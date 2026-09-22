@@ -12,6 +12,7 @@ import {
   findExpandedStepId,
   isStepDone,
   isStepExpandable,
+  isStepGated,
 } from '@/pages/first-steps/firstStepsConfig.js';
 import { useFirstStepsState } from '@/pages/first-steps/FirstStepsContext.jsx';
 import FirstStepsImportButton from '@/pages/first-steps/FirstStepsImportButton.jsx';
@@ -94,9 +95,48 @@ function StepAction({ step, done, ui, onConfigure }) {
   );
 }
 
-function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure, ui }) {
+/**
+ * The yes/no question that stands in for a gated step's body until it is answered.
+ *
+ * "No" is not a dismissal: for a tenant that reports to no SIF, "no" IS the completed state, so
+ * it ticks the step. That is why the caller routes it through the same toggle the checkbox uses
+ * rather than a separate code path — one way for a step to become done, one thing to persist.
+ */
+function StepGateQuestion({ step, ui, loading, onAnswer }) {
+  return (
+    <div className="space-y-3" data-testid={`first-steps-gate-${step.id}`}>
+      <p className="text-xs text-muted-foreground">{ui(step.gateQuestionKey)}</p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onAnswer(step, true)}
+          className="rounded-md border px-3 py-1 text-xs font-medium text-foreground cursor-pointer hover:bg-muted/50 disabled:opacity-50 disabled:cursor-default"
+          data-testid={`first-steps-gate-yes-${step.id}`}
+        >
+          {ui('yes')}
+        </button>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onAnswer(step, false)}
+          className="rounded-md border px-3 py-1 text-xs font-medium text-foreground cursor-pointer hover:bg-muted/50 disabled:opacity-50 disabled:cursor-default"
+          data-testid={`first-steps-gate-no-${step.id}`}
+        >
+          {ui('no')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepRow({
+  step, done, expanded, loading, gateAnswered,
+  onToggle, onOpen, onConfigure, onGateAnswer, ui,
+}) {
   const Icon = FIRST_STEPS_ICONS[step.iconName];
   const expandable = isStepExpandable(step);
+  const gated = isStepGated(step, done, gateAnswered);
   return (
     <div className="bg-card" data-testid={`first-steps-step-${step.id}`}>
       <div className="flex items-start gap-4 px-5 py-4">
@@ -124,24 +164,35 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
 
           {expanded && (
             <div className="mt-1 space-y-3">
-              {step.descKey && (
-                <p className="text-xs text-muted-foreground">{ui(step.descKey)}</p>
-              )}
-              {step.action === 'company' && <CompanyDataSummary ui={ui} data-testid="CompanyDataSummary__45a28a" />}
-              <div className="flex items-center gap-3">
-                <StepAction
+              {gated ? (
+                <StepGateQuestion
                   step={step}
-                  done={done}
                   ui={ui}
-                  onConfigure={onConfigure}
-                  data-testid="StepAction__45a28a" />
-                {Boolean(step.minutes) && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" data-testid={`first-steps-time-${step.id}`} />
-                    {step.minutes} {ui('minutes')}
-                  </span>
-                )}
-              </div>
+                  loading={loading}
+                  onAnswer={onGateAnswer}
+                  data-testid="StepGateQuestion__45a28a" />
+              ) : (
+                <>
+                  {step.descKey && (
+                    <p className="text-xs text-muted-foreground">{ui(step.descKey)}</p>
+                  )}
+                  {step.action === 'company' && <CompanyDataSummary ui={ui} data-testid="CompanyDataSummary__45a28a" />}
+                  <div className="flex items-center gap-3">
+                    <StepAction
+                      step={step}
+                      done={done}
+                      ui={ui}
+                      onConfigure={onConfigure}
+                      data-testid="StepAction__45a28a" />
+                    {Boolean(step.minutes) && (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" data-testid={`first-steps-time-${step.id}`} />
+                        {step.minutes} {ui('minutes')}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
               <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -209,10 +260,36 @@ export default function FirstStepsPage() {
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
+  /**
+   * Which gated steps the user has answered "yes" to, this visit. Deliberately not persisted —
+   * see "Gated steps" in `firstStepsConfig.js`. Cleared on every toggle of the step, which is
+   * what makes un-ticking a step bring its question back.
+   */
+  const [gateAnswered, setGateAnswered] = useState({});
+
   const handleToggle = useCallback(async (id) => {
     const saved = await toggleStep(id);
-    if (!saved) toast.error(ui('genericError'));
+    if (!saved) {
+      toast.error(ui('genericError'));
+      return;
+    }
+    // Only on a saved toggle: a failed write leaves the step where it was, so a user who
+    // answered "yes" must not lose the body they are looking at.
+    setGateAnswered((prev) => (prev[id] ? { ...prev, [id]: false } : prev));
   }, [toggleStep, ui]);
+
+  /**
+   * "Yes" reveals the step's real body; "No" completes the step, because for a tenant that
+   * reports to no SIF the answer IS the outcome. Both go through the same toggle the checkbox
+   * uses, so there is exactly one way a step becomes done.
+   */
+  const handleGateAnswer = useCallback((step, answer) => {
+    if (answer) {
+      setGateAnswered((prev) => ({ ...prev, [step.id]: true }));
+      return;
+    }
+    handleToggle(step.id);
+  }, [handleToggle]);
 
   /**
    * ETP-5364 — closes the checklist for good, or brings it back.
@@ -348,9 +425,11 @@ export default function FirstStepsPage() {
                 done={isStepDone(step, completed)}
                 expanded={step.id === expandedStepId}
                 loading={loading}
+                gateAnswered={Boolean(gateAnswered[step.id])}
                 onToggle={handleToggle}
                 onOpen={handleOpen}
                 onConfigure={(target) => navigate(target.to)}
+                onGateAnswer={handleGateAnswer}
                 ui={ui}
                 data-testid="StepRow__45a28a" />
             ))}

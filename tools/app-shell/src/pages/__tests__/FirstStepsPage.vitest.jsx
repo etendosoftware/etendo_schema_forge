@@ -381,7 +381,9 @@ describe('FirstStepsPage — Configure navigation', () => {
 
     await user.click(screen.getByTestId('first-steps-title-team'));
     await user.click(screen.getByTestId('first-steps-configure-team'));
-    expect(navigateMock).toHaveBeenCalledWith('/roles');
+    // ETP-5364: Usuarios, not Roles — inviting someone creates a USER; the role window shapes
+    // permissions afterwards and made the step read as a different, later job.
+    expect(navigateMock).toHaveBeenCalledWith('/user');
   });
 
   it('offers an importer instead of a route on the two bulk-load steps', async () => {
@@ -414,6 +416,9 @@ describe('FirstStepsPage — Configure navigation', () => {
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-title-fiscal-config'));
+    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
+    // window. "Yes" is what puts the Configure button on screen.
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
     await user.click(screen.getByTestId('first-steps-configure-fiscal-config'));
     expect(navigateMock).toHaveBeenCalledWith('/fiscal-config');
   });
@@ -702,3 +707,118 @@ describe('FirstStepsPage — finishing the setup (ETP-5364)', () => {
     expect(screen.queryByTestId('first-steps-dismissed-notice')).not.toBeInTheDocument();
   });
 });
+
+describe('FirstStepsPage — fiscal-config asks before it configures (ETP-5364)', () => {
+  const openFiscal = (user) => user.click(screen.getByTestId('first-steps-title-fiscal-config'));
+
+  it('replaces the description and the Configure button with a yes/no question', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toHaveTextContent(
+      'firstStepsFiscalConfigQuestion');
+    expect(screen.getByTestId('first-steps-gate-yes-fiscal-config')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-gate-no-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-configure-fiscal-config')).not.toBeInTheDocument();
+  });
+
+  it('reveals the normal body on "yes" without persisting anything', async () => {
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
+    expect(screen.getByTestId('first-steps-configure-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+    // "Yes" is not an outcome — it only opens the step the user still has to do.
+    expect(toggleStep).not.toHaveBeenCalled();
+  });
+
+  it('completes the step on "no", through the same toggle the checkbox uses', async () => {
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-no-fiscal-config'));
+    expect(toggleStep).toHaveBeenCalledWith('fiscal-config');
+    expect(toggleStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a failed "no" and leaves the question up', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [], toggleResult: false });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-no-fiscal-config'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('asks nothing once the step is completed', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: ['fiscal-config'] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-done-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('asks again after the user un-ticks the step', async () => {
+    // The whole reason the answer is not persisted: un-ticking is the escape hatch for someone
+    // who answered wrongly. The re-render is driven by the mocked context, so the un-tick is
+    // simulated by the state the provider would hand back next.
+    const user = userEvent.setup();
+    setHook({ completed: ['fiscal-config'] });
+    const { rerender } = render(<FirstStepsPage />);
+    await openFiscal(user);
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+
+    setHook({ completed: [] });
+    rerender(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('forgets a "yes" once the step is ticked and un-ticked', async () => {
+    // The in-memory answer must not outlive the tick that followed it, or a user who said yes,
+    // completed the step and later un-ticked it would land back on the Configure button with
+    // the question never re-asked.
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    const { rerender } = render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
+    expect(screen.getByTestId('first-steps-configure-fiscal-config')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('first-steps-toggle-fiscal-config'));
+    await waitFor(() => expect(toggleStep).toHaveBeenCalledWith('fiscal-config'));
+
+    // The provider hands back the completed state, then the user un-ticks it. The row stays
+    // open throughout — `openedStepId` is untouched by either write.
+    setHook({ completed: ['fiscal-config'] });
+    rerender(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+
+    setHook({ completed: [] });
+    rerender(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-configure-fiscal-config')).not.toBeInTheDocument();
+  });
+
+  it('gates no other step', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    for (const id of ['company-data', 'products', 'contacts', 'invoice-sequence', 'team']) {
+      await user.click(screen.getByTestId(`first-steps-title-${id}`));
+      expect(screen.queryByTestId(`first-steps-gate-${id}`)).not.toBeInTheDocument();
+    }
+  });
+});
+

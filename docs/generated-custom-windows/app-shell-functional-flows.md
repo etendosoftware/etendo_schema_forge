@@ -160,6 +160,93 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   3. Import the same file again and confirm the rows come back as Omitidas — that is the duplicate pre-check, which uses the same base.
   4. Repeat both from the Productos window and confirm the two flows issue identical URLs.
 
+#### 3.2 The demo/trial banner (`DemoTrialIndicator`, ETP-5364)
+
+- **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx`, above the global header.
+- **When it renders:** only when the current environment is **not** productive
+  (`isProductiveEnvironment`) **and** the backend supplied `trialDaysRemaining` as an integer.
+  Anything else — a productive tenant, a missing environment, no trial metadata — renders
+  nothing. That gate is why the content below needs no plan check of its own.
+- **What it holds, left to right:** the `Demo` pill, the days-remaining label, the trial progress
+  bar, the **Ir al pago** button (→ `/upgrade`), and the fiscal caveat.
+- **The two caveats.** Two `genericLabels` keys, rendered as two `<p>` — one line each:
+  - `environmentDemoFiscalNotice` — *"En este entorno de pruebas no se harán conexiones con
+    Hacienda, para ello deberá crear un entorno productivo."*
+  - `environmentDemoMigrationNotice` — *"Los datos distintos a contactos y productos, no se
+    migrarán al entorno productivo."*
+
+  Notes that are load-bearing:
+  - **Two keys, not one string with a `\n`.** The sentences are independent and each owns a
+    line, so the break is structural markup rather than an escape a translator can silently drop
+    inside a JSON string.
+  - They sit in the banner rather than inside the upgrade flow because both facts have to be
+    known **before** paying, and they stay on an expired trial, which is exactly when someone is
+    about to.
+  - **"crear un entorno productivo" is plain prose, not a link.** The Ir al pago button
+    immediately to its left is that link; two controls with one destination, 8px apart, read as a
+    mistake rather than as emphasis.
+  - Layout: the pair lives in one `flex-1 min-w-[16rem]` block inside the already-`flex-wrap`
+    bar, so it takes the leftover width when there is room and drops to a second line of the same
+    bar when there is not — it never squeezes the days label or the button.
+- **Colour.** The non-expired state is amber: `status-warning` (`bg`/`foreground`/`border`), the
+  only orange trio the core Tailwind preset defines, which brings its dark-mode values with it.
+  Changing it was a token swap, not new CSS.
+  - ⚠️ **The expired state's classes do not exist.** `status-danger` is defined **nowhere** — not
+    in `@etendosoftware/app-shell-core`'s Tailwind preset (which has `success`, `warning`, `info`
+    and `neutral`) and not in any stylesheet; the red family is called `destructive`. So
+    `bg-status-danger`, `text-status-danger-foreground`, `border-status-danger-border`,
+    `bg-status-danger-border` and `bg-status-danger-foreground` all generate no CSS and the
+    expired banner renders with no background, border or text colour of its own. This is
+    pre-existing and `TopBar.jsx` is the only file in the repo that uses those class names. Left
+    as found: red-vs-amber is a design decision, not a rename.
+- **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
+  — both caveats' presence and their position after the button, that they are two sibling `<p>`
+  neither of which carries the other's text, that no second link is drawn, the wrap classes, the
+  amber token, and the three states that render nothing or keep the caveats.
+- **Manual verification path:**
+  1. On a trial tenant, confirm the bar is amber and the two caveats read to the right of Ir al
+     pago, on two separate lines.
+  2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
+  3. On a productive tenant, confirm the whole bar is gone.
+
+#### 3.3 What a First Steps row can do (ETP-5364)
+
+- **Why it has its own section:** the checklist is a declarative catalogue. Anything a row does
+  that is not "show a description and a button" is a FIELD in
+  `tools/app-shell/src/pages/first-steps/firstStepsConfig.js`, never an `if` in
+  `FirstStepsPage`. That file's header is the contract; this is the functional summary.
+- **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
+  and its action until it is answered. The only one today is **Configuración fiscal** (a
+  `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
+  Sistema de Facturación (SIF), como SII, Verifactu o TicketBai?"*
+  - **Sí** reveals the ordinary body — the description, the Configure button to `/fiscal-config`,
+    the time estimate. It persists nothing: the user still has to do the step.
+  - **No** marks the step completed, because for a tenant that reports to no SIF the answer IS
+    the outcome. It goes through the same `toggleStep` the checkbox uses, so there is exactly one
+    way a step becomes done and exactly one thing that persists.
+  - **The answer itself is never stored.** The only durable state is the step's own completed
+    flag in `ETGO_ACCOUNT.FIRST_STEPS`. Un-ticking the step therefore brings the question back —
+    which is precisely the escape hatch a user who answered wrongly needs, at the cost of no new
+    backend field. The in-memory "said yes" flag is cleared on every successful toggle of that
+    step, so a yes → tick → un-tick round trip re-asks rather than landing back on the button.
+- **Row destination.** **Invita a tu equipo** navigates to `/user` (Usuarios), not `/roles`.
+  Inviting someone is creating a USER; the role window is where permissions are shaped
+  afterwards, and landing there first made the step read as a different, later job.
+- **Automated evidence:**
+  - `tools/app-shell/src/pages/first-steps/__tests__/firstStepsConfig.vitest.js` —
+    `isStepGated` across answered/completed, that only `fiscal-config` declares a gate, and that
+    the team row points at `/user`.
+  - `tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx` — the gate's yes / no /
+    failed-write / re-ask-after-untick paths.
+  - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
+    (Sí → navigation, No → completion persisted, un-tick → asked again).
+- **Manual verification path:**
+  1. On a productive tenant, open Primeros pasos → "Configuración fiscal" and confirm it opens
+     with the SIF question instead of the Configurar button.
+  2. Answer **Sí** and confirm the Configurar button appears and reaches `/fiscal-config`.
+  3. Answer **No** instead and confirm the step ticks; reload and confirm it is still ticked.
+  4. Un-tick it and confirm the question comes back rather than the Configurar button.
+
 ### 4. Entity list/detail data flow
 
 - **User goal / entry point:** Browse a window list, open a record, create/update/delete records, and work with child rows.
