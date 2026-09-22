@@ -107,10 +107,10 @@ resolve_log_group() {
     cloudfront:production)      echo "/cloudfront/etendo-production" ;;
 
     rds:experimental)           echo "/aws/rds/instance/etendo-experimental/postgresql" ;;
-    rds:production)             echo "/aws/rds/instance/etendo-production/postgresql" ;;
+    # Renamed from etendo-production on 2026-09-22 when production moved to an
+    # encrypted instance. The old group (and its -unencrypted sibling) is gone.
+    rds:production)             echo "/aws/rds/instance/etendo-production-enc/postgresql" ;;
 
-    # Production instance logs stopped being exported on 2026-05-22; the proxy
-    # is the only live DB-side log for production. See docs/ops/server-logs.md.
     rds-proxy:production)       echo "/aws/rds/proxy/etendo-production-proxy" ;;
 
     *)

@@ -50,7 +50,7 @@ Other services:
 | `public-api` | — | `/ecs/etendo-public-api-production` | — |
 | `alb` | `/alb/etendo-experimental` | `/alb/etendo-production` | — |
 | `cloudfront` | `/cloudfront/etendo-experimental` | `/cloudfront/etendo-production` | — |
-| `rds` | `/aws/rds/instance/etendo-experimental/postgresql` | `/aws/rds/instance/etendo-production/postgresql` (**empty — see below**) | — |
+| `rds` | `/aws/rds/instance/etendo-experimental/postgresql` | `/aws/rds/instance/etendo-production-enc/postgresql` | — |
 | `rds-proxy` | — | `/aws/rds/proxy/etendo-production-proxy` | — |
 
 Note the group names do **not** follow one uniform pattern — compare
@@ -78,33 +78,31 @@ scripts/tail-logs.sh --list-groups
 
 ## Database logs: what is actually available
 
-Verified 2026-09-22. This is uneven across environments — do not assume a `--service rds`
-call will return anything.
+Verified 2026-09-22. Availability is uneven across environments.
 
 | Environment | PostgreSQL instance logs | Notes |
 |---|---|---|
-| `experimental` | **Yes**, current (~5.6k lines/24h) | `--service rds --env experimental` |
-| `production` | **No** — group exists but is empty | Last event `2026-05-22 13:09`, `storedBytes=0`. Zero lines over a 7-day scan. |
+| `experimental` | **Yes**, current | `--service rds --env experimental` |
+| `production` | **Yes**, current | `/aws/rds/instance/etendo-production-enc/postgresql` |
 | `demo1` | **No group at all** | Nothing is exported to CloudWatch |
 
-For production, the only live DB-side log is the **RDS Proxy**, which is current
-and busy (~20k lines/7d):
+Production additionally exposes the **RDS Proxy**, which logs connection
+lifecycle and pinning events (not queries) — the place to look for
+connection-pool problems:
 
 ```bash
 scripts/tail-logs.sh --service rds-proxy --env production --since 1h --all
 ```
 
-It logs connection lifecycle and pinning events, not queries — useful for
-connection-pool problems, useless for slow-query analysis.
-
-> **Open gap.** Production PostgreSQL log export to CloudWatch stopped on
-> 2026-05-22 and nobody appears to have noticed. Both
-> `/aws/rds/instance/etendo-production/postgresql` and its `-unencrypted`
-> counterpart return zero events over 7 days while the streams still exist. If
-> production DB logs are needed, someone has to re-enable the log exports on the
-> RDS instance (`Log exports` → `postgresql`) — it cannot be fixed from this
-> repo. Until then `--service rds --env production` succeeds and returns nothing,
-> which is exactly the kind of silent gap worth knowing about before an incident.
+> **The production group was renamed on 2026-09-22.** Production moved to an
+> encrypted instance: `/aws/rds/instance/etendo-production/postgresql` and its
+> `-unencrypted` sibling no longer exist, replaced by `etendo-production-enc`.
+> A rename like this breaks the lookup table **silently in one direction only** —
+> a stale entry fails loudly with `ResourceNotFoundException`, but a group that
+> exists and is simply empty (as the orphaned one was for 122 days) returns
+> nothing and looks like a quiet database. When infra renames an instance,
+> update `resolve_log_group()` in `scripts/tail-logs.sh` and the tables above;
+> `--list-groups` shows the current truth.
 
 ## Options
 
