@@ -458,7 +458,7 @@ function blocksPsd2Confirm(psd2Blocked, process) {
 }
 
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
-function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, submitLocked, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
   // states split three ways here, and only for Payment OUT (PIS never initiates inbound money):
   //   connected            → pisEligible, full PIS form
@@ -486,8 +486,11 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
   // is satisfied by the total applied (cash + used credit), not the cash field alone —
   // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
+  // `submitLocked` (ETP-5434) covers what the form itself cannot express: the catalogs still being
+  // in flight, and — the one that matters — the `scheduleId` lookup not having answered yet, which
+  // `missingRequired` deliberately does not test but the backend requires.
   const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId || rateInvalid;
-  const saveDisabled = saving || loading || missingRequired;
+  const saveDisabled = saving || submitLocked || missingRequired;
   // For PIS, the template-specific creditor fields must be filled before confirming
   // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
   const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
@@ -496,8 +499,11 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   // Only Confirm is gated on psd2Blocked. Saving a DRAFT stays allowed on purpose: with Automatic
   // Withdrawn off for transfers (ETP-4891) a draft moves no money and creates no bank transaction,
   // so there is nothing to protect the user from — and losing the typed values would be worse.
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling
-    || !pisReady || psd2Blocked;
+  // `submitLocked` is folded in here rather than OR-ed at the button (as it used to be): the button
+  // was already disabled while loading, but its cursor/opacity read the bare flag and so still
+  // looked enabled. One value now drives both.
+  const confirmDisabled = saving || submitLocked || missingRequired || !balance.canConfirm
+    || !!pisPolling || !pisReady || psd2Blocked;
   const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
   return {
     pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
@@ -987,7 +993,7 @@ function PisTransferSection({
  * the main component's cognitive complexity down. */
 function PaymentModalFooter({
   saving, pisPolling, pisWindowClosed, pisChecking, ui, requestClose, cancelPisWait, onReopenPis,
-  saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
+  saveDisabled, confirmDisabled, confirmLabel, onSaveDraft, onConfirm, floppy,
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: 'hsl(var(--card))', flexShrink: 0 }}>
@@ -1034,7 +1040,7 @@ function PaymentModalFooter({
           <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
             {floppy}{ui('save')}
           </button>
-          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             {confirmLabel}
           </button>
@@ -1132,7 +1138,18 @@ export default function NewPaymentEntryModal({
   const [methodId, setMethodId] = useState('');
   const [sources, setSources] = useState([]);
   const [scheduleId, setScheduleId] = useState(scheduleIdProp || '');
-  const [loading, setLoading] = useState(true);
+  // ETP-5434 — the modal's wait is split in TWO, because the two things it used to gate together
+  // have nothing to do with each other:
+  //   fieldsLoading     — the accounts + methods catalogs, i.e. what the two selects actually show.
+  //   scheduleResolving — the paymentPlan lookup that resolves `scheduleId`, which feeds no field
+  //                       at all but IS mandatory in the registerPayment body.
+  // Before the split a single `loading` was cleared in the effect's `finally`, i.e. only after the
+  // schedule lookup, so both selects sat under a skeleton for 2.9 s on a real sales invoice while
+  // the catalogs that fill them had been on the client since ~0.65 s.
+  const [fieldsLoading, setFieldsLoading] = useState(true);
+  // Starts resolved when the caller already handed us the schedule id: there is no request to wait
+  // for on that path, so Guardar/Confirmar must not be held back for it.
+  const [scheduleResolving, setScheduleResolving] = useState(!scheduleIdProp);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [dateInvalid, setDateInvalid] = useState(false);
@@ -1197,48 +1214,104 @@ export default function NewPaymentEntryModal({
   });
 
   // Fetch accounts, payment methods, credit sources, and (if needed) the schedule.
+  //
+  // ETP-5434 — these were ONE sequential block behind a single `loading` flag: the three POSTs were
+  // awaited together, then the schedule lookup, then `finally { setLoading(false) }`. Measured on a
+  // live sales invoice, the catalogs landed at ~0.65 s but the selects only appeared at 2.9 s,
+  // because `paymentPlan` (which feeds neither of them) does not even start until the invoice
+  // header GETs ahead of it in the connection queue have drained. The three concerns now run as
+  // three independent chains, each releasing exactly what it owns:
+  //   catalogs → fieldsLoading      (the two selects — the 2.9 s → ~0.65 s win)
+  //   credit   → sources            (gates nothing: usePaymentBalance re-seeds its lines when
+  //                                  `sources` arrives, so the credit section shows up on its own)
+  //   schedule → scheduleResolving  (gates Guardar/Confirmar only — see submitLocked below)
+  // The schedule lookup is also fired up front instead of after the POSTs, so its own wait starts
+  // as early as the connection queue allows.
+  //
+  // The two catalogs deliberately share ONE flag rather than one each: the default pick
+  // (seedMethodAndAccount → pickDefaultMethodId/pickDefaultAccountId) reads BOTH responses, and
+  // they land ~30 ms apart. Releasing them separately would buy those 30 ms at the price of briefly
+  // showing an account select whose options are still filtered by an empty method.
   useEffect(() => {
     let cancelled = false;
+    // Re-arm both gates: the effect keys on the invoice, so if it ever re-runs for another one,
+    // Guardar must not stay live over the previous invoice's schedule id.
+    setFieldsLoading(true);
+    setScheduleResolving(!scheduleIdProp);
+    // ETP-5434: this `post` is only ever called with the three query-shaped actions below
+    // (invoiceAccounts, invoicePaymentMethods, invoiceCreditSources) — all confirmed read-only in
+    // PaymentActionHandlerSupport.routeQuery (PaymentRegistrationService.handleListAccounts/
+    // handleListPaymentMethods, PaymentCreditSourcesService.handleListCreditSources: OBCriteria/HQL
+    // selects and JSON building only, no save/delete/flush). `refreshVersion: false` skips the
+    // core's post-POST version-refresh GET (0.7-1.9s per call in production) that exists to keep
+    // the optimistic-lock token fresh after a mutation — unneeded here since nothing mutates. Do
+    // NOT copy this onto the other `post` helper further down in this file: those actions DO mutate.
+    const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
+      { method: 'POST', body, refreshVersion: false }).catch(() => null);
+
     (async () => {
       try {
-        const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
-          { method: 'POST', body }).catch(() => null);
-        // Edit mode: the draft's own consumption must be added back into each source's avail
-        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
-        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
-        const [accRes, methRes, srcRes] = await Promise.all([
+        const [accRes, methRes] = await Promise.all([
           post('invoiceAccounts'), post('invoicePaymentMethods'),
-          post('invoiceCreditSources', creditSourcesBody),
         ]);
         if (cancelled) return;
 
         const accJson = await readJson(accRes);
         const accList = mapAccounts(accJson);
         const methList = mapMethods(await readJson(methRes));
+        if (cancelled) return;
         setAccounts(accList);
         setMethods(methList);
-        setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        // Edit mode prefills from the draft instead of picking defaults.
+        // Edit mode prefills from the draft instead of picking defaults. It needs only these two
+        // responses (accJson/accList/methList) — never the credit sources — which is why it can run
+        // here instead of waiting for the third POST.
         seedMethodAndAccount({
           isEdit, payment, accJson, accList, methList,
           bpPreferredAccountId: bpPreferredAccountIdRef.current,
           setMethodId, setAccountId, onAmountChange: balance.onAmountChange,
         });
-
-        if (!scheduleIdProp) {
-          const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
-          if (sched && !cancelled) setScheduleId(sched);
-        }
       } catch { /* silent — fields degrade gracefully */ }
-      finally { if (!cancelled) setLoading(false); }
+      finally { if (!cancelled) setFieldsLoading(false); }
     })();
+
+    (async () => {
+      try {
+        // Edit mode: the draft's own consumption must be added back into each source's avail
+        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
+        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
+        const srcRes = await post('invoiceCreditSources', creditSourcesBody);
+        if (cancelled) return;
+        const srcList = mapSources(await readJson(srcRes));
+        if (!cancelled) setSources(srcList);
+      } catch { /* silent — the credit section simply stays empty */ }
+    })();
+
+    (async () => {
+      if (scheduleIdProp) return;
+      try {
+        const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
+        if (sched && !cancelled) setScheduleId(sched);
+      } catch { /* silent — submit's own !scheduleId guard reports it in the UI language */ }
+      // Resolved means "the lookup finished", NOT "we got an id": an invoice with no pending
+      // installment legitimately comes back empty, and gating on the VALUE would leave that case
+      // blocked forever instead of letting submit surface its localized message as it does today.
+      finally { if (!cancelled) setScheduleResolving(false); }
+    })();
+
     return () => { cancelled = true; };
     // apiFetch is intentionally excluded: it is re-created per render by some
     // callers (and by the test mock), which would re-run this effect on every
     // render and loop. Re-fetch only when the target invoice changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specName, invoiceId]);
+
+  // What Guardar/Confirmar wait for. `scheduleResolving` is in here and NOT in the field gate on
+  // purpose: `submit` sends `scheduleId` and the backend rejects a body without it with a raw
+  // English 400 (PaymentActionHandlerSupport.validateBody), while `missingRequired` never checks
+  // it. Releasing the fields early without this would open a ~2.3 s window in which Guardar is
+  // clickable but `scheduleId` is still '' — turning a pure rendering win into a new failure.
+  const submitLocked = fieldsLoading || scheduleResolving;
 
   // ── account/method dependency: only accounts that support the selected method ──
   const filteredAccounts = useMemo(
@@ -1421,7 +1494,7 @@ export default function NewPaymentEntryModal({
   const {
     pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
   } = computePaymentModalState({
-      dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance,
+      dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, submitLocked, balance,
       date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban,
       pisAccountNumber, pisSortCode, ui,
     });
@@ -1861,7 +1934,7 @@ export default function NewPaymentEntryModal({
             </Field>
             </>)}
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
-              {loading ? (
+              {fieldsLoading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-method-select-skeleton" />
               ) : (
                 <CreatableSearchSelect
@@ -1876,7 +1949,7 @@ export default function NewPaymentEntryModal({
               )}
             </Field>
             <Field label={ui('account')} required data-testid="Field__7727b3">
-              {loading ? (
+              {fieldsLoading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-account-select-skeleton" />
               ) : (
                 <CreatableSearchSelect
@@ -2009,7 +2082,6 @@ export default function NewPaymentEntryModal({
           onReopenPis={onReopenPis}
           saveDisabled={saveDisabled}
           confirmDisabled={confirmDisabled}
-          loading={loading}
           confirmLabel={confirmLabel}
           onSaveDraft={() => submit('draft')}
           onConfirm={() => submit('confirm')}
