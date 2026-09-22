@@ -39,10 +39,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   ),
 }));
 
-// ETP-5402 QA follow-up — ReportViewerPage now filters its gallery/selected report against the
-// caller's own per-report access map (fetchMyReportAccess()); full access to every catalog id
-// keeps this file's Trial Balance fixture visible, matching the `useWindowAccess: () => 'full'`
-// mock above. See reportViewerTestHelpers.js for the shared access map.
+// See reportViewerTestHelpers.js (mockFullReportAccess) for the ETP-5402 rationale.
 vi.mock('@/lib/rolesApi.js', () => ({
   fetchMyReportAccess: () => Promise.resolve({ reportAccess: mockFullReportAccess }),
 }));
