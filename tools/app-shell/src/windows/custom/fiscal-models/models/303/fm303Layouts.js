@@ -161,14 +161,30 @@ const BASE = {
         // non-zero box 111). A plain devolución/domiciliación (tipo U/D/X, condition A) requires
         // IBAN alone per AEAT error EDID065 — it must NOT force the full bank block. bank_iban
         // keeps the wider `_BANK_IBAN_REQUIRED_WHEN` (A OR B); do not widen the other 6 to match.
-        { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', type: 'text', readOnly: false,
+        // ETP-5438 (AEAT spec audit) — maxLength values are the AEAT DID-page fixed-width slot
+        // for each field (DR303e26v101 v1.01): IBAN 34 ("Nota 6: Para el IBAN español deberá
+        // empezar por ES y únicamente se usan las primeras 24 posiciones" — 34 is the record
+        // slot's own width, not the ES-IBAN's 24-char payload), SWIFT-BIC 11, Bank name 70,
+        // Bank address 35, City 30, Country code 2.
+        { id: 'bank_iban', labelKey: 'fm.ident.bank.iban', type: 'text', readOnly: false, maxLength: 34,
           requiredWhen: _BANK_IBAN_REQUIRED_WHEN },
-        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
-        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'text', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_swift_bic', labelKey: 'fm.ident.bank.swift_bic', type: 'text', readOnly: false, maxLength: 11, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_nombre',    labelKey: 'fm.ident.bank.nombre',    type: 'text', readOnly: false, maxLength: 70, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_direccion', labelKey: 'fm.ident.bank.direccion', type: 'text', readOnly: false, maxLength: 35, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_ciudad',    labelKey: 'fm.ident.bank.ciudad',    type: 'text', readOnly: false, maxLength: 30, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        { id: 'bank_pais',      labelKey: 'fm.ident.bank.pais',      type: 'text', readOnly: false, maxLength: 2,  visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN },
+        // ETP-5438 — bank_sepa ("Devolución - Marca SEPA") is a single-digit Num field on the DID
+        // page whose only valid values are this 4-entry enum (spec's own "Nota 2: Devolución
+        // marca SEPA" table) — was a free-text input with no constraint at all. `renderIdentSelectField`
+        // (FmBoxes303.jsx) already generically supports `type: 'select'` (see TIPO_DECLARACION_FIELD
+        // above), so this reuses that existing control rather than inventing a new one.
+        { id: 'bank_sepa',      labelKey: 'fm.ident.bank.sepa',      type: 'select', readOnly: false, visibleWhen: _BANK_DVX_VW, requiredWhen: _BANK_FULL_BLOCK_REQUIRED_WHEN,
+          options: [
+            { value: '0', labelKey: 'fm.ident.bank.sepa.vacia' },
+            { value: '1', labelKey: 'fm.ident.bank.sepa.cuenta_espana' },
+            { value: '2', labelKey: 'fm.ident.bank.sepa.ue_sepa' },
+            { value: '3', labelKey: 'fm.ident.bank.sepa.resto_paises' },
+          ] },
       ],
       rows: [],
     },
@@ -357,7 +373,9 @@ const BASE = {
       colHeaderKeys: [],
       fields: [
         { id: 'rectificativa',         labelKey: 'fm.ident.rectificativa',         type: 'checkbox', readOnly: false },
-        { id: 'nro_justificante',      labelKey: 'fm.ident.nro_justificante',      type: 'text',     readOnly: false,
+        // ETP-5438 — maxLength 13 per the AEAT spec's "Número justificante identificativo de la
+        // autoliquidación anterior" record slot (DR303e26v101 v1.01).
+        { id: 'nro_justificante',      labelKey: 'fm.ident.nro_justificante',      type: 'text',     readOnly: false, maxLength: 13,
           visibleWhen: { field: 'rectificativa', equals: true } },
         { id: 'baja_domiciliacion',    labelKey: 'fm.ident.baja_domiciliacion',    type: 'checkbox', readOnly: false,
           visibleWhen: { field: 'rectificativa', equals: true } },
@@ -393,7 +411,8 @@ const _COMPLEMENTARIA_RECTIF_OP = { op: 'patchSection', section: 'rectificativa'
   titleKey: 'fm.section.complementaria',
   fields: [
     { id: 'complementaria',   labelKey: 'fm.ident.complementaria',   type: 'checkbox', readOnly: false },
-    { id: 'nro_justificante', labelKey: 'fm.ident.nro_justificante', type: 'text',     readOnly: false,
+    // ETP-5438 — same 13-char AEAT slot as the current-year rectificativa's nro_justificante above.
+    { id: 'nro_justificante', labelKey: 'fm.ident.nro_justificante', type: 'text',     readOnly: false, maxLength: 13,
       visibleWhen: { field: 'complementaria', equals: true } },
   ],
 }};

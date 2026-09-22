@@ -602,6 +602,70 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   });
 });
 
+// ── ETP-5438 (AEAT spec audit): datos_bancarios field maxLength + bank_sepa enum ──
+
+describe('getLayout303 — datos_bancarios field maxLength (ETP-5438)', () => {
+  const layout = getLayout303(2026, 'T2');
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+
+  // Values are the AEAT DID-page fixed-width record slot for each field
+  // (DR303e26v101 v1.01) — see fm303Layouts.js's own comment above these fields.
+  it.each([
+    ['bank_iban', 34],
+    ['bank_swift_bic', 11],
+    ['bank_nombre', 70],
+    ['bank_direccion', 35],
+    ['bank_ciudad', 30],
+    ['bank_pais', 2],
+  ])('%s has maxLength %i', (id, expected) => {
+    const field = sec.fields.find(f => f.id === id);
+    expect(field.maxLength).toBe(expected);
+  });
+});
+
+describe('getLayout303 — bank_sepa is a 4-value enum select, not free text (ETP-5438)', () => {
+  const layout = getLayout303(2026, 'T2');
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+  const field = sec.fields.find(f => f.id === 'bank_sepa');
+
+  it('has type "select"', () => {
+    expect(field.type).toBe('select');
+  });
+
+  it('offers exactly the 4 AEAT-spec values with their own labelKeys', () => {
+    expect(field.options).toEqual([
+      { value: '0', labelKey: 'fm.ident.bank.sepa.vacia' },
+      { value: '1', labelKey: 'fm.ident.bank.sepa.cuenta_espana' },
+      { value: '2', labelKey: 'fm.ident.bank.sepa.ue_sepa' },
+      { value: '3', labelKey: 'fm.ident.bank.sepa.resto_paises' },
+    ]);
+  });
+
+  it('keeps its pre-existing visibleWhen/requiredWhen conditions unchanged by the type conversion', () => {
+    expect(field.visibleWhen).toBeDefined();
+    expect(field.requiredWhen).toEqual({ allOf: [
+      { field: 'rectificativa', equals: true },
+      { field: '_box111NonZero', equals: true },
+    ] });
+  });
+});
+
+describe('getLayout303 — rectificativa nro_justificante maxLength (ETP-5438)', () => {
+  it('current-year (2026) rectificativa section: nro_justificante has maxLength 13', () => {
+    const layout = getLayout303(2026, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
+  });
+
+  it('pre-2023 complementaria patch: nro_justificante also has maxLength 13', () => {
+    const layout = getLayout303(2022, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('getLayout303 — sin_actividad section', () => {

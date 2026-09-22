@@ -6,6 +6,12 @@
 // clamps a negative commit on either box to 0 and surfaces an i18n toast error — same
 // "make the invalid state structurally impossible" approach as the pre-existing box78/box110
 // clamp (see FmModel303Page.box78Clamp.vitest.jsx), which this test file's scaffold mirrors.
+//
+// ETP-5438 (AEAT spec audit) — boxes 70, 78, 109 and 110 are ALSO declared "Num" (numérico sin
+// signo / unsigned) in the official Modelo 303 "Diseño de registro" (DR303e26v101 v1.01), exactly
+// like 111 and 77 above, but had no negative guard at all until this audit found the gap. Widened
+// into the SAME NEGATIVE_NOT_ALLOWED_BOXES set (fiscalModelsUtils.js) rather than a parallel
+// mechanism — see that constant's own comment for the full spec citation.
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -59,6 +65,10 @@ vi.mock('../FmBoxes303.jsx', () => ({
       React.createElement('input', { 'data-testid': 'commit-111', onChange: (e) => onBoxChange(111, e.target.value) }),
       React.createElement('input', { 'data-testid': 'commit-77', onChange: (e) => onBoxChange(77, e.target.value) }),
       React.createElement('input', { 'data-testid': 'commit-27', onChange: (e) => onBoxChange(27, e.target.value) }),
+      React.createElement('input', { 'data-testid': 'commit-70', onChange: (e) => onBoxChange(70, e.target.value) }),
+      React.createElement('input', { 'data-testid': 'commit-78', onChange: (e) => onBoxChange(78, e.target.value) }),
+      React.createElement('input', { 'data-testid': 'commit-109', onChange: (e) => onBoxChange(109, e.target.value) }),
+      React.createElement('input', { 'data-testid': 'commit-110', onChange: (e) => onBoxChange(110, e.target.value) }),
     );
   },
 }));
@@ -155,5 +165,97 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
 
     expect(boxValue(27)).toBe(-100);
     expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('FmModel303Page — negative value rejected on boxes 70, 78, 109 and 110 (ETP-5438)', () => {
+  it('clamps a negative box70 (Resultados a ingresar anteriores autoliquidaciones) commit to 0', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(70, '-300');
+
+    expect(boxValue(70)).toBe(0);
+    expect(toastErrorMock).toHaveBeenCalled();
+  });
+
+  it('clamps a negative box78 (Cuotas a compensar aplicadas) commit to 0', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(78, '-45.5');
+
+    expect(boxValue(78)).toBe(0);
+    expect(toastErrorMock).toHaveBeenCalled();
+  });
+
+  it('clamps a negative box109 (Devoluciones acordadas por la AT) commit to 0', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(109, '-1');
+
+    expect(boxValue(109)).toBe(0);
+    expect(toastErrorMock).toHaveBeenCalled();
+  });
+
+  it('clamps a negative box110 (Cuotas a compensar pendientes) commit to 0', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(110, '-200');
+
+    expect(boxValue(110)).toBe(0);
+    expect(toastErrorMock).toHaveBeenCalled();
+  });
+
+  it('accepts a zero value on all 4 new boxes unchanged (boundary, not a clearly positive value)', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(70, '0');
+    commit(78, '0');
+    commit(109, '0');
+    commit(110, '0');
+
+    expect(boxValue(70)).toBe(0);
+    expect(boxValue(78)).toBe(0);
+    expect(boxValue(109)).toBe(0);
+    expect(boxValue(110)).toBe(0);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts a positive value on all 4 new boxes unchanged', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    commit(70, '150');
+    commit(78, '75.25');
+    commit(109, '10');
+    commit(110, '400');
+
+    expect(boxValue(70)).toBe(150);
+    expect(boxValue(78)).toBe(75.25);
+    expect(boxValue(109)).toBe(10);
+    expect(boxValue(110)).toBe(400);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  // ETP-5438 explicit follow-up: a negative box110 must floor to 0 BEFORE box78's own, unrelated
+  // relative clamp (box78 <= box110, ETP-5338 pt.2) reads it — otherwise box78 could inherit a
+  // negative ceiling from an un-floored box110. Both guards live in the same handleBoxChange, with
+  // the negative-not-allowed floor applying first (see fiscalModelsUtils.js's
+  // NEGATIVE_NOT_ALLOWED_BOXES comment) — this test pins that ordering as an observable contract,
+  // not just an implementation detail.
+  it('floors a negative box110 to 0 first, so box78s relative clamp never inherits a negative ceiling', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+
+    // box78 is legitimately positive before box110 goes negative.
+    commit(110, '500');
+    commit(78, '300');
+    expect(boxValue(78)).toBe(300);
+
+    // Committing box110 as negative must floor it to 0 (this test file's own guard) AND
+    // immediately re-clamp box78 down to that floored 0 (box78Clamp's reactive check), never to
+    // a negative value.
+    commit(110, '-50');
+
+    expect(boxValue(110)).toBe(0);
+    expect(boxValue(78)).toBe(0);
+    expect(boxValue(78)).not.toBeLessThan(0);
   });
 });

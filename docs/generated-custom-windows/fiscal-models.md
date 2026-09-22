@@ -971,6 +971,63 @@ other boxes, just not accumulated and re-queried with `ONLY_MEMO_AND_CORRECTIVE`
   they are intentionally NOT `editable` (backend-computed) — no rendering change was needed since
   they already lacked the `editable` flag.
 
+### Editable-box/field input validation vs. the official AEAT spec (ETP-5438)
+
+An audit cross-referenced every EDITABLE casilla/field in the Modelo 303 window against the
+official AEAT "Diseño de registro" for Modelo 303 (v1.01, applies from ejercicio 2026 — the same
+spec `fm303Layouts.js`'s `BASE` layout is built from). The spec's own "Nota" footer on every page
+defines the field-type legend: `A` (Alfabético), `An` (Alfanumérico — letters/numbers/blanks,
+left-aligned), `Num` (Numérico **sin signo** — digits only, **no negative values**), `N` (Numérico
+**con signo** — negative allowed, a literal `N` marks a negative value). ETP-5393 Bug C (above) had
+already fixed this exact class of gap for boxes 111/77; the audit found it was incomplete.
+
+**Sign-guard gap — 4 more `Num` (unsigned) editable boxes had no negative guard.** Boxes 70
+("Resultados a ingresar de anteriores autoliquidaciones"), 78 ("Cuotas a compensar de periodos
+anteriores aplicadas"), 109 ("Devoluciones acordadas por la Agencia Tributaria") and 110 ("Cuotas
+a compensar pendientes de periodos anteriores") are all declared `Num` in the spec, exactly like
+111 and 77, but were left out of `NEGATIVE_NOT_ALLOWED_BOXES` (`fiscalModelsUtils.js`) and its
+backend mirror `NEGATIVE_NOT_ALLOWED_BOX_KEYS` (`FiscalDeclCrudHandler.java`). Widened into the
+SAME set/mechanism on both ends — no new plumbing:
+- **Frontend**: `NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110])`. `handleBoxChange`
+  (`FmModel303Page.jsx`) already floors any box in this set to `0` and shows the i18n toast — no
+  code change needed there, only the set. Box 78 also carries its own, unrelated relative clamp
+  (≤ box110, ETP-5338 pt.2) in the same function — the negative-not-allowed floor runs FIRST, on
+  the same `value` variable the relative clamp then reads, so a negative box110 commit floors to 0
+  before box78's ceiling is computed from it; box78 can never inherit a negative ceiling.
+- **Backend**: `NEGATIVE_NOT_ALLOWED_BOX_KEYS = Set.of("111", "77", "70", "78", "109", "110")` in
+  `FiscalDeclCrudHandler#rejectNegativeManualBoxes` — same 400-and-leave-record-untouched contract
+  as before.
+
+**Alphanumeric (`An`) fields had no length limit at all.** The 6 bank identification fields
+(`bank_iban`, `bank_swift_bic`, `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais`) and
+`nro_justificante` (rectificativa/complementaria) were plain `<input type="text">` with no
+`maxLength`, despite the spec giving each a fixed record-slot width (IBAN 34, SWIFT-BIC 11, bank
+name 70, address 35, city 30, country code 2, nro_justificante 13). `fm303Layouts.js` now declares
+`maxLength` on each field (both the current-year rectificativa's `nro_justificante` and the
+pre-2023 `_COMPLEMENTARIA_RECTIF_OP` patch's copy); `FmBoxes303.jsx`'s two identification-section
+text-input render paths now forward `maxLength={f.maxLength}`. Backend mirror: a new
+`rejectOversizedIdentificationFields` guard in `FiscalDeclCrudHandler.handleDeclPut` (same
+400-and-leave-untouched contract, reading `manualData.identification` instead of
+`manualOverrides`) rejects a PUT whose value for any of these 7 keys exceeds its limit.
+
+**`bank_sepa` was free text; the spec defines it as a 4-value enum.** "Devolución - Marca SEPA" is
+actually a single-digit `Num` field on the DID page restricted to `0`/`1`/`2`/`3` (spec's own "Nota
+2: Devolución marca SEPA" table: 0 Vacía, 1 Cuenta España, 2 Unión Europea SEPA, 3 Resto Países) —
+the UI rendered it as unconstrained free text. `fm303Layouts.js`'s `bank_sepa` field is now
+`type: 'select'` with those 4 options (reusing `FmBoxes303.jsx`'s existing generic
+`renderIdentSelectField`, the same control `tipo_declaracion` already uses — no new component). New
+i18n keys `fm.ident.bank.sepa.{vacia,cuenta_espana,ue_sepa,resto_paises}` in `en_US.json`/
+`es_ES.json`/`es_AR.json`. Backend mirror: a new `rejectInvalidBankSepa` guard rejects a PUT whose
+`manualData.identification.bank_sepa` is present, non-blank, and not one of the 4 values —
+`bank_sepa`'s own conditional requiredness (`_BANK_FULL_BLOCK_REQUIRED_WHEN`) is left untouched, an
+absent/blank value is not rejected by this guard.
+
+Regression tests: `FmModel303Page.negativeBoxClamp.vitest.jsx` (4 new boxes + the box78/box110
+interaction), `FmBoxes303.vitest.jsx` (`maxLength` DOM attributes + the `bank_sepa` select
+rendering/options/onChange/disabled), `fm303Layouts.vitest.js` (raw layout-data assertions for both),
+and `FiscalDeclCrudHandlerTest.java` (all 3 new backend guards, mirroring the existing 111/77 test
+style).
+
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
 The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`

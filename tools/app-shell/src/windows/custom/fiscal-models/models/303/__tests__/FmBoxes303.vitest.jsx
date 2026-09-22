@@ -2009,3 +2009,122 @@ describe('FmBoxes303 — readOnly prop', () => {
     });
   });
 });
+
+// ── ETP-5438 (AEAT spec audit): identification field maxLength ──────────────
+
+describe('FmBoxes303 — identification field maxLength (ETP-5438)', () => {
+  it('sets maxLength on every datos_bancarios text input per its AEAT DID-page slot width', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    const inputs = Array.from(
+      container.querySelectorAll('input.fm-aeat-ident-inline-field__input[type="text"]')
+    );
+    // Declaration order in fm303Layouts.js's datos_bancarios.fields: iban, swift_bic, nombre,
+    // direccion, ciudad, pais — bank_sepa is now a <select> (see the enum describe block below)
+    // and does not appear in this input[type="text"] list.
+    expect(inputs.map(i => i.maxLength)).toEqual([34, 11, 70, 35, 30, 2]);
+  });
+
+  it('sets maxLength=13 on the rectificativa nro_justificante text input', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+      />
+    );
+    const textInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+    expect(textInput).toBeTruthy();
+    expect(textInput.maxLength).toBe(13);
+  });
+
+  it('reflects maxLength as a real HTML maxlength attribute, not just a React prop', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    const ibanInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+    // bank_iban DOES declare maxLength=34 (asserted above) — this just confirms the attribute is
+    // reflected as a real HTML constraint, not merely a React prop that never reached the DOM.
+    expect(ibanInput.getAttribute('maxlength')).toBe('34');
+  });
+});
+
+// ── ETP-5438 (AEAT spec audit): bank_sepa 4-value enum ───────────────────────
+
+describe('FmBoxes303 — bank_sepa enum select (ETP-5438)', () => {
+  it('renders bank_sepa as a <select> (not free text) once the datos_bancarios section is visible', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    // 34/11/70/35/30/2 -> 6 text inputs (iban/swift_bic/nombre/direccion/ciudad/pais); bank_sepa
+    // must NOT be a 7th one.
+    const textInputs = container.querySelectorAll('input.fm-aeat-ident-inline-field__input[type="text"]');
+    expect(textInputs.length).toBe(6);
+    const selects = container.querySelectorAll('select');
+    expect(selects.length).toBeGreaterThan(0);
+  });
+
+  it('offers exactly the 4 AEAT enum values (0/1/2/3) plus the placeholder, no free text', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    const selects = Array.from(container.querySelectorAll('select'));
+    // bank_sepa is the only select in this section (tipo_declaracion's own select lives in
+    // the identificacion section, not datos_bancarios).
+    expect(selects.length).toBe(1);
+    const optionValues = Array.from(selects[0].querySelectorAll('option')).map(o => o.value);
+    expect(optionValues).toEqual(['', '0', '1', '2', '3']);
+  });
+
+  it('calls onIdentChange with the raw enum string when bank_sepa changes', () => {
+    const onIdentChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+        onIdentChange={onIdentChange}
+      />
+    );
+    const select = container.querySelector('select');
+    fireEvent.change(select, { target: { value: '2' } });
+    expect(onIdentChange).toHaveBeenCalledWith('bank_sepa', '2');
+  });
+
+  it('disables the bank_sepa select when readOnly is true', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+        readOnly
+      />
+    );
+    const select = container.querySelector('select');
+    expect(select.disabled).toBe(true);
+  });
+});
