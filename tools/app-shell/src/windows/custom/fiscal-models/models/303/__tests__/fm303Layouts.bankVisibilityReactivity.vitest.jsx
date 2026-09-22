@@ -46,7 +46,7 @@ function findRectificativaCheckbox() {
 }
 
 // Locates the editable grid cell for a given AD box number (its `.fm-aeat-cell__num` reads
-// the box number, e.g. "111") and sets its value through the same edit-button -> input ->
+// the box number, e.g. "70") and sets its value through the same edit-button -> input ->
 // blur flow a real user drives.
 function setBoxValue(boxNum, value) {
   const numSpan = Array.from(document.querySelectorAll('.fm-aeat-cell__num'))
@@ -56,6 +56,28 @@ function setBoxValue(boxNum, value) {
   const input = cell.querySelector('.fm-aeat-cell__input');
   fireEvent.change(input, { target: { value: String(value) } });
   fireEvent.blur(input);
+}
+
+// ETP-5431 pt.2 — box 111 (Rectificación - Importe) is no longer user-editable: it is now
+// autocompleted by `computeBox111` (fm303Layouts.js) from boxes 69/70/71, applied by
+// `recomputeDerivedBoxes` (fiscalModelsUtils.js). Every scenario in this file that used to
+// `setBoxValue(111, X)` directly now drives the SAME `_box111NonZero` outcome indirectly
+// through box 68 (`reg_anual`, still editable, feeds box69 with nothing else in play) and box
+// 70 (`a_deducir`, still editable) — both live on the SAME `resultado_final` tab as the removed
+// box 111 editor, so no extra tab navigation is needed. With box68/70 as the only non-zero
+// inputs: box69 = box68 (all other box69 terms default to 0), box71 = box69 - box70 (all other
+// box71 terms default to 0). Landing on box69 > 0 and (box70 - box69) > 0 puts computeBox111 on
+// its "box69 positive" branch -> box111 = box70 - box69.
+function setBoxesForNonZero111() {
+  setBoxValue(68, 5);
+  setBoxValue(70, 15); // box69 = 5, box71 = 5 - 15 = -10 (< 0), box111 = 15 - 5 = 10 (> 0).
+}
+
+// Reverts box111 back to empty (_box111NonZero: false) by bringing box70 down to box69 (diff
+// no longer positive) without touching box68 — mirrors the original "box 111 back to 0"
+// revert scenario, now reached through the formula instead of a direct write.
+function setBoxesForZero111() {
+  setBoxValue(70, 5); // box70 - box69 = 5 - 5 = 0 (not > 0) -> computeBox111 returns null.
 }
 
 function makeDecl(identification, overrides = {}) {
@@ -75,10 +97,12 @@ describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity 
     const decl = makeDecl({ tipo_declaracion: 'I', rectificativa: false, bank_sepa: '3' });
     render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
 
-    // Activate: check rectificativa, set box 111 = 10.
+    // Activate: check rectificativa, autocomplete box 111 to a non-zero value (ETP-5431 pt.2 —
+    // via boxes 68/70, box 111 is no longer directly typed) — without touching box 111,
+    // never the user.
     fireEvent.click(screen.getByText('fm.page.resultado_final'));
     fireEvent.click(findRectificativaCheckbox());
-    setBoxValue(111, 10);
+    setBoxesForNonZero111();
 
     // Bank block visible AND required (asterisk present) on the identificacion tab.
     fireEvent.click(screen.getByText('fm.page.identificacion'));
@@ -86,9 +110,9 @@ describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity 
     expect(labelAfterActivate).toBeInTheDocument();
     expect(labelAfterActivate.textContent).toBe('fm.ident.bank.swift_bic*');
 
-    // Revert: box 111 back to 0 (rectificativa stays checked).
+    // Revert: box 111 autocompletes back to empty (rectificativa stays checked).
     fireEvent.click(screen.getByText('fm.page.resultado_final'));
-    setBoxValue(111, 0);
+    setBoxesForZero111();
 
     fireEvent.click(screen.getByText('fm.page.identificacion'));
     expect(screen.queryByText(/^fm\.ident\.bank\.swift_bic\*?$/)).not.toBeInTheDocument();
@@ -102,7 +126,7 @@ describe('FmModel303Page + FmBoxes303 — datos_bancarios visibility reactivity 
 
     fireEvent.click(screen.getByText('fm.page.resultado_final'));
     fireEvent.click(findRectificativaCheckbox());
-    setBoxValue(111, 10);
+    setBoxesForNonZero111();
 
     fireEvent.click(screen.getByText('fm.page.identificacion'));
     expect(screen.getByText(/^fm\.ident\.bank\.swift_bic\*?$/)).toBeInTheDocument();
@@ -146,7 +170,7 @@ describe('FmModel303Page + FmBoxes303 — marca SEPA reactivity (ETP-5431)', () 
     render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} />);
     fireEvent.click(screen.getByText('fm.page.resultado_final'));
     fireEvent.click(findRectificativaCheckbox());
-    setBoxValue(111, 10);
+    setBoxesForNonZero111();
     fireEvent.click(screen.getByText('fm.page.identificacion'));
   }
 

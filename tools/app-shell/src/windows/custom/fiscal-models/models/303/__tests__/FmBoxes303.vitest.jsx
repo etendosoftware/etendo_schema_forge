@@ -873,30 +873,37 @@ describe('FmBoxes303 — commitPendingEdit no-op guard (ETP-5409)', () => {
 // FmBoxes303 in isolation: after a commit, the parent re-renders with the corrected
 // (post-clamp) `boxes` value, and re-opening the editor must read from THAT, not from
 // a leftover draft.
+//
+// ETP-5431 pt.2 — box 111 is no longer user-editable (see "read-only" describe block
+// below), so this regression is now exercised on box 77 instead: it's the other box in
+// `NEGATIVE_NOT_ALLOWED_BOXES` that is STILL editable, so the exact same stale-draft
+// mechanics still apply to it. The scenario (type negative, commit, parent clamps and
+// re-renders, reopen must show the clamped value not the stale draft) is unchanged —
+// only the box number moved.
 
 describe('FmBoxes303 — editable cell re-edit does not leak a stale pending draft (ETP-5393)', () => {
-  it('box 111: types -12, commits (blur), parent clamps to 0 — reopening the editor shows 0, not -12', () => {
+  it('box 77: types -12, commits (blur), parent clamps to 0 — reopening the editor shows 0, not -12', () => {
     const onBoxChange = vi.fn();
     const { container, rerender } = render(
       <FmBoxes303
         {...BASE_PROPS}
-        boxes={{ 111: 0 }}
+        boxes={{ 77: 0 }}
         sectionIds={['resultado_final']}
         onBoxChange={onBoxChange}
       />
     );
 
-    // Open the editor for box 111 and type the invalid negative value.
-    const findEditBtnFor111 = (c) => Array.from(c.querySelectorAll('.fm-aeat-cell')).find(
-      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '111'
+    // Open the editor for box 77 and type the invalid negative value.
+    const findEditBtnFor77 = (c) => Array.from(c.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '77'
     )?.querySelector('.fm-aeat-cell__edit-btn');
 
-    fireEvent.click(findEditBtnFor111(container));
+    fireEvent.click(findEditBtnFor77(container));
     let input = container.querySelector('.fm-aeat-cell__input');
     expect(input).toBeTruthy();
     fireEvent.change(input, { target: { value: '-12' } });
     fireEvent.blur(input);
-    expect(onBoxChange).toHaveBeenCalledWith(111, '-12');
+    expect(onBoxChange).toHaveBeenCalledWith(77, '-12');
     // Editor closed after commit.
     expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
 
@@ -906,7 +913,7 @@ describe('FmBoxes303 — editable cell re-edit does not leak a stale pending dra
     rerender(
       <FmBoxes303
         {...BASE_PROPS}
-        boxes={{ 111: 0 }}
+        boxes={{ 77: 0 }}
         sectionIds={['resultado_final']}
         onBoxChange={onBoxChange}
       />
@@ -914,7 +921,7 @@ describe('FmBoxes303 — editable cell re-edit does not leak a stale pending dra
 
     // Reopen the editor for the same cell — it must start from the current
     // persisted value (0), never the stale "-12" draft from the previous session.
-    fireEvent.click(findEditBtnFor111(container));
+    fireEvent.click(findEditBtnFor77(container));
     input = container.querySelector('.fm-aeat-cell__input');
     expect(input).toBeTruthy();
     expect(input.value).toBe('0');
@@ -2090,5 +2097,83 @@ describe('FmBoxes303 — readOnly prop', () => {
       expect(textInput).toBeTruthy();
       expect(textInput.disabled).toBe(true);
     });
+  });
+});
+
+// ── ETP-5431 pt.2 — casilla 111 is no longer user-editable ───────────────────
+// `rectificacion_importe` (box 111, resultado_final section) now carries neither `editable`
+// nor `derivedValue` in fm303Layouts.js — its value comes exclusively from `computeBox111`,
+// applied to the real box array by `recomputeDerivedBoxes` (fiscalModelsUtils.js), one level
+// above this component. From FmBoxes303's own point of view the row renders like any other
+// non-editable total row (e.g. `resultado_69`/`resultado_declaracion`): a plain read-only cell,
+// no pencil, no `fm-aeat-cell--editable` class.
+
+describe('FmBoxes303 — box 111 (rectificacion_importe) is read-only (ETP-5431 pt.2)', () => {
+  function findCell111(container) {
+    return Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '111'
+    );
+  }
+
+  it('renders no edit button for box 111, unlike its still-editable sibling box 70', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 10, 111: 5 }} sectionIds={['resultado_final']} />
+    );
+    const cell111 = findCell111(container);
+    expect(cell111).toBeTruthy();
+    expect(cell111.querySelector('.fm-aeat-cell__edit-btn')).toBeNull();
+    expect(cell111.classList.contains('fm-aeat-cell--editable')).toBe(false);
+
+    const cell70 = Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+      cell => cell.querySelector('.fm-aeat-cell__num')?.textContent === '70'
+    );
+    expect(cell70.querySelector('.fm-aeat-cell__edit-btn')).toBeTruthy();
+  });
+
+  it('clicking anywhere in the box 111 cell does not open an editor', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 111: 5 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    fireEvent.click(findCell111(container));
+    expect(container.querySelector('.fm-aeat-cell__input')).toBeNull();
+    expect(onBoxChange).not.toHaveBeenCalled();
+  });
+
+  it('still displays the formatted value, exactly like the other computed total rows', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 111: 1234.56 }} sectionIds={['resultado_final']} />
+    );
+    const value = findCell111(container).querySelector('.fm-aeat-cell__value');
+    expect(value.textContent.trim()).not.toBe('');
+  });
+});
+
+// ── ETP-5431 pt.2 — boxes 109/70 join the negative-not-allowed `min="0"` UX hint ─────
+// Same `NEGATIVE_NOT_ALLOWED_BOXES`-driven input attribute already covered for box 77's stale-
+// draft scenario above — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) are now also members
+// of the shared Set, so their editors must carry `min="0"` too (FmBoxes303.jsx:167).
+
+describe('FmBoxes303 — min="0" on boxes 109/70 (ETP-5431 pt.2, NEGATIVE_NOT_ALLOWED_BOXES)', () => {
+  function openEditorFor(container, boxNum) {
+    const cell = Array.from(container.querySelectorAll('.fm-aeat-cell')).find(
+      c => c.querySelector('.fm-aeat-cell__num')?.textContent === String(boxNum).padStart(2, '0')
+    );
+    fireEvent.click(cell.querySelector('.fm-aeat-cell__edit-btn'));
+    return container.querySelector('.fm-aeat-cell__input');
+  }
+
+  it('renders min=0 on box 109 (devoluciones_at)', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 109: 0 }} sectionIds={['resultado_final']} />
+    );
+    expect(openEditorFor(container, 109).getAttribute('min')).toBe('0');
+  });
+
+  it('renders min=0 on box 70 (a_deducir)', () => {
+    const { container } = render(
+      <FmBoxes303 {...BASE_PROPS} boxes={{ 70: 0 }} sectionIds={['resultado_final']} />
+    );
+    expect(openEditorFor(container, 70).getAttribute('min')).toBe('0');
   });
 });
