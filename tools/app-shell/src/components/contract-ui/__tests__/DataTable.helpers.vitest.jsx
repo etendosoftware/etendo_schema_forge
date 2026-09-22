@@ -139,29 +139,23 @@ describe('DataTable helpers', () => {
   // (here, the header row, since <TableHeader> precedes <TableBody> in the
   // DOM) ONCE, and does not recompute from body content afterward — so
   // applying it unconditionally stops the resize regardless of hideHeader.
-  // ETP-5332 — `getTableContainerStyle` gained an optional `minWidthPx = 0` parameter
-  // (the sum of every column's own width demand, used to stop a fixed-layout table
-  // from squeezing columns below their own colgroup). The old signature took no
-  // arguments at all, so passing a boolean here used to be inert; `true > 0` is truthy
-  // in JS, so the same call now silently returns `minWidth: true` instead of the plain
-  // shape below. Calls are re-expressed against the real contract: no argument (or 0)
-  // for the no-budget case, a literal px number for the budget case — never a boolean.
+  // ETP-5332 (origin/develop) gave `getTableContainerStyle` an optional
+  // `minWidthPx` budget parameter that added a literal `minWidth` to the
+  // returned style. That approach was superseded by this ticket's own later
+  // fix (ETP-5133, BUG-1 pass 2): a JS-measured `growColumnWidth()` using a
+  // `ResizeObserver` (see DataTable.jsx's own doc comments around
+  // `growColumnWidth`/`renderLinesColgroup`). The merged, real
+  // `getTableContainerStyle()` takes zero arguments and never returns a
+  // `minWidth` — assert that contract directly instead of the superseded one.
   describe('getTableContainerStyle', () => {
-    it('is byte-identical to the pre-ETP-5332 shape when called with no argument (every existing caller outside DataTable relies on this)', () => {
+    it('takes no arguments and always returns the plain fixed-layout shape', () => {
       expect(getTableContainerStyle()).toEqual({ tableLayout: 'fixed', width: '100%' });
       expect(getTableContainerStyle()).not.toHaveProperty('minWidth');
     });
 
-    it('is also the plain shape when explicitly passed 0 (no budget to declare)', () => {
-      expect(getTableContainerStyle(0)).toEqual({ tableLayout: 'fixed', width: '100%' });
-    });
-
-    it('adds a literal minWidth when a px budget is given', () => {
-      expect(getTableContainerStyle(992)).toEqual({
-        tableLayout: 'fixed',
-        width: '100%',
-        minWidth: 992,
-      });
+    it('ignores extra arguments (no minWidth budget parameter exists)', () => {
+      expect(getTableContainerStyle(992)).toEqual({ tableLayout: 'fixed', width: '100%' });
+      expect(getTableContainerStyle(992)).not.toHaveProperty('minWidth');
     });
   });
 });

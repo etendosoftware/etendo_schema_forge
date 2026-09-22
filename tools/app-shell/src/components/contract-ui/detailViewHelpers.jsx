@@ -100,6 +100,30 @@ export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
   });
 }
 
+/**
+ * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
+ *
+ * That modal persists its row with its own raw fetch, bypassing `handleAddChild`/
+ * `handleUpdateChild` entirely — the only places that mark BOTH the child collection
+ * cache (`invalidateChildrenCache`, ETP-5366) AND the PARENT entity's own list cache
+ * (`invalidateEntityCache`) stale. Without the latter, the window's grid kept serving
+ * its pre-save cached page (e.g. a rolled-up "Dirección" list column) for up to
+ * `recordStaleTime` after the user navigated back to it (ETP-5366 follow-up).
+ *
+ * `secondaryHooks[idx]` is the same `useEntity(entity, ...)` instance as the main
+ * `hook` (identical first `entity` arg), so invalidating through either reaches the
+ * same cache key.
+ */
+export function buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState }) {
+  return () => {
+    const parent = hook.selected ?? hook.editing;
+    secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
+    secondaryHooks[idx]?.invalidateEntityCache?.();
+    secondaryHooks[idx]?.handleSelect(parent);
+    setCustomModalState({ key: null, rowId: null });
+  };
+}
+
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
   // devtools console is open) and only place it beside the content once there

@@ -34,7 +34,6 @@ export default function GoodsReceiptSecondaryActions(props) {
   const [showClone, setShowClone] = useState(false);
 
   const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   return (
     <DocumentSecondaryActions
@@ -51,7 +50,6 @@ export default function GoodsReceiptSecondaryActions(props) {
           receiptId={recordId}
           data={data}
           base={base}
-          headers={headers}
           onClose={() => setShowClone(false)}
           onCloned={(newId) => { setShowClone(false); navigate(`/goods-receipt/${newId}`); }}
           data-testid="CloneReceiptModal__GoodsReceiptSecondaryActions" />,

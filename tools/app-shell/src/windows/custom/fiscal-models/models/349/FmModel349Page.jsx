@@ -868,7 +868,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
+    // ETP-4576 — `!token` is deliberately NOT part of this gate; see FmModel303Page.jsx's
+    // identical comment. Under the cookie session the client holds no token, so a `!token`
+    // gate is permanently false and the request would simply never fire.
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
       if (cached?.operators) setLiveOperators(cached.operators);

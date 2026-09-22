@@ -9,6 +9,18 @@ vi.mock('@/i18n', () => ({
   useUI: () => key => key,
   getStoredLocale: () => 'es_ES',
 }));
+// ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
+// `isAuthenticated` off the auth context rather than a token it can read. Nothing here renders
+// an AuthProvider, so the context is mocked instead of wrapping every case.
+// Both accessors, same session: useEnvironmentSwitch reads the optional one (ETP-5216 mounts
+// its callers in trees with no provider), and a mock that declares only the strict one makes
+// every render of this page throw before it can assert anything.
+const UPGRADE_SESSION = { isAuthenticated: true, csrfToken: null, session: null };
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => UPGRADE_SESSION,
+  useAuthOptional: () => UPGRADE_SESSION,
+}));
+
 vi.mock('@/auth/api.js', () => ({
   authHeaders: (t) => ({ 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }),
   buildHeaders: (t) => ({ 'Content-Type': 'application/json', 'Accept-Language': 'es_ES', ...(t ? { Authorization: `Bearer ${t}` } : {}) }), detectBaseUrl: () => 'http://tomcat.example/etendo' }));
@@ -17,6 +29,13 @@ vi.mock('@/lib/observability.js', () => ({
   track: vi.fn(),
 }));
 
+import {
+  TEST_BEARER_TOKEN,
+  TEST_CSRF_TOKEN,
+  declareBearerSession,
+  declareCookieSession,
+  expectNoAuthorizationHeader,
+} from '@/test/sessionContract.js';
 import UpgradePage from '../UpgradePage.jsx';
 // `track` is imported (not just `vi.mock`ed above) so `trackedEvents` below can
 // read `.mock.calls` off the same singleton — see OnboardingPage.vitest.jsx /
@@ -25,6 +44,17 @@ import UpgradePage from '../UpgradePage.jsx';
 // Stripe's hosted page owns card entry now, there is no local decline constant.
 import { track } from '@/lib/observability.js';
 
+/**
+ * ETP-4576 — a LEGACY key, seeded on purpose and expected to change nothing.
+ *
+ * `getCheckoutToken()`/`getPlatformToken()` used to read it and hand the value to
+ * `buildAuthHeaders`, which puts whatever it receives into `X-Go-CSRF`. `purgeLegacyAuthStorage`
+ * deletes the key, so the value was always null and both checkout POSTs went out with no proof of
+ * intent — refused by the backend, while the environments GET beside them kept working because the
+ * browser attaches the session cookie by itself. Both readers are gone; the seed stays so the
+ * cases below can assert that a stale entry left over from an older release makes no difference
+ * either way.
+ */
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const EXISTING_TENANT = 'Acme Trial';
 
@@ -135,6 +165,46 @@ function installFetch({ environments = [], purchases = [], checkout = {}, status
   return requests;
 }
 
+/**
+ * Headers of the first recorded request whose URL contains `fragment`, keys lowercased.
+ *
+ * Read off `globalThis.fetch.mock.calls` rather than the `requests` array `installFetch` returns,
+ * because that one only records the checkout-creation route — and the proof has to be asserted on
+ * the onboarding POST too, which is the other write in this flow.
+ */
+function headersFor(fragment) {
+  const call = globalThis.fetch.mock.calls.find(([url]) => String(url).includes(fragment));
+  expect(call, `no request matched ${fragment}`).toBeTruthy();
+  return headersOf(call[1]);
+}
+
+/** A request's headers with the keys lowercased, so a case change cannot pass an assertion. */
+function headersOf(init) {
+  return Object.fromEntries(
+    Object.entries(init?.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]),
+  );
+}
+
+/**
+ * The checkout write. `develop` moved it off `/sws/go/checkout/sessions` onto the
+ * provider-neutral billing boundary (`createBillingPurchase`, lib/upgrade/api.js), so the proof
+ * has to be asserted there — the old path is still mocked by `installFetch`, and asserting on it
+ * would silently assert nothing.
+ *
+ * Matched on the exact URL AND the method, not a fragment: `/sws/go/billing/purchases/<id>` is a
+ * READ on the same prefix, and a fragment match that drifted onto it would look green while the
+ * write went out bare.
+ */
+const CHECKOUT_POST_URL = '/sws/go/billing/purchases';
+
+function checkoutPostCall() {
+  const call = globalThis.fetch.mock.calls.find(
+    ([url, init]) => String(url) === CHECKOUT_POST_URL && init?.method === 'POST',
+  );
+  expect(call, `no POST matched ${CHECKOUT_POST_URL}`).toBeTruthy();
+  return call;
+}
+
 /** The properties of every tracked event carrying this name, in order. */
 function trackedEvents(name) {
   return track.mock.calls
@@ -182,6 +252,10 @@ beforeEach(() => {
   globalThis.localStorage.clear();
   globalThis.localStorage.setItem(PLATFORM_TOKEN_KEY, 'platform-token');
   globalThis.sessionStorage.clear();
+  // The page mocks AuthContext away, so nothing publishes the session credentials the request
+  // builders read — without this the scheme stays on its bearer default and a case asserting the
+  // CSRF proof would see only a Content-Type. See src/test/sessionContract.js.
+  declareCookieSession();
   vi.stubGlobal('location', { ...globalThis.location, assign: assignMock });
 });
 
@@ -216,7 +290,6 @@ describe('UpgradePage — hosted checkout', () => {
       clientName: 'Acme Trial',
       upgradeAction: 'create-productive',
       language: 'es_ES',
-      dataTransfer: { products: true, contacts: true },
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
   });
@@ -261,6 +334,107 @@ describe('UpgradePage — hosted checkout', () => {
 });
 
 /**
+ * ETP-4576 — what the checkout requests CARRY, which is what actually broke.
+ *
+ * Every assertion above this block is about the body and the screen, and all of them passed while
+ * paying for a tenant was impossible: the POST reached the right URL with the right payload and
+ * the backend refused it, because `getCheckoutToken()` read `sf_auth_token`/`sf_platform_token` —
+ * keys the migration purges — and fed the null it got to `buildAuthHeaders`, which puts its
+ * argument into `X-Go-CSRF`. The GET beside it kept working the whole time, since the browser
+ * attaches the session cookie itself and a read needs no proof, so nothing on screen said a word.
+ *
+ * Both schemes are driven, because the preference promises ONE switch and TWO working schemes: a
+ * call site that hardcodes one scheme's header sends nothing under the other, and only a suite
+ * that runs it twice can see that.
+ *
+ * What `develop` changed underneath, and what it did NOT change: the write moved to
+ * `/sws/go/billing/purchases` and the tenant name is no longer typed — it is derived from the demo
+ * environment and rendered read-only. Neither touches what this block is about, which is what the
+ * requests CARRY.
+ */
+describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
+  /**
+   * Drives the flow to the point where the checkout write has gone out.
+   *
+   * There is no tenant name to type: `develop` removed the input, so the name comes from the demo
+   * environment. It is asserted on screen here rather than assumed, because a blank name would
+   * still produce a POST and every header assertion below would pass on a request that means
+   * nothing.
+   */
+  async function submitCheckout() {
+    const user = userEvent.setup();
+    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+    expect(screen.getByTestId('upgrade-tenant-from-demo')).toHaveTextContent(EXISTING_TENANT);
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+  }
+
+  it('sends the write proof on the checkout POST under the cookie scheme', async () => {
+    await submitCheckout();
+
+    expect(headersOf(checkoutPostCall()[1])['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
+    // Not just on this one: no request in the whole flow may carry a bearer token.
+    expectNoAuthorizationHeader();
+  });
+
+  it('lets the session cookie travel on the checkout POST', async () => {
+    await submitCheckout();
+
+    const [, init] = checkoutPostCall();
+    // Absent, this is only broken cross-origin — which is the dev setup (:3100 -> :8080) and any
+    // split-origin deploy, i.e. exactly where it is hardest to notice.
+    expect(init.credentials).toBe('include');
+  });
+
+  it('leaves the environments GET without a proof, as a read needs none', async () => {
+    await submitCheckout();
+
+    expect(headersFor('/sws/go/environments')['x-go-csrf']).toBeUndefined();
+  });
+
+  it('sends the write proof on the onboarding POST after the Stripe redirect', async () => {
+    // The second of the two writes, and the one that actually provisions the tenant: a proof
+    // missing here means the user has paid and gets nothing.
+    setupCheckoutReturn({ tenantName: 'Acme Productive' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    expect(headersFor('/sws/go/onboarding')['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
+    // …and the status poll beside it is a read, so it carries none.
+    expect(headersFor('/sws/go/checkout/sessions/')['x-go-csrf']).toBeUndefined();
+  });
+
+  it('sends the bearer token, and the proof too, under the bearer scheme', async () => {
+    // The scheme the app runs on while the CSRF preference is off. The proof travels there as
+    // well, deliberately: the browser attaches a same-origin session cookie whatever the client
+    // believes it is doing, and the backend validates CSRF the moment it sees one on a write.
+    declareBearerSession();
+    await submitCheckout();
+
+    const headers = headersOf(checkoutPostCall()[1]);
+    expect(headers.authorization).toBe(`Bearer ${TEST_BEARER_TOKEN}`);
+    expect(headers['x-go-csrf']).toBe(TEST_CSRF_TOKEN);
+  });
+
+  it('takes its credential from the scheme, never from the legacy storage key', async () => {
+    // The stale entry `beforeEach` seeds must reach no header of any request in the flow. That it
+    // makes no difference either way is covered by the two "no token is held" cases above, which
+    // remove the key and assert the same outcomes.
+    await submitCheckout();
+
+    for (const [, init] of globalThis.fetch.mock.calls) {
+      expect(JSON.stringify(init?.headers ?? {})).not.toContain('platform-token');
+    }
+  });
+});
+
+/**
  * Checkout funnel telemetry. Each test drives one funnel step and asserts the
  * event name and properties the analytics side reads, because a renamed event or
  * a dropped property is invisible in the UI and only shows up as a hole in the
@@ -289,12 +463,15 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
   });
 
-  it('reports the unavailable branch when there is no platform token to look up with', async () => {
+  // ETP-4576 — there is no "no platform token" branch left: under the cookie scheme no client
+  // holds one, so reporting the page as unavailable on that basis hid the upgrade from every
+  // authenticated user. The lookup runs and the branch follows what the backend answers.
+  it('reports the checkout branch even when no token is held', async () => {
     globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'unavailable' }]));
+    await waitFor(() => expect(trackedEvents('upgrade_page_viewed')).toEqual([{ branch: 'checkout' }]));
   });
 
   it('tracks leaving for free onboarding instead of the checkout', async () => {
@@ -319,7 +496,11 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(trackedEvents('upgrade_checkout_submitted')).toEqual([{ upgradeAction: 'create-productive' }]);
   });
 
-  it('tracks an expired session instead of a submission', async () => {
+  // ETP-4576 — an absent local token is no longer "session expired": under the cookie scheme
+  // no client holds one, so that check refused the submission for every authenticated user.
+  // Whether the session is still valid is the backend's answer (401), not a local guess, so
+  // what this now pins down is that the submission is no longer blocked before it is sent.
+  it('submits even when no token is held locally', async () => {
     const user = userEvent.setup();
     globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
@@ -327,9 +508,8 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
     await user.click(screen.getByTestId('upgrade-submit'));
 
-    await screen.findByTestId('upgrade-error');
-    expect(trackedEvents('upgrade_session_expired')).toEqual([{}]);
-    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
+    await waitFor(() => expect(trackedEvents('upgrade_checkout_submitted')).not.toEqual([]));
+    expect(trackedEvents('upgrade_session_expired')).toEqual([]);
   });
 
   it('tracks the submission with the chosen upgrade action, before the redirect', async () => {
@@ -420,6 +600,23 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await renderUpgradePage();
 
     await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+    await screen.findByTestId('upgrade-success');
+    expect(requests).toHaveLength(0);
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/onboarding', expect.objectContaining({ method: 'POST' })
+    );
+  });
+
+  it('offers recovery for a purchase stalled in provisioning', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [{ purchaseId: 'purchase-stalled', status: 'PROVISIONING', clientName: 'Acme Productive' }],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-stalled'));
     await screen.findByTestId('upgrade-success');
     expect(requests).toHaveLength(0);
     expect(globalThis.fetch).toHaveBeenCalledWith(

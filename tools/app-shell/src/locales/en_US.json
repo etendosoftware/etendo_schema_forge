@@ -16972,11 +16972,13 @@
     "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
     "processAssetCompleted": "Create Amortization completed",
+    "processNowCompleted": "Create Periods completed",
     "reactivated": "Document reactivated",
     "post": "Post",
     "unpost": "Unpost",
     "documentPosted": "Document posted successfully",
     "documentUnposted": "Document unposted successfully",
+    "documentConfirmed": "Document confirmed successfully",
     "notPostedDocuments": "Not Posted Documents",
     "postSelected": "Post selected",
     "postingComplete": "All documents posted successfully",
@@ -17158,6 +17160,10 @@
     "allShipmentsAlreadyInvoiced": "All selected shipments are already invoiced",
     "selectShipmentsSameCustomer": "Select shipments from the same customer",
     "selectShipmentsSameCurrency": "Select shipments in the same currency",
+    "receipt": "receipt",
+    "allReceiptsAlreadyInvoiced": "All selected receipts are already invoiced",
+    "selectReceiptsSameVendor": "Select receipts from the same vendor",
+    "selectReceiptsSameCurrency": "Select receipts in the same currency",
     "invoiceCreatedAsDraftToast": "Invoice created and confirmed",
     "failedToCreateInvoice": "Failed to create invoice",
     "failedToGeneratePdf": "Failed to generate PDF",
@@ -17626,6 +17632,7 @@
     "accessTierReadOnly": "Read-only",
     "rolesWindowCount": "{count} Windows",
     "rolesMatrixWindowColumn": "Window",
+    "rolesMatrixInformesHeader": "Informes",
     "rolesUserCount": "{count} Users",
     "rolesSummaryCardNavigateAria": "View users with the {role} role",
     "userRolesTabLabel": "User roles",
@@ -20087,7 +20094,7 @@
     "soConfirmedTitle": "Order confirmed",
     "soConfirmedSubtitle": "The following documents were created as drafts:",
     "soConfirmActionOnly": "Confirm order",
-    "soManageDocsTitle": "Manage documents",
+    "soManageDocsTitle": "Generate invoice",
     "soCreateDocsBtn": "Create →",
     "soDocsCreatedTitle": "Documents created",
     "soOrderConfirmed": "Order confirmed",
@@ -20268,6 +20275,7 @@
     "assetsDepEndDateLabel": "Amortization End Date",
     "assetsAssetValueLabel": "Asset Value",
     "assetsResidualValueLabel": "Residual Asset Value",
+    "assetsPendingDepreciationLabel": "Pending Depreciation",
     "assetsDepreciationAmtLabel": "Depreciation Amount",
     "assetsPrevDepreciatedLabel": "Previously Depreciated Value",
     "poSave": "Save",
@@ -20398,6 +20406,7 @@
     "goBack": "Go back",
     "deleteRow": "Delete",
     "editLineTooltip": "Edit line",
+    "savingLineTooltip": "Saving line",
     "selectRow": "Select row",
     "recordDeleted": "Record deleted",
     "recordsDeleted": "{count} record(s) deleted",
@@ -21282,6 +21291,11 @@
     "firstStepsTeamDesc": "Invite the people who will work with you and choose what each one can do.",
     "firstStepsAllSetTitle": "You're all set",
     "firstStepsAllSetSubtitle": "Your account is ready. Create your first invoice and start working.",
+    "firstStepsFinishSetup": "Finish initial setup",
+    "firstStepsFinishSetupHint": "Hides First Steps from the menu. You can bring it back from this page at any time.",
+    "firstStepsDismissedTitle": "First Steps is hidden",
+    "firstStepsDismissedSubtitle": "It no longer appears in the menu. Bring it back whenever you want to review the setup.",
+    "firstStepsReopen": "Show it in the menu again",
     "inviteUser": "Invite user",
     "inviteUserDescriptionTitle": "Company user invitations",
     "inviteUserDescription": "Invite people to join your company by email. They can accept with an existing account or register a new one.",
@@ -22081,8 +22095,13 @@
     "amortizationErrorFullyDepreciated": "This asset is already fully depreciated. No new amortization lines can be generated.",
     "assetsValidationAnnualDepreciationMax": "Annual Depreciation % cannot exceed 100%. Please correct the value before creating amortization.",
     "amortizationConfirmAction": "Confirm amortization",
-    "amortizationErrorLineAmountInvalid": "There are lines with a zero or negative amount. Please correct them before confirming.",
-    "amortizationErrorLinePercentageMissing": "There are lines with a missing amortization percentage. Please correct them before confirming.",
+    "amortizationErrorLineAmountInvalid": "There are lines with a zero or negative amount.",
+    "amortizationErrorLinePercentageMissing": "There are lines with a missing amortization percentage.",
+    "amortizationBulkAlreadyConfirmed": "Already confirmed",
+    "amortizationProcessedDirectUpdateBlocked": "Processed cannot be updated directly.",
+    "amortizationBulkNoLines": "Has no amortization lines.",
+    "amortizationBulkValidationFailed": "Could not validate document",
+    "amortizationBulkNotConfirmed": "Not confirmed, nothing to reactivate",
     "assetsAnnualDepreciationLabel": "Annual Depreciation %",
     "returnToVendorPdfGenerating": "Generating purchase return delivery note...",
     "returnToVendorPdfError": "Could not generate the purchase return PDF.",
@@ -22255,18 +22274,15 @@
     "glc.section.identity.title": "Schema identity",
     "glc.section.identity.subtitle": "Basic accounting schema configuration.",
     "glc.section.calendar.title": "Calendar and currency",
-    "glc.section.policies.title": "Accounting policies",
-    "glc.section.policies.subtitle": "Rules that affect accounting recording and calculation.",
     "glc.field.name": "Schema name",
     "glc.field.gaap": "Accounting standard",
     "glc.field.organization": "Organization",
-    "glc.field.accrual": "Accounting criterion",
     "glc.field.description": "Description",
     "glc.field.calendar": "Fiscal calendar",
     "glc.field.currency": "Main currency",
+    "glc.toggle.allowNegative": "Allow negative",
     "glc.accrual.accrual": "Accrual",
     "glc.accrual.cash": "Cash",
-    "glc.toggle.allowNegative": "Allow negative",
     "glc.unbacked.label": "Not saved",
     "glc.unbacked.tooltip": "This field is a design preview and is not stored yet.",
     "glc.readonly.fromOrgInfo": "Defined on the organization",
@@ -24950,6 +24966,7 @@
     "documentSequenceSalesOrder": "Sales Order",
     "documentSequenceSalesInvoice": "Sales Invoice",
     "documentSequenceSalesCorrectiveInvoice": "Corrective Sales Invoice",
+    "documentSequencePurchaseInvoice": "Purchase Invoice",
     "documentSequencePurchaseCorrectiveInvoice": "Corrective Purchase Invoice",
     "backendError.returnInvoiceAlreadyExists": "A rectificative invoice already exists for this return document.",
     "backendError.rectifiedInvoiceRequired": "Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.",
@@ -26230,6 +26247,30 @@
     },
     "Receipt-Invoice Link": {
       "label": "Receipt-Invoice Link"
+    },
+    "Tax Report": {
+      "label": "Tax Report"
+    },
+    "Aging Report (Receivables)": {
+      "label": "Aging Report (Receivables)"
+    },
+    "Aging Report (Payables)": {
+      "label": "Aging Report (Payables)"
+    },
+    "Stock Report": {
+      "label": "Stock Report"
+    },
+    "Balance Sheet": {
+      "label": "Balance Sheet"
+    },
+    "Profit & Loss": {
+      "label": "Profit & Loss"
+    },
+    "General Ledger": {
+      "label": "General Ledger"
+    },
+    "Journal Entries": {
+      "label": "Journal Entries"
     }
   },
   "statuses": {

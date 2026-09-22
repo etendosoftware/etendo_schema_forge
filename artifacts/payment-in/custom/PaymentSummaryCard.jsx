@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const STATUS_LABEL_KEYS = {
   RPPC: 'statusCleared', DR: 'statusDraft', RPAP: 'statusAwaiting',
@@ -15,6 +16,12 @@ function fmtAmount(amount, currencyId) {
 }
 
 export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   if (!data) return null;
 
@@ -23,15 +30,14 @@ export default function PaymentSummaryCard({ data, token, apiBaseUrl }) {
   const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/payment-in/finPaymentScheduleDetail?parentId=${data.id}&_startRow=0&_endRow=100`,
-          { headers },
+          {},
         );
         if (!res.ok) { setAppliedAmount(0); return; }
         const details = (await res.json())?.response?.data || [];

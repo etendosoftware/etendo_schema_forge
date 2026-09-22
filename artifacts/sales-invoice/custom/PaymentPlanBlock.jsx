@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -27,10 +28,13 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
   const [loaded, setLoaded] = useState(false);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const currency = data?.['currency$_identifier'] || '';
   const grandTotal = parseFloat(data?.grandTotalAmount) || 1;
 
@@ -39,7 +43,7 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/sales-invoice/paymentPlan?parentId=${recordId}&_startRow=0&_endRow=50`, { headers });
+        const res = await apiFetch(`${base}/sales-invoice/paymentPlan?parentId=${recordId}&_startRow=0&_endRow=50`);
         if (res.ok && !cancelled) {
           setInstallments((await res.json())?.response?.data || []);
         }
@@ -47,7 +51,7 @@ export default function PaymentPlanBlock({ recordId, data, token, apiBaseUrl }) 
       finally { if (!cancelled) setLoaded(true); }
     })();
     return () => { cancelled = true; };
-  }, [recordId, base, headers]);
+  }, [recordId, base, apiFetch]);
 
   // Only show if 2+ installments
   if (!loaded || installments.length < 2) return null;

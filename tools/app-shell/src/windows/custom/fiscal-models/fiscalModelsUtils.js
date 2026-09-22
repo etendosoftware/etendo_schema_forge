@@ -8,7 +8,7 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
 export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -284,7 +284,7 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
 }
 
 export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
@@ -333,7 +333,7 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
 export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = { status: newStatus };
@@ -361,7 +361,10 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
 export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone, exactly like validate349Vies below. Under the
+  // cookie session the client holds no token, so a `!token` gate is permanently false and
+  // the DELETE is simply never issued - the row's delete action does nothing, silently.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
@@ -390,7 +393,7 @@ export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
  * was rejected", so both collapse to the same ok:false contract.
  */
 export async function persistManualData(id, manualData, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
@@ -435,7 +438,7 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
 export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
-  if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
+  if (!apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, { baseUrl: '', token });
@@ -865,7 +868,7 @@ function getDeadlineDate(model, year, period) {
  * updated after sinceMs (Unix ms timestamp). Returns false on any error.
  */
 export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
@@ -882,7 +885,7 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
 // ── Model 349 utilities ───────────────────────────────────────────
 
 export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -943,7 +946,10 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
  * action is always a meaningful follow-up.
  */
 export async function validate349Vies(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone. Under the cookie session the client holds no
+  // token, so a `!token` gate is permanently false and the request is simply never
+  // issued - no error, no failed response, just a button that does nothing.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -995,7 +1001,7 @@ export async function generate349File(decl, {
   token, apiBaseUrl, phone, contact,
   fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
 } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -1046,7 +1052,7 @@ export async function generate349File(decl, {
 }
 
 export async function checkModified349(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
