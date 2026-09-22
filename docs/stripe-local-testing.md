@@ -655,6 +655,56 @@ renewal date — attaching a test clock would need to happen at Stripe customer 
 checkout flow does not currently do. The offline hand-rolled simulator above is the practical way
 to exercise those two deterministically.
 
+### Forcing a real `invoice.payment_failed` / `invoice.paid` cycle (`tools/stripe-subscription-past-due.sh`)
+
+`tools/stripe-webhook-simulate.sh` (§4) hand-signs a payload; it never touches Stripe. For a test
+that must go through the *real* provider — a real declined charge, a real webhook, forwarded by a
+real `stripe listen` — use `tools/stripe-subscription-past-due.sh` instead. It takes one id, either
+an `etgo_checkout_request_id` or an `etgo_billing_event_id` (case-insensitive; a billing event is
+resolved to its linked checkout request first), reads the real `stripe_subscription_id` /
+`stripe_customer_id` / `created_client_id` from `ETGO_CHECKOUT_REQUEST`, and drives Stripe directly:
+
+```bash
+stripe listen --forward-to localhost:8080/etendo/sws/go/checkout/webhook   # keep this running
+
+make stripe-past-due ID=<etgo_checkout_request_id_or_billing_event_id>            # CMD=fail (default)
+make stripe-past-due ID=<same id> CMD=recover
+make stripe-past-due ID=<same id> CMD=status                                     # read-only
+```
+
+or directly: `tools/stripe-subscription-past-due.sh [fail|recover|status] <id>`.
+
+- **`fail`** attaches the well-known test payment method `pm_card_chargeCustomerFail` as the
+  subscription's default, creates and finalizes a manual invoice for the subscription's own price
+  (`--amount` overrides the cents), then pays it — a decline is the *expected* outcome, not a
+  script failure. It then polls the DB for the `invoice.payment_failed` billing event and the
+  `PAST_DUE` / non-null-due-date projection, and saves recovery state (subscription, customer, the
+  failing payment method, the previous default payment method, the invoice id) to
+  `${TMPDIR:-/tmp}/etp5443-past-due-<sub>.env`.
+- **`recover`** restores the previous default payment method (or attaches `pm_card_visa` if none
+  was on file) and pays the *same* invoice `fail` left open — this time expected to succeed — then
+  polls for `invoice.paid` and the `CURRENT` projection with the due date cleared.
+- **`status`** is read-only: prints the resolved ids, the live Stripe subscription (status, period,
+  default payment method, latest invoice) and the stored `ETGO_Subscription*` preferences.
+
+**Why a manual invoice instead of resetting `billing_cycle_anchor=now`:** this subscription's
+`billing_mode` is `flexible`. With that mode, `proration_behavior=none` on a
+`billing_cycle_anchor=now` reset emits **no invoice at all** (verified against a real Test Mode
+subscription while building this script) — there is nothing for Stripe to fail to pay, so nothing
+reaches the webhook. Creating the invoice item + invoice by hand, against the subscription's
+existing period, is what actually produces a payable (and payment-failable) invoice.
+
+**The Stripe subscription itself can stay `active` throughout.** The manual invoice is not the
+subscription's regular renewal invoice, so Stripe does not necessarily flip the subscription's own
+`status` field to `past_due`. What matters for this test is `ETGO_SubscriptionStatus`: the backend
+sets it from the `invoice.payment_failed` event regardless of what the subscription object itself
+reports — check the AD_Preference projection (`status`/`recover` above), not
+`stripe subscriptions retrieve`'s `status` field, to confirm the lifecycle actually moved.
+
+`fail` and `recover` **mutate the Stripe Test Mode account** (a human runs them, not an agent, per
+this repo's automation guardrails); `status` never mutates anything. Both refuse to run against a
+live-mode key or a live-mode object.
+
 ### Create a Checkout Session directly
 
 ```bash
