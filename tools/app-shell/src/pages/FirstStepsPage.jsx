@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
-import { Check, Circle, Clock, Receipt } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
+import { Check, Circle, Clock, Eye, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils.js';
 import { useGuardedNavigate } from '@/hooks/useGuardedNavigate.js';
+import { useCapabilitiesSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import {
   areAllStepsDone,
@@ -25,6 +27,12 @@ import CompanyDataSummary from '@/pages/first-steps/CompanyDataSummary.jsx';
  *
  * Steps are NOT a wizard: any row can be opened and completed at any time, in any order. The
  * catalogue's `findExpandedStepId` only picks which row is open when the page first renders.
+ *
+ * ETP-5364 — once every visible step is done the page offers "Finalizar configuración inicial",
+ * which sets `dismissed` and drops the entry from the sidebar. The page itself stays routable at
+ * `/first-steps` and then renders the banner that undoes it, so the action is reversible without
+ * a settings screen: hiding a menu entry with no way back is a trap, not a feature. Completing
+ * the list does NOT dismiss it on its own — a user may well want the checklist to stay.
  *
  * Where the first invoice is created: the same route the dashboard's "Sales invoices" quick
  * action uses (`/{window}/new`, resolved by the `:windowName/:recordId` route).
@@ -179,13 +187,25 @@ function StepRow({ step, done, expanded, loading, onToggle, onOpen, onConfigure,
 }
 
 export default function FirstStepsPage() {
+  // ETP-5395 — "Primeros pasos" is Owner-only (AD_User.EM_ETGO_Is_Owner, ETP-4830). Hiding the
+  // menu entry (menu.json's `"capability": "isOwner"`) is not enough on its own — a non-owner
+  // typing the URL directly must be bounced too. `capabilities.isOwner` is absent/false until
+  // proven true (fail-closed, same convention as every other capability read through
+  // `useCapabilitiesSafe()`), so this redirects unless it is explicitly `true`. The check itself
+  // runs AFTER every hook below (see the `return <Navigate .../>` right before the JSX return) —
+  // Rules of Hooks forbids an early return before hooks are called, so `useCapabilitiesSafe()` is
+  // read here but acted on only once every hook has executed unconditionally, mirroring the
+  // AppLayout.jsx "ETP-5395 Point 1 Fix B" gate in that same file (its `if (allowedIds ===
+  // undefined) return <AppLayoutLoading />;` also runs only after every hook above it).
+  const capabilities = useCapabilitiesSafe();
   const ui = useUI();
   const navigate = useGuardedNavigate();
   // `steps`, `completedCount` and `total` come from the provider rather than from the
   // catalogue directly: a trial tenant is shown a shorter list (see "Plan-dependent steps" in
   // firstStepsConfig.js), and the page, the sidebar badge and the progress bar must all be
   // counting the same rows.
-  const { completed, loading, toggleStep, plan, steps, completedCount, total } = useFirstStepsState();
+  const { completed, loading, toggleStep, plan, steps, completedCount, total, dismissed,
+    setDismissed } = useFirstStepsState();
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
@@ -193,6 +213,19 @@ export default function FirstStepsPage() {
     const saved = await toggleStep(id);
     if (!saved) toast.error(ui('genericError'));
   }, [toggleStep, ui]);
+
+  /**
+   * ETP-5364 — closes the checklist for good, or brings it back.
+   *
+   * Stays on this page after closing rather than navigating to the dashboard: the entry has
+   * just vanished from the menu, and leaving the user in front of the banner that explains it
+   * (and offers the way back) is what makes that reversible instead of alarming. `setDismissed`
+   * rolls its own state back on a failed POST, which is invisible on its own — hence the toast.
+   */
+  const handleSetDismissed = useCallback(async (next) => {
+    const saved = await setDismissed(next);
+    if (!saved) toast.error(ui('genericError'));
+  }, [setDismissed, ui]);
 
   useSetPageMeta({
     title: ui('firstStepsPageTitle'),
@@ -213,6 +246,12 @@ export default function FirstStepsPage() {
       return effective === id ? '' : id;
     });
   }, [completed, plan]);
+
+  // Gate acted on here, after every hook above has already been called unconditionally on
+  // every render (see the ETP-5395 comment at the top of this component).
+  if (capabilities.isOwner !== true) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="flex flex-col h-full" data-testid="first-steps-page">
@@ -243,17 +282,61 @@ export default function FirstStepsPage() {
             </div>
           </div>
 
-          {allSet && (
-            <div className="flex">
+          {dismissed && (
+            <div
+              className="rounded-xl border bg-card p-4 shadow-sm space-y-2"
+              data-testid="first-steps-dismissed-notice"
+            >
+              <p className="text-sm font-medium text-text-primary">
+                {ui('firstStepsDismissedTitle')}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {ui('firstStepsDismissedSubtitle')}
+              </p>
               <button
                 type="button"
-                onClick={() => navigate(CREATE_INVOICE_TO)}
-                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-                data-testid="first-steps-create-invoice"
+                onClick={() => handleSetDismissed(false)}
+                className="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50"
+                data-testid="first-steps-reopen"
               >
-                <Receipt className="h-4 w-4" data-testid="first-steps-create-invoice-icon" />
-                {ui('createInvoice')}
+                <Eye className="h-4 w-4" data-testid="first-steps-reopen-icon" />
+                {ui('firstStepsReopen')}
               </button>
+            </div>
+          )}
+
+          {allSet && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate(CREATE_INVOICE_TO)}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+                  data-testid="first-steps-create-invoice"
+                >
+                  <Receipt className="h-4 w-4" data-testid="first-steps-create-invoice-icon" />
+                  {ui('createInvoice')}
+                </button>
+                {!dismissed && (
+                  <button
+                    type="button"
+                    onClick={() => handleSetDismissed(true)}
+                    className="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50"
+                    data-testid="first-steps-finish-setup"
+                  >
+                    <Check className="h-4 w-4" data-testid="first-steps-finish-setup-icon" />
+                    {ui('firstStepsFinishSetup')}
+                  </button>
+                )}
+              </div>
+              {!dismissed && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="first-steps-finish-setup-hint"
+                >
+                  {ui('firstStepsFinishSetupHint')}
+                </p>
+              )}
             </div>
           )}
 

@@ -35,14 +35,55 @@ describe('BulkPurchaseOrderMoreMenu source', () => {
     assert.match(src, /Promise\.allSettled/);
   });
 
-  it('persists result to sessionStorage before reload', () => {
-    assert.match(src, /sessionStorage\.setItem\(\s*STORAGE_KEY/);
-    assert.match(src, /STORAGE_KEY\s*=\s*'bulkActionResult'/);
+  // ETP-5302 — same split as the sales-order twin (BulkOrderMoreMenu): the runner
+  // RETURNS `{ ok, failed }` and the component decides what to do with it. The raw
+  // `sessionStorage.setItem` write and the local STORAGE_KEY const are gone —
+  // persistence lives in useBulkActionToast's `persistBulkActionResult`.
+  it('runner returns the aggregate result instead of persisting it', () => {
+    assert.match(src, /return \{ ok, failed \};/);
+    assert.doesNotMatch(src, /sessionStorage\.setItem/);
+    assert.doesNotMatch(src, /STORAGE_KEY/);
   });
 
-  it('reloads the page and clears selection after run', () => {
-    assert.match(src, /clearSelection\(\)/);
-    assert.match(src, /window\.location\.reload\(\)/);
+  it('accepts the refresh callback handed down by the bulkActions slot', () => {
+    assert.match(src, /export default function BulkPurchaseOrderMoreMenu\(\{[^}]*\brefresh\b[^}]*\}\)/);
+  });
+
+  // PRIMARY path — refetch the rows in place instead of reloading the whole tab.
+  it('primary path: clears the selection, shows the toast and refetches the list in place', () => {
+    assert.match(src, /import \{[^}]*showBulkActionToast[^}]*\} from '@\/hooks\/useBulkActionToast'/);
+    assert.match(
+      src,
+      /if \(refresh\) \{[\s\S]*?clearSelection\(\);[\s\S]*?showBulkActionToast\(ui, result\);[\s\S]*?refresh\(\);[\s\S]*?return;[\s\S]*?\}/,
+    );
+    const refreshBranch = src.indexOf('if (refresh)');
+    const persist = src.indexOf('persistBulkActionResult(result)');
+    assert.ok(refreshBranch > -1 && refreshBranch < persist, 'the refresh branch must short-circuit first');
+    const branch = src.slice(refreshBranch, persist);
+    assert.doesNotMatch(branch, /setTimeout/);
+    assert.doesNotMatch(branch, /location\.reload/);
+  });
+
+  // FALLBACK path only — kept for a host mounted outside ListView's `bulkActions`
+  // slot, which has no in-place refetch to offer.
+  it('fallback path (no refresh): persists the result, then clears selection and reloads', () => {
+    assert.match(src, /persistBulkActionResult\(result\)/);
+    assert.match(
+      src,
+      /setTimeout\([\s\S]*?clearSelection\(\);[\s\S]*?window\.location\.reload\(\);[\s\S]*?\}, 600\)/,
+    );
+  });
+
+  it('keeps exactly one reload call site (the fallback)', () => {
+    const reloads = src.match(/window\.location\.reload\(\)/g) || [];
+    assert.equal(reloads.length, 1);
+  });
+
+  // Mounting `useBulkActionToast()` here to reach `showResult` would also install the
+  // hook's sessionStorage-DRAINING effect and eat this component's own persisted
+  // result before the fallback reload could hand it over — use the pure helper.
+  it('imports the pure showBulkActionToast helper and never mounts the hook itself', () => {
+    assert.doesNotMatch(src, /useBulkActionToast\(\)/);
   });
 
   it('skips orders not in CO with the poBulkOrderNotCompleted i18n key', () => {
@@ -85,8 +126,10 @@ describe('BulkPurchaseOrderMoreMenu source', () => {
     assert.match(src, /body:\s*JSON\.stringify\(\{\}\)/);
   });
 
-  it('uses Bearer token authorization on requests', () => {
-    assert.match(src, /Authorization:\s*`Bearer \$\{token\}`/);
+  it('through apiFetch, never a hand-built credential header', () => {
+    // module-level helpers cannot hold a hook, so they use the module apiFetch under an alias
+    assert.match(src, /\b(?:module)?[aA]piFetch\(/);
+    assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
   it('renders i18n labels for each menu item via useUI', () => {

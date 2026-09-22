@@ -3,9 +3,6 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -47,6 +44,15 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "statusPills": [

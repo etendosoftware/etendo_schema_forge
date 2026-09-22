@@ -74,6 +74,83 @@ describe('registry', () => {
   // useCapabilitiesSafe() wiring). These tests cover that axis directly with
   // synthetic groups, and also re-confirm the pre-existing windowId axis is
   // untouched by its addition (no regression).
+  // ETP-5364 — the fourth axis, and the only one that is a user PREFERENCE rather than an access
+  // rule: `"hideWhenFirstStepsDismissed": true` on menu.json's first-steps entry, fed from
+  // `useFirstStepsProgressOptional()?.dismissed` by AppLayout.
+  //
+  // It lives here, with the access axes, rather than as a group filter in SideMenu — which is
+  // where it was first written, and which is what produced the bug: the checklist state arrives
+  // on its own request, so the sidebar painted the entry and removed it a moment later, visibly,
+  // on every reload and every locale change. Deciding it here means the entry is never painted
+  // before its state is known.
+  describe('filterMenuGroupsByAccess — first-steps dismissal axis (ETP-5364)', () => {
+    const dismissible = () => [{
+      group: 'First Steps',
+      items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }],
+    }];
+
+    it('shows the entry when the checklist is explicitly NOT dismissed', () => {
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, false);
+      expect(result.find(g => g.group === 'First Steps')).toBeDefined();
+    });
+
+    it('hides the entry once the user dismissed the checklist', () => {
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, true);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('hides the entry while the state is still unknown (fails closed)', () => {
+      // THE REGRESSION TEST. `undefined` is "not answered yet" — the state AppLayout holds on
+      // the first render after boot. Revealing the entry here and hiding it when the GET lands
+      // is exactly the flash this axis exists to remove, so `undefined` must not reveal it.
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null, undefined);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('hides the entry when the argument is omitted entirely', () => {
+      // Every pre-ETP-5364 call site passes four arguments. Defaulting to "shown" would have
+      // reintroduced the flash through any caller that had not been updated.
+      const result = filterMenuGroupsByAccess(dismissible(), null, {}, null);
+      expect(result.find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+
+    it('leaves items that do not declare the flag alone', () => {
+      // The axis is opt-in per item, like `capability` and `accessWindowId`. A dismissed
+      // checklist must not remove anything else from the menu.
+      const groups = [{ group: 'Home', items: [{ name: 'dashboard' }] }];
+      const result = filterMenuGroupsByAccess(groups, null, {}, null, true);
+      expect(result.find(g => g.group === 'Home').items.map(i => i.name)).toEqual(['dashboard']);
+    });
+
+    it('keeps Home reachable in every checklist state', () => {
+      // The ticket's own acceptance criterion. Home is a separate menu.json group carrying no
+      // capability, no flag and no windowId, so no checklist state can take it away.
+      for (const dismissed of [true, false, undefined]) {
+        const groups = [
+          { group: 'First Steps', items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }] },
+          { group: 'Home', items: [{ name: 'dashboard' }] },
+        ];
+        const result = filterMenuGroupsByAccess(groups, null, {}, null, dismissed);
+        expect(result.find(g => g.group === 'Home')).toBeDefined();
+      }
+    });
+
+    it('is independent of the capability axis on the same item', () => {
+      // menu.json's first-steps entry declares BOTH. Each must be able to hide it on its own,
+      // and neither may reveal it while the other refuses.
+      const gated = () => [{
+        group: 'First Steps',
+        items: [{ name: 'first-steps', capability: 'isOwner', hideWhenFirstStepsDismissed: true }],
+      }];
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: true }, null, false)
+        .find(g => g.group === 'First Steps')).toBeDefined();
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: false }, null, false)
+        .find(g => g.group === 'First Steps')).toBeUndefined();
+      expect(filterMenuGroupsByAccess(gated(), null, { isOwner: true }, null, true)
+        .find(g => g.group === 'First Steps')).toBeUndefined();
+    });
+  });
+
   describe('filterMenuGroupsByAccess — capability axis (ETP-4513)', () => {
     it('shows a capability-gated item when capabilities[cap] === true', () => {
       const groups = [{ group: 'Settings', items: [{ name: 'roles', capability: 'isAdminOrClientAdmin' }] }];
@@ -326,7 +403,65 @@ describe('registry', () => {
     });
   });
 
+  // ETP-5402 QA follow-up — regression coverage for a live bug: reportAccess-derived
+  // visibility for report-viewer-finance/inventory must be keyed off menu.json's REAL
+  // "Finance"/"Inventory" groups (via REPORT_IDS_BY_GROUP), not a synthetic group name —
+  // confirmed live that a synthetic "Reports" group name (as every other test in this file
+  // uses) never matches REPORT_IDS_BY_GROUP, silently never exercising the fallback at all.
+  describe('filterMenuGroupsByAccess — reportAccess fallback on the accessWindowId axis (ETP-5402 QA follow-up)', () => {
+    it('shows report-viewer-finance for a role with real access to a Finance reportId sibling, even with no window grant', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        undefined,
+        { 'aging-payable': 'full' },
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      expect(finance).toBeDefined();
+      expect(finance.items.map(i => i.name)).toContain('report-viewer-finance');
+    });
+
+    it('hides report-viewer-finance when reportAccess has no entry for any Finance reportId and there is no window grant either', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        undefined,
+        {},
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      // The Finance group may still exist for other reasons in a real menu, but its
+      // report-viewer-finance item specifically must be gone.
+      expect(finance?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+
+    it('an Inventory-category reportId does not leak the Finance link into visibility (group-scoped, not global)', () => {
+      const groups = buildMenuGroups();
+      const result = filterMenuGroupsByAccess(
+        groups,
+        new Set(),
+        { isAdminOrClientAdmin: false },
+        {},
+        undefined,
+        { 'inventory-stock-report': 'full' },
+      );
+      const finance = result.find(g => g.group === 'Finance');
+      expect(finance?.items.map(i => i.name) ?? []).not.toContain('report-viewer-finance');
+    });
+  });
+
   describe('shipped navigation catalog (ETP-5240)', () => {
+    // ETP-5364 — the fifth axis is a user PREFERENCE, not a grant. These specs measure the
+    // permission boundary, so they hold the checklist at "not dismissed" throughout and let the
+    // `capability` axis decide `first-steps` on its own. Omitting the argument would fail closed
+    // and drop the entry from every profile below, which is that axis's job, not this block's;
+    // its own on/off behaviour lives in the dedicated describe above.
+    const NOT_DISMISSED = false;
     const gated = defaultNavigation.filter(entry => entry.windowId || entry.processId || entry.obuiappProcessId || entry.accessWindowId || entry.capability);
     const ungated = defaultNavigation.filter(entry => !gated.includes(entry));
     const proof = optionalNavigation.filter(entry => entry.proof);
@@ -364,7 +499,7 @@ describe('registry', () => {
     it.each(navigationProfiles)('admin catalog: $label', profile => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions();
       const groups = filterMenuGroupsByAccess(
-        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess, NOT_DISMISSED,
       );
       // Proof visibility belongs to SideMenu, not the registry. Its real flag
       // behavior is exercised in SideMenu.vitest.jsx using these same profiles.
@@ -373,14 +508,14 @@ describe('registry', () => {
 
     it.each(navigationProfiles)('ungated optional navigation without role grants: $label', profile => {
       const groups = filterMenuGroupsByAccess(
-        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {},
+        buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), new Set(), {}, {}, NOT_DISMISSED,
       );
       expectNavigation(groups, expectedNavigation({ ...profile, proof: true }).filter(entry => !gated.includes(entry)));
     });
 
     it.each(gated)('single grant: $name', entry => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry]);
-      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess);
+      const groups = filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED);
       const bypassedAnchors = entry.capability === 'isAdminOrClientAdmin'
         ? defaultNavigation.filter(candidate => candidate.accessWindowId) : [];
       // A capability is a NAMED BOOLEAN, not a per-entry grant: switching one on reveals every
@@ -399,28 +534,43 @@ describe('registry', () => {
       // Non-admin exercises anchor denial rather than its admin bypass.
       const remaining = defaultNavigation.filter(candidate => candidate !== entry && !candidate.capability);
       const { allowedIds, capabilities, windowAccess } = navigationPermissions(remaining);
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...remaining, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...remaining, ...proof]);
+    });
+
+    // ETP-5395 — `isOwner` is a distinct capability name from
+    // `isAdminOrClientAdmin`. Unlike the accessWindowId axis (which
+    // deliberately bypasses for any admin/client-admin, see the
+    // "admin/client-admin bypass" describe block above), the `capability`
+    // axis has no such bypass: an Admin/ClientAdmin who is not the account
+    // Owner must NOT see First Steps, while an Owner-only grant must not
+    // leak into admin-gated siblings like `roles`.
+    it('first-steps requires its own isOwner grant — an admin/client-admin capability does not imply it', () => {
+      const names = filterMenuGroupsByAccess(
+        buildMenuGroups(), new Set(), { isAdminOrClientAdmin: true, isOwner: false }, {}, NOT_DISMISSED,
+      ).flatMap(group => group.items.map(item => item.name));
+      expect(names).not.toContain('first-steps');
+      expect(names).toContain('roles');
     });
 
     it.each(defaultNavigation.filter(entry => entry.accessWindowId))('read-only anchor grant: $name', entry => {
       const { allowedIds, capabilities, windowAccess } = navigationPermissions([entry], 'read-only');
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof, entry]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...ungated, ...proof, entry]);
     });
 
     it.each([{}, null])('admin bypass with window map %j preserves the entire catalog', windowAccess => {
       const { allowedIds, capabilities } = navigationPermissions();
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...defaultNavigation, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...defaultNavigation, ...proof]);
     });
 
     it.each([
       { label: 'denied', allowedIds: new Set(), capabilities: {}, windowAccess: {} },
       { label: 'maps loading', allowedIds: new Set(), capabilities: null, windowAccess: null },
     ])('$label exposes only ungated entries', ({ allowedIds, capabilities, windowAccess }) => {
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess), [...ungated, ...proof]);
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), allowedIds, capabilities, windowAccess, NOT_DISMISSED), [...ungated, ...proof]);
     });
 
     it('null role-menu fallback opens only the membership axis, not capabilities or anchors', () => {
-      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}), [
+      expectNavigation(filterMenuGroupsByAccess(buildMenuGroups(), null, {}, {}, NOT_DISMISSED), [
         ...defaultNavigation.filter(entry => !entry.accessWindowId && !entry.capability), ...proof,
       ]);
     });

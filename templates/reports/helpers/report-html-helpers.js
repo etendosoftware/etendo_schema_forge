@@ -151,6 +151,24 @@ export function createReportHelpers({ numberFormat } = {}) {
     }, 0);
   }
 
+  // ETP-5401 — Trial Balance's Epígrafe level returns one row per (leaf
+  // transaction, ancestor) pair for EVERY ancestor that shares the requested
+  // elementlevel, because Epígrafe is itself a multi-depth hierarchy (e.g. the
+  // root "PYG" and its child "P.G.1" both carry elementlevel='E'). Summing
+  // every row therefore counts the same underlying money once per nesting
+  // depth. `is_root` (report-trial-balance's own SQL) flags the row whose
+  // account has no ancestor at that SAME level, so the grand total sums each
+  // leaf exactly once — a no-op for Cuenta/Desglose/Subcuenta, which never
+  // nest within themselves (verified: every row there is already is_root).
+  function sumFieldWhere(rows, flagField, field) {
+    if (!Array.isArray(rows)) return 0;
+    return rows.reduce(function(acc, row) {
+      if (!row[flagField]) return acc;
+      var val = Number(row[field]);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
+  }
+
   // ETP-4900: adds together several VALUES already resolved in the current
   // Handlebars context (unlike sumField, which sums one FIELD across an array
   // of rows) — e.g. {{sumFields current days30 days60}} on a single document
@@ -175,6 +193,20 @@ export function createReportHelpers({ numberFormat } = {}) {
     return String(value);
   }
 
+  // ETP-5401 — a "Saldo a <date>" column header must match the same
+  // locale-dependent order the Período filter already shows (dd/MM/yyyy in
+  // es_ES, MM/dd/yyyy in en_US), not a single fixed format. Pure string split
+  // on the YYYY-MM-DD param value — never `new Date(value)` on a date-only
+  // string, per the date-only parsing convention (CLAUDE.md), which would
+  // risk a one-day shift under a negative UTC offset.
+  function formatDateLocale(value, locale) {
+    if (value == null || value === '') return '';
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+    if (!m) return String(value);
+    var y = m[1], mo = m[2], d = m[3];
+    return locale === 'en_US' ? mo + '/' + d + '/' + y : d + '/' + mo + '/' + y;
+  }
+
   function sumRowsByCategory(rows, categoryPrefix, field) {
     if (!Array.isArray(rows)) return 0;
     return rows
@@ -185,15 +217,24 @@ export function createReportHelpers({ numberFormat } = {}) {
   // Report row VALUE translation (ETP-5013). `translatedName` already comes
   // translated from SQL (Journal Entries' `document_type` = COALESCE(trl name
   // from a real `ad_ref_list_trl` JOIN, base ad_ref_list name, raw c_doctype
-  // name, 'Journal')) — this helper's only remaining job is the MMR/MMS return
-  // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
-  // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
+  // name, 'Journal')). Two independent overlays apply on top of it, in this
+  // ORDER (ETP-5356 — synced from schema_forge_core's report-html-helpers.js):
+  //   1. The MMR/MMS return split (RETURN_LABELS) — `IsReturn` has no
+  //      equivalent code in ad_ref_list, so it can't come from the JOIN.
+  //   2. DOC_TYPE_LABEL_OVERRIDES — an unconditional per-docbasetype relabel
+  //      (ETP-5128/ETP-5356), now covering MMR/MMS themselves (regular,
+  //      non-return case) alongside MXI/ARI/API/MMI/APP/GLJ/ARR.
+  // The return check MUST run first: DOC_TYPE_LABEL_OVERRIDES now has entries
+  // for MMR/MMS too, so checking overrides first would always win and the
+  // return-variant labels would never be reachable.
+  // See RETURN_LABELS' and DOC_TYPE_LABEL_OVERRIDES' docstrings (report-i18n.js).
   function translateDocType(docbasetype, isreturn, translatedName, locale) {
+    if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+      var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+      return dict[docbasetype + '_RETURN'] || translatedName;
+    }
     var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-    if (overrides[docbasetype]) return overrides[docbasetype];
-    if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-    return dict[docbasetype + '_RETURN'] || translatedName;
+    return overrides[docbasetype] || translatedName;
   }
 
   return {
@@ -206,8 +247,10 @@ export function createReportHelpers({ numberFormat } = {}) {
     ifCond,
     eq,
     sumField,
+    sumFieldWhere,
     sumFields,
     formatDateDisplay,
+    formatDateLocale,
     sumRowsByCategory,
     translateDocType,
     csvField,
@@ -388,6 +431,14 @@ const JSREPORT_HELPER_SOURCES = {
     return acc + (isNaN(val) ? 0 : val);
   }, 0);
 }`,
+  sumFieldWhere: `function sumFieldWhere(rows, flagField, field) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce(function(acc, row) {
+    if (!row[flagField]) return acc;
+    var val = Number(row[field]);
+    return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+}`,
   sumFields: `function sumFields() {
   var args = Array.prototype.slice.call(arguments, 0, arguments.length - 1);
   return args.reduce(function(acc, v) {
@@ -403,6 +454,13 @@ const JSREPORT_HELPER_SOURCES = {
   }
   return String(value);
 }`,
+  formatDateLocale: `function formatDateLocale(value, locale) {
+  if (value == null || value === '') return '';
+  var m = /^(\\d{4})-(\\d{2})-(\\d{2})/.exec(String(value));
+  if (!m) return String(value);
+  var y = m[1], mo = m[2], d = m[3];
+  return locale === 'en_US' ? mo + '/' + d + '/' + y : d + '/' + mo + '/' + y;
+}`,
   sumRowsByCategory: `function sumRowsByCategory(rows, categoryPrefix, field) {
   if (!Array.isArray(rows)) return 0;
   return rows
@@ -416,11 +474,12 @@ const JSREPORT_HELPER_SOURCES = {
   translateDocType: `function translateDocType(docbasetype, isreturn, translatedName, locale) {
   var RETURN_LABELS = ${JSON.stringify(RETURN_LABELS)};
   var DOC_TYPE_LABEL_OVERRIDES = ${JSON.stringify(DOC_TYPE_LABEL_OVERRIDES)};
+  if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
+    var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
+    return dict[docbasetype + '_RETURN'] || translatedName;
+  }
   var overrides = DOC_TYPE_LABEL_OVERRIDES[locale] || DOC_TYPE_LABEL_OVERRIDES.en_US;
-  if (overrides[docbasetype]) return overrides[docbasetype];
-  if (isreturn !== 'Y' || (docbasetype !== 'MMR' && docbasetype !== 'MMS')) return translatedName;
-  var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;
-  return dict[docbasetype + '_RETURN'] || translatedName;
+  return overrides[docbasetype] || translatedName;
 }`,
   // ETP-5032 — see createReportHelpers()'s csvField for why this exists and why
   // it must stay behaviourally identical to it. Being listed here also makes
@@ -584,10 +643,27 @@ export function buildJsreportHelpersString(helpersCode, numberFormatOverride, se
 
   const stateSrc = 'var _prevGroupValues = {};';
 
+  // toFixedHalfUp mirrors formatCurrency.js's helper of the same name: round HALF-UP on the
+  // DECIMAL value, not on its binary approximation, so a printed document shows the same cent as
+  // the screen it was printed from and as the backend's own BigDecimal HALF_UP arithmetic.
+  // `(2.675).toFixed(2)` is "2.67"; shifting through the string form avoids the lossy ×10^n
+  // multiply. If the browser twin changes, so must this, or UI and PDF drift by a cent
+  // (ETP-5107 QA round 2).
+  //
+  // Declared INSIDE __groupEsEs on purpose: jsreport registers helpers by top-level
+  // `function NAME(` text, so a second top-level function here would be registered as a callable
+  // helper it is not — which is exactly what the "emits no helper createReportHelpers() does not
+  // expose" guardrail in report-jsreport-helpers-builder.test.js protects against.
   const groupEsEsSrc = `function __groupEsEs(num, minFrac, maxFrac) {
+  function toFixedHalfUp(abs, digits) {
+    var shifted = Number(abs + 'e' + digits);
+    if (!isFinite(shifted)) return abs.toFixed(digits);
+    var rounded = Number(Math.round(shifted) + 'e-' + digits);
+    return isFinite(rounded) ? rounded.toFixed(digits) : abs.toFixed(digits);
+  }
   var sign = num < 0 ? '-' : '';
   var abs = Math.abs(num);
-  var fixed = abs.toFixed(maxFrac);
+  var fixed = toFixedHalfUp(abs, maxFrac);
   // Guard against "-0,00" (ETP-4898): summing floats (e.g. a report-wide
   // Total row) routinely leaves a residual like -2.9e-11 instead of exactly
   // 0 — genuinely negative, but rounds to zero at this precision. Dropping the

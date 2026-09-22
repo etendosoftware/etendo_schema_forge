@@ -6,9 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
+import { fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { LAST_ENVIRONMENT_KEY } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { getApiBase } from '@/hooks/useNeoResource.js';
 /**
  * Public Company Invitation Acceptance Page (ETP-4894).
  *
@@ -60,6 +64,20 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [existingAuthenticated, setExistingAuthenticated] = useState(false);
+  // ETP-4576 — the credential LoginStep hands back on `onAuthenticated`. This page runs
+  // OUTSIDE the authenticated shell, so no AuthProvider publishes anything to the shared
+  // scheme and the value has to be threaded explicitly. It used to be read back out of
+  // `localStorage.sf_platform_token`, which no longer works: the session endpoints stopped
+  // handing out a bearer to store, and purgeLegacyAuthStorage deletes that key on mount —
+  // so the accept call was going out with no credential at all.
+  const [sessionCredential, setSessionCredential] = useState(null);
+  // ETP-4576 — WHICH credential the one above is. LoginStep collapses both backend
+  // shapes into a single value, so the scheme travels beside it: under `cookie` it is
+  // a CSRF proof that belongs in `X-Go-CSRF` (the `__Host-` cookie carries the session
+  // and rides along on its own), under `bearer` it is a token that belongs in
+  // `Authorization`. Sending one in the other's slot fails, and fails differently on
+  // each side — 401 for a proof read as a bearer, 403 for a bearer with no proof.
+  const [credentialScheme, setCredentialScheme] = useState(null);
 
   // ETP-5202 — the invitation link is routinely opened on a shared computer while somebody
   // else's session is still open. `sessionGuard` decides whether this page may proceed
@@ -73,9 +91,23 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // from listing environments on mount: this page only ever needs the one-shot
   // `enterByClientName`, which re-fetches the list itself (the newly joined tenant cannot be in
   // a list loaded before the invitation was accepted).
-  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  // The credential is threaded in for the same reason the accept call below threads it: this
+  // page runs outside the authenticated shell, so the hook finds no AuthProvider to read and
+  // would otherwise consider the freshly-signed-in invitee unauthenticated and refuse to enter.
+  const { enterByClientName } = useEnvironmentSwitch({
+    enabled: false,
+    credential: sessionCredential,
+    credentialScheme,
+  });
+  // ETP-4576 — the shell's auth context is the only thing on the client that can answer
+  // "is anybody signed in" under the cookie scheme: the `__Host-` cookie is httpOnly, so the
+  // page cannot read it, and the context has already resolved the restore by the time this
+  // route renders. `status` is deliberately read optionally — the page is inside the provider
+  // in the app (runtime-routes.jsx), but it must not throw in a tree that has none.
+  const authStatus = useAuthOptional()?.status ?? null;
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
+  const [currentClientName, setCurrentClientName] = useState('');
 
   const clearTokenFromUrl = () => {
     try {
@@ -158,12 +190,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       return undefined;
     }
 
-    const authToken = readStoredValue('sf_auth_token');
-    const platformToken = readStoredValue('sf_platform_token');
-    if (!authToken && !platformToken) {
-      setSessionGuard(SESSION_GUARD.CLEAR);
-      return undefined;
-    }
+    // ETP-4576 — who is signed in is asked of the SESSION, not of localStorage. develop
+    // read sf_auth_token/sf_platform_token here; the cookie migration stopped writing them,
+    // so both are null and this guard would answer CLEAR for everyone — silently disabling
+    // the very check ETP-5202 exists for. One ambient request answers it for both schemes.
 
     // Back to CHECKING before the identity request goes out. This is NOT redundant with the
     // initial useState: the effect runs once with `invitationData === null`, takes the
@@ -171,28 +201,67 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     // this line the guard stays CLEAR for the whole duration of the fetch, LoginStep/RegisterStep
     // render underneath it, and the invitee can start typing credentials in a tab where the other
     // person's session is still live — the precise thing this guard exists to prevent.
+    // ETP-4576 — when the context has already settled on "nobody is signed in", that IS the
+    // answer. Asking /sws/neo/session again costs a round trip and, worse, renders the checking
+    // screen in front of a fresh-browser invitee who has nothing to conflict with: develop could
+    // skip it because "no sf_auth_token in localStorage" was knowable synchronously, and the
+    // cookie migration took that shortcut away. The context gives it back. With no context above
+    // us the question is genuinely open, so the request still goes out.
+    if (authStatus === 'anonymous') {
+      setSessionGuard(SESSION_GUARD.CLEAR);
+      return undefined;
+    }
+
     setSessionGuard(SESSION_GUARD.CHECKING);
 
     let isMounted = true;
 
-    const readAccountEmail = async (bearer) => {
-      if (!bearer) return null;
+    /**
+     * Three answers, not two — which is what "fail SAFE, not open" above needs.
+     *
+     * develop could separate "nobody is signed in" from "somebody is, but I cannot say who"
+     * because a token sat in localStorage: its presence proved the session existed even when
+     * the identity call failed. The cookie migration took that away, and collapsing everything
+     * unreadable into `null` quietly turned the guard fail-OPEN — a 500 from the identity
+     * endpoint waved the invitee straight onto the acceptance surface with somebody else's
+     * session still live, the one outcome ETP-5202 exists to prevent.
+     *
+     * The status line restores the distinction. A 401 is the server positively saying nobody is
+     * authenticated. Any other non-ok answer came from a server that did NOT deny us, so a
+     * session may well be open and unidentifiable. A thrown request is deliberately treated as
+     * "no session": nothing answered at all, and blocking a fresh-browser invitee on a flaky
+     * network is the worse of the two failures.
+     */
+    const readAccountIdentity = async () => {
       try {
-        const res = await apiFetch('/sws/neo/session', { token: bearer, on401: 'ignore' });
-        if (!res.ok) return null;
+        // No `token` override: apiFetch sends the active credential itself — the __Host-
+        // cookie under the cookie scheme, the bearer under the legacy one. `on401: 'ignore'`
+        // keeps the 401 a plain answer instead of logging the visitor out mid-invitation.
+        const res = await apiFetch('/sws/neo/session', { on401: 'ignore' });
+        if (res.status === 401) return { signedIn: false, email: null };
+        if (!res.ok) return { signedIn: true, email: null };
         const data = await res.json().catch(() => null);
-        return data?.accountEmail || null;
+        return { signedIn: true, email: data?.accountEmail || null };
       } catch {
-        return null;
+        return { signedIn: false, email: null };
       }
     };
 
     (async () => {
-      // The fallback is skipped when both keys hold the same value, which happens for a session
-      // that never went through the environment switch — one answer, one request.
-      const email = (await readAccountEmail(authToken))
-        || (platformToken === authToken ? null : await readAccountEmail(platformToken));
+      const { signedIn, email } = await readAccountIdentity();
       if (!isMounted) return;
+
+      // Nobody signed in: nothing to warn about.
+      if (!signedIn) {
+        setSessionGuard(SESSION_GUARD.CLEAR);
+        return;
+      }
+      // Signed in, but unidentifiable — prompt with the copy that does not claim to know who.
+      if (!email) {
+        setActiveAccountEmail(null);
+        setSessionGuard(SESSION_GUARD.CONFLICT);
+        return;
+      }
 
       const invitedEmail = invitationData?.email || '';
       if (email && invitedEmail && email.trim().toLowerCase() === invitedEmail.trim().toLowerCase()) {
@@ -204,7 +273,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         // Only skip it when there is a platform token to accept WITH, since that is what
         // `handleAcceptExisting` sends; if that token turns out to be stale the accept call
         // falls back to the login step rather than dead-ending on an error.
-        if (branch === 'existing_account' && platformToken) {
+        // The open session IS what `handleAcceptExisting` accepts with, so reaching this
+        // point is itself the precondition develop expressed as "a platform token exists".
+        if (branch === 'existing_account') {
           setExistingAuthenticated(true);
         }
         setSessionGuard(SESSION_GUARD.CLEAR);
@@ -218,7 +289,43 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     return () => {
       isMounted = false;
     };
-  }, [invitationData, apiFetch]);
+  }, [invitationData, apiFetch, authStatus]);
+
+  // ETP-4576 — "the company you are in right now", for the second button on the success screen.
+  //
+  // develop answered this with two localStorage reads: `sf_auth_token` proved a session was
+  // open and `sf_auth_client_name` named the tenant. The cookie migration deleted both — the
+  // session moved into the `__Host-` cookie, and `sf_auth_client_name` is in LEGACY_AUTH_KEYS,
+  // so `purgeLegacyAuthStorage` removes it and it cannot simply be written again. The result
+  // was a silent regression: `canStayInCurrent` was permanently false, and somebody who joined
+  // a second company from an open session was offered no way back to the one they were in.
+  //
+  // Both halves come from the one call `enterByClientName` already makes. `GET /sws/go/environments`
+  // is account-scoped and rides the session cookie, so a visitor with no session gets a rejection
+  // instead of a list — which IS the "no token" answer develop read out of storage, just asked of
+  // the server. The tenant is picked out of that list by `sf_last_environment`, the clientId
+  // `rememberEnvironment` writes on every switch; it is deliberately NOT a legacy auth key (the
+  // last tenant entered must survive a logout), so the purge leaves it alone.
+  useEffect(() => {
+    const rememberedClientId = readStoredValue(LAST_ENVIRONMENT_KEY);
+    if (!rememberedClientId) return undefined;
+
+    let isMounted = true;
+    (async () => {
+      try {
+        const envs = await fetchEnvironments(fetch, getApiBase());
+        if (!isMounted) return;
+        const match = envs.find((env) => env?.clientId === rememberedClientId);
+        setCurrentClientName(match?.clientName || '');
+      } catch {
+        // No session, or the list cannot be read: no tenant to offer, so no button. Same
+        // outcome as develop's missing token, and the "enter the company" button above is
+        // unaffected either way.
+      }
+    })();
+
+    return () => { isMounted = false; };
+  }, []);
 
   // ETP-5202 — signing the previous user out happens BEFORE the invitee is asked for any
   // credential, never after accepting: a logout at the end would still pass through the state
@@ -272,7 +379,9 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     }
   };
 
-  const handleExistingAuthenticated = async () => {
+  const handleExistingAuthenticated = async (credential, _account, meta) => {
+    setSessionCredential(credential || null);
+    setCredentialScheme(meta?.scheme ?? null);
     setActionError(null);
     setExistingAuthenticated(true);
   };
@@ -281,13 +390,17 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     setActionError(null);
     setSubmitting(true);
     try {
-      // ETP-5022: the platform session token is read from localStorage, not the
-      // app's auth context (this flow runs before/outside it), so it is passed as an
-      // explicit override; on401: 'ignore' keeps the existing domain error handling below.
-      const sessionToken = globalThis.localStorage?.getItem('sf_platform_token') || '';
+      // ETP-5022's explicit override, now fed by the credential LoginStep handed back
+      // rather than by a localStorage key; on401: 'ignore' keeps the domain error handling below.
+      // The credential goes in the slot its scheme names. Under `cookie` apiFetch's
+      // default `credentials: 'include'` is what authenticates the request, and the
+      // proof only has to prove intent; under `bearer` the token is the credential.
+      const credentialOptions = credentialScheme === 'cookie'
+        ? { headers: { 'X-Go-CSRF': sessionCredential } }
+        : { token: sessionCredential };
       const res = await apiFetch('/sws/go/company-invitations/accept', {
         method: 'POST',
-        token: sessionToken,
+        ...credentialOptions,
         on401: 'ignore',
         body: JSON.stringify({ token: token.trim() }),
       });
@@ -337,6 +450,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       // domain error handling below instead of an automatic logout.
       const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
         method: 'POST',
+        // Anonymous by design: the invitation token in the body IS the authorization.
+        // A leftover session cookie would only make the backend demand a CSRF proof
+        // this pre-login page cannot hold, so keep it off the request.
+        credentials: 'omit',
         on401: 'ignore',
         body: JSON.stringify({
           token: token.trim(),
@@ -355,13 +472,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         return;
       }
 
-      if (data.token) {
-        try {
-          globalThis.localStorage?.setItem('sf_platform_token', data.token);
-        } catch {
-          // Ignore
-        }
-      }
+      // ETP-4576 — the token the legacy backend still returns here is deliberately DROPPED.
+      // `sf_platform_token` is a legacy auth key: `purgeLegacyAuthStorage` deletes it, so storing
+      // it wrote a credential into the very storage this migration exists to empty, and left it
+      // racing the purge. Under the cookie session the session arrives as the `__Host-` cookie the
+      // browser installs on its own, and the screen below enters the company through
+      // `enterByClientName`, which reads the credential from the active scheme — never from here.
 
       clearTokenFromUrl();
       setSuccessData({
@@ -379,6 +495,10 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     // domain error handling below instead of an automatic logout.
     const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
       method: 'POST',
+      // Anonymous by design: the invitation token in the body IS the authorization.
+      // A leftover session cookie would only make the backend demand a CSRF proof
+      // this pre-login page cannot hold, so keep it off the request.
+      credentials: 'omit',
       on401: 'ignore',
       body: JSON.stringify({
         token: token.trim(),
@@ -405,13 +525,12 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
 
   const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
   const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
-  // Whether there is a tenant to stay in — read from storage on every render rather than
-  // remembered by the guard effect, because the guard only runs on the actionable branches: an
-  // already-accepted invitation reopened from the email skipped it entirely and silently lost
-  // the "stay where you are" option, even though the situation is identical to the screen shown
-  // right after accepting.
-  const currentClientName = readStoredValue('sf_auth_client_name');
-  const canStayInCurrent = Boolean(readStoredValue('sf_auth_token') && currentClientName);
+  // Whether there is a tenant to stay in. Resolved by the effect above rather than read from
+  // storage on every render, but for the same reason the storage read was unconditional: the
+  // session guard only runs on the actionable branches, so an already-accepted invitation
+  // reopened from the email would otherwise silently lose the "stay where you are" option,
+  // even though the situation is identical to the screen shown right after accepting.
+  const canStayInCurrent = Boolean(currentClientName);
 
   // The marketing shell is identical on every full-page state; the pre-existing states below
   // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.

@@ -313,12 +313,13 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         bottomSection={ReturnToVendorShipmentBottomPanel}
         topbarRight={ConfirmWithCreditButton}
         menuActions={({ data, status }) => [
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}
-        sendDocument={{"enabled":false}}
+        sendDocument
         {...props} window={effectiveWindow}
       />
       </>
@@ -336,7 +337,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
       dateFilterKey="movementDate"
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      sendDocument={{"enabled":false}}
+      sendDocument
       {...props} window={effectiveWindow}
     />
   );

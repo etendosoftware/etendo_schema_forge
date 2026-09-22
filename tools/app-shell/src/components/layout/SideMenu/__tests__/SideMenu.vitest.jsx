@@ -58,6 +58,7 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
+  PUBLIC_API_KEYS: 'public-api-keys',
 }));
 
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
@@ -205,8 +206,12 @@ describe('SideMenu shipped navigation profiles (ETP-5240)', () => {
     mockUseFeatureFlag.mockImplementation(
       key => (key === 'proof-of-concept-menu' && profile.proof) || catalogFeatureFlags.includes(key));
     const { allowedIds, capabilities, windowAccess } = navigationPermissions();
+    // 5th arg (ETP-5364): `false` = "the checklist is not dismissed". It is a user preference,
+    // not a grant, so `navigationPermissions()` does not model it — and omitting it fails
+    // closed, which would drop `first-steps` from this membership catalog.
     const menuGroups = filterMenuGroupsByAccess(
       buildMenuGroups(profile.apps, { appStoreUnlocked: profile.marketplace }), allowedIds, capabilities, windowAccess,
+      false,
     );
     const expected = expectedNavigation(profile);
     const user = userEvent.setup();

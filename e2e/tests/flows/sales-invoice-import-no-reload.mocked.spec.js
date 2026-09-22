@@ -342,7 +342,13 @@ test.describe('Sales Invoice — import from shipment discount carry-over', () =
     // to etgoDiscount on the invoice line so the backend sees the correct discount.
     expect(Number(posted.etgoDiscount)).toBe(10);
     // The POST must also include the salesOrderLine reference so re-import detection works.
-    expect(posted.cOrderlineId).toBe(ORDER_LINE_ID);
+    // ETP-5381: the key is `salesOrderLine` — the spec's java_qualifier for
+    // C_INVOICELINE.C_OrderLine_ID. It used to be posted as `cOrderlineId`, a key that exists
+    // in no NEO spec: NeoFieldFilter.filterRecord drops unknown keys SILENTLY (200, line
+    // created, FK NULL), so the loss never surfaced. The dedicated regression guard lives in
+    // invoice-import-order-line-fk.mocked.spec.js; this is the discount test's own sanity check.
+    expect(posted.salesOrderLine).toBe(ORDER_LINE_ID);
+    expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
   });
 });
 
@@ -403,6 +409,9 @@ const SOURCE_LINE_1_IMPORTED = {
 };
 
 // Not yet imported — selectable, and used to assert the negative quantity stepper.
+// ETP-5381: it carries the originating order-line FK under `salesOrderLine` (the key NEO
+// actually returns), so the test can assert the rectificativa's own line re-posts it under
+// the same key instead of the dead `cOrderlineId`.
 const SOURCE_LINE_2_AVAILABLE = {
   id: SRC_LINE_2_ID,
   product: 'prod-b',
@@ -410,6 +419,7 @@ const SOURCE_LINE_2_AVAILABLE = {
   invoicedQuantity: 3,
   unitPrice: 15,
   lineNetAmount: 45,
+  salesOrderLine: ORDER_LINE_ID,
 };
 
 // Current invoice's own existing line — its sourceInvoiceLineId points back at
@@ -581,6 +591,13 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
     // The imported line's POST body must carry a negative invoicedQuantity.
     await expect.poll(() => state.postBodies.length, { timeout: 5_000 }).toBeGreaterThan(0);
     expect(Number(state.postBodies[0].invoicedQuantity)).toBeLessThan(0);
+
+    // ETP-5381: the source line's order-line FK must be carried over under `salesOrderLine`
+    // (the spec's java_qualifier for C_INVOICELINE.C_OrderLine_ID), never the pre-fix
+    // `cOrderlineId` — a key that exists in no NEO spec and is dropped silently by
+    // NeoFieldFilter (200, line created, FK NULL). See invoice-import-order-line-fk.mocked.spec.js.
+    expect(state.postBodies[0].salesOrderLine).toBe(ORDER_LINE_ID);
+    expect(Object.hasOwn(state.postBodies[0], 'cOrderlineId')).toBe(false);
 
     // Assertion: after a successful import, afterImport PATCHes the header's originInvoices
     // virtual field (ETP-4919: plural — a rectificativa can be linked to more than one source

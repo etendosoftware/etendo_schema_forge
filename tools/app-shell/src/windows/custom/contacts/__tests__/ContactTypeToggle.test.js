@@ -55,15 +55,29 @@ describe('ContactTypeToggle', () => {
     assert.match(src, /onChange\('etgoIsperson', newType === 'person'\)/);
   });
 
-  it('re-syncs name via onChange while auto-owned on switch to company', () => {
+  it('restores the company draft, or derives it from first+last, on switch to company', () => {
     assert.match(src, /onChange/);
     assert.match(src, /if \(onChange\)/);
     assert.match(src, /if \(newType === 'company'\) syncFieldsToCompany\(\)/);
-    assert.match(src, /const lastAutoFilledNameRef = useRef\(null\)/);
-    assert.match(src, /const ownedByAuto = currentName === '' \|\| currentName === lastAutoFilledNameRef\.current/);
-    assert.match(src, /if \(ownedByAuto && fullName && fullName !== currentName\)/);
-    assert.match(src, /onChange\('name', fullName\)/);
-    assert.match(src, /lastAutoFilledNameRef\.current = null/);
+    assert.match(src, /function syncFieldsToCompany\(\)/);
+    // The person names are kept as a local draft so a round-trip person → company
+    // → person does not destroy them.
+    assert.match(src, /personNameDraftRef\.current = \{ firstName, lastName \}/);
+    // A user-owned company name wins over the derived one; only an auto-derived
+    // (or empty) draft is refreshed from first+last.
+    assert.match(src, /const existingDraft = String\(companyNameDraftRef\.current \|\| ''\)\.trim\(\)/);
+    assert.match(src, /const companyName = companyNameAutoDerivedRef\.current \|\| !existingDraft/);
+    // The draft moves only when there is a real value: an empty derivation must not erase a
+    // legal name the user still owns.
+    assert.match(src, /if \(companyName\) \{/);
+    assert.match(src, /onChange\('name', companyName\)/);
+  });
+
+  // ETP-5350 — the label wraps an sr-only radio, so label activation synthesizes a second
+  // click that bubbles back and ran handleSelect twice, wiping both drafts on every switch.
+  it('stops the label from synthesizing a second click on the nested radio', () => {
+    assert.match(src, /event\.preventDefault\(\)/);
+    assert.match(src, /onClick=\{\(event\) =>/);
   });
 
   it('clears person fields (first/last name) when switching to company', () => {
@@ -71,10 +85,16 @@ describe('ContactTypeToggle', () => {
     assert.match(src, /if \(lastName\) onChange\('etgoLastname', ''\)/);
   });
 
-  it('clears the legal name (Razón Social) when switching to person', () => {
+  it('clears the legal name (Razón Social) when switching to person, keeping it as a draft', () => {
     assert.match(src, /else clearNameForPerson\(\)/);
-    assert.match(src, /if \(\(data\?\.name \|\| ''\)\.trim\(\) !== ''\) onChange\('name', ''\)/);
-    assert.match(src, /onChange\('name', ''\)/);
+    assert.match(src, /function clearNameForPerson\(\)/);
+    assert.match(src, /const companyName = \(data\?\.name \|\| ''\)\.trim\(\)/);
+    // Stored locally before being cleared from the payload, so switching back
+    // restores it verbatim instead of re-deriving it.
+    assert.match(src, /companyNameDraftRef\.current = companyName/);
+    assert.match(src, /if \(companyName\) onChange\('name', ''\)/);
+    assert.match(src, /if \(firstName\) onChange\('etgoFirstname', firstName\)/);
+    assert.match(src, /if \(lastName\) onChange\('etgoLastname', lastName\)/);
   });
 
   it('renders Person and Company buttons', () => {

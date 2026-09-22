@@ -142,19 +142,28 @@ vi.mock('@generated/goods-receipt/custom/GoodsReceiptBottomPanel', () => ({ defa
 vi.mock('../GoodsReceiptPreview.jsx', () => ({ default: () => null }));
 vi.mock('../RelatedDocuments.jsx', () => ({ default: () => null }));
 
+// Mirrors goods-shipment/__tests__/index.vitest.jsx's mock of BulkInvoiceFromShipment: this
+// window's tests exercise the `bulkActions` slot with partial/no props (the generated-app mock
+// above renders `<BulkActions />` with zero props for every test, not just the ones that target
+// the bulk toolbar), so the real component — which calls hooks and reads `selectedRows` — must
+// not run for real here.
+vi.mock('@generated/goods-receipt/custom/BulkInvoiceFromReceipt', () => ({
+  default: () => <div data-testid="bulk-invoice-receipt" />,
+}));
+
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
 }));
 
 let bulkDocumentActionCalls = [];
-vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
+// The named exports come from the shared helper (it documents why a mock must expose
+// the module's FULL export surface); only the `default` stub is window-specific.
+vi.mock('@/components/contract-ui/BulkDocumentAction', async () => ({
+  ...(await import('@/test/bulkDocumentActionMock.js')).bulkDocumentActionNamedExports(),
   default: (props) => {
     bulkDocumentActionCalls.push(props);
     return null;
   },
-  buildInOutActions: vi.fn(),
-  buildPostActions: vi.fn(() => []),
-  postRowFilter: vi.fn(),
 }));
 
 vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
@@ -164,6 +173,28 @@ vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
       <button data-testid="clone-modal-cloned" onClick={onCloned}>Cloned</button>
     </div>
   ),
+}));
+
+// ETP-5404 — Contacto (BusinessPartner) selector must offer "create new contact"
+// inline, at parity with purchase-order/goods-shipment. Mirrors the mock shape
+// used in goods-shipment/__tests__/index.vitest.jsx: a stub Provider that stays
+// visible in the DOM (data-testid="contact-provider") and a captured-args hook
+// stub so the documentType wiring can be asserted directly.
+let lastCreateContactModalArgs = null;
+vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
+  CreateContactContext: {
+    Provider: ({ children }) => <div data-testid="contact-provider">{children}</div>,
+  },
+}));
+
+vi.mock('@/components/contract-ui/useCreateContactModal.jsx', () => ({
+  useCreateContactModal: vi.fn((args) => {
+    lastCreateContactModalArgs = args;
+    return {
+      createContactCtxValue: { fieldKey: 'businessPartner', onOpen: vi.fn() },
+      contactPortal: <div data-testid="contact-portal" />,
+    };
+  }),
 }));
 
 vi.mock('@/components/contract-ui/SendDocumentModal', () => ({
@@ -215,7 +246,9 @@ vi.mock('react-router-dom', () => ({
 
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import {
+  postRowFilter, buildPostActions, buildUnpostActions, unpostRowFilter,
+} from '@/components/contract-ui/BulkDocumentAction';
 import GoodsReceiptWindow from '../index.jsx';
 
 const DEFAULT_PROPS = {
@@ -232,11 +265,43 @@ describe('GoodsReceiptWindow', () => {
     lastRowQuickActions = null;
     lastBulkActionsFn = null;
     bulkDocumentActionCalls = [];
+    lastCreateContactModalArgs = null;
   });
 
   it('renders the generated app', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('generated-app')).toBeInTheDocument();
+  });
+
+  // ── ETP-5404 — Contacto selector: create-new-contact wiring ────────────────
+  // The bug: the Contacto (BusinessPartner) selector on this window never
+  // offered "create a new contact" inline, unlike Purchase Order / Sales Order /
+  // Sales Quotation / Purchase Invoice / Sales Invoice / Goods Shipment. The fix
+  // wraps the tree in CreateContactContext.Provider (fed by useCreateContactModal)
+  // and renders its portal alongside the generated app.
+  describe('ETP-5404 — Contacto selector create-new-contact wiring', () => {
+    it('wraps the generated app in CreateContactContext.Provider', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      const provider = screen.getByTestId('contact-provider');
+      expect(provider).toBeInTheDocument();
+      expect(provider).toContainElement(screen.getByTestId('generated-app'));
+    });
+
+    it('renders the contactPortal returned by useCreateContactModal', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(screen.getByTestId('contact-portal')).toBeInTheDocument();
+    });
+
+    // Given the user is creating a Goods Receipt (Albarán de Compra), the modal
+    // must build the "create new contact" form for a purchase-side partner.
+    it('calls useCreateContactModal with documentType: "purchase"', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+      expect(lastCreateContactModalArgs).toMatchObject({
+        apiBaseUrl: '/api',
+        token: 'tok',
+        documentType: 'purchase',
+      });
+    });
   });
 
   // ── ETP-5058: refetchAfterSave ─────────────────────────────────────────────
@@ -285,6 +350,19 @@ describe('GoodsReceiptWindow', () => {
     fireEvent.click(screen.getByTestId('trigger-confirm'));
     expect(listener).toHaveBeenCalledTimes(1);
     window.removeEventListener('goods-receipt:open-confirm-modal', listener);
+  });
+
+  // ETP-5265 QA follow-up — the event carries a mutable `detail` so the
+  // GoodsReceiptActions listener can hand its in-flight promise back; onConfirm returns
+  // it so the core's Confirm button can await it and spin (no more "processing" toast).
+  it('draftMode.onConfirm dispatches an event with a mutable detail object', () => {
+    let seen = null;
+    const listener = (e) => { seen = e.detail; };
+    window.addEventListener('goods-receipt:open-confirm-modal', listener);
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    fireEvent.click(screen.getByTestId('trigger-confirm'));
+    window.removeEventListener('goods-receipt:open-confirm-modal', listener);
+    expect(seen).toEqual({});
   });
 
   // ── menuActionsForForm ─────────────────────────────────────────────────────
@@ -346,6 +424,14 @@ describe('GoodsReceiptWindow', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     expect(screen.getByTestId('table-slot')).toBeInTheDocument();
     expect(screen.getByTestId('bulk-actions-slot')).toBeInTheDocument();
+  });
+
+  // Bulk "Crear factura" action, mirroring the goods-shipment window: BulkInvoiceFromReceipt
+  // must render as a child of GoodsReceiptBulkAction, alongside Procesar/Contabilizar/
+  // Descontabilizar/Copy-link, not replace any of them.
+  it('renders BulkInvoiceFromReceipt inside the bulk-actions slot', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    expect(screen.getByTestId('bulk-invoice-receipt')).toBeInTheDocument();
   });
 
   // ── hideMoreMenu ────────────────────────────────────────────────────────────
@@ -412,10 +498,13 @@ describe('GoodsReceiptWindow', () => {
     expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
   });
 
-  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+  // ETP-5378 — used to expect [], which is exactly the defect: with Post as the
+  // kebab's only entry, a posted row lost the kebab altogether, even though this
+  // window's decisions.json (and menuActionsForForm) have always offered Unpost.
+  it('offers Unpost instead of Post for an already-posted row', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }]);
   });
 
   it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {
@@ -456,6 +545,70 @@ describe('GoodsReceiptWindow', () => {
     const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
     expect(postCall).toBeDefined();
     expect(postCall.rowFilter).toBe(postRowFilter);
+  });
+
+  // ETP-5302 — the in-out (DR→CO) bulk button is labelled "Procesar" (`process`),
+  // NOT "Confirmar" (`confirmBulk`, now deleted from the locales): "Confirmar" is
+  // the label of the dropdown OPTION inside the dialog. Asserted alongside the
+  // `post` instance above so the two BulkDocumentAction mounts of this window
+  // stay distinguishable by labelKey.
+  it('wires the in-out bulk BulkDocumentAction to labelKey="process"', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+    expect(labelKeys).toContain('process');
+    expect(labelKeys).not.toContain('confirmBulk');
+    const processCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'process');
+    expect(processCall.entity).toBe('goodsReceipt');
+  });
+
+  // ── ETP-5302 — bulk Descontabilizar (unpost) ───────────────────────────────
+  // Its own button rather than a second option inside "Contabilizar" (that button
+  // would then be named after the opposite of what it does). The gate itself
+  // (`buildUnpostActions` / `unpostRowFilter`) is covered exhaustively in
+  // BulkDocumentAction.vitest.jsx — these tests only verify this window mounts a
+  // THIRD instance and hands the SHARED helper references through, rather than
+  // re-deriving its own local copies (which is how two implementations of one rule
+  // drift apart — the root cause of the ETP-5302 bug itself).
+  describe('ETP-5302 — bulk unpost button', () => {
+    const unpostCall = () => bulkDocumentActionCalls.find((p) => p.labelKey === 'unpost');
+
+    it('mounts a third BulkDocumentAction for unpost, on the neoAction path', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      // Deduped, order preserved: proves all three instances mount in this order
+      // without being brittle about how many times React re-rendered them.
+      const labelKeys = bulkDocumentActionCalls.map((p) => p.labelKey);
+      expect(labelKeys.filter((k, i) => labelKeys.indexOf(k) === i)).toEqual(['process', 'post', 'unpost']);
+      expect(unpostCall().actionMode).toBe('neoAction');
+      expect(unpostCall().entity).toBe('goodsReceipt');
+    });
+
+    it('wires the SHARED buildUnpostActions/unpostRowFilter references, not local copies', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      expect(unpostCall().buildActions).toBe(buildUnpostActions);
+      expect(unpostCall().rowFilter).toBe(unpostRowFilter);
+    });
+
+    it('keeps the post and unpost instances independent (no crossed helpers)', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      const postCall = bulkDocumentActionCalls.find((p) => p.labelKey === 'post');
+      expect(postCall.buildActions).toBe(buildPostActions);
+      expect(postCall.rowFilter).toBe(postRowFilter);
+      expect(postCall.rowFilter).not.toBe(unpostRowFilter);
+    });
+
+    // A receipt's accounting reversal IS a standalone action here, so no bulk
+    // instance of this window chains an unpost before its document action — that
+    // opt-in belongs to the invoice windows only.
+    it('never opts into preUnpostActions on any of its bulk instances', () => {
+      render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+
+      for (const call of bulkDocumentActionCalls) {
+        expect(call.preUnpostActions).toBeUndefined();
+      }
+    });
   });
 
   // ETP-5209 regression: production crash root cause. The real

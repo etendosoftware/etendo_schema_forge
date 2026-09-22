@@ -54,7 +54,7 @@ export default function AssetsSidebar({ data }) {
             subtitle={ui('assetsBookValue')}
             data-testid="MetricCard__b651ab" />
           <MetricCard
-            label={ui('assetsResidualValueLabel')}
+            label={ui('assetsPendingDepreciationLabel')}
             value={hasData ? formatCurrency(orgCurrency, residualAssetValue) : '—'}
             data-testid="MetricCard__b651ab" />
           <MetricCard

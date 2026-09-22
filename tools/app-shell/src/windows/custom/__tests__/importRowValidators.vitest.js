@@ -19,17 +19,17 @@ describe('contacts row validator', () => {
   it('accepts a row whose coded cells are blank — blank falls back to the AD default', () => {
     // The ETP-4995 blocker in miniature: an empty cell is "the row says nothing", never
     // an error. If this regresses, the downloaded template stops importing again.
-    assert.deepEqual(runImportRowValidator('contacts', { name: 'Acme', taxID: 'B1' }), []);
-    assert.deepEqual(runImportRowValidator('contacts', { oBTIKTaxIDKey: '', etgoIsperson: '   ' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { name: 'Acme', taxID: 'B12345674' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { name: 'Acme', oBTIKTaxIDKey: '', etgoIsperson: '   ' }), []);
   });
 
   it('accepts the human words a user actually types, accent- and case-insensitively', () => {
-    assert.deepEqual(runImportRowValidator('contacts', { oBTIKTaxIDKey: 'NIF', etgoIsperson: 'Empresa' }), []);
-    assert.deepEqual(runImportRowValidator('contacts', { oBTIKTaxIDKey: 'cif/nif', etgoIsperson: 'persona fisica' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { name: 'Acme', oBTIKTaxIDKey: 'NIF', etgoIsperson: 'Empresa' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { oBTIKTaxIDKey: 'cif/nif', etgoIsperson: 'persona fisica', etgoFirstname: 'Ana', etgoLastname: 'Gil' }), []);
   });
 
   it('accepts the raw AD code, so a CSV exported from Etendo round-trips', () => {
-    assert.deepEqual(runImportRowValidator('contacts', { oBTIKTaxIDKey: '1', etgoIsperson: 'N' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { name: 'Acme', oBTIKTaxIDKey: '1', etgoIsperson: 'N' }), []);
   });
 
   it('reports an unrecognized Tax ID Type against its own column', () => {
@@ -48,6 +48,71 @@ describe('contacts row validator', () => {
   it('reports both coded columns at once when both are wrong', () => {
     const errors = runImportRowValidator('contacts', { oBTIKTaxIDKey: 'xx', etgoIsperson: 'yy' });
     assert.deepEqual(errors.map((e) => e.target), ['oBTIKTaxIDKey', 'etgoIsperson']);
+  });
+
+  it('requires both first name and last name for a person during review', () => {
+    const errors = runImportRowValidator('contacts', { etgoIsperson: 'Persona', etgoFirstname: 'Ana' });
+    assert.deepEqual(errors.map((e) => e.target), ['etgoLastname']);
+    assert.match(errors[0].message, /first name and last name/i);
+  });
+
+  it('accepts a company legal name or derives one from both person-name columns', () => {
+    assert.deepEqual(runImportRowValidator('contacts', { etgoIsperson: 'Empresa', name: 'ACME SL' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { etgoIsperson: 'Empresa', etgoFirstname: 'Ana', etgoLastname: 'Gil' }), []);
+  });
+
+  /**
+   * ETP-5350 — the CIF/NIF is checked in the review, not left to the server's 400 at confirm.
+   * `taxIdValidation.js` is the browser mirror of `SpanishTaxIdValidator.java` and the Contacts
+   * form used it all along; the import simply never called it. Both live failures are pinned
+   * here: a wrong check digit, and the 18-character value produced by editing a cell inline.
+   */
+  it('reports a tax id whose check digit does not match, against its own column', () => {
+    const errors = runImportRowValidator('contacts', { taxID: 'B65241890' });
+    assert.deepEqual(errors.map((e) => e.target), ['taxID']);
+    assert.match(errors[0].message, /check digit/i);
+  });
+
+  it('reports a tax id that is not a NIF, CIF or NIE at all', () => {
+    const errors = runImportRowValidator('contacts', { taxID: 'B65241890B65241895' });
+    assert.deepEqual(errors.map((e) => e.target), ['taxID']);
+    assert.match(errors[0].message, /NIF, CIF or NIE/i);
+  });
+
+  it('accepts the three valid shapes, and the separators a human types', () => {
+    for (const taxID of ['B12345674', '12345678Z', 'X1234567L', ' b12345674 ', 'B-1234567-4']) {
+      assert.deepEqual(runImportRowValidator('contacts', { taxID }), [],
+        `${taxID} should be accepted`);
+    }
+  });
+
+  /**
+   * The column is `required: true`, which `validateRow` enforces on its own. Reporting the
+   * blank here too would put two messages on one cell.
+   */
+  it('leaves a blank tax id to the required-field check, reporting nothing itself', () => {
+    assert.deepEqual(runImportRowValidator('contacts', { taxID: '' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', { taxID: '   ' }), []);
+    assert.deepEqual(runImportRowValidator('contacts', {}), []);
+  });
+
+  it('reports the tax id alongside the coded columns rather than masking them', () => {
+    const errors = runImportRowValidator('contacts',
+      { taxID: 'nope', oBTIKTaxIDKey: 'xx', etgoIsperson: 'yy' });
+    assert.deepEqual(errors.map((e) => e.target), ['taxID', 'oBTIKTaxIDKey', 'etgoIsperson']);
+  });
+
+  it('localizes the tax id message through the injected translate', () => {
+    const translate = (key) => (key === 'taxIdInvalidCheckDigit'
+      ? 'El dígito de control no coincide. Revisa el número.' : key);
+    const [error] = runImportRowValidator('contacts', { taxID: 'B65241890' }, { translate });
+    assert.equal(error.message, 'El dígito de control no coincide. Revisa el número.');
+  });
+
+  it('falls back to English when the dictionary echoes the key back', () => {
+    const [error] = runImportRowValidator('contacts', { taxID: 'B65241890' },
+      { translate: (key) => key });
+    assert.match(error.message, /check digit/i);
   });
 
   it('localizes the message through the injected translate', () => {
@@ -75,6 +140,56 @@ describe('product row validator', () => {
     // Prices are declared `isNumeric: true` in decisions.json, so `validateRow` checks
     // them. Duplicating that here would let the two drift apart.
     assert.deepEqual(runImportRowValidator('product', { salesPrice: 'abc' }), []);
+  });
+
+  /**
+   * ETP-5350 — the three costing mistakes `validateRow` structurally cannot see.
+   *
+   * `isNumeric` already covers "abc" in the cost cell and neither costing column is required,
+   * so what is left is a negative cost, an unparseable date, and a date with no cost.
+   */
+  describe('cost and starting date (ETP-5350)', () => {
+    it('accepts a row with neither, with only a cost, or with both', () => {
+      assert.deepEqual(runImportRowValidator('product', { searchKey: 'SKU-1', name: 'Widget' }), []);
+      assert.deepEqual(runImportRowValidator('product', { cost: '7,40' }), []);
+      assert.deepEqual(runImportRowValidator('product', { cost: '7,40', costStartingDate: '01/08/2026' }), []);
+      // Zero is a legitimate standard cost, not a missing one.
+      assert.deepEqual(runImportRowValidator('product', { cost: '0' }), []);
+    });
+
+    it('leaves a non-numeric cost to isNumeric, like the price columns', () => {
+      assert.deepEqual(runImportRowValidator('product', { cost: 'abc' }), []);
+    });
+
+    it('reports a negative cost against the cost column', () => {
+      // ProductCostingHandler refuses it (ERR_costingCostNegative). Caught here, it is a cell
+      // the user can fix; left to the handler, it is a 400 after they confirmed.
+      const errors = runImportRowValidator('product', { cost: '-5' });
+      assert.deepEqual(errors.map((e) => e.target), ['cost']);
+    });
+
+    it('reports an impossible date, which nothing generic can reject', () => {
+      // `31/02/2026` is not blank, so `required` says nothing about it, and it is not a number,
+      // so `isNumeric` says nothing either. Without this it reached the send as a bad payload.
+      const errors = runImportRowValidator('product', { cost: '10', costStartingDate: '31/02/2026' });
+      assert.deepEqual(errors.map((e) => e.target), ['costStartingDate']);
+    });
+
+    it('fails a starting date with no cost instead of silently dropping it', () => {
+      // A date alone cannot create an M_Costing row, so `buildCostOperation` returns null and
+      // the value vanishes: no error, no warning, product imported, cost nowhere. That is the
+      // silent-drop class this codebase has already removed twice (ETP-4997, then the province
+      // predicate one level above it).
+      const errors = runImportRowValidator('product', { costStartingDate: '01/08/2026' });
+      assert.deepEqual(errors.map((e) => e.target), ['cost']);
+    });
+
+    it('reports the date problem alone when the date is both invalid and unaccompanied', () => {
+      // Two messages on one row for one mistake is noise: fixing the date is the only
+      // instruction that makes sense while the date is unreadable.
+      const errors = runImportRowValidator('product', { costStartingDate: 'no es fecha' });
+      assert.deepEqual(errors.map((e) => e.target), ['costStartingDate']);
+    });
   });
 });
 

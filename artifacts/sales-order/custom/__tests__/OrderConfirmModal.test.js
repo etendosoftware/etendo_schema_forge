@@ -35,8 +35,69 @@ describe('OrderConfirmModal', () => {
       assert.match(src, /background: 'var\(--status-info-fg\)', color: 'hsl\(var\(--card\)\)'/);
     });
 
-    it('uses the warning foreground for document-status text', () => {
-      assert.match(src, /background: 'var\(--status-warning-bg\)', color: 'var\(--status-warning-fg\)'/);
+    /**
+     * ETP-4767 asked one thing of the document-status badge: its colours must come from
+     * the semantic status ROLE tokens, never from a hardcoded hex or a raw palette value.
+     *
+     * ETP-5381 gave the badge two branches — an auto-generated invoice arrives confirmed
+     * while the shipment beside it is still a draft — so a single literal-string match no
+     * longer describes the component. Rather than match two literals (which would accept
+     * an INVERTED mapping, success-on-draft, just as happily), the tone expression is
+     * lifted out of the source and EXECUTED, the same technique the ETP-4888 block below
+     * uses for `rawMsg`. That pins the actual status→role mapping, and asserting the token
+     * SHAPE on the evaluated values is what keeps a hardcoded colour out of either branch.
+     *
+     * A render test of DocPill was considered and rejected: DocPill is not exported, so
+     * reaching it means mounting the whole modal and driving it through handleConfirm with
+     * fetch, the two action responses and the portal mocked — a large surface for one
+     * assertion, and it would need a source change (exporting DocPill) that a test has no
+     * business asking for.
+     */
+    function getRealToneResolver() {
+      const match = src.match(/const confirmed = ([\s\S]*?);\s*const tone = ([\s\S]*?);/);
+      assert.ok(match, 'could not locate the confirmed/tone expressions in OrderConfirmModal.jsx');
+      return new Function(
+        'documentStatus',
+        `const confirmed = ${match[1]}; const tone = ${match[2]}; return tone;`,
+      );
+    }
+
+    const STATUS_ROLE_TOKEN = /^var\(--status-(success|warning|info|destructive)-(bg|fg)\)$/;
+
+    it('drives the document-status badge from the semantic role tokens, not a literal colour', () => {
+      const tone = getRealToneResolver();
+      for (const status of ['CO', 'DR', null, undefined]) {
+        const { bg, fg } = tone(status);
+        assert.match(bg, STATUS_ROLE_TOKEN,
+          `background for documentStatus=${status} must be a semantic status role token, got ${bg}`);
+        assert.match(fg, STATUS_ROLE_TOKEN,
+          `color for documentStatus=${status} must be a semantic status role token, got ${fg}`);
+      }
+      // The badge must consume the resolved tone rather than re-deciding a colour inline.
+      assert.match(src, /background: tone\.bg, color: tone\.fg/);
+    });
+
+    it('uses the success role for a confirmed document and the warning role for a draft (ETP-5381)', () => {
+      const tone = getRealToneResolver();
+
+      assert.deepEqual(tone('CO'), {
+        bg: 'var(--status-success-bg)',
+        fg: 'var(--status-success-fg)',
+      }, 'a confirmed document must read as success, not as a draft');
+
+      const draft = {
+        bg: 'var(--status-warning-bg)',
+        fg: 'var(--status-warning-fg)',
+      };
+      assert.deepEqual(tone('DR'), draft);
+      // Anything that is not explicitly confirmed stays on the draft tone — a missing
+      // documentStatus must never be optimistically badged as completed.
+      assert.deepEqual(tone(null), draft);
+      assert.deepEqual(tone(undefined), draft);
+    });
+
+    it('labels the badge from the same confirmed/draft decision as the colour', () => {
+      assert.match(src, /ui\(confirmed \? 'statusCompleted' : 'statusDraft'\)/);
     });
   });
 

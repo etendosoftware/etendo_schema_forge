@@ -14,6 +14,7 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -48,6 +49,25 @@ const REPORT_CATEGORY_WINDOW_IDS = {
   finance: 'D647D118F5014D00AF47A636B2CD0DD3',
   inventory: '6346B88619F948F9A42224BDB0B239FA',
 };
+
+// ETP-5402 QA follow-up — the report ids ReportAccessCatalog.java actually covers, one array per
+// REPORT_CATEGORY_WINDOW_IDS key (a category absent from that map has no per-report catalog
+// entries either, and stays permissive/ungated exactly as it does today). Used to (a) let a role
+// through the category gate below via a real per-report grant even without the coarse window
+// grant (e.g. Sales holds `aging-receivable` but not the Financial Reports window), and (b)
+// filter the gallery down to only the reports the caller actually has a tier for. Mirrors the
+// backend's own `ReportAccessCatalog.ROWS` catalog (com.etendoerp.go) — keep both in sync if a
+// report row is ever added, removed, or moved between categories.
+const REPORT_CATEGORY_REPORT_IDS = {
+  finance: [
+    'tax-report', 'aging-receivable', 'aging-payable', 'balance-sheet', 'profit-loss',
+    'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
+  ],
+  inventory: ['inventory-stock-report'],
+};
+
+/** Flattened union of every REPORT_CATEGORY_REPORT_IDS id, for the category-agnostic filter below. */
+const ALL_CATALOG_REPORT_IDS = new Set(Object.values(REPORT_CATEGORY_REPORT_IDS).flat());
 
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
@@ -575,16 +595,24 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   // this snapshot float to the top of the list. Deliberately NOT derived from `pending`, so
   // checking a brand-new item mid-session doesn't make it jump up until the next reopen.
   const [openSnapshotIds, setOpenSnapshotIds] = useState(() => new Set());
+  // ETP-5400 — without this, "options.length === 0 && query === ''" was the
+  // ONLY signal the empty-state text relied on, so a selector with genuinely
+  // zero records (e.g. no products assigned to any accounting entry) got
+  // stuck on "Loading..." forever: the fetch had already resolved, but an
+  // empty result looks identical to "still in flight" with no query typed.
+  const [loading, setLoading] = useState(false);
   const inputRef = useRef(null);
   const apiFetch = useApiFetch(ETENDO_BASE);
 
   useEffect(() => {
     if (!open) return;
+    setLoading(true);
     const t = setTimeout(() => {
       apiFetch(`/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}`)
         .then(r => r.json())
         .then(data => setOptions(Array.isArray(data) ? data : (data?.items ?? [])))
-        .catch(() => setOptions([]));
+        .catch(() => setOptions([]))
+        .finally(() => setLoading(false));
     }, query ? 300 : 0);
     return () => clearTimeout(t);
   }, [query, open, selector, apiFetch]);
@@ -628,6 +656,32 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
   const MAX_VISIBLE_TAGS = 3;
   const visibleTags = confirmed.slice(0, MAX_VISIBLE_TAGS);
   const hiddenCount = confirmed.length - MAX_VISIBLE_TAGS;
+
+  // Sonar S3358 — extracted out of a nested ternary in the JSX below.
+  let optionsListContent;
+  if (loading) {
+    optionsListContent = <p className="px-4 py-6 text-sm text-muted-foreground text-center">{ui('loading')}</p>;
+  } else if (options.length === 0) {
+    optionsListContent = <p className="px-4 py-6 text-sm text-muted-foreground text-center">{ui('noResults')}</p>;
+  } else {
+    optionsListContent = orderedOptions.map(o => {
+      const isSelected = pending.some(s => s.id === o.id);
+      return (
+        <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleItem(o)}
+            className="w-4 h-4 accent-primary shrink-0"
+          />
+          <TruncatedText
+            text={o.name}
+            className="text-sm min-w-0"
+            data-testid="TruncatedText__PopupMultiSelector" />
+        </label>
+      );
+    });
+  }
 
   return (
     <>
@@ -681,29 +735,7 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
               />
             </div>
             <div className="flex-1 overflow-auto">
-              {options.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground text-center">
-                  {query.length > 0 ? ui('noResults') : ui('loading')}
-                </p>
-              ) : (
-                orderedOptions.map(o => {
-                  const isSelected = pending.some(s => s.id === o.id);
-                  return (
-                    <label key={o.id} className="flex items-center gap-3 px-4 py-2 hover:bg-muted/40 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => toggleItem(o)}
-                        className="w-4 h-4 accent-primary shrink-0"
-                      />
-                      <TruncatedText
-                        text={o.name}
-                        className="text-sm min-w-0"
-                        data-testid="TruncatedText__PopupMultiSelector" />
-                    </label>
-                  );
-                })
-              )}
+              {optionsListContent}
             </div>
             <div className="flex items-center justify-between px-4 py-3 border-t border-border/30 bg-muted/20">
               <span className="text-xs text-muted-foreground">{ui('selected', { count: pending.length })}</span>
@@ -711,104 +743,6 @@ function PopupMultiSelector({ selector, label, onChange, value = '', displayValu
                 <button onClick={() => setOpen(false)} className="h-8 px-3 text-xs rounded-md border border-border hover:bg-muted/50">{ui('cancel')}</button>
                 <button onClick={confirm} className="h-8 px-3 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90">OK</button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-// Single-select modal: shows a button with the current value, opens a modal with
-// a search input and a clickable list. Single click selects and closes immediately.
-function SingleSelectModal({ selector, label, value, displayValue, onChange, hasError = false, extraParams = {} }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [options, setOptions] = useState([]);
-  const inputRef = useRef(null);
-  const extraParamsRef = useRef(extraParams);
-  const apiFetch = useApiFetch(ETENDO_BASE);
-  useEffect(() => { extraParamsRef.current = extraParams; });
-
-  useEffect(() => {
-    if (!open) return;
-    const extra = Object.entries(extraParamsRef.current)
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join('&');
-    const path = `/sws/report-selectors/${selector}?q=${encodeURIComponent(query)}${extra ? '&' + extra : ''}`;
-    const t = setTimeout(() => {
-      apiFetch(path)
-        .then(r => r.json()).then(setOptions).catch(() => setOptions([]));
-    }, query ? 300 : 0);
-    return () => clearTimeout(t);
-  }, [query, open, selector, apiFetch]);
-
-  const openModal = () => {
-    setQuery('');
-    setOptions([]);
-    setOpen(true);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
-
-  const selectItem = (item) => {
-    onChange(item.id, item.name);
-    setOpen(false);
-  };
-
-  const clear = (e) => {
-    e.stopPropagation();
-    onChange('', '');
-  };
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={openModal}
-        className={`w-full h-9 px-3 text-sm rounded-md border bg-card hover:bg-muted/50 flex items-center justify-between gap-2 ${hasError ? 'border-destructive ring-1 ring-destructive/30' : 'border-border'}`}
-      >
-        <span className={`truncate ${displayValue ? 'text-foreground' : 'text-muted-foreground'}`}>
-          {displayValue || `Select ${label}...`}
-        </span>
-        {displayValue && (
-          <span onClick={clear} className="text-muted-foreground hover:text-destructive shrink-0 text-base leading-none">&times;</span>
-        )}
-      </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30" onClick={e => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div className="bg-card rounded-xl shadow-2xl w-[420px] max-h-[500px] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
-              <h3 className="text-sm font-semibold">{label}</h3>
-              <button onClick={() => setOpen(false)} className="text-lg leading-none text-muted-foreground hover:text-foreground">&times;</button>
-            </div>
-            <div className="px-4 py-2 border-b border-border/30">
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder={ui('searchPlaceholder')}
-                className="w-full h-8 px-2 text-sm border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary/30"
-              />
-            </div>
-            <div className="flex-1 overflow-auto">
-              {options.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground text-center">
-                  {query.length > 0 ? 'No results' : 'Loading...'}
-                </p>
-              ) : (
-                options.map(o => (
-                  <button
-                    key={o.id}
-                    onClick={() => selectItem(o)}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-muted/50 truncate ${value === o.id ? 'bg-primary/10 text-primary font-medium' : ''}`}
-                  >
-                    {o.name}
-                  </button>
-                ))
-              )}
             </div>
           </div>
         </div>
@@ -2129,6 +2063,19 @@ export default function ReportViewerPage() {
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
 
+  // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
+  // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
+  // treated as "no report-level access proven yet" everywhere below, the same fail-closed
+  // convention `useWindowAccess` already uses while its own map is still loading.
+  const [reportAccess, setReportAccess] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyReportAccess()
+      .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
+      .catch(() => { if (!cancelled) setReportAccess({}); });
+    return () => { cancelled = true; };
+  }, []);
+
   // ETP-5116 — computed before the effect below so the effect can short-circuit
   // the catalog fetch (and any other gated side effect added later) whenever
   // the selected category's access is denied, instead of only blocking the
@@ -2140,9 +2087,20 @@ export default function ReportViewerPage() {
   // useWindowAccess fails closed to 'none' while windowAccess is still loading,
   // so an authorized user briefly sees the guard too until it resolves, then
   // the effect below re-fires once categoryAccessDenied flips to false.
+  //
+  // ETP-5402 QA follow-up — a role can also pass this gate via a real per-report grant even
+  // without the coarse category window (e.g. Sales holds `aging-receivable` but not the
+  // Financial Reports window): `hasAccessibleReportInCategory` checks REPORT_CATEGORY_REPORT_IDS
+  // against the fetched `reportAccess` map. Both checks fail closed while their own data is
+  // still loading, so `categoryAccessDenied` briefly stays true (same transient guard flash the
+  // window-only version already had) until whichever resolves last flips it.
   const categoryWindowId = REPORT_CATEGORY_WINDOW_IDS[categoryFilter] ?? null;
   const categoryWindowAccessTier = useWindowAccess(categoryWindowId);
-  const categoryAccessDenied = Boolean(categoryWindowId) && categoryWindowAccessTier === 'none';
+  const categoryReportIds = REPORT_CATEGORY_REPORT_IDS[categoryFilter] ?? null;
+  const hasAccessibleReportInCategory = Boolean(categoryReportIds) && Boolean(reportAccess)
+    && categoryReportIds.some((id) => reportAccess[id] !== undefined);
+  const categoryAccessDenied = Boolean(categoryWindowId) && categoryWindowAccessTier === 'none'
+    && !hasAccessibleReportInCategory;
 
   useEffect(() => {
     if (categoryAccessDenied) {
@@ -2162,7 +2120,20 @@ export default function ReportViewerPage() {
       .finally(() => setLoading(false));
   }, [categoryAccessDenied]);
 
-  const selectedReport = reportId ? reports.find(r => r.id === reportId) : null;
+  // ETP-5402 QA follow-up — the real per-report filter: a catalog row (one whose id appears in
+  // ANY REPORT_CATEGORY_REPORT_IDS list, regardless of the current `categoryFilter` — this page
+  // also renders every category mixed together with no `?category=` at all) only shows when the
+  // caller's own `reportAccess` map has an entry for it. A non-catalog row (e.g. "purchases",
+  // deliberately ungated per ETP-5116's own decision — see REPORT_CATEGORY_WINDOW_IDS above)
+  // always passes through unfiltered. While `reportAccess` is still loading (`null`), every row
+  // passes through unfiltered too — the same transient "not gated yet" window the category-level
+  // guard above already has, not a new behavior.
+  const visibleReports = useMemo(() => {
+    if (!reportAccess) return reports;
+    return reports.filter((r) => !ALL_CATALOG_REPORT_IDS.has(r.id) || reportAccess[r.id] !== undefined);
+  }, [reports, reportAccess]);
+
+  const selectedReport = reportId ? visibleReports.find(r => r.id === reportId) : null;
 
   const selectReport = (report) => {
     const params = new URLSearchParams(searchParams);
@@ -2209,7 +2180,7 @@ export default function ReportViewerPage() {
 
   return (
     <ReportList
-      reports={reports}
+      reports={visibleReports}
       loading={loading}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}

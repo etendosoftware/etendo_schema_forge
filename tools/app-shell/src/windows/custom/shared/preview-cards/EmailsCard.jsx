@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { StatusTag } from '@/components/ui/status-tag';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { resolveNeoBaseUrl } from '@/components/contract-ui/documentEmailSend.js';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -134,9 +135,19 @@ function EmailRow({ row, ui, localeTag }) {
       </div>
       <div className="flex items-baseline gap-2 min-w-0 mt-0.5">
         <span className="text-xs text-muted-foreground shrink-0">{ui('emailHistoryTo')}</span>
-        <span className="text-sm font-medium text-foreground truncate">
-          {to.length > 0 ? to.join(', ') : ui('emailHistoryNoRecipients')}
-        </span>
+        {/* ETP-5304 — the recipient list routinely runs past the 380px preview column
+            ("a@acme.com, b@acme.com, c@acme.com"), and plain `truncate` clipped it with
+            no way to read the rest. `TruncatedText` keeps the ellipsis and offers the
+            full list on hover/focus, opening the tooltip only when the text is actually
+            clipped (it measures `scrollWidth > clientWidth`), so the short
+            `emailHistoryNoRecipients` fallback stays silent. `min-w-0` follows the
+            ETP-5281 precedent in DataTable.cellRenderers: a flex child's default
+            `min-width: auto` is content-based, which can keep it from shrinking enough
+            to ever truncate. */}
+        <TruncatedText
+          text={to.length > 0 ? to.join(', ') : ui('emailHistoryNoRecipients')}
+          className="min-w-0 text-sm font-medium text-foreground"
+          data-testid="TruncatedText__emails" />
       </div>
     </div>
   );

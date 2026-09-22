@@ -1,11 +1,29 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadCustomModule,
+  apiFetchToGlobalFetch,
+} from '../../../_test-support/loadCustomModule.js';
+import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromPurchaseOrderModal.jsx'), 'utf8');
+
+// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
+// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
+const { helpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromPurchaseOrderModal.jsx'),
+  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
+  // binding the loader strips); the stub forwards to `globalThis.fetch`,
+  // which is what the mocks below install.
+  { moduleApiFetch: apiFetchToGlobalFetch },
+);
+const { fetchDocuments, buildLineBody } = helpers;
+
+// The invoice-line -> order-line FK key, read from the generated contract
+// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
+const ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
 
 describe('ImportFromPurchaseOrderModal — source shape', () => {
   it('exports a default function component', () => {
@@ -25,22 +43,6 @@ describe('ImportFromPurchaseOrderModal — source shape', () => {
     assert.match(src, /purchase-invoice\/header\/\$\{invoiceId\}/);
   });
 
-  it('filters candidate orders by CO status, matching business partner, and pending invoice status', () => {
-    assert.match(src, /documentStatus\s*===\s*'CO'/);
-    assert.match(src, /businessPartner\s*===\s*bpId/);
-    assert.match(src, /Number\(o\.invoiceStatus/);
-  });
-
-  it('filters candidates by matching currency and computes excludedByCurrency', () => {
-    assert.match(src, /invoiceCurrency\s*=.*currency/);
-    assert.match(src, /documents\s*=\s*invoiceCurrency\s*\?\s*candidates\.filter\(o\s*=>\s*o\.currency\s*===\s*invoiceCurrency\)\s*:\s*candidates/);
-    assert.match(src, /excludedByCurrency\s*=\s*!!invoiceCurrency\s*&&\s*documents\.length\s*===\s*0\s*&&\s*candidates\.length\s*>\s*0/);
-  });
-
-  it('returns excludedByCurrency in the fetchDocuments result', () => {
-    assert.match(src, /return\s*\{\s*documents,\s*sharedContext:[\s\S]*?,\s*excludedByCurrency\s*\}/);
-  });
-
   it('wires the purchase-order-specific i18n keys including the currency empty state', () => {
     assert.match(src, /titleKey="importFromPurchaseOrder"/);
     assert.match(src, /searchPlaceholderKey="searchPurchaseOrder"/);
@@ -58,66 +60,19 @@ describe('ImportFromPurchaseOrderModal — source shape', () => {
     assert.match(src, /afterImport=\{afterImport\}/);
   });
 
-  // ETP-4724: buildLineBody must carry the source order line's custom
-  // description through to the created invoice line, otherwise the backend
-  // falls back to the product's default description. This assertion is
-  // expected to FAIL against current source until the fix lands.
-  it('carries the order line description into the built invoice line body', () => {
-    assert.match(src, /description:\s*line\.description\s*\|\|\s*null/);
+  // ETP-5381: the sales side had drifted to `cOrderlineId`, a key absent from
+  // the spec, which NeoFieldFilter.filterRecord drops silently. The purchase
+  // side was always correct — this guard keeps it that way.
+  it('never mentions the non-existent cOrderlineId key', () => {
+    assert.doesNotMatch(src, /cOrderlineId/);
   });
 });
-
-// ---------------------------------------------------------------------------
-// fetchDocuments — behavioral currency-filter tests
-//
-// Same rationale as ImportFromOrderModal.test.js: the component only exports a
-// default React wrapper, so the exact currency-filter algorithm (verified
-// byte-for-byte against the regex assertions above) is re-derived here and
-// exercised with a mocked fetch.
-// ---------------------------------------------------------------------------
-
-async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const [ordersRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/purchase-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/purchase-invoice/header/${invoiceId}`, { headers }),
-  ]);
-
-  const alreadyImportedOrderLines = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine); });
-  }
-
-  let invoiceCurrency = null;
-  if (headerRes.ok) {
-    invoiceCurrency = (await headerRes.json())?.response?.data?.[0]?.currency || null;
-  }
-
-  let documents = [];
-  let excludedByCurrency = false;
-  const orderDiscountMap = {};
-  if (ordersRes.ok) {
-    const all = (await ordersRes.json())?.response?.data || [];
-    const candidates = all.filter(o =>
-      o.documentStatus === 'CO'
-      && o.businessPartner === bpId
-      && Number(o.invoiceStatus ?? 0) < 100
-    );
-    documents = invoiceCurrency ? candidates.filter(o => o.currency === invoiceCurrency) : candidates;
-    excludedByCurrency = !!invoiceCurrency && documents.length === 0 && candidates.length > 0;
-    documents.forEach(o => {
-      if (o.etgoTotalDiscount) orderDiscountMap[o.id] = Number(o.etgoTotalDiscount);
-    });
-  }
-  return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap }, excludedByCurrency };
-}
 
 function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
 }
 
-function installFetch({ orders, invLines = [], invoiceHeader }) {
+function installFetch({ orders = [], invLines = [], invoiceHeader = {} }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/purchase-order/header?')) return mockRes(true, orders);
     if (url.includes('/purchase-invoice/lines?parentId=')) return mockRes(true, invLines);
@@ -198,58 +153,72 @@ describe('ImportFromPurchaseOrderModal — fetchDocuments currency filter', () =
     assert.equal(result.documents[0].id, 'o1');
     assert.equal(result.excludedByCurrency, false);
   });
+
+  it('excludes orders for another business partner and fully invoiced orders', async () => {
+    installFetch({
+      orders: [
+        { id: 'o1', documentStatus: 'CO', businessPartner: 'other-bp', invoiceStatus: 0, currency: 'USD' },
+        { id: 'o2', documentStatus: 'CO', businessPartner: 'bp1', invoiceStatus: 100, currency: 'USD' },
+      ],
+      invoiceHeader: { currency: 'USD' },
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.documents.length, 0);
+  });
 });
 
-// ---------------------------------------------------------------------------
-// buildLineBody — behavioral description-passthrough test (ETP-4724)
-//
-// buildLineBody is re-derived verbatim from the CURRENT source below (byte
-// -for-byte, minus the missing `description` line the bug report calls out),
-// so it faithfully reproduces today's (buggy) behavior: the built body never
-// carries `line.description`, so the backend falls back to the product's
-// default description when creating the invoice line.
-//
-// Once the fix lands in ImportFromPurchaseOrderModal.jsx (adding
-// `description: line.description || null` to the returned object), update
-// ONLY the re-derived `buildLineBody` copy below to match — the assertion
-// itself (`result.description === 'Entrega especial'`) does not need to
-// change, and should then pass.
-// ---------------------------------------------------------------------------
-
-async function buildLineBody({ line, qty, invoiceId, lineNo }) {
-  const unitPrice = Number(line.unitPrice) || 0;
-  const listPrice = Number(line.listPrice) || unitPrice;
-  const grossUnitPrice = Number(line.grossUnitPrice) || 0;
-  const discount = Number(line.discount) || 0;
-  return {
-    parentId: invoiceId,
-    product: line.product,
-    invoicedQuantity: qty,
-    unitPrice,
-    listPrice,
-    ...(grossUnitPrice ? { grossUnitPrice } : {}),
-    ...(discount ? { etgoDiscount: discount } : {}),
-    lineNetAmount: unitPrice * qty,
-    description: line.description || null,
-    tax: line.tax || null,
-    uOM: line.uOM || null,
-    lineNo,
-    salesOrderLine: line.id,
+describe('ImportFromPurchaseOrderModal — buildLineBody', () => {
+  const line = {
+    id: 'ol1',
+    product: 'p1',
+    description: 'Entrega especial',
+    unitPrice: 10,
+    listPrice: 10,
+    tax: 't1',
+    uOM: 'u1',
   };
-}
 
-describe('ImportFromPurchaseOrderModal — buildLineBody description passthrough', () => {
   it('carries the order line description into the built invoice line body', async () => {
-    const line = {
-      id: 'ol1',
-      product: 'p1',
-      description: 'Entrega especial',
-      unitPrice: 10,
-      listPrice: 10,
-      tax: 't1',
-      uOM: 'u1',
-    };
     const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
     assert.equal(result.description, 'Entrega especial');
+  });
+
+  it('computes the line net amount from the unit price and the imported quantity', async () => {
+    const result = await buildLineBody({ line, qty: 3, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result.invoicedQuantity, 3);
+    assert.equal(result.lineNetAmount, 30);
+  });
+
+  // ETP-5381 REGRESSION GUARD (purchase side — the reference implementation).
+  // Posting the FK under a key the spec does not declare makes NeoFieldFilter
+  // drop it silently (HTTP 200, line created, C_OrderLine_ID NULL), which keeps
+  // the match table empty and skips `UPDATE C_ORDERLINE SET QtyInvoiced`,
+  // leaving the order invoiceable forever. Keep the working side working.
+  it('sends the source order line under the spec API key for C_OrderLine_ID', async () => {
+    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(result[ORDER_LINE_FK], 'ol1');
+  });
+
+  it('does not send the order line under a key the NEO spec would silently drop', async () => {
+    const result = await buildLineBody({ line, qty: 2, invoiceId: 'inv1', lineNo: 10 });
+    assert.equal(Object.hasOwn(result, 'cOrderlineId'), false);
+  });
+});
+
+describe('ImportFromPurchaseOrderModal — duplicate detection via the order line FK', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('builds the already-imported set from the spec API key on existing invoice lines', async () => {
+    installFetch({ invLines: [{ id: 'il1', [ORDER_LINE_FK]: 'ol1' }] });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+  });
+
+  it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
+    installFetch({ invLines: [{ id: 'il1', cOrderlineId: 'ol9' }] });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
   });
 });

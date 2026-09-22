@@ -194,8 +194,12 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     await glInput.fill('Comis');
     await page.getByRole('button', { name: 'Comisiones bancarias' }).click();
 
-    // Enter a positive amount (AmountInput renders data-testid field-number-tx-amount).
-    await page.getByTestId('field-number-tx-amount').fill('100');
+    // Enter a positive amount. ETP-5107: the call site has always asked for
+    // data-testid="tx-amount", but the old `AmountInput` never destructured `data-testid`, so the
+    // prop was silently dropped and the input fell back to `field-number-${name}`. The
+    // `MaskedAmountInput` that replaced it honours the prop, so the rendered testid is now the one
+    // the author actually requested.
+    await page.getByTestId('tx-amount').fill('100');
 
     const save = page.getByTestId('tx-new-save');
     await expect(save).toBeEnabled();
@@ -232,7 +236,8 @@ test.describe('Financial Account — Nuevo movimiento (mocked)', () => {
     await glInput.click();
     await glInput.fill('Inter');
     await page.getByRole('button', { name: 'Intereses' }).click();
-    await page.getByTestId('field-number-tx-amount').fill('75');
+    // Same testid note as the test above (ETP-5107: `MaskedAmountInput` honours `data-testid`).
+    await page.getByTestId('tx-amount').fill('75');
 
     await page.getByTestId('tx-new-save').click();
     await expect(page.getByText('Movimiento creado')).toBeVisible();

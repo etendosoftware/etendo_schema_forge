@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useUI } from '@/i18n';
 import { DistinctValuesFilter } from '@/components/ui/distinct-values-filter';
 import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { NO_ROLE_FILTER_VALUE } from './RoleChipsCell.jsx';
 
 /**
  * ETP-4906 — Users LIST GRID toolbar dropdown: filters the grid by applied template
@@ -38,13 +39,16 @@ import { ADMIN_NAME_I18N_KEY, resolveRoleDisplayName } from '@/lib/roleNameI18n.
 export function RoleFilterControl({ value, onChange, roles, 'data-testid': dataTestId = 'RoleFilterControl__toolbar' }) {
   const ui = useUI();
 
+  // ETP-5188 (Point 5) — "Sin rol" is a synthetic option, not a real role from `roles`,
+  // placed first (right after "All roles") so it reads as a special/summary value rather
+  // than getting lost among the actual role names.
   const codes = useMemo(
-    () => (roles ?? []).filter((role) => role?.id != null).map((role) => String(role.id)),
+    () => [NO_ROLE_FILTER_VALUE, ...(roles ?? []).filter((role) => role?.id != null).map((role) => String(role.id))],
     [roles],
   );
 
   const labelFor = useMemo(() => {
-    const byId = {};
+    const byId = { [NO_ROLE_FILTER_VALUE]: ui('noRole') };
     for (const role of roles ?? []) {
       if (role?.id == null) continue;
       byId[String(role.id)] = role.isClientAdmin
@@ -54,7 +58,10 @@ export function RoleFilterControl({ value, onChange, roles, 'data-testid': dataT
     return (code) => byId[code] ?? code;
   }, [roles, ui]);
 
-  if (codes.length === 0) return null;
+  // ETP-5188 — the "Sin rol" sentinel is always prepended to `codes`, so `codes.length`
+  // is never 0 even with no real roles. The "no roles → render nothing" contract must be
+  // based on the underlying `roles` prop instead.
+  if (!roles || roles.length === 0) return null;
 
   return (
     <span data-testid={dataTestId}>

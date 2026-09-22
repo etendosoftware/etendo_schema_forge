@@ -278,8 +278,9 @@
           "reason": "ETP-4914 — correction to the accounting-dimension matrix: Centro de costo is 'Por config' (not 'Nunca') for Activo (Amortizaciones) Cabecera. Config-gated, same as project (raw AD: @$Element_CC@='Y' & @IsDepreciated@='Y')."
         },
         "businessPartner": {
-          "visibility": "discarded",
-          "reason": "ETP-4529 — Contacto is 'Nunca' for Activo (Amortizaciones) per the accounting-dimension matrix."
+          "visibility": "editable",
+          "section": "principal",
+          "reason": "ETP-4914 — correction to the ETP-4529 matrix: Contacto is 'Siempre' for Activo (Amortizaciones) Cabecera, gated only by @IsDepreciated@='Y' (matches core's own raw AD displayLogic exactly, confirmed in schema-raw.json). It is NOT a GL-config-gated accounting dimension like Project/Cost Center (no @$Element_BP@ term), so no dimension-evaluator wiring is needed — rendered directly, depreciate-gated, by the custom AssetsDetailPanel."
         },
         "eTADASUser1": {
           "visibility": "discarded",

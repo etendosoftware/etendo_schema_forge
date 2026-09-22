@@ -7,6 +7,8 @@ import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { TruncatedText } from '@/components/ui/truncated-text';
 
 function fmt(val, curr) {
   const n = typeof val === 'string' ? parseFloat(val) : (val ?? 0);
@@ -60,10 +62,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -90,9 +95,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   const fetchInstallments = useCallback(async () => {
     if (!recordId || !base) { setInstallmentsLoading(false); return; }
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/sales-invoice/paymentPlan?parentId=${recordId}&_startRow=0&_endRow=50`,
-        { headers },
+        {},
       );
       if (res.ok) {
         const json = await res.json();
@@ -100,7 +105,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       }
     } catch { /* silent */ }
     finally { setInstallmentsLoading(false); }
-  }, [recordId, base, headers]);
+  }, [recordId, base, apiFetch]);
 
   useEffect(() => { fetchInstallments(); }, [fetchInstallments]);
 
@@ -152,9 +157,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     setShipmentCreating(true);
     try {
       const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const res = await fetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
-        method: 'POST', headers, body: JSON.stringify({}),
+      const res = await apiFetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
+        method: 'POST', body: JSON.stringify({}),
       });
       const json = await res.json();
       const shipmentData = json?.response?.data;
@@ -266,6 +270,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         </span>
       );
     }
+    // ETP-5268 follow-up — amount shown again, capped to ~6 digits via
+    // TruncatedText (tooltip only opens when it genuinely truncates).
     return (
       <>
         <button
@@ -276,7 +282,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           style={{ padding: '0 12px', borderRadius: '8px', backgroundColor: 'var(--status-info-bg)', border: '1px solid var(--status-info-border)', color: 'hsl(var(--primary))', fontVariantNumeric: 'tabular-nums' }}
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
-          {ui('cpFavorBadge')} {fmt(outstandingAbs, currency)}
+          {ui('cpFavorBadge')}
+          <TruncatedText text={fmt(outstandingAbs, currency)} className="w-[72px] shrink-0 text-left" />
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal

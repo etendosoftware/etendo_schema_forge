@@ -528,6 +528,15 @@ export function mergeDefaultsPreservingUserEdits(prev, defaults, userChangedKeys
     return merged;
 }
 
+/**
+ * True for a NEO sequence preview placeholder (e.g. "<10000000>", "<REC-1000008>") — a display
+ * hint for an auto-generated value, never something the user typed. The prefix is doc-type
+ * dependent, so it is not necessarily numeric.
+ */
+export function isSequencePlaceholder(value) {
+    return typeof value === 'string' && /^<[^<>]+>$/.test(value);
+}
+
 export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
@@ -538,9 +547,9 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
         return true;
     }
 
-    // Skip NEO sequence placeholders (e.g. "<10000000>") — these are display hints
-    // for auto-generated values and must not be sent to the backend on create.
-    if (typeof value === 'string' && /^<\d+>$/.test(value)) {
+    // Skip NEO sequence placeholders — display hints for auto-generated values that must not
+    // reach the backend.
+    if (isSequencePlaceholder(value)) {
         return true;
     }
 
@@ -757,6 +766,10 @@ export function buildPatchPayload(editing, selected) {
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
+        // A sequence placeholder is a display hint, never a user-authored value: the backend
+        // strips it as read-only anyway, and sending it makes the server read the field as
+        // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
+        if (isSequencePlaceholder(value)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;
@@ -1000,6 +1013,10 @@ export function useEntity(entity, childEntity, {
     // the "Others" tab mounts only while it is the active tab. Optional: surfaces
     // whose form predates the static fall back to the registry (see below).
     contractFields = null,
+    // Field values to seed a NEW record with, e.g. when the creation form is opened from a
+    // lookup that already knows the name the user typed and the role (customer/vendor) the
+    // calling document implies. Applied by `handleNew`; ignored on every other path.
+    initialData = null,
 }) {
     const ui = useUI();
     const apiFetch = useApiFetch(apiBaseUrl);
@@ -1015,7 +1032,26 @@ export function useEntity(entity, childEntity, {
     const [children, setChildren] = useState([]);
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
-    const [loading, setLoading] = useState(false);
+    // Bug fix: initialize `loading` to match whether a list fetch is actually
+    // guaranteed to start on mount. When `skipListFetch` is false (the common
+    // case), the mount effect below unconditionally calls `loadList(false)`,
+    // whose very first line is `setLoading(true)` — but that only takes effect
+    // on the SECOND render (after the effect runs), so the FIRST render was
+    // rendering with the stale `loading: false` default. `ListView.jsx`'s
+    // `ListTableRegion` branches on `loading && items.length === 0` to decide
+    // between a skeleton and the real `<Table>`; with the old default, the very
+    // first render evaluated that condition as false and mounted `<Table>`
+    // prematurely (before any data existed), which was then unmounted on the
+    // next render once `loading` correctly flipped to `true`, and mounted a
+    // THIRD time once the fetch resolved — an extra, spurious mount+unmount
+    // cycle on every list page load. Any `<Table>`/`headerTable` that runs its
+    // own data fetch in a mount effect (e.g. Users' `UserHeaderTable`) paid for
+    // that spurious cycle as a real, duplicate network request. Seeding
+    // `loading` from `!skipListFetch` makes the very first render already
+    // reflect reality: true when a fetch WILL start (skeleton immediately, no
+    // premature Table mount), false when `skipListFetch` genuinely means no
+    // fetch will ever be triggered (e.g. DetailView, which doesn't need a list).
+    const [loading, setLoading] = useState(!skipListFetch);
     // ETP-5034: outcome of the last fetchById, when it did NOT yield a record.
     // null = nothing wrong (never fetched, or the record loaded fine).
     // 'notFound' = the backend answered but carried no row: the id does not exist,
@@ -1082,6 +1118,12 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
+    // the moment handleNew runs, and putting it in that callback's dependency array would
+    // rebuild handleNew on every render for any caller passing an object literal — which
+    // re-fires the `useNewRouteEditingReset` effect that depends on it.
+    const initialDataRef = useRef(initialData);
+    initialDataRef.current = initialData;
     // ETP-4741: monotonic id of the current defaults fetch. A response (or its
     // timer) only acts while its epoch is still current — bumping the epoch is
     // how the timeout and newer handleNew calls make in-flight responses inert,
@@ -1411,7 +1453,16 @@ export function useEntity(entity, childEntity, {
                 const raw = extractSingleRow(data);
                 return raw ? normalizeRecord(raw, entity) : null;
             });
-        runQuery(key, fetcher, { force })
+        // ETP-5265 QA follow-up — `return` (added, the rest of the chain is untouched):
+        // callers that must stay busy until the record is actually back on screen need to
+        // await the refetch. `onRefresh` in DetailView is literally
+        // `() => hook.fetchById?.(id, { force: true })`, so without this the awaiting
+        // caller waited on `undefined` and resumed immediately. Behaviour-preserving: no
+        // existing caller reads the return value, and the chain ends in `.catch`, so the
+        // promise handed out always settles as fulfilled and can never surface as an
+        // unhandled rejection in a caller that ignores it. The `if (!id) return;` guard
+        // above still returns undefined, exactly as before.
+        return runQuery(key, fetcher, { force })
             .then(row => {
                 if (!isCurrent()) return;
                 // ETP-4563: a mutation superseded this read while it was in flight: drop the
@@ -1547,7 +1598,7 @@ export function useEntity(entity, childEntity, {
         userChangedKeysRef.current.delete(key);
     }, []);
 
-    const handleSelect = useCallback((row) => {
+    const handleSelect = useCallback((row, { force = false } = {}) => {
         // Reset the per-session changed-keys set when a different record is loaded,
         // so format validation (email/website/phone) only ever re-checks fields the
         // user actually edits in THIS record — never legacy values inherited from a
@@ -1566,12 +1617,26 @@ export function useEntity(entity, childEntity, {
         setBlockingCondition(null);
         setSelected(row);
         setEditing(row ? { ...row } : null);
-        fetchChildren(row?.id);
+        // `force` defaults to false — every pre-existing caller reselects a record to LOAD it
+        // (mount, a list row click, a parent switching secondary tabs) and reusing a fresh cached
+        // child list there is correct, not stale. A caller passes `force: true` when it just
+        // wrote a child and a ≤30s-old cache entry for the exact same query key would otherwise
+        // hide it — see `customAddModal`'s `onSaved` in DetailView.jsx, added for ETP-5332's
+        // Dirección tab (LocationEditorModal): the address saved, but a cache hit served the
+        // list from before the save, so the popup and the window both showed the old rows until
+        // the cache aged out or a reload bypassed it entirely.
+        fetchChildren(row?.id, { force });
     }, [fetchChildren, neutralizePendingDefaults]);
 
     const handleNew = useCallback(async () => {
+        const seed = initialDataRef.current ?? {};
         backendDefaultKeysRef.current = new Set();
-        userChangedKeysRef.current = new Set();
+        // Seeded keys count as user-changed. That single fact is what makes the seed safe:
+        // `mergeDefaultsPreservingUserEdits` below already refuses to overwrite a
+        // user-changed key, so the in-flight `/defaults` response cannot clobber the seed
+        // and no new race handling is needed. It also keeps `shouldSkipPayloadField` from
+        // dropping a seeded legacy-looking FK id out of the POST payload.
+        userChangedKeysRef.current = new Set(Object.keys(seed));
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -1580,7 +1645,7 @@ export function useEntity(entity, childEntity, {
         // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
         setBlockingCondition(null);
         setSelected(null);
-        setEditing({}); // Start with empty so UI is responsive
+        setEditing({ ...seed }); // Start with just the seed so UI is responsive
 
         // ETP-4741 — the defaults GET races the user, who can already be typing
         // into the open form. Guards: an epoch check discards any response whose
@@ -1994,7 +2059,7 @@ export function useEntity(entity, childEntity, {
     }, [selected, apiBaseUrl, entity, apiFetch, refresh, ui, invalidateEntityCache, cacheScope, specName, dataCache]);
 
     const handleAddChild = useCallback(async (childData) => {
-        if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
+        if (!childEntity || !apiBaseUrl || !selected?.id) return;
         try {
             const body = {};
             // Include all fields from childData, skipping internal/companion keys.
@@ -2029,6 +2094,13 @@ export function useEntity(entity, childEntity, {
             // The refresh itself stays where ETP-5005 put it (after the optimistic
             // append, with `silent: true`) — do not re-add an eager fetch here.
             invalidateChildrenCache(selected.id);
+            // ETP-5366: a line/child add can change data the PARENT list row displays
+            // (a computed header total, a rolled-up count) even though nothing here
+            // touched the parent record directly. Mark the parent entity's own list
+            // cache stale too — same shape as handleSave/handleDelete/handleProcessSuccess
+            // below — so navigating back to the grid re-fetches instead of serving the
+            // pre-mutation cached page for up to `recordStaleTime`.
+            invalidateEntityCache();
             const savedLine = normalizeRecord(data?.response?.data?.[0] ?? data, childEntity);
             // ETP-5005 — show the persisted line IMMEDIATELY, then reconcile in the background.
             //
@@ -2076,7 +2148,7 @@ export function useEntity(entity, childEntity, {
             toast.error(msg);
             return null;
         }
-    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, invalidateChildrenCache, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
+    }, [childEntity, apiBaseUrl, token, selected, fetchChildren, ui, invalidateChildrenCache, invalidateEntityCache, refreshHeaderTotals, applyExemptionCauseSignals, apiFetch]);
 
     const handleUpdateChild = useCallback((childId, fieldOrObject, value, signalSource) => {
         setChildren(prev => prev.map(c => {
@@ -2094,8 +2166,12 @@ export function useEntity(entity, childEntity, {
         // object-only behaviour so unrelated single-field (string) updates don't reset the flag.
         if (signalSource) applyExemptionCauseSignals(signalSource);
         else if (typeof fieldOrObject === 'object') applyExemptionCauseSignals(fieldOrObject);
-        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
+        // ETP-5366: also invalidate the parent entity's own list cache — a line edit
+        // (e.g. quantity) can change a value the parent list row displays (a computed
+        // header total), so the grid must not keep serving the pre-edit cached page
+        // once the user navigates back to it. See handleAddChild's identical rationale.
+        if (selected?.id) { invalidateChildrenCache(selected.id); invalidateEntityCache(); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache, invalidateEntityCache]);
 
     const handleDeleteChild = useCallback((childId) => {
         setChildren(prev => prev.filter(c => String(c.id) !== String(childId)));
@@ -2112,8 +2188,10 @@ export function useEntity(entity, childEntity, {
         // when the header GET returns), not overwritten by it.
         applyExemptionCauseSignals({});
         // Refresh header to update totals after line deletion
-        if (selected?.id) { invalidateChildrenCache(selected.id); refreshHeaderTotals(selected.id); }
-    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache]);
+        // ETP-5366: also invalidate the parent entity's own list cache — see
+        // handleUpdateChild's identical rationale above.
+        if (selected?.id) { invalidateChildrenCache(selected.id); invalidateEntityCache(); refreshHeaderTotals(selected.id); }
+    }, [selected, refreshHeaderTotals, applyExemptionCauseSignals, invalidateChildrenCache, invalidateEntityCache]);
 
     /**
      * ETP-5073 follow-up: refresh ONLY the remembered `updated` token of a record, without
@@ -2359,6 +2437,10 @@ export function useEntity(entity, childEntity, {
         handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         invalidateEntityCache,
+        // ETP-5366: exposed for the callers that write a child collection OUTSIDE this hook
+        // (a customAddModal doing its own POST/PUT). They have no other way to tell the shared
+        // cache that the collection they just changed is no longer what it holds.
+        invalidateChildrenCache,
         buildListQuery,
         sortColumn, sortDirection, setSortColumn, setSortDirection,
     };

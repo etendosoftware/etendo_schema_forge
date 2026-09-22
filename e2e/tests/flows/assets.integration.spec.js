@@ -134,7 +134,7 @@ function parseCurrency(text) {
 
 /** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
  *  editing state: Valor del activo / Valor residual in the form must equal
- *  Valor actual / Valor residual del activo in the sidebar. Run after each
+ *  Valor actual / Pendiente de Amortizar in the sidebar. Run after each
  *  financial-field change and after creating the amortization. */
 async function verifySidebarSync(page) {
   // Scope to the sidebar's card container (no testids in the app): the
@@ -146,10 +146,19 @@ async function verifySidebarSync(page) {
   const sidebarValue = (label) =>
     cards.getByText(label, { exact: true }).locator('xpath=following-sibling::div[1]').innerText();
 
-  const formAsset = parseFloat((await page.getByTestId('field-assetValue').inputValue()) || '0');
+  // Both sides are read with parseCurrency because both are now LOCALIZED (ETP-5107): these two
+  // columns are AD `Amount` references, so the form input groups them exactly like the sidebar
+  // ("2.000,00"). A bare parseFloat stops at the group separator and reads that as 2, which is
+  // what made this assertion fail with "Expected: 2, Received: 2000" - the sidebar, the form and
+  // the database all agreed on 2000 and only the parser disagreed. Verified live: typing 2000
+  // shows "2.000,00" in both, saves 2000 to A_ASSET.assetvalueamt, and survives a reload.
+  const formAsset = parseCurrency(await page.getByTestId('field-assetValue').inputValue());
   expect(parseCurrency(await sidebarValue('Valor actual'))).toBeCloseTo(formAsset, 2);
-  const formResidual = parseFloat((await page.getByTestId('field-residualAssetValue').inputValue()) || '0');
-  expect(parseCurrency(await sidebarValue('Valor residual del activo'))).toBeCloseTo(formResidual, 2);
+  const formResidual = parseCurrency(await page.getByTestId('field-residualAssetValue').inputValue());
+  // ETP-5414 renamed the sidebar card's label from "Valor residual del activo" to
+  // "Pendiente de Amortizar" (AssetsSidebar.jsx) without updating this assertion — the
+  // form field's own label (asserted via testid above, never by text) is untouched.
+  expect(parseCurrency(await sidebarValue('Pendiente de Amortizar'))).toBeCloseTo(formResidual, 2);
 }
 
 /** Set a field's value and retry until the form is actually dirty (save enabled).
@@ -198,6 +207,18 @@ async function applyNameAndCategoryFilter(page, name) {
   await page.getByTestId('filter-advanced').click();
   const panel = page.getByRole('dialog');
   await expect(panel).toBeVisible();
+
+  // The panel is not guaranteed to be blank: a persisted filter (localStorage,
+  // scoped per window) can survive a fresh `/assets` reload and repopulate the
+  // dialog with whatever was applied earlier in the same test (e.g. by
+  // `findByNameAndCategory` before this helper runs a second time from
+  // `verifyAssetNotInList`). "Limpiar" resets the draft back to exactly one
+  // blank row, matching the truly-first-use state, and it self-disables when
+  // there is nothing to clear — so this is a no-op on a genuinely blank panel.
+  const clearButton = panel.getByTestId('advanced-filter-clear');
+  if (await clearButton.isEnabled().catch(() => false)) {
+    await clearButton.click();
+  }
 
   // Condition 1 — Nombre Es <name> (plain text value).
   await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();

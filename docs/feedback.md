@@ -274,6 +274,8 @@ Owner: whoever next touches the goods-shipment window.
 - Also discovered while wiring this in: for sales-invoice/purchase-invoice, `InvoiceLinesTable.jsx` (and its per-window wrapper components `SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx`) are **not currently reachable from the running app** — neither window's `decisions.json` sets `window.customLinesComponent`, so `HeaderPage.jsx` renders the plain generated `LinesTable.jsx` (a separate file with its own hardcoded columns, no project/costcenter, no dimensionsPanel) via `DetailTable={LinesTable}`, never `InvoiceLinesTable.jsx` via `CustomLines`. This predates ETP-4529 (the wrapper files exist since ETP-3908/ETP-3569) and is unrelated to this fix's correctness — flagged for the coordinator since it means neither ETP-4543's original columns nor ETP-4529's `dimensionsPanel` column render live for these two windows today without further wiring work (and, per the point above, `customLinesComponent`'s contract doesn't fit `InvoiceLinesTable.jsx` as-is either).
 
 **Resolved (ETP-4529, generator support in `schema_forge_core`):** the "coordinator decision" and the "no equivalent override mechanism" gap called out above are both closed — not by adding a lines-tab override point, but by extending the generator itself. `generate-frontend.js`'s `generateTableComponent` now emits the synthetic `dimensionsPanel` column directly from a new `decisions.json` field flag (`dimensionsPanel: true`, read independently of `grid` — see `docs/decisions-reference.md`), for ANY pipeline-generated lines table. This sidesteps the `InvoiceLinesTable.jsx` reachability gap entirely for sales-invoice/purchase-invoice (that component stays dead code; the fix lives in the ACTUALLY-rendered generated `LinesTable.jsx`) and gives goods-shipment/goods-receipt the column for the first time. All four windows now set `lines.project.dimensionsPanel`/`lines.costcenter.dimensionsPanel` to `true` (grid stays `false`) and were regenerated. Verified additive: `generateTableComponent` on an entity with zero `dimensionsPanel: true` fields (e.g. `physical-inventory`) produces a byte-identical `contract.json`/generated output (same checksum, only `updatedAt` differs). Full generator design + verification: see the ETP-4529 developer delivery report (or `git log` on `cli/src/generate-frontend.js`/`resolve-curated.js`/`generate-contract.js` in `schema_forge_core` for "ETP-4529"). One pre-existing, unrelated item surfaced while regenerating these 4 windows: their committed `apiPrediction.actions` were stale relative to already-published core behavior (a `field` key dropped in favor of richer `name`/`actionType`/`parameters`/etc. metadata) — confirmed to reproduce with the plain published `@etendosoftware/schema-forge-cli@0.3.9` too, unrelated to this change; worth a coordinator-scheduled `make regen` sweep across the repo.
+
+**Dead code deleted (ETP-5133).** `InvoiceLinesTable.jsx`, `SalesInvoiceLinesTable.jsx`, and `InvoiceLineTableCustom.jsx` — flagged as unreachable above and again by the ETP-4529 generator-support resolution — have now been deleted outright, along with their own test files. A live-browser check during ETP-5133 found that a fix (the new `noTruncate` column flag) had been mistakenly applied to this dead `InvoiceLinesTable.jsx` file instead of the actually-rendered generated `LinesTable.jsx`, which is what finally prompted removing the files rather than continuing to carry them as documented dead weight. Nothing outside their own tests ever imported them (confirmed via a repo-wide reference search before deletion); `sales-invoice`/`purchase-invoice`'s lines grid has rendered exclusively through the pipeline-generated `LinesTable.jsx` (via `InlineLinesPanel`/`DataTable`'s shared `inlineEditable` rendering) since before this fix, so the deletion changes no runtime behavior. A future reader hitting this entry or the ETP-4529 one above should treat the "not currently reachable" language as historical — the files themselves no longer exist. See `docs/generated-custom-windows/purchase-invoice.md` and `sales-invoice.md` for the corrected doc sections, and `docs/ui-customization.md` §14b for the `noTruncate`/`dimensionsPanel` mechanics on the surviving generated component.
 ---
 
 ## `lineHiddenColumns` Hid Unrelated Grid Columns (product/listPrice/grossAmount) — ETP-4530
@@ -2518,3 +2520,236 @@ variation involved.
 letting the page settle (e.g. two `requestAnimationFrame`s, or a short fixed wait) before taking the
 "before" measurement, not loosening the 0.5px tolerance (which is correctly guarding against a real
 class of bug — table-layout content-driven resize — that this spec exists to catch).
+
+## [2026-09-17] ETP-4879 — One date field feeding two backend date properties silently rolled back the accounting date
+
+**Component:** `NewTransactionModal.jsx` (`tools/app-shell/src/windows/custom/financial-account/`)
+and `FinancialAccountTransactionsHandler.applyEditableDimensions` (`com.etendoerp.go`).
+
+**Symptom:** QA reported that editing a "Procesada" (Processed but not yet Posted) financial-account
+movement from the kebab's Editar action could fail to save ("falla al guardar"). **This specific
+symptom was never reproduced live** — a full static read of the Core trigger that guards this table
+(`APRM_FIN_FINACC_TRAN_CHECK_TRG`) found no condition in the common case (Processed, not
+reconciled, G/L item preserved) that would reject the save. The real, confirmed bug found during
+that same investigation is a separate data-integrity issue, described below — it is a plausible but
+**unconfirmed** explanation for the original report, not a proven root cause. Treat ETP-4879 as
+having fixed a real bug it found, not as a confirmed fix for the exact QA repro; if "falla al
+guardar" resurfaces, reproduce it live (capture the actual HTTP response / Tomcat log) before
+assuming this ticket already covers it.
+
+**Root cause (confirmed).** `NewTransactionModal.jsx` collapses the movement's transaction date and
+accounting date into a single form field (`form.date`), and built both `transactionDate` and
+`accountingDate` from that one value on every save. The backend's `applyEditableDimensions` — the
+applier used whenever a movement is Processed but not Posted — unconditionally called
+`trx.setTransactionDate(...)` and `trx.setDateAcct(...)` from whatever the request body carried.
+So a movement whose accounting date (`DATEACCT`) had legitimately diverged from its transaction
+date got `DATEACCT` silently rewritten back to the transaction date on **any** edit through this
+modal while Processed — including an edit that only touched a dimension. No error, no warning: the
+save succeeded, and the wrong date change is exactly what a purely-dimensions edit should never
+have caused.
+
+**Fix.** `applyEditableDimensions` no longer touches `transactionDate`/`dateAcct` at all — a
+Processed-but-not-Posted movement's dates are now immutable through this endpoint, matching the
+other locked fields (amount, direction, currency, status). The frontend was updated in lockstep:
+`NewTransactionModal.jsx` now disables the date input whenever `movement.processed` is true
+(`lockWhileProcessed`), so the UI and the backend contract agree instead of the UI silently sending
+a value the backend used to accept and misapply.
+
+**Lesson.** When a UI field maps to more than one backend property (here: one date input feeding
+both `transactionDate` and `accountingDate`), a handler that blindly reassigns both from the same
+incoming value will silently collapse them the moment they are allowed to diverge — even on an
+edit that has nothing to do with either field. The fix is not to validate the incoming value more
+carefully; it is to stop accepting it at all once the record's state says that property is no
+longer editable. See `docs/generated-custom-windows/financial-account.md` ("Edit mode") for the
+full field-acceptance table, and `com.etendoerp.go`'s `docs/neo-headless.md` §5.3 ("Real-world
+example — `FinancialAccountTransactionsHandler`") for the backend contract.
+
+---
+
+## [2026-09-16] ETP-5302 — One rule, two implementations: bulk reactivate failed on a posted invoice
+
+**Component:** `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` and
+`DetailMoreActionsMenu.jsx` — the `preUnpost` rule.
+
+**Symptom:** Reactivating a Completed + **Posted** invoice from the list's floating selection
+bar returned `{"status":"error","message":"Factura contabilizada"}` and the row was counted
+as failed. Reactivating the *very same invoice* from its detail-form kebab worked. Two
+surfaces, one action, opposite outcomes — which is what made it read as a data or permissions
+problem rather than a wiring one.
+
+**Root cause:** The rule *"reactivating a posted document reverses its accounting first"* is
+declared per window in `decisions.json` as `preUnpost: true` on the `reactivate` menu action
+(`sales-invoice`, `purchase-invoice`, `amortization`). It was **implemented only in
+`DetailMoreActionsMenu.jsx`** — and duplicated across that component's two branches, so it was
+already two copies before the bulk bar existed. `BulkDocumentAction` had no knowledge of the
+attribute at all and sent a bare `docAction: 'RE'`, which Core rejects:
+`src-db/database/model/functions/C_INVOICE_POST.xml:948` —
+`IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR('@InvoiceDocumentPosted@')`, translated to
+"Factura contabilizada" through the `InvoiceDocumentPosted` `AD_MESSAGE`.
+
+**Fix:** The rule moved to a single home, `tools/app-shell/src/lib/preUnpost.js`:
+`isPosted(row)` and `runPreUnpost({recordId, record, enabled, execute})` → `{ran, success,
+message}`. `DetailMoreActionsMenu`'s two branches now call it (observable behaviour
+unchanged) and `BulkDocumentAction` gained a `preUnpostActions` prop, mounted as
+`preUnpostActions={['RE']}` by both invoice windows. Each row runs unpost → action; a failed
+unpost aborts that row, so a document still carrying its accounting entries is never
+reactivated.
+
+**Lesson (the generalisable one).** A behaviour *declared* in `decisions.json` but
+*implemented* in one component is a rule with no single owner. Every other surface that can
+trigger the same action silently ignores it, and nothing fails at build time, in review, or
+in the pipeline validator — the divergence only surfaces when a user runs the action from the
+other surface. **Before adding a second surface for an existing action (a bulk bar, a row
+kebab, an MCP tool), grep `decisions.json` for the flags that action carries and check each
+one is honoured, not just the happy-path call.** If a flag's handling lives inline in a
+component, extract it to `lib/` as the first step, not as cleanup afterwards.
+
+**Two supporting notes worth keeping:**
+
+- `isPosted` counts only `'Y'` / `true`. The AD *Posted status* domain also holds `T`, `E`,
+  `D`, `p`, `i` (Error, Invalid Account, …) — none of which mean posted. A truthiness check on
+  `row.posted` would treat every one of them as posted and unpost a document that never was.
+- `preUnpost.js` is deliberately **not a hook**. `BulkDocumentAction` is reached from a
+  `bulkActions` slot that `ListView` invokes as a flat function call, so anything reachable
+  from there must stay hook-free — this is the same constraint that produced the ETP-5209
+  production crash *"Rendered more hooks than during the previous render"*.
+
+**Deliberately not harmonised:** the order windows do **not** get `preUnpostActions`.
+`C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch, so unposting there would be a
+gratuitous accounting reversal, not a fix. Opt-in per window is the correct shape here — a
+"consistency" pass that applies it to every window offering `RE` would be a regression.
+## [2026-09-17] ETP-5395 — Three related access-control gaps: role-less invite race, un-gated First Steps, stale menu-access cache
+
+Three independent fixes shipped under one ticket, all in the same theme (a session/role/ownership
+signal was either resolved too late, not checked at all, or trusted too long). Documented together
+because they were delivered, reviewed and QA'd as one unit; each has its own component/root cause.
+
+### Point 1 — Role-less invited user could briefly see the full app
+
+**Component:** `tools/app-shell/src/layout/AppLayout.jsx` (`etendo_schema_forge`);
+`packages/app-shell-core/src/auth/AuthContext.jsx` (`schema_forge_core`, shared auth code).
+
+**Symptom:** A role-less user (an invited user right after accepting the invite, before any role
+is assigned) could briefly see the full app — sidebar included, with "Primeros pasos" reachable —
+instead of being held on a loading/no-access state until access resolved.
+
+**Root cause:** two independent bugs, both real, both needed fixing:
+1. `AuthContext`'s access-loading effect refused to run at all unless `state.session.selectedRole`
+   was set (`if (!state.isSessionReady || state.needsRefresh || state.accessLoaded ||
+   !state.session.selectedRole) return;`). A role-less session (empty `roleList`) never gets a
+   `selectedRole` — it's not "not yet arrived," it's a legitimate terminal shape for this session —
+   so the effect returned early on every render, `accessLoaded` never became `true`, and every
+   consumer waiting on it (`useRoleMenu()` included) hung indefinitely instead of resolving to "no
+   access."
+2. Independently, while `useRoleMenu()`'s `allowedIds` was `undefined` (fetch in flight, including
+   the hung-forever case above), `AppLayout` passed a stand-in empty `Set` into
+   `filterMenuGroupsByAccess()`. That stand-in only hides menu items carrying a
+   `windowId`/`processId`/`obuiappProcessId` — an item with none of those (`menu.json`'s
+   `first-steps`/`dashboard` entries) was never filtered by that function regardless of the `Set`
+   it received, so it rendered immediately and was reachable via `<Outlet>` for the entire loading
+   window, however long that turned out to be.
+
+**Fix:** `AuthContext`'s effect no longer gates on `selectedRole` — `loadAccess()` already
+short-circuits to `{}` with no network call when `selectedRole` is missing, so letting the effect
+run for that case is safe and correctly resolves `accessLoaded: true`. `AppLayout` now renders a
+blank `AppLayoutLoading` placeholder and mounts nothing routed at all (no sidebar, no `Outlet`)
+while `allowedIds === undefined`, instead of passing a stand-in `Set` through the filter.
+
+**Rejected approach:** An earlier attempt fixed this at the OTHER end — guarding
+`routeByEnvironments` against a role-less environment login at login time, so a role-less session
+could never reach the vulnerable code path (`545376bd5`/`fb61b0562`, then reverted by
+`e7db6ed6d`/`c645d843b`; net diff in `schema_forge_core`'s `OnboardingFlow.jsx` is zero). It was
+abandoned in favor of the `AuthContext` fix above.
+
+**Lesson:** An effect gated on "wait until X is present" needs to distinguish "X hasn't arrived
+yet" from "X will never arrive for this valid session shape" — a role-less session is the latter,
+and treating it like the former turns a should-resolve-to-empty case into a permanent hang.
+Blocking entry at the point where a bad state is *created* (login) is tempting because it feels
+like it prevents the bug outright, but it only closes the one door you're looking at — this exact
+role-less shape can also arise from a role being revoked mid-session, which login-time blocking
+never touches. Fixing the state resolution itself (making `accessLoaded` correctly settle for
+every valid session shape) closes the gap regardless of how that shape is reached, which is why it
+was kept over the reverted login-time guard.
+
+---
+
+### Point 2 — "Primeros pasos" was visible to every user, not just the tenant Owner
+
+**Component:** `SFWindowAccessMap.java` (`com.etendoerp.go`); `menu.json`, `FirstStepsPage.jsx`,
+`DashboardPage.jsx` (`etendo_schema_forge`).
+
+**Symptom:** The First Steps onboarding checklist was reachable by any authenticated user in a
+tenant — via the sidebar menu entry or a direct `/first-steps` URL — and `DashboardPage`'s
+auto-redirect ("send an unseen user to First Steps") fired for non-owners too. Per ETP-4830,
+"Primeros pasos" is meant to be Owner-only (`AD_User.EM_ETGO_Is_Owner`).
+
+**Root cause:** no session-level signal existed to express "is this user the tenant Owner."
+`menu.json`'s declarative `capability` gate had nothing to check ownership against, and neither
+`FirstStepsPage` nor `DashboardPage` had any owner check at all — the checklist's audience had
+simply never been restricted since it was built.
+
+**Fix:** `SFWindowAccessMap` now resolves and returns `capabilities.isOwner` per-user (via
+`OwnerSupport.isOwner(userId)`), resolved identically in both the admin/client-admin bypass branch
+and the normal per-role branch — ownership is orthogonal to admin status, so a client-admin who is
+also the owner gets `true`, and one who isn't still gets `false`. `menu.json`'s `first-steps` entry
+now declares `"capability": "isOwner"`, hiding the sidebar entry for non-owners.
+`FirstStepsPage` redirects to `/dashboard` whenever `capabilities.isOwner !== true` (fail-closed,
+same convention as every other capability read through `useCapabilitiesSafe()`), closing the
+direct-URL hole the menu gate alone left open. `DashboardPage`'s unseen-checklist auto-redirect now
+also requires `isOwner === true`, so a non-owner is never bounced to a page they can't use.
+
+**Lesson:** A `menu.json` capability gate hides the *entry point*, it is not an access boundary by
+itself — a route reachable by direct URL needs the same predicate enforced on the page (and on
+anything that auto-navigates to it) independently. Also worth flagging for whoever writes the next
+React gate like this one: the redirect must run AFTER every hook has executed unconditionally on
+every render (Rules of Hooks) — an early `return <Navigate .../>` placed before the component's own
+hooks is invalid even when the gating condition looks like it "obviously" belongs at the top; this
+exact ordering mistake was introduced and caught within this same ticket (`7d72f89d1`) before
+reaching REVIEW.
+
+---
+
+### Point 3 — Sidebar could serve a stale menu for up to a minute after a real permission change
+
+**Component:** `tools/app-shell/src/App.jsx` (`MENU_ACCESS_CACHE_TTL_MS`).
+
+**Symptom:** After an admin edited a role's window/process access, the affected user's tab could
+keep showing the OLD sidebar sections for up to 60 seconds — even though `windowAccess`/
+`capabilities` (uncached) refreshed correctly and the "Tus permisos fueron actualizados" banner
+correctly fired on the very next refresh cycle. Only the menu tree underneath the banner lagged.
+
+**Root cause:** `MENU_ACCESS_CACHE_TTL_MS` was set to 60 seconds by analogy to two unrelated
+numbers — this app's own query-cache default staleness, and the 5-minute poll this whole mechanism
+tolerates as a worst case — rather than being sized to the actual burst it exists to collapse
+(several focus/blur events firing a few hundred milliseconds apart when multiple dialogs/tabs open
+in quick succession). 60s is roughly two orders of magnitude larger than that burst window, which
+is more than enough time to span a real admin-driven permission change and serve it stale.
+
+**Fix:** Shrunk the TTL to 3 seconds — over 10x headroom above the actual burst case it needs to
+absorb, while being far too short to meaningfully outlive a real permission change relative to how
+far apart genuine refresh triggers (a separate focus event, a visibility change, the 5-minute poll)
+actually fire in practice.
+
+**Lesson:** Size a cache TTL to the specific race it exists to collapse, not by analogy to a
+different cache's default or a different mechanism's worst-case interval. "Same order of magnitude
+as an unrelated cache's staleness" reads as principled but can hide a value that is 15-20x too
+large for the problem actually being solved — trace back to the smallest window that still absorbs
+the burst, not the largest window that still "feels safe."
+
+---
+
+**Known non-blocking follow-ups (QA, not yet separately ticketed):**
+- **Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.** The
+  shrunk 3s TTL still caches the FAILURE case too (the `MENU_ACCESS_UNREACHABLE` sentinel), not
+  just successful resolutions — confirmed by a QA regression test (`267ee06ff`). That correctly
+  bounds the worst case, but it raises the failure-retry ceiling from roughly once/minute (old 60s
+  TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage lasts. Still
+  bounded and still fails open correctly — just a real behavior change a future engineer
+  investigating "why did listmenu call volume spike during an outage" should be able to find
+  documented somewhere.
+- **A different, pre-existing route to role loss is not covered by either Point 1 fix.** When an
+  admin revokes a role and the affected user's session detects it via the existing periodic-refresh
+  machinery (ETP-5195/ETP-5189) rather than via the invite-acceptance race this ticket fixes, the
+  client-side `selectedRole` is not cleared — a pre-existing architectural gap in that refresh
+  machinery, not touched by ETP-5395. Noted here for whoever next works on session/role refresh,
+  not filed as a separate ticket.

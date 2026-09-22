@@ -18,10 +18,13 @@
 // Kebab menu in the list selection toolbar that groups bulk creation actions
 // (Create Purchase Invoices / Create Goods Receipts) for selected Purchase
 // Orders. Mirrors artifacts/sales-order/custom/BulkOrderMoreMenu.jsx — same
-// per-record fan-out, same fail-open pre-checks, same sessionStorage toast
-// aggregation consumed by useBulkActionToast.
+// per-record fan-out, same fail-open pre-checks, same aggregated toast, and (ETP-5302)
+// the same in-place list refetch instead of a full page reload.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -32,8 +35,8 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
-
-const STORAGE_KEY = 'bulkActionResult';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -45,11 +48,11 @@ const orderCriteria = (orderId) => encodeURIComponent(JSON.stringify([
 // No checkDraftPurchaseInvoice endpoint exists, so we query the
 // purchase-invoice header entity filtered by the originating order — same
 // pattern used in PurchaseOrderActions.jsx for the single-record flow.
-async function hasDraftPurchaseInvoice(orderId, apiBaseUrl, headers) {
+async function hasDraftPurchaseInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/purchase-invoice/header?criteria=${orderCriteria(orderId)}&_limit=50`,
-      { headers },
+      {},
     );
     if (!res.ok) return false;
     const invoices = (await res.json())?.response?.data ?? [];
@@ -59,11 +62,11 @@ async function hasDraftPurchaseInvoice(orderId, apiBaseUrl, headers) {
   }
 }
 
-async function hasDraftGoodsReceipt(orderId, apiBaseUrl, headers) {
+async function hasDraftGoodsReceipt(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/goods-receipt/goodsReceipt?criteria=${orderCriteria(orderId)}&_limit=50`,
-      { headers },
+      {},
     );
     if (!res.ok) return false;
     const receipts = (await res.json())?.response?.data ?? [];
@@ -74,10 +77,6 @@ async function hasDraftGoodsReceipt(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
   const isInvoice = action === 'createPurchaseInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -94,16 +93,16 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
       // proceed; the backend handler then rejects with "no pending lines" for
       // fully-fulfilled orders, which we surface as the row failure message.
       const alreadyHasDraft = isInvoice
-        ? await hasDraftPurchaseInvoice(row.id, apiBaseUrl, headers)
-        : await hasDraftGoodsReceipt(row.id, apiBaseUrl, headers);
+        ? await hasDraftPurchaseInvoice(row.id, apiBaseUrl)
+        : await hasDraftGoodsReceipt(row.id, apiBaseUrl);
       if (alreadyHasDraft) {
         const messageKey = isInvoice ? 'poBulkOrderHasDraftInvoice' : 'poBulkOrderHasDraftReceipt';
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({}),
       });
       if (!res.ok) {
@@ -124,10 +123,13 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
     }));
   const ok = outcomes.length - failed.length;
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+  // ETP-5302 — returns the result instead of persisting it. Persisting is only needed
+  // by the legacy reload path; when the list can refetch in place the caller shows the
+  // toast directly and sessionStorage never comes into play.
+  return { ok, failed };
 }
 
-export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl }) {
+export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
@@ -136,8 +138,20 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
   const handleSelect = (action) => async () => {
     if (running) return;
     setRunning(true);
-    await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkPurchaseOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
     setRunning(false);
+
+    // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
+    // matching BulkDocumentAction's button right next to this menu in the same bar.
+    if (refresh) {
+      clearSelection();
+      showBulkActionToast(ui, result);
+      refresh();
+      return;
+    }
+
+    // No refetch available (mounted outside ListView's `bulkActions` slot): legacy path.
+    persistBulkActionResult(result);
     setTimeout(() => {
       clearSelection();
       window.location.reload();

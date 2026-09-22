@@ -39,6 +39,17 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * @param {boolean}      params.storeCondition - false → no-op
  * @param {string|null}  params.token          - Bearer token
  * @param {string|null}  params.apiBaseUrl     - Window base URL (last segment stripped inside)
+ * @param {boolean}      [params.skipBlobFetch] - ETP-5358 Part 2. true → `refresh()` (mount, and
+ *   every cross-view sync) only fetches the marked attachment's METADATA (existence + staleness),
+ *   never its bytes. Used by `GenericPreviewModal`'s `ManagedLeftPanel` when `autoFetch` is true:
+ *   in that mode nothing renders this hook's own file view (see ETP-5358 Part 1), so eagerly
+ *   downloading the blob on every open was pure waste — it was fetched a second time, byte for
+ *   byte, in parallel with the caller's own `usePdfGenerator`-backed viewer. The bytes are instead
+ *   fetched lazily, on demand, via the returned `fetchBlobUrl()` — e.g. only when something like a
+ *   Download button actually needs them. `storedFile` is still set (with `objectUrl: null`) in this
+ *   mode, so the auto-store gate and `onFileChange` keep working unchanged. Drop-zone callers
+ *   (`autoFetch: false` — purchase-invoice, goods-receipt, return-material-receipt) never pass this
+ *   and keep eagerly fetching the blob, since they render it directly.
  */
 export function useMainAttachment({
   documentId = null,
@@ -47,6 +58,7 @@ export function useMainAttachment({
   token = null,
   apiBaseUrl = null,
   recordUpdated = null,
+  skipBlobFetch = false,
 } = {}) {
   const [storedFile, setStoredFile] = useState(null);
   // ETP-4787 — the stored file is still shown while it lasts, but callers are told it
@@ -61,7 +73,7 @@ export function useMainAttachment({
   const sourceRef = useRef(null);
   if (!sourceRef.current) sourceRef.current = newAttachmentsSource();
 
-  const active = !!(storeCondition && documentId && tableName && token);
+  const active = !!(storeCondition && documentId && tableName);
 
   const revokeUrl = useCallback(() => {
     if (objectUrlRef.current) {
@@ -91,6 +103,13 @@ export function useMainAttachment({
         return;
       }
       setStoredFileIsStale(isCachedRenderingStale(main, recordUpdated));
+      // ETP-5358 Part 2 — metadata-only mode: existence + staleness is everything the
+      // auto-store gate and onFileChange need. Skip the blob GET entirely; fetchBlobUrl()
+      // below fetches it lazily, on demand, if/when a caller actually needs the bytes.
+      if (skipBlobFetch) {
+        applyAttachment(main.id, main.name, main.dataType, null);
+        return;
+      }
       objectUrl = await fetchAttachmentBlobUrl({ token, attachmentId: main.id, apiBaseUrl });
       if (objectUrl) applyAttachment(main.id, main.name, main.dataType, objectUrl);
     } catch {
@@ -98,7 +117,7 @@ export function useMainAttachment({
     } finally {
       setIsBusy(false);
     }
-  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated, applyAttachment, revokeUrl]);
+  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated, skipBlobFetch, applyAttachment, revokeUrl]);
 
   // Restore from server on mount / whenever the record identity changes.
   useEffect(() => {
@@ -106,7 +125,7 @@ export function useMainAttachment({
     (async () => { if (!cancelled) await refresh(); })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated]);
+  }, [active, token, tableName, documentId, apiBaseUrl, recordUpdated, skipBlobFetch]);
 
   // Another view (Attachments tab, another mounted OcrSidePanel/preview) wrote
   // to this same record — reload so this instance stops showing stale data.
@@ -203,8 +222,41 @@ export function useMainAttachment({
     notifyAttachmentsChanged({ tableName, recordId: documentId, source: sourceRef.current });
   }, [active, storedFile, token, apiBaseUrl, revokeUrl, tableName, documentId]);
 
+  // ETP-5358 Part 2 — the on-demand counterpart to `skipBlobFetch`. In metadata-only mode
+  // `storedFile.objectUrl` is null even though the attachment is known to exist; this fetches
+  // the bytes NOW, the first time something actually needs them (a Download click), instead of
+  // `refresh()` fetching them unconditionally on every mount for a viewer nothing renders.
+  // Idempotent per resolved URL (returns the cached one on a second call) and de-duplicates a
+  // concurrent double-call (e.g. an impatient double-click) onto the same in-flight request,
+  // so two clicks in quick succession never fire two GETs for the same bytes.
+  const inFlightBlobFetch = useRef(null);
+  const fetchBlobUrl = useCallback(async () => {
+    if (objectUrlRef.current) return objectUrlRef.current;
+    const attachmentId = storedFile?.attachmentId;
+    if (!active || !attachmentId) return null;
+    if (inFlightBlobFetch.current) return inFlightBlobFetch.current;
+    const promise = (async () => {
+      try {
+        const url = await fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl });
+        if (!url) return null;
+        objectUrlRef.current = url;
+        // Guard against a concurrent refresh() having already moved storedFile on to a
+        // DIFFERENT attachment (e.g. the record was re-completed mid-fetch) — never attach a
+        // stale URL to the current attachment's record.
+        setStoredFile((prev) => (prev && prev.attachmentId === attachmentId ? { ...prev, objectUrl: url } : prev));
+        return url;
+      } catch {
+        return null;
+      } finally {
+        inFlightBlobFetch.current = null;
+      }
+    })();
+    inFlightBlobFetch.current = promise;
+    return promise;
+  }, [active, token, apiBaseUrl, storedFile?.attachmentId]);
+
   return {
     storedFile, storedFileIsStale, isBusy, storeFailed,
-    storeFile, storeBlob, storeUrl, markExisting, deleteFile,
+    storeFile, storeBlob, storeUrl, markExisting, deleteFile, fetchBlobUrl,
   };
 }

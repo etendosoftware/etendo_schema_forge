@@ -11,6 +11,15 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+// ETP-5395 — mutable ref so most tests can leave the page's actual body under test (Owner
+// granted, same convention as DetailView.secondaryTabCapabilityGate.vitest.jsx) while the
+// dedicated gate describe block below flips it to exercise the redirect.
+const capabilitiesRef = vi.hoisted(() => ({ current: { isOwner: true } }));
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: () => capabilitiesRef.current,
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -66,27 +75,31 @@ const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
  * is the full 7-step checklist every test below expects unless it says otherwise.
  */
 function setHook({ completed = [], loading = false, error = null, toggleResult = true,
-  plan = PLAN_PRODUCTIVE } = {}) {
+  plan = PLAN_PRODUCTIVE, dismissed = false, dismissResult = true } = {}) {
   const toggleStep = vi.fn(async () => toggleResult);
   const markSeen = vi.fn(async () => true);
+  const setDismissed = vi.fn(async () => dismissResult);
   hookState.value = {
     completed,
     seen: false,
+    dismissed,
     loading,
     error,
     toggleStep,
     markSeen,
+    setDismissed,
     plan,
     steps: visibleFirstSteps(plan),
     completedCount: countCompletedSteps(completed, plan),
     total: firstStepsTotal(plan),
   };
-  return { toggleStep, markSeen };
+  return { toggleStep, markSeen, setDismissed };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   setHook();
+  capabilitiesRef.current = { isOwner: true };
 });
 
 describe('FirstStepsPage — smoke and wiring', () => {
@@ -538,5 +551,154 @@ describe('FirstStepsPage — the completion checkbox', () => {
     await user.click(screen.getByTestId('first-steps-toggle-company-data'));
     await waitFor(() => expect(hookState.value.toggleStep).toHaveBeenCalled());
     expect(toastMock.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('FirstStepsPage — Owner-only gate (ETP-5395)', () => {
+  /**
+   * A real destination route rather than a mocked `useNavigate`/stubbed `<Navigate>`, so the
+   * redirect is asserted by where the user actually ends up — same convention as
+   * InviteAcceptancePage.tenantEntry.vitest.jsx's `renderPage()`.
+   */
+  function renderAtFirstSteps() {
+    return render(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('redirects to /dashboard instead of rendering when the user is not the account Owner', () => {
+    capabilitiesRef.current = { isOwner: false };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('redirects to /dashboard when isOwner is missing from the capabilities map (fail-closed)', () => {
+    capabilitiesRef.current = {};
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('renders the page normally, not the redirect, when isOwner is true', () => {
+    capabilitiesRef.current = { isOwner: true };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-landed')).not.toBeInTheDocument();
+  });
+
+  // [ETP-5395 QA] — ownership transferred (or the capabilities map otherwise refreshed to
+  // isOwner: false) WHILE the user already has this page open, with no full page reload. The
+  // gate is not a mount-only check: `useCapabilitiesSafe()` reads live context state and the
+  // `if (capabilities.isOwner !== true) return <Navigate .../>` runs on every render, so the
+  // very next re-render (triggered by AuthContext's own focus/visibility/poll-driven capability
+  // refresh — see AuthContext.jsx's refresh()) must bounce the now-non-owner user out, not leave
+  // them stranded on a page they can no longer legitimately see.
+  it('redirects to /dashboard on the next render after isOwner flips to false mid-session (ownership transferred, no reload)', () => {
+    capabilitiesRef.current = { isOwner: true };
+    const { rerender } = renderAtFirstSteps();
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+
+    capabilitiesRef.current = { isOwner: false };
+    rerender(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+});
+
+describe('FirstStepsPage — finishing the setup (ETP-5364)', () => {
+  it('offers "Finalizar configuración inicial" only once every step is done', () => {
+    setHook({ completed: ['company-data', 'products', 'contacts'] });
+    render(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-finish-setup')).not.toBeInTheDocument();
+  });
+
+  it('shows the button, and what it does, at 7/7', () => {
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-finish-setup')).toHaveTextContent('firstStepsFinishSetup');
+    // The hint is what keeps this from reading as a destructive, one-way action.
+    expect(screen.getByTestId('first-steps-finish-setup-hint'))
+      .toHaveTextContent('firstStepsFinishSetupHint');
+  });
+
+  it('persists the dismissal when clicked', async () => {
+    const user = userEvent.setup();
+    const { setDismissed } = setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    expect(setDismissed).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the user on the page rather than navigating away', async () => {
+    // The entry has just vanished from the sidebar; leaving the user in front of the banner
+    // that explains it — and undoes it — is what makes the action reversible.
+    const user = userEvent.setup();
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed write, because the rollback alone is invisible', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: ALL_DONE, dismissResult: false });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+  });
+
+  it('replaces the button with the way back once dismissed', () => {
+    setHook({ completed: ALL_DONE, dismissed: true });
+    render(<FirstStepsPage />);
+
+    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-reopen')).toHaveTextContent('firstStepsReopen');
+    expect(screen.queryByTestId('first-steps-finish-setup')).not.toBeInTheDocument();
+    // Creating the first invoice is still the point of reaching 7/7.
+    expect(screen.getByTestId('first-steps-create-invoice')).toBeInTheDocument();
+  });
+
+  it('brings the checklist back from the banner', async () => {
+    const user = userEvent.setup();
+    const { setDismissed } = setHook({ completed: ALL_DONE, dismissed: true });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-reopen'));
+    expect(setDismissed).toHaveBeenCalledWith(false);
+  });
+
+  it('shows the banner even mid-checklist, so a dismissal is never a dead end', () => {
+    // `dismissed` is independent of completion: a user can dismiss at 7/7 and later un-tick a
+    // step. Without this the banner would disappear and the entry would be unrecoverable.
+    setHook({ completed: ['company-data'], dismissed: true });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-reopen')).toBeInTheDocument();
+  });
+
+  it('shows no banner while the checklist is still offered', () => {
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-dismissed-notice')).not.toBeInTheDocument();
   });
 });

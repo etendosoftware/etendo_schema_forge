@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, navigateTo } from '../helpers/auth.js';
+import { apiAuthHeaders, login, navigateTo } from '../helpers/auth.js';
 import { ensureOpenPeriod } from '../helpers/period-helpers.js';
 import { ensureStockOnHand, DEFAULT_WAREHOUSE_NAME } from '../helpers/inventory-helpers.js';
 import { ensureSecondaryWarehouse } from '../helpers/warehouse-helpers.js';
@@ -9,8 +9,8 @@ import {
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
   addProductLine, ensureVendorSetup, openDraftRow, openListRow, clickConfirmButton,
-  waitForConfirmResponse, dismissSuccessModal, expectStatusPill, safeReload,
-  readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
+  waitForConfirmResponse, dismissSuccessModal, expectStatusPill, expectAlreadyConfirmed,
+  safeReload, readDocumentTotals, verifyTotalsConsistency, parseAmount, waitForLinesSettled,
   waitForDerivedFieldValue,
 } from '../helpers/purchase-helpers.js';
 
@@ -23,7 +23,8 @@ import {
  *   - 6.x  Confirm PO with "Create receipt" (receipt only)
  *   - 14.1 Receipt generated from PO has pre-filled data + lines
  *   - 15.2 Confirm receipt with "Create invoice" → stock enters warehouse + invoice created
- *   - 22.1 Confirm invoice → Completed
+ *   - 22.1 The generated invoice arrives Completed (ETP-5381: created and
+ *          confirmed in one step) and is listed as Completed
  *   - 27.x Full end-to-end flow validation
  *   - Required field validation (empty form save attempt)
  *
@@ -31,7 +32,7 @@ import {
  *   1. Login → ensure vendor → create PO with 2 lines
  *   2. Confirm PO (receipt only, no invoice)
  *   3. Open receipt → confirm with "Create invoice" toggle ON
- *   4. Navigate to invoice via result modal → confirm → verify Completed
+ *   4. Navigate to invoice via result modal → verify it arrived Completed
  *   5. Add payment → confirm → verify "Depositado" status
  *
  * Gated by E2E_SALES_INTEGRATION=1.
@@ -329,9 +330,12 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       invoiceId = (page.url().match(/\/purchase-invoice\/([^/?]+)/) || [])[1];
       expect(invoiceId, 'Should have captured the invoice record id from the URL').toBeTruthy();
 
-      // Verify invoice is in draft status with 2 lines
-      await expectStatusPill(page, /borrador|draft/i,
-        'Invoice should be in Draft status');
+      // ETP-5381: an invoice generated from another document is created AND
+      // confirmed in one step, so it arrives Completed — there is no Draft stage
+      // any more. The status is read from `data-status` rather than the
+      // translated pill text, which is language-independent.
+      await expectAlreadyConfirmed(page,
+        '[ETP-5381] The invoice generated from the receipt should arrive already Completed');
 
       await expect(page.getByRole('button', { name: /líneas\s+2|lines\s+2/i }),
         '[Plan 6.3] Invoice should have 2 lines inherited from the receipt',
@@ -342,46 +346,31 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       verifyTotalsConsistency(invoiceTotals, 'Invoice', poTotals);
     });
 
-    await test.step('Confirm the invoice', async () => {
-      // Declare response listener BEFORE clicking confirm
-      const invoiceConfirmResponse = page.waitForResponse(
-        (r) => r.url().includes('/sws/neo/') &&
-          ['POST', 'PUT', 'PATCH'].includes(r.request().method()) &&
-          r.status() < 400,
-        { timeout: 30_000 },
-      );
-      await clickConfirmButton(page);
-      await invoiceConfirmResponse;
-      await dismissSuccessModal(page);
-    });
-
     await test.step('Verify invoice is Completed', async () => {
-      const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
+      // ETP-5381: confirming the invoice by hand no longer happens, so this check
+      // used to run only in the branch where the (now nonexistent) confirm click
+      // navigated back to the list — i.e. it would have silently stopped running.
+      // It is now unconditional: go to the list on purpose, prove THIS invoice is
+      // listed as Completed, then re-enter it for the payment steps below.
+      await navigateTo(page, 'purchase-invoice');
+      await expect(page.getByTestId('list-view'),
+        'Should land on the purchase-invoice list',
+      ).toBeVisible({ timeout: 20_000 });
 
-      if (!onDetailView) {
-        // Confirming navigated back to the list. Reload to drop the router state
-        // that re-opens the row-preview overlay for the just-saved record, then
-        // re-enter the invoice through its row quick action — openListRow owns
-        // the overlay dismissal, the hover-to-reveal pill and the scoped pencil
-        // testid, none of which the previous inline block did.
-        await safeReload(page);
-        await expect(page.getByTestId('list-view'),
-          'Reloading after confirmation should land on the purchase-invoice list',
-        ).toBeVisible({ timeout: 20_000 });
+      // Target THIS invoice by record id, and read its status from the
+      // language-independent `data-row-status` attribute (DataTable) rather
+      // than from translated cell text.
+      const invoiceRow = page.getByTestId(`row-${invoiceId}`);
+      await expect(invoiceRow,
+        '[Plan 22.1] The confirmed invoice should appear in the list view',
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(invoiceRow,
+        '[Plan 22.1] Invoice should appear as Completed in the list view',
+      ).toHaveAttribute('data-row-status', 'CO', { timeout: 10_000 });
 
-        // Target THIS invoice by record id, and read its status from the
-        // language-independent `data-row-status` attribute (DataTable) rather
-        // than from translated cell text.
-        const invoiceRow = page.getByTestId(`row-${invoiceId}`);
-        await expect(invoiceRow,
-          '[Plan 22.1] The confirmed invoice should appear in the list view',
-        ).toBeVisible({ timeout: 15_000 });
-        await expect(invoiceRow,
-          '[Plan 22.1] Invoice should appear as Completed in the list view',
-        ).toHaveAttribute('data-row-status', 'CO', { timeout: 10_000 });
-
-        await openListRow(page, invoiceRow, { label: 'completed invoice' });
-      }
+      // openListRow owns the row-preview overlay dismissal, the hover-to-reveal
+      // pill and the scoped pencil testid.
+      await openListRow(page, invoiceRow, { label: 'completed invoice' });
 
       await waitForDetailReady(page);
       await expectStatusPill(page, /completado|registrado|booked|completed/i,
@@ -724,7 +713,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await expect(page).toHaveURL(/\/purchase-invoice\//, { timeout: 15_000 });
     await waitForDetailReady(page);
-    await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
+    // ETP-5381: the invoice is created AND confirmed in one step by the receipt
+    // confirm, so it arrives Completed — there is no Draft stage any more.
+    await expectAlreadyConfirmed(page,
+      '[ETP-5381] The invoice generated from the receipt should arrive already Completed');
 
     // Wait for the lines count to settle, not just become momentarily
     // visible — right after a "Ver factura" navigation the "Documentos"
@@ -795,26 +787,26 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     ).toBeLessThanOrEqual(0.05);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 9: Confirm the invoice — the negative sign must survive completion
+    // STEP 9: The invoice arrives completed — the negative sign must have
+    // survived the completion the backend performed on creation
     // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ETP-5381 removed the manual confirm step here: the invoice is created AND
+    // confirmed in one go. What this test is actually about — the negative sign
+    // surviving PO → receipt → invoice AND surviving completion — is unchanged,
+    // and is now asserted UNCONDITIONALLY. It used to hide behind an
+    // `if (onDetailView)` that only held when the confirm click kept us on the
+    // detail view; with no confirm click there is no navigation to guess at.
 
-    await clickConfirmButton(page);
-    await waitForConfirmResponse(page);
-    await page.waitForTimeout(2_000);
-    await dismissSuccessModal(page);
+    await waitForDetailReady(page);
+    await expectStatusPill(page, /completado|registrado|booked|completed/i,
+      '[ETP-4567] Invoice should read Completed, negative line still present');
 
-    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
-    if (onDetailView) {
-      await waitForDetailReady(page);
-      await expectStatusPill(page, /completado|registrado|booked|completed/i,
-        '[ETP-4567] Invoice should show Completed after confirmation, negative line still present');
-
-      const negCompletedRow = await findNegativeLineRow(page, 'invoicedQuantity');
-      const completedQtyText = await negCompletedRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
-      expect(parseAmount(completedQtyText),
-        '[ETP-4567] Invoiced quantity should remain negative after the invoice is completed',
-      ).toBeLessThan(0);
-    }
+    const negCompletedRow = await findNegativeLineRow(page, 'invoicedQuantity');
+    const completedQtyText = await negCompletedRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
+    expect(parseAmount(completedQtyText),
+      '[ETP-4567] Invoiced quantity should remain negative on the completed invoice',
+    ).toBeLessThan(0);
     await slow(page);
   });
 
@@ -1011,11 +1003,11 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
       // — verified live. `page.request` runs outside the page lifecycle, and
       // asking the backend for the record again is a stronger check anyway:
       // it re-queries the DB instead of re-reading a body the app already had.
-      const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-      expect(token, 'An auth token should be present in localStorage after login').toBeTruthy();
-
+      // ETP-4576: the credential is no longer readable from localStorage - it
+      // lives in memory (bearer) or in an HttpOnly cookie. Replay whatever the
+      // app itself authenticates with; page.request shares the cookie jar.
       const reread = await page.request.get(`/sws/neo/purchase-order/header/${recordId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: await apiAuthHeaders(page),
       });
       expect(reread.ok(),
         `Re-reading the saved PO should succeed (got ${reread.status()})`,
@@ -1229,7 +1221,10 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
 
     await expect(page).toHaveURL(/\/purchase-invoice\//, { timeout: 15_000 });
     await waitForDetailReady(page);
-    await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
+    // ETP-5381: the invoice is created AND confirmed in one step by the receipt
+    // confirm, so it arrives Completed — there is no Draft stage any more.
+    await expectAlreadyConfirmed(page,
+      '[ETP-5381] The invoice generated from the fully-negative receipt should arrive already Completed');
 
     await waitForLinesSettled(page, 2, 'Invoice should have 2 lines inherited from the receipt');
 
@@ -1251,28 +1246,26 @@ test.describe('Purchase Order — Full flow with receipt and invoice (integratio
     ).toBeLessThanOrEqual(0.05);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // Confirm the invoice — the negative sign must survive completion
+    // The invoice arrives completed — the negative sign must have survived
+    // the completion the backend performed on creation
     // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ETP-5381 removed the manual confirm step here (see the sibling test
+    // above). The ETP-4567 assertions this test exists for are now
+    // unconditional instead of hiding behind an `if (onDetailView)` guard that
+    // only existed to tolerate the post-confirm navigation.
 
-    await clickConfirmButton(page);
-    await waitForConfirmResponse(page);
-    await page.waitForTimeout(2_000);
-    await dismissSuccessModal(page);
+    await waitForDetailReady(page);
+    await expectStatusPill(page, /completado|registrado|booked|completed/i,
+      '[ETP-4567] Invoice should read Completed, still fully negative');
 
-    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
-    if (onDetailView) {
-      await waitForDetailReady(page);
-      await expectStatusPill(page, /completado|registrado|booked|completed/i,
-        '[ETP-4567] Invoice should show Completed after confirmation, still fully negative');
-
-      const completedRows = page.locator('[data-testid^="line-row-"]');
-      const completedRowCount = await completedRows.count();
-      for (let i = 0; i < completedRowCount; i++) {
-        const qtyText = await completedRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
-        expect(parseAmount(qtyText),
-          `[ETP-4567] Every invoice line quantity should remain negative after completion (row ${i})`,
-        ).toBeLessThan(0);
-      }
+    const completedRows = page.locator('[data-testid^="line-row-"]');
+    const completedRowCount = await completedRows.count();
+    for (let i = 0; i < completedRowCount; i++) {
+      const qtyText = await completedRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every invoice line quantity should remain negative on the completed invoice (row ${i})`,
+      ).toBeLessThan(0);
     }
     await slow(page);
   });

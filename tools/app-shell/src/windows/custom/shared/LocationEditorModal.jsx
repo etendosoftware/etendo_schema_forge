@@ -1131,7 +1131,13 @@ export default function LocationEditorModal({
                             // (tools/app-shell/src/walkthrough/flows/create-contact.json).
                             // Renaming it breaks a shipped tour.
                             data-testid="location-save"
-                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, border: '1px solid hsl(var(--foreground))', cursor: 'pointer', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
+                            // Colours live in classes, not in `style`: an inline `background`
+                            // beats any Tailwind rule including :hover, so the brand-yellow
+                            // hover every other primary action has (ListView's "+ Nuevo
+                            // contacto", RecordCreateModal / InlineCreateModal's save) could
+                            // never paint. Geometry stays inline — it is not themed.
+                            className="border border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] text-[hsl(var(--card))] transition-colors enabled:hover:border-[hsl(var(--accent-highlight))] enabled:hover:bg-[hsl(var(--accent-highlight))] enabled:hover:text-[hsl(var(--accent-highlight-foreground))]"
+                            style={{ font: '600 14px/20px system-ui', padding: '9px 20px', borderRadius: 20, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, opacity: saveDisabled ? 0.5 : 1 }}
                         >
                             {saving && <Loader2
                                 size={13}

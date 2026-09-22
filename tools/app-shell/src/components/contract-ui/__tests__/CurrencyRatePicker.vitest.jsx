@@ -94,7 +94,9 @@ describe('CurrencyRatePicker', () => {
     const container = screen.getByTestId(`field-${FIELD.key}`);
     expect(within(container).getByText('USD')).toBeInTheDocument();
     // orgPrecision defaults to 2 (useCurrencyPrecision's initial state) before its fetch resolves.
-    expect(within(container).getByText('— 1.50')).toBeInTheDocument();
+    // ETP-5107: the decimal separator comes from getCurrencyFormatConfig(), which defaults to
+    // the es-ES-style ',' until /sws/neo/currency-format resolves.
+    expect(within(container).getByText('— 1,50')).toBeInTheDocument();
   });
 
   it('renders the placeholder when no value is selected', () => {
@@ -321,12 +323,24 @@ describe('CurrencyRatePicker', () => {
 
     await user.click(await screen.findByTestId('currency-rate-pencil'));
     const input = screen.getByTestId('currency-rate-input');
-    expect(input).toHaveValue(2.5);
+    // ETP-5107: the editor is seeded in the same convention the rate is displayed in, so on a
+    // comma-decimal instance the user is handed '2,5' (a string — the input is text, not number)
+    // rather than a period they cannot retype.
+    expect(input).toHaveValue('2,5');
 
     await user.clear(input);
     await user.type(input, '3.75');
     await user.click(screen.getByTestId('currency-rate-confirm'));
     expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 3.75, 'EM_ETGO_Currency_Rate');
+
+    // ETP-5107 positive path: a rate typed the way it is displayed (comma) must COMMIT, not be
+    // silently discarded. A bare parseFloat('2,5') returns 2 here and a bare parseFloat('0,86')
+    // returns 0, which the `> 0` guard then drops with no feedback.
+    await user.click(screen.getByTestId('currency-rate-pencil'));
+    await user.clear(screen.getByTestId('currency-rate-input'));
+    await user.type(screen.getByTestId('currency-rate-input'), '2,5');
+    await user.click(screen.getByTestId('currency-rate-confirm'));
+    expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 2.5, 'EM_ETGO_Currency_Rate');
 
     await user.click(screen.getByTestId('currency-rate-pencil'));
     await user.clear(screen.getByTestId('currency-rate-input'));
@@ -453,7 +467,9 @@ describe('CurrencyRatePicker', () => {
     expect(screen.queryByPlaceholderText('Buscar moneda...')).not.toBeInTheDocument();
   });
 
-  it('does not fetch options when the component token prop is missing', () => {
+  // ETP-4576 — inverted: the picker must still load its options with no token prop, since
+  // under the cookie scheme nothing hands it one.
+  it('still fetches options when the component token prop is missing', () => {
     render(
       <CurrencyRatePicker
         field={FIELD}
@@ -470,7 +486,7 @@ describe('CurrencyRatePicker', () => {
     // /sws/neo/session call still fires — only the component's own currencyOptions
     // fetch must be gated on the token PROP.
     const calledUrls = globalThis.fetch.mock.calls.map((c) => String(c[0]));
-    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(false);
+    expect(calledUrls.some((u) => u.includes('currencyOptions'))).toBe(true);
   });
 
   it('shows a required marker when the field is required', () => {
@@ -502,7 +518,7 @@ describe('CurrencyRatePicker', () => {
         onChange={() => {}}
       />,
     );
-    await waitFor(() => expect(screen.getByText('— 1.23')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('— 1,23')).toBeInTheDocument());
   });
 
   it('renders read-only values and keeps the dropdown usable when the option fetch fails', async () => {
@@ -520,7 +536,7 @@ describe('CurrencyRatePicker', () => {
       />,
     );
     expect(screen.getByText('USD')).toBeInTheDocument();
-    expect(screen.getByTestId(`field-${FIELD.key}`)).toHaveTextContent('4.20');
+    expect(screen.getByTestId(`field-${FIELD.key}`)).toHaveTextContent('4,20');
 
     unmount();
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('offline'));
@@ -539,5 +555,109 @@ describe('CurrencyRatePicker', () => {
 
     await userEvent.click(screen.getByTestId('currency-rate-trigger'));
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
+  });
+
+  describe('ETP-5107 — comma-decimal rates', () => {
+    function renderEditing(props = {}) {
+      const onChange = vi.fn();
+      const { unmount } = render(
+        <CurrencyRatePicker
+          field={FIELD}
+          value="usd-id"
+          displayValue="USD"
+          formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+          resolvedLabel="Currency"
+          token={TOKEN}
+          apiBaseUrl={BASE_URL}
+          onChange={onChange}
+          {...props}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('currency-rate-pencil'));
+      return { input: screen.getByTestId('currency-rate-input'), onChange, unmount };
+    }
+
+    it('renders the rate editor as a text input with a decimal keypad, never a native number input', () => {
+      // A native `type="number"` rejects the comma keystroke outright, so on a comma-decimal
+      // instance the rate could not be typed the way it is displayed. `inputMode="decimal"` keeps
+      // the numeric keypad on touch devices without that restriction.
+      const { input } = renderEditing();
+      expect(input).not.toHaveAttribute('type', 'number');
+      expect(input).toHaveAttribute('type', 'text');
+      expect(input).toHaveAttribute('inputmode', 'decimal');
+      // step/min are inert on a text input — the real `> 0` check lives in handleRateConfirm.
+      expect(input).not.toHaveAttribute('step');
+      expect(input).not.toHaveAttribute('min');
+    });
+
+    it('keeps the org precision when formatting a rate instead of collapsing it to two decimals', async () => {
+      // A careless "just route it through formatCurrency" fix would force exactly two decimals and
+      // silently truncate a 4-decimal rate to 1,23.
+      globalThis.fetch = mkFetch(CURRENCIES, 4);
+      render(
+        <CurrencyRatePicker
+          field={FIELD}
+          value="usd-id"
+          displayValue="USD"
+          formData={{ id: 'rec-1', eTGOCurrencyRate: '1.2345' }}
+          resolvedLabel="Currency"
+          token={TOKEN}
+          apiBaseUrl={BASE_URL}
+          onChange={() => {}}
+        />,
+      );
+      await waitFor(() => expect(screen.getByText('— 1,2345')).toBeInTheDocument());
+      expect(screen.queryByText('— 1,23')).not.toBeInTheDocument();
+    });
+
+    it('localizes the decimal separator of every rate listed in the dropdown', async () => {
+      // The reported symptom: "EUR — 1.00", "GBP 0.86", "USD 1.47" in an otherwise
+      // comma-decimal UI.
+      globalThis.fetch = mkFetch([
+        { id: 'gbp-id', isoCode: 'GBP', rate: 0.86 },
+        { id: 'usd-id', isoCode: 'USD', rate: 1.47 },
+      ], 2);
+      render(
+        <CurrencyRatePicker
+          field={FIELD}
+          value=""
+          formData={{ id: 'new' }}
+          resolvedLabel="Currency"
+          token={TOKEN}
+          apiBaseUrl={BASE_URL}
+          onChange={() => {}}
+        />,
+      );
+      fireEvent.click(screen.getByTestId('currency-rate-trigger'));
+
+      await waitFor(() => expect(screen.getByText('0,86')).toBeInTheDocument());
+      expect(screen.getByText('1,47')).toBeInTheDocument();
+      expect(screen.queryByText('0.86')).not.toBeInTheDocument();
+      expect(screen.queryByText('1.47')).not.toBeInTheDocument();
+    });
+
+    it('commits the same number whether the rate is typed with a comma or a period', () => {
+      const withComma = renderEditing();
+      fireEvent.change(withComma.input, { target: { value: '0,86' } });
+      fireEvent.click(screen.getByTestId('currency-rate-confirm'));
+      expect(withComma.onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 0.86, 'EM_ETGO_Currency_Rate');
+      withComma.unmount();
+
+      const withPeriod = renderEditing();
+      fireEvent.change(withPeriod.input, { target: { value: '0.86' } });
+      fireEvent.click(screen.getByTestId('currency-rate-confirm'));
+      expect(withPeriod.onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 0.86, 'EM_ETGO_Currency_Rate');
+    });
+
+    it('reads a rate like 1.500 as 1.5, never as 1500', () => {
+      // Why handleRateConfirm uses parseLocaleNumber and NOT the grouping-aware parseAmountInput:
+      // a rate of 1.500 legitimately means one-and-a-half, which a grouping rule reads as 1500.
+      const { input, onChange } = renderEditing();
+      fireEvent.change(input, { target: { value: '1.500' } });
+      fireEvent.click(screen.getByTestId('currency-rate-confirm'));
+
+      expect(onChange).toHaveBeenCalledWith('eTGOCurrencyRate', 1.5, 'EM_ETGO_Currency_Rate');
+      expect(onChange).not.toHaveBeenCalledWith('eTGOCurrencyRate', 1500, 'EM_ETGO_Currency_Rate');
+    });
   });
 });

@@ -18,8 +18,18 @@ describe('useBulkActionToast source', () => {
     assert.match(src, /['"]bulkActionResult['"]/);
   });
 
-  it('removes the key from sessionStorage after reading', () => {
-    assert.match(src, /sessionStorage\.removeItem/);
+  it('removes the key from storage after reading', () => {
+    assert.match(src, /\.removeItem\(STORAGE_KEY\)/);
+  });
+
+  // ETP-4994 — reading the `sessionStorage` ACCESSOR throws (not just its
+  // methods) when site data is blocked, and this hook runs inside ListView's
+  // render tree, so an unguarded access takes the whole grid down. Every access
+  // must go through the `session()` helper, which is the only place allowed to
+  // name `globalThis.sessionStorage`.
+  it('reaches storage only through the guarded session() helper', () => {
+    assert.match(src, /function session\(\)[\s\S]*?globalThis\.sessionStorage/);
+    assert.doesNotMatch(src, /(?<!globalThis\.)\bsessionStorage\.(getItem|setItem|removeItem)/);
   });
 
   it('calls toast.success on full success', () => {
@@ -37,6 +47,35 @@ describe('useBulkActionToast source', () => {
   it('formats message with ok and failed counts', () => {
     assert.match(src, /replace\(.*\{ok\}/);
     assert.match(src, /replace\(.*\{failed\}/);
+  });
+});
+
+// ETP-5302 — the module's public surface grew: `showBulkActionToast` is no longer
+// private. Three selection-bar components (BulkDocumentAction and the two order
+// kebab menus) import it to show the bulk result directly instead of persisting it
+// and reloading the whole page. They must NOT mount the hook to get there — its
+// sessionStorage-draining effect would eat their own persisted result on the
+// fallback path — so the pure function has to stay exported and effect-free.
+describe('useBulkActionToast — exported surface (ETP-5302)', () => {
+  it('exports showBulkActionToast as a standalone (ui, result) function', () => {
+    assert.match(src, /export function showBulkActionToast\(ui, result\)/);
+  });
+
+  it('keeps persistBulkActionResult exported for the legacy fallback path', () => {
+    assert.match(src, /export function persistBulkActionResult\(result\)/);
+  });
+
+  it('the hook delegates to the same helper — one toast implementation, not two', () => {
+    const delegations = src.match(/showBulkActionToast\(ui, \w+\)/g) || [];
+    // showResult() and the mount effect must both route through it.
+    assert.ok(delegations.length >= 2, `expected >= 2 delegations, got ${delegations.length}`);
+  });
+
+  it('showBulkActionToast itself never touches sessionStorage', () => {
+    const start = src.indexOf('export function showBulkActionToast');
+    const end = src.indexOf('export function persistBulkActionResult');
+    assert.ok(start > -1 && end > start);
+    assert.doesNotMatch(src.slice(start, end), /sessionStorage/);
   });
 });
 

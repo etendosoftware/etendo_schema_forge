@@ -1,13 +1,31 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadCustomModule,
+  apiFetchToGlobalFetch,
+} from '../../../_test-support/loadCustomModule.js';
+import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromShipmentModal.jsx'), 'utf8');
 
-describe('ImportFromShipmentModal', () => {
+// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
+// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
+const { helpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromShipmentModal.jsx'),
+  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
+  // binding the loader strips); the stub forwards to `globalThis.fetch`,
+  // which is what the mocks below install.
+  { moduleApiFetch: apiFetchToGlobalFetch },
+);
+const { fetchDocuments, buildLineBody } = helpers;
+
+// The invoice-line -> order-line FK key, read from the generated contract
+// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
+const ORDER_LINE_FK = orderLineApiKey('sales-invoice');
+
+describe('ImportFromShipmentModal — source shape', () => {
   it('exports a default function component', () => {
     assert.match(src, /export default function ImportFromShipmentModal/);
   });
@@ -24,18 +42,6 @@ describe('ImportFromShipmentModal', () => {
     assert.match(src, /sales-invoice\/lines\?parentId=/);
   });
 
-  it('filters shipments by CO status, matching business partner, and not fully invoiced', () => {
-    assert.match(src, /documentStatus\s*===\s*'CO'/);
-    assert.match(src, /businessPartner\s*===\s*bpId/);
-    assert.match(src, /invoiced\s*!==\s*true/);
-  });
-
-  it('tracks already-imported shipment lines and order lines', () => {
-    assert.match(src, /alreadyImported/);
-    assert.match(src, /goodsShipmentLine/);
-    assert.match(src, /salesOrderLine/);
-  });
-
   it('wires the shipment-specific i18n keys for search and empty states', () => {
     assert.match(src, /searchPlaceholderKey="searchShipment"/);
     assert.match(src, /emptyMessageKey="noPendingShipmentsForCustomer"/);
@@ -46,17 +52,6 @@ describe('ImportFromShipmentModal', () => {
     assert.match(src, /fetchLines/);
     assert.match(src, /goods-shipment\/goodsShipmentLine\?parentId=/);
     assert.match(src, /resolveLinePrice/);
-  });
-
-  it('marks lines as already imported via shipment and order line ids', () => {
-    assert.match(src, /_alreadyImported/);
-    assert.match(src, /alreadyImportedShipmentLines\?\.has\(l\.id\)/);
-    assert.match(src, /alreadyImportedOrderLines\?\.has\(l\.salesOrderLine\)/);
-  });
-
-  it('creates invoice lines via POST to sales-invoice/lines', () => {
-    assert.match(src, /sales-invoice\/lines/);
-    assert.match(src, /method:\s*'POST'/);
   });
 
   it('wires the success message key so the shared modal can toast on success', () => {
@@ -71,89 +66,16 @@ describe('ImportFromShipmentModal', () => {
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
   });
 
-  it('resolves shipment currency via the linked sales order and never excludes shipments with no linked order', () => {
-    assert.match(src, /invoiceCurrency\s*=\s*invoiceHeader\.currency/);
-    assert.match(src, /sales-order\/header\/\$\{id\}/);
-    assert.match(src, /documents\s*=\s*candidates\.filter\(s\s*=>\s*!s\.salesOrder\s*\|\|\s*orderCurrencyMap\[s\.salesOrder\]\s*===\s*invoiceCurrency\)/);
-  });
-
-  it('computes excludedByCurrency only when currency filtering removed every candidate', () => {
-    assert.match(src, /excludedByCurrency\s*=\s*documents\.length\s*===\s*0\s*&&\s*candidates\.length\s*>\s*0/);
-  });
-
   it('passes noCurrencyMatchMessageKey to the shared modal', () => {
     assert.match(src, /noCurrencyMatchMessageKey="noShipmentsMatchCurrency"/);
   });
+
+  // ETP-5381: `cOrderlineId` is not a key of the sales-invoice NEO spec, and
+  // NeoFieldFilter.filterRecord drops unknown body keys silently.
+  it('never mentions the non-existent cOrderlineId key', () => {
+    assert.doesNotMatch(src, /cOrderlineId/);
+  });
 });
-
-// ---------------------------------------------------------------------------
-// fetchDocuments — behavioral currency-filter tests
-//
-// M_InOut (shipment) has no currency column of its own — currency must be
-// resolved via the linked sales order (candidate.salesOrder). This mirrors the
-// exact algorithm in the source (verified against the regex assertions above)
-// with a mocked fetch, since the component only exports a default React
-// wrapper.
-// ---------------------------------------------------------------------------
-
-async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const [shipRes, invLinesRes, , headerRes] = await Promise.all([
-    fetch(`${base}/goods-shipment/goodsShipment?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/lines?criteria=ignored&_startRow=0&_endRow=2000`, { headers }),
-    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
-  ]);
-
-  const alreadyImportedShipmentLines = new Set();
-  const alreadyImportedOrderLines = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => {
-      if (il.goodsShipmentLine) alreadyImportedShipmentLines.add(il.goodsShipmentLine);
-      if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId);
-    });
-  }
-
-  let invoiceHeader = {};
-  if (headerRes.ok) {
-    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
-  }
-
-  let candidates = [];
-  if (shipRes.ok) {
-    const all = (await shipRes.json())?.response?.data || [];
-    candidates = all.filter(s =>
-      s.documentStatus === 'CO'
-      && s.businessPartner === bpId
-      && s.invoiced !== true
-    );
-  }
-
-  const invoiceCurrency = invoiceHeader.currency || null;
-  let documents = candidates;
-  let excludedByCurrency = false;
-  if (invoiceCurrency) {
-    const orderIds = [...new Set(candidates.filter(s => s.salesOrder).map(s => s.salesOrder))];
-    const orderCurrencyMap = {};
-    await Promise.all(orderIds.map(async (id) => {
-      try {
-        const r = await fetch(`${base}/sales-order/header/${id}`, { headers });
-        if (r.ok) {
-          const o = (await r.json())?.response?.data?.[0];
-          if (o) orderCurrencyMap[id] = o.currency;
-        }
-      } catch { /* ignore */ }
-    }));
-    documents = candidates.filter(s => !s.salesOrder || orderCurrencyMap[s.salesOrder] === invoiceCurrency);
-    excludedByCurrency = documents.length === 0 && candidates.length > 0;
-  }
-
-  return {
-    documents,
-    sharedContext: { invoiceHeader, alreadyImportedShipmentLines, alreadyImportedOrderLines },
-    excludedByCurrency,
-  };
-}
 
 function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
@@ -163,11 +85,13 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ shipments, invLines = [], invoiceHeader = {}, orders = {} }) {
+function installFetch({ shipments = [], invLines = [], invoiceHeader = {}, orders = {} }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/goods-shipment/goodsShipment?')) return mockRes(true, shipments);
     if (url.includes('/sales-invoice/lines?parentId=')) return mockRes(true, invLines);
     if (url.includes('/sales-invoice/lines?criteria=')) return mockRes(true, []);
+    if (url.includes('/sales-invoice/lines/selectors/')) return { ok: true, json: async () => ({ items: [] }) };
+    if (url.includes('/sales-invoice/lines/callout')) return { ok: false, json: async () => ({}) };
     if (url.includes('/sales-invoice/header/')) return mockResSingle(true, invoiceHeader);
     const orderMatch = url.match(/\/sales-order\/header\/([^/?]+)/);
     if (orderMatch) return mockResSingle(true, orders[orderMatch[1]] || null);
@@ -175,9 +99,22 @@ function installFetch({ shipments, invLines = [], invoiceHeader = {}, orders = {
   });
 }
 
-describe('ImportFromShipmentModal — fetchDocuments currency filter', () => {
+describe('ImportFromShipmentModal — fetchDocuments filtering', () => {
   afterEach(() => {
     mock.reset();
+  });
+
+  it('filters shipments by CO status, matching business partner, and not-yet-invoiced', async () => {
+    installFetch({
+      shipments: [
+        { id: 's1', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false },
+        { id: 'sDraft', documentStatus: 'DR', businessPartner: 'bp1', invoiced: false },
+        { id: 'sOtherBp', documentStatus: 'CO', businessPartner: 'other-bp', invoiced: false },
+        { id: 'sInvoiced', documentStatus: 'CO', businessPartner: 'bp1', invoiced: true },
+      ],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.deepEqual(result.documents.map(d => d.id), ['s1']);
   });
 
   it('keeps a shipment whose linked order currency matches the invoice currency', async () => {
@@ -265,5 +202,73 @@ describe('ImportFromShipmentModal — fetchDocuments currency filter', () => {
     const ids = result.documents.map(d => d.id).sort();
     assert.deepEqual(ids, ['s1', 's3']);
     assert.equal(result.excludedByCurrency, false);
+  });
+});
+
+describe('ImportFromShipmentModal — duplicate detection via the order line FK', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('builds the already-imported order line set from the spec API key', async () => {
+    installFetch({
+      invLines: [{ id: 'il1', goodsShipmentLine: 'sl1', [ORDER_LINE_FK]: 'ol1' }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+  });
+
+  it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
+    installFetch({
+      invLines: [{ id: 'il1', goodsShipmentLine: 'sl1', cOrderlineId: 'ol9' }],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
+  });
+});
+
+describe('ImportFromShipmentModal — buildLineBody order line FK (ETP-5381)', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  const buildArgs = (line) => ({
+    line,
+    qty: 2,
+    invoiceId: 'inv1',
+    lineNo: 10,
+    sharedContext: { invoiceHeader: {}, productAuxMap: {} },
+    base: '/b',
+    headers: {},
+  });
+
+  // ETP-5381 REGRESSION GUARD — the FK must travel under the spec's key.
+  // Under the old `cOrderlineId`, NeoFieldFilter dropped it silently (HTTP 200,
+  // line created, C_OrderLine_ID NULL), which kept M_MATCHSO empty and skipped
+  // `UPDATE C_ORDERLINE SET QtyInvoiced`, leaving the order invoiceable forever.
+  it('sends the shipment line source order line under the spec API key for C_OrderLine_ID', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'sl1', product: 'p1', salesOrderLine: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(body[ORDER_LINE_FK], 'ol1');
+    assert.equal(body.goodsShipmentLine, 'sl1');
+  });
+
+  it('does not send the order line under a key the NEO spec would silently drop', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'sl1', product: 'p1', salesOrderLine: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, 'cOrderlineId'), false);
+  });
+
+  it('sends an explicit null when the shipment line has no linked order line', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'sl1', product: 'p1', salesOrderLine: null, _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), true);
+    assert.equal(body[ORDER_LINE_FK], null);
   });
 });

@@ -1,8 +1,8 @@
 {
-  "version": "0.5.0",
-  "generatedAt": "2026-08-13T11:56:58.624Z",
-  "updatedAt": "2026-09-11T12:33:56.102Z",
-  "checksum": "440d2a2a13f05f23",
+  "version": "0.5.1",
+  "generatedAt": "2026-09-16T11:53:10.457Z",
+  "updatedAt": "2026-09-21T12:45:33.031Z",
+  "checksum": "c5f2f4c6d8e2b3d2",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -30,6 +30,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {
@@ -554,7 +563,7 @@
             "label": "Movement Quantity",
             "type": "quantity",
             "tsType": "number",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true,
             "grid": true,
             "form": true,
@@ -716,6 +725,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {
@@ -1394,7 +1412,7 @@
             "apiKey": "movementQuantity",
             "column": "MovementQty",
             "type": "quantity",
-            "visibility": "readOnly",
+            "visibility": "editable",
             "required": true
           },
           {

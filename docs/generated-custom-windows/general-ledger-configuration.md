@@ -28,23 +28,26 @@ The current frontend is production-shaped but still backed by local mock data be
 
 ### General
 
-Three sections:
+Two sections (the former "Políticas contables" section, which held only the `Allow
+negative` toggle, was removed entirely — see below):
 
 1. **Identidad del esquema**
 2. **Calendario y moneda**
-3. **Políticas contables**
 
 Backed editable fields:
 
 - `Nombre del esquema` → `name`
-- `Criterio contable` → `accrual`
 - `Descripción` → `description`
 - `Moneda principal` → `currency`
-- `Allow negative` → direct binding of `Allownegative`
 
-Hidden-but-kept backend field:
+Hidden-but-kept backend fields:
 
 - `Esquema contable` / `gAAP` stays persisted in the ledger but is not user-editable in this custom surface.
+- `Criterio contable` / `accrual` (`IsAccrual`) is hidden and internally fixed to Devengo (accrual = true) — Etendo Go doesn't support Caja (cash-basis) for taxes. `decisions.json` marks it `system`-visibility, and `GeneralLedgerConfigurationHandler.applyGeneralChanges()` no longer accepts a client-supplied value for it, so it cannot be flipped away from Devengo through this window or through a raw NEO write (ETP-5372).
+- `Allow negative` / `Allownegative` — `decisions.json` marks `allowNegative` as
+  `system`-visibility and `GeneralLedgerConfigurationHandler.applyGeneralChanges()` no
+  longer accepts a client-supplied value for it; the checkbox was removed entirely from
+  the General tab (ETP-4947). The value is still reported on GET via `buildGeneral()`.
 
 Read-only fields sourced from the organization-level backend relation in the delivered implementation:
 
@@ -88,6 +91,7 @@ Editable toggle list over `C_AcctSchema_Element` rows.
 - **Label i18n (ETP-4845):** `GeneralLedgerConfigurationHandler.buildDimensions` sends each row's stable `type` (the `C_AcctSchema_Element.ElementType` / AD_Ref_List `181` code — `OO`, `AC`, `PR`, `BP`, `PJ`, `CC`, …) but no `labelKey`; `row.label` is the raw (English) `Name` column, untranslated. `mapDimensionRows()` in `mockCatalogs.js` derives `labelKey` from `type` via `DIMENSION_TYPE_LABEL_KEYS` before the row reaches `DimensionsTab.jsx`, which already preferred `labelKey` over `label`. Filter/translate by `type`, never by matching the display name (it isn't stable across locales).
 - **User 1 / User 2 excluded (ETP-4845):** `mapDimensionRows()` drops rows whose `type` is `U1`/`U2` (or any *non-empty* code absent from `DIMENSION_TYPE_LABEL_KEYS`) regardless of `IsActive` — no window's contract curates `USER1_ID`/`USER2_ID` as an editable (`form: true`) field, so Etendo GO does not support them as an accounting dimension and showing the toggle is misleading. A client created through classic Etendo's default "new client" wizard seeds all 8 elements (including `U1`/`U2`); GOClient's own provisioning seeds only the 6 GO-supported ones. Edge case, documented by a test but **not fixed** (`mockCatalogs.mapDimensionRows.vitest.js`, "treats an empty-string type identically to 'no type property'"): the filter's guard is `!row.type`, a falsiness check — a real row with `type: ''` (present but empty) is indistinguishable from a mock-seed row that carries no `type` key at all, so it passes through unfiltered and untranslated, reproducing bug 1's symptom for that one row. Not observed from the live handler; tracked as a known gap in the test, not a live regression.
 - **Organization / Account excluded (ETP-5120):** `OO` (Organización) and `AC` (Cuenta) are Etendo's two built-in mandatory accounting dimensions — always active on every schema and not meant to be a user-configurable toggle in this window — so they were removed from `DIMENSION_TYPE_LABEL_KEYS` and are now dropped by the exact same omission mechanism as `U1`/`U2` above (absent from `DIMENSION_TYPE_LABEL_KEYS`, filtered out of `mapDimensionRows()` regardless of `IsActive`).
+- **Contacto / Producto excluded and locked (ETP-4879):** `BP` (Contacto) and `PR` (Producto) are never shown in this screen — unlike the frontend-only omissions above (`U1`/`U2`/`OO`/`AC`), this one is enforced on the **backend**: `GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES = {"BP", "PR"}`, and `buildDimensions()` skips these rows before they ever reach the frontend. `applyDimensionChanges()` also silently ignores any attempt to toggle a BP/PR row's `active` flag, regardless of its stored `mandatory` value — so even a direct API call cannot re-expose the toggle. Rationale: every window that renders these two dimensions (Assets, Financial Account, Amortization) already hardcodes them as always-visible, ignoring this config entirely, so the toggle was a no-op that only confused users (it looked like disabling either one would hide the field somewhere — it never did). A companion data-fix (`cli/src/data-fixes/sql/20260917T120000Z__R37-acctdim-bp-pr-locked-active.sql`, gap `K2`) forces `C_AcctSchema_Element.IsActive='Y'` and `IsMandatory='Y'` for every existing client's BP/PR rows, and the GOClient sampledata seed (`referencedata/sampledata/GOClient/C_ACCTSCHEMA_ELEMENT.xml`, `com.etendoerp.go`) was corrected so new tenants are born already correct. Project (`PJ`) and Cost Center (`CC`) are unaffected — still editable, `false` by default.
 - **FIXED — new/unsaved documents ignored dimension config entirely (ETP-4845):** `useDisplayLogic.js`'s `evaluate()` skipped calling `/evaluate-display` whenever the record had no `id` yet ("new records have no meaningful state to evaluate"). True for record-dependent logic (`@Posted@='Y'`), but the `@ACCT_DIMENSION_DISPLAY@` macro is GL-Configuration-only, not record-dependent — every brand-new document (across every window and every client) showed toggled-OFF dimension fields until the very first save, because the visibility map stayed empty and `EntityForm.jsx`'s fail-open filter never activated. Live-verified before/after on a freshly onboarded client (`Acctdim_Centrally_Maintained='Y'` default) and on GOClient (`='N'`): a brand-new purchase-invoice header now correctly hides a toggled-off dimension immediately, matching the behavior an existing (already-saved) record always had. Fix: only skip the no-`id` early return when the caller has NOT declared `cacheableKeys` (both current callers — `DetailView.jsx` and `useAccountingDimensionFields.js` — always declare them, so this fires for every dimension-macro consumer now).
 - **KNOWN GAP — toggle only writes half the picture for centrally-maintained clients (ETP-4845, unresolved, backend `com.etendoerp.go`, tracked separately as ETP-4854):** `GeneralLedgerConfigurationHandler.applyDimensionChanges` only sets `C_AcctSchema_Element.IsActive`. It never syncs the parallel per-dimension `AD_Client.<Dim>_Acctdim_IsEnable/Header/Lines/Breakdown` columns (visible on the classic "Client" window's Accounting Dimension section) — the ones `DimensionDisplayUtility.getAccountingDimensionConfiguration()` reads instead of `AcctSchemaElement.IsActive` once `AD_Client.Acctdim_Centrally_Maintained='Y'`. **`'Y'` is the ONBOARDING DEFAULT for every newly provisioned client** (verified: a fresh tenant onboarded through the normal signup flow comes back `Acctdim_Centrally_Maintained='Y'` with `Project_Acctdim_IsEnable`/`Costcenter_Acctdim_IsEnable`/etc. all `'N'`) — GOClient is the outlier, manually pinned to `'N'` for local/experimental testing. For the default/majority case this tab's toggle has **zero effect** on any document regardless of the fix above. See ETP-4854 for the proposed fix (unify every client to `'N'`, two-front onboarding gap).
 
@@ -127,12 +131,12 @@ After the backend wiring lands, remember the Etendo step:
 
 1. Start the app and open `/general-ledger-configuration`.
 2. Confirm the tab order and labels match the Figma: `General`, `Valores por defecto`, `Dimensiones`, `Cuentas generales`.
-3. On **General**, verify the first row renders as 4 columns on wide screens: name, organization, accounting criteria. `gAAP` (Esquema contable) is intentionally not shown — it is set at schema creation time and is not editable from this form.
+3. On **General**, verify the first row renders as 2 columns on wide screens: name, organization. `gAAP` (Esquema contable) and `Criterio contable` (accrual) are intentionally not shown — `gAAP` is set at schema creation time, `Criterio contable` is fixed to Devengo (ETP-5372); neither is editable from this form.
 4. Confirm `Organización` and `Calendario fiscal` are read-only and show the muted `AD_OrgInfo` origin hint.
 5. Edit `Nombre del esquema` and confirm `Guardar cambios` enables.
 6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.
 7. On **Valores por defecto**, confirm all 9 groups render (`Banco`, `Diario`, `Contactos`, `Impuestos`, `Producto`, `Activos`, `Proyecto`, `Almacén`, `Otras cuentas` — 39 fields total) and required account selectors show the required marker (20 fields, up from the previous 6). Confirm `paymentSelection` no longer renders at all, `disposalGain`/`disposalLoss` render under `Otras cuentas` (not `Activos`, and with no info-icon hint — that mechanism was retired), and that none of the 10 AD-inactive fields (see list above) render at all.
-8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`) or Cuenta (`AC`) — Etendo's built-in mandatory dimensions are not user-configurable toggles here and are dropped from the tab, same as `U1`/`U2`.
+8. On **Dimensiones**, confirm optional rows can be toggled and mandatory rows stay enabled/read-only (cannot be turned off). Deactivate an optional dimension, save, and reload the window — the row must still be present and shown as inactive, not disappear. Confirm the list never shows a row for Organización (`OO`), Cuenta (`AC`), Contacto (`BP`) or Producto (`PR`) — the first two are Etendo's built-in mandatory dimensions, and Contacto/Producto are locked always-on per ETP-4879 (same as `U1`/`U2`) — while Proyecto (`PJ`) and Centro de coste (`CC`) remain visible and toggleable.
 9. On **Cuentas generales**, confirm the three sections render and both toggle+account pairs (suspense balancing, currency balancing) behave independently.
 
 ## Test Design

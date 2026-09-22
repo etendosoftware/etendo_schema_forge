@@ -177,7 +177,7 @@ describe('PriceListProductPrices', () => {
     });
   });
 
-  it('does not fetch when token is missing', async () => {
+  it('does not fetch when token is missing — inverted: the cookie carries the session', async () => {
     render(
       <PriceListProductPrices
         {...defaultProps}
@@ -186,7 +186,10 @@ describe('PriceListProductPrices', () => {
     );
     // Should not call fetch
     await waitFor(() => {
-      expect(globalThis.fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+      expect(globalThis.fetch).toHaveBeenCalled();
     });
   });
 

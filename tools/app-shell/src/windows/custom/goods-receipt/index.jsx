@@ -8,13 +8,18 @@ import GoodsReceiptSecondaryActions from '@generated/goods-receipt/custom/GoodsR
 import GoodsReceiptPreview from './GoodsReceiptPreview.jsx';
 import RelatedDocuments from './RelatedDocuments.jsx';
 import { AttachmentsTab } from '@/components/attachments';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkInvoiceFromReceipt from '@generated/goods-receipt/custom/BulkInvoiceFromReceipt';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
+import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
+import { useRowConfirmAction } from '../shared/useRowConfirmAction.jsx';
+import ConfirmGoodsReceiptModal from '@generated/goods-receipt/custom/ConfirmGoodsReceiptModal';
 
 import { buildHeaders } from '@/auth/api.js';
 const HEADER_COLUMNS = [
@@ -60,11 +65,12 @@ function CustomHeaderTable(props) {
 function GoodsReceiptBulkAction(props) {
   return (
     <>
+      <BulkInvoiceFromReceipt {...props} data-testid="BulkInvoiceFromReceipt__bf4f23" />
       <BulkDocumentAction
         {...props}
         entity="goodsReceipt"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__bf4f23" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -75,12 +81,36 @@ function GoodsReceiptBulkAction(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__bf4f23" />
+      {/* ETP-5302 — bulk Descontabilizar, the counterpart of the unpost entry this
+          window's detail kebab already offers. Its own button rather than a second
+          option inside "Contabilizar": that button would then be named after the
+          opposite of what it does. Only shows when a posted row is selected, so in
+          practice it and "Contabilizar" are rarely on screen together. */}
+      <BulkDocumentAction
+        {...props}
+        entity="goodsReceipt"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__bf4f23" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
         data-testid="CopyLinkButton__bf4f23" />
     </>
   );
+}
+
+/**
+ * ETP-5265 QA follow-up — dispatches the confirm event and returns whatever promise the
+ * GoodsReceiptActions listener attached to `detail`. Undefined when that listener only
+ * opened the confirm modal, which is the unchanged pre-existing behaviour.
+ */
+function dispatchConfirmModalEvent() {
+  const detail = {};
+  window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal', { detail }));
+  return detail.promise;
 }
 
 export default function GoodsReceiptWindow(props) {
@@ -95,11 +125,30 @@ export default function GoodsReceiptWindow(props) {
 
   const headers = useMemo(() => (buildHeaders(token)), [token]);
 
+  const { createContactCtxValue, contactPortal } =
+    useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
+
   const { requestDelete, deleteDialog } = useRowDelete({
     apiBaseUrl,
     entity: 'goodsReceipt',
     token,
     onSuccess: () => setRefreshKey(k => k + 1),
+  });
+
+  // ETP-5378 — "Confirmar" in the row-hover kebab, opening this window's own confirm
+  // popup exactly as the form does. See useRowConfirmAction for why it refetches the
+  // record first (the modal needs detail-only enrichments the grid row does not carry).
+  const { confirmMenuAction, confirmPortal } = useRowConfirmAction({
+    specName: 'goods-receipt',
+    entityName: 'goodsReceipt',
+    apiBaseUrl,
+    token,
+    ConfirmModal: ConfirmGoodsReceiptModal,
+    confirmedTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
+    invoiceResultTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
+    invoiceDocType: 'facturaCompra',
+    invoiceRoute: '/purchase-invoice',
+    onRefresh: () => setRefreshKey(k => k + 1),
   });
 
   const customTabs = useMemo(() => ([
@@ -135,11 +184,25 @@ export default function GoodsReceiptWindow(props) {
     // ETP-5209 — Post reachable from the row-hover kebab, mirroring menuActionsForForm's
     // gate. Extracted to shared/buildDocumentRowQuickActions.js (rejection-cycle fix —
     // this block was duplicated verbatim in goods-shipment/index.jsx).
-    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
-  }), [navigate, windowName, requestDelete, ui]);
+    //
+    // ETP-5378 — includeUnpost: the window already declares `unpost` in its
+    // decisions.json menuActions, so the FORM kebab has always offered
+    // Descontabilizar while the grid row went silent the moment the document was
+    // posted — the kebab disappeared entirely, since Post was its only entry. The
+    // grid now mirrors the form: Post while unposted, Unpost once posted.
+    // ETP-5378 — Confirmar first, then Post/Unpost: the same order Pedido de Venta's
+    // kebab uses. The entry opens this window's own confirm popup, so confirming from
+    // the list is the identical flow as from the form.
+    ...buildDocumentRowQuickActionsPostMenu({
+      ui,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      includeUnpost: true,
+      extraMenuActions: confirmMenuAction,
+    }),
+  }), [navigate, windowName, requestDelete, ui, confirmMenuAction]);
 
   return (
-    <>
+    <CreateContactContext.Provider value={createContactCtxValue}>
       <GeneratedApp
         {...props}
         autoSaveOnBlur={true}
@@ -154,6 +217,8 @@ export default function GoodsReceiptWindow(props) {
         Table={CustomHeaderTable}
         labelOverrides={LABEL_OVERRIDES}
         initialColumnFilters={docStatus ? { documentStatus: { mode: 'enumLabel', value: [docStatus] } } : undefined}
+        /* ETP-5009 — a ?DocStatus deep-link outranks the saved grid state. */
+        initialFiltersFromUrl={Boolean(docStatus)}
         secondaryTabs={[]}
         draftMode={{
           enabled: true,
@@ -161,7 +226,10 @@ export default function GoodsReceiptWindow(props) {
           processValue: 'CO',
           label: ui('confirm'),
           keepSaveWhenCompletedFields: ['orderReference'],
-          onConfirm: () => window.dispatchEvent(new CustomEvent('goods-receipt:open-confirm-modal')),
+          // ETP-5265 QA follow-up — see dispatchConfirmModalEvent above: the listener's
+          // in-flight promise comes back through the event `detail` so the Confirm button
+          // can await it and spin. Undefined on the modal path = unchanged behaviour.
+          onConfirm: () => dispatchConfirmModalEvent(),
         }}
         notesField="description"
         bottomSection={GoodsReceiptBottomPanel}
@@ -185,6 +253,7 @@ export default function GoodsReceiptWindow(props) {
             data-testid="GoodsReceiptPreview__bf4f23" />
         )}
         data-testid="GeneratedApp__bf4f23" />
+      {contactPortal}
       {deleteDialog}
       {cloneTargets && createPortal(
         <CloneOrderModal
@@ -199,6 +268,7 @@ export default function GoodsReceiptWindow(props) {
           data-testid="CloneOrderModal__bf4f23" />,
         document.body,
       )}
-    </>
+      {confirmPortal}
+    </CreateContactContext.Provider>
   );
 }

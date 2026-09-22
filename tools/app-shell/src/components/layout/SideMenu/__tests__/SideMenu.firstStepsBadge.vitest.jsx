@@ -1,6 +1,10 @@
 /**
  * ETP-5190 — the `x/7` progress badge on the sidebar's First Steps entry.
  *
+ * ETP-5364's `dismissed` flag — the one thing that removes that entry — is NOT decided here. It
+ * is an item-level predicate in `filterMenuGroupsByAccess`, asserted in registry.vitest.jsx; the
+ * last describe below only pins that this component does not second-guess it.
+ *
  * Separate from `SideMenu.vitest.jsx` because this suite needs a real `FirstStepsContext`
  * provider around the menu, and that suite's fixture deliberately renders it bare.
  *
@@ -35,6 +39,7 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: () => false,
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
+  PUBLIC_API_KEYS: 'public-api-keys',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({
@@ -135,11 +140,12 @@ const MENU_GROUPS = [
   { group: 'Home', icon: 'Home', section: 'General', items: [{ name: 'dashboard', label: 'Home' }] },
 ];
 
-function setState({ completed = [], loading = false, error = null } = {}) {
+function setState({ completed = [], loading = false, error = null, dismissed = false } = {}) {
   hook.value = {
-    completed, seen: false, loading, error,
+    completed, seen: false, dismissed, loading, error,
     toggleStep: async () => true,
     markSeen: async () => true,
+    setDismissed: async () => true,
   };
 }
 
@@ -250,5 +256,38 @@ describe('First Steps sidebar badge — collapsed', () => {
   it('never renders the expanded badge in the collapsed rail', () => {
     renderMenu({ expanded: false });
     expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
+  });
+});
+
+describe('First Steps sidebar entry — what this component does NOT decide (ETP-5364)', () => {
+  it('renders whatever groups it is handed, dismissed or not', () => {
+    // `dismissed` is applied by `filterMenuGroupsByAccess` (the fourth menu axis,
+    // `"hideWhenFirstStepsDismissed"` in menu.json) BEFORE AppLayout hands the groups down —
+    // see registry.vitest.jsx. SideMenu deliberately does not re-check it: a group filter here
+    // was the first implementation, and because the checklist state arrives on its own request
+    // the entry rendered and then vanished on every reload and locale change.
+    setState({ dismissed: true });
+    renderMenu();
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
+  });
+
+  it('keeps Home reachable in every checklist state', () => {
+    // The ticket's other acceptance criterion, asserted here as well as on the filter because
+    // Home must survive the whole render path, not just the predicate.
+    for (const dismissed of [true, false, undefined]) {
+      setState({ dismissed });
+      const { unmount } = renderMenu();
+      expect(screen.getByTestId('menu-item-dashboard')).toHaveAttribute('href', '/dashboard');
+      unmount();
+    }
+  });
+
+  it('completing every step does NOT dismiss on its own', () => {
+    // Finishing the list and choosing to put it away are two different acts. Deriving one from
+    // the other would take the entry from a user who never asked, with no way to un-tick a step.
+    setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    renderMenu();
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${PRODUCTIVE_TOTAL}`);
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 });

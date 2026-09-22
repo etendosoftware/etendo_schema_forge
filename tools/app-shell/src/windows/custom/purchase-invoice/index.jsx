@@ -71,6 +71,7 @@ const LIST_COLUMNS = [
 // before DataTable fires onColumnsReady.
 const OVERDUE_INITIAL_COLUMNS = [
   { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', required: true },
+  { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
   { key: 'orderReference', column: 'POReference', type: 'string' },
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', required: true },
@@ -88,11 +89,13 @@ const LABEL_OVERRIDES = {
     POReference: 'Nº documento',
     OutstandingAmt: 'Saldo pendiente',
     em_etgo_delivery_status: 'Estado de recepción',
+    DocumentNo: 'N° interno',
   },
   en_US: {
     POReference: 'Document No.',
     OutstandingAmt: 'Outstanding Amount',
     em_etgo_delivery_status: 'Reception Status',
+    DocumentNo: 'Internal No.',
   },
   // ETP-5106: es_AR carried no overrides at all, so the grid fell through to the
   // raw AD label ("Total Pendiente"). Only OutstandingAmt is declared here — the
@@ -107,7 +110,11 @@ function PurchaseInvoiceBulkAction(props) {
     <>
       <BulkDocumentAction
         {...props}
-        labelKey="confirmBulk"
+        labelKey="process"
+        // ETP-5302 — Core's C_INVOICE_POST refuses RE while Posted='Y'. The detail kebab
+        // already unposts first (`preUnpost: true` in decisions.json); this makes the bulk
+        // bar run the same two steps instead of failing with "Factura contabilizada".
+        preUnpostActions={['RE']}
         data-testid="BulkDocumentAction__c20e53" />
       {/* ETP-5209 — bulk Contabilizar (post), gated to processed & not-yet-posted rows */}
       <BulkDocumentAction
@@ -182,7 +189,12 @@ export default function PurchaseInvoiceWindow(props) {
   const effectiveRecord = savedRecord ?? location.state?.savedRecord ?? null;
 
   const clearSavedRecord = useClearSavedRecord(setSavedRecord, location, navigate);
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] });
+  // MUST stay in sync with artifacts/purchase-invoice/decisions.json ->
+  // window.draftMode.keepSaveWhenCompletedFields. This override is what actually reaches
+  // DetailView: the generated HeaderPage sets draftMode from the contract but expands
+  // {...props} AFTER it, so this value wins and the contract's never applies here.
+  // draft-mode-allowlist-sync.test.js fails if the two drift apart.
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'] });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
@@ -277,6 +289,9 @@ export default function PurchaseInvoiceWindow(props) {
         subsetFilters={INVOICE_SUBSET_FILTERS}
         initialColumnFilters={initialColumnFilters}
         initialAdvancedFilter={initialAdvancedFilter}
+        /* ETP-5009 — these two came from the URL, so they must outrank any grid
+           state saved from a previous visit to this window. */
+        initialFiltersFromUrl={isInvoiceFilter || Boolean(docStatus)}
         initialColumns={isInvoiceFilter ? OVERDUE_INITIAL_COLUMNS : null}
         dateFilterKey="invoiceDate"
         onCloneRow={(rowOrRows) => setCloneTargets(Array.isArray(rowOrRows) ? rowOrRows : [rowOrRows])}

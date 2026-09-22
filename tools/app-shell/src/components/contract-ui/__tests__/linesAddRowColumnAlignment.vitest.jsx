@@ -26,8 +26,9 @@
  * Harness/mocks follow linesDateField.vitest.jsx, which renders the same two components.
  */
 import { render, screen } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import React, { createRef } from 'react';
-import { DataTable } from '../DataTable.jsx';
+import { DataTable, growColumnWidth, getTableContainerStyle } from '../DataTable.jsx';
 import InlineLinesPanel from '../InlineLinesPanel.jsx';
 
 vi.mock('sonner', () => ({
@@ -129,17 +130,35 @@ function readHeaderLayout() {
 
 /**
  * The same budget as the add-row table declares it: literal-px `<col>`s, plus the
- * `calc((100% - Fpx) / N + Bpx)` expression `growColumnWidth()` emits for grow columns
- * (F = every fixed px the table believes is spoken for, N = number of grow columns).
+ * `calc((100% - Fpx) / N + Bpx)` expression `growColumnWidth()` emits for
+ * grow columns when no live scroll host is measured (F = every fixed px the table
+ * believes is spoken for, N = number of grow columns).
+ *
+ * ETP-5133 BUG-1 follow-up — this MUST read from server-rendered markup, not a
+ * mounted `container`'s live DOM: jsdom's `cssstyle` cannot parse a `calc(...)`
+ * value (it appears whenever `growColumnWidth()` falls back to its unmeasured
+ * formula — see its own doc comment in DataTable.jsx) and silently drops the
+ * ENTIRE `style` attribute rather than the single unparseable declaration —
+ * verified live: `col.getAttribute('style')` comes back `null`, not merely
+ * missing `width`. `renderToStaticMarkup` serializes the literal style text
+ * React wrote without ever going through jsdom's CSSOM, so the calc()
+ * expression survives intact.
  */
-function readAddRowLayout(container) {
+function readAddRowLayout(columns) {
+  const html = renderToStaticMarkup(addRowElement(columns));
+  const colgroupHtml = /<colgroup>([\s\S]*?)<\/colgroup>/.exec(html)?.[1] ?? '';
+  const colTags = colgroupHtml.match(/<col\b[^>]*>/g) ?? [];
   let fixedPx = 0;
   const growBases = [];
   let calcFixedPx = null;
   let calcGrowCount = null;
-  for (const col of container.querySelectorAll('colgroup col')) {
-    const width = styleProp(col, 'width') ?? '';
-    if (!width.startsWith('calc(')) {
+  for (const tag of colTags) {
+    const style = /style="([^"]*)"/.exec(tag)?.[1] ?? '';
+    const width = /(?:^|;)\s*width:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+    // Fixed columns render a bare pixel value ('80px'); grow columns render a
+    // `calc(...)` expression — so match on `calc(` anywhere rather than
+    // anchoring at the start.
+    if (!width.includes('calc(')) {
       fixedPx += parseInt(width, 10);
       continue;
     }
@@ -153,8 +172,13 @@ function readAddRowLayout(container) {
 
 /**
  * Reads back `growColumnWidth()`'s `calc((100% - Fpx) / N + Bpx)`. jsdom's CSS
- * serializer rewrites it — `calc(Bpx + 0.5 * (100% - Fpx))` for N=2 — so match the
- * three quantities wherever they landed instead of the literal source shape.
+ * serializer rewrites a live-mounted calc() — `calc(Bpx + 0.5 * (100% - Fpx))`
+ * for N=2 — so match the three quantities wherever they landed instead of the
+ * literal source shape; that tolerance also means this same regex-based
+ * reader keeps working when the text instead comes verbatim from
+ * server-rendered markup (see `readAddRowLayout` above), since the literal
+ * `calc(...)` string still contains all three of the same quantities the
+ * regex below looks for.
  */
 function parseGrowWidth(width) {
   const fixedPx = Number(/100%\s*-\s*(\d+)px/.exec(width)[1]);
@@ -182,8 +206,12 @@ function renderHeader(columns) {
   );
 }
 
-function renderAddRow(columns) {
-  return render(
+// Shared between `renderAddRow` (live mount — used for DOM assertions that
+// don't touch `<col>` widths, e.g. the `<td>` count) and `readAddRowLayout`
+// (server-rendered markup — the only reliable way to read a `<col>` width
+// that may contain `max(...)`, see its own doc comment).
+function addRowElement(columns) {
+  return (
     <DataTable
       columns={columns}
       data={[]}
@@ -203,8 +231,12 @@ function renderAddRow(columns) {
         onCancel: vi.fn(),
         catalogs: {},
       }}
-    />,
+    />
   );
+}
+
+function renderAddRow(columns) {
+  return render(addRowElement(columns));
 }
 
 /** Renders both renderers for the same columns and returns their width budgets. */
@@ -214,7 +246,7 @@ function layoutsFor(columns) {
   header.unmount();
 
   const addRow = renderAddRow(columns);
-  const addRowLayout = readAddRowLayout(addRow.container);
+  const addRowLayout = readAddRowLayout(columns);
   return { headerLayout, addRowLayout, addRow };
 }
 
@@ -268,5 +300,90 @@ describe('the reserved action slot itself (ETP-5245)', () => {
     // checkbox 40 + quantity 152 + amount 172 + right spacer 48 — no 160px slot.
     expect(headerLayout.fixedPx).toBe(412);
     expect(addRowLayout.calcFixedPx).toBe(412);
+  });
+});
+
+// ── growColumnWidth() — direct unit coverage ─────────────────────────────────────
+// Everything above only ever exercises the UNMEASURED branch (no live scroll host —
+// jsdom has no ResizeObserver, see readAddRowLayout's own doc comment): it always gets
+// back a calc() expression to decode. The MEASURED branch — the actual literal-pixel
+// arithmetic added by ETP-5133's BUG-1 fix (pass 2, see growColumnWidth()'s own doc
+// comment in DataTable.jsx) to reproduce flexbox's leftover-distribution against a real,
+// live scroll host — is never reached by mounting DataTable standalone, so it is
+// covered directly here with a synthetic `measured` object instead.
+describe('growColumnWidth()', () => {
+  it('without a measured host, returns the calc() expression restoring the column basis', () => {
+    expect(growColumnWidth(224, 992, 3)).toBe('calc((100% - 992px) / 3 + 224px)');
+    // A `measured` object whose hostWidthPx isn't finite yet (host not measured, or no
+    // live scroll host at all) also falls back to the calc() branch instead of throwing.
+    expect(growColumnWidth(130, 420, 2, { hostWidthPx: NaN, growBasisTotalPx: 260 }))
+      .toBe('calc((100% - 420px) / 2 + 130px)');
+  });
+
+  it('with a measured host and surplus, splits the leftover evenly on top of each basis', () => {
+    const basisPx = 130;
+    const fixedTotalPx = 420;
+    const growCount = 2;
+    const growBasisTotalPx = 260; // 2 * 130
+    const hostWidthPx = 900;
+
+    const width = growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx });
+    const expectedLeftoverPerColumn = (hostWidthPx - fixedTotalPx - growBasisTotalPx) / growCount;
+
+    expect(width).toBe(`${basisPx + expectedLeftoverPerColumn}px`);
+    // The property that actually makes this "correct": fixed budget + every grow
+    // column's resolved width must sum exactly to what the container measured.
+    expect(fixedTotalPx + growCount * parseInt(width, 10)).toBe(hostWidthPx);
+  });
+
+  it('keeps columns with different bases at different widths — the Persona regression (bases 224/224/320/224/224)', () => {
+    // This is the exact case that broke in Chrome: a per-column calc() was ignored and
+    // every column rendered at an identical width regardless of its own basis. The
+    // measured branch reproduces flexbox's own arithmetic in JS instead of relying on
+    // the browser to resolve a percentage per <col>.
+    const bases = [224, 224, 320, 224, 224];
+    const growCount = bases.length;
+    const growBasisTotalPx = bases.reduce((sum, b) => sum + b, 0);
+    const fixedTotalPx = 40; // checkbox only
+    const hostWidthPx = 1600; // comfortably fits
+
+    const widths = bases.map((basisPx) =>
+      growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx }),
+    );
+
+    expect(new Set(widths).size).toBeGreaterThan(1);
+    expect(widths[0]).toBe(widths[1]); // same basis -> same resolved width
+    expect(parseInt(widths[2], 10)).toBeGreaterThan(parseInt(widths[0], 10)); // wider basis (320) stays widest
+  });
+
+  it('clamps leftover at 0 under a deficit — columns keep their basis and overflow instead of shrinking', () => {
+    // Cuenta Bancaria-shaped deficit: the row demands ~1968px of real content in a
+    // ~1134px measured host.
+    const basisPx = 224;
+    const growCount = 5;
+    const growBasisTotalPx = basisPx * growCount; // 1120
+    const fixedTotalPx = 848; // total demand: 848 + 1120 = 1968
+    const hostWidthPx = 1134;
+
+    const widths = Array.from({ length: growCount }, () =>
+      growColumnWidth(basisPx, fixedTotalPx, growCount, { hostWidthPx, growBasisTotalPx }),
+    );
+
+    for (const w of widths) {
+      expect(w).toBe(`${basisPx}px`); // never squeezed below its own basis
+    }
+    // The row's real content demand still exceeds the measured host — that excess
+    // overflows (horizontal scroll); it never squeezes a column below its own basis.
+    expect(fixedTotalPx + growCount * basisPx).toBeGreaterThan(hostWidthPx);
+  });
+
+  it('returns undefined when there are no growing columns', () => {
+    expect(growColumnWidth(100, 500, 0)).toBeUndefined();
+  });
+});
+
+describe('getTableContainerStyle()', () => {
+  it('always returns the fixed table-layout, 100%-width style object', () => {
+    expect(getTableContainerStyle()).toEqual({ tableLayout: 'fixed', width: '100%' });
   });
 });

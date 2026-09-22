@@ -1,8 +1,8 @@
 {
-  "version": "0.89.0",
-  "generatedAt": "2026-08-07T13:07:42.785Z",
-  "updatedAt": "2026-09-14T18:30:38.298Z",
-  "checksum": "7d1889e746ca5e40",
+  "version": "0.88.0",
+  "generatedAt": "2026-09-17T15:12:05.781Z",
+  "updatedAt": "2026-09-18T17:56:38.949Z",
+  "checksum": "f0e8c4c90b1a6f43",
   "frontendContract": {
     "window": {
       "id": "167",
@@ -222,7 +222,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "!!record.id"
+              "js": "record['processed'] === true"
             }
           },
           {
@@ -1634,6 +1634,25 @@
             }
           },
           {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "label": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 10
+            }
+          },
+          {
             "name": "eTGODeliveryStatus",
             "apiKey": "eTGODeliveryStatus",
             "column": "em_etgo_delivery_status",
@@ -1663,25 +1682,6 @@
             "gridOrder": 8,
             "validation": {
               "maxLength": 0
-            }
-          },
-          {
-            "name": "eTGOTbaiStatus",
-            "apiKey": "eTGOTbaiStatus",
-            "column": "EM_ETGO_Tbai_Status",
-            "label": "EM_ETGO_Tbai_Status",
-            "type": "string",
-            "tsType": "string",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": false,
-            "computed": {
-              "mode": "stored",
-              "refresh": "synchronous"
-            },
-            "validation": {
-              "maxLength": 10
             }
           }
         ],
@@ -1832,7 +1832,10 @@
           "enabled": true,
           "processField": "documentAction",
           "processValue": "CO",
-          "label": "Confirm"
+          "label": "Confirm",
+          "keepSaveWhenCompletedFields": [
+            "accountingDate"
+          ]
         }
       },
       "lines": {
@@ -1864,6 +1867,7 @@
             ],
             "section": "principal",
             "gridOrder": 1,
+            "noTruncate": true,
             "validation": {
               "maxLength": 60
             },
@@ -4046,6 +4050,14 @@
             "required": false
           },
           {
+            "name": "eTGOTbaiStatus",
+            "apiKey": "eTGOTbaiStatus",
+            "column": "EM_ETGO_Tbai_Status",
+            "type": "string",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
             "name": "etcopagCopilotFeedback",
             "apiKey": "etcopagCopilotFeedback",
             "column": "EM_Etcopag_Cop_Feedback",
@@ -4266,14 +4278,6 @@
             "apiKey": "eTGODueDate",
             "column": "em_etgo_due_date",
             "type": "date",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
-            "name": "eTGOTbaiStatus",
-            "apiKey": "eTGOTbaiStatus",
-            "column": "EM_ETGO_Tbai_Status",
-            "type": "string",
             "visibility": "readOnly",
             "required": false
           }

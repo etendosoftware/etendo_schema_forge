@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import {
   resolvePositiveInt,
   getSurveyConfig,
@@ -232,16 +233,22 @@ describe('getRemoteCannedResponses', () => {
 });
 
 describe('loadRemoteSurveyConfig', () => {
-  it('does nothing when apiBaseUrl is null/undefined or token is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined or token is missing — inverted: the cookie carries the session', async () => {
     const fetchImpl = vi.fn();
     await loadRemoteSurveyConfig({ apiBaseUrl: null, token: 'tok', fetchImpl });
     await loadRemoteSurveyConfig({ apiBaseUrl: undefined, token: 'tok', fetchImpl });
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: null, fetchImpl });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchImpl).toHaveBeenCalled();
   });
 
   it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+        // ETP-4576 — the token argument is ignored by the shared builders: the credential comes
+    // from the active scheme, so the test declares the scheme instead of passing a value.
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok' });
     await loadRemoteSurveyConfig({ apiBaseUrl: '', token: 'tok', fetchImpl });
     expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/', {
       headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' },
@@ -252,6 +259,9 @@ describe('loadRemoteSurveyConfig', () => {
     const payload = { maxPerMonth: 9, canned: {} };
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
 
+        // ETP-4576 — the token argument is ignored by the shared builders: the credential comes
+    // from the active scheme, so the test declares the scheme instead of passing a value.
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok-123' });
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok-123', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
@@ -279,13 +289,16 @@ describe('loadRemoteSurveyConfig', () => {
 });
 
 describe('submitSurveyResponse', () => {
-  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing — inverted: the cookie carries the session', async () => {
     const fetchImpl = vi.fn();
     await submitSurveyResponse({ apiBaseUrl: null, token: 'tok', surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: undefined, token: 'tok', surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: '/etendo', token: null, surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: null, fetchImpl });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchImpl).toHaveBeenCalled();
   });
 
   it('posts the survey response with a Bearer token, JSON content type, and full body', async () => {

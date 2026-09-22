@@ -41,7 +41,7 @@ export function RoleChangedBanner() {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 z-50"
+      className="pointer-events-none fixed inset-x-0 top-0 z-50"
       role="status"
       aria-live="polite"
       data-testid="RoleChangedBanner__ecaf3f">
@@ -50,7 +50,8 @@ export function RoleChangedBanner() {
         icon={AlertTriangle}
         dismissible
         onDismiss={dismiss}
-        data-testid="role-changed-banner">
+        data-testid="role-changed-banner"
+        className="pointer-events-none [&_button]:pointer-events-auto">
         {ui('roleChangedBannerMessage')}
       </InfoBanner>
     </div>

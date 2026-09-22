@@ -226,6 +226,10 @@ export default function ReportDrawer({
   const [reportRows, setReportRows] = useState(null);
   const [error, setError] = useState(null);
   const [jsreportAvailable, setJsreportAvailable] = useState(null);
+  // Bumped on every "Vista previa" click so the render effect below re-runs even
+  // when activeFormat was already 'preview' (clicking preview a 2nd/3rd time is
+  // a no-op for React state otherwise, and the panel stays blank — ETP-5300).
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   const apiFetch = useApiFetch(apiBaseUrl);
 
@@ -237,7 +241,7 @@ export default function ReportDrawer({
 
   // Fetch all records when drawer opens
   useEffect(() => {
-    if (!open || !apiBaseUrl || !entity || !token) {
+    if (!open || !apiBaseUrl || !entity) {
       setReportRows(null);
       setError(null);
       return;
@@ -265,6 +269,26 @@ export default function ReportDrawer({
 
   // Store preview HTML so we can re-render and print reliably
   const previewHtmlRef = useRef('');
+  // Tracks whether the iframe currently shows a blob: URL (PDF view). Only in
+  // that case would we need to navigate the iframe away (via about:blank)
+  // before writing HTML again — doc.write() cannot replace a native PDF
+  // viewer. Reassigning `iframe.src = 'about:blank'` when it is ALREADY
+  // 'about:blank' (e.g. the 2nd/3rd consecutive preview click) is a
+  // same-value navigation: some browsers do not fire a fresh `load` event for
+  // it, which would leave writeToIframe waiting on an onload that never comes
+  // and the panel blank forever. Using this ref instead of inspecting
+  // iframe.src/getAttribute sidesteps that entirely — we simply know, from
+  // our own state transitions, whether a real navigation is required.
+  //
+  // Invariant (ETP-5300 review follow-up): `handleFormatClick`'s 'preview'
+  // branch resets this to `false` synchronously, right after the
+  // `removeAttribute('src')` call that already escapes the blob. Since
+  // `activeFormat` only ever becomes 'preview' through that handler, the
+  // render effect below is guaranteed to see `false` by the time it runs, so
+  // it always takes the direct-write branch — the about:blank+onload branch
+  // is unreachable through the current call graph and kept only as a
+  // defensive fallback (see the effect below).
+  const iframeShowingBlobRef = useRef(false);
 
   // Render preview into iframe when data is ready
   useEffect(() => {
@@ -273,18 +297,41 @@ export default function ReportDrawer({
     const writeToIframe = (html) => {
       previewHtmlRef.current = html;
       const iframe = iframeRef.current;
-      // Reset src to about:blank first (clears any blob URL from PDF view)
-      iframe.src = 'about:blank';
-      // Wait for blank page to load, then write HTML
-      iframe.onload = () => {
+
+      const writeDoc = () => {
         try {
           const doc = iframe.contentDocument;
           doc.open();
           doc.write(html);
           doc.close();
         } catch { /* cross-origin safety */ }
-        iframe.onload = null;
       };
+
+      if (iframeShowingBlobRef.current) {
+        // Defensive fallback only — per the invariant documented at the ref's
+        // declaration, `handleFormatClick` always resets the ref to `false`
+        // before `activeFormat` can become 'preview', so this branch should
+        // not be reachable through the current call graph. Kept in case a
+        // future code path sets `activeFormat` to 'preview' without going
+        // through that handler (e.g. a new entry point), in which case the
+        // iframe really could still be on a blob: URL and doc.write() would
+        // silently no-op against the native PDF viewer without this.
+        // This IS a genuine src change (blob: -> about:blank) when it does
+        // apply, so `load` reliably fires.
+        iframe.src = 'about:blank';
+        iframe.onload = () => {
+          iframeShowingBlobRef.current = false;
+          writeDoc();
+          iframe.onload = null;
+        };
+      } else {
+        // Already showing about:blank or HTML we wrote ourselves (same
+        // origin) — no navigation needed, write directly. This is what makes
+        // repeated "Vista previa" clicks redisplay the report instead of
+        // depending on a `load` event that a same-value src reassignment
+        // might not fire.
+        writeDoc();
+      }
     };
 
     const renderPreview = async () => {
@@ -311,7 +358,7 @@ export default function ReportDrawer({
     };
 
     renderPreview();
-  }, [open, fetchingData, reportRows, activeFormat, jsreportAvailable, columns, title, activeFilters]);
+  }, [open, fetchingData, reportRows, activeFormat, jsreportAvailable, columns, title, activeFilters, previewNonce]);
 
   const handlePrint = useCallback(() => {
     const iframe = iframeRef.current;
@@ -347,6 +394,7 @@ export default function ReportDrawer({
 
       if (format === 'pdf') {
         // Show PDF in iframe
+        iframeShowingBlobRef.current = true;
         iframeRef.current.src = url;
         setActiveFormat('pdf');
       } else {
@@ -365,9 +413,20 @@ export default function ReportDrawer({
 
   const handleFormatClick = useCallback((formatId) => {
     if (formatId === 'preview') {
-      setActiveFormat('preview');
-      // Clear iframe src if it was showing a PDF blob
+      // Clear iframe src if it was showing a PDF blob. removeAttribute already
+      // performs the "escape the blob" navigation, so reset the ref here too —
+      // this guarantees the render effect below always finds it `false` and
+      // takes the direct-write branch, eliminating the double-navigation/
+      // onload-wait race by construction (ETP-5300 review follow-up).
       if (iframeRef.current) iframeRef.current.removeAttribute('src');
+      iframeShowingBlobRef.current = false;
+      setActiveFormat('preview');
+      // Force the render effect to re-run even when activeFormat was already
+      // 'preview' (e.g. clicking "Vista previa" a 2nd/3rd time) — otherwise
+      // none of the effect's other dependencies change and it never re-fires,
+      // leaving the panel blank until the drawer is reopened or the format is
+      // switched away and back (ETP-5300).
+      setPreviewNonce(n => n + 1);
     } else {
       handleExport(formatId);
     }

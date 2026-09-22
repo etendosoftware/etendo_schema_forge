@@ -79,7 +79,8 @@
       "enabled": true,
       "processField": "documentAction",
       "processValue": "CO",
-      "label": "Confirm"
+      "label": "Confirm",
+      "keepSaveWhenCompletedFields": ["accountingDate"]
     },
     "dateFilterKey": "invoiceDate",
     "labelOverrides": {
@@ -401,8 +402,8 @@
           "grid": false,
           "reference": "DocumentType",
           "inputMode": "selector",
-          "readOnlyLogicJs": "!!record.id",
-          "readOnlyLogic": null,
+          "readOnlyLogicJs": null,
+          "readOnlyLogic": "@Processed@='Y'",
           "seq": 15
         },
         "documentType": {
@@ -599,6 +600,7 @@
           "section": "principal",
           "inputMode": "search",
           "displayLogic": null,
+          "noTruncate": true,
           "forceCalloutFields": [
             "listPrice",
             "unitPrice",

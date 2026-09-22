@@ -92,13 +92,15 @@
       "dedupe": { "scope": "database", "key": ["searchKey"] },
       "fields": [
         { "target": "searchKey", "aliases": ["codigo", "código", "sku"], "label": "Search Key", "required": true, "example": "SKU-1001" },
-        { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true, "example": "Tornillo hexagonal M8" },
-        { "target": "description", "aliases": ["descripcion", "descripción"], "example": "Tornillería inoxidable" },
-        { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false, "example": "Item" },
-        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false, "example": "Unidad" },
-        { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price", "isNumeric": true, "example": "12,50", "labelKey": "importHeaderSalesPrice" },
-        { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra", "coste", "costo"], "label": "Purchase Price", "isNumeric": true, "example": "8,20", "labelKey": "importHeaderPurchasePrice" },
-        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "column": "M_Product_Category_ID" }
+        { "target": "name", "aliases": ["nombre"], "label": "Name", "required": true, "example": "Tornillo hexagonal M8", "exampleKey": "importExampleProductName" },
+        { "target": "description", "aliases": ["descripcion", "descripción", "description"], "example": "Tornillería inoxidable", "exampleKey": "importExampleProductDescription" },
+        { "target": "productType", "aliases": ["tipo", "tipo de producto"], "label": "Product Type", "required": false, "example": "Item", "exampleKey": "importExampleProductType" },
+        { "target": "uOM", "aliases": ["unidad de medida", "unidad", "um", "uom"], "label": "Unit of Measure", "matchEntity": "UOM", "required": false, "example": "Unidad", "exampleKey": "importExampleProductUom" },
+        { "target": "salesPrice", "aliases": ["precio de venta", "precio venta", "precio", "pvp"], "label": "Sales Price", "isNumeric": true, "example": "12,50", "exampleKey": "importExampleProductSalesPrice", "labelKey": "importHeaderSalesPrice" },
+        { "target": "purchasePrice", "aliases": ["precio de compra", "precio compra"], "label": "Purchase Price", "isNumeric": true, "example": "8,20", "exampleKey": "importExampleProductPurchasePrice", "labelKey": "importHeaderPurchasePrice" },
+        { "target": "cost", "aliases": ["costo", "coste", "coste estandar", "coste estándar", "costo estandar", "costo estándar", "standard cost"], "label": "Cost", "required": false, "isNumeric": true, "example": "7,40", "exampleKey": "importExampleProductCost", "labelKey": "importHeaderCost" },
+        { "target": "costStartingDate", "aliases": ["fecha de inicio", "fecha inicio", "vigente desde", "fecha de inicio del coste", "starting date"], "label": "Cost Starting Date", "example": "01/01/2026", "exampleKey": "importExampleProductCostStartingDate", "labelKey": "importHeaderCostStartingDate" },
+        { "target": "category", "aliases": ["categoria", "categoría", "codigo categoria", "código categoría", "nombre categoria", "nombre categoría"], "label": "Category", "example": "Herramientas", "exampleKey": "importExampleProductCategory", "column": "M_Product_Category_ID" }
       ]
     }
   },
@@ -112,7 +114,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 1
+          "seq": 1,
+          "publicApi": { "exposed": true, "name": "searchKey", "type": "passthrough", "handlerId": null }
         },
         "name": {
           "grid": true,
@@ -126,13 +129,15 @@
               { "field": "searchKey", "labels": { "en_US": "Identifier", "es_ES": "Identificador" } },
               { "field": "name", "labels": { "en_US": "Name", "es_ES": "Nombre" } }
             ]
-          }
+          },
+          "publicApi": { "exposed": true, "name": "name", "type": "passthrough", "handlerId": null }
         },
         "description": {
           "type": "textarea",
           "section": "principal",
           "seq": 7,
-          "span": 3
+          "span": 3,
+          "publicApi": { "exposed": true, "name": "description", "type": "passthrough", "handlerId": null }
         },
         "productType": {
           "grid": true,
@@ -154,7 +159,8 @@
           "searchable": true,
           "reference": "ProductCategory",
           "section": "principal",
-          "seq": 4
+          "seq": 4,
+          "publicApi": { "exposed": true, "name": "category", "type": "passthrough", "handlerId": null }
         },
         "uOM": {
           "grid": true,
@@ -197,7 +203,8 @@
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "publicApi": { "exposed": true, "name": "salePrice", "type": "passthrough", "handlerId": null }
         },
         "eTGOPurchasePrice": {
           "visibility": "readOnly",
@@ -209,7 +216,8 @@
           "visibility": "readOnly",
           "grid": true,
           "form": false,
-          "section": "other"
+          "section": "other",
+          "publicApi": { "exposed": true, "name": "stock", "type": "passthrough", "handlerId": null }
         },
         "stocked": {
           "section": "other",

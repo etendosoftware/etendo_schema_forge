@@ -12,6 +12,7 @@ import {
   TBAI_REVERSEINVOICECODE_OPTIONS,
 } from '@/windows/custom/shared/useSifFieldPatcher.js';
 import SifAttachmentsSection from '@/windows/custom/shared/SifAttachmentsSection.jsx';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 function Field({ label, htmlFor, children }) {
@@ -36,34 +37,6 @@ function ReadOnlyValue({ id, value }) {
       readOnly
       className="bg-muted/40"
       data-testid="Input__b99c8b" />
-  );
-}
-
-function CheckboxField({ id, checked, disabled, onToggle }) {
-  return (
-    <div className="h-10 flex items-center">
-      <button
-        type="button"
-        role="checkbox"
-        id={id}
-        aria-checked={checked}
-        disabled={disabled}
-        onClick={() => !disabled && onToggle(!checked)}
-        className={[
-          'h-5 w-5 shrink-0 rounded-sm border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
-          'flex items-center justify-center transition-colors',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          checked ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent',
-        ].join(' ')}
-      >
-        {checked && (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-        )}
-      </button>
-    </div>
   );
 }
 
@@ -345,7 +318,7 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
   // either returns the authorization number (injected into updates) or an ERROR message.
   const handleAuthorizationToggle = useCallback(async (val) => {
     onChange?.('aeatsiiIsauthorization', val); // optimistic update
-    if (!apiBaseUrl || !token) return;
+    if (!apiBaseUrl) return;
     try {
       const res = await apiFetch('/header/callout', {
         method: 'POST',
@@ -587,12 +560,14 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
               label={ui('sifDataTabs.field.authorization')}
               htmlFor="sif-auth"
               data-testid="Field__b99c8b">
-              <CheckboxField
-                id="sif-auth"
-                checked={Boolean(getVal('aeatsiiIsauthorization'))}
-                disabled={siiFieldReadOnly}
-                onToggle={handleAuthorizationToggle}
-                data-testid="CheckboxField__b99c8b" />
+              <div className="h-10 flex items-center">
+                <CheckboxField
+                  id="sif-auth"
+                  checked={Boolean(getVal('aeatsiiIsauthorization'))}
+                  disabled={siiFieldReadOnly}
+                  onToggle={handleAuthorizationToggle}
+                  data-testid="CheckboxField__b99c8b" />
+              </div>
             </Field>
             {getVal('aeatsiiIsauthorization') && (
               <ReadOnlyField
@@ -620,12 +595,14 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 label={ui('sifDataTabs.field.registerError')}
                 htmlFor="sif-registerError"
                 data-testid="Field__b99c8b">
-                <CheckboxField
-                  id="sif-registerError"
-                  checked={Boolean(getVal('aeatsiiErrorRegistral'))}
-                  disabled={errorRegistralReadOnly}
-                  onToggle={val => onChange?.('aeatsiiErrorRegistral', val)}
-                  data-testid="CheckboxField__b99c8b" />
+                <div className="h-10 flex items-center">
+                  <CheckboxField
+                    id="sif-registerError"
+                    checked={Boolean(getVal('aeatsiiErrorRegistral'))}
+                    disabled={errorRegistralReadOnly}
+                    onToggle={val => onChange?.('aeatsiiErrorRegistral', val)}
+                    data-testid="CheckboxField__b99c8b" />
+                </div>
               </Field>
             )}
             <SifAttachmentsSection
@@ -691,12 +668,14 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 label={ui('sifDataTabs.field.simplifiedInvoiceArt7273')}
                 htmlFor="sif-vfSimp7273"
                 data-testid="Field__b99c8b">
-                <CheckboxField
-                  id="sif-vfSimp7273"
-                  checked={Boolean(getVal('etvfacSimpinvart7273'))}
-                  disabled={dateReadOnly}
-                  onToggle={val => onChange?.('etvfacSimpinvart7273', val)}
-                  data-testid="CheckboxField__b99c8b" />
+                <div className="h-10 flex items-center">
+                  <CheckboxField
+                    id="sif-vfSimp7273"
+                    checked={Boolean(getVal('etvfacSimpinvart7273'))}
+                    disabled={dateReadOnly}
+                    onToggle={val => onChange?.('etvfacSimpinvart7273', val)}
+                    data-testid="CheckboxField__b99c8b" />
+                </div>
               </Field>
             )}
             {shouldShowNoRecipientIdArt61d(vfInvType) && (
@@ -704,12 +683,14 @@ export default function SifTab({ recordId, data, token, apiBaseUrl, onChange, on
                 label={ui('sifDataTabs.field.noRecipientIdArt61d')}
                 htmlFor="sif-vfNoId61d"
                 data-testid="Field__b99c8b">
-                <CheckboxField
-                  id="sif-vfNoId61d"
-                  checked={Boolean(getVal('etvfacInvNoIDArt61d'))}
-                  disabled={dateReadOnly}
-                  onToggle={val => onChange?.('etvfacInvNoIDArt61d', val)}
-                  data-testid="CheckboxField__b99c8b" />
+                <div className="h-10 flex items-center">
+                  <CheckboxField
+                    id="sif-vfNoId61d"
+                    checked={Boolean(getVal('etvfacInvNoIDArt61d'))}
+                    disabled={dateReadOnly}
+                    onToggle={val => onChange?.('etvfacInvNoIDArt61d', val)}
+                    data-testid="CheckboxField__b99c8b" />
+                </div>
               </Field>
             )}
             {/* ETP-4783: "Tipo de Factura Rectificativa" (etvfacReverseinvtype) removed from UI.

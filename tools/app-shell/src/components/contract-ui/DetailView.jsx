@@ -119,7 +119,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -991,7 +991,7 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
-  setSelectedChildRows, setExecutingDetailProcess,
+  setSelectedChildRows, setExecutingDetailProcess, apiFetch: request = apiFetch,
 }) {
   const rows = explicitRows || selectedChildRows;
   const fieldValues = {};
@@ -1005,7 +1005,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return request(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
           body: JSON.stringify({ fieldValues }),
           token, baseUrl: '',
@@ -1233,7 +1233,7 @@ export function DetailView({
   // `displayLogic`) are willing to trust as config-driven dimension-macro
   // visibility, SCOPED TO THIS WINDOW INSTANCE ONLY — see `DIMENSION_MACRO_KEYS`
   // above for why the global allowlist itself must never include 'product'.
-  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md)
+  dimensionsPanelFieldKeys = [], lineRowActions = [], lineCellBadges = {}, initialData = null, // ETP-4888: generic per-row action / per-column badge slots forwarded to DetailTable.rowActions/.cellBadges (docs/ui-customization.md). ETP-5332: initialData seeds a new record — see useEntity.
 }) {
   // DetailView never needs the parent list: on `/new` there is no record to match, and on
   // `/:id` the currentItem shortcut only helps when we arrived from ListView (items already
@@ -1266,7 +1266,7 @@ export function DetailView({
       : (Form?.fields ?? []).filter(f => !gateExclusions.includes(f.key))),
     [Form, gateExclusions]
   );
-  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields });
+  const hook = useEntity(entity, detailEntity, { token, apiBaseUrl, skipListFetch: true, refetchAfterSave, specName: windowName, contractFields: gateFields, initialData });
   const apiFetch = useApiFetch(apiBaseUrl);
   // Session-level currency fallback. NEO Headless doesn't return
   // `currency$_identifier` on every line endpoint (only on the header), so we
@@ -1739,13 +1739,9 @@ export function DetailView({
       return () => clearTimeout(t);
     }
   }, [selectedChildRows.length, selectionBarVisible]);
-  // Per-tab close-animation timeouts. Kept in a ref so the lifecycle effect
-  // below doesn't have to depend on visibility state (which would cancel its
-  // own scheduled close on the next re-render).
+  // Per-tab close-animation timeout ids (kept in a ref so the effect below doesn't depend on visibility state).
   const secondaryBarTimeoutRef = useRef({});
-  // Mirrors the primary lifecycle, but iterates secondary tabs. Each tab's
-  // bar mounts when its selection becomes non-empty and slides out 250ms
-  // after the selection is cleared.
+  // Mirrors the primary close-line lifecycle per secondary tab: bar slides out 250ms after selection clears.
   useEffect(() => {
     for (const st of secondaryTabs) {
       const tabKey = st.key;
@@ -1767,9 +1763,9 @@ export function DetailView({
       }
     }
   }, [secondarySelectedRows, secondaryTabs]);
-  // Flush any pending secondary-bar close timeouts on unmount so they can't
-  // fire a setState after teardown (which throws "window is not defined" once
-  // the test/jsdom environment is gone).
+  // Flush pending secondary-bar, close-line and close-secondary-line timeouts on
+  // unmount so they can't fire a setState after teardown (which throws "window is
+  // not defined" once the test/jsdom environment is gone).
   useEffect(() => {
     const timeouts = secondaryBarTimeoutRef.current;
     return () => {
@@ -1777,6 +1773,8 @@ export function DetailView({
         clearTimeout(timeouts[key]);
         delete timeouts[key];
       }
+      clearTimeout(closeLineTimeoutRef.current);
+      clearTimeout(closeSecondaryLineTimeoutRef.current);
     };
   }, []);
   // Clear secondary-tab selection state when the active tab changes. The
@@ -1813,9 +1811,10 @@ export function DetailView({
   const [editingChild, setEditingChild] = useState(null);
   const [savingChild, setSavingChild] = useState(false);
 
+  const closeLineTimeoutRef = useRef(null);
   const closeLine = useCallback(() => {
     setIsClosingLine(true);
-    setTimeout(() => {
+    closeLineTimeoutRef.current = setTimeout(() => {
       setSelectedLine(null);
       setLineEdits(null);
       setLineEditColumns({});
@@ -1835,9 +1834,10 @@ export function DetailView({
     return translateBackendError(raw ?? `Error ${res.status}`, ui);
   }, [ui]);
 
+  const closeSecondaryLineTimeoutRef = useRef(null);
   const closeSecondaryLine = useCallback(() => {
     setIsClosingSecondaryLine(true);
-    setTimeout(() => {
+    closeSecondaryLineTimeoutRef.current = setTimeout(() => {
       setSelectedSecondaryLine(null);
       setSecondaryLineEdits(null);
       setSecondaryLineEditColumns({});
@@ -1908,7 +1908,7 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+    if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
 
@@ -2306,7 +2306,7 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -2391,7 +2391,7 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
+    if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // These fields are computed client-side — no callout needed.
@@ -2689,7 +2689,11 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  // ETP-4576 — hands down the hook's apiFetch, not the module-level one this file also
+  // imports. The two read the CSRF proof from different places, and only the hook's is
+  // reliably populated here: the module one sent this POST with no proof and the backend
+  // answered 403, which is what stopped every document confirm.
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
   const othersRef = useRef(null);
 
@@ -4322,10 +4326,7 @@ export function DetailView({
             key={st.key}
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
-            onSaved={() => {
-              secondaryHooks[idx]?.handleSelect(hook.selected ?? hook.editing);
-              setCustomModalState({ key: null, rowId: null });
-            }}
+            onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
             onParentRefresh={() => {
               if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
             }}

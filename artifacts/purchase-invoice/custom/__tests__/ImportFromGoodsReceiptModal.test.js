@@ -1,11 +1,29 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadCustomModule,
+  apiFetchToGlobalFetch,
+} from '../../../_test-support/loadCustomModule.js';
+import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromGoodsReceiptModal.jsx'), 'utf8');
+
+// The REAL production helpers, evaluated straight out of the .jsx — not a copy.
+// See artifacts/_test-support/loadCustomModule.js (ETP-5381).
+const { helpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromGoodsReceiptModal.jsx'),
+  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
+  // binding the loader strips); the stub forwards to `globalThis.fetch`,
+  // which is what the mocks below install.
+  { moduleApiFetch: apiFetchToGlobalFetch },
+);
+const { fetchDocuments, buildLineBody } = helpers;
+
+// The invoice-line -> order-line FK key, read from the generated contract
+// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
+const ORDER_LINE_FK = orderLineApiKey('purchase-invoice');
 
 describe('ImportFromGoodsReceiptModal — source shape', () => {
   it('exports a default function component', () => {
@@ -23,26 +41,6 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
     assert.match(src, /goods-receipt\/goodsReceipt/);
     assert.match(src, /purchase-invoice\/lines\?parentId=/);
     assert.match(src, /purchase-invoice\/header\/\$\{invoiceId\}/);
-  });
-
-  it('filters receipts by CO status, matching business partner, and not fully invoiced', () => {
-    assert.match(src, /documentStatus\s*===\s*'CO'/);
-    assert.match(src, /businessPartner\s*===\s*bpId/);
-    assert.match(src, /invoiced\s*!==\s*true/);
-  });
-
-  it('resolves receipt currency via the linked purchase order and never excludes receipts with no linked order', () => {
-    assert.match(src, /invoiceCurrency\s*=\s*invoiceHeader\.currency/);
-    assert.match(src, /purchase-order\/header\/\$\{id\}/);
-    assert.match(src, /documents\s*=\s*candidates\.filter\(r\s*=>\s*!r\.salesOrder\s*\|\|\s*orderCurrencyMap\[r\.salesOrder\]\s*===\s*invoiceCurrency\)/);
-  });
-
-  it('computes excludedByCurrency only when currency filtering removed every candidate', () => {
-    assert.match(src, /excludedByCurrency\s*=\s*documents\.length\s*===\s*0\s*&&\s*candidates\.length\s*>\s*0/);
-  });
-
-  it('returns excludedByCurrency in the fetchDocuments result', () => {
-    assert.match(src, /return\s*\{\s*documents,\s*sharedContext:[\s\S]*?,\s*excludedByCurrency,?\s*\}/);
   });
 
   it('wires the goods-receipt-specific i18n keys including the currency empty state', () => {
@@ -66,75 +64,14 @@ describe('ImportFromGoodsReceiptModal — source shape', () => {
     assert.match(src, /getDocDisplay=\{getDocDisplay\}/);
     assert.match(src, /buildLineBody=\{buildLineBody\}/);
   });
+
+  // ETP-5381: the sales side had drifted to `cOrderlineId`, a key absent from
+  // the spec, which NeoFieldFilter.filterRecord drops silently. The purchase
+  // side was always correct — this guard keeps it that way.
+  it('never mentions the non-existent cOrderlineId key', () => {
+    assert.doesNotMatch(src, /cOrderlineId/);
+  });
 });
-
-// ---------------------------------------------------------------------------
-// fetchDocuments — behavioral currency-filter tests
-//
-// M_InOut (goods receipt) has no currency column of its own — currency must be
-// resolved via the linked purchase order (candidate.salesOrder). This mirrors
-// the exact algorithm in the source (verified against the regex assertions
-// above) with a mocked fetch, since the component only exports a default React
-// wrapper.
-// ---------------------------------------------------------------------------
-
-async function fetchDocuments({ base, headers, bpId, invoiceId }) {
-  const [receiptRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/goods-receipt/goodsReceipt?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/purchase-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/purchase-invoice/header/${invoiceId}`, { headers }),
-  ]);
-
-  const alreadyImportedReceiptLines = new Set();
-  const alreadyImportedOrderLines = new Set();
-  if (invLinesRes.ok) {
-    const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => {
-      if (il.goodsShipmentLine) alreadyImportedReceiptLines.add(il.goodsShipmentLine);
-      if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine);
-    });
-  }
-
-  let invoiceHeader = {};
-  if (headerRes.ok) {
-    invoiceHeader = (await headerRes.json())?.response?.data?.[0] || {};
-  }
-
-  let candidates = [];
-  if (receiptRes.ok) {
-    const all = (await receiptRes.json())?.response?.data || [];
-    candidates = all.filter(r =>
-      r.documentStatus === 'CO'
-      && r.businessPartner === bpId
-      && r.invoiced !== true
-    );
-  }
-
-  const invoiceCurrency = invoiceHeader.currency || null;
-  let documents = candidates;
-  let excludedByCurrency = false;
-  if (invoiceCurrency) {
-    const orderIds = [...new Set(candidates.filter(r => r.salesOrder).map(r => r.salesOrder))];
-    const orderCurrencyMap = {};
-    await Promise.all(orderIds.map(async (id) => {
-      try {
-        const r = await fetch(`${base}/purchase-order/header/${id}`, { headers });
-        if (r.ok) {
-          const o = (await r.json())?.response?.data?.[0];
-          if (o) orderCurrencyMap[id] = o.currency;
-        }
-      } catch { /* ignore */ }
-    }));
-    documents = candidates.filter(r => !r.salesOrder || orderCurrencyMap[r.salesOrder] === invoiceCurrency);
-    excludedByCurrency = documents.length === 0 && candidates.length > 0;
-  }
-
-  return {
-    documents,
-    sharedContext: { invoiceHeader, alreadyImportedReceiptLines, alreadyImportedOrderLines },
-    excludedByCurrency,
-  };
-}
 
 function mockRes(ok, data) {
   return { ok, json: async () => ({ response: { data } }) };
@@ -144,10 +81,12 @@ function mockResSingle(ok, item) {
   return { ok, json: async () => ({ response: { data: item ? [item] : [] } }) };
 }
 
-function installFetch({ receipts, invLines = [], invoiceHeader = {}, orders = {} }) {
+function installFetch({ receipts = [], invLines = [], invoiceHeader = {}, orders = {} }) {
   globalThis.fetch = mock.fn(async (url) => {
     if (url.includes('/goods-receipt/goodsReceipt?')) return mockRes(true, receipts);
     if (url.includes('/purchase-invoice/lines?parentId=')) return mockRes(true, invLines);
+    if (url.includes('/purchase-invoice/lines/selectors/')) return { ok: true, json: async () => ({ items: [] }) };
+    if (url.includes('/purchase-invoice/lines/callout')) return { ok: false, json: async () => ({}) };
     if (url.includes('/purchase-invoice/header/')) return mockResSingle(true, invoiceHeader);
     const orderMatch = url.match(/\/purchase-order\/header\/([^/?]+)/);
     if (orderMatch) return mockResSingle(true, orders[orderMatch[1]] || null);
@@ -155,9 +94,22 @@ function installFetch({ receipts, invLines = [], invoiceHeader = {}, orders = {}
   });
 }
 
-describe('ImportFromGoodsReceiptModal — fetchDocuments currency filter', () => {
+describe('ImportFromGoodsReceiptModal — fetchDocuments filtering', () => {
   afterEach(() => {
     mock.reset();
+  });
+
+  it('filters receipts by CO status, matching business partner, and not-yet-invoiced', async () => {
+    installFetch({
+      receipts: [
+        { id: 'r1', documentStatus: 'CO', businessPartner: 'bp1', invoiced: false },
+        { id: 'rDraft', documentStatus: 'DR', businessPartner: 'bp1', invoiced: false },
+        { id: 'rOtherBp', documentStatus: 'CO', businessPartner: 'other-bp', invoiced: false },
+        { id: 'rInvoiced', documentStatus: 'CO', businessPartner: 'bp1', invoiced: true },
+      ],
+    });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.deepEqual(result.documents.map(d => d.id), ['r1']);
   });
 
   it('keeps a receipt whose linked order currency matches the invoice currency', async () => {
@@ -245,5 +197,70 @@ describe('ImportFromGoodsReceiptModal — fetchDocuments currency filter', () =>
     const ids = result.documents.map(d => d.id).sort();
     assert.deepEqual(ids, ['r1', 'r3']);
     assert.equal(result.excludedByCurrency, false);
+  });
+});
+
+describe('ImportFromGoodsReceiptModal — duplicate detection via the order line FK', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it('builds the already-imported order line set from the spec API key', async () => {
+    installFetch({ invLines: [{ id: 'il1', goodsShipmentLine: 'rl1', [ORDER_LINE_FK]: 'ol1' }] });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.ok(result.sharedContext.alreadyImportedOrderLines.has('ol1'));
+  });
+
+  it('ignores the legacy cOrderlineId key, which NEO never returns', async () => {
+    installFetch({ invLines: [{ id: 'il1', goodsShipmentLine: 'rl1', cOrderlineId: 'ol9' }] });
+    const result = await fetchDocuments({ base: '/b', headers: {}, bpId: 'bp1', invoiceId: 'inv1' });
+    assert.equal(result.sharedContext.alreadyImportedOrderLines.has('ol9'), false);
+  });
+});
+
+describe('ImportFromGoodsReceiptModal — buildLineBody order line FK (ETP-5381)', () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  const buildArgs = (line) => ({
+    line,
+    qty: 2,
+    invoiceId: 'inv1',
+    lineNo: 10,
+    sharedContext: { invoiceHeader: {}, productAuxMap: {} },
+    base: '/b',
+    headers: {},
+  });
+
+  // ETP-5381 REGRESSION GUARD (purchase side — the reference implementation).
+  // Posting the FK under a key the spec does not declare makes NeoFieldFilter
+  // drop it silently (HTTP 200, line created, C_OrderLine_ID NULL), which keeps
+  // the match table empty and skips `UPDATE C_ORDERLINE SET QtyInvoiced`,
+  // leaving the order invoiceable forever. Keep the working side working.
+  it('sends the receipt line source order line under the spec API key for C_OrderLine_ID', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(body[ORDER_LINE_FK], 'ol1');
+    assert.equal(body.goodsShipmentLine, 'rl1');
+  });
+
+  it('does not send the order line under a key the NEO spec would silently drop', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, 'cOrderlineId'), false);
+  });
+
+  it('sends an explicit null when the receipt line has no linked order line', async () => {
+    installFetch({});
+    const body = await buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: null, _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), true);
+    assert.equal(body[ORDER_LINE_FK], null);
   });
 });

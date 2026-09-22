@@ -45,6 +45,7 @@ vi.mock('@/components/ui/select', () => ({
 }));
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import * as formatCurrencyModule from '@/lib/formatCurrency.js';
@@ -86,6 +87,10 @@ function makePriceList(overrides = {}) {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('CreateInvoiceConfirmModal', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() =>
       Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) }),
@@ -173,35 +178,28 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.queryByText(/\$/)).toBeNull();
   });
 
-  // ── Checkbox state ─────────────────────────────────────────────────────────
+  // ── No create-invoice checkbox (ETP-5381) ──────────────────────────────────
+  // Every button that opens this modal already says "Crear factura", so the checkbox asked the
+  // user to confirm a confirmation — and unticking it left a dialog whose only action did nothing.
+  // The toggle in ConfirmInOutModal is a different case and stays: there the button says
+  // "Confirmar" and the invoice is genuinely optional.
 
-  it('starts with checkbox checked', () => {
-    const { container } = renderModal();
-    // The checkmark SVG polyline is rendered only when checked
-    expect(container.querySelector('polyline')).toBeInTheDocument();
+  it('does not render a create-invoice checkbox', () => {
+    renderModal();
+    expect(screen.queryByText('soCreateInvoiceTitle')).not.toBeInTheDocument();
+    expect(screen.queryByText('soGenerateDocs')).not.toBeInTheDocument();
   });
 
-  it('toggles checkbox when the row is clicked', () => {
-    const { container } = renderModal();
-    // Find the clickable checkbox row by its title text's parent
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow);
-    // After toggle: unchecked → no polyline
-    expect(container.querySelector('polyline')).not.toBeInTheDocument();
-  });
-
-  it('confirm button is enabled when checkbox is checked and not loading', () => {
+  it('confirm button is enabled straight away, with nothing left to tick', () => {
     renderModal();
     const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
     expect(confirmBtn).not.toBeDisabled();
   });
 
-  it('confirm button is disabled when checkbox is unchecked', () => {
-    renderModal();
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow); // uncheck
-    const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
-    expect(confirmBtn).toBeDisabled();
+  it('confirms without any prior interaction', () => {
+    const { props } = renderModal();
+    fireEvent.click(screen.getByText('soCreateDocsBtn'));
+    expect(props.onConfirm).toHaveBeenCalledWith('', []);
   });
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -267,17 +265,9 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(props.onConfirm).toHaveBeenCalledTimes(1);
     // ETP-4028: onConfirm is always called with the priceListId arg (unset here, since
     // the picker is not shown) — old call sites that ignore the arg keep working.
-    expect(props.onConfirm).toHaveBeenCalledWith('');
-  });
-
-  it('does not call onConfirm when checkbox is unchecked', () => {
-    const { props } = renderModal();
-    const checkboxRow = screen.getByText('soCreateInvoiceTitle').closest('div[style]');
-    fireEvent.click(checkboxRow); // uncheck
-    // Confirm button is disabled — verify attribute before asserting
-    const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
-    expect(confirmBtn).toBeDisabled();
-    expect(props.onConfirm).not.toHaveBeenCalled();
+    // ETP-5381: the second argument is the list of invoices this document rectifies —
+    // empty here because no rectifiable-invoice picker is wired into this render.
+    expect(props.onConfirm).toHaveBeenCalledWith('', []);
   });
 
   // ── pendingQtyUrl — subtitle behavior ─────────────────────────────────────
@@ -331,14 +321,19 @@ describe('CreateInvoiceConfirmModal', () => {
     expect(screen.getByText('soCreateInvoiceCheckDesc')).toBeInTheDocument();
   });
 
-  it('shows soGenerateDocs section label', () => {
-    renderModal();
-    expect(screen.getByText('soGenerateDocs')).toBeInTheDocument();
+  // ── pendingQtyTotal — bulk callers skip the single-document fetch ──────────
+
+  it('shows the pending subtitle from pendingQtyTotal without fetching pendingQtyUrl', () => {
+    renderModal({ pendingQtyUrl: '/api/pending', pendingQtyTotal: 8 });
+
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('shows soCreateInvoiceTitle inside the checkbox row', () => {
-    renderModal();
-    expect(screen.getByText('soCreateInvoiceTitle')).toBeInTheDocument();
+  it('treats pendingQtyTotal of 0 as a real value, not "no data"', () => {
+    renderModal({ pendingQtyTotal: 0 });
+    expect(screen.getByText(/soAmountPendingInvoice/)).toBeInTheDocument();
+    expect(screen.queryByText('soCreateInvoiceCheckDesc')).not.toBeInTheDocument();
   });
 
   // ── formatCurrency usage (ETP-4314 policy: no hand-rolled currency formatting) ──
@@ -410,6 +405,10 @@ describe('CreateInvoiceConfirmModal', () => {
       });
     });
 
+    // ETP-5410 follow-up: CreatableSearchSelect only renders its option list in the DOM
+    // once the field is focused (unlike the old native-<select> mock, whose <option>s were
+    // always present) — every filtering assertion below now focuses the field first.
+
     it('filters out inactive price lists', async () => {
       mockPriceListFetch([
         makePriceList({ id: 'active-1', name: 'Active PL', active: true }),
@@ -417,8 +416,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Active PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Active PL')).toBeInTheDocument();
       expect(screen.queryByText('Inactive PL')).not.toBeInTheDocument();
     });
 
@@ -429,8 +430,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Sales PL')).toBeInTheDocument();
       expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
     });
 
@@ -443,8 +446,10 @@ describe('CreateInvoiceConfirmModal', () => {
       // the sales price list and excluding the purchase one.
       renderModal({ showPriceListPicker: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Sales PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Sales PL')).toBeInTheDocument();
       expect(screen.queryByText('Purchase PL')).not.toBeInTheDocument();
     });
 
@@ -455,8 +460,10 @@ describe('CreateInvoiceConfirmModal', () => {
       ]);
       renderModal({ showPriceListPicker: true, isSOTrx: false, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('Purchase PL')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      expect(screen.getByText('Purchase PL')).toBeInTheDocument();
       expect(screen.queryByText('Sales PL')).not.toBeInTheDocument();
     });
 
@@ -545,7 +552,7 @@ describe('CreateInvoiceConfirmModal', () => {
         expect(screen.getByText('soCreateDocsBtn').closest('button')).not.toBeDisabled();
       });
       fireEvent.click(screen.getByText('soCreateDocsBtn'));
-      expect(onConfirm).toHaveBeenCalledWith('pl-selected');
+      expect(onConfirm).toHaveBeenCalledWith('pl-selected', []);
     });
 
     it('calls onConfirm with the user-selected priceListId after changing the select', async () => {
@@ -558,19 +565,250 @@ describe('CreateInvoiceConfirmModal', () => {
       await waitFor(() => {
         expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
-      fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-b' } });
+      // ETP-5410 follow-up: focus + mousedown an option, replacing the old mocked
+      // native-<select> `fireEvent.change`.
+      fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+      fireEvent.mouseDown(screen.getByTestId('option-invoice-confirm-price-list-pl-b'));
       fireEvent.click(screen.getByText('soCreateDocsBtn'));
-      expect(onConfirm).toHaveBeenCalledWith('pl-b');
+      expect(onConfirm).toHaveBeenCalledWith('pl-b', []);
     });
 
-    it('shows noPriceListsAvailable option when no price lists match', async () => {
+    // ETP-5410 follow-up: the old Radix-Select-based picker rendered an explicit
+    // "noPriceListsAvailable" option in this case. CreatableSearchSelect's own empty-state
+    // message only appears once the user has TYPED a non-matching search query (it has no
+    // "the whole catalog is empty" affordance of its own) — a real, narrow loss of an
+    // informational message, but not a functional one: the field renders with the correct
+    // resolvedLabel-based placeholder and, most importantly, the confirm button correctly
+    // stays disabled since priceListId can never resolve to anything.
+    it('renders normally (no crash) and keeps the confirm button disabled when no price lists match', async () => {
       mockPriceListFetch([]);
       renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl });
       await waitFor(() => {
-        expect(screen.getByText('noPriceListsAvailable')).toBeInTheDocument();
+        expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
       });
+      expect(screen.getByPlaceholderText(/salesPriceListField/)).toBeInTheDocument();
       const confirmBtn = screen.getByText('soCreateDocsBtn').closest('button');
       expect(confirmBtn).toBeDisabled();
+    });
+
+    // A bulk caller (e.g. BulkInvoiceFromShipment) has no other way to observe the picker's
+    // internal selection — it needs it to compute a per-line quote reactively.
+    describe('onPriceListChange — notifies the caller of the picker\'s internal selection', () => {
+      it('fires with the initial resolved/preselected priceListId', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({
+          showPriceListPicker: true, isSOTrx: true, apiBaseUrl,
+          data: makeData({ resolvedPriceListId: 'pl-b' }), onPriceListChange,
+        });
+        await waitFor(() => {
+          expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+        });
+      });
+
+      it('fires again when the user changes the selection', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })]);
+        const onPriceListChange = vi.fn();
+        renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl, onPriceListChange });
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+        onPriceListChange.mockClear();
+        fireEvent.focus(screen.getByTestId('field-invoice-confirm-price-list'));
+        fireEvent.mouseDown(screen.getByTestId('option-invoice-confirm-price-list-pl-b'));
+        expect(onPriceListChange).toHaveBeenCalledWith('pl-b');
+      });
+
+      it('is a no-op when omitted — the picker still works with no callback supplied', async () => {
+        mockPriceListFetch([makePriceList({ id: 'pl-a' })]);
+        expect(() => renderModal({ showPriceListPicker: true, isSOTrx: true, apiBaseUrl })).not.toThrow();
+        await waitFor(() => {
+          expect(screen.getByTestId('invoice-confirm-price-list-select')).toBeInTheDocument();
+        });
+      });
+    });
+  });
+
+  // ── rectifiable-invoice picker (ETP-5381) ─────────────────────────────────
+  //
+  // Second entry point of the same flow: the "Crear factura" button on an already-confirmed
+  // return document. The rectificative invoice is created AND confirmed in one step, and
+  // ETSG_CHECK_RECTIF_INV_DOC rejects it unless it declares which invoice it corrects — so the
+  // picker gates this modal's primary button exactly as it gates the pre-completion one.
+  describe('rectifiable-invoice picker (ETP-5381)', () => {
+    const RECTIFY_URL = '/sws/neo/return-material-receipt/returnReceipt/REC-001/action/rectifiableInvoices';
+
+    const RECTIFIABLE = [
+      { id: 'inv-1', documentNo: 'FAC-001', businessPartner: 'Acme Corp', invoiceDate: '2026-08-10', grandTotalAmount: 300, currency: 'EUR' },
+      { id: 'inv-2', documentNo: 'FAC-002', businessPartner: 'Globex SA', invoiceDate: '2026-08-11', grandTotalAmount: 200, currency: 'EUR' },
+    ];
+
+    function mockRectifyFetch({ invoices = RECTIFIABLE, suggestedInvoiceIds } = {}) {
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        if (String(url).includes('rectifiableInvoices')) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ response: { data: { invoices, suggestedInvoiceIds } } }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) });
+      }));
+    }
+
+    const confirmBtn = () => screen.getByText('soCreateDocsBtn').closest('button');
+    const openPicker = () => fireEvent.click(screen.getByTestId('invoice-confirm-rectify-open'));
+    const pick = (id) => fireEvent.click(screen.getByTestId(`invoice-confirm-rectify-option-${id}`));
+    const apply = () => fireEvent.click(screen.getByTestId('invoice-confirm-rectify-apply'));
+    // The dialog doubles as its own backdrop, so this is the cancel path that needs no label.
+    const dismissPicker = () => fireEvent.click(screen.getByTestId('invoice-confirm-rectify-picker-modal'));
+
+    it('is not rendered at all when no rectifiableInvoicesUrl is supplied', async () => {
+      mockRectifyFetch();
+      renderModal();
+      await act(async () => {});
+      expect(screen.queryByTestId('invoice-confirm-rectify-open')).not.toBeInTheDocument();
+      expect(confirmBtn()).not.toBeDisabled();
+      expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('rectifiableInvoices'))).toBe(false);
+    });
+
+    it('shows the compact field, keeping the catalogue behind the trigger', async () => {
+      mockRectifyFetch();
+      renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-open')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('invoice-confirm-rectify-option-inv-1')).not.toBeInTheDocument();
+    });
+
+    it('blocks the primary button until a picked invoice is applied', async () => {
+      mockRectifyFetch();
+      renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-open')).toBeInTheDocument();
+      });
+      expect(confirmBtn()).toBeDisabled();
+
+      openPicker();
+      pick('inv-1');
+      // A draft click is not a decision.
+      expect(confirmBtn()).toBeDisabled();
+
+      apply();
+      await waitFor(() => expect(confirmBtn()).not.toBeDisabled());
+    });
+
+    it('hands every applied invoice to onConfirm as the second argument', async () => {
+      mockRectifyFetch();
+      const { props } = renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-open')).toBeInTheDocument();
+      });
+      openPicker();
+      pick('inv-1');
+      pick('inv-2');
+      apply();
+      await waitFor(() => expect(confirmBtn()).not.toBeDisabled());
+
+      fireEvent.click(confirmBtn());
+      // C_Invoice_Reverse is a 1:N bridge — one return can correct several invoices.
+      expect(props.onConfirm).toHaveBeenCalledWith('', ['inv-1', 'inv-2']);
+    });
+
+    it('accepts the backend suggestion as a preselection', async () => {
+      mockRectifyFetch({ suggestedInvoiceIds: ['inv-2'] });
+      const { props } = renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-selected-inv-2')).toBeInTheDocument();
+      });
+      expect(confirmBtn()).not.toBeDisabled();
+      fireEvent.click(confirmBtn());
+      expect(props.onConfirm).toHaveBeenCalledWith('', ['inv-2']);
+    });
+
+    it('re-blocks the primary button when the last selected invoice is removed', async () => {
+      mockRectifyFetch({ suggestedInvoiceIds: ['inv-2'] });
+      renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => expect(confirmBtn()).not.toBeDisabled());
+      fireEvent.click(screen.getByTestId('invoice-confirm-rectify-remove-inv-2'));
+      await waitFor(() => expect(confirmBtn()).toBeDisabled());
+    });
+
+    it('discards the picker draft on cancel — the preselection survives untouched', async () => {
+      mockRectifyFetch({ suggestedInvoiceIds: ['inv-2'] });
+      const { props } = renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-selected-inv-2')).toBeInTheDocument();
+      });
+
+      openPicker();
+      pick('inv-1');   // add another one...
+      pick('inv-2');   // ...and drop the preselected one
+      dismissPicker(); // walk away without applying
+
+      expect(screen.queryByTestId('invoice-confirm-rectify-picker-modal')).not.toBeInTheDocument();
+      expect(screen.getByTestId('invoice-confirm-rectify-selected-inv-2')).toBeInTheDocument();
+      expect(screen.queryByTestId('invoice-confirm-rectify-selected-inv-1')).not.toBeInTheDocument();
+
+      fireEvent.click(confirmBtn());
+      expect(props.onConfirm).toHaveBeenCalledWith('', ['inv-2']);
+    });
+
+    it('keeps the primary button blocked when there is genuinely nothing to rectify', async () => {
+      mockRectifyFetch({ invoices: [] });
+      renderModal({ rectifiableInvoicesUrl: RECTIFY_URL });
+      await waitFor(() => {
+        expect(screen.getByTestId('invoice-confirm-rectify-empty')).toBeInTheDocument();
+      });
+      expect(confirmBtn()).toBeDisabled();
+    });
+  });
+
+  // ── cardAmountLabel — bulk callers with no single trustworthy total ────────
+  // A bulk toolbar action (N selected documents) has no linkedOrders total and no
+  // documentNo that means anything, so it passes a label instead of a `data` total.
+
+  describe('cardAmountLabel', () => {
+    it('overrides the computed total when provided', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56 }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
+    });
+
+    it('overrides the documentNo fallback when the total is 0', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 0, documentNo: 'SO-999' }), cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByText('SO-999')).not.toBeInTheDocument();
+    });
+
+    it('leaves the computed total untouched when omitted (single-record behavior unchanged)', () => {
+      renderModal({ data: makeData({ grandTotalAmount: 1234.56, 'currency$_identifier': 'EUR' }) });
+      expect(screen.getByText(/1\.234,56\s€/)).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5410 follow-up: a bulk caller used to pass cardAmountLabel=undefined while its own
+  // quote fetch was in flight, which just swapped a wrong-value flash for a blank-then-pop-in —
+  // also reported as jarring. A spinner was tried next and rejected too: at the ~100-250ms this
+  // resolves in, a spinning icon appearing and vanishing read as a glitch. cardAmountLoading now
+  // renders a static skeleton placeholder instead (same primitive NewPaymentEntryModal already
+  // uses for its own async fields — `@/components/ui/skeleton`), which has no motion of its own
+  // and so doesn't flicker even for a very brief show.
+  describe('cardAmountLoading', () => {
+    it('shows a skeleton placeholder instead of the amount, even when cardAmountLabel is also provided', () => {
+      renderModal({
+        data: makeData({ grandTotalAmount: 1234.56 }),
+        cardAmountLabel: '3 albaranes',
+        cardAmountLoading: true,
+      });
+      expect(screen.queryByText('3 albaranes')).not.toBeInTheDocument();
+      expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
+      expect(screen.getByTestId('Skeleton__cardAmount')).toBeInTheDocument();
+    });
+
+    it('shows the normal amount when false (default) — single-record and non-loading bulk callers are unaffected', () => {
+      renderModal({ cardAmountLabel: '3 albaranes' });
+      expect(screen.getByText('3 albaranes')).toBeInTheDocument();
+      expect(screen.queryByTestId('Skeleton__cardAmount')).not.toBeInTheDocument();
     });
   });
 });

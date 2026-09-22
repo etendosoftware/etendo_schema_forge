@@ -17,10 +17,15 @@
 
 // Kebab menu in the list selection toolbar that groups bulk creation actions
 // (Create Invoices / Create Shipments) for selected Sales Orders. Each action
-// fans out to the per-record NeoHandler endpoint and aggregates results via
-// sessionStorage, consumed by useBulkActionToast on next page load.
+// fans out to the per-record NeoHandler endpoint and aggregates the results into a
+// single toast. ETP-5302 — the aggregate is shown directly and the list refetches in
+// place via the `refresh` handed to the `bulkActions` slot; the sessionStorage-then-
+// full-reload handoff survives only as a fallback for hosts outside that slot.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -31,8 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
-
-const STORAGE_KEY = 'bulkActionResult';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
 
@@ -40,9 +45,9 @@ const DRAFT = 'DR';
 // { exists, count, id?, documentNo? } for a single sales-order ID. On a network
 // error the check fails open (lets the create call proceed) — matching the
 // "fail-open" pattern in OrderCreateInvoice.jsx.
-async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
+async function hasDraftInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`, { headers });
+    const res = await moduleApiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
     if (!res.ok) return false;
     const data = (await res.json())?.response?.data;
     return Boolean(data?.exists);
@@ -54,13 +59,13 @@ async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
 // No checkDraftShipment endpoint exists yet, so we query the goods-shipment
 // entity directly filtered by salesOrder — same pattern used in
 // OrderCreateInvoice.jsx for the single-record flow.
-async function hasDraftShipment(orderId, apiBaseUrl, headers) {
+async function hasDraftShipment(orderId, apiBaseUrl) {
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const criteria = encodeURIComponent(JSON.stringify([
       { fieldName: 'salesOrder', operator: 'equals', value: orderId },
     ]));
-    const res = await fetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`, { headers });
+    const res = await moduleApiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`);
     if (!res.ok) return false;
     const shipments = (await res.json())?.response?.data ?? [];
     return shipments.some((s) => s.documentStatus === DRAFT);
@@ -70,10 +75,6 @@ async function hasDraftShipment(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
   const isInvoice = action === 'createDraftInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -90,16 +91,16 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
       // proceed; the backend handler then rejects with "no pending lines" for
       // fully-fulfilled orders, which we surface as the row failure message.
       const alreadyHasDraft = isInvoice
-        ? await hasDraftInvoice(row.id, apiBaseUrl, headers)
-        : await hasDraftShipment(row.id, apiBaseUrl, headers);
+        ? await hasDraftInvoice(row.id, apiBaseUrl)
+        : await hasDraftShipment(row.id, apiBaseUrl);
       if (alreadyHasDraft) {
         const messageKey = isInvoice ? 'soBulkOrderHasDraftInvoice' : 'soBulkOrderHasDraftShipment';
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({}),
       });
       if (!res.ok) {
@@ -120,10 +121,13 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
     }));
   const ok = outcomes.length - failed.length;
 
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ ok, failed }));
+  // ETP-5302 — returns the result instead of persisting it. Persisting is only needed
+  // by the legacy reload path; when the list can refetch in place the caller shows the
+  // toast directly and sessionStorage never comes into play.
+  return { ok, failed };
 }
 
-export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl }) {
+export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
@@ -132,8 +136,20 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
   const handleSelect = (action) => async () => {
     if (running) return;
     setRunning(true);
-    await runBulkOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
+    const result = await runBulkOrderAction({ rows: selectedRows, action, apiBaseUrl, token, ui });
     setRunning(false);
+
+    // ETP-5302 — refetch the rows in place rather than reloading the whole browser page,
+    // matching BulkDocumentAction's button right next to this menu in the same bar.
+    if (refresh) {
+      clearSelection();
+      showBulkActionToast(ui, result);
+      refresh();
+      return;
+    }
+
+    // No refetch available (mounted outside ListView's `bulkActions` slot): legacy path.
+    persistBulkActionResult(result);
     setTimeout(() => {
       clearSelection();
       window.location.reload();

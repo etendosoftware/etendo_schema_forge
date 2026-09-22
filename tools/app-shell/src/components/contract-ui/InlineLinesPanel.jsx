@@ -3,6 +3,7 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,17 +16,17 @@ import { DateField } from '@/components/ui/date-field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useLabel, useLocaleSwitch, useUI } from '@/i18n';
 import { resolveRowCurrency } from '@/lib/rowCurrency.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 import { formatSignedDelta } from '@/lib/formatSigned.js';
 import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { resolveColumnLabel } from '@/lib/resolveColumnLabel.js';
 import { InlineSearchCombo } from './InlineSearchCombo.jsx';
-import { SelectorInput } from './SelectorInput.jsx';
 import { PillToggle } from '@/components/PillToggle';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { resolveLookupDrawer } from './lookupDrawers.js';
 import { columnFlex, isLineGridColumn } from '@/lib/linesColumnWidth.js';
 import { ACTION_SLOT_WIDTH_PX, resolveTrailingColumn } from '@/lib/linesActionSlot.js';
+import { registerLinesScrollHost, unregisterLinesScrollHost } from '@/lib/linesScrollHost.js';
 import { getEmailFieldError, getPhoneFieldError, getWebsiteFieldError } from './recipientEdits.js';
 import { getContactsTextFieldError } from './contactsFieldValidation.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
@@ -55,7 +56,11 @@ const TOKENS = {
 // the same pattern (`px-2` around the 28px/h-7 w-7 toggle button = 44px total) so the
 // chevron gets the same breathing room from the row's left border that every other
 // leading column already has — it previously had none, sitting flush against the edge.
-const CHECKBOX_COLUMN_WIDTH = 40;
+// Exported — DataTable's add-row form (InlineAddRow) reserves this SAME width
+// for its own leading checkbox/saving-spinner cell (ETP-5133), instead of a
+// second, independently-maintained `w-10` Tailwind guess that happened to
+// equal 40px today but had nothing tying it to this constant.
+export const CHECKBOX_COLUMN_WIDTH = 40;
 // Exported — DataTable's add-row-only companion table (see renderLinesColgroup
 // in DataTable.jsx) reserves a matching leading column so the two independently
 // mounted tables stay pixel-aligned when a dimensionsPanel column is present.
@@ -321,7 +326,14 @@ function renderDimensionsSubRow({
         <div className="mb-4 grid grid-cols-4 gap-4">
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">{ui('organization')} *</label>
-            <div className="h-10 flex items-center px-3 rounded-lg border border-[hsl(var(--border-control))] bg-card text-sm text-foreground">{row['organization$_identifier']}</div>
+            {/* ETP-5133 — matches DimensionGrid's own fields: a long org name
+                can overflow this fixed-width cell, so truncate + title give
+                it the same ellipsis-plus-tooltip treatment as every other
+                dimension field in this expand row. */}
+            <div
+              className="h-10 flex items-center px-3 rounded-lg border border-[hsl(var(--border-control))] bg-card text-sm text-foreground truncate"
+              title={row['organization$_identifier']}
+            >{row['organization$_identifier']}</div>
           </div>
         </div>
       )}
@@ -421,6 +433,33 @@ export function renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimen
  * grid column at all (see `hasDimensionsPanel` / the hover action + expand chevron it
  * replaced the column with).
  */
+// ETP-5133 — ellipsis policy is per-column, not a blanket default: most
+// columns (e.g. description) should ellipsize with a hover tooltip, but a
+// column can opt out via `noTruncate` (e.g. product) to show the FULL text
+// instead, scrolling horizontally within its own cell when it overflows
+// rather than being cut off. `overflowX: 'auto'` on the cell is what makes
+// that scroll possible; ReadCell and LookupTrigger (below) are what stop
+// clipping the text with `truncate` in the first place.
+//
+// When a cell is in edit mode, the input/trigger has its own px-2 (8px)
+// + 1px border = 9px of internal padding. Reducing the cell's outer
+// padding to 3px compensates: the input's CONTENT lands exactly where
+// read-mode text lands (cell_left + 12px), so values don't visually
+// jump when toggling between view and edit modes.
+//
+// Extracted out of renderLineCell so the truncate/numeric-alignment policy
+// scores against its own function, not the base cell renderer's.
+function computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx }) {
+  return {
+    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
+    flex: columnFlex(col, idx),
+    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
+    textAlign: isNumeric ? 'right' : 'left',
+    minWidth: 0,
+    ...(noTruncate ? { overflowX: 'auto' } : null),
+  };
+}
+
 function renderLineCell({
   col, idx, row, isEditing, showActions, trailingColumn, isDocumentReadOnly,
   visibleColumns, hasRowClick,
@@ -434,18 +473,8 @@ function renderLineCell({
 
   const isNumeric = NUMERIC_TYPES.has(col.type);
   const editable = isEditing && isCellEditable(col);
-  // When a cell is in edit mode, the input/trigger has its own px-2 (8px)
-  // + 1px border = 9px of internal padding. Reducing the cell's outer
-  // padding to 3px compensates: the input's CONTENT lands exactly where
-  // read-mode text lands (cell_left + 12px), so values don't visually
-  // jump when toggling between view and edit modes.
-  const baseStyle = {
-    padding: editable ? '0 3px' : `0 ${TOKENS.cellPaddingX}px`,
-    flex: columnFlex(col, idx),
-    justifyContent: isNumeric ? 'flex-end' : 'flex-start',
-    textAlign: isNumeric ? 'right' : 'left',
-    minWidth: 0,
-  };
+  const noTruncate = col.noTruncate === true;
+  const baseStyle = computeLineCellStyle({ editable, isNumeric, noTruncate, col, idx });
 
   const cellClickable = !isEditing && !hasRowClick && !isDocumentReadOnly;
   const cellContent = editable ? (
@@ -488,6 +517,7 @@ function renderLineCell({
   // and every caller that doesn't pass `cellBadges` at all, renders byte-for-byte
   // the same single-child markup as before this slot existed.
   const badge = cellBadges?.[col.key]?.(row) ?? null;
+  const badgedContentClassName = `min-w-0 flex-1${noTruncate ? '' : ' truncate'}`;
 
   return (
     <div
@@ -499,7 +529,7 @@ function renderLineCell({
     >
       {badge ? (
         <div className="flex w-full min-w-0 items-center gap-1.5">
-          <div className="min-w-0 flex-1 truncate">{cellContent}</div>
+          <div className={badgedContentClassName}>{cellContent}</div>
           {badge}
         </div>
       ) : cellContent}
@@ -516,20 +546,29 @@ function LookupTrigger({ field, displayLabel, selectorUrl, selectorContext, toke
   const ui = useUI();
   const [open, setOpen] = useState(false);
   const Drawer = resolveLookupDrawer(field.lookupDrawer);
+  // ETP-5133 — `noTruncate` (e.g. product) shows the full value instead of
+  // ellipsizing it: the button itself scrolls horizontally when the text
+  // overflows its width, rather than clipping it. Every other lookup/popup
+  // field (the default) keeps truncating with no behavior change.
+  const noTruncate = field.noTruncate === true;
+  const labelClassName = noTruncate ? 'flex-1 whitespace-nowrap' : 'flex-1 truncate';
   return (
     <>
       <button
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className="w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors"
+        className={[
+          'w-full flex items-center gap-2 h-7 rounded-md border border-input bg-card px-2 text-sm text-left hover:border-primary/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus-ring focus-visible:outline-none transition-colors',
+          noTruncate ? 'overflow-x-auto' : '',
+        ].filter(Boolean).join(' ')}
       >
         <Search
           className="h-3.5 w-3.5 text-muted-foreground shrink-0"
           data-testid={"Search__" + field.id} />
         {displayLabel
-          ? <span className="flex-1 truncate text-foreground">{displayLabel}</span>
-          : <span className="flex-1 truncate text-muted-foreground">{field.label || ui('search')}</span>}
+          ? <span className={`${labelClassName} text-foreground`}>{displayLabel}</span>
+          : <span className={`${labelClassName} text-muted-foreground`}>{field.label || ui('search')}</span>}
       </button>
       <Drawer
         open={open}
@@ -585,60 +624,90 @@ function renderDateCell(raw, locale) {
   }
 }
 
+// Line-level `amount` cells show no currency symbol by default — the currency belongs to the
+// document and is shown at header level, so repeating it on every line is noise.
+//
+// ETP-5245 makes that opt-in per column: a column that declares `currencyField` in
+// decisions.json is saying "these rows do NOT share one currency", which is true of any grid
+// that is not a single document's lines. Product > Costing is the first: M_Costing rows carry
+// their own currency and a real tenant holds 1663 USD rows next to 1545 EUR ones, so an
+// unlabelled number there is ambiguous rather than tidy. Columns that declare nothing keep
+// rendering exactly as before — this must stay opt-in, since it is shared by every
+// inline-lines grid in the app. Extracted out of ReadCell so this branch's own ternary scores
+// against its own function, not the type-dispatcher's.
+function renderAmountReadCell(row, col) {
+  const isoCode = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
+  return <span className="tabular-nums">{formatCurrency(isoCode, row[col.key])}</span>;
+}
+
+function renderPercentReadCell(row, col) {
+  const val = Number(row[col.key]);
+  return <span className="tabular-nums">{Number.isFinite(val) ? `${val}%` : '—'}</span>;
+}
+
+function renderSignedDeltaReadCell(row, col) {
+  const { text, tone } = formatSignedDelta(row[col.key]);
+  return (
+    <span
+      className="block text-right tabular-nums"
+      style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function isEnumLikeType(type) {
+  return type === 'enum' || type === 'select' || type === 'status';
+}
+
+// ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw display text; resolve
+// through ui() like EditCell already does. Returns null when the row's raw value has no
+// enumLabels entry, signaling ReadCell to fall through to the generic identifier-based
+// rendering below (untranslated) instead of returning here.
+function renderEnumReadCell(row, col, ui) {
+  const raw = row[col.key];
+  const key = col.enumLabels?.[raw];
+  if (key == null) return null;
+  const label = ui?.(key) ?? key;
+  return <span className="block truncate" title={label || undefined}>{label}</span>;
+}
+
+// ETP-5133 — per-column ellipsis policy (see `noTruncate` in renderLineCell): most columns
+// ellipsize with a hover tooltip, but a column can opt out (e.g. product) to show the full
+// value instead — the cell itself scrolls horizontally when it overflows (see the
+// `overflowX: 'auto'` on renderLineCell's wrapper), so no `truncate` and no tooltip needed
+// here (the text is already fully visible/reachable). Extracted out of ReadCell so this
+// branch's own nested check scores against its own function, not the type-dispatcher's.
+function renderStringReadCell(display, col) {
+  if (col.noTruncate) {
+    return <span className="block whitespace-nowrap">{display}</span>;
+  }
+  return <span className="block truncate" title={display || undefined}>{display}</span>;
+}
+
 function ReadCell({ row, col, locale, t, ui }) {
   if (typeof col.render === 'function') {
     return col.render(row, {});
   }
-  if (col.type === 'amount') {
-    // Line-level cells show no currency symbol by default — the currency belongs to the document
-    // and is shown at header level, so repeating it on every line is noise.
-    //
-    // ETP-5245 makes that opt-in per column: a column that declares `currencyField` in
-    // decisions.json is saying "these rows do NOT share one currency", which is true of any grid
-    // that is not a single document's lines. Product > Costing is the first: M_Costing rows carry
-    // their own currency and a real tenant holds 1663 USD rows next to 1545 EUR ones, so an
-    // unlabelled number there is ambiguous rather than tidy. Columns that declare nothing keep
-    // rendering exactly as before — this must stay opt-in, since it is shared by every
-    // inline-lines grid in the app.
-    const isoCode = col.currencyField ? resolveRowCurrency(row, col, undefined) : undefined;
-    return <span className="tabular-nums">{formatCurrency(isoCode, row[col.key])}</span>;
-  }
-  if (col.type === 'percent') {
-    const val = Number(row[col.key]);
-    return <span className="tabular-nums">{Number.isFinite(val) ? `${val}%` : '—'}</span>;
-  }
-  if (col.type === 'signedDelta') {
-    const { text, tone } = formatSignedDelta(row[col.key]);
-    return (
-      <span
-        className="block text-right tabular-nums"
-        style={{ fontWeight: 600, color: SIGNED_DELTA_TONE_COLOR[tone] }}
-      >
-        {text}
-      </span>
-    );
-  }
-  if (col.type === 'boolean') {
-    return renderBooleanCell(row[col.key], ui);
-  }
-  if (col.type === 'date') {
-    return renderDateCell(row[col.key], locale);
-  }
-  // ETP-4685 — enumLabels values are i18n keys (buildEnumLabelKey), not raw
-  // display text; resolve through ui() like EditCell already does, or the
-  // read-only cell (what the user sees before ever clicking to edit it)
-  // falls through to the raw backend identifier below, untranslated.
-  if (col.type === 'enum' || col.type === 'select' || col.type === 'status') {
-    const raw = row[col.key];
-    const key = col.enumLabels?.[raw];
-    if (key != null) {
-      const label = ui?.(key) ?? key;
-      return <span className="block truncate" title={label || undefined}>{label}</span>;
-    }
-  }
+  if (col.type === 'amount') return renderAmountReadCell(row, col);
+  if (col.type === 'percent') return renderPercentReadCell(row, col);
+  if (col.type === 'signedDelta') return renderSignedDeltaReadCell(row, col);
+  if (col.type === 'boolean') return renderBooleanCell(row[col.key], ui);
+  if (col.type === 'date') return renderDateCell(row[col.key], locale);
+  const enumRendered = isEnumLikeType(col.type) ? renderEnumReadCell(row, col, ui) : null;
+  if (enumRendered) return enumRendered;
   const display = resolveIdentifier(row, col.key);
+  // ETP-5107 (reopened) — a numeric column that is NOT amount/price-shaped (number, decimal,
+  // integer, quantity) reaches here, and rendering it bare printed JS's own '.' next to a
+  // comma-formatted Precio on the same row: the `% de descuento` = `10.5` vs `Precio` = `44,00`
+  // screenshot QA reopened this ticket with. The masked EDIT cell above was fixed first; this is
+  // the READ-ONLY cell, the one a user sees without clicking anything, and it is a separate path.
+  if (NUMERIC_TYPES.has(col.type)) {
+    return <span className="tabular-nums">{formatPlainDecimal(display)}</span>;
+  }
   if (typeof display === 'string') {
-    return <span className="block truncate" title={display || undefined}>{display}</span>;
+    return renderStringReadCell(display, col);
   }
   return <span>{display ?? ''}</span>;
 }
@@ -992,6 +1061,24 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
   const handleBodyScroll = useCallback((e) => {
     if (headerScrollRef.current) headerScrollRef.current.scrollLeft = e.currentTarget.scrollLeft;
   }, []);
+  // ETP-5133 — while the sibling add-row form is active (`lineFormActive`, the
+  // un-stripped twin of DataTable's own `addRow.active` — see that prop's own
+  // doc comment), reserve a real DOM anchor INSIDE this scroll body and hand it
+  // to DataTable's add-row via lib/linesScrollHost.js, so the add-row's
+  // `<table>` mounts as a genuine child of the SAME scrollable element the rows
+  // above scroll in (one native scrollbar, one column-width source) instead of
+  // a second, independently-scrolled table that goes out of sync mid-scroll.
+  // useLayoutEffect (not useEffect) so the registration lands before paint —
+  // and before the sibling DataTable's own effect looks it up, matching React's
+  // sibling effect order for a fragment that mounts both in one commit.
+  const addRowHostRef = useRef(null);
+  useLayoutEffect(() => {
+    if (!lineFormActive) return undefined;
+    const node = addRowHostRef.current;
+    if (!node) return undefined;
+    registerLinesScrollHost(entity, node);
+    return () => unregisterLinesScrollHost(entity, node);
+  }, [entity, lineFormActive]);
 
   // Close edit mode when the user clicks outside the editing row. Defers the state
   // update to the next tick so any focused input fires its onBlur first — that triggers
@@ -1135,7 +1222,8 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
     : `0 0 ${ACTION_SLOT_WIDTH_PX}px`;
 
   // ETP-4529 — at most one column may declare `type: 'dimensionsPanel'` (see
-  // InvoiceLinesTable.jsx for a caller example). When present (and at least one
+  // artifacts/{window}/generated/web/{window}/LinesTable.jsx for a caller
+  // example). When present (and at least one
   // candidate field is visible), an extra leading expand-chevron column and a
   // full-width sub-row (the shared DimensionGrid) render for whichever row is
   // expanded. ETP-4610 replaced the fixed-column entry point (badges / "+ Add
@@ -1542,6 +1630,16 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
           after the add-row form instead, so it never sits between the saved
           lines and the form. */}
       {!lineFormActive && renderBalanceFooterRow({ balanceFooter, visibleColumns, hasDimensionsPanel, reserveActionSlot, cellStyle })}
+      {/* ETP-5133 — portal target for the sibling DataTable's add-row (and,
+          while it's active, its own balance-footer render — see the
+          lineFormActive branch above). Empty div, no width/height of its own:
+          DataTable's `useLinesScrollHost('entity')` portals its add-row
+          `<table>` in here once registered, so it scrolls horizontally with
+          the rows above it via this SAME `overflow-x-auto` ancestor instead of
+          a second, independently-scrolled table. Renders (and registers)
+          ONLY while lineFormActive, mirroring exactly when DataTable is
+          expected to be mounted in add-row-only mode. */}
+      {lineFormActive && <div ref={addRowHostRef} data-testid="inline-add-row-host" />}
       </div>
     </div>
   );

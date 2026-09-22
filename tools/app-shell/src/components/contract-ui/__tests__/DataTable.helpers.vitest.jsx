@@ -139,17 +139,23 @@ describe('DataTable helpers', () => {
   // (here, the header row, since <TableHeader> precedes <TableBody> in the
   // DOM) ONCE, and does not recompute from body content afterward — so
   // applying it unconditionally stops the resize regardless of hideHeader.
+  // ETP-5332 (origin/develop) gave `getTableContainerStyle` an optional
+  // `minWidthPx` budget parameter that added a literal `minWidth` to the
+  // returned style. That approach was superseded by this ticket's own later
+  // fix (ETP-5133, BUG-1 pass 2): a JS-measured `growColumnWidth()` using a
+  // `ResizeObserver` (see DataTable.jsx's own doc comments around
+  // `growColumnWidth`/`renderLinesColgroup`). The merged, real
+  // `getTableContainerStyle()` takes zero arguments and never returns a
+  // `minWidth` — assert that contract directly instead of the superseded one.
   describe('getTableContainerStyle', () => {
-    it('sets table-layout: fixed in hideHeader (add-row-only) mode', () => {
-      expect(getTableContainerStyle(true)).toEqual({ tableLayout: 'fixed', width: '100%' });
+    it('takes no arguments and always returns the plain fixed-layout shape', () => {
+      expect(getTableContainerStyle()).toEqual({ tableLayout: 'fixed', width: '100%' });
+      expect(getTableContainerStyle()).not.toHaveProperty('minWidth');
     });
 
-    it('also sets table-layout: fixed in normal list-header mode (ETP-5182 fix)', () => {
-      expect(getTableContainerStyle(false)).toEqual({ tableLayout: 'fixed', width: '100%' });
-    });
-
-    it('returns the same style object shape regardless of hideHeader', () => {
-      expect(getTableContainerStyle(true)).toEqual(getTableContainerStyle(false));
+    it('ignores extra arguments (no minWidth budget parameter exists)', () => {
+      expect(getTableContainerStyle(992)).toEqual({ tableLayout: 'fixed', width: '100%' });
+      expect(getTableContainerStyle(992)).not.toHaveProperty('minWidth');
     });
   });
 });

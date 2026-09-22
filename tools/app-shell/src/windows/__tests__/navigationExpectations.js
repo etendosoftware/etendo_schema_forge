@@ -17,16 +17,27 @@ const groups = {
   Inventory: 'product product-category physical-inventory goods-movements internal-consumption warehouse report-viewer-inventory',
   Finance: 'payment-in payment-out financial-account chart-of-accounts cost-center service-project general-ledger-configuration calendar assets asset-group amortization not-posted-documents simple-g-l-journal fiscal-monitor conversion-rates fiscal-models tax tax-category report-viewer-finance',
   Connections: 'authorize',
-  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles acct-process-monitor fiscal-config',
+  Settings: 'organization document-sequence price-list payment-term business-partner-category user roles api-keys acct-process-monitor fiscal-config',
 };
 
 // Composition aliases documented in calendar/fiscal-monitor/fiscal-config guides.
 const aliases = { calendar: 'fiscal-calendar', 'fiscal-monitor': 'sii-monitor', 'fiscal-config': 'sii-config' };
 const exceptions = {
   dashboard: {},
-  'first-steps': {},
+  // ETP-5395 — gated to the account Owner via the `isOwner` capability
+  // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
+  // so it does not participate in the accessWindowId admin bypass or in the
+  // `roles`/`acct-process-monitor` capability-sibling set.
+  //
+  // ETP-5364 — ALSO the only entry declaring `hideWhenFirstStepsDismissed`, the fourth menu
+  // axis: a user preference rather than a permission, so it is not part of
+  // `navigationPermissions()` (which models grants). A caller filtering the catalog has to pass
+  // `false` as `filterMenuGroupsByAccess`'s 5th argument to mean "not dismissed"; omitting it
+  // fails closed and drops this entry, deliberately — see registry.vitest.jsx.
+  'first-steps': { capability: 'isOwner', hideWhenFirstStepsDismissed: true },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
+  'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
   // ETP-5269. Synthetic destination (runtime-routes.jsx), no AD window of its own.
   // Additionally hidden behind the `acct-process-monitor` feature flag. That gate lives in
   // SideMenu and is invisible to buildMenuGroups — the boundary this catalog measures — so here
@@ -67,7 +78,18 @@ export const optionalNavigation = [
 // exclusions. App Store is classified above, not permanently hidden.
 // ETP-5196 — smart-scan moved here (hidden: true in menu.json); its runtime
 // access gate lives in SmartScanPage.jsx's own content gate, unaffected by this.
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan'.split(' ');
+// ETP-5402 — the 9 Informes-subsection report rows the real report-viewer gallery shows
+// (tax-report, both aging schedules, inventory-stock-report, and the 5 financial-family
+// reports resolved via the "Informes financieros" pseudo-window — balance-sheet,
+// profit-loss, report-general-ledger, report-journal-entries, report-trial-balance), each
+// `hidden: true` and carrying a `reportId` (not windowId/obuiappProcessId/processId/
+// accessWindowId) — a grant-only identity key SideMenu's own filterMenuGroupsByAccess
+// never reads at all. Their real access gate is server-side (SFRolesOverview/
+// SFSystemRoleTemplates -> ReportAccessCatalog); `reportId` exists purely so the
+// "Configuración > Roles" and "Roles del usuario" matrices can resolve a category/label
+// override for them (same convention as match-rule/fiscal-calendar above, no live
+// sidebar link either).
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan tax-report aging-receivable aging-payable inventory-stock-report balance-sheet profit-loss report-general-ledger report-journal-entries report-trial-balance'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },

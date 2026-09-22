@@ -44,6 +44,15 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "statusPills": [
@@ -377,6 +386,7 @@
           "section": "principal"
         },
         "movementQuantity": {
+          "visibility": "editable",
           "grid": true,
           "gridOrder": 2,
           "inputMode": "number",

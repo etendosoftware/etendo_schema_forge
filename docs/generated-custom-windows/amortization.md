@@ -359,7 +359,7 @@ keys through as explicit props).
 ## ETP-4538 — Reactivate replaces Unpost on posted amortizations
 
 - The three-dot menu no longer exposes the independent **Descontabilizar** (`unpost`) action for amortization documents.
-- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow.
+- **Reactivar** is visible whenever the document is processed (`processed='Y'`), including records whose accounting status is posted (`posted='Y'`). For posted records, `preUnpost: true` makes the UI call the existing unpost endpoint before triggering the `Processed` action; for unposted records, only the `Processed` action runs. This matches the Etendo Go document lifecycle rule: reactivation is the single user action and accounting reversal is part of that flow. **ETP-5302:** that behaviour is unchanged, but it is no longer implemented inline in `DetailMoreActionsMenu.jsx` — the rule now lives in `tools/app-shell/src/lib/preUnpost.js` (`isPosted(row)` + `runPreUnpost({recordId, record, enabled, execute})`), shared with the list's bulk bar. **Update (ETP-5414):** Amortization now DOES mount `preUnpostActions` for its bulk "Reactivar" (`preUnpostActions={['reactivate']}` in `AmortizationBulkActions.jsx`) and its row-kebab "Reactivar" (`preUnpost: true` on the `menuActions` entry in `tools/app-shell/src/windows/custom/amortization/index.jsx`) — see the ETP-5414 section below for the full mechanism, including the residual grid-vs-DB race this introduces.
 - Role-based access restrictions for **Reactivar** are deferred until the role permissions model exists.
 
 ## ETP-4979 — List column-sort click was dead on the "Fecha contable" (desc-default) column
@@ -399,11 +399,15 @@ column and into the row hover-action strip via `InlineLinesPanel`'s generic `row
 `docs/feedback.md` entries).
 
 **Investigated first: wrap `InlineLinesPanel` instead of hand-patching?** `AmortizationLinesTable`
-is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike
-`InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`, which are thin adapters that just forward
-`DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`, `addRow`, hidden-column
-visibility, selection state) into `InlineLinesPanel`. `AmortizationLinesTable` instead owns *all*
-of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
+is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike the
+pipeline-generated `LinesTable.jsx` used by the 5 windows named above (e.g.
+`artifacts/sales-invoice/generated/web/sales-invoice/LinesTable.jsx`), which is a thin generated
+wrapper that just forwards `DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`,
+`addRow`, hidden-column visibility, selection state) into `InlineLinesPanel`. (Two earlier
+hand-written adapters aiming at the same shape, `InvoiceLinesTable.jsx` and
+`SalesInvoiceLinesTable.jsx`, were deleted as dead code under ETP-5133 — they never actually
+rendered for either window; see `sales-invoice.md`'s "Dead custom lines-table components removed"
+section.) `AmortizationLinesTable` instead owns *all* of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
 `{apiBaseUrl}/lines[/…]`, its own multi-select + `SelectionToolbar` wiring, and — critically — its
 own inline "add line" draft row (Sales-Order-style: Enter-to-save-and-reopen, Esc-to-cancel,
 click-outside-to-save), a flow `InlineLinesPanel` has no equivalent for at all (that pattern lives
@@ -508,6 +512,154 @@ requiring another live-UX bug report.
 
 **Still not visually verified in a real browser** — same environment constraint as above. The user
 will confirm the actual pixel result against the deployed instance.
+
+## ETP-5414 — Bulk and per-row Confirmar/Reactivar/Contabilizar
+
+ETP-5414's "mejora 3" (bulk/row processing) is the only part of that ticket that touches this
+window. Mejora 1 (assets bulk-generate amortization) and mejora 2 (% amortizado shown on
+`/assets`) were both scoped to `/assets`, not `/amortization` — see that window's own doc, not
+this one, for them.
+
+Three actions — **Confirmar**, **Reactivar**, **Contabilizar** — are now available two ways: as
+buttons on the list's multi-select floating bar (`AmortizationBulkActions.jsx`), and individually
+on each grid row's three-dot kebab (`tools/app-shell/src/windows/custom/amortization/index.jsx`).
+Both surfaces share the exact same eligibility rules and, where relevant, the exact same helper
+functions — never two hand-copied definitions of "can this row be confirmed/reactivated/posted".
+
+### Wire mechanism — why Confirmar and Reactivar are the same server call
+
+Both actions hit `POST {apiBaseUrl}/header/{id}/action/Processed`. The request body is ignored
+server-side (`NeoButtonActionHelper.executeButtonActionCore` never reads a `fieldValues` key); the
+server-side process `a_amortization_process` (PL/pgSQL) decides which direction to run by
+re-reading the row's CURRENT `Processed`/`Posted` columns at execution time, not from anything the
+client sends:
+
+```sql
+IF (Processed='Y' AND Posted<>'Y') THEN  -- unprocess (reactivate)
+ELSIF (Processed='N') THEN               -- process (confirm), plus org/period checks
+ELSIF (Posted='Y') THEN RAISE EXCEPTION '@AmortizationDocumentPosted@';
+END IF;
+```
+
+Because both intents share one wire action, `BulkDocumentAction.jsx` (the shared multi-select
+component) gained an optional `neoActionName` field per offered action, decoupling the
+dropdown/UI identity (`value: 'confirm'` / `value: 'reactivate'`) from the literal URL segment
+both map to (`neoActionName: 'Processed'`). `RowQuickActions.jsx` (the shared per-row kebab
+component) gained the same `neoActionName` field for symmetry, plus an optional `preUnpost` flag
+on a `neoAction`-typed `menuActions` entry (see Reactivar below).
+
+**Contabilizar has no such ambiguity** — its wire action (`neoAction: 'post'`) is a real, distinct
+button/process, handled generically by `DocumentPostingService.handleAction` (the same bean
+`sales-invoice`/`purchase-invoice` use, `post`/`unpost` are symmetric branches of one method) and
+already proven in production by amortization's own pre-existing detail-kebab **Post** button
+(`decisions.json → window.menuActions[1]`).
+
+### Eligibility per action (identical rule, bulk and row-kebab)
+
+- **Confirmar** — offered only for a row that is NOT confirmed (`processed !== 'Y'`). Clicking it
+  (or picking it from the bulk dropdown) runs an ASYNC validation before the wire call —
+  `validateConfirmEligibility(row, apiFetch, ui)` in `AmortizationBulkActions.jsx`, imported
+  directly by the row-kebab's `index.jsx` rather than re-implemented:
+  1. fetch/parse failure while reading lines → rejected (own reason, distinct from "no lines").
+  2. zero lines on the document → rejected.
+  3. any line missing `amortizationPercentage` → rejected.
+  4. any line with `amortizationAmount <= 0` → rejected.
+  Only when all four pass does the `Processed` call fire. This mirrors what
+  `AmortizationConfirmModal.jsx` (the single-record confirm dialog) already checked client-side —
+  see "Known debt" below for why this validation exists ONLY on the client.
+- **Reactivar** — offered only for a row that IS confirmed (`processed === 'Y'`). No lines check.
+  If the row is also `posted === 'Y'`, the UI unposts first (`preUnpostActions={['reactivate']}`
+  on the bulk `<BulkDocumentAction>`, `preUnpost: true` on the row-kebab's `menuActions` entry) via
+  the shared `runPreUnpost`/`unpost` mechanism (`tools/app-shell/src/lib/preUnpost.js`) —
+  `POST /header/{id}/action/unpost`, handled by the same `DocumentPostingService` bean, which
+  deletes the `Fact_Acct` rows and sets `Posted='N'`. Only after that succeeds does the
+  `Processed` call run. **If the unpost genuinely cannot happen (accounting already settled,
+  irreversible), the row fails naturally** — it lands in the bulk toast's "failed" bucket (or a
+  row-kebab error toast) with the server's own message; it is never pre-filtered out as
+  ineligible. This is a deliberate reversal from an earlier version of this feature, which
+  pre-blocked posted rows client-side — the product decision (confirmed with QA) is "try, then
+  fail if it genuinely can't" rather than "assume it never can".
+- **Contabilizar** — offered only for a row that is confirmed AND not yet posted
+  (`processed === 'Y' && posted !== 'Y'`), reusing `isRowProcessed`/`isRowPosted` /
+  `buildPostActions`/`postRowFilter` — all exported from the SHARED `BulkDocumentAction.jsx`,
+  the exact same predicates `sales-invoice`/`purchase-invoice`'s own bulk "Contabilizar" already
+  use. No amortización-specific eligibility logic exists for this action at all.
+
+### Components
+
+- **`artifacts/amortization/custom/AmortizationBulkActions.jsx`** — the floating multi-select
+  bar. Renders TWO sibling `<BulkDocumentAction>` instances (a Fragment, not one dropdown with
+  three options): one for Confirmar/Reactivar (`labelKey="process"`, a 2-entry dropdown), one for
+  Contabilizar (`labelKey="post"`, a single-entry button) — same composition pattern as
+  `sales-invoice`/`purchase-invoice`'s own `SalesInvoiceBulkAction`/`PurchaseInvoiceBulkAction`.
+  Every `<BulkDocumentAction>` here sets `rowLabel={(row) => row.name || row.id}`, since
+  amortización has no `documentNo` (its `titleField` is `name`) — the default
+  `row.documentNo || row.id` would otherwise label toast rows with a raw UUID.
+- **`tools/app-shell/src/windows/custom/amortization/index.jsx`** (new file) — the per-row kebab.
+  **Why this file exists at all, instead of the row-kebab being generated automatically:**
+  `generate-frontend.js` never emits a `menuActions` entry inside the generated `<ListView>`
+  call's `rowQuickActions` prop, for ANY window (confirmed against sales-order's and
+  purchase-invoice's own generated `HeaderPage.jsx` — same gap everywhere). A generated file
+  cannot be hand-edited (`artifacts/*/generated/` is output, not source), and that generator gap
+  lives in `schema_forge_core`, a separate repo. The established workaround — already used by
+  `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice` — is a small custom
+  `index.jsx` that keeps the DETAIL branch exactly as the pipeline generates it (renders the
+  generated `<HeaderPage>` untouched) and replaces ONLY the list/grid branch with a hand-written
+  `<ListView>` carrying the extra `rowQuickActions.menuActions`. This file mirrors
+  `purchase-invoice/index.jsx`'s pattern specifically (a plain `useMemo`, no shared hook), not
+  `useOrderWindow.jsx`'s (order-family-specific: currency checks, manage-docs launcher — none of
+  which apply here). It is registered in `tools/app-shell/src/windows/registry.js`'s
+  `customLoaders['amortization']`, which wins over the pre-existing `windowLoaders['amortization']`
+  entry (still present, now shadowed).
+  - Visual scope: the kebab is ADDED on top of what already rendered — Edit (pencil) is left at
+    `RowQuickActions.jsx`'s own default (visible), unchanged from before this file existed.
+    Duplicar/Email stay off, as before — Clone requires `onClone` (never passed), Email requires
+    `sendDocument`/`documentPreview` (never passed, and `ListView.jsx`'s auto-detect needs a
+    `documentNo` column amortización doesn't have). Delete stays off via `hideDeleteButton: true`,
+    matching `decisions.json → window.hideDeleteButton`. (An earlier version of this file also
+    suppressed Edit via `actions.edit.show = false`, over-reading "only show the kebab" as
+    "remove everything else too" — caught in browser testing and reverted; Edit was never meant
+    to disappear.)
+  - Confirmar's eligibility check is ASYNC (the lines fetch above), but `RowQuickActions.jsx`'s
+    `menuActions` builder is read SYNCHRONOUSLY — an async function there resolves to a `Promise`,
+    fails the component's `Array.isArray` guard, and hides the WHOLE kebab silently. So Confirmar
+    only gates its SYNC precondition (`!isConfirmed(row)`) via `visible`, and the async lines
+    check runs inside its own `onClick` instead — the same async-validate-then-act pattern
+    `sales-order`'s own bespoke row-kebab "confirm" entry already uses
+    (`useOrderWindow.jsx`). Reactivar and Contabilizar need no async check, so both stay fully
+    declarative `menuActions` entries.
+  - `RowQuickActions.jsx` deliberately never toasts for its declarative `documentAction`/
+    `neoAction` paths ("toast/snackbar is the host's responsibility"); `index.jsx`'s
+    `onMenuActionExecuted` supplies that (success/failure toast + list refresh) for Reactivar and
+    Contabilizar. Confirmar toasts itself, inside its own `onClick` — it needs the raw validation
+    REASON string, not the generic success/`actionFailed` pair — so `onMenuActionExecuted`
+    explicitly skips `action.key === 'confirm'` to avoid a double toast.
+
+### Known debt (read before touching this area again)
+
+- **The lines validation behind Confirmar (missing %, non-positive amount, empty document)
+  exists ONLY on the client.** Verified against the live `a_amortization_process` PL/pgSQL: the
+  server enforces none of it. Skipping the client check (e.g. a future refactor that calls the
+  `Processed` action directly, bypassing `validateConfirmEligibility`) can confirm a document with
+  ZERO lines — `TotalAmortization` resolves to `NULL` via a `sum()` over zero rows, the document is
+  left `Processed` with a null total, and `a_amortizationline_trg` then refuses further edits: an
+  irreversible bad state reachable purely from the client if this check is ever dropped or forked.
+- **Confirmar and Reactivar sharing one wire action leaves a narrow, unclosed race.** Both
+  `rowFilter` (bulk) and each `menuActions` entry's `visible` (row-kebab) are deliberately
+  WHITELISTS — "only proceed if I can positively confirm eligibility from the grid's own
+  snapshot" — because the server infers confirm-vs-reactivate from LIVE DB state, which the grid
+  snapshot can lag. If a document was reactivated in another tab/session after this grid last
+  loaded, the grid may still show `processed: 'Y'`; picking "Reactivar" here would then hit a
+  server that sees `Processed='N'` and runs the CONFIRM branch instead — silently doing the
+  opposite of what the user asked, reported as a success. The whitelist narrows this window (it
+  cannot proceed on stale-but-still-plausible data the way a blacklist would) but cannot close it
+  — closing it for real requires the server to receive the user's actual INTENT instead of
+  inferring it from state, which is a separate, not-yet-scoped follow-up.
+- **`AmortizationConfirmModal.jsx` (the single-record confirm dialog) still uses a raw `fetch`
+  with a hand-built `Authorization` header**, violating this repo's mandatory `useApiFetch`/
+  `apiFetch` policy (`docs/request-policy.md`). Pre-existing, untouched by ETP-5414 — flagged here
+  so it isn't mistaken for something this feature introduced, and so the next person touching this
+  file migrates it instead of copying its pattern into new code.
 
 ## Theme roles
 

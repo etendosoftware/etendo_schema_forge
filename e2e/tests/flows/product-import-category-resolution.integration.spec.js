@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { login, navigateTo } from '../helpers/auth.js';
+import { apiAuthHeaders, login, navigateTo } from '../helpers/auth.js';
 import { captureScreenshot } from '../helpers/captureScreenshot.js';
 
 /**
@@ -53,22 +53,22 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     await navigateTo(page, 'product');
     await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
 
-    // Both probes below must send the SAME `Accept-Language` the app's own requests send
-    // (`authHeaders()` -> `getStoredLocale()`, localStorage key `schema-forge-locale`, default
-    // `es_ES`). Without it `NeoAuthenticator.applyRequestLanguage` is a silent no-op and the
-    // backend resolves every `*_Trl` name into the user's AD language instead (ETP-4685,
-    // ETP-5022) — which since ETP-5079 would make the category `_identifier` read here disagree
-    // with the label the product grid actually renders.
-    const readNeoJson = (path) => page.evaluate(async (url) => {
-      const token = localStorage.getItem('sf_auth_token');
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Accept-Language': localStorage.getItem('schema-forge-locale') || 'es_ES',
-        },
+    // ETP-5079 + ETP-4685/ETP-5022: both probes must send the SAME `Accept-Language` the app's
+    // own requests send, or `NeoAuthenticator.applyRequestLanguage` is a silent no-op and the
+    // backend resolves every `*_Trl` name into the user's AD language — making the category
+    // `_identifier` read here disagree with the label the product grid renders.
+    // ETP-4576: the credential comes from apiAuthHeaders (cookie session or legacy bearer,
+    // whichever this run uses); apiAuthHeaders captures only the credential headers, not the
+    // locale, so the language is added explicitly here.
+    const readNeoJson = async (path) => {
+      const locale = await page.evaluate(
+        () => localStorage.getItem('schema-forge-locale') || 'es_ES',
+      );
+      const response = await page.request.get(path, {
+        headers: { ...(await apiAuthHeaders(page)), 'Accept-Language': locale },
       });
-      return { status: response.status, body: await response.json() };
-    }, path);
+      return { status: response.status(), body: await response.json() };
+    };
 
     const categoriesPayload = await readNeoJson('/sws/neo/product-category/productCategory?limit=1000');
     expect(categoriesPayload.status).toBe(200);
@@ -146,8 +146,11 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     });
 
     // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
-    // of all importable fields (8 for Product), not columns mapped out of columns present.
-    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/8');
+    // of all importable fields, not columns mapped out of columns present. ETP-5350 took
+    // Product from 8 to 10 by adding `cost` and `costStartingDate` to
+    // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
+    // that list: add a field there and this number moves.
+    await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('5/10');
     // ETP-5223: the chip reads `<source column>→<target caption>`, and the target caption
     // is now resolved through `fieldLabelFn` (the AD label dictionary for the SESSION locale)
     // instead of the English `field.label` declared in decisions.json. The locale here is
