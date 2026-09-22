@@ -9,17 +9,21 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US' }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (val) => val || '-',
-  // getPendingSifTargets (via isTbaiEligibleByDate, ETP-5122) needs a real
-  // date-only parser to compare invoiceDate against the TBAI adoption date.
-  parseCalendarDate: (raw) => {
-    if (!raw) return null;
-    const match = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (!match) return null;
-    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  },
-}));
+// Spread the REAL module and override only the formatter. `@/lib/dateOnly` is a
+// dependency of the fiscal gate this modal renders through
+// (InvoicePreview -> useInvoicePreview -> getPendingSifTargets ->
+// isSifEligibleByDate), so an exhaustive hand-written factory is a standing
+// liability: every helper the gate later reaches for has to be re-listed here or
+// vitest throws `No "<name>" export is defined on the "@/lib/dateOnly" mock` at
+// render time. That is exactly how adding `parseWallClockInstant` (ETP-5046) broke
+// five tests in this file that assert nothing about dates at all. Spreading the
+// actual module is also strictly MORE correct than the hand-rolled parser this
+// replaced: the gate needs real date-only semantics (ETP-5122), and the real
+// `parseCalendarDate` is the canonical implementation of them.
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return { ...actual, formatCalendarDate: (val) => val || '-' };
+});
 
 vi.mock('@/lib/formatAmount.js', () => ({
   formatAmount: (val) => Number(val || 0).toFixed(2),
