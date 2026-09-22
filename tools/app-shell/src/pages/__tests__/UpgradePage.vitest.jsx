@@ -494,6 +494,71 @@ describe('UpgradePage — checkout funnel tracking', () => {
   });
 });
 
+/**
+ * Regression coverage for the empty-`clientName` bug: there is no name input on
+ * this page — `handleSubmit` computes a fallback from the demo environment and
+ * calls `setForm` (async), but `runUpgrade` closes over the render's own `form`
+ * variable, so a `clientName: ''` request can reach the backend (400 "clientName
+ * is required") even though a resolvable name was available. See the current
+ * `handleSubmit`/`runUpgrade` split in UpgradePage.jsx.
+ */
+describe('UpgradePage — clientName resolution on submit (upgrade clientName bug)', () => {
+  it('sends the demo environment name as clientName without ever asking the user to type one', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-tenant-name-input')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe(EXISTING_TENANT);
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe(EXISTING_TENANT);
+  });
+
+  it('never calls createBillingPurchase and surfaces a tenant-name error when no name can be resolved', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameRequired');
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the editable tenant-name field when the account owns no demo environment', async () => {
+    installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-tenant-name-input-label')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-tenant-from-demo')).not.toBeInTheDocument();
+  });
+
+  it('sends the typed tenant name as clientName when there is no demo to fall back on', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Acme Second Co');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toEqual({
+      action: 'productive-tenant',
+      clientName: 'Acme Second Co',
+      upgradeAction: 'create-productive',
+      language: 'es_ES',
+    });
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe('Acme Second Co');
+  });
+});
+
 describe('UpgradePage — environment lookup failure (ETP-4985)', () => {
   /** A `/sws/go/environments` rejection shaped like the real 401 from the backend. */
   function unauthorizedEnvironments() {

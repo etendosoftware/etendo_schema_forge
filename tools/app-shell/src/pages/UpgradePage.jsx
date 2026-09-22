@@ -8,6 +8,8 @@ import { track } from '@/lib/observability.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
   createBillingPurchase,
@@ -690,7 +692,13 @@ export default function UpgradePage() {
     return () => { cancelled = true; };
   }, []);
 
-  const runUpgrade = async () => {
+  // `tenantName` is passed in explicitly by the caller (handleSubmit) rather than
+  // read from `form.tenantName` here: the caller may have just computed it (demo
+  // fallback) and called `setForm` a moment earlier, and that update is not
+  // guaranteed to have committed yet when this function's own closure captured
+  // `form` — reading `form.tenantName` here would silently send the STALE value,
+  // including an empty string when the field was never populated (ETP-5443).
+  const runUpgrade = async tenantName => {
     const token = getCheckoutToken();
     if (!token) {
       setFormError('upgradeSessionExpired');
@@ -712,14 +720,14 @@ export default function UpgradePage() {
         token,
         {
           action: 'productive-tenant',
-          clientName: form.tenantName.trim(),
+          clientName: tenantName,
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
       // browser only follows the provider-hosted URL and never handles cards.
-      sessionStorage.setItem(PENDING_CHECKOUT_NAME, form.tenantName.trim());
+      sessionStorage.setItem(PENDING_CHECKOUT_NAME, tenantName);
       sessionStorage.setItem(PENDING_CHECKOUT_ACTION, form.upgradeAction);
       sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(Date.now()));
       sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER, JSON.stringify(dataTransfer));
@@ -766,16 +774,24 @@ export default function UpgradePage() {
     if (tenantName && tenantName !== form.tenantName) {
       setForm(previous => ({ ...previous, tenantName }));
     }
-    const validation = {};
 
-    if (Object.keys(validation).length > 0) {
-      setErrors(validation);
+    // No name to fall back on. `demoEnvironment` falsy is exactly the condition
+    // that renders the editable input (see the form below), so this is always
+    // "the field is visible and empty" — never "no field to type into" (that
+    // branch no longer exists now that ETP-5443 restored the input for the
+    // no-demo case). Sending clientName: '' would 400 with INVALID_REQUEST
+    // "clientName is required"; surface a translated error instead — but only
+    // when there IS a session to submit with. A missing token must still reach
+    // runUpgrade's own check first, so upgradeSessionExpired (the actionable
+    // diagnosis) is not masked by this one.
+    if (!tenantName && getCheckoutToken()) {
+      setErrors({ tenantName: 'upgradeTenantNameRequired' });
       return;
     }
     setErrors({});
 
     // Not awaited: runUpgrade drives its own phase/error state and never rejects.
-    runUpgrade();
+    runUpgrade(tenantName);
   };
 
   return (
@@ -900,10 +916,39 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent data-testid="CardContent__58bad7">
             <form className="space-y-5" onSubmit={handleSubmit} noValidate data-testid="upgrade-form">
-              <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm" data-testid="upgrade-tenant-from-demo">
-                <p className="text-muted-foreground">{ui('upgradeTenantFromDemo')}</p>
-                <p className="mt-1 font-semibold text-foreground">{form.tenantName || ui('upgradePlanProductiveName')}</p>
-              </div>
+              {demoEnvironment ? (
+                <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm" data-testid="upgrade-tenant-from-demo">
+                  <p className="text-muted-foreground">{ui('upgradeTenantFromDemo')}</p>
+                  <p className="mt-1 font-semibold text-foreground">{form.tenantName || ui('upgradePlanProductiveName')}</p>
+                </div>
+              ) : (
+                // No demo to upgrade — this account's owned environments are all
+                // already productive, so this purchase creates a brand-new
+                // company rather than converting one (ETP-5396 design §4: "For
+                // an account with no owned demo, allow only its own new-company
+                // purchase intent"). The backend tells the two apart by whether
+                // `clientName` already resolves to a client this account owns
+                // (isResumingOwnedTenant), not by a distinct `upgradeAction` —
+                // 'create-productive' (the only supported value besides the
+                // rejected legacy 'convert-demo') covers both (ETP-5443).
+                <div className="space-y-1.5" data-testid="upgrade-tenant-name-field">
+                  <Label htmlFor="upgrade-tenant-name-input" data-testid="upgrade-tenant-name-input-label">
+                    {ui('upgradeTenantNameLabel')}
+                  </Label>
+                  <Input
+                    id="upgrade-tenant-name-input"
+                    value={form.tenantName}
+                    placeholder={ui('upgradeTenantNamePlaceholder')}
+                    aria-invalid={Boolean(errors.tenantName)}
+                    onChange={event => {
+                      const { value } = event.target;
+                      setForm(previous => ({ ...previous, tenantName: value }));
+                      setErrors({});
+                    }}
+                    data-testid="upgrade-tenant-name-input"
+                  />
+                </div>
+              )}
               {errors.tenantName && (
                 <p className="text-xs text-destructive" data-testid="upgrade-tenant-name-error">
                   {ui(errors.tenantName)}
