@@ -49,6 +49,7 @@ import {
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
+  buildCustomAddModalOnSaved,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -863,5 +864,93 @@ describe('buildHeaderFormData (ETP-5052)', () => {
     expect(data).toEqual({ id: '1', warehouse: 'W1' });
     expect('hasLines' in data).toBe(false);
     expect(result).toEqual({ id: '1', warehouse: 'W1', hasLines: true });
+  });
+});
+
+// --- ETP-5366 follow-up: the customAddModal onSaved path (e.g. Contacts' address
+// form) persists via its own raw fetch, bypassing handleAddChild/handleUpdateChild
+// entirely — the only places that invalidate BOTH the child collection cache and the
+// PARENT entity's own list cache. buildCustomAddModalOnSaved is what has to do that
+// invalidation instead. Before invalidateEntityCache() existed in this function, the
+// window's grid kept serving its pre-save cached page (e.g. a rolled-up "Dirección"
+// list column) for up to `recordStaleTime` after the user navigated back to it.
+describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
+  function makeSecondaryHook(overrides = {}) {
+    return {
+      invalidateChildrenCache: vi.fn(),
+      invalidateEntityCache: vi.fn(),
+      handleSelect: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it('invalidates the children cache, the parent entity cache, re-selects the parent, and closes the modal — in that order', () => {
+    const secondaryHook = makeSecondaryHook();
+    const secondaryHooks = [secondaryHook];
+    const parent = { id: 'BP-1', name: 'ACME' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks, idx: 0, hook, setCustomModalState });
+    onSaved();
+
+    expect(secondaryHook.invalidateChildrenCache).toHaveBeenCalledWith(parent.id);
+    expect(secondaryHook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    expect(secondaryHook.handleSelect).toHaveBeenCalledWith(parent);
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+
+    // Order matters: the entity cache must be dropped BEFORE handleSelect re-reads it,
+    // otherwise handleSelect's fetch would still be served from the stale cache entry
+    // (the same failure mode ETP-5366 fixed for the children collection — see
+    // useEntity.cache.vitest.jsx test 18).
+    const invalidateEntityOrder = secondaryHook.invalidateEntityCache.mock.invocationCallOrder[0];
+    const handleSelectOrder = secondaryHook.handleSelect.mock.invocationCallOrder[0];
+    expect(invalidateEntityOrder).toBeLessThan(handleSelectOrder);
+  });
+
+  it('falls back to hook.editing when hook.selected is unset (new/unsaved header)', () => {
+    const secondaryHook = makeSecondaryHook();
+    const editing = { id: 'BP-2', name: 'Draft Partner' };
+    const hook = { selected: null, editing };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks: [secondaryHook], idx: 0, hook, setCustomModalState });
+    onSaved();
+
+    expect(secondaryHook.invalidateChildrenCache).toHaveBeenCalledWith(editing.id);
+    expect(secondaryHook.handleSelect).toHaveBeenCalledWith(editing);
+  });
+
+  it('reaches the tab at the given idx, not just the first secondary hook', () => {
+    const otherHook = makeSecondaryHook();
+    const targetHook = makeSecondaryHook();
+    const parent = { id: 'BP-1' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({
+      secondaryHooks: [otherHook, targetHook],
+      idx: 1,
+      hook,
+      setCustomModalState,
+    });
+    onSaved();
+
+    expect(targetHook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    expect(targetHook.handleSelect).toHaveBeenCalledWith(parent);
+    expect(otherHook.invalidateEntityCache).not.toHaveBeenCalled();
+    expect(otherHook.handleSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the secondary hook is missing invalidation methods (optional chaining)', () => {
+    const secondaryHooks = [{ handleSelect: vi.fn() }];
+    const parent = { id: 'BP-1' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks, idx: 0, hook, setCustomModalState });
+    expect(() => onSaved()).not.toThrow();
+    expect(secondaryHooks[0].handleSelect).toHaveBeenCalledWith(parent);
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
   });
 });

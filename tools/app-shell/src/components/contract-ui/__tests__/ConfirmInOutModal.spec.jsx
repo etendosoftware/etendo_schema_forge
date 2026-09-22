@@ -347,7 +347,10 @@ describe('ConfirmInOutModal', () => {
     });
     expect(screen.getByTestId('confirm-modal-confirm-btn')).toBeDisabled();
 
-    fireEvent.change(screen.getByTestId('select-control'), { target: { value: 'pl-a' } });
+    // ETP-5410 follow-up: the tariff picker is now the real CreatableSearchSelect (focus to
+    // open, mousedown an option), not the mocked native <select> this used to drive.
+    fireEvent.focus(screen.getByTestId('field-confirm-modal-price-list'));
+    fireEvent.mouseDown(screen.getByTestId('option-confirm-modal-price-list-pl-a'));
     await waitFor(() => {
       expect(screen.getByTestId('confirm-modal-confirm-btn')).not.toBeDisabled();
     });

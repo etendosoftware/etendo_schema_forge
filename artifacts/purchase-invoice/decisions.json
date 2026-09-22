@@ -606,6 +606,7 @@
           "inputMode": "search",
           "readOnlyLogic": null,
           "displayLogic": null,
+          "noTruncate": true,
           "forceCalloutFields": [
             "listPrice",
             "unitPrice",

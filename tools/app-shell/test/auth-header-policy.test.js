@@ -24,7 +24,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SRC = join(__dirname, '..', 'src');
 
 // The one module allowed to spell the header out: it *defines* the policy.
-const ALLOWED = new Set([join('auth', 'api.js')]);
+// ETP-4576 adds the session-contract test helper. It does not BUILD a request: it asserts
+// that recorded requests carried the bearer, the mirror of expectNoAuthorizationHeader for
+// the cookie scheme. The header literal is the thing under test there, so matching it here
+// is a false positive — this policy is about call sites, and an assertion is not one.
+const ALLOWED = new Set([join('auth', 'api.js'), join('test', 'sessionContract.js')]);
 
 // Two shapes, because the first sweep only caught the literal one and 8 real gaps hid behind
 // the second (lib/menuTree.js, lib/neoWebhookClient.js, ...): an object literal spelling the

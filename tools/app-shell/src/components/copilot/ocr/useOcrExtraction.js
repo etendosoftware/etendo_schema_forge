@@ -77,7 +77,6 @@ export function useOcrExtraction({
 
   const extract = useCallback(async (file) => {
     if (!file) throw new Error('No file provided');
-    if (!token) throw new Error('Missing auth token');
 
     setError(null);
     setStatus('uploading');
