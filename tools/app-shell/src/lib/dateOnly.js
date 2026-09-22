@@ -1,9 +1,16 @@
 const DATE_ONLY_PREFIX_RE = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 
-// yyyy-MM-dd, optionally followed by a wall-clock time, optionally followed by a
-// zone designator (`Z` or `±hh:mm` / `±hhmm`) that this module deliberately DISCARDS.
-const WALL_CLOCK_RE =
-  /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?)?(?:Z|[+-]\d{2}:?\d{2})?$/i;
+// A wall-clock timestamp is read in three flat pieces rather than one nested pattern, so no
+// single expression trips SonarQube's regex-complexity limit (javascript:S5843).
+//
+// 1. The trailing zone designator (`Z` / `z`, `±hh:mm`, `±hhmm`) that this module deliberately
+//    DISCARDS. Stripped up front instead of being matched-and-ignored at the tail.
+const ZONE_SUFFIX_RE = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+// 2. The mandatory `yyyy-MM-dd` head.
+const WALL_CLOCK_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})/;
+// 3. The optional `T`- or whitespace-separated time that may follow it, anchored so that anything
+//    left over after the date is rejected exactly as the single combined pattern used to reject it.
+const WALL_CLOCK_TIME_RE = /^[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?$/i;
 
 function normalizeLocale(locales) {
   if (typeof locales === 'string') return locales.replace('_', '-');
@@ -83,19 +90,26 @@ export function parseWallClockInstant(raw) {
   }
 
   const str = String(raw).trim();
-  const match = str.match(WALL_CLOCK_RE);
-  // Not ISO-shaped (e.g. '03/05/2024'): fall back to the calendar-day reading rather
-  // than inventing a second parser here.
-  if (!match) return parseCalendarDate(str);
+  const body = str.replace(ZONE_SUFFIX_RE, '');
+  const date = body.match(WALL_CLOCK_DATE_RE);
+  const rest = date ? body.slice(date[0].length) : '';
+  const time = rest ? rest.match(WALL_CLOCK_TIME_RE) : null;
+  // Not ISO-shaped (e.g. '03/05/2024'), or carrying trailing garbage the time pattern refuses:
+  // fall back to the calendar-day reading rather than inventing a second parser here. The
+  // ORIGINAL string is handed over, not the zone-stripped body.
+  if (!date || (rest && !time)) return parseCalendarDate(str);
 
-  const millis = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  // Digit counts only, as before: '2026-13-45T99:99:99' still parses, and the local-time
+  // constructor rolls the overflow over. Range validation belongs upstream.
+  const fraction = time?.[4];
+  const millis = fraction ? Number(fraction.slice(0, 3).padEnd(3, '0')) : 0;
   return new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    Number(match[4] ?? 0),
-    Number(match[5] ?? 0),
-    Number(match[6] ?? 0),
+    Number(date[1]),
+    Number(date[2]) - 1,
+    Number(date[3]),
+    Number(time?.[1] ?? 0),
+    Number(time?.[2] ?? 0),
+    Number(time?.[3] ?? 0),
     millis,
   );
 }
