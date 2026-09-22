@@ -15,6 +15,9 @@ import {
   generate303File,
   applyIdentParams,
   roundEur,
+  isBankIbanRequired,
+  isCancelModifyDebitRequested,
+  withBox111NonZeroFlag,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -1251,7 +1254,11 @@ describe('applyIdentParams — tipo-independent forwarding (documents current be
     expect(params.get('BankAddress')).toBe('Calle Falsa 123');
     expect(params.get('BankCity')).toBe('Madrid');
     expect(params.get('CountryIso')).toBe('ES');
-    expect(params.get('Cancel_Modify_Debit')).toBe('true');
+    // ETP-5431 — was 'true'. The checkbox used to travel through IDENT_PARAM_MAP, which
+    // forwards a value verbatim, so a checked box reached AEAT303Report2024 as
+    // `Cancel_Modify_Debit=true` while every Java reader tests `equals("Y", ...)`. It now
+    // follows the same explicit Y-flag convention as sin_actividad/redeme/concurso.
+    expect(params.get('Cancel_Modify_Debit')).toBe('Y');
   });
 
   it('forwards the same bank_* params for tipo=G, C and N too — applyIdentParams has no tipo awareness at all', () => {
@@ -1261,5 +1268,146 @@ describe('applyIdentParams — tipo-independent forwarding (documents current be
       expect(params.get('IBAN')).toBe('ES7620770024003102575766');
       expect(params.get('SEPA')).toBe('1');
     }
+  });
+});
+
+// ── ETP-5431 — Cancel_Modify_Debit wire format ────────────────────────────────
+// The flag used to travel through IDENT_PARAM_MAP (verbatim forwarding), so a checked box
+// arrived as `Cancel_Modify_Debit=true`. Every Java reader compares with
+// `StringUtils.equals("Y", ...)`: AEAT303Report2024#isCancelOrModifyDebitRequested (Nota 3's
+// exception) and #generatePage3 (which writes the mark at position 440 of page 3). So from the
+// Go frontend the flag NEVER took effect — neither the exception nor the mark in the file.
+// These tests exist so that silent mismatch cannot come back.
+
+describe('isCancelModifyDebitRequested (ETP-5431)', () => {
+  it('accepts the strict boolean the checkbox writes', () => {
+    expect(isCancelModifyDebitRequested({ baja_domiciliacion: true })).toBe(true);
+  });
+
+  it('accepts the legacy \'Y\' string so already-persisted manualData keeps working', () => {
+    expect(isCancelModifyDebitRequested({ baja_domiciliacion: 'Y' })).toBe(true);
+  });
+
+  it.each([[false], [undefined], [null], [''], ['N']])(
+    'treats %p as NOT requested', (value) => {
+      expect(isCancelModifyDebitRequested({ baja_domiciliacion: value })).toBe(false);
+    },
+  );
+
+  it('never reads the literal string \'true\' as marked — that WAS the bug', () => {
+    expect(isCancelModifyDebitRequested({ baja_domiciliacion: 'true' })).toBe(false);
+  });
+
+  it('tolerates a missing identification object', () => {
+    expect(isCancelModifyDebitRequested(undefined)).toBe(false);
+    expect(isCancelModifyDebitRequested(null)).toBe(false);
+    expect(isCancelModifyDebitRequested({})).toBe(false);
+  });
+});
+
+describe('applyIdentParams — Cancel_Modify_Debit reaches AEAT as "Y" (ETP-5431)', () => {
+  it('sends Y for a checked box, the value AEAT303Report2024 actually tests for', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, { tipo_declaracion: 'C', baja_domiciliacion: true });
+    expect(params.get('Cancel_Modify_Debit')).toBe('Y');
+  });
+
+  it('sends Y for the legacy \'Y\' shape too, never the raw stored value', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, { tipo_declaracion: 'C', baja_domiciliacion: 'Y' });
+    expect(params.get('Cancel_Modify_Debit')).toBe('Y');
+  });
+
+  it.each([[false], [undefined], [null], [''], ['N']])(
+    'omits the parameter entirely when the box is unmarked (%p)', (value) => {
+      const params = new URLSearchParams();
+      applyIdentParams(params, { tipo_declaracion: 'C', baja_domiciliacion: value });
+      expect(params.get('Cancel_Modify_Debit')).toBeNull();
+    },
+  );
+
+  // It must not be reinstated in IDENT_PARAM_MAP: that map forwards verbatim, which is what
+  // produced 'true' in the first place. A duplicate would also emit the param twice.
+  it('emits the parameter exactly once — it must not also travel through IDENT_PARAM_MAP', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, { tipo_declaracion: 'C', baja_domiciliacion: true });
+    expect(params.getAll('Cancel_Modify_Debit')).toEqual(['Y']);
+  });
+});
+
+// ── ETP-5431 — the marca SEPA placeholder sends no parameter at all ───────────
+// `bank_sepa` became a select whose only empty choice is renderIdentSelectField's own
+// placeholder (value ''). The declared options are 1/2/3 — marca 0 is deliberately NOT
+// offered. What an untouched field sends must not change: applyMappedIdentParams skips
+// falsy values (`if (v)`), so NO `SEPA` parameter is emitted.
+//
+// This matters twice over, and both are easy to break "helpfully":
+//   1. AEAT303Report2023#generatePageDID0 substitutes "0" for a blank marca before writing
+//      position 194, so the file is identical either way — the parameter is redundant.
+//   2. The REDEME validators (AEAT303Report2021/2023#checkData) reject a BLANK marca with
+//      @AEAT303_sepa_empty@ for a monthly-register tipo D/V/X, but accept "0". Emitting
+//      SEPA=0 for the placeholder would silently kill that validation.
+
+describe('applyIdentParams — marca SEPA placeholder (ETP-5431)', () => {
+  it.each([[''], [undefined], [null]])(
+    'sends no SEPA parameter at all for an untouched marca (%p)', (value) => {
+      const params = new URLSearchParams();
+      applyIdentParams(params, { tipo_declaracion: 'D', bank_sepa: value });
+      expect(params.get('SEPA')).toBeNull();
+      expect(params.has('SEPA')).toBe(false);
+    },
+  );
+
+  it('never substitutes "0" for an unset marca — that would defeat @AEAT303_sepa_empty@', () => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, { tipo_declaracion: 'D', bank_sepa: '' });
+    expect(params.getAll('SEPA')).toEqual([]);
+  });
+
+  it.each([['1'], ['2'], ['3']])('forwards a chosen marca %s verbatim', (marca) => {
+    const params = new URLSearchParams();
+    applyIdentParams(params, { tipo_declaracion: 'D', bank_sepa: marca });
+    expect(params.get('SEPA')).toBe(marca);
+  });
+});
+
+// ── ETP-5431 — isBankIbanRequired honours Nota 3's exception ──────────────────
+// The imperative mirror of `_BANK_IBAN_REQUIRED_WHEN`, used by the generate/submit pre-flight
+// guards. Kept in sync with fm303Layouts.js by hand, so it needs its own coverage.
+
+describe('isBankIbanRequired — Nota 3 exception (ETP-5431)', () => {
+  const inNota3 = extra => withBox111NonZeroFlag(
+    { rectificativa: true, ...extra }, [{ num: 111, value: 500 }],
+  );
+
+  it('requires IBAN for a rectificativa with non-zero box 111 when the flag is unmarked', () => {
+    expect(isBankIbanRequired('I', inNota3())).toBe(true);
+  });
+
+  it('does NOT require IBAN once the cancel/modify-direct-debit flag is marked', () => {
+    expect(isBankIbanRequired('I', inNota3({ baja_domiciliacion: true }))).toBe(false);
+  });
+
+  it('honours the legacy \'Y\' shape of the flag', () => {
+    expect(isBankIbanRequired('I', inNota3({ baja_domiciliacion: 'Y' }))).toBe(false);
+  });
+
+  it.each([[false], [undefined], [null], [''], ['N']])(
+    'still requires IBAN for an unmarked flag stored as %p', (value) => {
+      expect(isBankIbanRequired('I', inNota3({ baja_domiciliacion: value }))).toBe(true);
+    },
+  );
+
+  // Condition A is outside Nota 3's scope: U/D/X need an account by virtue of the type itself
+  // (AEAT EDID065), so the waiver must not reach them.
+  it.each([['U'], ['D'], ['X']])(
+    'tipo %s still requires IBAN even with the flag marked — condition A is untouched', (tipo) => {
+      expect(isBankIbanRequired(tipo, inNota3({ baja_domiciliacion: true }))).toBe(true);
+    },
+  );
+
+  it('does not require IBAN for tipo I when box 111 is zero, flag irrelevant', () => {
+    const ident = withBox111NonZeroFlag({ rectificativa: true }, [{ num: 111, value: 0 }]);
+    expect(isBankIbanRequired('I', ident)).toBe(false);
   });
 });
