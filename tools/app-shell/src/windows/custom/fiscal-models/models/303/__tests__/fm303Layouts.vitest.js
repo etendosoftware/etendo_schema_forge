@@ -763,6 +763,43 @@ describe('getLayout303 — bank_sepa marca selector (ETP-5431)', () => {
   });
 });
 
+// ── ETP-5438 (AEAT spec audit): datos_bancarios field maxLength ──
+
+describe('getLayout303 — datos_bancarios field maxLength (ETP-5438)', () => {
+  const layout = getLayout303(2026, 'T2');
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+
+  // Values are the AEAT DID-page fixed-width record slot for each field
+  // (DR303e26v101 v1.01) — see fm303Layouts.js's own comment above these fields.
+  it.each([
+    ['bank_iban', 34],
+    ['bank_swift_bic', 11],
+    ['bank_nombre', 70],
+    ['bank_direccion', 35],
+    ['bank_ciudad', 30],
+    ['bank_pais', 2],
+  ])('%s has maxLength %i', (id, expected) => {
+    const field = sec.fields.find(f => f.id === id);
+    expect(field.maxLength).toBe(expected);
+  });
+});
+
+describe('getLayout303 — rectificativa nro_justificante maxLength (ETP-5438)', () => {
+  it('current-year (2026) rectificativa section: nro_justificante has maxLength 13', () => {
+    const layout = getLayout303(2026, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
+  });
+
+  it('pre-2023 complementaria patch: nro_justificante also has maxLength 13', () => {
+    const layout = getLayout303(2022, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
+  });
+});
+
 // ── sin_actividad section ─────────────────────────────────────────────────────
 
 describe('getLayout303 — sin_actividad section', () => {

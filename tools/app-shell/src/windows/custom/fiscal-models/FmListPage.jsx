@@ -42,6 +42,31 @@ async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
   return compute349Operators(decl, { token, apiBaseUrl });
 }
 
+// ETP-5438 — a declaration in one of these statuses must never be silently recomputed from
+// current invoice data again: once presented, an invoice added or removed afterward must not
+// change what "Resultado" shows. Kept as a local literal (not exported from
+// fiscalModelsUtils.js) matching this codebase's existing deliberate non-dedup convention for
+// status-family lists — see fiscal-models.md "Duplicated, deliberately, in 4 places": several
+// fiscal-models tests mock fiscalModelsUtils.js with hand-written objects (no `importOriginal`
+// spread), so a new named export there would silently become `undefined` in those suites.
+const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack']);
+
+// Passed as `checkModifiedFn` for the submitted-family buckets below instead of omitting it
+// (the way the pre-existing `otherDecls303`/`otherDecls349` buckets do): omitting it makes
+// `useFiscalAutoCompute`'s mount effect skip its own cache-consult branch and unconditionally
+// recompute from live invoice data on every mount — which is exactly the ETP-5438 root cause
+// (FmListPage never truly unmounts, but its `decls` state — and therefore this bucket's own
+// array reference — changes on every declarations refetch, e.g. right after presenting a
+// DIFFERENT declaration, re-triggering a fresh live recompute for every already-submitted one).
+// Always resolving `false` makes the hook trust its own sessionStorage cache instead: a
+// never-before-computed submitted declaration still gets exactly one bootstrap compute (so
+// "Resultado" never gets stuck on "—", ETP-4755), and every mount after that first one reuses
+// the cached result — network-free, so nothing here can pick up an invoice added/removed after
+// submission.
+async function neverModifiedFn() {
+  return false;
+}
+
 // Generic filter dropdown — handles year, model and status filters
 function FilterDropdown({ label, value, options, onChange }) {
   const [open, setOpen] = useState(false);
@@ -613,29 +638,43 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     [decls]
   );
 
-  // Non-draft declarations (ETP-4755 "Resultado" fix): `declToJson`
-  // (FiscalDeclCrudHandler, backend) never persists a computed result on the
-  // declaration record — GET /fiscal303/declarations always comes back with no
-  // `result` field, for every status. The draft-only hooks above are correct for
-  // drafts (live-recompute + poll, since their underlying invoices can still
-  // change), but once a declaration leaves draft its boxes are otherwise NEVER
-  // computed at all in this list — the "Resultado" column stayed stuck on "—"
-  // forever, the same class of bug the "Incidencias" column had before this list
-  // fetched real data. Mirrors FmModel303Page.jsx's own already-shipped fix for
-  // its KPIs/boxes ("Auto-compute on mount when the list didn't hand us any
-  // precomputed data" — same ETP-4755, same `/fiscal303/boxes` and
-  // `/fiscal349/operators` endpoints, which recompute from invoice data
-  // regardless of declaration status): compute ONCE per declaration, with no
-  // `checkModifiedFn` so `useFiscalAutoCompute`'s polling effect never engages
-  // (it no-ops without one) — a submitted/ready/skipped declaration's boxes are
-  // not expected to keep changing, unlike a draft's.
+  // Non-draft, non-submitted declarations (ETP-4755 "Resultado" fix, narrowed by ETP-5438):
+  // `declToJson` (FiscalDeclCrudHandler, backend) never persists a computed result on the
+  // declaration record — GET /fiscal303/declarations always comes back with no `result` field,
+  // for every status. The draft-only hooks above are correct for drafts (live-recompute + poll,
+  // since their underlying invoices can still change), but once a declaration leaves draft its
+  // boxes are otherwise NEVER computed at all in this list — the "Resultado" column stayed stuck
+  // on "—" forever, the same class of bug the "Incidencias" column had before this list fetched
+  // real data. Mirrors FmModel303Page.jsx's own already-shipped fix for its KPIs/boxes
+  // ("Auto-compute on mount when the list didn't hand us any precomputed data" — same ETP-4755,
+  // same `/fiscal303/boxes` and `/fiscal349/operators` endpoints, which recompute from invoice
+  // data regardless of declaration status).
+  //
+  // ETP-5438 — submitted-family declarations (see SUBMITTED_STATUSES above) were carved OUT of
+  // this bucket into their own `submittedDecls303`/`submittedDecls349` below: they still need the
+  // one bootstrap compute, but must never be recomputed again after that — see `neverModifiedFn`'s
+  // comment for why omitting `checkModifiedFn` (this bucket's own behavior, correct for `ready`)
+  // was the actual root cause of "still recalculating even though already presented".
   const otherDecls303 = useMemo(
-    () => decls.filter(d => d.model === '303' && d.status !== 'draft'),
+    () => decls.filter(d => d.model === '303' && d.status !== 'draft' && !SUBMITTED_STATUSES.has(d.status)),
     [decls]
   );
 
   const otherDecls349 = useMemo(
-    () => decls.filter(d => d.model === '349' && d.status !== 'draft'),
+    () => decls.filter(d => d.model === '349' && d.status !== 'draft' && !SUBMITTED_STATUSES.has(d.status)),
+    [decls]
+  );
+
+  // ETP-5438 — submitted-family declarations: compute once (bootstrap, so "Resultado" is never
+  // stuck on "—" for a freshly-presented declaration), then frozen via `neverModifiedFn` — see
+  // its comment above for the full rationale.
+  const submittedDecls303 = useMemo(
+    () => decls.filter(d => d.model === '303' && SUBMITTED_STATUSES.has(d.status)),
+    [decls]
+  );
+
+  const submittedDecls349 = useMemo(
+    () => decls.filter(d => d.model === '349' && SUBMITTED_STATUSES.has(d.status)),
     [decls]
   );
 
@@ -670,6 +709,34 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     apiBaseUrl,
     enabled: Boolean(apiBaseUrl),
   });
+
+  const { computedMap: computedMapSubmitted303 } = useFiscalAutoCompute(submittedDecls303, {
+    computeFn:       computeBoxes303Real,
+    checkModifiedFn: neverModifiedFn,
+    token,
+    apiBaseUrl,
+    enabled:         Boolean(token && apiBaseUrl),
+  });
+
+  const { computedMap: computedMapSubmitted349 } = useFiscalAutoCompute(submittedDecls349, {
+    computeFn:       computeOperators349Real,
+    checkModifiedFn: neverModifiedFn,
+    token,
+    apiBaseUrl,
+    enabled:         Boolean(token && apiBaseUrl),
+  });
+
+  // Union the "other" (ready/skipped) and "submitted" one-time-compute maps into a single map
+  // per model — `getComputedForDecl` only ever needs "the non-draft compute for this decl.id",
+  // it doesn't care which of the two hooks produced it.
+  const computedMapOther303Merged = useMemo(
+    () => ({ ...computedMapOther303, ...computedMapSubmitted303 }),
+    [computedMapOther303, computedMapSubmitted303]
+  );
+  const computedMapOther349Merged = useMemo(
+    () => ({ ...computedMapOther349, ...computedMapSubmitted349 }),
+    [computedMapOther349, computedMapSubmitted349]
+  );
 
   useEffect(() => {
     if (onComputeUpdate && Object.keys(computedMap349).length > 0) {
@@ -885,7 +952,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             // (see `getComputedForDecl` above for the implementation)
             const isDraft = decl.status === 'draft';
             const computed = getComputedForDecl(decl, isDraft, {
-              computedMap, computedMapOther303, computedMap349, computedMapOther349,
+              computedMap, computedMapOther303: computedMapOther303Merged,
+              computedMap349, computedMapOther349: computedMapOther349Merged,
             });
             const hasStoredResult = !!decl.result?.kind;
             const isComputingThis = ['303', '349'].includes(decl.model)

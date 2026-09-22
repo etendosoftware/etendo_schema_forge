@@ -22,6 +22,7 @@ import {
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
   clampNegativeOverrides,
 } from '../../fiscalModelsUtils.js';
+import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -243,6 +244,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const { selectedOrg } = useAuth();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [status, setStatus] = useState(decl.status);
+  // Computed from `status` state (not `decl.status`) so it tracks a same-session
+  // presentation without a remount. Declared early — before the mount-time
+  // auto-compute effect below, which reads it (ETP-5438) — and reused at the
+  // action-bar gates further down. Mirrors FmModel349Page.jsx's identical hoist.
+  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
@@ -588,11 +594,34 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
     if (liveBoxes != null) return;
     if (!apiBaseUrl) return;
+    // ETP-5438 — once `isSubmitted`, never issue a live recompute here: `computeBoxes303`
+    // (= `GET /fiscal303/boxes`) always recomputes from whatever invoices exist RIGHT NOW,
+    // regardless of who calls it or when — see FmModel349Page.jsx's identical fix and
+    // comment for the full rationale (same bug class, "en todos los modelos tiene que
+    // funcionar de la misma manera" — every model must freeze once presented). Falls back
+    // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+    // submitted-family bucket already populated this session, instead of a live compute.
+    // (`!token` is deliberately NOT part of this gate — see the ETP-4576 comment above.)
+    if (isSubmitted) {
+      const cached = getCachedFiscalCompute(decl.id);
+      if (cached?.boxes != null) {
+        applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      }
+      return;
+    }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
 
   async function handleGenerate({ filename } = {}) {
+    // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
+    // this is a belt-and-braces second check (same double-check pattern already used below
+    // for missingRequiredFields), not the primary gate. The real defense-in-depth against a
+    // direct/malformed API call is server-side, in Fiscal303BoxesHandler#dispatch.
+    if (isSubmitted) {
+      toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
+      return;
+    }
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above). Must run before
     // any other guard/state change below: an unset `tipo_declaracion` (or, when visible, a blank
     // `bank_iban`) must never reach the backend, which used to silently default a missing
@@ -834,7 +863,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const blocking = incidents?.blocking ?? 0;
   const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
-  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
 
   // ETP-5187 — `decl._hasDuplicatePeriod` is set by FmListPage.jsx when this declaration is a
   // 2nd/Nth one for the same (model, year, period): another declaration already exists for that
@@ -1017,30 +1045,39 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           </button>
         )}
 
-        <button
-          className="fm-btn"
-          onClick={() => {
-            // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
-            // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
-            if (missingRequiredFields.length > 0) {
-              missingRequiredFieldsToast(
-                'fm.validation.missing_required_generate',
-                "Completá {fields} antes de generar el fichero.",
-              );
-              return;
-            }
-            setShowFilegen(true);
-          }}
-          disabled={generating}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
-        >
-          <Download
-            size={16}
-            strokeWidth={1.75}
-            style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-            data-testid="Download__4f6c0d" />
-          {t('fm.action.gen303') ?? 'Generar fichero 303'}
-        </button>
+        {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
+            re-generated, matching "Calcular"/"Registrar-Presentar"'s existing `!isSubmitted`
+            gate above. Previously always visible regardless of status — that behavior was
+            only ever DESCRIBED in docs/generated-custom-windows/fiscal-models.md, never
+            justified as a deliberate product decision there, and the 349 page had the
+            identical gap; fixed for full cross-model parity ("en todos los modelos tiene que
+            funcionar de la misma manera"). */}
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={() => {
+              // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
+              // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
+              if (missingRequiredFields.length > 0) {
+                missingRequiredFieldsToast(
+                  'fm.validation.missing_required_generate',
+                  "Completá {fields} antes de generar el fichero.",
+                );
+                return;
+              }
+              setShowFilegen(true);
+            }}
+            disabled={generating}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
+          >
+            <Download
+              size={16}
+              strokeWidth={1.75}
+              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+              data-testid="Download__4f6c0d" />
+            {t('fm.action.gen303') ?? 'Generar fichero 303'}
+          </button>
+        )}
 
         {!isSubmitted && (
           <button

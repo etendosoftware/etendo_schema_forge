@@ -2177,3 +2177,57 @@ describe('FmBoxes303 — min="0" on boxes 109/70 (ETP-5431 pt.2, NEGATIVE_NOT_AL
     expect(openEditorFor(container, 70).getAttribute('min')).toBe('0');
   });
 });
+
+// ── ETP-5438 (AEAT spec audit): identification field maxLength ──────────────
+
+describe('FmBoxes303 — identification field maxLength (ETP-5438)', () => {
+  it('sets maxLength on every datos_bancarios text input per its AEAT DID-page slot width', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    const inputs = Array.from(
+      container.querySelectorAll('input.fm-aeat-ident-inline-field__input[type="text"]')
+    );
+    // Declaration order in fm303Layouts.js's datos_bancarios.fields: iban, swift_bic, nombre,
+    // direccion, ciudad, pais, sepa — but bank_sepa is a `<select>` (ETP-5431 pt.2, see the
+    // "min=0 on boxes 109/70" describe above and fm303Layouts.vitest.js's own bank_sepa-select
+    // coverage), not an `input[type="text"]`, so this query only ever matches the other 6.
+    // ETP-5438's own enum-select attempt for bank_sepa was reverted in that branch, deliberately
+    // left for ETP-5431 to own.
+    expect(inputs.map(i => i.maxLength)).toEqual([34, 11, 70, 35, 30, 2]);
+  });
+
+  it('sets maxLength=13 on the rectificativa nro_justificante text input', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['rectificativa']}
+        identification={{ rectificativa: true }}
+      />
+    );
+    const textInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+    expect(textInput).toBeTruthy();
+    expect(textInput.maxLength).toBe(13);
+  });
+
+  it('reflects maxLength as a real HTML maxlength attribute, not just a React prop', () => {
+    const { container } = render(
+      <FmBoxes303
+        {...BASE_PROPS}
+        boxes={{}}
+        sectionIds={['datos_bancarios']}
+        identification={{ tipo_declaracion: 'D' }}
+      />
+    );
+    const ibanInput = container.querySelector('input.fm-aeat-ident-inline-field__input[type="text"]');
+    // bank_iban DOES declare maxLength=34 (asserted above) — this just confirms the attribute is
+    // reflected as a real HTML constraint, not merely a React prop that never reached the DOM.
+    expect(ibanInput.getAttribute('maxlength')).toBe('34');
+  });
+});

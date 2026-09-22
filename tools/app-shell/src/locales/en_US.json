@@ -21685,6 +21685,7 @@
     "fm.validation.missing_required_generate": "Complete {fields} before generating the file.",
     "fm.validation.missing_required_present": "Complete {fields} before marking the declaration as submitted.",
     "fm.validation.missing_required_banner": "Required fields are missing: {fields}.",
+    "fm.validation.already_submitted": "This declaration has already been submitted.",
     "fm.action.go_to": "Go to",
     "fm.action.open": "Open",
     "fm.action.change_status": "Change status",

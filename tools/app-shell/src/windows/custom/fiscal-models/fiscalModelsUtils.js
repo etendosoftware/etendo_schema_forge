@@ -120,7 +120,7 @@ export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
 export const DECLARATION_TYPE_INGRESO = 'I';
 
 // ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
-// importación liquidado por la Aduana pendiente de ingreso) are the only editable boxes the
+// importación liquidado por la Aduana pendiente de ingreso) are editable boxes the
 // classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
 // 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
 // literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
@@ -137,7 +137,20 @@ export const DECLARATION_TYPE_INGRESO = 'I';
 // neither one alone is sufficient). `FmModel303Page.jsx`'s `handleBoxChange` still clamps too,
 // but only as the interactive-input layer (it also owns the user-facing toast); it is redundant
 // with, not a substitute for, the two functions below.
-export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 109, 70]);
+//
+// ETP-5438 (AEAT spec audit) — boxes 70 (Resultados a ingresar de anteriores autoliquidaciones),
+// 78 (Cuotas a compensar de periodos anteriores aplicadas), 109 (Devoluciones acordadas por la
+// AT de anteriores autoliquidaciones) and 110 (Cuotas a compensar pendientes de periodos
+// anteriores) are declared "Num" (numérico sin signo / unsigned) in the official Modelo 303
+// "Diseño de registro" (DR303e26v101 v1.01), exactly like 111 and 77 — the spec's own "Nota"
+// footer on every page: "1. Los campos deben ser A (Alfabético) An (Alfanumérico), Num
+// (Numérico sin signo) o N (Numérico con signo)." These were editable in the UI with no negative
+// guard until this audit found the gap; widened into the SAME set/mechanism rather than a
+// parallel one. Note box78 also carries its own, unrelated relative clamp (≤ box110) in
+// `FmModel303Page.jsx`'s `handleBoxChange` — that clamp runs on the value AFTER this set's
+// floor-at-0 has already applied, so a negative box110 commit floors to 0 first and box78 can
+// never inherit a negative ceiling from it.
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110]);
 
 // Silently zeroes any NEGATIVE_NOT_ALLOWED_BOXES entry in a box array. "Silent" is deliberate:
 // this runs on every boxArr regardless of how it got here (a fresh backend response, a value
