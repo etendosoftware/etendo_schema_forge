@@ -376,8 +376,14 @@ export default function ReportDrawer({
         } else {
           const now = new Date().toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
           const cols = columns || [];
+          // Sonar S4624 — built as a separate string first (not inlined into
+          // the `filtersHtml` template below) so it isn't a template literal
+          // nested inside another template literal.
+          const filtersText = activeFilters?.length
+            ? activeFilters.map(f => `${f.label}: ${f.value}`).join(' | ')
+            : '';
           const filtersHtml = activeFilters?.length
-            ? `<div class="report-filters"><strong>${reportLabels.filtersLabel}:</strong> ${activeFilters.map(f => `${f.label}: ${f.value}`).join(' | ')}</div>`
+            ? `<div class="report-filters"><strong>${reportLabels.filtersLabel}:</strong> ${filtersText}</div>`
             : '';
           const headerCells = cols.map(c => `<th>${c.label || c.key}</th>`).join('');
           const bodyRows = reportRows.map(r => `<tr>${cols.map(c => `<td>${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('');
