@@ -604,7 +604,13 @@ export default function SideMenu({
   const featureFlagValues = useMemo(() => ({
     [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
     [PUBLIC_API_KEYS]: showPublicApiKeys,
-  }), [showAcctProcessMonitor, showPublicApiKeys]);
+    // ETP-5436 — an item can now ALSO declare featureFlag: PROOF_OF_CONCEPT_MENU (e.g.
+    // quick-sales-order/quick-purchase-order in menu.json), so CommandPalette's generic
+    // item-level filter hides them from search when the flag is off. This map must agree
+    // with showProofOfConceptMenu's group-level gate above, or an item inside an unlocked
+    // group would still be filtered out here as if the flag were unset.
+    [PROOF_OF_CONCEPT_MENU]: showProofOfConceptMenu,
+  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay
