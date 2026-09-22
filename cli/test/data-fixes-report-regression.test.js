@@ -118,6 +118,16 @@ const FIXES_WITH_REPORT = new Set([
   // dev fleet: 94 applied, 461 rows, 0 left off target.
   // See cli/test/data-fixes-r38-document-sequence-series-prefixes.test.js.
   '20260919T120000Z__R38-document-sequence-series-prefixes',
+  // R39 (ETP-5442) backfills C_ELEMENTVALUE_OPERAND (formula-account rows, e.g.
+  // "P.G.D = P.G.C + P.G.19") that GO onboarding never imported. @check only requires that a
+  // formula account's OWNER exists in the tenant's chart, so a tenant whose chart is missing one
+  // of the accounts an operand REFERENCES still matches @check and gets marked APPLIED — the
+  // @apply join simply finds nothing for that line. Its @report lists every operand line that
+  // could not be created and which side (formula account, referenced account, or both) is
+  // missing from the chart — same "flag, don't guess" pattern as R19/R28/R31/R35/R37/R38: the fix
+  // declines part of its own scope instead of silently pretending it succeeded. Empty — `detail`
+  // null — whenever the tenant's chart carries every account this fix references.
+  '20260922T120000Z__R39-elementvalue-operand-backfill',
   // R39 (gap C3) opens every C_PeriodControl row of a period whose aggregate status is
   // Mixed, but deliberately never touches a Permanently Closed row and respects the same
   // future-Permanently-Closed-period guard AD Process 167 itself enforces. Its @report

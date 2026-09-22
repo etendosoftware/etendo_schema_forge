@@ -2739,14 +2739,13 @@ the burst, not the largest window that still "feels safe."
 ---
 
 **Known non-blocking follow-ups (QA, not yet separately ticketed):**
-- **Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.** The
-  shrunk 3s TTL still caches the FAILURE case too (the `MENU_ACCESS_UNREACHABLE` sentinel), not
-  just successful resolutions — confirmed by a QA regression test (`267ee06ff`). That correctly
-  bounds the worst case, but it raises the failure-retry ceiling from roughly once/minute (old 60s
-  TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage lasts. Still
-  bounded and still fails open correctly — just a real behavior change a future engineer
-  investigating "why did listmenu call volume spike during an outage" should be able to find
-  documented somewhere.
+- ~~**Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.**~~
+  **Resolved by ETP-5403.** The shrunk 3s TTL used to also govern the FAILURE case (the
+  `MENU_ACCESS_UNREACHABLE` sentinel), raising the failure-retry ceiling from roughly once/minute
+  (old 60s TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage
+  lasted. ETP-5403 decoupled the two: failure outcomes are now cached under their own
+  `MENU_ACCESS_FAILURE_TTL_MS` (60s, back near the pre-ETP-5395 baseline) in `App.jsx`'s
+  `fetchMenuAccess()`, while the success-path TTL stays at 3s.
 - **A different, pre-existing route to role loss is not covered by either Point 1 fix.** When an
   admin revokes a role and the affected user's session detects it via the existing periodic-refresh
   machinery (ETP-5195/ETP-5189) rather than via the invite-acceptance race this ticket fixes, the

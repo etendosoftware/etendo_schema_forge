@@ -69,25 +69,27 @@ describe('FmListPage — 349 result column computation', () => {
   });
 });
 
-describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755)', () => {
-  it('defines otherDecls303 and otherDecls349 (non-draft filters)', () => {
+describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755, narrowed by ETP-5438)', () => {
+  it('defines otherDecls303 and otherDecls349 (non-draft, non-submitted filters)', () => {
     assert.match(src, /otherDecls303/);
     assert.match(src, /otherDecls349/);
   });
 
-  it('otherDecls303/otherDecls349 filter on status !== "draft"', () => {
+  it('otherDecls303/otherDecls349 filter on status !== "draft" and exclude SUBMITTED_STATUSES', () => {
     const block303 = src.match(/otherDecls303\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
     assert.ok(block303, 'otherDecls303 useMemo must exist');
     assert.match(block303[0], /d\.status !== ['"]draft['"]/);
+    assert.match(block303[0], /!SUBMITTED_STATUSES\.has\(d\.status\)/);
 
     const block349 = src.match(/otherDecls349\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
     assert.ok(block349, 'otherDecls349 useMemo must exist');
     assert.match(block349[0], /d\.status !== ['"]draft['"]/);
+    assert.match(block349[0], /!SUBMITTED_STATUSES\.has\(d\.status\)/);
   });
 
-  it('calls useFiscalAutoCompute 4 times (draft 303, draft 349, other 303, other 349)', () => {
+  it('calls useFiscalAutoCompute 6 times (draft 303, draft 349, other 303, other 349, submitted 303, submitted 349)', () => {
     const matches = src.match(/useFiscalAutoCompute\s*\(/g);
-    assert.ok(matches && matches.length === 4, `expected exactly 4 useFiscalAutoCompute calls, got ${matches?.length}`);
+    assert.ok(matches && matches.length === 6, `expected exactly 6 useFiscalAutoCompute calls, got ${matches?.length}`);
   });
 
   it('defines computedMapOther303 and computedMapOther349', () => {
@@ -117,6 +119,56 @@ describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755)', () => {
     const block349 = src.match(/useFiscalAutoCompute\(draftDecls349,\s*\{[\s\S]*?\}\);/);
     assert.ok(block349, 'draftDecls349 useFiscalAutoCompute call must exist');
     assert.match(block349[0], /checkModifiedFn:\s*checkModified349/);
+  });
+
+  it('defines submittedDecls303 and submittedDecls349 (submitted-family filters, ETP-5438)', () => {
+    assert.match(src, /submittedDecls303/);
+    assert.match(src, /submittedDecls349/);
+  });
+
+  it('submittedDecls303/submittedDecls349 filter on SUBMITTED_STATUSES', () => {
+    const block303 = src.match(/submittedDecls303\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
+    assert.ok(block303, 'submittedDecls303 useMemo must exist');
+    assert.match(block303[0], /SUBMITTED_STATUSES\.has\(d\.status\)/);
+
+    const block349 = src.match(/submittedDecls349\s*=\s*useMemo\(\s*\(\)\s*=>[\s\S]*?\[decls\]\s*\);/);
+    assert.ok(block349, 'submittedDecls349 useMemo must exist');
+    assert.match(block349[0], /SUBMITTED_STATUSES\.has\(d\.status\)/);
+  });
+
+  it('defines computedMapSubmitted303 and computedMapSubmitted349', () => {
+    assert.match(src, /computedMapSubmitted303/);
+    assert.match(src, /computedMapSubmitted349/);
+  });
+
+  it('the submittedDecls303/submittedDecls349 hook calls carry neverModifiedFn as checkModifiedFn (frozen, not polling)', () => {
+    const block303 = src.match(/useFiscalAutoCompute\(submittedDecls303,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block303, 'submittedDecls303 useFiscalAutoCompute call must exist');
+    assert.match(block303[0], /checkModifiedFn:\s*neverModifiedFn/);
+    assert.match(block303[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+
+    const block349 = src.match(/useFiscalAutoCompute\(submittedDecls349,\s*\{[\s\S]*?\}\);/);
+    assert.ok(block349, 'submittedDecls349 useFiscalAutoCompute call must exist');
+    assert.match(block349[0], /checkModifiedFn:\s*neverModifiedFn/);
+    assert.match(block349[0], /enabled:\s*Boolean\(token && apiBaseUrl\)/);
+  });
+
+  it('neverModifiedFn always resolves false (trusts the cache, never forces a live recompute)', () => {
+    const fnMatch = src.match(/async function neverModifiedFn\(\)\s*\{[\s\S]*?\n\}/);
+    assert.ok(fnMatch, 'neverModifiedFn must exist');
+    assert.match(fnMatch[0], /return false;/);
+  });
+
+  it('merges the "other" and "submitted" one-time-compute maps into computedMapOther303Merged/349Merged', () => {
+    assert.match(src, /computedMapOther303Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther303,\s*\.\.\.computedMapSubmitted303\s*\}\)/);
+    assert.match(src, /computedMapOther349Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther349,\s*\.\.\.computedMapSubmitted349\s*\}\)/);
+  });
+
+  it('getComputedForDecl is called with the merged maps, not the raw "other" maps', () => {
+    const callMatch = src.match(/getComputedForDecl\(decl,\s*isDraft,\s*\{[\s\S]*?\}\);/);
+    assert.ok(callMatch, 'getComputedForDecl(...) call site must exist');
+    assert.match(callMatch[0], /computedMapOther303:\s*computedMapOther303Merged/);
+    assert.match(callMatch[0], /computedMapOther349:\s*computedMapOther349Merged/);
   });
 
   it('the "Resultado" column picks the map based on decl.status === "draft"', () => {
