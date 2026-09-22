@@ -301,7 +301,13 @@ export function applyIdentParams(params, identChecks) {
   if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
-function applyBoxParams(params, manualOverrides) {
+// ETP-5431 — exported so AeatSubmitFlow.jsx's handleSubmit can apply the exact same
+// manualOverrides -> AEAT param mapping generate303File already uses below. Before this
+// export, AeatSubmitFlow had no way to forward box overrides (box 111, box 70, etc.) to
+// POST /fiscal303/submit at all, so any manually-overridden box value reached "Generar
+// fichero 303" (which calls applyBoxParams) but never the AEAT telematic submission
+// itself — the two endpoints silently diverged. See AeatSubmitFlow.jsx's own import site.
+export function applyBoxParams(params, manualOverrides) {
   for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
     const v = manualOverrides[Number(boxNum)];
     if (v != null) params.set(paramName, String(v));

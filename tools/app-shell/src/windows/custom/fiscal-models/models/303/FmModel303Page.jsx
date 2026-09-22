@@ -1263,6 +1263,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           orgIdent={orgIdent}
           identChecks={identChecks}
           liveBoxes={liveBoxes}
+          manualOverrides={manualOverrides}
           summary={summary}
           token={token}
           apiBaseUrl={apiBaseUrl}
