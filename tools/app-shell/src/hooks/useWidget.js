@@ -15,7 +15,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
   const [error, setError] = useState(null);
 
   const refresh = useCallback(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     setLoading(true);
     setError(null);
     apiFetch(`/${specName}/data`)
@@ -34,7 +34,7 @@ export function useWidget(specName, { token, apiBaseUrl }) {
   }, [apiFetch, specName, token, apiBaseUrl]);
 
   useEffect(() => {
-    if (token) refresh();
+    refresh();
   }, [refresh, token]);
 
   return { data, loading, error, refresh };

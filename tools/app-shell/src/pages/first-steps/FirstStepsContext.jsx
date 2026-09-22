@@ -19,12 +19,14 @@ import { useTenantPlan } from '@/hooks/useTenantPlan.js';
 const INERT_STATE = Object.freeze({
   completed: Object.freeze([]),
   seen: false,
+  dismissed: false,
   // Inert means "no provider above me", which is indistinguishable from "not answered yet" —
   // so it reports loading and the badge renders nothing rather than a wrong 0/7.
   loading: true,
   error: null,
   toggleStep: async () => false,
   markSeen: async () => false,
+  setDismissed: async () => false,
   completedCount: 0,
   plan: null,
   steps: Object.freeze(visibleFirstSteps(null)),
@@ -39,10 +41,17 @@ export function FirstStepsProvider({ children }) {
   // it knows nothing about plans, and a tenant that goes productive must be able to save the
   // two steps that just appeared.
   const firstSteps = useFirstSteps({ allowedIds: toggleableStepIds(plan) });
-  const { completed, seen, loading, error, toggleStep, markSeen } = firstSteps;
+  const { completed, seen, dismissed, loading, error, toggleStep, markSeen, setDismissed } =
+    firstSteps;
   const value = useMemo(() => ({
     completed,
     seen,
+    // ETP-5364 — the user closed the checklist for good. Read by `AppLayout`, which feeds it to
+    // `filterMenuGroupsByAccess` as the fourth menu axis, and by `FirstStepsPage` to offer
+    // bringing it back. Never derived from `completedCount === total`: finishing the list is not
+    // the same act as choosing to put it away. TRI-STATE — `undefined` until the GET answers,
+    // and the menu filter reveals the entry only on an exact `false`. See useFirstSteps.js.
+    dismissed,
     // Either half missing makes the whole thing unanswerable: the completed ids without the
     // plan cannot produce a denominator, and the plan without the ids cannot produce a count.
     // This also holds back the dashboard's one-time redirect (`useFirstStepsRedirect` gates on
@@ -52,11 +61,13 @@ export function FirstStepsProvider({ children }) {
     error,
     toggleStep,
     markSeen,
+    setDismissed,
     plan,
     steps: visibleFirstSteps(plan),
     completedCount: countCompletedSteps(completed, plan),
     total: firstStepsTotal(plan),
-  }), [completed, seen, loading, planLoading, error, toggleStep, markSeen, plan]);
+  }), [completed, seen, dismissed, loading, planLoading, error, toggleStep, markSeen,
+    setDismissed, plan]);
   return <FirstStepsContext.Provider value={value}>{children}</FirstStepsContext.Provider>;
 }
 

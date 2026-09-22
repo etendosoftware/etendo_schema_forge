@@ -33,7 +33,11 @@ const ROWS = [
  *             'confirmed'` additionally asserts the button DOES appear on
  *             DOC-002 (Completado), so this spec still covers the
  *             positive case for the button's wiring, not just its absence.
- *   more    → window passes `menuActions` (kebab)
+ *   more    → window passes `menuActions` (kebab). sales-invoice and
+ *             purchase-invoice show it even on DOC-001 (Draft) since ETP-5378
+ *             added a Confirmar entry there, mirroring the form's draftMode
+ *             button — previously their kebab only ever appeared once
+ *             completed (Reactivate/Post).
  *
  * Edit and Delete are always expected (Delete fully visible because the test
  * rows do not set `hideDeleteWhenComplete` on draft state).
@@ -51,7 +55,10 @@ const FIELDS = {
   },
   'sales-invoice': {
     extra: { 'businessPartner$_identifier': 'Test BP', grandTotalAmount: 100, invoiceDate: '2026-01-15' },
-    expects: { clone: true, email: false, more: false },
+    // ETP-5378 — the row kebab now offers Confirmar on a Draft invoice (matching
+    // the form's own draftMode button), so DOC-001 (DR below) renders the kebab
+    // where it used to render nothing. See useInvoiceWindow.js's menuActions.
+    expects: { clone: true, email: false, more: true },
     emailGate: 'confirmed',
   },
   'purchase-invoice': {
@@ -59,7 +66,8 @@ const FIELDS = {
     // same display text so the row locator works across all four windows.
     extra: { 'businessPartner$_identifier': 'Test BP', grandTotalAmount: 100, invoiceDate: '2026-01-15' },
     docNoField: 'orderReference',
-    expects: { clone: true, email: false, more: false },
+    // ETP-5378 — see the sales-invoice comment above; same Confirmar addition.
+    expects: { clone: true, email: false, more: true },
   },
   'sales-quotation': {
     entityPath: 'quotation',  // quotation entity, not 'header'
