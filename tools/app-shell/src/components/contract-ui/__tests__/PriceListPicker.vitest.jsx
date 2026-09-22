@@ -13,27 +13,14 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
-// Radix Select cannot run in JSDOM — replace with a native <select> that
-// honours value/onValueChange and renders options via SelectItem. Mirrors the
-// mock in CreateInvoiceConfirmModal.vitest.jsx so PriceListSelectField renders
-// identically under test.
-vi.mock('@/components/ui/select', () => ({
-  Select: ({ children, value, onValueChange, disabled, 'data-testid': testId }) => (
-    <div>
-      <select
-        value={value ?? ''}
-        onChange={(e) => onValueChange?.(e.target.value)}
-        disabled={disabled}
-        data-testid={testId || 'select-control'}
-      >
-        {children}
-      </select>
-    </div>
-  ),
-  SelectTrigger: ({ children, ...props }) => <span {...props}>{children}</span>,
-  SelectValue: () => null,
-  SelectContent: ({ children }) => <>{children}</>,
-  SelectItem: ({ children, value }) => <option value={value}>{children}</option>,
+// ETP-5410 follow-up: PriceListSelectField no longer wraps Radix Select — it renders the
+// REAL CreatableSearchSelect (same searchable, clearable FK-picker component the generated
+// "Tarifa" field already uses on the real Factura de Venta form, and the one
+// NewPaymentEntryModal already uses for its own staticOptions pickers). buildUrlWithParams is
+// stubbed the same way CreatableSearchSelect's own test suite stubs it — irrelevant in
+// staticOptions mode (no selectorUrl fetch happens), but keeps the import resolvable.
+vi.mock('@/lib/buildUrlWithParams.js', () => ({
+  buildUrlWithParams: (url) => url,
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -42,8 +29,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   usePriceListPicker,
   PriceListSelectField,
-  resolvePriceListValue,
-  toPriceListSelectValue,
 } from '@/components/contract-ui/PriceListPicker';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -393,29 +378,12 @@ describe('usePriceListPicker', () => {
   });
 });
 
-// ── resolvePriceListValue / toPriceListSelectValue (sentinel helpers) ─────────
-
-describe('price-list sentinel helpers', () => {
-  it('toPriceListSelectValue maps a blank id to the empty sentinel', () => {
-    expect(toPriceListSelectValue('')).toBe('__empty__');
-    expect(toPriceListSelectValue(null)).toBe('__empty__');
-    expect(toPriceListSelectValue(undefined)).toBe('__empty__');
-  });
-
-  it('toPriceListSelectValue passes a real id through unchanged', () => {
-    expect(toPriceListSelectValue('pl-1')).toBe('pl-1');
-  });
-
-  it('resolvePriceListValue maps the empty sentinel back to an empty string', () => {
-    expect(resolvePriceListValue('__empty__')).toBe('');
-  });
-
-  it('resolvePriceListValue passes a real id through unchanged', () => {
-    expect(resolvePriceListValue('pl-1')).toBe('pl-1');
-  });
-});
-
 // ── PriceListSelectField ───────────────────────────────────────────────────────
+// ETP-5410 follow-up: renders the REAL CreatableSearchSelect (not a Radix Select mock) —
+// same component the generated "Tarifa" field uses on the real Factura de Venta form. Its
+// own extensive test suite (CreatableSearchSelect*.vitest.jsx) covers the picker's internal
+// search/dropdown/clear behavior; these tests only verify PriceListSelectField wires it
+// correctly (staticOptions, value, displayValue, onChange, the loading skeleton, the label).
 
 describe('PriceListSelectField', () => {
   afterEach(() => {
@@ -439,61 +407,70 @@ describe('PriceListSelectField', () => {
     expect(screen.getByText('salesPriceListField')).toBeInTheDocument();
   });
 
-  it('shows the loading option and disables the select while loading', () => {
+  it('shows a skeleton placeholder instead of the picker while loading', () => {
     renderField({ loading: true });
-    expect(screen.getByText('loading')).toBeInTheDocument();
-    expect(screen.getByTestId('test-price-list-select').closest('select')
-      ?? screen.getByRole('combobox')).toBeDisabled();
+    expect(screen.getByTestId('Skeleton__test-price-list')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('shows noPriceListsAvailable and disables the select when the list is empty and not loading', () => {
+  it('renders the real CreatableSearchSelect combobox once not loading, even with an empty list', () => {
     renderField({ loading: false, priceLists: [] });
-    expect(screen.getByText('noPriceListsAvailable')).toBeInTheDocument();
-    expect(screen.getByRole('combobox')).toBeDisabled();
+    expect(screen.queryByTestId('Skeleton__test-price-list')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 
-  it('renders an option per price list and enables the select when not empty', () => {
+  it('opens to show an option per price list (staticOptions, no server fetch)', () => {
     renderField({
       loading: false,
       priceLists: [makePriceList({ id: 'pl-a', name: 'PL A' }), makePriceList({ id: 'pl-b', name: 'PL B' })],
     });
-    expect(screen.getByText('PL A')).toBeInTheDocument();
-    expect(screen.getByText('PL B')).toBeInTheDocument();
-    expect(screen.getByRole('combobox')).not.toBeDisabled();
+    fireEvent.focus(screen.getByTestId('field-test-price-list'));
+    expect(screen.getByTestId('option-test-price-list-pl-a')).toHaveTextContent('PL A');
+    expect(screen.getByTestId('option-test-price-list-pl-b')).toHaveTextContent('PL B');
   });
 
   it('falls back to the id as the option label when name is missing', () => {
     const { name: _name, ...noName } = makePriceList({ id: 'pl-noname' });
     renderField({ priceLists: [noName] });
-    expect(screen.getByText('pl-noname')).toBeInTheDocument();
+    fireEvent.focus(screen.getByTestId('field-test-price-list'));
+    expect(screen.getByTestId('option-test-price-list-pl-noname')).toHaveTextContent('pl-noname');
   });
 
-  it('shows the current priceListId as the select value', () => {
+  it('shows the current priceListId as a clearable chip (the "x" the generated Tarifa field also has)', () => {
     renderField({
-      priceLists: [makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })],
+      priceLists: [makePriceList({ id: 'pl-a', name: 'PL A' }), makePriceList({ id: 'pl-b', name: 'PL B' })],
       priceListId: 'pl-b',
     });
-    expect(screen.getByRole('combobox').value).toBe('pl-b');
+    // SelectorChip only wires up its `testId` prop to the DOM (`data-testid` is accepted by
+    // CreatableSearchSelect's own JSX but never forwarded into SelectorChip) — this is the
+    // real rendered id, `field-${field.key}-chip`.
+    expect(screen.getByTestId('field-test-price-list-chip')).toHaveTextContent('PL B');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('shows the empty sentinel as the select value when priceListId is blank and no price lists loaded', () => {
-    // With an empty priceLists array the component itself renders the
-    // `__empty__` SelectItem (the "noPriceListsAvailable" option), so the
-    // native <select> mock has a matching option to select — unlike a blank
-    // priceListId with a non-empty priceLists array, where no rendered
-    // <option> matches the sentinel and the browser/jsdom falls back to the
-    // first real option instead (not a case this component's callers hit,
-    // since usePriceListPicker always auto-selects once priceLists is non-empty).
-    renderField({ priceLists: [], priceListId: '' });
-    expect(screen.getByRole('combobox').value).toBe('__empty__');
+  it('shows the plain search input (no chip) when priceListId is blank', () => {
+    renderField({ priceLists: [makePriceList({ id: 'pl-a' })], priceListId: '' });
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    expect(screen.queryByTestId('field-test-price-list-chip')).not.toBeInTheDocument();
   });
 
-  it('calls onChange with the resolved (non-sentinel) id when the user picks an option', () => {
+  it('calls onChange with just the picked id — CreatableSearchSelect itself also passes a label and the raw option, but PriceListSelectField narrows to the single-id contract both usePriceListPicker callers (a plain setPriceListId) expect', () => {
     const { onChange } = renderField({
-      priceLists: [makePriceList({ id: 'pl-a' }), makePriceList({ id: 'pl-b' })],
+      priceLists: [makePriceList({ id: 'pl-a', name: 'PL A' }), makePriceList({ id: 'pl-b', name: 'PL B' })],
+      priceListId: '',
+    });
+    fireEvent.focus(screen.getByTestId('field-test-price-list'));
+    fireEvent.mouseDown(screen.getByTestId('option-test-price-list-pl-b'));
+    expect(onChange).toHaveBeenCalledWith('pl-b');
+  });
+
+  it('calls onChange with an empty id when the chip is cleared', () => {
+    const { onChange } = renderField({
+      priceLists: [makePriceList({ id: 'pl-a', name: 'PL A' })],
       priceListId: 'pl-a',
     });
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'pl-b' } });
-    expect(onChange).toHaveBeenCalledWith('pl-b');
+    // The clear (X) control fires on mousedown, not click — SelectorChip#triggerClear.
+    fireEvent.mouseDown(screen.getByLabelText('clear'));
+    expect(onChange).toHaveBeenCalledWith('');
   });
 });

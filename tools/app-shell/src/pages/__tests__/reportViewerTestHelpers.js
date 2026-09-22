@@ -1,6 +1,26 @@
 import { screen, waitFor } from '@testing-library/react';
 
 /**
+ * Full per-report access map (ETP-5402) — ReportViewerPage filters its
+ * gallery/selected report against the caller's own per-report access map
+ * (`fetchMyReportAccess()`); granting 'full' to every catalog id keeps each
+ * suite's fixtures visible, matching the paired `useWindowAccess: () =>
+ * 'full'` mock. Name is prefixed with `mock` so Vitest allows referencing it
+ * from inside a hoisted `vi.mock('@/lib/rolesApi.js', ...)` factory.
+ */
+export const mockFullReportAccess = {
+  'tax-report': 'full',
+  'aging-receivable': 'full',
+  'aging-payable': 'full',
+  'balance-sheet': 'full',
+  'profit-loss': 'full',
+  'report-general-ledger': 'full',
+  'report-journal-entries': 'full',
+  'report-trial-balance': 'full',
+  'inventory-stock-report': 'full',
+};
+
+/**
  * Asserts that, while a required (non-hidden) param is empty, EVERY action
  * that can trigger a report render is disabled — the sidebar's own "Generate
  * Report" button AND the four top-bar actions (PDF / Excel / CSV / Print).
