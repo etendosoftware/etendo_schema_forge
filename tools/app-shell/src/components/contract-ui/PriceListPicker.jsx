@@ -123,7 +123,7 @@ export function PriceListSelectField({ priceLists, priceListId, onChange, loadin
             onChange={(id) => onChange(id)}
             resolvedLabel={label}
             staticOptions={options}
-          />
+            data-testid="CreatableSearchSelect__75722c" />
         )}
       </div>
     </div>
