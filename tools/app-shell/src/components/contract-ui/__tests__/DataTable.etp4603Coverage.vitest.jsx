@@ -19,6 +19,7 @@
  * override) to reach the gross-price branch that fixed drawer never triggers.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -172,6 +173,26 @@ const baseColumns = [
   { key: 'status', label: 'Status', type: 'status' },
 ];
 
+// ETP-5133 BUG-1 follow-up — `growColumnWidth()` falls back to a
+// `max(Bpx, calc(...))` expression whenever no live scroll host is measured
+// (the case for every standalone unit test below — see DataTable.jsx's own
+// doc comment on growColumnWidth). jsdom's `cssstyle` cannot parse `max(...)`
+// and silently drops the ENTIRE `style` attribute rather than just `width` —
+// verified: `col.getAttribute('style')` comes back `null`, not merely missing
+// `width`. Reading a `<col>` width back off a live-mounted node is therefore
+// unreliable for this case; `renderToStaticMarkup` serializes the literal
+// style text React wrote without ever going through jsdom's CSSOM, so the
+// max()/calc() expression survives intact.
+function colWidthsFromMarkup(element) {
+  const html = renderToStaticMarkup(element);
+  const colgroupHtml = /<colgroup>([\s\S]*?)<\/colgroup>/.exec(html)?.[1] ?? '';
+  const colTags = colgroupHtml.match(/<col\b[^>]*>/g) ?? [];
+  return colTags.map((tag) => {
+    const style = /style="([^"]*)"/.exec(tag)?.[1] ?? '';
+    return /(?:^|;)\s*width:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+  });
+}
+
 describe('DataTable — ETP-4603 coverage top-up', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -180,38 +201,35 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
   });
 
   // ── flexSpec / growColumnWidth / renderLinesColgroup (hideHeader mode) ──
-  // ETP-5332 — `growColumnWidth()` used to emit a `calc((100% - Fpx) / N + Bpx)`
-  // expression for grow columns; Chrome doesn't honour that per column inside
-  // `table-layout: fixed` (it splits the space equally and ignores each column's own
-  // basis), so the function now does the arithmetic itself and returns a literal
-  // number. jsdom has no `ResizeObserver`, so `availableWidthPx` stays 0 here and the
-  // grow column renders at the bare basis its own type declares — same shape a fixed
-  // column gets, just still driven by `columnFlex()`'s grow flag rather than a
-  // decodable string.
-  it('renders a fixed-layout colgroup with a literal-px width for grow columns when hideHeader is set', () => {
-    render(
+  it('renders a fixed-layout colgroup with calc()-based widths for grow columns when hideHeader is set', () => {
+    const columns = [
+      { key: 'name', label: 'Name', type: 'string' },
+      { key: 'fixed', label: 'Fixed', type: 'string', flexGrow: 0 },
+    ];
+    const element = (
       <DataTable
-        columns={[
-          { key: 'name', label: 'Name', type: 'string' },
-          { key: 'fixed', label: 'Fixed', type: 'string', flexGrow: 0 },
-        ]}
+        columns={columns}
         data={baseRows}
         hideHeader
         linesLayout="inlineEditable"
         selectable={false}
-      />,
+      />
     );
+    render(element);
 
     const table = screen.getByTestId('Table__eb5261');
     const cols = table.querySelectorAll('colgroup col');
     expect(cols.length).toBeGreaterThan(0);
-    // The fixed-basis column keeps its literal 80px width...
-    expect(cols[1].style.width).toBe('80px');
-    // ...and the grow column now renders its own literal basis (120px, per the
-    // `columnFlex` mock above) instead of a calc() expression.
-    expect(cols[0].style.width).toBe('120px');
     // Header row is hidden entirely in this mode.
     expect(screen.getByTestId('TableHeader__eb5261')).toHaveAttribute('aria-hidden', 'true');
+
+    // Widths read from server-rendered markup (see colWidthsFromMarkup) — jsdom
+    // drops the whole `style` attribute for the max()/calc() grow-column value.
+    const widths = colWidthsFromMarkup(element);
+    // The fixed-basis column keeps its literal 80px width...
+    expect(widths[1]).toBe('80px');
+    // ...while the grow column gets a calc()-based expression restoring its own basis.
+    expect(widths[0]).toMatch(/calc\(/);
   });
 
   // ETP-4803 — `dimensionsPanel` never renders as a fixed grid column in
@@ -238,11 +256,21 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
     ];
     const columnsWithDimensions = [
       columnsWithoutDimensions[0],
-      { key: 'dimensions', label: 'Dimensions', type: 'dimensionsPanel', dimensionFields: [] },
+      // ETP-5281 — `dimensionFields` must be non-empty (and visible, i.e. not
+      // filtered out by `hiddenColumns`) for the chevron to reserve its slot
+      // at all: DataTable now mirrors InlineLinesPanel's own
+      // `visibleDimensionFields.length > 0` gate instead of just checking
+      // that a `dimensionsPanel`-typed column exists in `columns`. An EMPTY
+      // `dimensionFields` array (e.g. every candidate hidden by tenant GL
+      // config) must NOT reserve the 44px slot — see
+      // DataTable.dimensionsPanelHiddenFields.vitest.jsx for that case.
+      { key: 'dimensions', label: 'Dimensions', type: 'dimensionsPanel', dimensionFields: [{ key: 'project', label: 'Project', type: 'string' }] },
       columnsWithoutDimensions[1],
     ];
 
-    const { container: withoutDimensions } = render(
+    // Widths read from server-rendered markup (see colWidthsFromMarkup) — jsdom
+    // drops the whole `style` attribute for the max()/calc() grow-column value.
+    const colsWithout = colWidthsFromMarkup(
       <DataTable
         columns={columnsWithoutDimensions}
         data={baseRows}
@@ -251,10 +279,8 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
         selectable={false}
       />,
     );
-    const colsWithout = [...withoutDimensions.querySelectorAll('colgroup col')]
-      .map((c) => c.style.width);
 
-    const { container: withDimensions } = render(
+    const colsWith = colWidthsFromMarkup(
       <DataTable
         columns={columnsWithDimensions}
         data={baseRows}
@@ -263,35 +289,32 @@ describe('DataTable — ETP-4603 coverage top-up', () => {
         selectable={false}
       />,
     );
-    const colsWith = [...withDimensions.querySelectorAll('colgroup col')]
-      .map((c) => c.style.width);
 
     // The dimensionsPanel column itself must add NO extra data <col> and
     // change NO fixed-column width — adding it to the schema is a no-op on
     // the DATA columns, exactly as it is on InlineLinesPanel's real
     // header/flex row. Before the ETP-4803 fix, this list gained a phantom
     // `120px`/'1 0' DATA entry that desynced fixedColsTotalPx/growCount,
-    // throwing off every subsequent grow column's width.
+    // shrinking every subsequent grow column's calc() width.
     //
     // ETP-4735's leading chevron reservation is the one legitimate
-    // difference: one extra '44px' <col>. (ETP-5332: `growColumnWidth()` used
-    // to fold that extra 44px into a `calc()` expression's fixed-total term,
-    // which this test could decode back out of the rendered string. Under
-    // jsdom — no `ResizeObserver` — the grow column now renders its bare
-    // basis regardless of the fixed total, so that specific accounting is no
-    // longer observable at this level; it is covered directly by
-    // `growColumnWidth()`'s own unit tests in
-    // linesAddRowColumnAlignment.vitest.jsx instead. What stays pinned here
-    // is the property this test actually owns: the dimensionsPanel column
-    // adds no data <col>, the chevron slot is the only structural addition,
-    // and every other column's width is untouched by its presence.)
+    // difference: one extra '44px' <col>, plus the grow column's calc()
+    // subtracting those same 44px from its fixedTotalPx term (so the row's
+    // total literal-pixel width — chevron + fixed cols — stays accounted for
+    // instead of overflowing the table by 44px under table-layout: fixed).
+    // (ETP-5332 added a literal-px `measured` branch to growColumnWidth() for
+    // a LIVE scroll host — not exercised here: this suite mounts DataTable
+    // standalone with no ResizeObserver mock, so `hostWidthPx` never resolves
+    // and growColumnWidth() keeps taking its original calc()-string branch,
+    // unchanged — see growColumnWidth()'s own doc comment in DataTable.jsx.)
     expect(colsWith[0]).toBe('44px');
     expect(colsWith[2]).toBe(colsWithout[1]); // the 'Fixed' column is untouched
     expect(colsWithout[1]).toBe('80px');
-    // The grow column keeps its own literal basis (120px) with or without the
-    // leading chevron column ahead of it.
-    expect(colsWithout[0]).toBe('120px');
-    expect(colsWith[1]).toBe('120px');
+    expect(colsWithout[0]).toMatch(/calc\(/);
+    expect(colsWith[1]).toMatch(/calc\(/);
+    const fixedTotalWithout = Number(colsWithout[0].match(/100% - (\d+)px/)[1]);
+    const fixedTotalWith = Number(colsWith[1].match(/100% - (\d+)px/)[1]);
+    expect(fixedTotalWith).toBe(fixedTotalWithout + 44);
   });
 
   // ── visibleColumns auto-hide/reveal for a displayIf-controlled column ───

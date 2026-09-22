@@ -14,7 +14,7 @@
 // `<MemoryRouter>` from the outside has no effect on which route renders — `BrowserRouter`
 // reads `window.location` directly. To exercise a given path we push it onto
 // `window.history` before rendering, same as a real browser navigation would.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
@@ -40,6 +40,22 @@ vi.mock('../components/CopilotContext.jsx', () => ({
   useCopilot: () => ({ open: () => {} }),
 }));
 
+// ETP-5195 — a provider seeded with a token starts `isSessionReady: false` and POSTs
+// /sws/neo/refreshtoken once on mount; until that settles the shell renders its pending
+// fallback, which is an EMPTY body. This file deliberately ran without a fetch mock, so every
+// route assertion below started failing on a blank document rather than on its own subject.
+// `{ unchanged: true }` is the backend's own no-op answer (SFRefreshToken stopped minting a JWT
+// when the role has not changed), inside the `{ result: "<json>" }` envelope the NEO webhook
+// bridge wraps every response in.
+beforeEach(() => {
+  globalThis.fetch = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+  }));
+});
+
 afterEach(() => {
   cleanup();
   window.localStorage.clear();
@@ -48,7 +64,13 @@ afterEach(() => {
 
 function renderAt(path, {
   windowMap = { 'sales-order': { slug: 'sales-order' } },
-  auth = { loginPath: '/login', initialSession: { token: 'test-token' } },
+  // ETP-4576: `credentialMode` defaults to `auto`, so AuthProvider restores the session
+  // from the server on mount and `status` sits at 'booting' until that settles. AuthGate
+  // renders its `bootingFallback` (null by default) meanwhile, so without opting out this
+  // test renders an empty body and every route assertion below fails. The subject here is
+  // route composition, not the restore, so it takes the documented `null` escape hatch -
+  // which makes `status` resolve synchronously from the seeded token.
+  auth = { loginPath: '/login', initialSession: { token: 'test-token' }, restoreSession: null },
   // DashboardPage waits on `useCurrency()` resolving to a non-null value before leaving its
   // skeleton state. With a token set, CurrencyProvider's effect fetches `${apiBaseUrl}/session`
   // for real (no fetch mock here) and silently swallows the failure, leaving the currency code
