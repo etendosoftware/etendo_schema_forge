@@ -16972,6 +16972,7 @@
     "backendError.assetSearchKeyDuplicate": "There is already an asset with this identifier in this organization.",
     "backendError.productNotStockable": "This product is of type Service and cannot be used in inventory movements.",
     "processAssetCompleted": "Create Amortization completed",
+    "processNowCompleted": "Create Periods completed",
     "reactivated": "Document reactivated",
     "post": "Post",
     "unpost": "Unpost",
