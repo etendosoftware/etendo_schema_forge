@@ -37,6 +37,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 - No current evidence shows visible totals, tax recalculation, discount recalculation, or other header-level monetary reactions in this window.
 - Copy-link visibility (ETP-4721): in the grid selection bar, `Copy link` appears only when exactly one row is selected — hidden with 0 or 2+ rows selected. In the detail topbar, `Copy link` is visible whenever the record has a persisted `recordId` (not the unsaved `'new'` sentinel), with no selection gate since detail always represents a single record. Both copy `{origin}/{windowName}/{recordId}` to the clipboard, show a `Link copied` / `Enlace copiado` toast, and display a `Copy link` / `Copiar enlace` tooltip on hover. The legacy dead link icon previously shown in the idle-state (no-selection) grid toolbar is now hidden via the `hideLink` prop passed to `<ListView>`. **Since ETP-5260**, the detail-topbar button no longer renders as a sibling of `ConfirmWithCreditButtonBase` inside `ConfirmWithCreditButton.jsx` — that sibling rendering (ETP-4721) was itself the bug this ticket fixed (it landed Copy link to the RIGHT of Save/Confirm, in `topbarRight`). It now lives in `ReturnMaterialReceiptSecondaryActions.jsx` (wired as `topbarSecondary`), left of Save/Confirm. This window has no Clone or Send in its secondary group (`clone={false}`/`showSend={false}` passed explicitly).
 - **ETP-4933 zone — unaffected by ETP-5260:** `ConfirmWithCreditButtonBase` (a PRIMARY action available in Borrador) stays in `ConfirmWithCreditButton.jsx` (`topbarRight`), to the RIGHT of Save/Confirm — the fix that gave this window `topbarSecondary` is strictly additive; it does not touch `topbarRight`. See `docs/ui-customization.md` §3b for the general slot-classification rule and why this matters.
+- **ETP-5408 — Confirmar now renders the generic positive-process button:** the DR-status Confirm button in the shared `ConfirmWithCreditButtonBase.jsx` was a hand-rolled `<button>` with inline styles and **no icon**, so it was the only Confirmar in the product without the checkmark that Facturas / Pedidos / Albaranes show. It now renders the shared `Button` (`@/components/ui/button.jsx`, `variant="default"` + `size="default"`) with `<Check size={16} className="mr-1" />`, and its classes come from the same `getButtonClass`/`getSaveBtnCls` helpers `DetailView.jsx` uses for a `style: 'positive'` AD process button (`salesTheme` undefined, `toolbarButtonSize` `'sm'` — the defaults for this window), so a future restyle of that button reaches this one too. Presentation only: `confirmBlocked` and the `maybeSaveBeforeConfirm` + `setShowModal(true)` click logic are unchanged. Because the shared `Button` carries `disabled:pointer-events-none` (which kills the native `title` on a disabled element), the button is wrapped in `GateTooltip` — the same wrapper `saveActions.jsx` uses, now exported from there rather than duplicated — so the ETP-4933 "why is Confirm blocked" hover explanation (`saveGate.title`) still appears. The CO-status "Crear factura rectificativa" pill button was deliberately left as a hand-rolled `<button>`: out of scope for this ticket.
 
 ## Gap assessment
 
@@ -50,7 +51,7 @@ Receive material back into stock after a sales-side return flow. The window is o
   ~~The left-panel mismatch flagged earlier is now resolved: the panel no longer auto-shows the system-generated PDF. It's now the customer-supplied return receipt upload~~ — **this left-panel change was reverted by ETP-5124** (see below); the paragraph is kept struck through for history. Other change made under ETP-4408 that stands unchanged: discarded `etblkpAccountingstatus` (the sole field on this window's "Otros" form tab, also present on `goods-shipment`) — internal accounting-posting state, not part of the DF and not needed here.
   **Bug fixed under ETP-4408 (found while validating this window, pre-existing since 2026-03):** `businessPartner` (Contacto) stayed editable forever, even on completed receipts. Root cause: its AD rule (`@Processed@='Y' | @HAS_M_INOUTLINES@='Y'`) includes `@HAS_M_INOUTLINES@`, a session variable the pipeline's resolver can never turn into client-side JS (`evaluable: false` unconditionally) — no `decisions.json` setting can fix that half of the rule. Fixed by overriding `readOnlyLogic` with the simplified, client-evaluable `"@Processed@='Y'"` instead of leaving it unresolved. **Known residual gap:** the `HAS_M_INOUTLINES` half (lock the partner once the receipt already has lines, even while still in draft) is not enforced client-side; only "locked once completed" is.
   (`warehouse` and `partnerAddress` were investigated for the same symptom and found **not** actually broken — their `"readOnlyLogic": null` in `decisions.json` turned out to be an inert no-op due to a `resolve-curated.js` `||`-fallback bug that always falls through to AD's real value regardless of an explicit `null` override; both fields already locked correctly on `Processed`. Left untouched.)
-  **Known gap (not fixed under ETP-4408, left for a follow-up):** `ConfirmWithCreditButtonBase.jsx` hides the "Crear factura de devolución" action once `hasReturnInvoice` is true (i.e. *any* return invoice exists), even when `invoiceStatus < 100`. A partially invoiced return (e.g. 83%) has no way to invoice the remainder from this UI. Pre-existing since 2026-05-27 (ETP-4033), not introduced here — just made visible by the new billing-status indicator.
+  **Known gap (not fixed under ETP-4408, left for a follow-up):** `ConfirmWithCreditButtonBase.jsx` hides the "Crear factura de devolución" action once `hasReturnInvoice` is true (i.e. *any* return invoice exists), even when `invoiceStatus < 100`. A partially invoiced return (e.g. 83%) has no way to invoice the remainder from this UI. Pre-existing since 2026-05-27 (ETP-4033), not introduced here — just made visible by the new billing-status indicator. **ETP-5381 update:** the *predicate* behind that flag changed — `useConfirmWithCredit.js` no longer overrides it with a client-side "count only `CO` invoices" filter and now trusts the backend's non-voided predicate, the same one guard P5 uses — so the hiding is now also enforced server-side (a second rectificative invoice is a 409). The partial-invoicing gap itself is unchanged and still open.
   **ETP-4737 — "Crear Factura Rectificativa" rename:** the invoice created from this window is now the unified "Factura Rectificativa" doc type (see `sales-invoice.md`), not a separate credit-memo/return-invoice type. `return-material-receipt/ConfirmWithCreditButton.jsx` now overrides `cardTitle`/`cardDesc` with new window-scoped keys (`returnReceipt.createRectificativeInvoice` / `returnReceipt.createRectificativeInvoiceDescription`) instead of falling back to `ConfirmWithCreditButtonBase.jsx`'s generic `createReturnInvoice`/`createReturnInvoiceDescription` keys (left untouched — they are also the fallback for `return-to-vendor-shipment`, a different window, so renaming them directly would have leaked the sales-side "Factura Rectificativa" wording into the unrelated purchase-side flow). The confirm-modal body copy (`returnReceipt.confirmModal.infoRowPost`) and the post-creation result texts (`rmrInvoiceCreatedTitle`, `rmrReturnInvoiceDoc`, `rmrCreateInvoiceConfirmDesc`) were reworded from "factura de devolución" to "factura rectificativa" in all 3 locales. **Known residual gap:** the secondary CO-status pill button (shown when the receipt is already completed and has no return invoice yet — the "add an invoice after the fact" path, distinct from the primary DR-status confirm flow) still renders the generic, unrenamed `ui('createReturnInvoice')` label ("Crear Factura de Devolución") — `ConfirmWithCreditButtonBase.jsx` has no override prop for that specific button today. Left as-is to avoid touching the shared component mid-task; a follow-up could add an optional `createButtonLabel` prop (same pattern as `cardTitle`/`cardDesc`) so this window can override it too.
 - **ETP-4857 — Bulk "Confirmar" action was missing for draft receipts:** the list selection bar had no way to complete multiple Borrador receipts at once, unlike the equivalent action already present on `goods-shipment`. Root cause: `ReturnMaterialReceiptBulkActions` (in this window's `index.jsx`) only rendered `CopyLinkButton` in its `bulkActions` slot — `BulkDocumentAction` had simply never been wired in here, even though the generic component and the plumbing through `ReturnWindowShell` (which forwards `bulkActions` via prop spread to the generated page, unchanged) both already supported it. Fixed by adding `BulkDocumentAction` (from `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx`) with `entity="returnMaterialReceipt"`, `buildActions={buildInOutActions}`, `labelKey="confirmBulk"` (renamed to `labelKey="process"` by ETP-5302, see below) — the exact same wiring `goods-shipment` uses. `buildInOutActions` only offers the `CO` (confirm) action when a draft row is selected; per explicit scope decision for this ticket it does **not** offer `RE` (reactivate) for completed rows selected alongside drafts, unlike `BulkDocumentAction`'s own default `buildActions` — only `DR→CO` is in scope here. **Follow-up bug found and fixed in the same change:** the result toast (success/warning/error) did not appear after running the bulk action — it only showed up whenever some other window that calls `useBulkActionToast()` happened to mount next. Root cause: `BulkDocumentAction` persists its result to `sessionStorage` and does a full `window.location.reload()`, but reading that value back and showing the toast is `useBulkActionToast()`'s job, and neither return window (nor their shared `ReturnWindowShell.jsx`) ever called it. Fixed by adding the `useBulkActionToast()` call inside `ReturnWindowShell.jsx` itself, so both `return-material-receipt` and `return-to-vendor-shipment` get it without duplicating the call in each window's `index.jsx`.
 - **ETP-4940 follow-up — Confirm silently discarded pending header edits:** clicking the primary DR-status confirm button (`ConfirmWithCreditButtonBase.jsx`'s "action-confirm-with-credit") fired its own `documentAction=CO` request (inside `ConfirmInOutModal.jsx`) without ever going through `DetailView.jsx`'s draftMode/kebab-menu save-before-confirm guards that ETP-4940 had already added elsewhere — an edit made without clicking Save first was silently discarded, and the record confirmed with the last-persisted value. Fixed by threading `onSave`/`isDirty` from `DetailView.jsx`'s `topbarRight` render through `ConfirmWithCreditButton.jsx` into `ConfirmWithCreditButtonBase.jsx`, which now calls the same `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` helper before opening the confirm modal. See `docs/ui-customization.md`'s "Save-before-confirm contract for `topbarRight`" note.
@@ -97,6 +98,7 @@ Receive material back into stock after a sales-side return flow. The window is o
 - **ETP-5124 — preview left panel reverted to the system-generated PDF**: `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ReturnMaterialReceiptPreview.vitest.jsx`'s "leftPanel wiring (ETP-5124 — system-generated PDF, reverting ETP-4408)" block asserts `GenericPreviewModal` receives a `leftPanel` prop and no `attachmentConfig` prop.
 - **ETP-5316 — Clone action removed everywhere**: `tools/app-shell/src/windows/custom/return-material-receipt/index.jsx` previously passed `duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}` to `ReturnWindowShell`, which showed the "Clonar" row quick-action in the grid for Completado rows — Clone/duplicate is not a supported action for this document. Changed to `duplicateAction={{ show: false }}`, mirroring the sibling `return-to-vendor-shipment` (fixed earlier under ETP-4717/4933). The document/detail view never showed Clone (`ReturnMaterialReceiptSecondaryActions.jsx` already passes `clone={false}` to `DocumentSecondaryActions`), so this closes the last remaining surface. `e2e/tests/flows/return-material-receipt.mocked.spec.js` was updated in this same change (the "row quick-actions for CO row" block, previously asserting `row-quick-action-clone` was visible for CO) to assert the corrected behavior: Clone stays hidden with `toHaveCount(0)` for both DR and CO rows.
 - **ETP-5316 — "Cant. movida" (`movementQuantity`) is now editable on the lines**: editing the field in a line always reverted to the original value. The frontend `PATCH .../returnMaterialReceiptLine/<id>` returned HTTP 200 / `status: 0` but echoed back the unchanged quantity — NEO silently discards writes to fields it holds as read-only, and `ETGO_SF_FIELD.IsReadOnly` was `Y` for `MovementQty` on this spec (`N` on the sibling `return-to-vendor-shipment`, which worked). Root cause was in the artifact, not the runtime: `artifacts/return-material-receipt/decisions.json` declared `entities.lines.fields.movementQuantity` with no `visibility` key, so it inherited `readOnly` from the raw AD metadata and `contract.json` resolved it to `visibility: readOnly`. Fixed by adding `"visibility": "editable"`, mirroring the sibling window's declaration; the inherited `readOnlyLogic` (`processed === true || uomManagement === 'Y'`) is untouched, so the field stays locked on processed receipts and on UOM-managed lines. Callouts were never involved (`/callout` returned an empty `updates` map). The sign/negative-value behaviour of this field is a separate issue (ETP-5336) and is not addressed here.
+- **ETP-5316 — a failed confirmation now reads as a sentence the user can act on**: core's `M_INOUT_POST` rejects a completion with a message built from AD_MESSAGE tokens plus run-time data (`@Inline@ 10, 20, 30, 40, @ProductNotNullAndMovementQtyZero@`), which reached the user as *"En la línea 10, 20, 30, 40, Cuando el producto no esta vacío…"*. Those numbers are **AD line numbers** (`line`, numbered in tens), not the row positions shown in the grid, so they located nothing — and the sentence, being different for every document, could not be mapped to a locale string either. Product decided the line reference is dropped: Etendo GO now returns the AD_MESSAGE keys alongside the translated text (`messageKeys`, `NeoProcessService`) and the SPA maps the key to its own wording ("Hay líneas sin cantidad."). Generic, not per-window: it lands wherever a document action fails — the confirm modal (`ConfirmInOutModal`, shared with goods-shipment / goods-receipt / the sibling return window) and the single-record bulk toast (`useBulkActionToast`). Reference: `docs/i18n-guide.md` § Backend Error Translation, mechanism 3.
 
 ## Print button hidden in every status — ETP-4714 (superseded by ETP-5124, see below)
 
@@ -345,3 +347,191 @@ Structural surfaces and controls consume background, card, foreground, muted, an
 border roles; operational feedback uses success, warning, information, neutral,
 and destructive roles. No local palette is used, so the active application theme
 controls the appearance.
+
+## Rectificative invoice: created, linked and confirmed in one step — ETP-5381
+
+This is the largest change this window has had since ETP-4737. Two things moved
+together: the invoice is no longer left in draft, and the user must now declare
+**which invoice it rectifies** before it can be created at all.
+
+### Why declaring the rectified invoice became mandatory
+
+A rectificative invoice cannot be confirmed without at least one rectified
+invoice. The `ETSG_CHECK_RECTIF_INV_DOC` validation (module
+`com.etendoerp.sif.general`) rejects a rectificative document type that has no
+rows in `C_Invoice_Reverse` — *"El tipo de documento es rectificativo, pero no se
+han asociado facturas a rectificar"*. Until now Etendo Go computed the source
+invoice (`findSourceInvoice`) **only** to copy currency, price list and payment
+terms onto the new invoice, and never created the link. That was harmless while
+the invoice stayed in draft; the moment ETP-5381 made the same request confirm
+it, an unlinked invoice would have been rejected outright.
+
+The link can only be created **while the invoice is still a draft**: the
+`C_INVOICE_REVERSE_TRG` database trigger refuses any insert into
+`C_Invoice_Reverse` once the invoice is `Processed='Y'`. So the backend ordering
+is not stylistic — it is the only order that works:
+
+1. create the invoice lines,
+2. create the `C_Invoice_Reverse` rows (`linkRectifiedInvoices`),
+3. complete the invoice.
+
+Complete first and the document can be neither confirmed nor linked — a
+permanently stuck draft. The ordering is enforced and documented in
+`ReturnShipmentUtils.finalizeReturnInvoice` (`ReturnShipmentUtils.java:613-634`,
+javadoc at `:599-612`), and restated as a general rule for creation handlers in
+`InvoiceCompletionService.java:65-69`.
+
+### The `rectifiableInvoices` action
+
+New NEO action on the return header, `POST .../action/rectifiableInvoices`
+(`ReturnMaterialReceiptHeaderHandler.java:74`, dispatched at `:107-109`), shared
+with `return-to-vendor-shipment` through
+`RectifiableInvoiceUtils.buildRectifiableInvoicesResponse` (`:73-86`).
+
+It lists the confirmed invoices this return document is allowed to rectify. There
+is no header-level link between a return and its original document, so it has to
+walk the lines: `M_InOutLine.Canceled_Inoutline_ID` → the original
+shipment/receipt line → `C_InvoiceLine` → `C_Invoice`
+(`fetchRectifiableInvoices`, `ReturnShipmentUtils.java:770-806`). Only
+`DocStatus = 'CO'` qualifies — a draft cannot be rectified and a voided invoice
+has nothing left to rectify — ordered `DateInvoiced DESC` (newest first).
+
+Response shape (`{"response":{"data":{...}}}`), exactly three keys:
+
+| Field | Content |
+|---|---|
+| `invoices` | the candidates, newest first; each carries `id`, `documentNo`, `invoiceDate` (`yyyy-MM-dd`), `grandTotalAmount`, `currency` (ISO code), `businessPartner` |
+| `suggestedInvoiceId` | the newest candidate's id, or `null` — deliberately the **same choice `resolveRectifiedInvoiceIds` would make on an empty selection**, so what the modal preselects is exactly what the server would have picked on its own |
+| `hasReturnInvoice` | the guard-P5 predicate (any non-voided invoice already exists for this return) |
+
+### The picker, in both entry points
+
+`tools/app-shell/src/components/contract-ui/RectifiableInvoicePicker.jsx` (new)
+exports `useRectifiableInvoices` (fetch + selection state) and
+`RectifiableInvoiceField` (the rendered list). The URL is built once in
+`ConfirmWithCreditButtonBase.jsx:50-51` and passed to **both** entry points:
+
+- **Confirming the return receipt with the invoice option ticked** — the picker
+  appears inside `ConfirmInOutModal.jsx` (rendered at `:259-267`,
+  `idPrefix="confirm-modal-rectify"`) but only while the toggle is on
+  (`rectifyActive`, `:72`).
+- **"Crear Factura Rectificativa" on an already-confirmed receipt** — the picker
+  appears inside `CreateInvoiceConfirmModal.jsx` (`:187-197`,
+  `idPrefix="invoice-confirm-rectify"`).
+
+Behavior:
+
+- **Multiple selection is allowed.** `C_Invoice_Reverse` is a 1:N bridge table
+  and a single return can legitimately correct more than one original invoice.
+  Rows toggle on click; each renders `documentNo`, the invoice date and the
+  formatted amount.
+- **`suggestedInvoiceId` is preselected**, but only if it is actually present in
+  the returned list — so confirming without touching the picker produces exactly
+  the link the server would have made on its own.
+- **An empty list blocks confirmation.** The field renders the reason instead of
+  a silently dead button: `noInvoicesToRectify` ("No hay facturas confirmadas que
+  rectificar para este documento de devolución."), and the confirm button stays
+  disabled because the hook's `isSatisfied` gate (`selectedIds.length > 0`) is
+  false. In the confirmed-receipt entry point this is a dead end by design; in
+  the draft entry point the user escapes by switching the invoice toggle off and
+  confirming the receipt alone.
+- A fetch failure is swallowed and leaves the list empty, which produces the same
+  safe blocked state rather than letting the user submit a request the server
+  would reject anyway.
+
+`createReturnInvoice` accepts the selection as `originInvoices: [ids]` in the
+request body (`ReturnShipmentUtils.PARAM_ORIGIN_INVOICES`, `:72`). The key is
+omitted entirely when nothing is selected; `resolveRectifiedInvoiceIds`
+(`:680-701`) then falls back to the newest candidate, and if there is none it
+throws **400** `"Select at least one invoice to rectify: a rectificative invoice
+cannot be confirmed without it."` — before anything is written, so no stuck draft
+is left behind. The fallback deliberately reads from `fetchRectifiableInvoices`
+rather than `findSourceInvoice`, because the latter accepts any non-voided
+invoice including a draft, and a draft cannot be rectified.
+
+### Guard P5 — 409 on a return document that is already invoiced
+
+`RectifiableInvoiceUtils.hasNonVoidedReturnInvoice` (`:199-220`) joins
+`M_InOutLine → C_InvoiceLine → C_Invoice` for this return and looks for any
+invoice with `DocStatus != 'VO'`. When one exists,
+`ReturnMaterialReceiptHeaderHandler.java:322-325` throws
+`AlreadyInvoicedException` with **"A rectificative invoice already exists for this
+return document."**, surfaced as **HTTP 409** (`:358-360`), before any write.
+
+The predicate is deliberately shared with the `hasReturnInvoice` flag the UI hides
+its button with, so guard and button can never disagree — and
+`useConfirmWithCredit.js` was changed in the same ticket to stop overriding that
+flag with a client-side `documentStatus === 'CO'` filter. Under the old filter a
+rectificative invoice still in draft read as "no invoice", the create button
+stayed visible, and a second one could be produced. On a SQL failure the predicate
+**propagates** rather than answering "no invoice", since a silent false would let
+through exactly the duplicate it exists to prevent.
+
+### HTTP status convention
+
+**409** = "already invoiced" (a duplicate request). **400** = "nothing to invoice"
+or a missing datum — including the missing-rectified-invoice case and
+`"Invoice to rectify not found: <id>"`. Messages are English literals in Java on
+purpose (no `AD_MESSAGE` rows) and are localized by
+`tools/app-shell/src/lib/backendErrors.js`:
+
+| Backend literal | i18n key |
+|---|---|
+| `A rectificative invoice already exists for this return document.` | `backendError.returnInvoiceAlreadyExists` |
+| `Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.` | `backendError.rectifiedInvoiceRequired` |
+
+### Modifying the invoice afterwards
+
+The rectificative invoice now arrives confirmed, so there is no "review the draft
+before confirming" step any more. To change it the user **reactivates** it from
+the `sales-invoice` window (`reactivate` menu action, `documentAction: 'RE'`,
+`preUnpost: true`, visible at `DocStatus='CO'` —
+`artifacts/sales-invoice/contract.json:26-34`). That is the only route back to
+`DR`.
+
+**Known residual gap (UI copy, not behavior):** the confirm card and modal still
+describe the outcome as a draft to be reviewed —
+`returnReceipt.createRectificativeInvoiceDescription` reads "Se crea en borrador,
+prellenada con los productos devueltos y los precios de la factura origen.", and
+`rmrCreateInvoiceConfirmDesc` still says "Se creará una factura rectificativa en
+borrador para el cliente. Podés revisarla y confirmarla antes de enviarla."
+Neither key was reworded in this ticket, and nothing in the UI tells the user that
+Reactivar is now the way to edit the invoice.
+
+### Manual verification
+
+1. On a **draft** receipt whose lines were imported from a shipment that was
+   billed by a confirmed invoice, open the confirm popup with the rectificative
+   invoice option ON. Confirm the "Factura a rectificar" list appears, that the
+   newest candidate is preselected, and that a second candidate can be ticked
+   alongside it.
+2. Confirm and verify: the receipt completes, the rectificative invoice opens in
+   **Confirmado** (not Borrador), and its Related Documents panel shows **one
+   chip per selected origin invoice** — `C_Invoice_Reverse` is 1:N.
+3. On a **completed** receipt with no invoice yet, use "Crear Factura
+   Rectificativa" and verify the same picker appears inside that modal, with the
+   same preselection.
+4. On a receipt whose lines carry no `Canceled_Inoutline_ID`, or whose origin
+   invoice is still in draft, verify the picker renders "No hay facturas
+   confirmadas que rectificar para este documento de devolución." and that the
+   confirm button is disabled — not silently dead. From the draft entry point,
+   verify switching the invoice toggle off still lets the receipt be confirmed
+   alone.
+5. On a receipt that already has a rectificative invoice, verify the "Crear
+   Factura Rectificativa" button is not rendered; then POST `createReturnInvoice`
+   directly and verify the translated 409 ("Ya existe una factura rectificativa
+   para este documento de devolución.") and that nothing is written.
+6. Void the existing rectificative invoice and verify the button reappears — the
+   predicate is "non-voided", not "any".
+7. Force the completion to fail and verify no draft rectificative invoice and no
+   `C_Invoice_Reverse` rows are left behind, and that the document number is not
+   burned.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path shared by all the ETP-5381 flows.
+- `tools/app-shell/src/components/contract-ui/__tests__/RectifiableInvoicePicker.vitest.jsx` (new) is the reference coverage for the picker, and it is thorough: `useRectifiableInvoices` is asserted to POST to the supplied action URL verbatim (no `baseUrl` prepending), to treat a non-array `invoices` field as empty rather than crashing, to preselect `suggestedInvoiceId` **only when it is part of the list**, and to select nothing when the backend sends no suggestion. The `isSatisfied` confirm gate is covered in all three directions (false while nothing is selected, true on selection, back to false when the last selection is removed), and `isEmpty` is proven to stay false **while the request is in flight** — the distinction that keeps a pending fetch from being rendered as "nothing to rectify". A `toggle — multiple selection` block covers accumulating selections in click order and removing only the toggled id, and a `failure modes fail closed` block covers a non-ok response and a rejected fetch. `RectifiableInvoiceField` is covered for the loading placeholder, the `noInvoicesToRectify` notice, one row per invoice, `data-selected` marking, `onToggle`, amount formatting through the canonical currency formatter, a missing amount, and a custom `idPrefix` so two pickers can coexist on one page.
+- `tools/app-shell/src/components/contract-ui/__tests__/ConfirmInOutModal.spec.jsx` gained a `rectifiable-invoice picker (ETP-5381)` block covering the draft entry point end to end: the picker renders only when a `rectifiableInvoicesUrl` is supplied **and** the invoice toggle is on, it blocks the confirm button until an invoice is picked, it sends the picked invoice as `originInvoices`, it sends **every** picked invoice (explicitly asserting the 1:N nature of `C_Invoice_Reverse`), it accepts the backend suggestion so confirming without touching the picker still links an invoice, it stays blocked when there is genuinely nothing to rectify, and — with the toggle OFF — it neither renders nor blocks, calling only `documentAction` with no `originInvoices`.
+- `tools/app-shell/src/windows/custom/shared/__tests__/useConfirmWithCredit.test.js` gained two ETP-5381 blocks: the duplicate-invoice gate is asserted to trust `data.hasReturnInvoice` when the backend sends the boolean, to fall back to `returnInvoices` with the **non-voided** predicate (never the old `CO`-only one), and to keep that fallback guarded by `Array.isArray` so a missing field is not read as "already invoiced"; and `handleCreateReturnInvoice` is asserted to accept an `originInvoices` argument, to build the body as `{ originInvoices }` for a non-empty array, to send a bare `{}` rather than `{ originInvoices: [] }` when nothing was selected, and to serialize that body into the POST instead of a hardcoded `{}`.
+- `tools/app-shell/src/windows/custom/return-material-receipt/__tests__/ConfirmWithCreditButton.spec.jsx` locks the button-visibility side of guard P5: the create-return-invoice button is hidden when the backend flag is true **even if the array lists only a voided invoice** (flag wins), and the array fallback uses the non-voided predicate so a `VO`-only list still shows the button.
+- **Remaining gap:** no mocked E2E spec exercises either entry point — `e2e/tests/flows/return-material-receipt.mocked.spec.js` does not reference `rectifiableInvoices`, `originInvoices` or the picker's test ids. The component ships `data-testid`s (`confirm-modal-rectify-*`, `invoice-confirm-rectify-*`, `*-option-<id>` with `data-selected`) that a future spec can use.

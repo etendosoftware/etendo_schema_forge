@@ -391,8 +391,14 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /function SoCheckboxCard\(\{[^}]*disabled[^}]*\}\)/);
     });
 
-    it('blocks onClick when disabled', () => {
-      assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
+    // ETP-5381: the click gate moved from `disabled` to `interactive` (= !disabled && !implied).
+    // A disabled card must still be inert — that is what this test has always guarded — and an
+    // implied card must be inert too: it renders no tick box, so a click could only do nothing.
+    // The `interactive` VALUE is proven for all four (disabled, implied) combinations in
+    // "ETP-5381 … / SoCheckboxCard — an implied card is inert" below; what is pinned here is that
+    // the handler is wired to that value instead of re-deriving its own gate.
+    it('blocks onClick when the card is not interactive (disabled or implied)', () => {
+      assert.match(src, /onClick=\{interactive \? onChange : undefined\}/);
     });
 
     it('switches to semantic success roles when disabled', () => {
@@ -403,6 +409,250 @@ describe('OrderCreateInvoice', () => {
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  // ETP-5381 — "Gestionar documentos" on a COMPLETED order (CreateDocsModal). When only ONE
+  // action is still pending there is nothing to choose between: the dialog's only button already
+  // says "Crear", so the tick was a confirmation of a confirmation. That sole action is now
+  // IMPLIED — its card keeps the selected styling but drops the tick box and the click handler,
+  // the section label drops "(optional)", and the button is live on open. With BOTH pending it is
+  // a real choice, so the checkboxes stay — and the CONFIRM-the-order modal keeps its checkboxes
+  // unconditionally, because there both actions are genuinely optional.
+  //
+  // The decision expressions are extracted from the source and EVALUATED rather than pinned as
+  // text: a rewritten-but-wrong expression must fail, a rewritten-and-still-correct one must not.
+  // Same idiom as the extract-and-eval error-message blocks further down this file.
+  describe('ETP-5381 — the sole pending action is implied, and only there', () => {
+    function idxOf(source, marker) {
+      const i = source.indexOf(marker);
+      assert.ok(i !== -1, `marker not found: ${marker}`);
+      return i;
+    }
+
+    function sliceBetween(source, startMarker, endMarker) {
+      const start = idxOf(source, startMarker);
+      const end = source.indexOf(endMarker, start);
+      assert.ok(end !== -1, `marker not found after "${startMarker}": ${endMarker}`);
+      return source.slice(start, end);
+    }
+
+    // Text inside the parentheses of the `if (` at `ifIdx`.
+    function condFrom(source, ifIdx) {
+      assert.ok(ifIdx !== -1, 'no `if (` found near the requested marker');
+      const start = source.indexOf('(', ifIdx);
+      let depth = 1;
+      let i = start + 1;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.equal(depth, 0, 'unbalanced parens in the extracted condition');
+      return source.slice(start + 1, i);
+    }
+
+    const condAfter = (source, marker) => condFrom(source, source.indexOf('if (', idxOf(source, marker)));
+    const condBefore = (source, marker) => condFrom(source, source.lastIndexOf('if (', idxOf(source, marker)));
+
+    function grabDecl(source, name) {
+      const m = new RegExp(`\\bconst ${name}\\s*=[^;]*;`).exec(source);
+      assert.ok(m, `declaration not found: const ${name}`);
+      return m[0];
+    }
+
+    const cardSrc = sliceBetween(src, 'function SoCheckboxCard({', 'export function CreateDocsModal');
+    const createDocsSrc = src.slice(idxOf(src, 'export function CreateDocsModal'));
+    const confirmSrc = sliceBetween(src, 'export function ConfirmModal', '// ── SoCheckboxCard');
+
+    /**
+     * Evaluate CreateDocsModal's real decision chain for a given modal state, plus the three
+     * gates that state has to pass to reach the network: the early return in handleCreate and
+     * the two per-endpoint branches.
+     */
+    function docsDecision({
+      needsShip = false, needsInvoice = false,
+      createShipment = false, createInvoice = false, loading = false,
+    } = {}) {
+      const decls = ['soleAction', 'shipWanted', 'invoiceWanted', 'canCreate']
+        .map(n => grabDecl(createDocsSrc, n)).join('\n');
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('needsShip', 'needsInvoice', 'createShipment', 'createInvoice', 'loading', `
+        ${decls}
+        return {
+          soleAction:    Boolean(soleAction),
+          shipWanted:    Boolean(shipWanted),
+          invoiceWanted: Boolean(invoiceWanted),
+          canCreate:     Boolean(canCreate),
+          bailsOut:      Boolean(${condAfter(createDocsSrc, 'const handleCreate')}),
+          postsShipment: Boolean(${condBefore(createDocsSrc, 'action/createShipment')}),
+          postsInvoice:  Boolean(${condBefore(createDocsSrc, 'action/createDraftInvoice')}),
+        };`);
+      return fn(needsShip, needsInvoice, createShipment, createInvoice, loading);
+    }
+
+    describe('SoCheckboxCard — an implied card is inert', () => {
+      function interactive(disabled, implied) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('disabled', 'implied',
+          `${grabDecl(cardSrc, 'interactive')}\nreturn Boolean(interactive);`)(disabled, implied);
+      }
+
+      it('is inert when implied, inert when disabled, and clickable otherwise', () => {
+        assert.equal(interactive(false, true), false, 'an implied card must not be clickable');
+        assert.equal(interactive(true, false), false, 'a disabled card must not be clickable');
+        assert.equal(interactive(true, true), false);
+        assert.equal(interactive(false, false), true, 'an ordinary card must still toggle');
+      });
+
+      it('wires the click handler to that value rather than re-deriving a gate', () => {
+        assert.match(cardSrc, /onClick=\{interactive \? onChange : undefined\}/);
+      });
+
+      it('omits the tick box entirely when implied — it is not merely hidden or greyed', () => {
+        const gateIdx = cardSrc.indexOf('{!implied && (');
+        assert.ok(gateIdx !== -1, 'the tick box must be gated on !implied');
+        const boxIdx = cardSrc.indexOf('width: 18, height: 18');
+        assert.ok(boxIdx > gateIdx, 'the 18x18 tick box must sit inside the !implied gate');
+      });
+
+      it('exposes the implied state to the DOM for the e2e specs', () => {
+        assert.match(cardSrc, /data-implied=\{implied \? 'true' : 'false'\}/);
+      });
+    });
+
+    describe('CreateDocsModal — both actions pending (a real choice, unchanged)', () => {
+      const both = { needsShip: true, needsInvoice: true };
+
+      it('is not a sole action, so neither card is implied', () => {
+        assert.equal(docsDecision(both).soleAction, false);
+      });
+
+      it('starts with nothing selected, so the button is disabled on open', () => {
+        const r = docsDecision(both);
+        assert.equal(r.shipWanted, false);
+        assert.equal(r.invoiceWanted, false);
+        assert.equal(r.canCreate, false);
+      });
+
+      it('creates nothing if the submit is somehow reached without a tick', () => {
+        const r = docsDecision(both);
+        assert.equal(r.bailsOut, true);
+        assert.equal(r.postsShipment, false);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the shipment posts only the shipment', () => {
+        const r = docsDecision({ ...both, createShipment: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.bailsOut, false);
+        assert.equal(r.postsShipment, true);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the invoice posts only the invoice', () => {
+        const r = docsDecision({ ...both, createInvoice: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.postsShipment, false);
+        assert.equal(r.postsInvoice, true);
+      });
+
+      it('renders both cards with a tick box, since implied tracks soleAction', () => {
+        assert.equal((createDocsSrc.match(/implied=\{soleAction\}/g) || []).length, 2);
+      });
+
+      it('keeps the "(optional)" section label while there is something to opt out of', () => {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        const label = new Function('soleAction', 'ui',
+          `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+        assert.equal(label(false, k => k), 'soGenerateDocs');
+      });
+    });
+
+    for (const [side, state, expected] of [
+      ['shipment', { needsShip: true }, { shipWanted: true, invoiceWanted: false, postsShipment: true, postsInvoice: false }],
+      ['invoice', { needsInvoice: true }, { shipWanted: false, invoiceWanted: true, postsShipment: false, postsInvoice: true }],
+    ]) {
+      describe(`CreateDocsModal — only the ${side} is pending (implied)`, () => {
+        // No tick is simulated anywhere below: createShipment/createInvoice stay false, which is
+        // exactly the user's position the instant the dialog opens.
+        const r = docsDecision(state);
+
+        it('treats it as the sole action', () => {
+          assert.equal(r.soleAction, true);
+        });
+
+        it('has the button enabled on open, with no interaction', () => {
+          assert.equal(r.canCreate, true);
+          assert.equal(r.bailsOut, false);
+        });
+
+        it(`posts the ${side} and nothing else`, () => {
+          assert.equal(r.shipWanted, expected.shipWanted);
+          assert.equal(r.invoiceWanted, expected.invoiceWanted);
+          assert.equal(r.postsShipment, expected.postsShipment);
+          assert.equal(r.postsInvoice, expected.postsInvoice);
+        });
+
+        it('drops "(optional)" from the section label', () => {
+          // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+          const label = new Function('soleAction', 'ui',
+            `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+          assert.equal(label(true, k => k), 'soGenerateDocsImplied');
+        });
+
+        it('hides the button behind loading, not behind a tick', () => {
+          assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
+          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{loading \|\| !canCreate\}/);
+        });
+      });
+    }
+
+    // Blast radius. Applying `implied` to the CONFIRM modal would silently create documents the
+    // user never asked for — far worse than the redundant tick this ticket removed. There both
+    // actions are genuinely optional, which is the distinction drawn in a84798d2a.
+    describe('ConfirmModal — both checkboxes stay, and still gate creation', () => {
+      it('renders two cards, neither of them implied', () => {
+        assert.equal((confirmSrc.match(/<SoCheckboxCard/g) || []).length, 2);
+        assert.doesNotMatch(confirmSrc, /implied/);
+      });
+
+      it('has no soleAction shortcut of its own', () => {
+        assert.doesNotMatch(confirmSrc, /soleAction/);
+      });
+
+      it('keeps the "(optional)" label and never borrows the implied one', () => {
+        assert.match(confirmSrc, /ui\('soGenerateDocs'\)/);
+        assert.doesNotMatch(confirmSrc, /soGenerateDocsImplied/);
+      });
+
+      it('starts with both boxes unticked', () => {
+        assert.match(confirmSrc, /const \[createShipment,\s+setCreateShipment\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /const \[createInvoice,\s+setCreateInvoice\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /setCreateShipment\(v => !v\)/);
+        assert.match(confirmSrc, /setCreateInvoice\(v => !v\)/);
+      });
+
+      it('creates no document when neither box was ticked', () => {
+        assert.equal(confirmCreates('createShipment', {}), false);
+        assert.equal(confirmCreates('createDraftInvoice', {}), false);
+      });
+
+      it('creates only the document whose box was ticked', () => {
+        assert.equal(confirmCreates('createShipment', { createShipment: true }), true);
+        assert.equal(confirmCreates('createDraftInvoice', { createShipment: true }), false);
+        assert.equal(confirmCreates('createDraftInvoice', { createInvoice: true }), true);
+        assert.equal(confirmCreates('createShipment', { createInvoice: true }), false);
+      });
+
+      function confirmCreates(endpoint, {
+        createShipment = false, createInvoice = false,
+        shipmentResult = null, invoiceResult = null,
+      }) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('createShipment', 'createInvoice', 'shipmentResult', 'invoiceResult',
+          `return Boolean(${condBefore(confirmSrc, `action/${endpoint}`)});`)(
+          createShipment, createInvoice, shipmentResult, invoiceResult);
+      }
     });
   });
 
@@ -885,8 +1135,13 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 3 (createDraftInvoice)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedInvoiceError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5381: this branch was the last one still appending the RAW backend message;
+        // it now goes through translateBackendError(msg, ui) like its shipment sibling, so
+        // the new duplicate-invoice / completion messages surface translated. Stub it as
+        // identity — the point here is that the raw message survives end-to-end, not
+        // re-testing the mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {

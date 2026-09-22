@@ -55,9 +55,21 @@ function DocCard({ doc, currency, ui, navigate, onClose, onNavigate }) {
           {doc.amount != null && (
             <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtAmount(doc.amount, currency)}</span>
           )}
-          <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 999, background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)', border: '1px solid var(--status-warning-border)', whiteSpace: 'nowrap' }}>
-            {doc.status || ui('statusDraft')}
-          </span>
+          {(() => {
+            // ETP-5381: this badge used to be unconditionally warning-coloured and default to
+            // "Borrador", which was fine while every generated document was a draft. Invoices are
+            // now confirmed on creation, so the badge has to follow the real status — a shipment
+            // in the same result modal is still a draft, so this cannot be a blanket change.
+            const confirmed = doc.documentStatus === 'CO';
+            const palette = confirmed
+              ? { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)', border: 'var(--status-success-border)' }
+              : { bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)', border: 'var(--status-warning-border)' };
+            return (
+              <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 999, background: palette.bg, color: palette.fg, border: `1px solid ${palette.border}`, whiteSpace: 'nowrap' }}>
+                {doc.status || ui(confirmed ? 'statusCompleted' : 'statusDraft')}
+              </span>
+            );
+          })()}
         </div>
       </div>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hovered ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transition: 'stroke .15s' }}>

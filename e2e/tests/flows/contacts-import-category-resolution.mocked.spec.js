@@ -137,14 +137,21 @@ test('imports contacts with existing, normalized, new, and legacy category input
     name: 'contacts-etp-4905.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
+      // ETP-5350 — every `cif/nif` below MUST have a valid check digit. The import now runs
+      // `taxIdValidation.js` (the browser mirror of SpanishTaxIdValidator.java) during REVIEW,
+      // so an invented CIF lands in "Errores" and never reaches the batch: the previous
+      // B1234567x fixtures left exactly one row importable out of five. Generate replacements
+      // with the validator itself, never by hand:
+      //   node --input-type=module -e "import {getTaxIdError} from './tools/app-shell/src/lib/taxIdValidation.js'; \
+      //     for (const c of '0123456789ABCDEFGHIJ') if (!getTaxIdError('B1234567'+c)) console.log('B1234567'+c)"
       // ETP-4995: the three category columns collapsed into one, and "nombre" now maps to the
       // commercial name, so the person's first name uses its own header.
       ['nombre comercial', 'nombre de pila', 'apellido', 'email', 'telefono', 'web', 'cif/nif', 'direccion', 'ciudad', 'codigo postal', 'pais', 'region', 'categoria', 'email de contacto'],
-      ['Contacto por código', 'Lucia', 'Fernandez', 'lucia.code@example.com', '+34 910 000 001', 'https://code.example', 'B12345678', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', 'CLIENTS', 'lucia.code.person@example.com'],
-      ['Contacto por nombre', 'Andres', 'Rojaz', 'andres.name@example.com', '+34 910 000 002', 'https://name.example', 'B12345679', '', '', '', '', '', ' clientes ', 'andres.name.person@example.com'],
-      ['Contacto nuevo uno', 'Paula', 'Gomez', 'paula.one@example.com', '+34 910 000 003', 'https://new-one.example', 'B12345680', '', '', '', '', '', 'Distribución Especial', 'paula.one.person@example.com'],
-      ['Contacto nuevo dos', 'Martin', 'Diaz', 'martin.two@example.com', '+34 910 000 004', 'https://new-two.example', 'B12345681', '', '', '', '', '', 'Distribución Especial', 'martin.two.person@example.com'],
-      ['Contacto legacy', 'Julia', 'Perez', 'julia.legacy@example.com', '+34 910 000 005', 'https://legacy.example', 'B12345682', '', '', '', '', '', '', 'julia.legacy.person@example.com'],
+      ['Contacto por código', 'Lucia', 'Fernandez', 'lucia.code@example.com', '+34 910 000 001', 'https://code.example', 'B12345674', 'Calle Mayor 1', 'Madrid', '28013', 'Spain', 'Madrid', 'CLIENTS', 'lucia.code.person@example.com'],
+      ['Contacto por nombre', 'Andres', 'Rojaz', 'andres.name@example.com', '+34 910 000 002', 'https://name.example', 'B12345682', '', '', '', '', '', ' clientes ', 'andres.name.person@example.com'],
+      ['Contacto nuevo uno', 'Paula', 'Gomez', 'paula.one@example.com', '+34 910 000 003', 'https://new-one.example', 'B12345690', '', '', '', '', '', 'Distribución Especial', 'paula.one.person@example.com'],
+      ['Contacto nuevo dos', 'Martin', 'Diaz', 'martin.two@example.com', '+34 910 000 004', 'https://new-two.example', 'B12345708', '', '', '', '', '', 'Distribución Especial', 'martin.two.person@example.com'],
+      ['Contacto legacy', 'Julia', 'Perez', 'julia.legacy@example.com', '+34 910 000 005', 'https://legacy.example', 'B12345716', '', '', '', '', '', '', 'julia.legacy.person@example.com'],
     ].map((row) => row.join(',')).join('\n')),
   });
 
@@ -189,7 +196,7 @@ test('imports contacts with existing, normalized, new, and legacy category input
   // value in the input itself is scheme-less; the import normalizes the CSV's full
   // URL the same way (contactsImportDescriptor.js's stripUrlScheme).
   await expect(page.getByTestId('field-etgoWeb')).toHaveValue('code.example');
-  await expect(page.getByTestId('field-taxID')).toHaveValue('B12345678');
+  await expect(page.getByTestId('field-taxID')).toHaveValue('B12345674');
   await page.getByTestId('tab-locationAddress').click();
   await expect(page.getByText('Madrid, Calle Mayor 1', { exact: true })).toBeVisible();
   const codeContact = state.contacts.find((contact) => contact.name === 'Contacto por código');
@@ -245,9 +252,9 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
     buffer: Buffer.from([
       // ETP-4995: cif/nif is now required at import level, so every fixture row carries one.
       'nombre comercial,nombre de pila,apellido,categoria,cif/nif,email de contacto',
-      'Contacto válido,Val,Id,VALID,B20000001,valid@example.com',
-      'Categoría ambigua,Ana,Lopez,Servicios,B20000002,ambiguous@example.com',
-      'Error creando categoría,Leo,Diaz,Nueva Categoría,B20000003,error@example.com',
+      'Contacto válido,Val,Id,VALID,B20000006,valid@example.com',
+      'Categoría ambigua,Ana,Lopez,Servicios,B20000014,ambiguous@example.com',
+      'Error creando categoría,Leo,Diaz,Nueva Categoría,B20000022,error@example.com',
     ].join('\n')),
   });
   await page.getByTestId('ImportDialog__importButton').click();
@@ -297,8 +304,8 @@ test('skips an in-file duplicate tax id before sending the batch', async ({ page
       // ETP-4995: the dedupe key is taxID, not etgoEmail — email is optional, and a blank key
       // made dedupeRows skip deduplication entirely. Same tax id = same legal entity.
       'nombre comercial,nombre de pila,apellido,cif/nif,email',
-      'Contacto original,Lucia,Fernandez,B30000001,original@example.com',
-      'Contacto repetido,Lucia,Fernandez,B30000001,repeated@example.com',
+      'Contacto original,Lucia,Fernandez,B30000004,original@example.com',
+      'Contacto repetido,Lucia,Fernandez,B30000004,repeated@example.com',
     ].join('\n')),
   });
 
@@ -344,7 +351,7 @@ test('imports a minimal company row with only the required legal name and tax id
     mimeType: 'text/csv',
     buffer: Buffer.from([
       'nombre comercial,cif/nif,email',
-      'Cliente solo con razón social,B40000001,minimal@example.com',
+      'Cliente solo con razón social,B40000002,minimal@example.com',
     ].join('\n')),
   });
 
