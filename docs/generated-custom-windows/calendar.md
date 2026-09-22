@@ -82,12 +82,14 @@ keep every spec single-window, and let the custom frontend do the aggregation.
    user (or a user whose oldest role is the GOOrg-scoped one) is the reliable way to verify the
    `AccDefUtility` fix above in isolation.
 - Trigger **Create Periods** on a year to generate 12 standard periods plus an optional adjustment
-  period. The required **Fiscal Year Range** choice defaults to **January - December**; selecting
+  period. The required **Fiscal Year Range** choice defaults to **January - December** and also
+  offers **April - March**, **July - June** and **October - September**; selecting, say,
   **July - June** for Fiscal Year 2027 creates July 2027 through June 2028, with chronological
-  period numbers 1-12. January-December remains the untouched core process-100 flow; July-June is
-  handled by the `year-close` NEO handler because core process metadata has no range parameter. A
-  year must not already contain periods for a different range. Invalid range values are rejected
-  server-side rather than silently falling back to January.
+  period numbers 1-12 (April-March and October-September shift the same way from their own start
+  month). January-December remains the untouched core process-100 flow; April-March, July-June and
+  October-September are handled by the `year-close` NEO handler because core process metadata has
+  no range parameter. A year must not already contain periods for a different range. Invalid range
+  values are rejected server-side rather than silently falling back to January.
   **ETP-4948 — Hide once periods exist.** The **Create Periods** button is no longer offered once
   the year already has at least one `C_Period` record — `tools/app-shell/src/windows/custom/
   calendar/useYearHasPeriods.js`'s `useYearHasPeriods` hook issues a lightweight existence check
@@ -168,11 +170,13 @@ ever changes, this needs revisiting.
 ## Reactive behavior and dependencies
 - **Create Periods** (`year.processNow`, column `Processing`, on `fiscal-calendar`) is bound to
   classic AD Process `100` (`C_YearPeriods`). `decisions.json → window.processOverrides.processNow`
-  opens a `ProcessParamDialog` with `FISCALYEARSTART` (January - December or July - June) and
-  `CREATEADJUSTMENT` (Yes/No select) parameters. The entity's existing `YearCloseHandler` qualifier
-  delegates only `processNow` to the dedicated `FiscalYearPeriodsHandler`, which consumes the range selector:
-  it removes the UI-only key and lets the standard January-December request run through `CallProcess`,
-  while it creates the July-June periods directly through DAL. The core `C_PERIOD_TRG` still creates
+  opens a `ProcessParamDialog` with `FISCALYEARSTART` (January - December, April - March,
+  July - June or October - September) and `CREATEADJUSTMENT` (Yes/No select) parameters. The
+  entity's existing `YearCloseHandler` qualifier delegates only `processNow` to the dedicated
+  `FiscalYearPeriodsHandler`, which consumes the range selector: it removes the UI-only key and
+  lets the standard January-December request run through `CallProcess`, while it creates the
+  April-March, July-June or October-September periods directly through DAL, shifted from the
+  range's own start month. The core `C_PERIOD_TRG` still creates
   the normal period-control records for those DAL inserts. This
   process runs in the **`YearPage`** subtree (`fiscal-calendar` spec), while the Periods tab
   (`PeriodsExpandablePanel.jsx`) lives on a completely different spec (`open-close-period-control`)
@@ -433,7 +437,8 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
    confirm 12 periods appear from January through December.
 6. Open another empty Fiscal Year 2027, select **July - June**, and confirm 12 periods appear from
    July 2027 through June 2028, with period numbers 1 through 12 and month/year labels matching
-   their actual dates.
+   their actual dates. Repeat on two more empty years with **April - March** (April 2027 through
+   March 2028) and **October - September** (October 2027 through September 2028).
 7. Run Create Periods again for an already-populated year and confirm the existing periods are
    retained rather than moved or duplicated. Do not change range on a populated year.
 8. Open a year's detail and confirm **Periods** is the first secondary tab (before **Accounting**,
@@ -466,7 +471,9 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
 20. Open a July-June year with an adjustment period (Create Periods with **Fiscal Year Range =
     July - June** and **Create adjustment period? = Yes**), switch to the **Periods** tab, and
     confirm the 13th period's row shows an **Adjustment Period** badge next to its name while the
-    regular June period's row does not (ETP-4948 QA finding — adjustment period badge).
+    regular June period's row does not (ETP-4948 QA finding — adjustment period badge). Repeat for
+    an **April - March** year (adjustment period dated March 31) and an **October - September**
+    year (adjustment period dated September 30).
 21. Open an empty year (no periods yet) and confirm **Create Periods** is visible in the header.
     Click it, create periods, and confirm the button disappears from the header without a manual
     page reload (ETP-4948 — Create Periods hidden once periods exist). Reload the page on a year
@@ -564,5 +571,6 @@ applies to the GET/list path; the `openClose` ACTION on an individual row is unt
   `calendarStatus`, `calendarActions` (the Periods tab's new table header), and
   `calendarAdjustmentPeriod` (the 13th-period badge) to the same `genericLabels` block in both
   files, plus the `Fiscal Year Range`/`January - December`/`July - June` literal-label entries for
-  the new `FISCALYEARSTART` process parameter (label-keyed, same convention as the pre-existing
-  `Create Periods`/`Create Adjustment Period` entries in this same table).
+  the `FISCALYEARSTART` process parameter (label-keyed, same convention as the pre-existing
+  `Create Periods`/`Create Adjustment Period` entries in this same table). ETP-5407 added the
+  `April - March`/`October - September` entries to the same block in both files.

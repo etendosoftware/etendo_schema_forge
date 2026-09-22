@@ -237,7 +237,7 @@ describe('PeriodsExpandablePanel', () => {
       label: 'Fiscal Year Range',
       required: true,
     });
-    expect(fiscalYearRange.options.map(({ value }) => value)).toEqual(['JANUARY', 'JULY']);
+    expect(fiscalYearRange.options.map(({ value }) => value)).toEqual(['JANUARY', 'APRIL', 'JULY', 'OCTOBER']);
     expect(params.map(({ key }) => key)).toEqual(['FISCALYEARSTART', 'CREATEADJUSTMENT']);
     expect(createAdjustment.key).toBe('CREATEADJUSTMENT');
   });
