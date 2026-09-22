@@ -17,6 +17,8 @@ import { useBulkActionToast } from '@/hooks/useBulkActionToast';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useUI } from '@/i18n';
 import { buildDocumentRowQuickActionsPostMenu } from '../shared/buildDocumentRowQuickActions.js';
+import { useRowConfirmAction } from '../shared/useRowConfirmAction.jsx';
+import ConfirmGoodsReceiptModal from '@generated/goods-receipt/custom/ConfirmGoodsReceiptModal';
 
 import { buildHeaders } from '@/auth/api.js';
 const HEADER_COLUMNS = [
@@ -131,6 +133,22 @@ export default function GoodsReceiptWindow(props) {
     onSuccess: () => setRefreshKey(k => k + 1),
   });
 
+  // ETP-5378 — "Confirmar" in the row-hover kebab, opening this window's own confirm
+  // popup exactly as the form does. See useRowConfirmAction for why it refetches the
+  // record first (the modal needs detail-only enrichments the grid row does not carry).
+  const { confirmMenuAction, confirmPortal } = useRowConfirmAction({
+    specName: 'goods-receipt',
+    entityName: 'goodsReceipt',
+    apiBaseUrl,
+    token,
+    ConfirmModal: ConfirmGoodsReceiptModal,
+    confirmedTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
+    invoiceResultTitleKey: 'goodsReceipt.confirmModal.confirmedTitle',
+    invoiceDocType: 'facturaCompra',
+    invoiceRoute: '/purchase-invoice',
+    onRefresh: () => setRefreshKey(k => k + 1),
+  });
+
   const customTabs = useMemo(() => ([
     { key: 'related', label: ui('relatedDocuments'), Component: RelatedDocuments },
     { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: 'M_InOut', config: {} } },
@@ -164,8 +182,22 @@ export default function GoodsReceiptWindow(props) {
     // ETP-5209 — Post reachable from the row-hover kebab, mirroring menuActionsForForm's
     // gate. Extracted to shared/buildDocumentRowQuickActions.js (rejection-cycle fix —
     // this block was duplicated verbatim in goods-shipment/index.jsx).
-    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
-  }), [navigate, windowName, requestDelete, ui]);
+    //
+    // ETP-5378 — includeUnpost: the window already declares `unpost` in its
+    // decisions.json menuActions, so the FORM kebab has always offered
+    // Descontabilizar while the grid row went silent the moment the document was
+    // posted — the kebab disappeared entirely, since Post was its only entry. The
+    // grid now mirrors the form: Post while unposted, Unpost once posted.
+    // ETP-5378 — Confirmar first, then Post/Unpost: the same order Pedido de Venta's
+    // kebab uses. The entry opens this window's own confirm popup, so confirming from
+    // the list is the identical flow as from the form.
+    ...buildDocumentRowQuickActionsPostMenu({
+      ui,
+      onRefresh: () => setRefreshKey(k => k + 1),
+      includeUnpost: true,
+      extraMenuActions: confirmMenuAction,
+    }),
+  }), [navigate, windowName, requestDelete, ui, confirmMenuAction]);
 
   return (
     <CreateContactContext.Provider value={createContactCtxValue}>
@@ -234,6 +266,7 @@ export default function GoodsReceiptWindow(props) {
           data-testid="CloneOrderModal__bf4f23" />,
         document.body,
       )}
+      {confirmPortal}
     </CreateContactContext.Provider>
   );
 }

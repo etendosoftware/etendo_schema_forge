@@ -16978,6 +16978,7 @@
     "unpost": "Unpost",
     "documentPosted": "Document posted successfully",
     "documentUnposted": "Document unposted successfully",
+    "documentConfirmed": "Document confirmed successfully",
     "notPostedDocuments": "Not Posted Documents",
     "postSelected": "Post selected",
     "postingComplete": "All documents posted successfully",

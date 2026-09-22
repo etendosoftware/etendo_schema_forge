@@ -214,7 +214,15 @@ export default function QuotationConfirmModal({
 
   const handleGoToDoc = () => {
     if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
-    const basePath = window.location.pathname.replace(/\/sales-quotation\/.*$/, '');
+    // ETP-5378 — this modal now also opens from the LIST row kebab, whose path is
+    // bare `/sales-quotation` (no trailing record id), not just the form's
+    // `/sales-quotation/{recordId}`. The old regex required a `/` right after
+    // "sales-quotation" to strip anything, so from the list it matched nothing,
+    // basePath stayed `/sales-quotation`, and the built URL doubled up into
+    // `/sales-quotation/sales-order/{id}` — a dead route (reported live: "Ver
+    // pedido" from a list-confirmed quotation). The trailing segment is optional
+    // now, so both origins strip to the same, correct app-root basePath.
+    const basePath = window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '');
     const target = createdDoc.type === 'order' ? 'sales-order' : 'sales-invoice';
     window.location.href = `${basePath}/${target}/${createdDoc.id}`;
   };

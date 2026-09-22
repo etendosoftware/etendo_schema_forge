@@ -481,10 +481,13 @@ describe('GoodsReceiptWindow', () => {
     expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
   });
 
-  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+  // ETP-5378 — used to expect [], which is exactly the defect: with Post as the
+  // kebab's only entry, a posted row lost the kebab altogether, even though this
+  // window's decisions.json (and menuActionsForForm) have always offered Unpost.
+  it('offers Unpost instead of Post for an already-posted row', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }]);
   });
 
   it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {

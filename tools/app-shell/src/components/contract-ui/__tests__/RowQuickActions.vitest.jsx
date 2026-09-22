@@ -17,6 +17,16 @@ vi.mock('@/hooks/useDocumentAction', () => ({
   }),
 }));
 
+// useNeoAction stub (ETP-5378) — the preUnpost step and every `neoAction` kebab item
+// go through this; the real hook would reach for the network.
+const neoActionExecuteMock = vi.fn().mockResolvedValue({ success: true });
+vi.mock('@/hooks/useNeoAction', () => ({
+  useNeoAction: () => ({
+    execute: neoActionExecuteMock,
+    loading: false,
+  }),
+}));
+
 import RowQuickActions from '../RowQuickActions.jsx';
 
 const DRAFT_ROW = { id: '1', documentStatus: 'DR' };
@@ -56,6 +66,9 @@ function setup(props = {}) {
 describe('RowQuickActions', () => {
   beforeEach(() => {
     docActionExecuteMock.mockClear();
+    docActionExecuteMock.mockResolvedValue({ ok: true });
+    neoActionExecuteMock.mockClear();
+    neoActionExecuteMock.mockResolvedValue({ success: true });
     docActionLoadingFlag = false;
   });
 
@@ -356,6 +369,60 @@ describe('RowQuickActions', () => {
       expect(screen.getByText('Reactivate')).toBeTruthy();
     });
   });
+
+  // ETP-5378 — the row kebab gained its first `preUnpost` action (invoice Reactivate).
+  // The rule lives in lib/preUnpost.js, shared with the detail kebab and the bulk bar so
+  // the three surfaces cannot drift: reactivating a POSTED document from the list used to
+  // send a bare docAction the backend rejects with "Factura contabilizada".
+  describe('preUnpost on a documentAction kebab item (ETP-5378)', () => {
+    const REACTIVATE = [{ key: 'reactivate', label: 'Reactivate', documentAction: 'RE', preUnpost: true }];
+    const POSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'Y' };
+    const UNPOSTED_ROW = { id: '9', documentStatus: 'CO', posted: 'N' };
+
+    async function clickReactivate(props) {
+      const utils = setup({ menuActions: REACTIVATE, ...props });
+      const user = userEvent.setup();
+      await user.click(screen.getByTestId('row-quick-action-more'));
+      await user.click(await screen.findByText('Reactivate'));
+      return utils;
+    }
+
+    it('unposts first, then runs the document action, on a posted row', async () => {
+      await clickReactivate({ row: POSTED_ROW });
+      expect(neoActionExecuteMock).toHaveBeenCalledWith('9', 'unpost');
+      expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
+      expect(neoActionExecuteMock.mock.invocationCallOrder[0])
+        .toBeLessThan(docActionExecuteMock.mock.invocationCallOrder[0]);
+    });
+
+    it('skips the unpost entirely on a row that is not posted', async () => {
+      await clickReactivate({ row: UNPOSTED_ROW });
+      expect(neoActionExecuteMock).not.toHaveBeenCalled();
+      expect(docActionExecuteMock).toHaveBeenCalledWith('9', 'RE');
+    });
+
+    it('aborts without running the document action when the unpost is rejected', async () => {
+      neoActionExecuteMock.mockResolvedValue({ success: false, message: 'period closed' });
+      const { onMenuActionExecuted } = await clickReactivate({ row: POSTED_ROW });
+      expect(docActionExecuteMock).not.toHaveBeenCalled();
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { success: false, message: 'period closed' },
+      );
+    });
+
+    // useDocumentAction THROWS on failure (useNeoAction resolves instead), so without
+    // forwarding the caught error the host never heard about it and the user saw nothing.
+    it('reports a thrown document action to the host instead of only the console', async () => {
+      docActionExecuteMock.mockRejectedValue(new Error('Factura contabilizada'));
+      const { onMenuActionExecuted } = await clickReactivate({ row: UNPOSTED_ROW });
+      expect(onMenuActionExecuted).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'reactivate' }),
+        { success: false, message: 'Factura contabilizada' },
+      );
+    });
+  });
+
 
   // ── ETP-5316: actionsConfig.show === false is an unconditional hide gate ──
   describe('actionsConfig.show === false (unconditional hide, ETP-5316)', () => {
