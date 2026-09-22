@@ -118,12 +118,10 @@ describe('BulkInvoiceFromShipment', () => {
   // from the invoice's price list. The quote mirrors that rule exactly so it never disagrees
   // with what the created invoice actually contains.
   describe('quote — real price per line, not an estimate', () => {
-    it('fetches shipment lines (product + salesOrderLine) to know each line\'s price source', () => {
-      assert.match(src, /goodsShipmentLine\?parentId=/);
-    });
-
-    it('fetches pendingInvoiceLines per shipment (still needed for both the subtitle and the quote quantities)', () => {
+    it('gets product + salesOrderLine from pendingInvoiceLines, not a separate lines request', () => {
       assert.match(src, /action\/pendingInvoiceLines/);
+      assert.doesNotMatch(src, /goodsShipmentLine\?parentId=/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
     });
 
     it('fetches the ORDER line\'s own price for lines that have one, independent of the chosen Tarifa', () => {
@@ -137,12 +135,17 @@ describe('BulkInvoiceFromShipment', () => {
     });
 
     it('fetches the Tarifa price only for lines with NO linked order line, reactive to selectedPriceListId', () => {
-      assert.match(src, /lines\/selectors\/M_Product_ID\?limit=500&offset=0&priceList=/);
+      assert.match(src, /action\/productPrices/);
       assert.match(src, /\.filter\(d => !d\.salesOrderLine\)/);
       assert.match(
         src,
         /useEffect\(\(\) => \{\s*\n\s*if \(!lineDetails \|\| !selectedPriceListId\)/,
       );
+    });
+
+    it('prices the tariff request via a dedicated POST action, not the generic product selector', () => {
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
+      assert.match(src, /productIds: products, priceListId: selectedPriceListId/);
     });
 
     it('computes quoteAmount as pendingQty × (order price ?? tariff price), skipping unresolved lines', () => {
@@ -159,11 +162,44 @@ describe('BulkInvoiceFromShipment', () => {
       assert.match(src, /invoiceableRows\[0\]\?\.\['etgoCurrency\$_identifier'\]/);
     });
 
-    it('falls back to the "N shipments" label when no quote could be resolved yet', () => {
+    it('falls back to the "N shipments" label once loading has settled and no quote could be resolved', () => {
       assert.match(
         src,
-        /const cardAmountLabel = quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)\s*\n\s*:\s*`\$\{invoiceableCount\} \$\{ui\('shipment'\)\}/,
+        /const cardAmountLabel = quoteLoading\s*\n\s*\?\s*undefined\s*\n\s*:\s*\(quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)\s*\n\s*:\s*`\$\{invoiceableCount\} \$\{ui\('shipment'\)\}/,
       );
+    });
+
+    // ETP-5410 follow-up: the fallback used to render on EVERY open (quoteAmount starts null)
+    // and then get silently replaced the instant the quote resolved — a "1 envío" flash on every
+    // click, reported by QA. Two earlier attempts were also rejected: suppressing
+    // cardAmountLabel to undefined with no visual replacement just swapped the flash for a
+    // blank-then-pop-in; wiring quoteLoading straight into a SPINNER made it flicker on/off
+    // almost as fast as the text flash, since quoteLoading itself resolves in ~100-250ms
+    // locally. The fix: cardAmountLoading now shows a static skeleton placeholder (see
+    // CreateInvoiceConfirmModal's own doc — same primitive NewPaymentEntryModal already uses
+    // for its own async fields), which doesn't have the spinner's flicker problem even for a
+    // very brief show — ONLY for N===1, the one case where a value always resolves on its own
+    // (pending lines + order price + the auto-selected Tarifa, no user action required).
+    describe('quoteLoading — drives the shared modal\'s skeleton placeholder, and gates cardAmountLabel so the two can never disagree', () => {
+      it('is scoped to exactly one selected shipment — N>=2 has no auto-selected Tarifa, so "N shipments" is a correct steady state, not a loading placeholder', () => {
+        assert.match(src, /const quoteLoading = invoiceableRows\.length === 1 && \(/);
+        assert.match(src, /cardAmountLoading=\{quoteLoading\}/);
+      });
+
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
     });
 
     it('no longer pre-checks for an existing draft invoice (the shared modal has no such banner)', () => {
@@ -173,9 +209,9 @@ describe('BulkInvoiceFromShipment', () => {
 
   // ── auto-preselected Tarifa for a single shipment ───────────────────────────
   describe('auto-preselects the Tarifa when exactly one shipment is selected', () => {
-    it('fetches the single-record header (only for N===1) to read resolvedPriceListId', () => {
-      assert.match(src, /if \(!showModal \|\| invoiceableRows\.length !== 1\) \{ setResolvedPriceListId\(undefined\); return; \}/);
-      assert.match(src, /goods-shipment\/goodsShipment\/\$\{invoiceableRows\[0\]\.id\}`, \{ baseUrl: '', token \}/);
+    it('derives resolvedPriceListId from the pendingInvoiceLines response, not a separate full-record GET', () => {
+      assert.match(src, /results\.length === 1 && results\[0\]\.resolvedPriceListId \? results\[0\]\.resolvedPriceListId : undefined/);
+      assert.match(src, /resolvedPriceListId: json\?\.response\?\.resolvedPriceListId \|\| null/);
     });
 
     it('feeds it to the shared modal via data.resolvedPriceListId — the same field the single-record flow already uses', () => {

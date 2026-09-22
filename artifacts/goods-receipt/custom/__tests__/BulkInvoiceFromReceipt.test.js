@@ -81,6 +81,39 @@ describe('BulkInvoiceFromReceipt', () => {
       assert.doesNotMatch(src, /ui\('shipment'\)/);
     });
 
+    // ETP-5410 follow-up: the fallback used to render on EVERY open (quoteAmount starts null)
+    // and then get silently replaced the instant the quote resolved — a "1 recibo" flash on
+    // every click, reported by QA. Two earlier attempts were also rejected: suppressing
+    // cardAmountLabel to undefined with no visual replacement just swapped the flash for a
+    // blank-then-pop-in; wiring quoteLoading straight into a SPINNER made it flicker on/off
+    // almost as fast as the text flash, since quoteLoading itself resolves in ~100-250ms
+    // locally. The fix: cardAmountLoading now shows a static skeleton placeholder (see
+    // CreateInvoiceConfirmModal's own doc — same primitive NewPaymentEntryModal already uses
+    // for its own async fields), which doesn't have the spinner's flicker problem even for a
+    // very brief show — ONLY for N===1, the one case where a value always resolves on its own
+    // (pending lines + order price + the auto-selected Tarifa).
+    describe('quoteLoading — drives the shared modal\'s skeleton placeholder, and gates cardAmountLabel so the two can never disagree', () => {
+      it('is scoped to exactly one selected receipt — N>=2 has no auto-selected Tarifa, so "N receipts" is a correct steady state, not a loading placeholder', () => {
+        assert.match(src, /const quoteLoading = invoiceableRows\.length === 1 && \(/);
+        assert.match(src, /cardAmountLoading=\{quoteLoading\}/);
+      });
+
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
+    });
+
     it('passes the pre-summed pendingQtyTotal instead of a single-document pendingQtyUrl', () => {
       assert.match(src, /pendingQtyTotal=\{pendingQtyTotal\}/);
       assert.doesNotMatch(src, /pendingQtyUrl=/);
@@ -96,12 +129,10 @@ describe('BulkInvoiceFromReceipt', () => {
   // a line related to a purchase order line is priced at THAT order line's own unitPrice,
   // ignoring the invoice's price list; only an unlinked line is priced from the chosen Tarifa.
   describe('quote — real price per line, not an estimate', () => {
-    it('fetches receipt lines (product + salesOrderLine) to know each line\'s price source', () => {
-      assert.match(src, /goodsReceiptLine\?parentId=/);
-    });
-
-    it('fetches pendingInvoiceLines per receipt from the goods-receipt spec', () => {
+    it('gets product + salesOrderLine from pendingInvoiceLines per receipt, not a separate lines request', () => {
       assert.match(src, /goods-receipt\/goodsReceipt\/\$\{r\.id\}\/action\/pendingInvoiceLines/);
+      assert.doesNotMatch(src, /goodsReceiptLine\?parentId=/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
     });
 
     it('fetches the PURCHASE ORDER line\'s own price for lines that have one, independent of the chosen Tarifa', () => {
@@ -113,7 +144,8 @@ describe('BulkInvoiceFromReceipt', () => {
     });
 
     it('fetches the Tarifa price only for lines with NO linked order line, from purchase price lists (isSOTrx=false)', () => {
-      assert.match(src, /purchase-invoice\/lines\/selectors\/M_Product_ID\?limit=500&offset=0&priceList=/);
+      assert.match(src, /action\/productPrices/);
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
       assert.match(src, /\.filter\(d => !d\.salesOrderLine\)/);
     });
 
@@ -133,9 +165,9 @@ describe('BulkInvoiceFromReceipt', () => {
 
   // ── auto-preselected Tarifa for a single receipt ────────────────────────────
   describe('auto-preselects the Tarifa when exactly one receipt is selected', () => {
-    it('fetches the single-record header (only for N===1) to read resolvedPriceListId', () => {
-      assert.match(src, /if \(!showModal \|\| invoiceableRows\.length !== 1\) \{ setResolvedPriceListId\(undefined\); return; \}/);
-      assert.match(src, /goods-receipt\/goodsReceipt\/\$\{invoiceableRows\[0\]\.id\}`, \{ baseUrl: '', token \}/);
+    it('derives resolvedPriceListId from the pendingInvoiceLines response, not a separate full-record GET', () => {
+      assert.match(src, /results\.length === 1 && results\[0\]\.resolvedPriceListId \? results\[0\]\.resolvedPriceListId : undefined/);
+      assert.match(src, /resolvedPriceListId: json\?\.response\?\.resolvedPriceListId \|\| null/);
     });
 
     it('feeds it to the shared modal via data.resolvedPriceListId — the same field the single-record flow already uses', () => {

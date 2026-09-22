@@ -31,6 +31,8 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
   const [pendingByLine, setPendingByLine] = useState(null); // null = not fetched yet
   const [orderLinePrices, setOrderLinePrices] = useState({});
   const [tariffPrices, setTariffPrices] = useState({});
+  const [mainFetchPending, setMainFetchPending] = useState(false);
+  const [tariffFetchPending, setTariffFetchPending] = useState(false);
   const [resolvedPriceListId, setResolvedPriceListId] = useState(undefined);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
@@ -65,55 +67,62 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
   const allInvoiced = invoiceableCount === 0;
   const canCreate = invoiceableCount > 0 && bpCheck.same && currencyCheck.same;
 
-  // Fetches, per invoiceable receipt: the lines (product + salesOrderLine, to know each line's
-  // real price source) and the pending-quantity map (the same one that caps what the backend
-  // will actually invoice). Both are needed for the quote below, not just for the subtitle.
+  // Fetches, per invoiceable receipt, the pending-quantity map (the same one that caps what
+  // the backend will actually invoice) — which now ALSO carries each pending line's product and
+  // salesOrderLine (ETP-5410 follow-up: CreateDraftInvoiceHandler#handlePendingLines merges them
+  // server-side), so this used to be two requests per receipt and is now one.
   useEffect(() => {
     if (!showModal || !canCreate) {
       setLineDetails(null);
       setPendingByLine(null);
       setOrderLinePrices({});
+      setResolvedPriceListId(undefined);
+      setMainFetchPending(false);
       return;
     }
     let cancelled = false;
+    setMainFetchPending(true);
     (async () => {
-      const [lineResults, pendingResults] = await Promise.all([
-        Promise.all(invoiceableRows.map(async (r) => {
-          try {
-            const res = await apiFetch(
-              `${base}/goods-receipt/goodsReceiptLine?parentId=${r.id}&_startRow=0&_endRow=200`,
-              { baseUrl: '', token },
-            );
-            if (!res.ok) return [];
-            return (await res.json())?.response?.data || [];
-          } catch {
-            return [];
-          }
-        })),
-        Promise.all(invoiceableRows.map(async (r) => {
-          try {
-            const res = await apiFetch(
-              `${base}/goods-receipt/goodsReceipt/${r.id}/action/pendingInvoiceLines`,
-              { baseUrl: '', token },
-            );
-            if (!res.ok) return {};
-            const data = (await res.json())?.response?.data || [];
-            const map = {};
-            data.forEach(item => { map[item.lineId] = Number(item.pendingQty) || 0; });
-            return map;
-          } catch {
-            return {};
-          }
-        })),
-      ]);
+      const results = await Promise.all(invoiceableRows.map(async (r) => {
+        try {
+          const res = await apiFetch(
+            `${base}/goods-receipt/goodsReceipt/${r.id}/action/pendingInvoiceLines`,
+            { baseUrl: '', token },
+          );
+          if (!res.ok) return { items: [], resolvedPriceListId: null };
+          const json = await res.json();
+          return {
+            items: json?.response?.data || [],
+            resolvedPriceListId: json?.response?.resolvedPriceListId || null,
+          };
+        } catch {
+          return { items: [], resolvedPriceListId: null };
+        }
+      }));
       if (cancelled) return;
 
       const details = {};
-      lineResults.flat().forEach(l => {
-        details[l.id] = { product: l.product, salesOrderLine: l.salesOrderLine || null };
+      const pendingMap = {};
+      results.forEach(r => {
+        r.items.forEach(item => {
+          details[item.lineId] = { product: item.product, salesOrderLine: item.salesOrderLine || null };
+          pendingMap[item.lineId] = Number(item.pendingQty) || 0;
+        });
       });
       setLineDetails(details);
-      setPendingByLine(Object.assign({}, ...pendingResults));
+      setPendingByLine(pendingMap);
+
+      // Auto-preselects the Tarifa for exactly ONE selected receipt — the same server-resolved
+      // tariff (linked order's price list, else the Business Partner's own, else the client's
+      // default) the single-receipt "Crear Factura" flow already preselects. For N>=2 there is
+      // no single well-defined resolved tariff (different orders could resolve to different
+      // ones), so the picker stays empty and the choice stays explicit.
+      // ETP-5410 follow-up: this used to be a SEPARATE full single-record GET (the single
+      // heaviest request in this modal's opening waterfall); now it's the same field
+      // pendingInvoiceLines already resolved server-side above, at no extra cost.
+      setResolvedPriceListId(
+        results.length === 1 && results[0].resolvedPriceListId ? results[0].resolvedPriceListId : undefined,
+      );
 
       // Order-linked lines are priced at the PURCHASE ORDER's price, not the chosen Tarifa
       // (Core's UpdatePricesAndAmounts copies orderLine.getUnitPrice() whenever the line has a
@@ -130,32 +139,13 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
           }
         } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
       }));
-      if (!cancelled) setOrderLinePrices(prices);
+      if (!cancelled) {
+        setOrderLinePrices(prices);
+        setMainFetchPending(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [showModal, canCreate, invoiceableRows, base, apiFetch, token]);
-
-  // Auto-preselects the Tarifa for exactly ONE selected receipt — the same server-resolved
-  // tariff the single-receipt "Crear Factura" flow already preselects (linked order's price
-  // list, else the Business Partner's own), via the same single-record GET that enrichment
-  // comes from. CreateInvoiceConfirmModal's own usePriceListPicker already knows how to consume
-  // `data.resolvedPriceListId` (ETP-4942) — this just has to feed it the field, which a grid
-  // row never carries. For N>=2 there is no single well-defined resolved tariff (different
-  // orders could resolve to different ones), so the picker stays empty and the choice stays
-  // explicit, same as before.
-  useEffect(() => {
-    if (!showModal || invoiceableRows.length !== 1) { setResolvedPriceListId(undefined); return; }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch(`${base}/goods-receipt/goodsReceipt/${invoiceableRows[0].id}`, { baseUrl: '', token });
-        if (!res.ok || cancelled) return;
-        const rec = (await res.json())?.response?.data?.[0];
-        if (rec?.resolvedPriceListId) setResolvedPriceListId(rec.resolvedPriceListId);
-      } catch { /* silent — the picker just stays empty, same as before this feature */ }
-    })();
-    return () => { cancelled = true; };
-  }, [showModal, invoiceableRows, base, apiFetch, token]);
 
   // Tariff prices for lines with NO linked purchase order line — these are the only ones Core
   // actually prices from the invoice's price list (setPricesBasedOnBOM), so this is the only
@@ -170,25 +160,36 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
     )];
     if (products.length === 0) { setTariffPrices({}); return; }
     let cancelled = false;
+    setTariffFetchPending(true);
     (async () => {
       try {
+        // ETP-5410 follow-up: a dedicated POST action that prices exactly these product ids,
+        // instead of the generic product-browse selector (up to 500 rows, filtered client-side)
+        // — see MultiDocumentInvoiceSupport#resolveProductPrices in com.etendoerp.go. Any
+        // invoiceable receipt id works as the URL anchor — the action ignores it.
         const res = await apiFetch(
-          `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0&priceList=${encodeURIComponent(selectedPriceListId)}`,
-          { baseUrl: '', token },
+          `${base}/goods-receipt/goodsReceipt/${invoiceableRows[0].id}/action/productPrices`,
+          {
+            method: 'POST',
+            baseUrl: '',
+            token,
+            body: JSON.stringify({ productIds: products, priceListId: selectedPriceListId }),
+          },
         );
         if (!res.ok || cancelled) return;
-        const items = (await res.json())?.items || [];
+        const items = (await res.json())?.response?.data || [];
         const prices = {};
         items.forEach(item => {
-          if (!item.id || !products.includes(item.id)) return;
-          const std = Number(item._aux?._PSTD);
-          if (std) prices[item.id] = std;
+          if (item.productId) prices[item.productId] = Number(item.price) || 0;
         });
         if (!cancelled) setTariffPrices(prices);
-      } catch { /* products left unpriced just don't contribute to the quote */ }
+      } catch { /* products left unpriced just don't contribute to the quote */
+      } finally {
+        if (!cancelled) setTariffFetchPending(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [lineDetails, selectedPriceListId, base, apiFetch, token]);
+  }, [lineDetails, selectedPriceListId, invoiceableRows, base, apiFetch, token]);
 
   // The quote: pendingQty × real unit price per line — the purchase order's price when the
   // line has one (always correct, since that's what Core actually bills), the selected
@@ -218,10 +219,36 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
     ? Object.values(pendingByLine).reduce((a, b) => a + b, 0)
     : undefined;
 
+  // Whether any pending line still needs a Tarifa-sourced price we haven't fetched yet.
+  const needsTariffPricing = !!(lineDetails && pendingByLine
+    && Object.entries(pendingByLine).some(([lineId, qty]) => {
+      if (!qty) return false;
+      const detail = lineDetails[lineId];
+      return !!(detail && !detail.salesOrderLine);
+    }));
+  // Drives CreateInvoiceConfirmModal's `cardAmountLoading` (a skeleton placeholder in the
+  // amount line — see that prop's own doc for why a skeleton and not a spinner), ONLY for a
+  // single selected receipt — that is the one case where everything resolves on its own
+  // (pending lines, order price, AND the auto-selected Tarifa) with no user action required, so
+  // a value is always about to load and a loading placeholder reads correctly. For N>=2 there
+  // is no auto-selected Tarifa — the user must pick one — so "N recibos" is the correct
+  // persistent label while waiting on them, not a symptom of loading, and must show
+  // immediately rather than sit behind a placeholder that would never resolve on its own.
+  const quoteLoading = invoiceableRows.length === 1 && (
+    mainFetchPending || (needsTariffPricing && (!selectedPriceListId || tariffFetchPending))
+  );
+
   const currencyCode = invoiceableRows[0]?.['etgoCurrency$_identifier'] || '';
-  const cardAmountLabel = quoteAmount != null
-    ? formatCurrency(currencyCode, quoteAmount)
-    : `${invoiceableCount} ${ui('receipt')}${invoiceableCount !== 1 ? 's' : ''}`;
+  // Gated on quoteLoading, not just computed unconditionally: cardAmountLoading already hides
+  // this behind a skeleton while true, but a caller must never hand the modal a label that
+  // still says "1 recibo" underneath — the label and the loading flag must agree, or a future
+  // change to either one (e.g. rendering the label as a tooltip too) could resurface the exact
+  // flash this whole feature exists to prevent.
+  const cardAmountLabel = quoteLoading
+    ? undefined
+    : (quoteAmount != null
+      ? formatCurrency(currencyCode, quoteAmount)
+      : `${invoiceableCount} ${ui('receipt')}${invoiceableCount !== 1 ? 's' : ''}`);
 
   if (selectedRows.length < 1) return null;
 
@@ -292,6 +319,7 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
           data={{ 'businessPartner$_identifier': bpCheck.name, resolvedPriceListId }}
           loading={creating}
           cardAmountLabel={cardAmountLabel}
+          cardAmountLoading={quoteLoading}
           pendingQtyTotal={pendingQtyTotal}
           showPriceListPicker
           isSOTrx={false}

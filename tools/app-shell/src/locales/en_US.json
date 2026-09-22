@@ -20091,7 +20091,7 @@
     "soConfirmedTitle": "Order confirmed",
     "soConfirmedSubtitle": "The following documents were created as drafts:",
     "soConfirmActionOnly": "Confirm order",
-    "soManageDocsTitle": "Manage documents",
+    "soManageDocsTitle": "Generate invoice",
     "soCreateDocsBtn": "Create →",
     "soDocsCreatedTitle": "Documents created",
     "soOrderConfirmed": "Order confirmed",

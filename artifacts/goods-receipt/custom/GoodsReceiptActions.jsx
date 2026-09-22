@@ -41,6 +41,8 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const [pendingByLine, setPendingByLine] = useState(null);
   const [orderLinePrices, setOrderLinePrices] = useState({});
   const [tariffPrices, setTariffPrices] = useState({});
+  const [mainFetchPending, setMainFetchPending] = useState(false);
+  const [tariffFetchPending, setTariffFetchPending] = useState(false);
   const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
 
   const isCompleted = data?.documentStatus === 'CO';
@@ -166,33 +168,34 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     }
   }, [confirmedDocs, onRefresh, ui]);
 
-  // Fetches this receipt's own lines (product + salesOrderLine) and its pending-quantity map.
-  // Skipped entirely when a linked order exists (see hasLinkedOrder above).
+  // Fetches this receipt's pending-quantity map, which now ALSO carries each pending line's
+  // product and salesOrderLine (ETP-5410 follow-up — see
+  // CreateDraftInvoiceHandler#handlePendingLines), so this used to be two requests and is now
+  // one. Skipped entirely when a linked order exists (see hasLinkedOrder above).
   useEffect(() => {
     if (!showInvoiceConfirm || hasLinkedOrder || !recordId) {
       setLineDetails(null);
       setPendingByLine(null);
       setOrderLinePrices({});
+      setMainFetchPending(false);
       return;
     }
     let cancelled = false;
+    setMainFetchPending(true);
     (async () => {
-      const [lineRes, pendingRes] = await Promise.all([
-        apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${recordId}&_startRow=0&_endRow=200`, { baseUrl: '', token })
-          .catch(() => null),
-        apiFetch(`${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token })
-          .catch(() => null),
-      ]);
+      const pendingRes = await apiFetch(
+        `${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token },
+      ).catch(() => null);
       if (cancelled) return;
 
-      const lines = lineRes?.ok ? (await lineRes.json())?.response?.data || [] : [];
-      const details = {};
-      lines.forEach(l => { details[l.id] = { product: l.product, salesOrderLine: l.salesOrderLine || null }; });
-      setLineDetails(details);
-
       const pendingData = pendingRes?.ok ? (await pendingRes.json())?.response?.data || [] : [];
+      const details = {};
       const pendingMap = {};
-      pendingData.forEach(item => { pendingMap[item.lineId] = Number(item.pendingQty) || 0; });
+      pendingData.forEach(item => {
+        details[item.lineId] = { product: item.product, salesOrderLine: item.salesOrderLine || null };
+        pendingMap[item.lineId] = Number(item.pendingQty) || 0;
+      });
+      setLineDetails(details);
       setPendingByLine(pendingMap);
 
       const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
@@ -206,7 +209,10 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           }
         } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
       }));
-      if (!cancelled) setOrderLinePrices(prices);
+      if (!cancelled) {
+        setOrderLinePrices(prices);
+        setMainFetchPending(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [showInvoiceConfirm, hasLinkedOrder, recordId, base, apiFetch, token]);
@@ -219,25 +225,35 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     )];
     if (products.length === 0) { setTariffPrices({}); return; }
     let cancelled = false;
+    setTariffFetchPending(true);
     (async () => {
       try {
+        // ETP-5410 follow-up: a dedicated POST action that prices exactly these product ids,
+        // instead of the generic product-browse selector (up to 500 rows, filtered client-side)
+        // — see MultiDocumentInvoiceSupport#resolveProductPrices in com.etendoerp.go.
         const res = await apiFetch(
-          `${base}/purchase-invoice/lines/selectors/M_Product_ID?limit=500&offset=0&priceList=${encodeURIComponent(selectedPriceListId)}`,
-          { baseUrl: '', token },
+          `${base}/goods-receipt/goodsReceipt/${recordId}/action/productPrices`,
+          {
+            method: 'POST',
+            baseUrl: '',
+            token,
+            body: JSON.stringify({ productIds: products, priceListId: selectedPriceListId }),
+          },
         );
         if (!res.ok || cancelled) return;
-        const items = (await res.json())?.items || [];
+        const items = (await res.json())?.response?.data || [];
         const prices = {};
         items.forEach(item => {
-          if (!item.id || !products.includes(item.id)) return;
-          const std = Number(item._aux?._PSTD);
-          if (std) prices[item.id] = std;
+          if (item.productId) prices[item.productId] = Number(item.price) || 0;
         });
         if (!cancelled) setTariffPrices(prices);
-      } catch { /* products left unpriced just don't contribute to the quote */ }
+      } catch { /* products left unpriced just don't contribute to the quote */
+      } finally {
+        if (!cancelled) setTariffFetchPending(false);
+      }
     })();
     return () => { cancelled = true; };
-  }, [lineDetails, selectedPriceListId, base, apiFetch, token]);
+  }, [lineDetails, selectedPriceListId, recordId, base, apiFetch, token]);
 
   const quoteAmount = useMemo(() => {
     if (!lineDetails || !pendingByLine) return null;
@@ -261,6 +277,25 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const cardAmountLabel = quoteAmount != null
     ? formatCurrency(data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier'] || '', quoteAmount)
     : undefined;
+
+  // Whether any pending line still needs a Tarifa-sourced price we haven't fetched yet.
+  const needsTariffPricing = !!(lineDetails && pendingByLine
+    && Object.entries(pendingByLine).some(([lineId, qty]) => {
+      if (!qty) return false;
+      const detail = lineDetails[lineId];
+      return !!(detail && !detail.salesOrderLine);
+    }));
+  // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+  // documentNo fallback while the quote was still resolving — the exact same "wrong value
+  // flashes, then gets replaced" glitch already fixed on the bulk toolbar actions
+  // (BulkInvoiceFromReceipt.jsx), just showing a document number instead of "N recibos".
+  // Unifies onto the same fix: cardAmountLoading shows a skeleton placeholder instead, so this
+  // and the bulk modal never disagree on what "the quote is still loading" looks like. Gated on
+  // hasLinkedOrder like the rest of the quote feature — when a linked order exists, the quote
+  // is never computed at all, so there is nothing to show a loading state for.
+  const quoteLoading = !hasLinkedOrder && (
+    mainFetchPending || (needsTariffPricing && (!selectedPriceListId || tariffFetchPending))
+  );
 
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
@@ -358,6 +393,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           loading={creatingInvoice}
           pendingQtyUrl={`${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`}
           cardAmountLabel={cardAmountLabel}
+          cardAmountLoading={quoteLoading}
           showPriceListPicker
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}

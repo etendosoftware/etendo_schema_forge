@@ -152,14 +152,18 @@ describe('GoodsReceiptActions', () => {
       );
     });
 
-    it('fetches this receipt\'s own lines and pendingInvoiceLines, not a bulk collection', () => {
-      assert.match(src, /goods-receipt\/goodsReceiptLine\?parentId=\$\{recordId\}/);
+    it('gets product + salesOrderLine from pendingInvoiceLines, not a separate lines request, and not a bulk collection', () => {
       assert.match(src, /goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/pendingInvoiceLines`, \{ baseUrl: '', token \}/);
+      // goodsReceiptLine?parentId=${receiptId} still exists elsewhere in this file (an unrelated
+      // feature) — only the recordId-anchored variant the quote effect used to call is gone.
+      assert.doesNotMatch(src, /goods-receipt\/goodsReceiptLine\?parentId=\$\{recordId\}/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
     });
 
     it('prices order-linked LINES from their own purchase order line, unlinked lines from the Tarifa', () => {
       assert.match(src, /purchase-order\/lines\/\$\{id\}/);
-      assert.match(src, /purchase-invoice\/lines\/selectors\/M_Product_ID\?limit=500&offset=0&priceList=/);
+      assert.match(src, /goods-receipt\/goodsReceipt\/\$\{recordId\}\/action\/productPrices/);
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
       assert.match(
         src,
         /const price = detail\.salesOrderLine\s*\n\s*\?\s*orderLinePrices\[detail\.salesOrderLine\]\s*\n\s*:\s*tariffPrices\[detail\.product\];/,
@@ -176,6 +180,36 @@ describe('GoodsReceiptActions', () => {
     it('passes cardAmountLabel and onPriceListChange to the modal', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLabel=\{cardAmountLabel\}[\s\S]*?\/>/);
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?onPriceListChange=\{setSelectedPriceListId\}[\s\S]*?\/>/);
+    });
+
+    // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+    // documentNo fallback while the quote was still resolving — unified onto the same
+    // cardAmountLoading skeleton fix already applied to BulkInvoiceFromReceipt.jsx, so the
+    // bulk and single-record "Crear factura" flows never disagree on what "still loading"
+    // looks like.
+    describe('quoteLoading — drives cardAmountLoading (skeleton), gated on hasLinkedOrder like the rest of the quote feature', () => {
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
+
+      it('is false whenever hasLinkedOrder is true — the quote is never computed there, so there is nothing to show a loading state for', () => {
+        assert.match(src, /const quoteLoading = !hasLinkedOrder && \(/);
+      });
+
+      it('passes cardAmountLoading to the shared modal', () => {
+        assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLoading=\{quoteLoading\}[\s\S]*?\/>/);
+      });
     });
 
     it('uses the authenticated request helper for the new fetches, not a bare fetch', () => {
