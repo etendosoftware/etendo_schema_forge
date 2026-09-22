@@ -399,11 +399,15 @@ column and into the row hover-action strip via `InlineLinesPanel`'s generic `row
 `docs/feedback.md` entries).
 
 **Investigated first: wrap `InlineLinesPanel` instead of hand-patching?** `AmortizationLinesTable`
-is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike
-`InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`, which are thin adapters that just forward
-`DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`, `addRow`, hidden-column
-visibility, selection state) into `InlineLinesPanel`. `AmortizationLinesTable` instead owns *all*
-of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
+is a fully self-contained `customLinesComponent` (`decisions.json`) — unlike the
+pipeline-generated `LinesTable.jsx` used by the 5 windows named above (e.g.
+`artifacts/sales-invoice/generated/web/sales-invoice/LinesTable.jsx`), which is a thin generated
+wrapper that just forwards `DetailView`'s own line-management props (`onUpdateRow`, `onDeleteRow`,
+`addRow`, hidden-column visibility, selection state) into `InlineLinesPanel`. (Two earlier
+hand-written adapters aiming at the same shape, `InvoiceLinesTable.jsx` and
+`SalesInvoiceLinesTable.jsx`, were deleted as dead code under ETP-5133 — they never actually
+rendered for either window; see `sales-invoice.md`'s "Dead custom lines-table components removed"
+section.) `AmortizationLinesTable` instead owns *all* of that machinery itself: its own `fetch`/PUT/POST/DELETE calls straight to
 `{apiBaseUrl}/lines[/…]`, its own multi-select + `SelectionToolbar` wiring, and — critically — its
 own inline "add line" draft row (Sales-Order-style: Enter-to-save-and-reopen, Esc-to-cancel,
 click-outside-to-save), a flow `InlineLinesPanel` has no equivalent for at all (that pattern lives
