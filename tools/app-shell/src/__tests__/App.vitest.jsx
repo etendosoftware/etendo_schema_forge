@@ -415,16 +415,15 @@ describe('fetchWindowAccess', () => {
     }
   });
 
-  // [ETP-5395 QA] — the shrunk 3s TTL still caches the FAILURE case (the
-  // `MENU_ACCESS_UNREACHABLE` sentinel, see fetchMenuAccess()'s catch branch), not
-  // just successful resolutions. This is what bounds the request-volume regression
-  // under a genuinely down/unreachable SFListMenu: without this, every refresh
-  // trigger (bootstrap, focus, visibility, the 5-min poll) would hit `/listmenu`
-  // again immediately, defeating the cache entirely for the one case (a sustained
-  // outage) where repeated failed round trips are most costly. With the cache
-  // applying to failures too, the worst case is bounded to one attempt per 3s
-  // (~20/min) — still a ~20x increase over the previous 60s TTL's ~1/min ceiling,
-  // but bounded rather than unbounded.
+  // [ETP-5395 QA, superseded by ETP-5403] — the FAILURE case (the
+  // `MENU_ACCESS_UNREACHABLE` sentinel, see fetchMenuAccess()'s catch branch) is
+  // cached too, not just successful resolutions — this is what bounds the
+  // request-volume regression under a genuinely down/unreachable SFListMenu. As of
+  // ETP-5403, failure outcomes are stamped with their OWN, much longer TTL
+  // (`MENU_ACCESS_FAILURE_TTL_MS`, 60s) instead of sharing the 3s success TTL — see
+  // the two tests below for the decoupled behavior. This test only proves the
+  // within-TTL dedupe still holds for the failure path; it says nothing about which
+  // TTL governs it.
   it('caches the SFListMenu FAILURE too, so two calls within the TTL only attempt /listmenu once', async () => {
     vi.stubGlobal('fetch', vi.fn((url) => (
       String(url).includes('/listmenu')
@@ -441,5 +440,108 @@ describe('fetchWindowAccess', () => {
     const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
     const menuCalls = calls.filter((url) => url.includes('/listmenu'));
     expect(menuCalls).toHaveLength(1);
+  });
+
+  // [ETP-5403] — the regression this ticket fixes: under a sustained outage, the
+  // failure outcome must NOT expire at the short 3s success-path TTL. Advancing the
+  // clock past `MENU_ACCESS_CACHE_TTL_MS` (3s) but staying well under
+  // `MENU_ACCESS_FAILURE_TTL_MS` (60s) must still serve the cached failure sentinel
+  // without a second /listmenu attempt — this is the "20x/min retry storm" the
+  // ticket's background section describes, now closed.
+  it('does not re-attempt SFListMenu at the short success TTL after a failure — stays throttled near the failure TTL', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', vi.fn((url) => (
+        String(url).includes('/listmenu')
+          ? Promise.reject(new Error('network down'))
+          : Promise.resolve(jsonResponse(PAYLOAD))
+      )));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      // Past the old 3s success TTL, with margin, but well under the 60s failure TTL.
+      await vi.advanceTimersByTimeAsync(3_100);
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // [ETP-5403] — the failure cache must still eventually expire and recover once the
+  // outage clears; the longer TTL throttles retries, it does not disable them.
+  it('re-attempts SFListMenu once the failure TTL has elapsed', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', vi.fn((url) => (
+        String(url).includes('/listmenu')
+          ? Promise.reject(new Error('network down'))
+          : Promise.resolve(jsonResponse(PAYLOAD))
+      )));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      // Past the 60s failure TTL, with margin.
+      await vi.advanceTimersByTimeAsync(60_100);
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // [ETP-5403 QA] — the decoupling must work in both directions: once a failure
+  // recovers into a SUCCESS, that outcome must be cached at the short 3s success TTL
+  // again, not left lingering at the 60s failure TTL from the previous attempt. Each
+  // `fetchMenuAccess()` call picks its TTL from its OWN outcome, not the cache's prior
+  // one — this proves it, by forcing a failure -> recovery -> success sequence and
+  // showing the post-recovery cache still expires quickly.
+  it('re-caches at the short success TTL again once a failure recovers into a success', async () => {
+    vi.useFakeTimers();
+    try {
+      let shouldFail = true;
+      vi.stubGlobal('fetch', vi.fn((url) => {
+        if (String(url).includes('/listmenu')) {
+          return shouldFail ? Promise.reject(new Error('network down')) : Promise.resolve(menuTextResponse(MENU_TREE));
+        }
+        return Promise.resolve(jsonResponse(PAYLOAD));
+      }));
+
+      const first = await fetchWindowAccess({ token: 'tok' });
+      expect(first).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+      // Past the 60s failure TTL — the outage has now cleared.
+      await vi.advanceTimersByTimeAsync(60_100);
+      shouldFail = false;
+
+      const second = await fetchWindowAccess({ token: 'tok' });
+      expect(second).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      // Only past the short 3s success TTL, well under the 60s failure TTL — if the
+      // recovered success were mistakenly cached at 60s, this would still be served
+      // from cache and no third /listmenu call would happen.
+      await vi.advanceTimersByTimeAsync(3_100);
+
+      const third = await fetchWindowAccess({ token: 'tok' });
+      expect(third).toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+
+      const calls = globalThis.fetch.mock.calls.map(([url]) => String(url));
+      const menuCalls = calls.filter((url) => url.includes('/listmenu'));
+      expect(menuCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
