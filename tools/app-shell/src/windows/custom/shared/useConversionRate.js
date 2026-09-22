@@ -32,7 +32,7 @@ export function useConversionRate({ fromCode, toCode, date, apiBaseUrl, token })
 
   useEffect(() => {
     // Same currency (or missing inputs) → nothing to convert; no fetch needed.
-    if (!fromCode || !toCode || fromCode === toCode || !apiBaseUrl || !token) {
+    if (!fromCode || !toCode || fromCode === toCode || !apiBaseUrl) {
       setState({ rate: null, hasRate: false, loading: false });
       return undefined;
     }

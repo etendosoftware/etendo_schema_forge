@@ -6,6 +6,7 @@ import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
@@ -45,23 +46,6 @@ const reportWalkthroughFinish = (info) => handleWalkthroughFinish(info, WALKTHRO
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
 
-function readSessionValue(key) {
-  try {
-    return globalThis.localStorage?.getItem(key) || '';
-  } catch {
-    return '';
-  }
-}
-
-function readSessionRoleList() {
-  try {
-    const parsed = JSON.parse(readSessionValue('sf_auth_rolelist') || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
 // ETP-4514: `allowedIds` is a real, resolved `Set` only once SFListMenu has
 // answered — `undefined` (in flight) and `null` (unauthenticated or fetch
 // failure, deliberately fail-open per useRoleMenu.js) must NOT trigger this,
@@ -86,15 +70,23 @@ function NoAccessScreen() {
   // invited-user case: you belong to the company, nobody has assigned you a role yet) versus a
   // role that grants no window. Telling the first user "your role has no permissions" would send
   // them to ask for the wrong thing.
-  const roleList = readSessionRoleList();
-  const hasRole = roleList.length > 0;
-  const companyName = readSessionValue('sf_auth_client_name') || ui('yourCompany');
+  // ETP-4576 — both of these came out of localStorage (`sf_auth_rolelist`, `sf_auth_client_name`).
+  // Those are legacy auth keys: `purgeLegacyAuthStorage` deletes them, so the reads answered ""
+  // and "[]" for every user. The consequence was not cosmetic — `hasRole` was permanently false,
+  // so this screen always told the visitor that nobody had assigned them a role, including the
+  // user whose role simply grants no window. That is precisely the distinction the comment above
+  // says the screen must not guess at. The session carries the role list; the company name is not
+  // in it, so it is read off the environment list this hook already loads.
+  const roleList = useAuthOptional()?.roleList;
+  const hasRole = Array.isArray(roleList) && roleList.length > 0;
   // One entry per client: the backend returns an environment per organization, so a client with
   // several orgs would otherwise be listed several times over. The current one is kept in the
   // list (disabled) rather than filtered out, so the menu also answers "where am I?".
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
+  const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
+    || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
 
   return (
@@ -114,8 +106,9 @@ function NoAccessScreen() {
       </p>
 
       {/* Absent for an account that owns a single environment, or one that cannot list them at
-          all (no platform token) — there is nowhere else to go, and an empty list would only
-          suggest otherwise. */}
+          all — there is nowhere else to go, and an empty list would only suggest otherwise.
+          "Cannot list them" is no longer "has no platform token": `useEnvironmentSwitch` gates on
+          the session being authenticated, and the listing rides the `__Host-` cookie. */}
       {canSwitch && (
         <div className="mt-6 w-full max-w-xs text-left" data-testid="no-access-company-switch">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">

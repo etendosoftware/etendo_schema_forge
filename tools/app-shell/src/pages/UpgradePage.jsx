@@ -14,7 +14,6 @@ import {
   getBillingOverview,
   getBillingOffer,
   getBillingPurchase,
-  getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
@@ -76,25 +75,23 @@ function readPendingDataTransfer(storage) {
   }
 }
 
-async function resolveCheckoutTenantName({ fetcher, baseUrl, token, requestId, storedTenantName }) {
+async function resolveCheckoutTenantName({ baseUrl, requestId, storedTenantName }) {
   if (storedTenantName) return storedTenantName;
-  const purchase = await getBillingPurchase(fetcher, baseUrl, token, requestId);
+  const purchase = await getBillingPurchase(baseUrl, requestId);
   return purchase?.clientName || '';
 }
 
-async function waitForCheckoutPayment({ fetcher, baseUrl, token, requestId }) {
+async function waitForCheckoutPayment({ baseUrl, requestId }) {
   let status = { status: 'pending' };
   for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-    status = await getCheckoutStatus(fetcher, baseUrl, token, requestId);
+    status = await getCheckoutStatus(baseUrl, requestId);
     if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
   }
   return status;
 }
 
 async function handleExistingPurchaseError(error, {
-  fetcher,
   baseUrl,
-  token,
   setFormError,
   resumePaidPurchase,
   waitForExistingProvisioning,
@@ -115,7 +112,7 @@ async function handleExistingPurchaseError(error, {
     return true;
   }
   try {
-    const overview = await getBillingOverview(fetcher, baseUrl, token);
+    const overview = await getBillingOverview(baseUrl);
     setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
   } catch {
     // The billing projection is recoverable; the purchase remains durable on the backend.
@@ -126,9 +123,7 @@ async function handleExistingPurchaseError(error, {
 }
 
 async function resumeCheckoutProvisioning({
-  fetcher,
   baseUrl,
-  token,
   requestId,
   storedTenantName,
   upgradeAction,
@@ -141,12 +136,12 @@ async function resumeCheckoutProvisioning({
   onReady,
 }) {
   const tenantName = await resolveCheckoutTenantName({
-    fetcher, baseUrl, token, requestId, storedTenantName,
+    baseUrl, requestId, storedTenantName,
   });
   if (!tenantName) throw new Error('Purchase has no environment name');
   onTenantName(tenantName);
 
-  const status = await waitForCheckoutPayment({ fetcher, baseUrl, token, requestId });
+  const status = await waitForCheckoutPayment({ baseUrl, requestId });
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
 
   const selectedTransfer = readPendingDataTransfer(storage);
@@ -488,15 +483,13 @@ export default function UpgradePage() {
 
   const startProvisioning = async () => {
     if (!pendingProvisioning) return;
-    const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      return;
-    }
+    // ETP-4576 — no `!token` gate: under the cookie session there is no client-held token, so the
+    // gate would be permanently true and this would report an expired session to every user.
+    // An actually-expired session answers 401, which `apiFetch` routes to the logout choke point.
     setEntering(true);
     try {
       const { startedAt, ...onboardingInput } = pendingProvisioning;
-      await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, onboardingInput, message => {
+      await runPaidOnboarding(getUpgradeBaseUrl(), onboardingInput, message => {
         setSteps(previous => applyProgressMessage(previous, message));
       });
       setPendingProvisioning(null);
@@ -528,8 +521,7 @@ export default function UpgradePage() {
   }, [phase, pendingProvisioning, entering]);
 
   const resumePaidPurchase = async purchase => {
-    const token = getCheckoutToken();
-    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+    if (!purchase?.purchaseId || !purchase?.clientName) {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
@@ -549,8 +541,7 @@ export default function UpgradePage() {
   };
 
   const waitForExistingProvisioning = async purchase => {
-    const token = getCheckoutToken();
-    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+    if (!purchase?.purchaseId || !purchase?.clientName) {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
@@ -558,7 +549,7 @@ export default function UpgradePage() {
     setPhase('running');
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
-        const current = await getBillingPurchase(fetch, getUpgradeBaseUrl(), token, purchase.purchaseId);
+        const current = await getBillingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
         if (current?.status === 'PROVISIONED') {
           setPhase('success');
           return;
@@ -586,13 +577,7 @@ export default function UpgradePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getCheckoutToken();
-    if (!token) {
-      setAccountState('unavailable');
-      return undefined;
-    }
-
-    fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
+    fetchEnvironments(fetch, getUpgradeBaseUrl())
       .then(list => {
         if (cancelled) return;
         const nextEnvironments = Array.isArray(list) ? list : [];
@@ -609,7 +594,7 @@ export default function UpgradePage() {
         if (!cancelled) setAccountState('unavailable');
       });
 
-    getBillingOverview(fetch, getUpgradeBaseUrl(), token)
+    getBillingOverview(getUpgradeBaseUrl())
       .then(overview => {
         if (!cancelled) setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
       })
@@ -617,7 +602,7 @@ export default function UpgradePage() {
         // Environment lookup remains the primary page state; billing is a recoverable projection.
       });
 
-    getBillingOffer(fetch, getUpgradeBaseUrl(), token)
+    getBillingOffer(getUpgradeBaseUrl())
       .then(offer => {
         if (!cancelled) setBillingOffer(offer);
       })
@@ -649,23 +634,20 @@ export default function UpgradePage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
-    const token = getCheckoutToken();
     const storedTenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token) {
+    if (!requestId) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
     let cancelled = false;
     setPhase('running');
     resumeCheckoutProvisioning({
-      fetcher: fetch,
       baseUrl: getUpgradeBaseUrl(),
-      token,
       requestId,
       storedTenantName,
       upgradeAction,
@@ -691,13 +673,6 @@ export default function UpgradePage() {
   }, []);
 
   const runUpgrade = async () => {
-    const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
-      return;
-    }
-
     setPhase('running');
     // Duration is measured from here to the terminal event in the resume
     // effect above, so it covers the full round trip through Stripe's hosted
@@ -707,9 +682,7 @@ export default function UpgradePage() {
 
     try {
       const session = await createBillingPurchase(
-        fetch,
         getUpgradeBaseUrl(),
-        token,
         {
           action: 'productive-tenant',
           clientName: form.tenantName.trim(),
@@ -727,9 +700,7 @@ export default function UpgradePage() {
       window.location.assign(session.checkoutUrl);
     } catch (error) {
       const existingPurchaseHandled = await handleExistingPurchaseError(error, {
-        fetcher: fetch,
         baseUrl: getUpgradeBaseUrl(),
-        token,
         setFormError,
         resumePaidPurchase,
         waitForExistingProvisioning,

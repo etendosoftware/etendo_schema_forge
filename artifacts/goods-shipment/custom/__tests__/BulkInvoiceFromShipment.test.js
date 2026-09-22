@@ -7,6 +7,20 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'BulkInvoiceFromShipment.jsx'), 'utf8');
 
+/**
+ * The source with comments removed, for the `doesNotMatch` assertions only.
+ *
+ * This file's own prose names the things it forbids — "the credential belongs to apiFetch"
+ * mentions the credential, and any future note about the old `Bearer` header would too. A
+ * negative regex over the raw text would then fail on an ACCURATE comment and push the next
+ * reader to delete the explanation rather than keep the code right. Positive assertions still
+ * run against `src`: matching a pattern that only exists in a comment is a mistake this
+ * component's shape (every fetch is a real call site) does not make.
+ */
+const code = src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
 describe('BulkInvoiceFromShipment', () => {
   it('exports a default function component', () => {
     assert.match(src, /export default function BulkInvoiceFromShipment/);
@@ -140,6 +154,45 @@ describe('BulkInvoiceFromShipment', () => {
 
     it('the modal reports success through onSuccess after the create call', () => {
       assert.match(src, /onSuccess\(\);/);
+    });
+  });
+
+  // ETP-4576 — the other half of this file's post-merge state. Develop contributed the
+  // `refresh` prop asserted above; this branch contributed the credential change, and it had
+  // no coverage here at all while both sibling bulk components (BulkOrderMoreMenu,
+  // BulkPurchaseOrderMoreMenu) assert theirs. A union resolution needs both halves pinned, or
+  // the next merge can quietly drop the unasserted one.
+  describe('ETP-4576 — every request goes through apiFetch', () => {
+    it('imports useApiFetch rather than holding a credential', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+    });
+
+    // The empty base is load-bearing, not a default someone forgot to fill in: the URLs here
+    // are already absolute and several address a DIFFERENT spec than this window's
+    // (`sales-order/lines`, `goods-shipment/...`). `resolveApiUrl` only skips the prefix when
+    // the path already starts with that same base, so passing this window's base would build
+    // /sws/neo/<this>/sws/neo/<other>/... and 404. Asserted so a later "tidy-up" that threads
+    // `apiBaseUrl` in here fails loudly instead of at runtime.
+    it('resolves apiFetch with an EMPTY base, because the URLs are cross-spec', () => {
+      assert.match(src, /const apiFetch = useApiFetch\(''\);/);
+      assert.doesNotMatch(code, /useApiFetch\(\s*apiBaseUrl\s*\)/);
+    });
+
+    it('issues every backend call through apiFetch, never a bare fetch', () => {
+      const apiFetchCalls = code.match(/\bapiFetch\(/g) || [];
+      assert.ok(apiFetchCalls.length >= 5, `expected the call sites to use apiFetch, found ${apiFetchCalls.length}`);
+      assert.doesNotMatch(code, /[^.\w$]fetch\(/);
+    });
+
+    it('never hand-builds a credential header', () => {
+      assert.doesNotMatch(code, /\bAuthorization\b/);
+      assert.doesNotMatch(code, /\bBearer\b/);
+    });
+
+    // Required by docs/request-policy.md: `apiFetch` is a hook result, so an effect that calls
+    // it and omits it from the dep array can keep a stale binding across a credential change.
+    it('lists apiFetch in the dependency array of the effect that uses it', () => {
+      assert.match(src, /\}, \[shipments, base, apiFetch\]\);/);
     });
   });
 

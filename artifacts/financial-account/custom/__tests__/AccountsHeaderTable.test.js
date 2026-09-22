@@ -79,7 +79,7 @@ describe('AccountsHeaderTable — module shape', () => {
     const code = src.replace(/^\s*\/\/.*$/gm, '');
     assert.doesNotMatch(code, /useFinancialAccounts/);
     assert.doesNotMatch(code, /\/sws\/neo/);
-    assert.doesNotMatch(code, /fetch\(/);
+    assert.doesNotMatch(code, /apiFetch\(/);
   });
 });
 

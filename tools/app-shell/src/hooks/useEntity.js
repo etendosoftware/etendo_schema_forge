@@ -2059,7 +2059,7 @@ export function useEntity(entity, childEntity, {
     }, [selected, apiBaseUrl, entity, apiFetch, refresh, ui, invalidateEntityCache, cacheScope, specName, dataCache]);
 
     const handleAddChild = useCallback(async (childData) => {
-        if (!childEntity || !apiBaseUrl || !token || !selected?.id) return;
+        if (!childEntity || !apiBaseUrl || !selected?.id) return;
         try {
             const body = {};
             // Include all fields from childData, skipping internal/companion keys.
