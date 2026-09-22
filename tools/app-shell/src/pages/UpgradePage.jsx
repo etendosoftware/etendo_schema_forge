@@ -421,7 +421,7 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
               <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" data-testid="Badge__58bad7">{purchase.status}</Badge>
-                {purchase.status === 'PAID' && (
+                {(purchase.status === 'PAID' || purchase.status === 'PROVISIONING') && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -688,7 +688,6 @@ export default function UpgradePage() {
           clientName: form.tenantName.trim(),
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
-          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
