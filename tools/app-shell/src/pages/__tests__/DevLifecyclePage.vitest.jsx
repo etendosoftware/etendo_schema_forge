@@ -33,8 +33,14 @@ describe('DevLifecyclePage', () => {
     render(<DevLifecyclePage />);
 
     expect(await screen.findByText('devLifecycleTitle')).toBeInTheDocument();
-    expect(screen.getByLabelText('devLifecycleTrialDays')).toHaveValue(15);
-    expect(screen.getByLabelText('devLifecycleGraceDays')).toHaveValue(7);
+    // The title renders on first paint, independent of load(); the field values below come
+    // from that same async fetch resolving, so they need their own wait instead of riding on
+    // findByText's — under a slow/loaded test run the two can land on different ticks (flaked
+    // in the full suite: graceDays still read its 15 default, not the fetched 7).
+    await waitFor(() => {
+      expect(screen.getByLabelText('devLifecycleTrialDays')).toHaveValue(15);
+      expect(screen.getByLabelText('devLifecycleGraceDays')).toHaveValue(7);
+    });
     expect(screen.getByRole('option', { name: /Demo tenant/ })).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/sws/go/dev/lifecycle');
   });

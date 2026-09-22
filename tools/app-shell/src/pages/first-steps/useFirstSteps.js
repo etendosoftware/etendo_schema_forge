@@ -77,7 +77,7 @@ export function useFirstSteps({ allowedIds } = {}) {
   // rendered bare in component tests, and `useAuth` throws with no `AuthProvider` above it
   // (same rationale as `useApiFetch`/`useLogout` — see docs/request-policy.md). With no
   // session the hook simply never fetches and stays in `loading`.
-  const token = useAuthOptional()?.token ?? null;
+  const isAuthenticated = useAuthOptional()?.isAuthenticated ?? false;
   const apiFetch = useApiFetch(getApiBase());
 
   // Callers pass a literal array, so memoize on its contents rather than its identity —
@@ -121,9 +121,13 @@ export function useFirstSteps({ allowedIds } = {}) {
   }, [apiFetch]);
 
   useEffect(() => {
-    // No session yet (the app is still hydrating): stay in `loading` rather than firing an
-    // unauthenticated GET, whose 401 would be read as an expired session and log the user out.
-    if (!token) return undefined;
+    // ETP-4576 — gated on `isAuthenticated`, NOT on a token. The intent below is right: do
+    // not fire the GET before the session exists, because its 401 would read as an expired
+    // session and log the user out. But under the cookie scheme the client holds no token at
+    // all, so `!token` is permanently false, the request is never issued, and the page sits
+    // in `loading` for ever with no error anywhere. `isAuthenticated` is true under both
+    // schemes once the session is real.
+    if (!isAuthenticated) return undefined;
     let cancelled = false;
     setLoading(true);
     apiFetch(ENDPOINT)
@@ -153,7 +157,7 @@ export function useFirstSteps({ allowedIds } = {}) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [token, apiFetch, applyState, allowList]);
+  }, [isAuthenticated, apiFetch, applyState, allowList]);
 
   /**
    * Flips one step, optimistically. The POST carries the full next state; if it fails the local

@@ -14,7 +14,10 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 // One stable object per test — a fresh object each render would make `useApiFetch`'s memo
 // churn and could refire the GET on every commit.
-const SESSION = Object.freeze({ token: 'test-token' });
+// ETP-4576 — carries `isAuthenticated` as the real context always does. The hook gates on it,
+// not on the token: under the cookie scheme the client holds none, so a `!token` gate would be
+// permanently false and the GET would never be issued. A double that omits it is not a session.
+const SESSION = Object.freeze({ token: 'test-token', isAuthenticated: true });
 const authState = vi.hoisted(() => ({ value: null }));
 
 vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({

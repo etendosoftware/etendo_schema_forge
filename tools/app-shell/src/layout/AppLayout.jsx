@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { isChromelessEmbed } from '@/lib/embeddedWindow.js';
 import { Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { Building2, ChevronDown, Loader2, LogOut } from 'lucide-react';
@@ -6,6 +6,7 @@ import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
 import { FavoritesProvider } from '@/components/layout/FavoritesContext';
@@ -31,6 +32,7 @@ import { useLogout } from '@/auth/useLogout.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { useUI } from '@/i18n';
 import { fetchCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
+import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 import { WalkthroughProvider } from '@etendosoftware/app-shell-core/walkthrough';
 import { WALKTHROUGH_FLOWS } from '@/walkthrough/flows';
 import { handleWalkthroughFinish } from '@/lib/walkthrough/walkthrough-events.js';
@@ -45,23 +47,6 @@ const reportWalkthroughFinish = (info) => handleWalkthroughFinish(info, WALKTHRO
 
 const COLLAPSED_W = 56;
 const EXPANDED_W = 240;
-
-function readSessionValue(key) {
-  try {
-    return globalThis.localStorage?.getItem(key) || '';
-  } catch {
-    return '';
-  }
-}
-
-function readSessionRoleList() {
-  try {
-    const parsed = JSON.parse(readSessionValue('sf_auth_rolelist') || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
 
 // ETP-4514: `allowedIds` is a real, resolved `Set` only once SFListMenu has
 // answered — `undefined` (in flight) and `null` (unauthenticated or fetch
@@ -87,15 +72,23 @@ function NoAccessScreen() {
   // invited-user case: you belong to the company, nobody has assigned you a role yet) versus a
   // role that grants no window. Telling the first user "your role has no permissions" would send
   // them to ask for the wrong thing.
-  const roleList = readSessionRoleList();
-  const hasRole = roleList.length > 0;
-  const companyName = readSessionValue('sf_auth_client_name') || ui('yourCompany');
+  // ETP-4576 — both of these came out of localStorage (`sf_auth_rolelist`, `sf_auth_client_name`).
+  // Those are legacy auth keys: `purgeLegacyAuthStorage` deletes them, so the reads answered ""
+  // and "[]" for every user. The consequence was not cosmetic — `hasRole` was permanently false,
+  // so this screen always told the visitor that nobody had assigned them a role, including the
+  // user whose role simply grants no window. That is precisely the distinction the comment above
+  // says the screen must not guess at. The session carries the role list; the company name is not
+  // in it, so it is read off the environment list this hook already loads.
+  const roleList = useAuthOptional()?.roleList;
+  const hasRole = Array.isArray(roleList) && roleList.length > 0;
   // One entry per client: the backend returns an environment per organization, so a client with
   // several orgs would otherwise be listed several times over. The current one is kept in the
   // list (disabled) rather than filtered out, so the menu also answers "where am I?".
   const companies = [...new Map(
     environments.filter((env) => env.clientId).map((env) => [env.clientId, env])
   ).values()];
+  const companyName = companies.find((env) => env.clientId === currentClientId)?.clientName
+    || ui('yourCompany');
   const canSwitch = companies.some((env) => env.clientId !== currentClientId);
 
   return (
@@ -115,8 +108,9 @@ function NoAccessScreen() {
       </p>
 
       {/* Absent for an account that owns a single environment, or one that cannot list them at
-          all (no platform token) — there is nowhere else to go, and an empty list would only
-          suggest otherwise. */}
+          all — there is nowhere else to go, and an empty list would only suggest otherwise.
+          "Cannot list them" is no longer "has no platform token": `useEnvironmentSwitch` gates on
+          the session being authenticated, and the listing rides the `__Host-` cookie. */}
       {canSwitch && (
         <div className="mt-6 w-full max-w-xs text-left" data-testid="no-access-company-switch">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -331,6 +325,27 @@ function AppLayoutAccessGate({ menuGroups }) {
   // before its state is known.
   const firstStepsDismissed = useFirstStepsProgressOptional()?.dismissed;
 
+  // ETP-5402 QA follow-up — the caller's own Informes-subsection report access
+  // (`fetchMyReportAccess()`), used only as a FALLBACK inside `filterMenuGroupsByAccess`'s
+  // `accessWindowId` check (see that function's own JSDoc): a role with a real per-report grant
+  // but not the category's coarse permission-anchor window (e.g. Sales on `aging-receivable`,
+  // not the Financial Reports window) still needs to see the "Informes" sidebar link. Unlike
+  // `capabilities`/`windowAccess` above, this is NOT sourced from `useAuth()` (core-managed state
+  // this repo cannot extend) — it is this repo's own fetch, fired once per mount. `{}` before it
+  // resolves fails closed the same way the other two maps already do.
+  const [reportAccess, setReportAccess] = useState({});
+  useEffect(() => {
+    // Skip entirely once allowedIds confirms zero window/process access (ETP-4514's blocking
+    // screen is about to render) — there is no menu left to apply the report-access fallback to,
+    // so this fetch would be pure waste on exactly the request path a locked-out caller hits.
+    if (allowedIds && allowedIds.size === 0) return undefined;
+    let cancelled = false;
+    fetchMyReportAccess()
+      .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
+      .catch(() => { if (!cancelled) setReportAccess({}); });
+    return () => { cancelled = true; };
+  }, [allowedIds]);
+
   // ETP-5395 Point 1 Fix B — must run BEFORE filterMenuGroupsByAccess and the
   // NoAccessScreen size-check below: id-less menu items (no
   // windowId/processId/obuiappProcessId — e.g. "first-steps", "dashboard")
@@ -350,7 +365,8 @@ function AppLayoutAccessGate({ menuGroups }) {
     allowedIds,
     capabilities,
     windowAccess,
-    firstStepsDismissed
+    firstStepsDismissed,
+    reportAccess
   );
 
   // ETP-4514: a confirmed (not loading, not fail-open-null) empty Set means

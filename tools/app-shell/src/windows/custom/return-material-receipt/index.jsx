@@ -1,11 +1,12 @@
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
+import ReturnMaterialReceiptRowConfirmModal from './ReturnMaterialReceiptRowConfirmModal.jsx';
 import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
@@ -21,6 +22,16 @@ function ReturnMaterialReceiptBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="process"
         data-testid="BulkDocumentAction__4e1c28" />
+      {/* ETP-5378 — bulk Contabilizar, at parity with Goods Shipment: gated on
+          processed & not-yet-posted rows. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnMaterialReceipt"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -77,6 +88,17 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
           usePdf: useReturnReceiptPdf,
           documentType: tMenu('Return Material Receipt'),
           visibleWhen: "@documentStatus@='CO'",
+        }}
+        // ETP-5378 — row-hover Confirmar, opening the same popup
+        // ConfirmWithCreditButton shows in the form.
+        confirmAction={{
+          ConfirmModal: ReturnMaterialReceiptRowConfirmModal,
+          specName: 'return-material-receipt',
+          entityName: 'returnMaterialReceipt',
+          confirmedTitleKey: 'documentConfirmed',
+          invoiceResultTitleKey: 'rmrInvoiceCreatedTitle',
+          invoiceDocType: 'facturaVenta',
+          invoiceRoute: '/sales-invoice',
         }}
         {...rest}
         data-testid="ReturnWindowShell__4e1c28" />

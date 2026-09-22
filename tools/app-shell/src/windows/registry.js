@@ -66,6 +66,19 @@ const windowLoaders = {
 };
 
 /**
+ * ETP-5402 QA follow-up — group name -> its `reportId` entries, read straight from
+ * `menuConfig.menu` (the raw, unfiltered source), computed once at module load. MUST NOT be
+ * derived from a `groups` array that has already been through `buildMenuGroups()`'s own
+ * `item.hidden` strip — every `reportId` entry is also `hidden: true`, so a `groups`-derived
+ * version always finds zero report ids per group (see `filterMenuGroupsByAccess`'s own JSDoc for
+ * the live bug this caused: Compras' `aging-payable` never showing in the sidebar despite
+ * `reportAccess` correctly containing it).
+ */
+const REPORT_IDS_BY_GROUP = new Map(
+  menuConfig.menu.map(g => [g.group, (g.items || []).filter(i => i.reportId).map(i => i.reportId)])
+);
+
+/**
  * Filters an already-built menuGroups array (see buildMenuGroups) down to what
  * the current role can reach, per SFListMenu (com.etendoerp.go docs/neo-headless.md
  * §8). Items carrying no windowId/processId/obuiappProcessId (dashboard, custom
@@ -120,37 +133,68 @@ const windowLoaders = {
  * that capability resolves. The two gates lift together and the entry appears
  * once, or not at all.
  *
+ * A fifth, independent fallback on the SAME `accessWindowId` check (ETP-5402 QA follow-up):
+ * an `accessWindowId` item ALSO passes when its own menu.json GROUP has at least one sibling
+ * `reportId` entry the caller has real report-level access to (`reportAccess`) — even without
+ * the coarse window grant. This closes the gap where a role holds a genuine per-report grant
+ * (e.g. Sales on `aging-receivable`, via `ReportAccessCatalog`/`SFMyReportAccess`) but not the
+ * category's own permission-anchor window (only Finance holds `D647D118…`): before this, such a
+ * role had no way to even see the "Informes" sidebar link, so the report was unreachable despite
+ * the Roles/Users matrix showing it as granted.
+ *
+ * Deliberately read from `REPORT_IDS_BY_GROUP` (derived straight from `menuConfig.menu`, the raw
+ * unfiltered source), NOT from the `group.items` this function receives — confirmed live
+ * (2026-09-22): every `reportId` entry is ALSO `hidden: true` in menu.json (an unrelated
+ * convention — a report never gets its own sidebar link), and `buildMenuGroups()` already strips
+ * every `item.hidden` entry OUT of `group.items` before this function ever runs. Reading
+ * `group.items` here found zero `reportId` siblings every time, so the fallback silently never
+ * fired for ANY category (Compras' aging-payable confirmed missing from the sidebar despite
+ * `reportAccess` correctly containing it) — the exact same "hidden strips a report row from code
+ * that still needs to read it" mistake the ETP-5402 matrix fix already made once, recurring here
+ * in a different call site.
+ *
  * @param {Array} groups — output of buildMenuGroups.
  * @param {Set<string>|null} allowedIds — from useRoleMenu(). `null` disables
  *   the windowId/processId/obuiappProcessId filtering axis.
  * @param {Record<string, boolean>|null} [capabilities] — from `useAuth()`/
  *   `useCapabilitiesSafe()`. `null`/omitted fails closed for capability-gated
- *   items. When `allowedIds`, `capabilities` and `windowAccess` are all falsy,
- *   `groups` is returned unchanged (matches this function's pre-ETP-4513
- *   behavior).
+ *   items. When `allowedIds`, `capabilities`, `windowAccess` and `reportAccess`
+ *   are all falsy, `groups` is returned unchanged (matches this function's
+ *   pre-ETP-4513 behavior).
  * @param {Record<string, string>|null} [windowAccess] — from `useAuth()`/
  *   `useWindowAccessSafe()`. `null`/omitted fails closed for accessWindowId
- *   items unless the admin exemption or all-falsy passthrough above applies.
+ *   items unless the admin exemption, a report-access fallback, or all-falsy passthrough above applies.
  * @param {boolean|undefined} [firstStepsDismissed] — from
  *   `useFirstStepsProgressOptional()`. Only `false` reveals an item declaring
  *   `hideWhenFirstStepsDismissed`; `true` and `undefined` both hide it.
+ * @param {Record<string, string>|null} [reportAccess] — id -> tier, from
+ *   `fetchMyReportAccess()` (ETP-5402 QA follow-up). `null`/omitted disables
+ *   only the report-access fallback above; the other axes are unaffected.
  */
 export function filterMenuGroupsByAccess(groups, allowedIds, capabilities = null, windowAccess = null,
-  firstStepsDismissed = undefined) {
-  if (!allowedIds && !capabilities && !windowAccess) return groups;
+  firstStepsDismissed = undefined, reportAccess = null) {
+  if (!allowedIds && !capabilities && !windowAccess && !reportAccess) return groups;
   const itemIds = item => [item.windowId, item.processId, item.obuiappProcessId].filter(Boolean);
   return groups
-    .map(group => ({
-      ...group,
-      items: group.items.filter(item => {
-        if (item.capability && capabilities?.[item.capability] !== true) return false;
-        if (item.hideWhenFirstStepsDismissed && firstStepsDismissed !== false) return false;
-        if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin && (!windowAccess || windowAccess[item.accessWindowId] === undefined)) return false;
-        if (!allowedIds) return true;
-        const ids = itemIds(item);
-        return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
-      }),
-    }))
+    .map(group => {
+      const reportIdsInGroup = REPORT_IDS_BY_GROUP.get(group.group) ?? [];
+      const groupHasAccessibleReport = Boolean(reportAccess)
+        && reportIdsInGroup.some(id => reportAccess[id] !== undefined);
+      return {
+        ...group,
+        items: group.items.filter(item => {
+          if (item.capability && capabilities?.[item.capability] !== true) return false;
+          if (item.hideWhenFirstStepsDismissed && firstStepsDismissed !== false) return false;
+          if (item.accessWindowId && !capabilities?.isAdminOrClientAdmin) {
+            const hasWindowAccess = windowAccess && windowAccess[item.accessWindowId] !== undefined;
+            if (!hasWindowAccess && !groupHasAccessibleReport) return false;
+          }
+          if (!allowedIds) return true;
+          const ids = itemIds(item);
+          return ids.length === 0 || ids.some(id => allowedIds.has(String(id)));
+        }),
+      };
+    })
     .filter(group => group.group === 'Favorites' || group.items.length > 0);
 }
 
@@ -278,6 +322,11 @@ const customLoaders = {
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
   'assets': () => import('./custom/assets/index.jsx'),
   'user': () => import('./custom/user/index.jsx'),
+  // ETP-5414 — bypasses the generated ListView branch only, to add the per-row
+  // kebab (Confirmar/Reactivar) menuActions the generator does not emit. Same
+  // pattern as purchase-invoice/sales-invoice above. Detail branch is untouched
+  // (still the generated HeaderPage, rendered directly).
+  'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
 /**
