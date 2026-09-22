@@ -248,8 +248,15 @@ const TIPO_DECLARACION_FIELD = {
 // `recomputeDerivedBoxes` is the sole caller and passes it through from its own `identChecks` arg.
 export function computeBox111({ isRectificativa, box70, box71 }) {
   if (!isRectificativa) return null;
-  if (!(box71 < 0) || !(box70 > 0)) return null;
-  return Math.min(box70, Math.abs(box71));
+  // A missing box70 entry (`null`/`undefined`) is treated as 0 — same as an explicit 0, both
+  // fail the "casilla70 > 0" gate below (see the raw-read comment on the caller in
+  // fiscalModelsUtils.js). Sanitizing here up front (rather than comparing the raw possibly-
+  // undefined value) lets the guard use SonarQube's preferred non-negated form (S1940) safely:
+  // `undefined <= 0` is `false`, not `true`, so leaving box70 unsanitized and flipping the
+  // operator would silently let a missing box70 through into `Math.min`, producing NaN.
+  const box70Value = box70 ?? 0;
+  if (box71 >= 0 || box70Value <= 0) return null;
+  return Math.min(box70Value, Math.abs(box71));
 }
 
 // ── Base layout (current / default form) ─────────────────────────
