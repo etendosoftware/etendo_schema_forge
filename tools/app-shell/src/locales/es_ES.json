@@ -18063,6 +18063,7 @@
     "report": "Informe",
     "format": "Formato",
     "records": "registros",
+    "reportGeneratedBy": "Generado por Etendo Go",
     "loadingAllRecords": "Cargando todos los registros...",
     "fetchingAllRecords": "Obteniendo todos los registros...",
     "renderingReport": "Generando informe...",
