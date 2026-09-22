@@ -11,7 +11,9 @@ import {
   createPortalSession,
   getBillingOffer,
   getBillingPurchase,
+  toCheckoutFetch,
 } from '../upgrade/api.js';
+import { minorUnitsToAmount } from '../upgrade/currency.js';
 
 function jsonResponse(data, { ok = true, status = 200 } = {}) {
   return { ok, status, json: async () => data };
@@ -72,21 +74,25 @@ describe('account billing projection', () => {
     assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
   });
 
+  // ETP-5443 REVIEW N3: a failed read of the subscription is its own error code, not the
+  // generic checkout-creation one — see the doc comment on UPGRADE_ERROR_CODES.
   it('returns a stable error when the subscription is unavailable', async () => {
     const fetchImpl = recordingFetch(jsonResponse({}, { ok: false, status: 503 }));
 
     await assert.rejects(
       () => getSubscription(fetchImpl, '', 'account-token'),
-      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 503
+      error => error.code === UPGRADE_ERROR_CODES.subscriptionUnavailable && error.status === 503
     );
   });
 
+  // ETP-5443 REVIEW N3: a failed portal-session creation is its own error code too, distinct
+  // from both `subscriptionUnavailable` and `checkoutCreationFailed`.
   it('returns a stable error when the portal session cannot be created', async () => {
     const fetchImpl = recordingFetch(jsonResponse({}, { ok: false, status: 502 }));
 
     await assert.rejects(
       () => createPortalSession(fetchImpl, '', 'account-token'),
-      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 502
+      error => error.code === UPGRADE_ERROR_CODES.portalUnavailable && error.status === 502
     );
   });
 
@@ -192,5 +198,67 @@ describe('createBillingPurchase', () => {
       error => error.code === UPGRADE_ERROR_CODES.purchaseAlreadyExists
         && error.purchase.purchaseId === 'req-1'
     );
+  });
+});
+
+// ETP-5443 REVIEW W7: adapts the shared `apiFetch` request helper to the plain
+// `fetchImpl(url, init)` shape this module's clients take. See `toCheckoutFetch`'s own doc
+// comment in `upgrade/api.js` for why each forced option matters.
+describe('toCheckoutFetch', () => {
+  function recordingApiFetch() {
+    const calls = [];
+    const impl = async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse({});
+    };
+    impl.calls = calls;
+    return impl;
+  }
+
+  it('forces baseUrl empty and on401 ignore, and passes the token through as an explicit override', async () => {
+    const apiFetchImpl = recordingApiFetch();
+    const fetchImpl = toCheckoutFetch(apiFetchImpl, 'account-token');
+
+    await fetchImpl('/sws/go/billing/subscription', { headers: { Authorization: 'Bearer x' } });
+
+    assert.equal(apiFetchImpl.calls[0].url, '/sws/go/billing/subscription');
+    assert.deepEqual(apiFetchImpl.calls[0].init, {
+      headers: { Authorization: 'Bearer x' },
+      token: 'account-token',
+      baseUrl: '',
+      on401: 'ignore',
+    });
+  });
+
+  // A missing account session must degrade to "no Authorization header" (an honest 401), not
+  // silently fall back to the ambient ERP session token — see the doc comment's third bullet.
+  it('keeps a null token null instead of falling back to the ambient session', async () => {
+    const apiFetchImpl = recordingApiFetch();
+    const fetchImpl = toCheckoutFetch(apiFetchImpl, null);
+
+    await fetchImpl('/sws/go/billing/subscription', {});
+
+    assert.equal(apiFetchImpl.calls[0].init.token, null);
+    assert.notEqual(apiFetchImpl.calls[0].init.token, undefined);
+  });
+});
+
+// ETP-5443 REVIEW N6: Stripe's zero-decimal currencies (JPY et al.) already carry the display
+// amount in `amountMinor` — dividing by 100 would understate them 100x.
+describe('minorUnitsToAmount', () => {
+  it('divides by 100 for an ordinary (non-zero-decimal) currency', () => {
+    assert.equal(minorUnitsToAmount('eur', 2900), 29);
+    assert.equal(minorUnitsToAmount('EUR', 100), 1);
+  });
+
+  it('does not divide for a zero-decimal currency, case-insensitively', () => {
+    assert.equal(minorUnitsToAmount('jpy', 100), 100);
+    assert.equal(minorUnitsToAmount('JPY', 100), 100);
+  });
+
+  it('returns null for a missing or non-finite amount', () => {
+    assert.equal(minorUnitsToAmount('eur', null), null);
+    assert.equal(minorUnitsToAmount('eur', undefined), null);
+    assert.equal(minorUnitsToAmount('eur', NaN), null);
   });
 });

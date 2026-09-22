@@ -111,6 +111,10 @@ describe('AccountSettingsPage', () => {
 
       expect(screen.getByText('loading')).toBeInTheDocument();
       expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
+      // ETP-5443 REVIEW N5: SubscriptionSection reads its own data over its own independent
+      // request and is not gated behind this page's authMethods load — it mounts even while
+      // the security half is still loading.
+      expect(screen.getByTestId('SubscriptionSection__account')).toBeInTheDocument();
 
       resolveAccount({ authMethods: BOTH_METHODS });
       expect(await screen.findByTestId('account-security-section')).toBeInTheDocument();
@@ -155,6 +159,9 @@ describe('AccountSettingsPage', () => {
       expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
       expect(screen.queryByText('loading')).not.toBeInTheDocument();
       expect(toastError).toHaveBeenCalledWith('accountMethodsLoadFailed');
+      // A Stripe/account outage has nothing to do with authMethods and must not also hide
+      // subscription (ETP-5443 REVIEW N5) — the two sections share no data or gating.
+      expect(screen.getByTestId('SubscriptionSection__account')).toBeInTheDocument();
     });
 
     it('never claims the password is unset when it simply could not read the account', async () => {

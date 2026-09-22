@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { getSubscription, createPortalSession, getCheckoutToken } from '@/lib/upgrade/api.js';
+import { getSubscription, createPortalSession, getCheckoutToken, toCheckoutFetch } from '@/lib/upgrade/api.js';
+import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
+
+/** Statuses whose subscription is genuinely healthy enough to promise a future renewal. */
+const RENEWING_STATUSES = new Set(['active', 'trialing']);
 
 /**
  * Maps Stripe's live subscription `status` (lowercase, provider-defined — see
@@ -43,7 +48,11 @@ const STRIPE_STATUS_LABEL_KEYS = {
  * Reachable while the ERP is paywalled by construction, not by a special case here: both
  * `getSubscription` and `createPortalSession` hang off the platform/account token
  * (`getCheckoutToken`), never the environment session `useApiFetch` would send — the same rule
- * `AccountSettingsPage.load()` and `UpgradePage.jsx` already follow for every billing call.
+ * `AccountSettingsPage.load()` and `UpgradePage.jsx` already follow for every billing call. Both
+ * calls still go through the shared, policy-compliant `apiFetch` (ETP-5443 REVIEW W7) — wrapped
+ * by `toCheckoutFetch` into the plain `fetchImpl` these clients take, with an explicit `token`
+ * override so a missing account session can never fall back to the ambient ERP one; see
+ * `toCheckoutFetch`'s own doc comment in `lib/upgrade/api.js`.
  *
  * `SubscriptionSection__root` is the stable inner anchor and is always present, even when the
  * caller also sets its own outer `data-testid` (AccountSettingsPage sets
@@ -63,9 +72,8 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
     setStatus('loading');
     setManageError(false);
     try {
-      // raw-fetch-ok: billing endpoints authenticate with the account/platform token
-      // (getCheckoutToken), never the ERP session useApiFetch would send.
-      const result = await getSubscription(fetch, apiBaseUrl, getCheckoutToken());
+      const token = getCheckoutToken();
+      const result = await getSubscription(toCheckoutFetch(apiFetch, token), apiBaseUrl, token);
       setSubscription(result || null);
       setStatus('loaded');
     } catch {
@@ -80,8 +88,8 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
     setManageError(false);
     setManaging(true);
     try {
-      // raw-fetch-ok: see the note in load() above.
-      const session = await createPortalSession(fetch, apiBaseUrl, getCheckoutToken());
+      const token = getCheckoutToken();
+      const session = await createPortalSession(toCheckoutFetch(apiFetch, token), apiBaseUrl, token);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
     } catch {
@@ -92,18 +100,38 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
   }, [apiBaseUrl]);
 
   const hasSubscription = subscription?.hasSubscription === true;
-  // `graceEndsAt` is only ever non-null when the STORED projection is PAST_DUE with a due
-  // date (see buildBillingSubscriptionJson in EtendoGoJwtServlet.java) — the authoritative
-  // signal for the grace banner. The live Stripe `status` is a display-only value and must
-  // not drive this: Stripe's own status vocabulary (active/past_due/trialing/canceled/...)
-  // can disagree in timing with the stored grace window.
-  const inGracePeriod = subscription?.graceEndsAt != null;
   const cancelsAtPeriodEnd = subscription?.cancelAtPeriodEnd === true;
   const renewalDate = subscription?.renewalAt
     ? formatCalendarDate(subscription.renewalAt, locale)
     : null;
   const statusLabelKey = STRIPE_STATUS_LABEL_KEYS[subscription?.status];
   const statusLabel = statusLabelKey ? ui(statusLabelKey) : subscription?.status;
+
+  // ETP-5443 REVIEW W5: "renews on X" is a promise the subscription will still be charged on
+  // that date, which is only true for a status that is actually renewing. Showing it for e.g.
+  // `past_due` (which still carries a `renewalAt` — Stripe's next invoice-retry date, not a
+  // renewal) or `canceled` reads as reassurance the account does not have.
+  const showsRenewsOn = !cancelsAtPeriodEnd && renewalDate != null
+    && RENEWING_STATUSES.has(subscription?.status);
+
+  // `graceEndsAt` is only ever non-null when the STORED projection is PAST_DUE with a due date
+  // (see `buildBillingSubscriptionJson` in `EtendoGoJwtServlet.java`); `graceDaysRemaining` is
+  // computed from it there as `max(0, ceil((graceEndsAt - now) / 1 day))`. So the pair can be in
+  // three states, not two: no grace window (`graceEndsAt` null); still inside it (`days > 0`,
+  // the case the banner was written for); and the window has ELAPSED while the stored projection
+  // has not yet been flipped to EXPIRED by the async lifecycle job (`graceEndsAt` non-null,
+  // `days === 0`) — access is already paused in that gap, and saying "N days left" would be a lie
+  // by omission (ETP-5443 REVIEW W4). The live Stripe `status` is a display-only value and must
+  // drive neither: Stripe's own status vocabulary (active/past_due/trialing/canceled/...) can
+  // disagree in timing with the stored grace window.
+  const graceDaysRemaining = subscription?.graceDaysRemaining ?? 0;
+  const showsGraceRemaining = graceDaysRemaining > 0;
+  const showsAccessPaused = !showsGraceRemaining && subscription?.graceEndsAt != null;
+  // Only English/Spanish need a singular form today (no language here inflects further at N=2+),
+  // matching the manual `_one`/`_many` key-selection convention already used for this kind of
+  // count-driven copy — see `fm.m349.vies.result.processed_one`/`_many` in FmModel349Page.jsx.
+  const graceRemainingKey = graceDaysRemaining === 1
+    ? 'subscriptionGraceRemainingOne' : 'subscriptionGraceRemaining';
 
   return (
     <Card data-testid={dataTestId}>
@@ -145,6 +173,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
               <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{ui('subscriptionPlan')}</span>
               <span className="text-sm font-medium" data-testid="SubscriptionSection__plan">
                 {subscription.plan}
               </span>
@@ -152,7 +181,10 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
                 className="text-sm text-muted-foreground"
                 data-testid="SubscriptionSection__amount"
               >
-                {formatCurrency(subscription.currency, subscription.amountMinor / 100)}
+                {formatCurrency(
+                  subscription.currency,
+                  minorUnitsToAmount(subscription.currency, subscription.amountMinor),
+                )}
               </span>
             </div>
 
@@ -169,18 +201,27 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
               </p>
             )}
 
-            {!cancelsAtPeriodEnd && renewalDate && (
+            {showsRenewsOn && (
               <p className="text-sm text-muted-foreground" data-testid="SubscriptionSection__renewsOn">
                 {ui('subscriptionRenewsOn', { date: renewalDate })}
               </p>
             )}
 
-            {inGracePeriod && (
+            {showsGraceRemaining && (
               <p
                 className="text-sm text-destructive"
                 data-testid="SubscriptionSection__graceRemaining"
               >
-                {ui('subscriptionGraceRemaining', { days: subscription.graceDaysRemaining })}
+                {ui(graceRemainingKey, { days: graceDaysRemaining })}
+              </p>
+            )}
+
+            {showsAccessPaused && (
+              <p
+                className="text-sm text-destructive"
+                data-testid="SubscriptionSection__accessPaused"
+              >
+                {ui('subscriptionAccessPaused')}
               </p>
             )}
 

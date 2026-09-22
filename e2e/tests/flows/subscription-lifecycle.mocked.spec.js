@@ -20,11 +20,13 @@ const AUTH_METHODS = { password: { enabled: true }, identities: [], removable: [
 // `status` is Stripe's own live subscription status — lowercase (`active`, `past_due`,
 // `trialing`, `canceled`...), never the uppercase `EnvironmentAccessPolicy` enum names. Whether
 // the grace banner shows is decided by a non-null `graceEndsAt`, not by matching `status`.
+// `currency` is lowercase too, matching the real backend payload (Stripe's own code, read
+// verbatim) — REVIEW W5 fixture realism.
 const ACTIVE_SUBSCRIPTION = {
   hasSubscription: true,
   plan: 'Pro',
   amountMinor: 2900,
-  currency: 'EUR',
+  currency: 'eur',
   status: 'active',
   renewalAt: '2026-11-15T00:00:00Z',
   cancelAtPeriodEnd: false,
@@ -32,13 +34,16 @@ const ACTIVE_SUBSCRIPTION = {
   graceDaysRemaining: 0,
 };
 
+// `renewalAt` is non-null here too (REVIEW W5): the real backend still sends it for a past-due
+// subscription — Stripe's next invoice-retry date, not a renewal — and `SubscriptionSection`
+// relies on the status (not a null renewalAt) to keep the "renews on" line from showing it.
 const PAST_DUE_SUBSCRIPTION = {
   hasSubscription: true,
   plan: 'Pro',
   amountMinor: 2900,
-  currency: 'EUR',
+  currency: 'eur',
   status: 'past_due',
-  renewalAt: null,
+  renewalAt: '2026-10-05T00:00:00Z',
   cancelAtPeriodEnd: false,
   graceEndsAt: '2026-10-01T00:00:00Z',
   graceDaysRemaining: 7,
@@ -51,6 +56,16 @@ const PAST_DUE_SUBSCRIPTION = {
 const PAST_DUE_WITHOUT_GRACE_END = {
   ...PAST_DUE_SUBSCRIPTION,
   graceEndsAt: null,
+  graceDaysRemaining: 0,
+};
+
+// Third state (REVIEW W4): the grace window has ELAPSED (`graceDaysRemaining` 0) while
+// `graceEndsAt` is still set — the stored projection has not yet been flipped to EXPIRED by the
+// async lifecycle job. Access is already paused in this gap; the section must say so rather than
+// showing a stale "days left" count or no banner at all.
+const ACCESS_PAUSED_SUBSCRIPTION = {
+  ...PAST_DUE_SUBSCRIPTION,
+  graceEndsAt: '2026-10-01T00:00:00Z',
   graceDaysRemaining: 0,
 };
 
@@ -193,6 +208,16 @@ test.describe('Subscription lifecycle — /account', () => {
 
     const section = page.getByTestId('SubscriptionSection__account');
     await expect(section).toBeVisible();
+    await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
+  });
+
+  test('access-paused shows once the grace window has elapsed, instead of the grace-remaining banner', async ({ page }) => {
+    await installSubscriptionMock(page, ACCESS_PAUSED_SUBSCRIPTION);
+    await gotoAccount(page);
+
+    const section = page.getByTestId('SubscriptionSection__account');
+    await expect(section).toBeVisible();
+    await expect(section.getByTestId('SubscriptionSection__accessPaused')).toBeVisible();
     await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
   });
 });

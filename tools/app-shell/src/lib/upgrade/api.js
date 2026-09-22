@@ -6,8 +6,52 @@ export const UPGRADE_ERROR_CODES = {
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
+  // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
+  // creation, is neither a checkout nor a creation of anything — reusing
+  // `checkoutCreationFailed` for them said the wrong thing about what broke. Each gets
+  // its own code so a caller (and a log line) can tell "can't read the subscription"
+  // apart from "can't open the portal" apart from "checkout failed".
+  subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
+  portalUnavailable: 'upgradePortalUnavailable',
   failed: 'upgradeGenericError',
 };
+
+/**
+ * Adapts the shared, policy-compliant request helper (`apiFetch` from
+ * `@etendosoftware/app-shell-core/auth/api`, or `useApiFetch`'s returned function) to the plain
+ * `fetchImpl(url, init)` shape every exported client in this module already takes — so a caller
+ * can stop handing them the raw global `fetch` (ETP-5443 REVIEW W7) without this module's own
+ * exported functions changing shape, which would break `UpgradePage.jsx` (still on raw `fetch`,
+ * out of this ticket's scope) and `upgrade-api.test.js` (which calls these exports directly with
+ * a hand-rolled mock `fetchImpl`).
+ *
+ * Two things every call site in this module needs from the shared helper, forced here so nobody
+ * has to remember them at the call site:
+ *
+ * - `baseUrl: ''` — every URL these clients build already carries `baseUrl` baked in (see the
+ *   callers below), so the shared helper's own base-prefixing must be a no-op here; otherwise a
+ *   real base (e.g. `/etendo`) would be prepended twice.
+ * - `on401: 'ignore'` — a 401 must reach this module's own `response.status === 401` branch
+ *   (which maps it to `UPGRADE_ERROR_CODES.sessionExpired`) instead of being turned into a
+ *   generic thrown `Error('Unauthorized')` by the shared helper before this module ever sees the
+ *   response. This is unrelated to (and does not require) `token` matching any locally-registered
+ *   session: the shared helper only routes a 401 to its own logout handler when the bearer that
+ *   earned it is still the CURRENT one for whatever session it is bound to, and the explicit
+ *   `token` override below means it never is — see `createApiFetch`'s `finish()`.
+ * - `token` is passed through as an explicit override, even when `getCheckoutToken()` returned
+ *   `null` (no account/platform session). Passing it unconditionally — rather than only when
+ *   truthy — matters: an explicit `undefined`/absent `token` option makes the shared helper fall
+ *   back to whatever session is ambiently registered, which in this app is the ERP session
+ *   token. Forcing the override to `null` keeps that fallback from ever firing, so a missing
+ *   account session degrades to "no Authorization header" (an honest 401) rather than to
+ *   silently authenticating an account-level request with the wrong (ERP) bearer.
+ *
+ * @param {(url: string, init?: object) => Promise<Response>} apiFetchImpl
+ * @param {string|null} token
+ */
+export function toCheckoutFetch(apiFetchImpl, token) {
+  return (url, init) => apiFetchImpl(url, { ...init, token: token ?? null, baseUrl: '', on401: 'ignore' });
+}
 
 /**
  * Creates a provider-hosted checkout session for a known paid action.
@@ -104,7 +148,7 @@ export async function getSubscription(fetchImpl, baseUrl, token) {
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+      : UPGRADE_ERROR_CODES.subscriptionUnavailable, data?.error?.message, response.status);
   }
   return data;
 }
@@ -118,7 +162,7 @@ export async function createPortalSession(fetchImpl, baseUrl, token) {
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+      : UPGRADE_ERROR_CODES.portalUnavailable, data?.error?.message, response.status);
   }
   return data;
 }
