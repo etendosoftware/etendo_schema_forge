@@ -438,9 +438,14 @@ export default function AccountsHeaderTable({
 
         {/* Vertical rule between the KPI panel and the rows, as in the original page */}
         <div className="w-px self-stretch bg-[hsl(var(--border-subtle))]" aria-hidden="true" />
-        {/* The only scrolling region. The room the elevated hover shadow needs under the
-            last row is reserved by DataTable itself, not here. */}
-        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto' }}>
+        {/* The only scrolling region. DataTable's own wrapper already reserves room
+            (`pb-6`) for the elevated hover shadow under its last row, but that only
+            helps inside DataTable's own overflow box. This div is an ADDITIONAL
+            `overflow: auto` ancestor layered on top of it — unique to this
+            hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer
+            has one — so it clips the shadow again at its own edge unless it also
+            carries the same 24px of trailing room. */}
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
           <DataTable
             {...props}
             data={visibleAccounts}

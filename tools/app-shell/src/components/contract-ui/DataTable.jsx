@@ -3347,8 +3347,21 @@ export function DataTable({
         spec, so this wrapper does clip vertically. With `rowHoverStyle="elevated"` the
         hovered row's `shadow-lg` reaches ~22px below it (10px offset + 15px blur - 3px
         spread); for the LAST row that lands past the table and got clipped away, which
-        read as "hover doesn't work on the last row". Overflow clips at the PADDING box,
-        so 24px of bottom padding gives the shadow room inside the visible area.
+        read as "hover doesn't work on the last row".
+
+        Overflow clips at the PADDING box of the NEAREST ancestor whose own box ends
+        before the shadow does — and that is NOT this div. `<Table>`'s own hardcoded
+        wrapper (schema_forge_core's table.jsx: `<div className="relative w-full
+        overflow-auto">`, this div's direct child — the same one `[&>div]` reaches
+        below for the scrollbar) sizes itself to exactly the `<table>`'s content height
+        with zero slack, and its own `overflow-auto` clips the shadow there FIRST,
+        before it would ever reach this div's own padding box. `pb-6` on *this* div is
+        therefore a no-op for the last row on its own — `[&>div]:pb-6` is what actually
+        gives the shadow room, by padding the inner div that does the real clipping.
+        Both stay applied: dropping the outer `pb-6` would shrink the intrinsic height
+        this div reports to ITS OWN parent (e.g. a window's custom scroll wrapper, see
+        AccountsHeaderTable.jsx), re-clipping the now-visible shadow one level further
+        out.
       */}
       <div
         ref={linesScrollAndWidthRef}
@@ -3371,7 +3384,7 @@ export function DataTable({
             // above this thumb once scrolled into view ("al final se ven
             // 2") — the `[&>div]` combinator reaches into that child instead.
             : 'overflow-x-auto overflow-y-visible [&>div]:[scrollbar-width:none] [&>div::-webkit-scrollbar]:hidden',
-          rowHoverStyle === 'elevated' ? 'pb-6' : '',
+          rowHoverStyle === 'elevated' ? 'pb-6 [&>div]:pb-6' : '',
         ].filter(Boolean).join(' ')}
       >
         <Table style={getTableContainerStyle(linesMinWidthPx(hideHeader, fixedColsTotalPx, growColsBasisPx))} data-testid="Table__eb5261">
