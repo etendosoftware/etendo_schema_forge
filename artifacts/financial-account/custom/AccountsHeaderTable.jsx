@@ -96,9 +96,9 @@ const GRID_TYPE_OVERRIDE = {
  * `virtualFields[]` entry injected in afterHandle, and is now the
  * `EM_ETGO_Pending_Count` stored computed column, so it needs no special case.
  *
- * Only the trailing actions column is appended here: its declarative equivalent
- * (`rowQuickActions`) renders an absolute hover overlay rather than a column, and
- * every action opens a local modal.
+ * Row actions are not part of this column list. `DataTable` owns their trailing
+ * sticky cell through `rowQuickActions`; this slot only supplies the
+ * account-specific contents (`AccountRowActions`) and its local-modal callbacks.
  */
 /**
  * A `multiField` decorator's `parts` turned into DataTable header segments.
@@ -153,33 +153,7 @@ function buildColumns(ui, locale, handlers) {
     };
   });
 
-  return [
-    ...dataColumns,
-    {
-      key: '_rowActions',
-      labels: { [locale]: '' },
-      sortable: false,
-      headClass: 'min-w-[90px]',
-      // ETP-5281 — `overflow-visible` overrides the shared TableCell's new default
-      // `overflow-hidden` (packages/app-shell-core ui/table.jsx): without it, the
-      // kebab trigger here got clipped by/hidden behind the neighboring
-      // `eTGOPendingCount` ("Por conciliar") cell.
-      cellClass: 'min-w-[90px] px-2 overflow-visible',
-      render: (row) => (
-        <span onClick={(e) => e.stopPropagation()} role="presentation" className="block">
-          <AccountRowActions
-            account={row}
-            onOpen={handlers.onOpen}
-            onEdit={handlers.onEdit}
-            onArchive={handlers.onArchive}
-            onDelete={handlers.onDelete}
-            onBankConnectionAction={handlers.onBankConnectionAction}
-            onTransfer={handlers.onTransfer}
-            onNewMovement={handlers.onNewMovement} />
-        </span>
-      ),
-    },
-  ];
+  return dataColumns;
 }
 
 /**
@@ -483,10 +457,12 @@ export default function AccountsHeaderTable({
             // ("Delete selected") becomes reachable. A hardcoded `selectable={false}`
             // here is what removed grid multi-select delete from this window; the story's
             // scope table requires it (Cuentas financieras: F/GH/GM all ✅).
-            // Independently of selection, the hover quick-actions overlay stays
-            // suppressed declaratively (`window.rowQuickActions.enabled: false` in
-            // decisions.json), since this list owns its per-row actions through the
-            // trailing AccountRowActions column.
+            // Independently of selection, the account-specific hover actions use
+            // DataTable's shared quick-actions cell. That is the same sticky-right
+            // infrastructure used by Sales Invoice; only the cell contents stay
+            // window-specific because they open local financial-account modals and
+            // expose conditional bank actions. Three buttons is the maximum row shape:
+            // Edit + Sync (connected accounts only) + kebab.
             //
             // Selection STATE stays ListView's, untouched: `onSelectionChange` (its own
             // `setSelectedRows`) plus `clearSelectionTrigger` / `deselectTrigger` /
@@ -498,6 +474,21 @@ export default function AccountsHeaderTable({
             // that reading — the row as a raised card — is why DataTable takes a
             // hover style rather than this slot restyling rows on its own.
             rowHoverStyle="elevated"
+            rowQuickActions={{
+              enabled: true,
+              buttonCount: 3,
+              render: (account) => (
+                <AccountRowActions
+                  account={account}
+                  onOpen={handlers.onOpen}
+                  onEdit={handlers.onEdit}
+                  onArchive={handlers.onArchive}
+                  onDelete={handlers.onDelete}
+                  onBankConnectionAction={handlers.onBankConnectionAction}
+                  onTransfer={handlers.onTransfer}
+                  onNewMovement={handlers.onNewMovement} />
+              ),
+            }}
             data-testid="DataTable__accthdr" />
         </div>
       </div>

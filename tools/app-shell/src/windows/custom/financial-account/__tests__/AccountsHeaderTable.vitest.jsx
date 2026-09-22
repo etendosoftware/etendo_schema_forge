@@ -11,8 +11,8 @@
  * archived accounts, "Inactivas" shows only archived across types, search inside the
  * inactive view, missing `active` flag counts as active) plus the new surface the slot
  * owns: the contract-driven data columns (headers from `gridLabelKey`, cell bodies bound
- * through `cellType` → ACCOUNT_CELL_TYPES), the one hand-appended actions column, the
- * stopPropagation guards that keep the pill / row actions from triggering row navigation, and
+ * through `cellType` → ACCOUNT_CELL_TYPES), the custom contents passed to DataTable's shared
+ * sticky quick-actions cell, the stopPropagation guards that keep the pill / row actions from triggering row navigation, and
  * how the slot reads ListView's `selectedRows` — which since ETP-5111 no longer swaps the
  * toolbar out (ETP-4656) but leaves it permanently mounted at every selection size.
  *
@@ -86,7 +86,7 @@ let tableProps = null;
 vi.mock('@/components/contract-ui', () => ({
   DataTable: (props) => {
     tableProps = props;
-    const { columns, data, onNavigate } = props;
+    const { columns, data, onNavigate, rowQuickActions } = props;
     return (
       <div data-testid="data-table">
         {(data ?? []).map((row) => (
@@ -101,6 +101,14 @@ vi.mock('@/components/contract-ui', () => ({
                 {col.render ? col.render(row) : String(row[col.key] ?? '')}
               </span>
             ))}
+            {typeof rowQuickActions?.render === 'function' ? (
+              <span
+                data-testid={`quick-actions-cell-${row.id}`}
+                onClick={(event) => event.stopPropagation()}
+                role="presentation">
+                {rowQuickActions.render(row)}
+              </span>
+            ) : null}
           </div>
         ))}
       </div>
@@ -300,9 +308,9 @@ describe('AccountsHeaderTable — layout', () => {
     expect(tableProps.selectedRows).toBeUndefined();
   });
 
-  // `filters={[]}` was inert (ListView supplies `onFilterChange`, which wins), and
-  // `rowQuickActions` / `hoverRowActions` are now declarative or already the default.
-  // Passing them anyway hid where the real switch lives.
+  // `filters={[]}` was inert (ListView supplies `onFilterChange`, which wins), while
+  // `hoverRowActions` remains the default. Account actions intentionally use the shared
+  // `rowQuickActions` cell so its hover-sticky geometry matches the document lists.
   // The retired page lifted the hovered row with a drop shadow instead of tinting it
   // (`hover:z-10 hover:shadow-lg` on AccountRow's <tr>). Moving onto the generic DataTable
   // lost that reading, so it is now an opt-in prop — behaviour covered by
@@ -313,12 +321,13 @@ describe('AccountsHeaderTable — layout', () => {
     expect(tableProps.rowHoverStyle).toBe('elevated');
   });
 
-  it('passes no inert filter / quick-action overrides to the grid', () => {
+  it('passes the account actions through DataTable\'s shared quick-actions cell', () => {
     renderTable();
 
     expect(tableProps.filters).toBeUndefined();
-    expect(tableProps.rowQuickActions).toBeUndefined();
     expect(tableProps.hoverRowActions).toBeUndefined();
+    expect(tableProps.rowQuickActions).toMatchObject({ enabled: true, buttonCount: 3 });
+    expect(typeof tableProps.rowQuickActions.render).toBe('function');
   });
 
   it('forwards onDataMutated so the modals can refresh the list', () => {
@@ -442,14 +451,13 @@ describe('AccountsHeaderTable — columns', () => {
     ]);
   });
 
-  it('appends exactly one synthetic column after the contract ones', () => {
+  it('does not append a synthetic actions column after the contract ones', () => {
     renderTable();
 
-    // Only `_rowActions` is hand-written: its declarative equivalent
-    // (`window.rowQuickActions`) renders an absolute hover overlay, not a column.
     expect(tableProps.columns.map((c) => c.key)).toEqual([
-      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount', '_rowActions',
+      'name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount',
     ]);
+    expect(tableProps.columns.some((c) => c.key === '_rowActions')).toBe(false);
   });
 
   it('carries the contract AD column name through to DataTable', () => {
@@ -478,8 +486,6 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey.currency.labels).toEqual({ es_ES: 'financeAccountsColCurrency' });
     expect(byKey.country.labels).toEqual({ es_ES: 'financeAccountsColCountry' });
     expect(byKey.currentBalance.labels).toEqual({ es_ES: 'financeAccountsColBalance' });
-    // The actions column is deliberately unlabelled.
-    expect(byKey._rowActions.labels).toEqual({ es_ES: '' });
   });
 
   // The pending column is the one that used to take the other branch. As a virtual field it
@@ -498,12 +504,10 @@ describe('AccountsHeaderTable — columns', () => {
   // The `labels` object only exists when a column declares a gridLabelKey. An empty one
   // would blank the header instead of falling back to `label` / `column` (the AD
   // dictionary), so the builder must omit the key rather than emit `{}`.
-  it('omits labels entirely for a column with no gridLabelKey', () => {
+  it('never synthesizes a blank-labelled actions column', () => {
     renderTable();
 
-    const actions = tableProps.columns.find((c) => c.key === '_rowActions');
-    // The actions column is the deliberate exception: it declares an EMPTY label on purpose.
-    expect(actions.labels).toEqual({ es_ES: '' });
+    expect(tableProps.columns.find((c) => c.key === '_rowActions')).toBeUndefined();
     expect(
       tableProps.columns.every((c) => c.labels === undefined || typeof c.labels === 'object'),
     ).toBe(true);
@@ -524,15 +528,11 @@ describe('AccountsHeaderTable — columns', () => {
   // Sorting is server-side (ListView owns the state, useEntity turns it into NEO's `_sortBy`),
   // which is why "Por conciliar" first had to become a real AD column — a value injected in
   // afterHandle can only be reordered inside the page the SQL already picked.
-  it('marks every data column sortable, and only the actions column not', () => {
+  it('marks every contract data column sortable', () => {
     renderTable();
 
     for (const col of tableProps.columns) {
-      if (col.key === '_rowActions') {
-        expect(col.sortable, 'the actions column must never sort').toBe(false);
-      } else {
-        expect(col.sortable, `${col.key} must be sortable`).toBe(true);
-      }
+      expect(col.sortable, `${col.key} must be sortable`).toBe(true);
     }
   });
 
@@ -583,7 +583,6 @@ describe('AccountsHeaderTable — columns', () => {
     expect(byKey.currentBalance.cellClass).toContain('w-[200px]');
     expect(byKey.eTGOPendingCount.headClass).toContain('w-[280px]');
     expect(byKey.eTGOPendingCount.cellClass).toContain('w-[280px]');
-    expect(byKey._rowActions.cellClass).toContain('min-w-[90px]');
   });
 
   // DataTable already appends `text-right tabular-nums` for every numeric column type
@@ -630,7 +629,7 @@ describe('AccountsHeaderTable — "Moneda" column', () => {
   it('sits third among the data columns — after Tipo & IBAN, before País', () => {
     renderTable();
 
-    const dataColumns = tableProps.columns.filter((c) => c.key !== '_rowActions');
+    const dataColumns = tableProps.columns;
     expect(dataColumns[2].key).toBe('currency');
     expect(dataColumns[1].key).toBe('type');
     expect(dataColumns[3].key).toBe('country');
@@ -707,7 +706,15 @@ describe('AccountsHeaderTable — "Por conciliar" pill column', () => {
   });
 });
 
-describe('AccountsHeaderTable — row actions column', () => {
+describe('AccountsHeaderTable — shared sticky row-actions cell', () => {
+  it('configures the maximum account action shape for shared reserved-width geometry', () => {
+    renderTable();
+
+    expect(tableProps.rowQuickActions).toMatchObject({ enabled: true, buttonCount: 3 });
+    expect(typeof tableProps.rowQuickActions.render).toBe('function');
+    expect(screen.getByTestId('quick-actions-cell-acc-1')).toBeInTheDocument();
+  });
+
   it('renders the hover actions with their stable per-row testids', () => {
     renderTable();
 

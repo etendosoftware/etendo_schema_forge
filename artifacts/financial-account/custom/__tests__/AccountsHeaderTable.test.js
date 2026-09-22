@@ -13,8 +13,8 @@
  *    so hiding/reordering a column stays a decisions.json edit — and their headers
  *    (`gridLabelKey`) and cell bodies (`cellType` → ACCOUNT_CELL_TYPES) must stay declarative
  *    too, i.e. no hardcoded label map and no hand-written column literal may come back;
- *  - the one hand-appended column (`_rowActions`) must keep swallowing its own clicks,
- *    otherwise the row navigation fires underneath it;
+ *  - account actions must use DataTable's shared sticky quick-actions cell through
+ *    `rowQuickActions.render`, with enough reserved width for the largest row shape;
  *  - `selectedRows` must stay destructured out of the slot props so it never reaches DataTable,
  *    even though ETP-5111 retired the toolbar/selection-bar swap that used to read it — and the
  *    toolbar must stay ungated, so the retired swap cannot creep back in.
@@ -93,13 +93,15 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
     assert.match(src, /key: col\.name/);
   });
 
-  it('adds exactly one hand-written column on top of the contract ones', () => {
-    // `_rowActions` is the only literal left: its declarative equivalent
-    // (`window.rowQuickActions`) renders an absolute hover overlay, not a column, and
-    // every action opens a local modal.
-    assert.match(src, /key: '_rowActions'/);
+  it('adds no hand-written column on top of the contract ones', () => {
+    assert.doesNotMatch(src, /key: '_rowActions'/);
     const literals = src.match(/key: '[^']+'/g) ?? [];
-    assert.deepEqual(literals, ["key: '_rowActions'"]);
+    assert.deepEqual(literals, []);
+  });
+
+  it('renders account actions through DataTable\'s shared sticky quick-actions cell', () => {
+    assert.match(src, /rowQuickActions=\{\{[\s\S]*?enabled: true,[\s\S]*?buttonCount: 3,/);
+    assert.match(src, /render: \(account\) => \([\s\S]*?<AccountRowActions[\s\S]*?account=\{account\}[\s\S]*?\/>/);
   });
 
   // "Por conciliar" is the `EM_ETGO_Pending_Count` stored computed column, declared in
@@ -158,11 +160,9 @@ describe('AccountsHeaderTable — contract-driven columns', () => {
 });
 
 describe('AccountsHeaderTable — row interaction guards', () => {
-  it('stops propagation on the actions cell so a row click does not fire', () => {
-    // The pill's own guard moved into `accountCellTypes.jsx` with its renderer, so only
-    // the hand-written actions column still guards here.
-    const guards = src.match(/onClick=\{\(e\) => e\.stopPropagation\(\)\}/g) ?? [];
-    assert.equal(guards.length, 1, 'expected the actions cell to guard its clicks');
+  it('does not recreate click isolation outside DataTable\'s shared actions cell', () => {
+    assert.doesNotMatch(src, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+    assert.match(src, /rowQuickActions=\{\{/);
   });
 
   // DataTable invokes onNavigate with the whole ROW, not an id (DataTable.jsx:1902,
@@ -300,7 +300,7 @@ describe('AccountsHeaderTable — delete wiring (ETP-4871)', () => {
     assert.match(src, /onDelete:\s*setDeleteTarget,/);
   });
 
-  it('threads onDelete through the _rowActions column into AccountRowActions', () => {
+  it('threads onDelete through the shared quick-actions renderer into AccountRowActions', () => {
     assert.match(src, /<AccountRowActions[\s\S]*?onDelete=\{handlers\.onDelete\}[\s\S]*?\/>/);
   });
 

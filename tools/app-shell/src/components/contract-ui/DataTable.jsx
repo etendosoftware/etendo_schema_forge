@@ -50,6 +50,12 @@ const QUICK_ACTIONS_CONTAINER_PADDING_PX = 24; // px-3 on both sides
 // per-window maximum is the safe (if occasionally slightly generous) choice.
 function estimateQuickActionsButtonCount(rowQuickActions) {
   if (!rowQuickActions) return 0;
+  if (typeof rowQuickActions.render === 'function') {
+    const customButtonCount = Number(rowQuickActions.buttonCount);
+    return Number.isFinite(customButtonCount) && customButtonCount > 0
+      ? Math.ceil(customButtonCount)
+      : 1;
+  }
   const readOnly = !!rowQuickActions.readOnly;
   const hasEmail = rowQuickActions.sendDocument
     ? rowQuickActions.sendDocument.enabled !== false
@@ -78,6 +84,8 @@ function estimateQuickActionsButtonCount(rowQuickActions) {
 // value is computed per-window, not one of a small static set Tailwind's
 // build-time scanner could pick up from a literal class string.
 function quickActionsReservedWidthPx(rowQuickActions) {
+  const explicitWidth = Number(rowQuickActions?.reservedWidthPx);
+  if (Number.isFinite(explicitWidth) && explicitWidth > 0) return explicitWidth;
   const count = estimateQuickActionsButtonCount(rowQuickActions);
   if (count <= 0) return 0;
   return count * QUICK_ACTIONS_BUTTON_PX
@@ -1971,6 +1979,11 @@ function renderRowActionFooterCells(hoverRowActions, onDeleteRow, legacyDeleteEn
 
 function isQuickActionsEnabled(rowQuickActions) {
   if (!rowQuickActions || rowQuickActions.enabled === false) return false;
+  // A custom renderer owns its own visibility rules. In particular, it may
+  // expose read-only domain actions that do not map to the canonical
+  // Edit/Clone/Email/Delete gates below, so its presence is enough to keep the
+  // shared sticky action cell enabled.
+  if (typeof rowQuickActions.render === 'function') return true;
   // ETP-5268 — a window that gates every mutating action behind `readOnly`
   // (e.g. a view-only GO tenant window) and configures neither an
   // email/send gate nor any menuActions ends up mounting a RowQuickActions
@@ -2735,25 +2748,29 @@ function TableDataRow({
           style={quickActionsColumnStyle(quickActionsColWidthPx)}
           onClick={(e) => e.stopPropagation()}
           data-testid="TableCell__eb5261">
-          <RowQuickActions
-            row={row}
-            entity={entity}
-            apiBaseUrl={apiBaseUrl}
-            token={token}
-            documentPreview={rowQuickActions.documentPreview}
-            sendDocument={rowQuickActions.sendDocument}
-            menuActions={rowQuickActions.menuActions}
-            hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
-            hideDeleteButton={rowQuickActions.hideDeleteButton}
-            readOnly={rowQuickActions.readOnly}
-            statusField={rowQuickActions.statusField}
-            onEdit={rowQuickActions.onEdit}
-            onClone={rowQuickActions.onClone}
-            onEmail={rowQuickActions.onEmail}
-            onDelete={rowQuickActions.onDelete}
-            onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
-            actionsConfig={rowQuickActions.actions}
-            data-testid="RowQuickActions__eb5261" />
+          {typeof rowQuickActions.render === 'function'
+            ? rowQuickActions.render(row)
+            : (
+              <RowQuickActions
+                row={row}
+                entity={entity}
+                apiBaseUrl={apiBaseUrl}
+                token={token}
+                documentPreview={rowQuickActions.documentPreview}
+                sendDocument={rowQuickActions.sendDocument}
+                menuActions={rowQuickActions.menuActions}
+                hideDeleteWhenComplete={rowQuickActions.hideDeleteWhenComplete}
+                hideDeleteButton={rowQuickActions.hideDeleteButton}
+                readOnly={rowQuickActions.readOnly}
+                statusField={rowQuickActions.statusField}
+                onEdit={rowQuickActions.onEdit}
+                onClone={rowQuickActions.onClone}
+                onEmail={rowQuickActions.onEmail}
+                onDelete={rowQuickActions.onDelete}
+                onMenuActionExecuted={rowQuickActions.onMenuActionExecuted}
+                actionsConfig={rowQuickActions.actions}
+                data-testid="RowQuickActions__eb5261" />
+            )}
         </TableCell>)
       )}
     </TableRow>
@@ -2915,6 +2932,9 @@ export function DataTable({
    *     onClone?: (row) => void,
    *     onEmail?: (row) => void,
    *     onDelete?: (row) => void,
+   *     render?: (row) => React.ReactNode, // replaces the canonical action set inside the shared sticky cell
+   *     buttonCount?: number,              // maximum custom buttons; drives canonical reserved-width geometry
+   *     reservedWidthPx?: number,          // explicit custom width; takes priority over buttonCount
    *     menuActions?: Array<MenuAction>,    // forwarded to RowQuickActions' kebab
    *     documentPreview?: boolean | object, // truthy ⇒ show Email button
    *     statusField?: string,

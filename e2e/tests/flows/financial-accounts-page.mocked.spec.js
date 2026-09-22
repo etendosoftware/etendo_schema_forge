@@ -31,6 +31,8 @@ import { login } from '../helpers/auth.js';
  * /sws/** stub (Playwright matches routes in reverse registration order).
  */
 
+const LONG_ACCOUNT_NAME = 'Santander Corporate & Investment Banking International Global Treasury Operations Enterprise Account';
+
 const ACCOUNTS = [
   {
     id: 'acc-1',
@@ -81,6 +83,19 @@ const ACCOUNTS = [
     iban: '',
     isDefault: false,
     eTGOPendingCount: 0,
+    active: true,
+  },
+  {
+    id: 'acc-6',
+    name: LONG_ACCOUNT_NAME,
+    type: 'B',
+    currentBalance: 0,
+    currencyId: '102',
+    currencyIso: 'EUR',
+    iban: 'ES1212340000000000000006',
+    isDefault: false,
+    eTGOPendingCount: 0,
+    bankConnected: false,
     active: true,
   },
   // Archived — must never show in the default view (only under the "Inactivas" filter).
@@ -201,13 +216,14 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page.getByTestId('row-acc-5')).toHaveCount(0);
   });
 
-  test('renders the contract-driven columns plus the synthetic actions one', async ({ page }) => {
-    // All four data columns come from contract.json (entity `account`, grid + gridOrder) —
-    // "Por conciliar" among them, as an `entities.account.virtualFields[]` declaration whose
-    // value the NeoHandler injects in afterHandle. Only the row actions are added by the slot.
-    for (const key of ['name', 'type', 'currentBalance', 'eTGOPendingCount', '_rowActions']) {
+  test('renders only the contract-driven data columns', async ({ page }) => {
+    // Every named column comes from contract.json (entity `account`, grid + gridOrder).
+    // Account actions use DataTable's shared trailing quick-actions cell, not a synthetic
+    // `_rowActions` data column owned by this window.
+    for (const key of ['name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount']) {
       await expect(page.getByTestId(`column-header-${key}`)).toHaveCount(1);
     }
+    await expect(page.getByTestId('column-header-_rowActions')).toHaveCount(0);
   });
 
   test('renders the rich cell bodies inside the generic grid cells', async ({ page }) => {
@@ -215,6 +231,60 @@ test.describe('Financial Accounts list — Cuentas', () => {
     // IBAN is chunked in groups of four by the shared TypeCell.
     await expect(page.getByTestId('cell-acc-1-type')).toContainText('ES12 1234 0000 0000 0000 0001');
     await expect(page.getByTestId('cell-acc-1-currentBalance')).toContainText('211.841,01');
+  });
+
+  test('a long account name truncates without pushing out the avatar or connection badge', async ({ page }) => {
+    const nameCell = page.getByTestId('cell-acc-6-name');
+    const name = page.getByTestId('account-row-name-acc-6');
+    const avatar = page.getByTestId('account-row-avatar-acc-6');
+    const badge = page.getByTestId('account-row-connection-badge-acc-6');
+
+    await expect(nameCell).toBeVisible();
+    await expect(avatar).toBeVisible();
+    await expect(badge).toBeVisible();
+    await expect(name).toHaveCSS('text-overflow', 'ellipsis');
+    expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth + 1)).toBe(true);
+
+    const [cellBox, avatarBox, badgeBox] = await Promise.all([
+      nameCell.boundingBox(), avatar.boundingBox(), badge.boundingBox(),
+    ]);
+    expect(cellBox).not.toBeNull();
+    expect(avatarBox).not.toBeNull();
+    expect(badgeBox).not.toBeNull();
+    expect(avatarBox.x).toBeGreaterThanOrEqual(cellBox.x);
+    expect(avatarBox.x + avatarBox.width).toBeLessThanOrEqual(cellBox.x + cellBox.width + 1);
+    expect(badgeBox.x).toBeGreaterThanOrEqual(cellBox.x);
+    expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(cellBox.x + cellBox.width + 1);
+
+    await name.hover();
+    await expect(page.getByTestId('account-row-name-acc-6-tooltip')).toHaveText(LONG_ACCOUNT_NAME);
+  });
+
+  test('a short account name does not open a redundant tooltip', async ({ page }) => {
+    const shortName = page.getByTestId('account-row-name-acc-1');
+    expect(await shortName.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+
+    await shortName.hover();
+
+    await expect(page.getByTestId('account-row-name-acc-1-tooltip')).toHaveCount(0);
+  });
+
+  test('a short disconnected account keeps its connection badge next to the name', async ({ page }) => {
+    const name = page.getByTestId('account-row-name-acc-3');
+    const badge = page.getByTestId('account-row-connection-badge-acc-3');
+
+    await expect(name).toBeVisible();
+    await expect(badge).toBeVisible();
+
+    const [nameBox, badgeBox] = await Promise.all([name.boundingBox(), badge.boundingBox()]);
+    expect(nameBox).not.toBeNull();
+    expect(badgeBox).not.toBeNull();
+
+    const horizontalGap = badgeBox.x - (nameBox.x + nameBox.width);
+    expect(horizontalGap).toBeGreaterThanOrEqual(0);
+    // `gap-1` is 4px; tolerate subpixel rounding while preventing the badge from
+    // drifting to the far edge of the account cell as it did with a full-width row.
+    expect(horizontalGap).toBeLessThanOrEqual(6);
   });
 
   // The sidebar is fed by the `summary` the backend attaches next to `response.data` on the
@@ -302,11 +372,61 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
   });
 
-  // ETP-5281 coverage gap: the `overflow-visible` escape on `_rowActions` (commit 23343b3c2,
-  // PR #1496) needs to hold for pending-count cell variants beyond the plain numeric badge
-  // already exercised above — the "Conciliado" pill (acc-4, eTGOPendingCount = 0, likely
-  // narrower than a numeric badge) and an archived row's extra badges (acc-5, only visible
-  // under the "Inactivas" filter).
+  test('row actions stay pinned to the visible right edge while the table scrolls horizontally', async ({ page }) => {
+    const row = page.getByTestId('row-acc-1');
+    // Account-specific controls now render inside DataTable's canonical trailing
+    // quick-actions cell. It deliberately has no synthetic column key/testid.
+    const actionsCell = row.locator(':scope > td:last-child');
+    const edit = row.getByTestId('account-row-edit-acc-1');
+    // DataTable's <Table> primitive owns the real horizontal scroll element in
+    // its direct wrapper; the outer DataTable div only hosts the mirror thumb.
+    const scrollContainer = page.getByTestId('Table__eb5261').locator('..');
+
+    await expect.poll(
+      () => scrollContainer.evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
+
+    const assertPinnedAt = async (ratio) => {
+      await scrollContainer.evaluate((element, nextRatio) => {
+        element.scrollLeft = (element.scrollWidth - element.clientWidth) * nextRatio;
+        element.dispatchEvent(new Event('scroll'));
+      }, ratio);
+
+      const [containerBox, rowBox] = await Promise.all([
+        scrollContainer.boundingBox(),
+        row.boundingBox(),
+      ]);
+      expect(containerBox).not.toBeNull();
+      expect(rowBox).not.toBeNull();
+
+      // Keep the pointer over the same row after the scroll. This activates the
+      // `group-hover/row:sticky` contract without depending on an off-screen cell.
+      await page.mouse.move(
+        containerBox.x + 48,
+        rowBox.y + (rowBox.height / 2),
+      );
+
+      await expect(actionsCell).toHaveCSS('position', 'sticky');
+      await expect(edit).toBeVisible();
+
+      const pinnedBox = await actionsCell.boundingBox();
+      expect(pinnedBox).not.toBeNull();
+      expect(Math.abs(
+        (pinnedBox.x + pinnedBox.width) - (containerBox.x + containerBox.width),
+      )).toBeLessThanOrEqual(2);
+    };
+
+    // Cover the same interaction in both scroll directions: left edge, right
+    // edge, then back to the middle. The actions must never drift off-screen.
+    await assertPinnedAt(0);
+    await assertPinnedAt(1);
+    await assertPinnedAt(0.5);
+  });
+
+  // The canonical sticky quick-actions cell must stay operable beside pending-count variants
+  // beyond the plain numeric badge already exercised above — the "Conciliado" pill (acc-4,
+  // eTGOPendingCount = 0) and an archived row's extra badges (acc-5, only visible under the
+  // "Inactivas" filter).
   test('the row kebab opens on a zero-pending ("Conciliado") row and on an archived row', async ({ page }) => {
     const zeroPendingRow = page.getByTestId('row-acc-4');
     await expect(zeroPendingRow).toBeVisible();
@@ -342,21 +462,11 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
   });
 
-  // This list owns its row actions: the canonical RowQuickActions overlay is switched off
-  // declaratively (`window.rowQuickActions.enabled: false` in decisions.json) rather than by a
-  // prop, so it is never mounted. Note this is INDEPENDENT of multi-select — ETP-4656 restored
-  // the checkbox column on this grid, and the overlay stays off regardless. That matters
-  // because the overlay is absolutely
-  // positioned over the trailing `_rowActions` cell: while it was mounted it added a second
-  // edit button plus a delete button and swallowed every pointer event aimed at the slot's own
-  // kebab, leaving "Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar"
-  // unreachable. This test guards both halves — the overlay is absent AND the slot's actions
-  // are genuinely operable.
-  // The row kebab trigger (account-row-menu-trigger-*) used to be reproducibly obscured by the
-  // eTGOPendingCount cell (Playwright reported "element intercepts pointer events"), same known
-  // issue hitting financial-account-delete.mocked.spec.js and financial-account-detail.mocked.spec.js.
-  // Confirmed live and fixed (commit 23343b3c2, PR #1496).
-  test('the slot owns the row actions — no generic quick-actions overlay', async ({ page }) => {
+  // This list reuses DataTable's canonical sticky quick-actions CELL while supplying
+  // account-specific contents through `rowQuickActions.render`. It must not also mount the
+  // canonical RowQuickActions CONTENT, which would duplicate Edit/Delete and obscure the
+  // account kebab (Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar).
+  test('the shared quick-actions cell renders only the account-specific controls', async ({ page }) => {
     const row = page.getByTestId('row-acc-1');
     await row.hover();
 
@@ -371,7 +481,7 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await offline.hover();
     await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
 
-    // Nothing from the generic overlay is in the DOM.
+    // Nothing from the canonical RowQuickActions content is in the DOM.
     await expect(row.getByTestId('row-quick-actions')).toHaveCount(0);
     await expect(row.getByTestId('row-quick-action-edit')).toHaveCount(0);
     await expect(row.getByTestId('row-quick-action-delete')).toHaveCount(0);

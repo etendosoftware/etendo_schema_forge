@@ -3590,8 +3590,10 @@ The list is a generic `DataTable` inside the `AccountsHeaderTable` slot, so it s
 every other window does: `ListView` owns the state, `useEntity` turns it into NEO's `_sortBy`
 (`resolveBackendSort`, `lib/gridQuery.js`), and the whole dataset is ordered — not just the
 loaded page. `DataTable` treats `sortable` as **opt-out** (`col.sortable !== false`), and the
-slot now declares `sortable: true` on every data column; only the trailing `_rowActions` column
-stays `false`.
+slot declares `sortable: true` on every data column. Row actions no longer belong to the column
+array: they render through
+`DataTable`'s shared `rowQuickActions` cell, so every column returned by `buildColumns` is a real,
+sortable data column.
 
 This is why "Por conciliar" had to become the `EM_ETGO_Pending_Count` stored computed column
 first. A value injected in `afterHandle` can only ever be reordered *inside the page the SQL
@@ -3844,14 +3846,48 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
   Both surfaces read the column, so there is a single source of truth: `AccountRow.pendingCount` comes straight from `ACCOUNTS_SQL` (appended **last** in the SELECT — `loadAccounts()` and the test's `ResultSet` stub both read by position), `buildSummary` counts `account.pendingCount > 0` for the sidebar, and `PENDING_BY_ACCOUNT_SQL` / `loadPendingByAccount` are gone. The R spec `financial-accounts-page` keeps the flat JSON key `pendingCount` (its payload is hand-built, and `useFinancialAccount` / `useFinancialAccounts` read that name); only the W spec's generic CRUD exposes it as `eTGOPendingCount`.
 - Adding/removing a grid column, reordering, relabelling or changing a renderer = a `decisions.json` change, **not** a code change (a genuinely new *kind* of cell still needs a renderer added to the registry). Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
-- **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[84px]` is not a width but a mirror of `NameCell`'s 44px grip + 32px avatar + 8px padding, so it is coupled to that cell body.
-- **Two pieces of list chrome are props, not decisions**, because both are generic `ListView`/`DataTable` behaviours the retired page had and every other window may want:
+- **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[40px]` is not a width but a mirror of `NameCell`'s 32px avatar + 8px padding, so it is coupled to that cell body. The former 44px decorative drag-grip slot is gone.
+- **List chrome uses shared `ListView`/`DataTable` props, not decisions**, because these behaviours are generic and every window may reuse them:
   - `tablePaddingX=""` (passed by the wrapper in `windows/custom/financial-account/index.jsx`) cancels `ListView`'s default `px-2` on the table region. That padding would inset the slot's full-bleed rules — the one under the toolbar and the vertical one between the KPI panel and the rows — from both edges. The slot owns its inner spacing instead.
   - `rowHoverStyle="elevated"` (passed to `DataTable` by `AccountsHeaderTable`) restores the retired `AccountRow`'s hover: an opaque background plus `shadow-lg` and `z-10`, so the row reads as a raised card and its shadow spills over the neighbouring separators. The default `"tint"` is `DataTable`'s pre-existing `hover:bg-muted/50` — no other grid changes. Selection backgrounds always win over the elevated background. In this mode `DataTable` also pads its table wrapper by 24px at the bottom: that wrapper is `overflow-x-auto overflow-y-visible`, which the CSS spec computes as `auto` on **both** axes, so without the padding the last row's downward shadow (`0 10px 15px -3px` ≈ 22px of reach) is clipped away and the last row looks like it has no hover at all.
+- **Account row actions use the same sticky cell as Sales Invoice.** `AccountsHeaderTable` passes a
+  custom `rowQuickActions.render(account)` to `DataTable`; the renderer keeps the financial-account
+  `AccountRowActions` contents (Edit, conditional Sync, and the account kebab), while `DataTable`
+  owns the trailing cell's reserved width, `right: 0` sticky behaviour, hover background, z-index,
+  header alignment and horizontal-scroll interaction. `buttonCount: 3` reserves the maximum row
+  shape (Edit + Sync + kebab); rows without a bank connection render two buttons inside the same
+  stable slot. The account container mirrors the shared `RowQuickActions` absolute positioning, so
+  it does not affect row height and reveals instantly on hover/focus. Do not reintroduce a synthetic
+  `_rowActions` data column: it sits at the table's far scroll edge and bypasses the shared viewport-
+  sticky behaviour.
 - **Reveal-on-hover affordances inside cells need the named group variant.** `DataTable` marks each row as `group/row`, not `group`, and Tailwind's `group-hover:` does not match a named group. Dropping the named variant is what made the copy-IBAN button and the drag grip silently vanish when the list moved onto `DataTable` — the exact same trap the row kebab hit. `accountColumns.jsx` and `AccountRowActions.jsx` therefore carry **both** variants (`group-hover:opacity-100 group-hover/row:opacity-100`): the named one is load-bearing, the unnamed one is cheap insurance for any future host that marks rows as a plain `group`, since jsdom can catch neither (it loads no Tailwind and computes no opacity).
 - **The hand-rolled `AccountsTable` host is deleted** (ETP-4658): `AccountsTable/{index,AccountsTableHeader,AccountRow}.jsx`, their tests, the `ACCOUNT_CELL_RENDERERS`/`ACCOUNT_COLUMNS` registry and the barrel export. Nothing mounted it once the list became the generated `ListView`, and declaring `pendingCount` in the contract had left it rendering that column twice with an off-by-one `colspan`. What survives in `AccountsTable/accountColumns.jsx` is only the three cell bodies (`NameCell`/`TypeCell`/`BalanceCell`), bound to columns by `accountCellTypes.jsx`. The folder name is now a misnomer; moving the file was left out on purpose to avoid churning imports and the tests that pin its path.
 - Nothing validates `gridLabelKey` or `cellType` (no rule in the pipeline validator, no whitelist). A typo'd label key renders **the key itself** on screen, because `useUI` returns the key on a miss; an unknown `cellType` falls back to DataTable's generic type renderer.
 - `readOnlyLogic.js` for these fields is produced by `generate-contract.js → convertLogicToJs` (AD expression → JS). The translator handles `@Col@='v'`, `!=`, empty (`!''`/`=''`), `null` and numeric (`>0`) forms; any expression that still contains a raw `@token@` after translation is marked `evaluable:false` (never emits invalid JS). All `readonlylogic-valid` contract tests must stay green after a regen.
+
+### Overflow-safe account and movement cells (ETP-5388)
+
+The account-name cell has a strict flex-shrink contract. Its avatar is `shrink-0`; every flex
+ancestor between the fixed-width grid cell and the name carries `min-w-0`; and the name/badge row is
+`w-fit max-w-full`. That row uses its intrinsic width when it fits and is capped by the cell when it
+does not. Within it, the name is `w-auto min-w-0 flex-1` and the connection badge is
+`shrink-0 whitespace-nowrap`. A short name therefore keeps the badge immediately beside it with the
+small gap shown in Figma, while a long name shrinks and ellipsises instead of compressing the avatar or
+pushing the badge outside the Cuenta column. `TruncatedText` reveals the complete name on hover only
+when the text is actually clipped (`scrollWidth > clientWidth + 1`), so short account names do not
+produce a redundant tooltip.
+
+The Movimientos table uses the same primitive for every truncatable textual value: payment/document
+number, contact, description, transaction type, accounting account, and the generic contract-cell
+fallback. Dates, status badges, posting indicators and monetary values deliberately keep their own
+renderers and do not gain tooltips. The payment link remains interactive: only its text shrinks,
+while the external-navigation icon reserves its width. The table uses a fixed, minimum-width layout
+so the text spans have a real clipping boundary; narrow viewports scroll horizontally instead of
+collapsing structural controls, badges or amount columns.
+
+This is presentation-only. The field set and renderer bindings remain owned by
+`artifacts/financial-account/decisions.json`; no decision, contract, generated output or NEO
+configuration changes are required.
 
 ### Advanced ("by conditions") filter on the Cuentas list (ETP-5113)
 
@@ -4032,9 +4068,11 @@ the generic contract that replaced the retired §9d.
    divergent branch, and with no textual conflict the tests outlived the feature. The slot
    now leaves `selectable` at DataTable's default and forwards `{...props}` untouched so
    `onSelectionChange` / `clearSelectionTrigger` / `deselectTrigger` / `deselectRowIds`
-   reach the grid. The hover quick-actions overlay stays suppressed **separately** and
-   declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
-   the trailing `AccountRowActions` column — do not conflate the two.
+   reach the grid. The generated generic quick-action set stays disabled declaratively
+   (`window.rowQuickActions.enabled: false`); `AccountsHeaderTable` deliberately overrides that
+   prop only at its inner `DataTable`, supplying `AccountRowActions` through the shared custom
+   renderer. This keeps selection independent from row actions without rebuilding a trailing data
+   column.
    `AccountsHeaderTable` still **destructures `selectedRows` out of the spread** even though
    ETP-5111 removed the toolbar swap that consumed it: `selectedRows` is also the name of
    `DataTable`'s own internal selection state, so forwarding a prop under that name reads as a
