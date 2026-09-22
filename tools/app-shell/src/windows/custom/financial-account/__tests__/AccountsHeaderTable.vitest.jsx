@@ -82,6 +82,8 @@ vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
  * ReconcilePill / AccountRowActions) render. Rendering the real DataTable here would
  * drag in filters, sorting and inline-add, none of which this slot configures.
  */
+import { QuickActionsCell } from './testUtils/dataTableStubQuickActionsCell.jsx';
+
 let tableProps = null;
 vi.mock('@/components/contract-ui', () => ({
   DataTable: (props) => {
@@ -101,14 +103,7 @@ vi.mock('@/components/contract-ui', () => ({
                 {col.render ? col.render(row) : String(row[col.key] ?? '')}
               </span>
             ))}
-            {typeof rowQuickActions?.render === 'function' ? (
-              <span
-                data-testid={`quick-actions-cell-${row.id}`}
-                onClick={(event) => event.stopPropagation()}
-                role="presentation">
-                {rowQuickActions.render(row)}
-              </span>
-            ) : null}
+            <QuickActionsCell row={row} rowQuickActions={rowQuickActions} />
           </div>
         ))}
       </div>

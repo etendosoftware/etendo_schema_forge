@@ -125,6 +125,8 @@ vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
 }));
 
 // See the sibling suite for why DataTable is stubbed rather than rendered for real.
+import { QuickActionsCell } from './testUtils/dataTableStubQuickActionsCell.jsx';
+
 vi.mock('@/components/contract-ui', () => ({
   DataTable: ({ columns, data, onNavigate, rowQuickActions }) => (
     <div data-testid="data-table">
@@ -135,14 +137,7 @@ vi.mock('@/components/contract-ui', () => ({
               {col.render ? col.render(row) : null}
             </span>
           ))}
-          {typeof rowQuickActions?.render === 'function' ? (
-            <span
-              data-testid={`quick-actions-cell-${row.id}`}
-              onClick={(event) => event.stopPropagation()}
-              role="presentation">
-              {rowQuickActions.render(row)}
-            </span>
-          ) : null}
+          <QuickActionsCell row={row} rowQuickActions={rowQuickActions} />
         </div>
       ))}
     </div>
