@@ -1125,6 +1125,17 @@ position 440 blank. Both readers now go through `isCancelOrModifyDebitRequested`
 too, so a constant-valued `Cancel_Modify_Debit` would have skipped the bank block while leaving
 the mark blank — a file stating the opposite of what it does).
 
+**Explicitly out of scope for ETP-5431 (recorded so it is not silently reopened):**
+- A plain `D`/`V`/`X` devolución with box 111 == 0 does **not** follow the marca-SEPA table above —
+  it keeps its pre-existing, tipo-only gating untouched (see `_NOT_NOTA3` and the matrix's first
+  three rows). The marca table applies exclusively to condition B (rectificativa ∧ box 111 ≠ 0 ∧
+  not waived).
+- No frontend validation was added for marca `0` outside the Nota 3 path — a plain devolución can
+  still leave `bank_sepa` on its placeholder with no error, exactly as before this ticket.
+- Nothing validates that a non-zero box 111 implies a negative box 71 (or vice versa); the two
+  boxes remain independently editable/computed, as they were before this ticket.
+- No `@etendosoftware` module version bump accompanied this change in either repo.
+
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
 25/26 ("Modificaciones bases y cuotas del recargo de equivalencia") or 40/41 ("Rectificación de
