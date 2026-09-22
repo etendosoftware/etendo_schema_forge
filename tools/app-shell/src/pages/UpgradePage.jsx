@@ -22,6 +22,7 @@ import {
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 
 const PRODUCTIVE_FEATURES = [
   'upgradeProductiveFeatureSeparate',
@@ -40,7 +41,36 @@ const STEP_LABELS = {
   finalize: 'upgradeStepFinalize',
 };
 
-const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive' };
+/**
+ * The client name of the environment this browser's ERP session is currently inside —
+ * persisted by `persistEnvironmentSession` (`etendo-go-core` onboarding/state.js) as
+ * `sf_auth_client_name` whenever an environment is entered. Same source `AppLayout`'s
+ * `companyName` and `InviteAcceptancePage`'s `currentClientName` already read, kept as a plain
+ * localStorage lookup here (rather than routed through `useEnvironmentSwitch`) so it resolves
+ * synchronously and does not depend on the account-scoped `/sws/go/environments` request this
+ * page issues separately succeeding first.
+ *
+ * Empty when the browser never entered a tenant this session (e.g. this page opened straight
+ * after account signup, before onboarding) — there is then no current environment to prefill
+ * from (ETP-5443).
+ */
+function readCurrentEnvironmentName(storage = globalThis.localStorage) {
+  try {
+    return storage?.getItem('sf_auth_client_name') || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Prefill priority: the environment the user is currently logged into, else the account's demo
+ * environment (resolved once the environments lookup below settles — today's behavior), else
+ * empty. The field is always rendered and always editable; this only decides its starting value.
+ */
+function createInitialForm() {
+  return { tenantName: readCurrentEnvironmentName(), upgradeAction: 'create-productive' };
+}
+
 const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
 const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 /** Checkout-submitted timestamp, so durationMs survives the Stripe redirect. */
@@ -467,7 +497,7 @@ export default function UpgradePage() {
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
   const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(createInitialForm);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
   const [steps, setSteps] = useState(() => initialSetupSteps());
@@ -600,6 +630,8 @@ export default function UpgradePage() {
         const nextEnvironments = Array.isArray(list) ? list : [];
         setEnvironments(nextEnvironments);
         const demo = nextEnvironments.find(environment => environment.plan !== 'productive');
+        // Only a fallback: `previous.tenantName` already holds the current environment's name
+        // when `createInitialForm` found one, and that takes priority over the demo (ETP-5443).
         if (demo?.clientName) {
           setForm(previous => previous.tenantName
             ? previous
@@ -770,23 +802,42 @@ export default function UpgradePage() {
     event.preventDefault();
     setFormError(null);
 
-    const tenantName = form.tenantName.trim() || String(demoEnvironment?.clientName || '').trim();
-    if (tenantName && tenantName !== form.tenantName) {
-      setForm(previous => ({ ...previous, tenantName }));
+    const tenantName = form.tenantName.trim();
+
+    // Both name checks below are gated on having a session to submit with. A missing token
+    // must still reach runUpgrade's own check first, so upgradeSessionExpired (the actionable
+    // diagnosis) is never masked by a "name required"/"name taken" message about a field the
+    // user cannot fix their way out of a dead session with.
+    if (getCheckoutToken()) {
+      // The field is always rendered and always editable (ETP-5443) — a blank submit is always
+      // "the field is visible and empty", never "no field to type into". Sending clientName: ''
+      // would 400 with INVALID_REQUEST "clientName is required"; surface a translated error
+      // instead.
+      if (!tenantName) {
+        setErrors({ tenantName: 'upgradeTenantNameRequired' });
+        return;
+      }
+
+      // AD_Client.name is globally unique, and the backend treats a name matching a tenant this
+      // account already owns as "resume that tenant" (EtendoGoJwtServlet.isResumingOwnedTenant),
+      // not "create a new one" — the user would pay and land back in the SAME environment. A
+      // match against the account's DEMO environment is allowed: that is the demo-to-pro
+      // conversion path, not a collision.
+      // TODO: this guard exists only because AD_Client.name is globally unique today. If that
+      // constraint is ever lifted, revisit whether a name match should still block the request.
+      const normalizedName = tenantName.toLowerCase();
+      const takenByOwnedProductiveEnvironment = environments.some(environment => (
+        isProductiveEnvironment(environment)
+        && String(environment.clientName || '').trim().toLowerCase() === normalizedName
+      ));
+      if (takenByOwnedProductiveEnvironment) {
+        setErrors({ tenantName: 'upgradeTenantNameTaken' });
+        return;
+      }
     }
 
-    // No name to fall back on. `demoEnvironment` falsy is exactly the condition
-    // that renders the editable input (see the form below), so this is always
-    // "the field is visible and empty" — never "no field to type into" (that
-    // branch no longer exists now that ETP-5443 restored the input for the
-    // no-demo case). Sending clientName: '' would 400 with INVALID_REQUEST
-    // "clientName is required"; surface a translated error instead — but only
-    // when there IS a session to submit with. A missing token must still reach
-    // runUpgrade's own check first, so upgradeSessionExpired (the actionable
-    // diagnosis) is not masked by this one.
-    if (!tenantName && getCheckoutToken()) {
-      setErrors({ tenantName: 'upgradeTenantNameRequired' });
-      return;
+    if (tenantName !== form.tenantName) {
+      setForm(previous => ({ ...previous, tenantName }));
     }
     setErrors({});
 
@@ -916,41 +967,43 @@ export default function UpgradePage() {
           </CardHeader>
           <CardContent data-testid="CardContent__58bad7">
             <form className="space-y-5" onSubmit={handleSubmit} noValidate data-testid="upgrade-form">
-              {demoEnvironment ? (
-                <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm" data-testid="upgrade-tenant-from-demo">
-                  <p className="text-muted-foreground">{ui('upgradeTenantFromDemo')}</p>
-                  <p className="mt-1 font-semibold text-foreground">{form.tenantName || ui('upgradePlanProductiveName')}</p>
-                </div>
-              ) : (
-                // No demo to upgrade — this account's owned environments are all
-                // already productive, so this purchase creates a brand-new
-                // company rather than converting one (ETP-5396 design §4: "For
-                // an account with no owned demo, allow only its own new-company
-                // purchase intent"). The backend tells the two apart by whether
-                // `clientName` already resolves to a client this account owns
-                // (isResumingOwnedTenant), not by a distinct `upgradeAction` —
-                // 'create-productive' (the only supported value besides the
-                // rejected legacy 'convert-demo') covers both (ETP-5443).
-                <div className="space-y-1.5" data-testid="upgrade-tenant-name-field">
-                  <Label htmlFor="upgrade-tenant-name-input" data-testid="upgrade-tenant-name-input-label">
-                    {ui('upgradeTenantNameLabel')}
-                  </Label>
-                  <Input
-                    id="upgrade-tenant-name-input"
-                    value={form.tenantName}
-                    placeholder={ui('upgradeTenantNamePlaceholder')}
-                    aria-invalid={Boolean(errors.tenantName)}
-                    onChange={event => {
-                      const { value } = event.target;
-                      setForm(previous => ({ ...previous, tenantName: value }));
-                      setErrors({});
-                    }}
-                    data-testid="upgrade-tenant-name-input"
-                  />
-                </div>
-              )}
+              {/*
+                Always editable, whether or not the account owns a demo (ETP-5443). Purchasing
+                under an account that owns no demo creates a brand-new company rather than
+                converting one (ETP-5396 design §4: "For an account with no owned demo, allow
+                only its own new-company purchase intent"); the backend tells the two apart by
+                whether `clientName` already resolves to a client this account owns
+                (isResumingOwnedTenant), not by a distinct `upgradeAction` — 'create-productive'
+                (the only supported value besides the rejected legacy 'convert-demo') covers
+                both. Prefilled by `createInitialForm`/the demo-fallback effect above; the taken-
+                name guard in handleSubmit is what actually keeps a productive-name collision
+                from resuming an owned tenant instead of creating a new one.
+              */}
+              <div className="space-y-1.5" data-testid="upgrade-tenant-name-field">
+                <Label htmlFor="upgrade-tenant-name-input" data-testid="upgrade-tenant-name-input-label">
+                  {ui('upgradeTenantNameLabel')}
+                </Label>
+                <Input
+                  id="upgrade-tenant-name-input"
+                  required
+                  value={form.tenantName}
+                  placeholder={ui('upgradeTenantNamePlaceholder')}
+                  aria-invalid={Boolean(errors.tenantName)}
+                  onChange={event => {
+                    const { value } = event.target;
+                    setForm(previous => ({ ...previous, tenantName: value }));
+                    setErrors({});
+                  }}
+                  data-testid="upgrade-tenant-name-input"
+                />
+              </div>
               {errors.tenantName && (
-                <p className="text-xs text-destructive" data-testid="upgrade-tenant-name-error">
+                <p
+                  className="text-xs text-destructive"
+                  data-testid={errors.tenantName === 'upgradeTenantNameTaken'
+                    ? 'upgrade-tenant-name-taken'
+                    : 'upgrade-tenant-name-error'}
+                >
                   {ui(errors.tenantName)}
                 </p>
               )}

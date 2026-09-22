@@ -27,6 +27,12 @@ import { track } from '@/lib/observability.js';
 
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const EXISTING_TENANT = 'Acme Trial';
+/**
+ * Client name of the environment this browser's ERP session is currently inside —
+ * `readCurrentEnvironmentName` in UpgradePage.jsx reads this key synchronously to prefill the
+ * tenant-name field, ahead of the (async) demo-environment fallback (ETP-5443).
+ */
+const CURRENT_ENV_KEY = 'sf_auth_client_name';
 
 /**
  * Private sessionStorage keys `runUpgrade`/the resume effect in UpgradePage.jsx
@@ -194,7 +200,9 @@ describe('UpgradePage — hosted checkout', () => {
     installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
 
-    expect(await screen.findByTestId('upgrade-tenant-from-demo')).toBeInTheDocument();
+    // The tenant-name field is always rendered and editable now (ETP-5443) — there is no
+    // separate read-only "from demo" box anymore.
+    expect(await screen.findByTestId('upgrade-tenant-name-input')).toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-cardholder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-card-number')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-expiry')).not.toBeInTheDocument();
@@ -503,12 +511,14 @@ describe('UpgradePage — checkout funnel tracking', () => {
  * `handleSubmit`/`runUpgrade` split in UpgradePage.jsx.
  */
 describe('UpgradePage — clientName resolution on submit (upgrade clientName bug)', () => {
-  it('sends the demo environment name as clientName without ever asking the user to type one', async () => {
+  it('prefills the tenant-name input with the demo environment name and sends it unedited', async () => {
     const user = userEvent.setup();
     const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
 
-    expect(screen.queryByTestId('upgrade-tenant-name-input')).not.toBeInTheDocument();
+    // The field is always rendered now (ETP-5443) — prefilled from the demo since no current
+    // environment (`sf_auth_client_name`) is set in this test.
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
 
     await user.click(screen.getByTestId('upgrade-submit'));
 
@@ -556,6 +566,110 @@ describe('UpgradePage — clientName resolution on submit (upgrade clientName bu
       language: 'es_ES',
     });
     expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe('Acme Second Co');
+  });
+});
+
+/**
+ * The tenant-name field is always visible and required, and prefilled from the environment the
+ * browser is currently inside (`sf_auth_client_name`, read by `readCurrentEnvironmentName` in
+ * UpgradePage.jsx) ahead of the demo-environment fallback. Submitting a name that matches an
+ * owned PRODUCTIVE environment is a collision — the backend would resume that tenant instead of
+ * creating a new one — and is blocked client-side with a distinct "taken" error. A match against
+ * a demo environment's name is explicitly allowed: that is the demo-to-productive conversion
+ * path (ETP-5443).
+ */
+describe('UpgradePage — current-environment prefill and taken-name guard (ETP-5443)', () => {
+  it('prefills the tenant-name input from the current environment, ahead of the demo fallback', async () => {
+    globalThis.localStorage.setItem(CURRENT_ENV_KEY, 'My Current Env');
+    installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('My Current Env');
+  });
+
+  it('prefills from the demo when the current environment IS the demo, and submits it without error', async () => {
+    const user = userEvent.setup();
+    globalThis.localStorage.setItem(CURRENT_ENV_KEY, EXISTING_TENANT);
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT, plan: 'demo' }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe(EXISTING_TENANT);
+    expect(screen.queryByTestId('upgrade-tenant-name-taken')).not.toBeInTheDocument();
+  });
+
+  it('blocks submission with a "taken" error, case-insensitively, when the name matches an owned productive environment', async () => {
+    const user = userEvent.setup();
+    // Deliberately different casing from the environment's stored clientName below, to prove
+    // the collision check normalizes case rather than doing an exact match.
+    globalThis.localStorage.setItem(CURRENT_ENV_KEY, 'ACME PRODUCTIVE');
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('ACME PRODUCTIVE');
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-taken')).toHaveTextContent('upgradeTenantNameTaken');
+    expect(screen.queryByTestId('upgrade-tenant-name-error')).not.toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('sends an edited, non-colliding name and clears a prior required-name error as soon as the field changes', async () => {
+    const user = userEvent.setup();
+    // No current environment and no demo, so the field starts empty and the first submit hits
+    // the required-name error before the user types anything.
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toBeInTheDocument();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Acme New Co');
+    expect(screen.queryByTestId('upgrade-tenant-name-error')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('Acme New Co');
+  });
+
+  it('shows a required-name error and sends no request when the field is cleared to whitespace', async () => {
+    const user = userEvent.setup();
+    globalThis.localStorage.setItem(CURRENT_ENV_KEY, 'Acme Productive');
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.clear(screen.getByTestId('upgrade-tenant-name-input'));
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), '   ');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameRequired');
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces session-expired instead of the taken-name error when the token is missing', async () => {
+    const user = userEvent.setup();
+    globalThis.localStorage.setItem(CURRENT_ENV_KEY, 'Acme Productive');
+    installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+    globalThis.localStorage.removeItem(PLATFORM_TOKEN_KEY);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-error')).toHaveTextContent('upgradeSessionExpired');
+    expect(screen.queryByTestId('upgrade-tenant-name-taken')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-tenant-name-error')).not.toBeInTheDocument();
+    expect(trackedEvents('upgrade_session_expired')).toEqual([{}]);
+    expect(trackedEvents('upgrade_checkout_submitted')).toEqual([]);
   });
 });
 

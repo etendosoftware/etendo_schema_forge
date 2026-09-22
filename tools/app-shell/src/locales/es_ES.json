@@ -22735,7 +22735,7 @@
     "upgradeFirstTenantFreeTitle": "Tu primer entorno es gratuito",
     "upgradeFirstTenantFreeBody": "Todavía no tienes ningún entorno, y el primero no tiene coste. El pago solo se aplica a los entornos adicionales.",
     "upgradeFirstTenantFreeAction": "Crear mi primer entorno",
-    "upgradeTenantNameTaken": "Ya tienes un entorno con este nombre. Elige un nombre distinto para crear uno nuevo.",
+    "upgradeTenantNameTaken": "Ya tienes un entorno productivo con ese nombre. Modifícalo para crear uno nuevo.",
     "upgradeMenuAction": "Crear entorno productivo",
     "upgradeTitle": "Crear un entorno productivo",
     "upgradeGoToPayment": "Ir al pago",
