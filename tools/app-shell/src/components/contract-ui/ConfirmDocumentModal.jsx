@@ -88,9 +88,13 @@ export const cardStyle = {
   boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
+// Fix (ETP-5410 follow-up, same pattern as ETP-4781/ETP-5260): was
+// `var(--status-info-fg)` — a badge-text token, not a button-background token —
+// which rendered a saturated blue instead of the dark gray/primary fill used by
+// the real "Crear Factura"/"Confirmar" buttons (e.g. GoodsShipmentActions.jsx).
 export const btnPrimaryStyle = {
   padding: '5px 14px', borderRadius: 6, border: 'none',
-  background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13,
+  background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', fontWeight: 500, fontSize: 13,
   cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
 };
 

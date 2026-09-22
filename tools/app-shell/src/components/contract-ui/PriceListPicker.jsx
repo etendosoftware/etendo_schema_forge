@@ -1,14 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUI } from '@/i18n';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CreatableSearchSelect } from './CreatableSearchSelect.jsx';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-
-// Radix Select has no empty-string value, so the picker uses '__empty__' as its
-// placeholder sentinel — translate it back to '' before it reaches priceListId,
-// and back to the sentinel when feeding the current value into the Select.
-const EMPTY_SENTINEL = '__empty__';
-export const resolvePriceListValue = (val) => (val === EMPTY_SENTINEL ? '' : val);
-export const toPriceListSelectValue = (id) => id || EMPTY_SENTINEL;
 
 /**
  * Shared price-list fetch + selection state for any confirmation flow that lets
@@ -81,39 +75,57 @@ export function usePriceListPicker({ enabled, isSOTrx = true, base, headers, def
 }
 
 /**
- * Presentational tariff `<Select>` — label + dropdown, shared by every modal
+ * Presentational tariff picker — label + searchable combo, shared by every modal
  * that uses {@link usePriceListPicker}. `idPrefix` controls both the DOM id
  * and every data-testid, so each caller keeps its own stable selectors.
+ *
+ * ETP-5410 follow-up: was a plain Radix `<Select>` (click-to-open, no search, no
+ * clear button). Replaced with {@link CreatableSearchSelect} in `staticOptions`
+ * mode (options are already fetched by {@link usePriceListPicker}, so no
+ * `selectorUrl`/`token`/server round-trip is needed) — the same searchable,
+ * clearable combo the generated "Tarifa" field already uses on the real
+ * Factura de Venta form (`EntityForm.jsx`'s `type === 'selector'` dispatch), and
+ * the same component `NewPaymentEntryModal.jsx` already uses for its own
+ * staticOptions pickers. Keeps a loading Skeleton instead of a disabled Select,
+ * matching that same modal's own loading-field pattern.
  */
 export function PriceListSelectField({ priceLists, priceListId, onChange, loading, idPrefix }) {
   const ui = useUI();
-  const placeholder = loading ? ui('loading') : ui('noPriceListsAvailable');
+  const label = ui('salesPriceListField');
+  // Stable reference across renders (CreatableSearchSelect keys internal effects off
+  // `field`) — idPrefix never changes per caller instance, so this only recomputes once.
+  const field = useMemo(() => ({ key: idPrefix, id: idPrefix, required: true }), [idPrefix]);
+  // CreatableSearchSelect renders each option's own `name` verbatim (no id fallback of its
+  // own) — this preserves the old Radix-Select implementation's `p['name'] ?? p.id` behavior
+  // for the (data-anomaly, not realistic) case of a price list with no name.
+  const options = useMemo(
+    () => priceLists.map(p => ({ ...p, name: p.name ?? p.id })),
+    [priceLists],
+  );
+  const displayValue = options.find(p => p.id === priceListId)?.name || '';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <label htmlFor={idPrefix} style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
-        {ui('salesPriceListField')}
+        {label}
       </label>
-      <Select
-        value={toPriceListSelectValue(priceListId)}
-        onValueChange={val => onChange(resolvePriceListValue(val))}
-        disabled={loading || priceLists.length === 0}
-        data-testid={`Select__${idPrefix}`}
-      >
-        <SelectTrigger id={idPrefix} data-testid={`${idPrefix}-select`}>
-          <SelectValue placeholder={placeholder} data-testid={`SelectValue__${idPrefix}`} />
-        </SelectTrigger>
-        <SelectContent data-testid={`SelectContent__${idPrefix}`}>
-          {loading && (
-            <SelectItem value={EMPTY_SENTINEL} data-testid={`SelectItem__${idPrefix}-loading`}>{ui('loading')}</SelectItem>
-          )}
-          {!loading && priceLists.length === 0 && (
-            <SelectItem value={EMPTY_SENTINEL} data-testid={`SelectItem__${idPrefix}-empty`}>{ui('noPriceListsAvailable')}</SelectItem>
-          )}
-          {priceLists.map(p => (
-            <SelectItem key={p.id} value={p.id} data-testid={`option-${idPrefix}-${p.id}`}>{p['name'] ?? p.id}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {/* Stable existence hook regardless of internal state (skeleton, empty input, or a
+          selected chip) — CreatableSearchSelect itself only wires up testids derived from
+          `field.key` (`field-${key}`, `field-${key}-chip`, ...), it never forwards a plain
+          `data-testid` prop into the DOM. */}
+      <div data-testid={`${idPrefix}-select`}>
+        {loading ? (
+          <Skeleton className="h-10 w-full rounded-lg" data-testid={`Skeleton__${idPrefix}`} />
+        ) : (
+          <CreatableSearchSelect
+            field={field}
+            value={priceListId}
+            displayValue={displayValue}
+            onChange={(id) => onChange(id)}
+            resolvedLabel={label}
+            staticOptions={options}
+            data-testid="CreatableSearchSelect__75722c" />
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchEnvironments, loginEnvironment } from '@etendosoftware/etendo-go-core/onboarding/api';
-import { persistEnvironmentSession } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { rememberEnvironment } from '@etendosoftware/etendo-go-core/onboarding/state';
+import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
 
@@ -8,16 +9,43 @@ import { sortEnvironments } from '../lib/environmentPresentation.js';
  * Lists the environments the signed-in account owns and switches between them.
  *
  * Switching tenants is a re-login, not a context change: each environment has
- * its own admin user, so it needs its own JWT. That is why this returns a hard
- * navigation rather than updating state — every cache keyed on the old tenant
- * has to go.
+ * its own admin user, so the backend rotates the session for it. That is why
+ * this returns a hard navigation rather than updating state — every cache keyed
+ * on the old tenant has to go.
  *
- * Requires the platform token, which is what proves the account owns the
- * environments. Sessions that never went through the account login do not have
- * it, so `environments` stays empty and callers should keep showing the current
- * company alone rather than an empty switcher.
+ * ETP-4576 — the account is proven by the `__Host-` session cookie, not by a
+ * token this hook can read, so `isAuthenticated` is the gate: a session that
+ * never went through the account login leaves `environments` empty, and callers
+ * should keep showing the current company alone rather than an empty switcher.
+ * Entering an environment is an unsafe method and carries the CSRF proof;
+ * listing them is a GET and carries none.
  */
-export function useEnvironmentSwitch({ enabled = true } = {}) {
+export function useEnvironmentSwitch({
+  enabled = true,
+  credential = null,
+  credentialScheme = null,
+} = {}) {
+  // `useAuthOptional`, not `useAuth`: ETP-5216 mounts InviteAcceptancePage in trees that have
+  // no AuthProvider above them (accepting an invitation is something you do while signed out),
+  // and the strict hook throws there. Reading the session optionally lands on exactly the state
+  // the block comment above describes — not authenticated, so no environments and no switcher.
+  const auth = useAuthOptional();
+  // ETP-4576 — `credential` is the escape hatch for the caller the comment above names:
+  // InviteAcceptancePage has no AuthProvider to read, so gating on the context alone left
+  // `isAuthenticated` permanently false there and `enterByClientName` returned false before
+  // issuing a single request. The invitee accepted, pressed "go to app", and nothing happened.
+  // develop did not have this hole because its gate read `sf_platform_token` out of
+  // localStorage, which works with no provider above; the cookie migration removed the key
+  // AND the provider-free path in one step. The page already threads this same credential into
+  // its accept call, so it is threaded here too rather than invented.
+  //
+  // Only the cookie scheme's value is a CSRF proof. Under `bearer` the credential belongs in
+  // `Authorization`, and `buildAuthHeaders` puts whatever it is given into `X-Go-CSRF` — so a
+  // bearer forwarded here would travel in the wrong slot and be refused.
+  const threadedCsrf = credentialScheme === 'cookie' ? credential : null;
+  const isAuthenticated = (auth?.isAuthenticated ?? false) || Boolean(credential);
+  const csrfToken = auth?.csrfToken ?? threadedCsrf;
+  const clientId = auth?.clientId ?? null;
   const [environments, setEnvironments] = useState([]);
   const [switching, setSwitching] = useState(null);
   // ETP-5190 — additive. `environments` alone cannot tell "still fetching" from "cannot know"
@@ -28,23 +56,22 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
   const [loading, setLoading] = useState(enabled);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !isAuthenticated) {
       setEnvironments([]);
       setLoading(false);
       return;
     }
-    // Environment discovery is account-scoped. Prefer the platform session because the active
-    // tenant JWT may be expired while the account session remains valid after a credential change.
-    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+    // ETP-4576 — environment discovery is account-scoped, and the account session
+    // is the `__Host-` cookie: there is no client-held token to read or to gate on.
+    // develop's version reads sf_platform_token/sf_auth_token from localStorage, keys
+    // the cookie migration stopped writing, so that gate would never pass and the
+    // environment list would come back empty for every authenticated user.
+    // `isAuthenticated` above is the gate; `sortEnvironments` is kept.
     let cancelled = false;
     setLoading(true);
     (async () => {
       try {
-        const envs = await fetchEnvironments(fetch, getApiBase(), token);
+        const envs = await fetchEnvironments(fetch, getApiBase());
         if (!cancelled) setEnvironments(sortEnvironments(envs));
       } catch {
         // A switcher that cannot list stays closed; the current company still shows.
@@ -53,15 +80,16 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       }
     })();
     return () => { cancelled = true; };
-  }, [enabled]);
+  }, [enabled, isAuthenticated]);
 
   const switchTo = useCallback(async (env) => {
-    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
-    if (!token || !env?.adminUserId) return false;
+    if (!isAuthenticated || !env?.adminUserId) return false;
     setSwitching(env.clientId);
     try {
-      const data = await loginEnvironment(fetch, getApiBase(), token, env);
-      if (!data?.token) {
+      // The backend rotates the session cookie for the target environment and
+      // answers `{ status: 'success' }` — there is no token to store client-side.
+      const data = await loginEnvironment(fetch, getApiBase(), csrfToken, env);
+      if (data?.status !== 'success') {
         setSwitching(null);
         return false;
       }
@@ -78,7 +106,9 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
         setSwitching(null);
         return false;
       }
-      persistEnvironmentSession(env, data);
+      // Remembering the environment is a UX preference, deliberately outside the
+      // session: logging out must not forget the last tenant entered.
+      rememberEnvironment(env.clientId);
       // The flag targeting identity belongs to the account, not the tenant, so it
       // survives — but anything cached per tenant must not, hence the full load.
       window.location.href = '/';
@@ -87,7 +117,7 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       setSwitching(null);
       return false;
     }
-  }, []);
+  }, [isAuthenticated, csrfToken]);
 
   /**
    * Enters an environment identified by name, re-reading the list first.
@@ -98,12 +128,11 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
    * so the caller can keep offering its own fallback rather than appear to hang.
    */
   const enterByClientName = useCallback(async (clientName) => {
-    const token = localStorage.getItem('sf_platform_token') || localStorage.getItem('sf_auth_token');
     const wanted = String(clientName ?? '').trim().toLowerCase();
-    if (!token || !wanted) return false;
+    if (!isAuthenticated || !wanted) return false;
     setSwitching(wanted);
     try {
-      const envs = await fetchEnvironments(fetch, getApiBase(), token);
+      const envs = await fetchEnvironments(fetch, getApiBase());
       const match = sortEnvironments(envs).find(
         (env) => String(env?.clientName ?? '').trim().toLowerCase() === wanted
       );
@@ -116,9 +145,16 @@ export function useEnvironmentSwitch({ enabled = true } = {}) {
       setSwitching(null);
       return false;
     }
-  }, [switchTo]);
+  }, [isAuthenticated, switchTo]);
 
-  const currentClientId = localStorage.getItem('sf_auth_client_id') || undefined;
-
-  return { environments, loading, switchTo, enterByClientName, switching, currentClientId };
+  return {
+    environments,
+    loading,
+    switchTo,
+    enterByClientName,
+    switching,
+    // ETP-4576 — from the session, not from sf_auth_client_id: the cookie migration
+    // stopped writing that key.
+    currentClientId: clientId || undefined,
+  };
 }
