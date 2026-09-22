@@ -7,6 +7,8 @@ import {
   createCheckoutSession,
   createBillingPurchase,
   getBillingOverview,
+  getSubscription,
+  createPortalSession,
   getBillingOffer,
   getBillingPurchase,
 } from '../upgrade/api.js';
@@ -43,6 +45,49 @@ describe('account billing projection', () => {
     assert.deepEqual(result, { canManageBilling: true, purchases: [] });
     assert.equal(fetchImpl.calls[0].url, '/sws/go/billing/overview');
     assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
+  });
+
+  it('reads the subscription with account authentication', async () => {
+    const subscription = {
+      hasSubscription: true,
+      plan: 'Productive',
+      status: 'active',
+    };
+    const fetchImpl = recordingFetch(jsonResponse(subscription));
+    const result = await getSubscription(fetchImpl, 'https://api.test', 'account-token');
+
+    assert.deepEqual(result, subscription);
+    assert.equal(fetchImpl.calls[0].url, 'https://api.test/sws/go/billing/subscription');
+    assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
+  });
+
+  it('creates a portal session with the account token', async () => {
+    const portal = { url: 'https://billing.stripe.test/session-1' };
+    const fetchImpl = recordingFetch(jsonResponse(portal));
+    const result = await createPortalSession(fetchImpl, 'https://api.test', 'account-token');
+
+    assert.deepEqual(result, portal);
+    assert.equal(fetchImpl.calls[0].url, 'https://api.test/sws/go/billing/subscription/portal');
+    assert.equal(fetchImpl.calls[0].init.method, 'POST');
+    assert.equal(fetchImpl.calls[0].init.headers.Authorization, 'Bearer account-token');
+  });
+
+  it('returns a stable error when the subscription is unavailable', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({}, { ok: false, status: 503 }));
+
+    await assert.rejects(
+      () => getSubscription(fetchImpl, '', 'account-token'),
+      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 503
+    );
+  });
+
+  it('returns a stable error when the portal session cannot be created', async () => {
+    const fetchImpl = recordingFetch(jsonResponse({}, { ok: false, status: 502 }));
+
+    await assert.rejects(
+      () => createPortalSession(fetchImpl, '', 'account-token'),
+      error => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed && error.status === 502
+    );
   });
 
   it('encodes purchase ids and returns a stable error for an unavailable projection', async () => {

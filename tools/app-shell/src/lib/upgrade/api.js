@@ -96,6 +96,33 @@ export async function getBillingOverview(fetchImpl, baseUrl, token) {
   return data || { purchases: [] };
 }
 
+/** Reads the authenticated account-level subscription projection. */
+export async function getSubscription(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/subscription`, {
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
+/** Creates an authenticated customer portal session for the account subscription. */
+export async function createPortalSession(fetchImpl, baseUrl, token) {
+  const response = await fetchImpl(`${baseUrl}/sws/go/billing/subscription/portal`, {
+    method: 'POST',
+    headers: buildAuthHeaders(token),
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
+  }
+  return data;
+}
+
 /** Reads the server-owned productive offer used to render purchase terms. */
 export async function getBillingOffer(fetchImpl, baseUrl, token) {
   const response = await fetchImpl(`${baseUrl}/sws/go/billing/offers`, {
