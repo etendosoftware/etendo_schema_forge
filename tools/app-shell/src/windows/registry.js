@@ -322,6 +322,11 @@ const customLoaders = {
   'not-posted-documents': () => import('./custom/not-posted-documents/index.jsx'),
   'assets': () => import('./custom/assets/index.jsx'),
   'user': () => import('./custom/user/index.jsx'),
+  // ETP-5414 — bypasses the generated ListView branch only, to add the per-row
+  // kebab (Confirmar/Reactivar) menuActions the generator does not emit. Same
+  // pattern as purchase-invoice/sales-invoice above. Detail branch is untouched
+  // (still the generated HeaderPage, rendered directly).
+  'amortization': () => import('./custom/amortization/index.jsx'),
 };
 
 /**

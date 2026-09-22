@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
 import { runPreUnpost } from '@/lib/preUnpost.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 
 // Resolves whether an action should render, given its actionsConfig entry
 // (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
@@ -31,6 +33,20 @@ function isActionVisible(config, fallbackVisibleWhen, row) {
  *   3. Email/Send      — only when documentPreview is configured for the window
  *   4. More (kebab)    — popover containing every menuActions[] item from the window config
  *   5. Delete          — respects the same hideDeleteWhenComplete + statusField gate as DetailView
+ *
+ * `menuActions` entries with a `neoAction` field (ETP-5414) support two optional siblings:
+ *   - `neoActionName` — overrides the literal wire action name sent to
+ *     `POST {apiBaseUrl}/{entity}/{id}/action/{name}`, defaulting to `neoAction` itself.
+ *   - `preUnpost` — when true, reverses the record's accounting first (via the shared
+ *     `runPreUnpost`/`unpost` mechanism, same as `BulkDocumentAction.jsx` and
+ *     `DetailMoreActionsMenu.jsx`) if the row is currently posted, before running the main
+ *     action; a preUnpost failure toasts and aborts before the main action ever fires.
+ * `menuActions` itself, and the function form's return value, MUST be synchronous — it is
+ * read directly (`typeof menuActions === 'function' ? menuActions({row,...}) : menuActions`)
+ * with no `await` anywhere in the render path. An action whose ELIGIBILITY needs an async
+ * check (e.g. a per-row field fetch) cannot express that as `visible`; it has to do the
+ * check inside its own `onClick` instead (see amortización's `confirm` entry for the
+ * pattern) and decide there whether to proceed or show an error.
  *
  * Per-button in-flight state (plan §2.6): each canonical button and kebab item tracks its own
  * pending Promise locally via `inFlight[key]`. While pending, that button is disabled and shows
@@ -233,7 +249,38 @@ export default function RowQuickActions({
         return;
       }
       if (action.neoAction) {
-        const result = await neoAction.execute(row?.id, action.neoAction);
+        // ETP-5414 — `neoActionName` is an OPTIONAL override of the literal wire action
+        // name, defaulting to `neoAction` itself. Mirrors `BulkDocumentAction.jsx`'s own
+        // `wireActionName = actions.find(...)?.neoActionName ?? selectedAction`: a window
+        // can label a kebab entry however it wants (`key`/`labelKey`) for UI purposes while
+        // still hitting a specific real button/process via `neoActionName`. Amortización's
+        // "Confirmar"/"Reactivar" don't strictly need this split at the ROW level (each
+        // kebab entry is independent, unlike the bulk dropdown's single shared
+        // `selectedAction`), but the field exists for the same reason and the same shape as
+        // the bulk one, so a future caller with an actual per-row naming collision doesn't
+        // have to reinvent it. Every existing caller (none of which set `neoActionName`)
+        // is unaffected: `wireActionName === action.neoAction`, unchanged.
+        const wireActionName = action.neoActionName ?? action.neoAction;
+        // ETP-5414 — optional pre-step, same mechanism `BulkDocumentAction.jsx` and
+        // `DetailMoreActionsMenu.jsx` already use: reverse the accounting first when
+        // `action.preUnpost` is set AND the row is currently posted (`runPreUnpost`'s own
+        // no-op guard covers every other case — unset flag, or a row that isn't posted —
+        // so this call is safe to make unconditionally whenever a neoAction fires).
+        const pre = await runPreUnpost({
+          recordId: row?.id, record: row, enabled: !!action.preUnpost, execute: neoAction.execute,
+        });
+        if (!pre.success) {
+          // RowQuickActions never toasts for the declarative documentAction/neoAction
+          // paths (see class docblock — "toast/snackbar is the host's responsibility"),
+          // but a preUnpost failure has nowhere else to surface: the main action below
+          // never runs, so there is no `result` for the host's `onMenuActionExecuted` to
+          // report on its own. Toasting here (mirroring `DetailMoreActionsMenu.jsx`'s own
+          // identical preUnpost failure handling) is the one exception to that rule.
+          toast.error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+          onMenuActionExecuted?.(action, { success: false, message: pre.message });
+          return;
+        }
+        const result = await neoAction.execute(row?.id, wireActionName);
         onMenuActionExecuted?.(action, result);
         return;
       }
@@ -261,7 +308,7 @@ export default function RowQuickActions({
         return next;
       });
     }
-  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
+  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight, ui]);
 
   return (
     <div
