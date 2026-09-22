@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { mockFullReportAccess } from './reportViewerTestHelpers.js';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -32,21 +33,9 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
 // ETP-5402 QA follow-up — ReportViewerPage now filters its gallery/selected report against the
 // caller's own per-report access map (fetchMyReportAccess()); full access to every catalog id
 // keeps this file's Trial Balance fixture visible, matching the `useWindowAccess: () => 'full'`
-// mock above.
+// mock above. See reportViewerTestHelpers.js for the shared access map.
 vi.mock('@/lib/rolesApi.js', () => ({
-  fetchMyReportAccess: () => Promise.resolve({
-    reportAccess: {
-      'tax-report': 'full',
-      'aging-receivable': 'full',
-      'aging-payable': 'full',
-      'balance-sheet': 'full',
-      'profit-loss': 'full',
-      'report-general-ledger': 'full',
-      'report-journal-entries': 'full',
-      'report-trial-balance': 'full',
-      'inventory-stock-report': 'full',
-    },
-  }),
+  fetchMyReportAccess: () => Promise.resolve({ reportAccess: mockFullReportAccess }),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({
