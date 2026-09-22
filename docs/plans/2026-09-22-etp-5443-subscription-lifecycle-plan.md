@@ -16,7 +16,7 @@
 - **Tests are delegated.** Per `CLAUDE.md`, every step that writes or fixes a test MUST be dispatched to the `test-generator` agent (Tester). Keep the TDD ordering below; delegate the test-writing step rather than doing it inline. Task 1 carries full test code as the worked exemplar — shape, imports, naming. The later test steps give Tester the exact inputs and assertions instead of the code, because Tester writes them and duplicating six files here would only go stale. If a test step's brief is not specific enough to write from, that is a plan defect: say so rather than inventing coverage.
 - **Commit messages:** `Feature ETP-5443: <description>`, first line ≤ 80 chars, no `Co-Authored-By` (Git Police rejects it).
 - **Never `--no-verify`** on commit or push.
-- **Grace anchor:** the end of the paid period. `invoice.period_end`, falling back to `current_period_end`. Never the moment the charge failed.
+- **Grace anchor:** the end of the paid period, read differently per event — `invoice.payment_failed` uses `invoice.period_end` (no fallback: an invoice carries no `current_period_end`); `customer.subscription.updated` past_due/unpaid uses the subscription's `current_period_start` (Stripe advances `current_period_end` to the next, unpaid period at renewal); an already-stored `PAST_DUE` due date is kept over either. Never the moment the charge failed. See the design doc §3.1 for the full rationale.
 - **Never write `PAST_DUE` without a due date.** `EnvironmentAccessPolicy.evaluate()` gives zero grace when `renewalDueAt` is null, so the customer is blocked instantly and silently.
 - **Java:** builds need `JAVA_HOME=$(/usr/libexec/java_home -v 17)` (corretto-17). A different JDK produces classes Tomcat will not load, after reporting BUILD SUCCESSFUL.
 - **React:** requests go through `useApiFetch` — a bare `fetch` fails `tools/app-shell/test/no-raw-fetch.test.js`. Amounts through `formatCurrency`, dates through `formatCalendarDate`. Every user-visible string needs a key in **both** `en_US.json` and `es_ES.json`. Every element a test queries needs a `data-testid`.
@@ -306,6 +306,16 @@ public class SubscriptionLifecycleApplier {
 }
 ```
 
+> **Superseded by REVIEW (ETP-5443):** the single `pastDue(JSONObject)` shown above — reading
+> `period_end` then falling back to `current_period_end` for every past-due path — was replaced.
+> `invoice.payment_failed` now reads only `period_end` (no fallback); `customer.subscription.
+> updated` past_due/unpaid anchors on `current_period_start` and keeps an already-stored
+> `PAST_DUE` due date instead of recomputing one; out-of-order delivery is screened against a new
+> `ETGO_SubscriptionEventAt` watermark; and both a top-level and an API-≥2025-03-31 item-nested
+> payload shape are read. This step is kept as the TDD starting point, not as the current
+> implementation — see the design doc §3.1/§3.4/§3.5 and `docs/stripe-local-testing.md` for the
+> logic actually shipped.
+
 - [ ] **Step 5: Run the tests and confirm they pass**
 
 ```bash
@@ -416,6 +426,18 @@ Move the existing body verbatim into a new `applyCheckoutPaid(String eventId, St
     log.info("Subscription lifecycle event '{}' ({}) applied", eventId, type);
   }
 ```
+
+> **Superseded by REVIEW (ETP-5443):** the shipped `applySubscriptionLifecycle` evaluates the
+> event twice — once with no stored state (early screen for a malformed/unhandled event, before
+> any lookup), once against `tenantEnvironmentLifecycleService.readSubscriptionState(clientId)`
+> once the client is known — because the out-of-order/stale-event check and the kept-due-date
+> rule both need the stored projection. The subscription id is read through
+> `SubscriptionLifecycleApplier.subscriptionIdOf(type, object)`, not the inline ternary shown
+> above (it also reads an invoice's subscription from `parent.subscription_details.subscription`
+> when the top-level field is absent). A failed store now rolls back the DAL session
+> (`EtendoGoDalHelper.rollbackDalChanges(...)`) before `markFailed`, and a successful store is
+> followed by `tenantEnvironmentLifecycleService.recordSubscriptionEventAt(clientId, ...)` before
+> `markApplied`. See design §3.4/§4.5 and `docs/stripe-local-testing.md`.
 
 Add the field next to the existing collaborators (around line 316):
 
@@ -634,14 +656,18 @@ Follow `SecuritySection.jsx` for structure and props. Use `useUI()` for labels,
 `formatCurrency(currency, amountMinor / 100)` for the amount and `formatCalendarDate` for the
 dates. Put a `data-testid` on every element the tests query.
 
-**Deliberate deviation from the Global Constraints' `useApiFetch` rule:** `SubscriptionSection`
-calls `getSubscription`/`createPortalSession` with the global `fetch` and the account/platform
-token (`getCheckoutToken()` from `tools/app-shell/src/lib/upgrade/api.js`), each call marked with
-a `raw-fetch-ok` comment for `tools/app-shell/test/no-raw-fetch.test.js` — not `useApiFetch`. This
-mirrors `UpgradePage.jsx`, which follows the same pattern for every billing call: billing is an
-account-level operation and must work with the account/platform token even while the ERP session
-is paywalled, whereas `useApiFetch` sends the environment/ERP session token. Reachability while
-blocked (§3.2 of the design) depends on this, not on a special case in the component.
+**Frontend request policy (ETP-5443 REVIEW W7 — supersedes the note this step originally
+shipped with):** `SubscriptionSection` calls `getSubscription`/`createPortalSession` through the
+shared, policy-compliant `apiFetch` (`@etendosoftware/app-shell-core/auth/api`), wrapped by
+`toCheckoutFetch(apiFetch, token)` (`tools/app-shell/src/lib/upgrade/api.js`) with
+`token: getCheckoutToken()` and `on401: 'ignore'` — not the plain global `fetch` the first pass
+used. This is still not a use of the `useApiFetch` hook itself: that hook sends the
+environment/ERP session token, and billing must authenticate with the account/platform token so
+it stays reachable while the ERP session is paywalled (mirrors `UpgradePage.jsx`; §3.2 of the
+design). The difference is that the account/platform token is now carried through the same
+shared helper everything else in the app uses, rather than through a bare `fetch` exempted with a
+`raw-fetch-ok` comment — so `tools/app-shell/test/no-raw-fetch.test.js` needs no exemption for
+this call site any more.
 
 - [ ] **Step 4: Compose it into `AccountSettingsPage.jsx`**
 

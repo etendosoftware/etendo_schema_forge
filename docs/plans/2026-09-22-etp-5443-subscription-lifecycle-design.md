@@ -35,11 +35,29 @@ the owner has no way to reach the Customer Portal.
 
 ## 3. Decisions taken
 
-### 3.1 The grace anchor is the end of the paid period
+### 3.1 The grace anchor is the end of the paid period — read differently per event
 
-When `invoice.payment_failed` arrives, `ETGO_SubscriptionDueAt` is set to the **end of the
-period the failed invoice covers** (`invoice.period_end`, falling back to the
-subscription's `current_period_end`) — not the moment the charge failed.
+Two events can drive the projection into `PAST_DUE`, and Stripe exposes the paid-period
+boundary under a different field on each, so each is read on its own terms rather than
+through one shared fallback:
+
+- **`invoice.payment_failed`** anchors on `invoice.period_end` — the failed invoice's own
+  paid period. There is **no fallback to `current_period_end`**: an invoice object carries
+  no such field, so a fallback there would either read nothing or, on a payload that also
+  happened to nest a subscription object, read the wrong thing. An invoice missing
+  `period_end` is ignored (`"missing period end"`), never written half-way.
+- **`customer.subscription.updated` with `status` `past_due`/`unpaid`** anchors on the
+  subscription's `current_period_start` — **not** `current_period_end`. Stripe advances
+  `current_period_end` to the *next* (unpaid) period at renewal even when the charge that
+  triggered it failed, so on a past-due subscription `current_period_end` names the period
+  the customer has **not** paid for. `current_period_start` is the boundary of the period
+  they did pay for.
+- **An already-stored `PAST_DUE` due date is kept.** If the projection is already `PAST_DUE`
+  with a due date on file when a `customer.subscription.updated` past-due event arrives,
+  that stored due date wins over any anchor recomputed from the subscription object.
+  `invoice.payment_failed` is the authoritative source for the grace anchor; a later
+  `updated` event corroborates the status but must not silently move an already-committed
+  deadline.
 
 The customer paid through that date. Anchoring the 15 days anywhere earlier takes away
 days they already bought: Stripe commonly attempts renewal a few days before the period
@@ -74,6 +92,42 @@ Rationale: the access policy runs at ERP login and cannot depend on an external 
 its inputs must be stored. Display detail has no such constraint, and storing it would add
 four fields that can silently drift when a webhook is missed, plus four more fields for
 ETP-5046's backfill to migrate.
+
+### 3.4 Out-of-order delivery is resisted with a stored event watermark
+
+Stripe does not guarantee delivery order, and a `FAILED` row is retried later on Stripe's
+own schedule — so a `past_due` event created before the `CURRENT` a later `invoice.paid`
+already applied must not be allowed to overwrite it just because it happens to arrive after.
+
+A new `AD_Preference` attribute, `ETGO_SubscriptionEventAt`, stores the Stripe `created`
+instant (event-envelope level, not the nested object) of the last **applied** lifecycle
+event for the client. Before interpreting an event,
+`SubscriptionLifecycleApplier.evaluate(type, event, stored)` compares the event's own
+`created` against that watermark:
+
+- **Strictly older** → ignored, `failure_reason = "stale event"`. The stored projection is
+  left untouched.
+- **Same second, or no watermark stored yet** → evaluated normally.
+
+Only an event that is actually **applied** (not ignored, not a failed store) advances the
+watermark — an event that changed nothing must not raise the bar for a genuinely
+older-but-unprocessed event that arrives later.
+
+### 3.5 The Stripe API version is not pinned, so both payload shapes are read
+
+Nothing in this task pins `Stripe-Version`. Two fields moved shape between API versions,
+and the account's actual configured API version decides which shape Stripe sends on any
+given event — so both are read rather than choosing one:
+
+- **Subscription period boundaries** (`current_period_start`, `current_period_end`):
+  top-level on the subscription object before API `2025-03-31`, moved onto the first
+  subscription item (`items.data[0].current_period_*`) from that version on.
+- **Invoice → subscription linkage**: `invoice.subscription` directly, or — from the same
+  API version — nested at `invoice.parent.subscription_details.subscription`.
+
+Pinning a version was considered and rejected: it would trade "read both shapes once" for
+"track Stripe's deprecation calendar and re-pin," with no correctness gain — the two shapes
+carry the same values, just at a different path.
 
 ## 4. Backend — webhook routing
 
@@ -119,8 +173,10 @@ grandfathered and free tenants safe if the switch is flipped early."*
 | Event | Status | `DueAt` |
 |---|---|---|
 | `invoice.paid` | `CURRENT` | cleared |
-| `invoice.payment_failed` | `PAST_DUE` | end of the failed invoice's period |
-| `customer.subscription.updated` | `active` → `CURRENT`; `past_due` / `unpaid` → `PAST_DUE`; `canceled` → `EXPIRED` | period end when `PAST_DUE` |
+| `invoice.payment_failed` | `PAST_DUE` | end of the failed invoice's own period (`period_end`) |
+| `customer.subscription.updated`, `active`/`trialing` | `CURRENT` | cleared |
+| `customer.subscription.updated`, `past_due`/`unpaid` | `PAST_DUE` | end of the already-paid period (`current_period_start`) — kept unchanged if a `PAST_DUE` due date is already stored (§3.1) |
+| `customer.subscription.updated`, `canceled` | `EXPIRED` | cleared |
 | `customer.subscription.deleted` | `EXPIRED` | cleared |
 
 `cancel_at_period_end = true` on `updated` **does not change the status**. Access continues
@@ -149,6 +205,24 @@ untouched rather than written half-way.
 
 This must be covered by an explicit test. It is the single highest-consequence defect this
 task can ship.
+
+### 4.5 A failed write rolls back before the row is marked `FAILED`
+
+Two failure exits roll back the current DAL session
+(`EtendoGoDalHelper.rollbackDalChanges(...)`) before `billingEventStore.markFailed(...)`
+commits the `FAILED` row:
+
+1. The generic `catch (RuntimeException e)` around `applyCheckoutEvent` in
+   `handleCheckoutWebhook` — this wraps both event families, so it covers subscription
+   lifecycle events too, not only the payment-confirmation path.
+2. The `"Could not store the subscription projection"` exit inside
+   `applySubscriptionLifecycle`, taken when `updateSubscriptionStatus` returns `false`.
+
+Without the rollback, a partially-applied write (e.g. the status column written but a
+later column in the same call throwing) could commit alongside the `FAILED` marker, so a
+retried delivery would be "repairing" a row that was never actually clean. The billing-event
+claim row itself is unaffected by the rollback — it was already committed, in its own
+transaction, by `CheckoutWebhookProcessor`'s idempotency claim before this handler ran.
 
 ## 5. Backend — endpoints
 
@@ -179,6 +253,16 @@ Resolves the account's `stripeCustomer` and calls the existing
 The `return_url` comes from `PublicUrlResolver.resolveConfiguredAppBaseUrl() + "/account"`,
 never from the browser's `Origin` — the same rule hosted checkout already follows.
 
+### 5.3 Provider call hygiene
+
+`currency` is upper-cased server-side (`Locale.ROOT`) before it reaches the response —
+Stripe returns it lower-case, and `formatCurrency` expects an ISO 4217 code. Every Stripe
+HTTP call `StripeCustomerPortalService` makes carries a 5s connect / 10s read timeout
+(`CONNECT_TIMEOUT_MS` / `READ_TIMEOUT_MS`), so a slow or hung provider cannot hold a servlet
+thread indefinitely; a timeout surfaces as an ordinary provider `IOException`, handled the
+same way as any other Stripe HTTP failure on that call (e.g. `502 BILLING_PROVIDER_ERROR`
+for the portal endpoint).
+
 ## 6. Frontend
 
 A new Subscription section in `AccountSettingsPage`, with its two API clients added to
@@ -186,7 +270,15 @@ A new Subscription section in `AccountSettingsPage`, with its two API clients ad
 
 Repo rules that apply, all of them enforced by existing guardrails:
 
-- Requests go through `useApiFetch` — never a bare `fetch` (`docs/request-policy.md`).
+- Requests go through the shared, policy-compliant `apiFetch` — never a bare `fetch`
+  (`docs/request-policy.md`). `SubscriptionSection` cannot use the `useApiFetch` hook
+  directly: that hook sends the ERP/environment session token, while billing must
+  authenticate with the account/platform token from `getCheckoutToken()`, which is what
+  keeps it reachable while the ERP is paywalled (§3.2). It calls `apiFetch`
+  (`@etendosoftware/app-shell-core/auth/api`) through `toCheckoutFetch(apiFetch, token)`
+  (`tools/app-shell/src/lib/upgrade/api.js`), which forces
+  `{ token, baseUrl: '', on401: 'ignore' }` so a missing account session degrades to an
+  honest 401 instead of silently falling back to the ambient ERP session token.
 - Every user-visible string gets a key in **both** `en_US.json` and `es_ES.json`.
 - Amounts render through `formatCurrency`; dates through `formatCalendarDate`.
 - Every element a test queries carries a `data-testid`.
@@ -215,7 +307,8 @@ immediate destructive cancellation as the default, and billing analytics.
 ## 9. Handoff to ETP-5046
 
 This task writes subscription state into the `ETGO_SubscriptionStatus` /
-`ETGO_SubscriptionDueAt` preferences. PRD §11.2 has ETP-5046 retiring that write path in
+`ETGO_SubscriptionDueAt` / `ETGO_SubscriptionEventAt` preferences (the last is the
+out-of-order-delivery watermark, §3.4). PRD §11.2 has ETP-5046 retiring that write path in
 favour of `ETGO_SUBSCRIPTION`.
 
 **ETP-5046's backfill must cover what this task has written by then**, not only the
