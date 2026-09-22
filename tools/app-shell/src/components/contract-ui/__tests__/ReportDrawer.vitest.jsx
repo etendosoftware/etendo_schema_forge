@@ -261,6 +261,36 @@ describe('ReportDrawer — ETP-5300 preview re-render regression', () => {
     await waitFor(() => expect(renderCallCount()).toBeGreaterThan(beforePreview));
   });
 
+  it('reopening the drawer after switching format resets activeFormat back to preview', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    const { rerender } = render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    // Switch away from the default 'preview' format.
+    const pdfButton = screen.getByText('pdf').closest('button');
+    await waitFor(() => expect(pdfButton).not.toBeDisabled());
+    await user.click(pdfButton);
+    await waitFor(() => expect(pdfButton.className).toMatch(/bg-primary/));
+
+    // Close the drawer. Per the fix's comment (ETP-5300, Lea's QA comment),
+    // ListView always renders <ReportDrawer/> and only toggles `open` — the
+    // component itself is never unmounted — so `rerender` (not a fresh
+    // `render`) is the faithful way to reproduce the bug here.
+    rerender(<ReportDrawer {...BASE_PROPS} open={false} />);
+
+    // Reopen.
+    rerender(<ReportDrawer {...BASE_PROPS} open={true} />);
+
+    await waitFor(() => {
+      const previewButton = screen.getByText('preview').closest('button');
+      expect(previewButton.className).toMatch(/bg-primary/);
+    });
+    const pdfButtonAfterReopen = screen.getByText('pdf').closest('button');
+    expect(pdfButtonAfterReopen.className).not.toMatch(/bg-primary/);
+  });
+
   it('clicking preview does not call jsreport when jsreport is unavailable (local HTML fallback)', async () => {
     const user = userEvent.setup();
     mockFetchWithJsreport({ jsreportOk: false });

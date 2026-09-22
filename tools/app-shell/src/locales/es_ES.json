@@ -18368,6 +18368,8 @@
     "purchaseOrderPdfTitle": "Pedido de Compra",
     "purchaseOrderPdfDocumentNo": "N.º Pedido",
     "purchaseOrderPdfSection": "Detalles del pedido",
+    "purchaseOrderPdfCustomerSection": "Datos del proveedor",
+    "purchaseOrderPdfCustomer": "Proveedor:",
     "orderPdfDocumentNo": "N.º Pedido",
     "orderPdfSection": "Detalles del pedido",
     "orderPdfDate": "Fecha:",

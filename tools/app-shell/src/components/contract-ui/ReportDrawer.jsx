@@ -267,6 +267,12 @@ export default function ReportDrawer({
     return () => { cancelled = true; };
   }, [open, apiBaseUrl, apiFetch, entity, token, sortColumn, sortDirection, columns]);
 
+  // ETP-5300 (Lea's QA comment) — the drawer is never unmounted between opens
+  // (ListView always renders it; only `shouldRender` toggles), so `activeFormat`
+  // survived across closes. Reopening after switching to PDF/Excel/CSV kept that
+  // format active instead of defaulting back to "Vista previa".
+  useEffect(() => { if (open) setActiveFormat('preview'); }, [open]);
+
   // Store preview HTML so we can re-render and print reliably
   const previewHtmlRef = useRef('');
   // Tracks whether the iframe currently shows a blob: URL (PDF view). Only in
