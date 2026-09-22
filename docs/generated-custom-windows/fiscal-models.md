@@ -35,15 +35,18 @@ debug contracts.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
-`FmListPage` calls `useFiscalAutoCompute` **four times** — once per (model × draft-vs-other)
-combination — because drafts and non-drafts need different refresh semantics:
+`FmListPage` calls `useFiscalAutoCompute` **six times** — once per (model × draft-vs-other-vs-
+submitted) combination — because drafts, non-draft/non-submitted declarations, and submitted-family
+declarations each need different refresh semantics:
 
 ```
 FmListPage
-  ├── useFiscalAutoCompute(draftDecls303, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(draftDecls349, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(otherDecls303, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
-  └── useFiscalAutoCompute(otherDecls349, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(draftDecls303,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(draftDecls349,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(otherDecls303,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(otherDecls349,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(submittedDecls303, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
+  └── useFiscalAutoCompute(submittedDecls349, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
         ├── On mount: calls computeFn for every decl in parallel
         │     result → computedMap[decl.id] = { boxes, summary, error, computedAt }
         │     null result → { boxes: null, summary: null, error: 'compute_failed', computedAt }  ← not "computing"
@@ -53,20 +56,151 @@ FmListPage
 
 - `draftDecls303`/`draftDecls349` = declarations with `status === 'draft'` — their underlying
   invoices can still change, so they get the full compute-on-mount + poll-for-changes treatment.
-- `otherDecls303`/`otherDecls349` (ETP-4755) = every non-draft declaration (ready/submitted/
-  submitted_ext/submitted_ack/skipped) — computed **once** on mount and never polled (omitting
-  `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the "Resultado" column
-  was permanently stuck on "—" for any declaration that had left draft, since the backend never
-  persists a computed result on the declaration record (`FiscalDeclCrudHandler#declToJson` has no
-  `result` field) — the same class of bug the "Incidencias" column had before it started fetching
-  real data. Both draft and non-draft instances call the exact same real endpoints, which recompute
-  from invoice data regardless of declaration status.
+- `otherDecls303`/`otherDecls349` (ETP-4755, narrowed by ETP-5438) = every non-draft,
+  **non-submitted-family** declaration (`ready`/`skipped`) — computed **once** on mount and never
+  polled (omitting `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the
+  "Resultado" column was permanently stuck on "—" for any declaration that had left draft, since
+  the backend never persists a computed result on the declaration record
+  (`FiscalDeclCrudHandler#declToJson` has no `result` field) — the same class of bug the
+  "Incidencias" column had before it started fetching real data. Draft, non-submitted, and
+  submitted-family instances all call the exact same real endpoints, which recompute from invoice
+  data regardless of declaration status — which is exactly why the submitted-family bucket needs
+  its own, separate freeze (see below).
+- `submittedDecls303`/`submittedDecls349` (ETP-5438) = every declaration whose `status` is in the
+  submitted family (`submitted`/`submitted_ext`/`submitted_ack`) — carved out of the `other*`
+  buckets above so a presented declaration gets its one bootstrap compute and is then **frozen**:
+  see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" below for the full
+  rationale (`neverModifiedFn`, `getCachedFiscalCompute`, and the backend defense-in-depth).
 - `computeFn` = `computeBoxes303(decl, { token, apiBaseUrl })` → `GET /fiscal303/boxes?year=&period=`
   (303) or `compute349Operators(decl, { token, apiBaseUrl })` → `GET /fiscal349/operators?year=&period=`
   (349).
 - `checkModifiedFn` = `checkModified303`/`checkModified349` → `GET /fiscal{model}/modified?year=&period=&since=`.
 - `computedAtRef` tracks the last **successful** compute timestamp per declaration to bound the `since` query parameter. It is intentionally not updated on errors, so `sinceMs` stays at the last success and any subsequent invoice change still triggers a retry.
-- Precomputed data (`decl._precomputed`) is seeded from whichever map (draft or other) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
+- Precomputed data (`decl._precomputed`) is seeded from whichever map (draft, other, or submitted) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
+
+## Freeze once presented — recalculation/re-presentation guard (ETP-5438)
+
+This is the primary deliverable of ETP-5438: once a Modelo 303 or Modelo 349 declaration reaches a
+**submitted-family** status (`submitted`, `submitted_ext`, `submitted_ack`), it must behave as a
+closed, immutable record — nothing in this window may silently recompute its boxes/operators from
+current invoice data, regenerate its file, or re-present it. Root cause: `computeBoxes303`
+(`GET /fiscal303/boxes`) and `compute349Operators` (`GET /fiscal349/operators`) always recompute
+from **whatever invoices exist right now**, regardless of who calls them or when — there was no
+concept of "this declaration is done" anywhere in the compute path, so an invoice added or removed
+after presentation silently changed what "Resultado" showed for an already-filed declaration
+("sigue tomando facturas aun presentada"). Fixed on both the frontend (freeze the UI) and the
+backend (reject the call), for **both** models — "en todos los modelos tiene que funcionar de la
+misma manera" (explicit product decision).
+
+**Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
+language/file rather than shared (same tradeoff as `statusLabelKey` above — see "Duplicated,
+deliberately, in 4 places"): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
+included even though it can no longer be newly selected from `PresentModal` — a legacy declaration
+that already carries it is just as frozen as one presented through either currently-selectable path.
+
+### Frontend
+
+- **List page (`FmListPage.jsx`).** `submittedDecls303`/`submittedDecls349` are carved out of the
+  pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
+  their own two `useFiscalAutoCompute` instances, passed `checkModifiedFn: neverModifiedFn` — a
+  function that always resolves `false`. This is the deliberate mechanism, not an oversight:
+  *omitting* `checkModifiedFn` (like `otherDecls303`/`349` do) makes the hook's mount effect skip
+  its cache-consult branch entirely and unconditionally recompute from live data on every mount —
+  which is exactly the ETP-5438 root cause, because `FmListPage` never truly unmounts (it stays
+  mounted so polling keeps running) but its `decls` array reference still changes on every
+  declarations refetch, e.g. right after presenting a *different* declaration — re-triggering a
+  fresh live recompute for every already-submitted one on the list. Passing `neverModifiedFn`
+  instead makes the hook trust its own `sessionStorage` cache: a never-before-computed submitted
+  declaration still gets exactly one bootstrap compute (so "Resultado" is never stuck on "—",
+  ETP-4755), and every mount after that first one reuses the cached result — network-free, so
+  nothing here can ever pick up an invoice added/removed after submission. The resulting
+  `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
+  `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
+  non-draft compute for this decl.id", it does not care which of the two hooks produced it.
+- **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` is a new export
+  that reads back the last payload this hook cached for one declaration, keyed
+  `fiscal_ac_v3_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
+  was ever cached this session. It exists so a detail page that opens with no `decl._precomputed`
+  handed down (a cold/direct navigation straight into a submitted declaration) can still show
+  something by reading whatever `FmListPage`'s own submitted-family bucket already computed and
+  cached, instead of falling back to a live `computeFn` call.
+- **Detail pages (`FmModel303Page.jsx` / `FmModel349Page.jsx`).** Both pages compute
+  `isSubmitted = SUBMITTED_STATUSES.includes(status)` and use it as the single gate for two
+  independent things:
+  - The mount-time auto-compute effect (the ETP-4755 "auto-compute on mount when the list didn't
+    hand us `_precomputed`" fix) now branches on `isSubmitted` **before** ever calling
+    `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` instead and applies
+    the cached snapshot if one exists (via the same `applyComputeResult` helper "Calcular" uses on
+    303; `setLiveOperators`/`setLiveInvoices`/`setLiveRectifications`/`setLiveRectifSummary` on
+    349); if nothing was ever cached, the tabs simply show no data — there is no in-page way to
+    populate it, since "Calcular" is itself hidden once submitted (see below), matching the
+    frozen-once-presented intent.
+  - Every action that could mutate or regenerate a submitted declaration is wrapped in
+    `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
+    303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
+    the action bar reduces to just **Cancelar** and the status pill. `handleGenerate` on both pages
+    also re-checks `isSubmitted` at its own top (belt-and-braces, same double-check pattern already
+    used for `missingRequiredFields`) and toasts `fm.validation.already_submitted` if reached
+    anyway — the real defense-in-depth for a direct/malformed call is server-side (see below).
+
+### Backend (`com.etendoerp.go`) — defense-in-depth
+
+The frontend gates above are UI-only; a raw/direct call to NEO Headless (or a future frontend
+regression) is not stopped by any of them. Every entry point that could recompute or re-file an
+already-presented declaration has its own, independent, server-side guard:
+
+- **Compute/generate — `AbstractFiscalHandler#guardNotAlreadySubmitted(orgId, year, period,
+  model)`**, shared by both models. Looks up
+  `FiscalDeclCrudHandler#findLatestDeclarationStatus(clientId, orgId, model, year, period)` — the
+  status of the **most recent** declaration (highest `DECL_SEQ`) for that natural key, not just any
+  match, because a period can legitimately have more than one declaration (the rectificativa flow):
+  an older, already-submitted declaration for the same period must not block a fresh rectificativa
+  draft's own compute. If that latest declaration's status is in
+  `FiscalDeclCrudHandler.SUBMITTED_STATUSES`, it throws `AlreadySubmittedException`; no-op
+  (returns normally) when no declaration exists yet for the natural key. Both
+  `Fiscal303BoxesHandler#dispatch` (the `boxes` and `generate` entities) and
+  `Fiscal349BoxesHandler#dispatch` (the `operators` and `generate` entities) call it as the first
+  thing inside their `try`, and both catch `AlreadySubmittedException` specifically — before their
+  own generic `catch (Exception e)` — turning it into a clean `409 Conflict` instead of letting it
+  bubble up as a generic `500`.
+- **Re-presentation (PUT) — `FiscalDeclCrudHandler#rejectRepresentation`.** Blocks a
+  `PUT /fiscal{303,349}/declarations?id=` whose body sets `status` to a value in
+  `SUBMITTED_STATUSES` when the declaration's **current** status is already in
+  `SUBMITTED_STATUSES` — i.e. only a submitted-family → submitted-family transition is rejected.
+  A normal, first-time presentation (`draft`/`ready` → submitted-family) is unaffected, and so is
+  the separate "Reactivar declaración" transition back to `draft`, which
+  `rejectTelematicReactivation` already guards on its own, narrower terms (blocking reactivation
+  only for `submission_method === 'aeat_telematic'`). Deliberately model-agnostic: the same
+  `ETGO_Fiscal_Decl` table and PUT path serve both models, and "you cannot re-present an
+  already-presented declaration" is not specific to either one.
+- **AEAT telematic resubmission — `Fiscal303SubmissionSupport#rejectResubmissionOrMissingPresenter`
+  (Modelo 303 only, see below).** This guard predates ETP-5438 (it already blocked a naive
+  double-click/network-retry resubmission) but was narrower — `submitted_ack`-only. Widened under
+  this ticket, by explicit user decision ("la presentación telemática debería funcionar igual que
+  los otros casos"), to the full `SUBMITTED_STATUSES` family, matching every other guard in this
+  section. It fires only for a **production** (non-`testMode`) call — `ServValiDos` test-mode
+  validations never change declaration status, so re-validating an already-submitted declaration
+  stays allowed and harmless. On trip, it responds `409` with `ALREADY_SUBMITTED` and never
+  constructs `AEAT303SubmissionService` at all (a QA regression test asserts this explicitly). This
+  is a distinct, narrower concern from `guardNotAlreadySubmitted` above — idempotency of a real AEAT
+  filing action, not "must not silently recompute/regenerate" — which is why `Fiscal303BoxesHandler`
+  deliberately does **not** call `guardNotAlreadySubmitted` for its `submit` entity; the dedicated
+  guard here already covers it.
+- **Modelo 349 has no telematic submission path — a legitimate asymmetry, not a gap.** Unlike
+  Modelo 303 (`AeatSubmitFlow` → `AEAT303SubmissionService`), Modelo 349 only ever reaches a
+  submitted status through `PresentModal`'s two manual paths (`submitted`/`submitted_ack` via the
+  PUT path above) — there is no `AeatSubmitFlow`/`AEAT349SubmissionService` equivalent, no real AEAT
+  telematic filing call to guard, and so no `rejectResubmissionOrMissingPresenter` counterpart to
+  widen. `Fiscal349BoxesHandler#dispatch` has no `submit` entity at all (only `operators`,
+  `generate`, `validate-vies`, and the modified-check fallback) — 349's `operators`/`generate` are
+  already fully covered by the shared `guardNotAlreadySubmitted` above, which is model-agnostic and
+  needed no 349-specific work.
+
+Regression tests: `Fiscal303BoxesHandlerTest`/`Fiscal349BoxesHandlerTest` (the `AlreadySubmittedException`
+→ `409` path for `boxes`/`operators`/`generate`), `FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
+`findLatestDeclarationStatus`'s "latest wins" semantics across a rectificativa's multiple
+declarations), and `Fiscal303SubmitHandlerTest` (the widened `SUBMITTED_STATUSES` resubmission
+guard, and the assertion that `AEAT303SubmissionService` is never constructed once it trips).
 
 ## Status lifecycle
 
@@ -208,7 +342,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 **Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -1666,7 +1800,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) and, unlike that button, not gated on submission status (`!isSubmitted`).
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
 ### PDF preview and file generation
 
