@@ -6,6 +6,7 @@ import {
   visibleFirstSteps,
 } from './firstStepsConfig.js';
 import { useFirstSteps } from './useFirstSteps.js';
+import { useDemoDataTransfer } from './useDemoDataTransfer.js';
 import { useTenantPlan } from '@/hooks/useTenantPlan.js';
 
 /**
@@ -31,6 +32,7 @@ const INERT_STATE = Object.freeze({
   plan: null,
   steps: Object.freeze(visibleFirstSteps(null)),
   total: firstStepsTotal(null),
+  dataTransfer: { status: 'LOADING', products: {}, contacts: {}, loading: true },
 });
 const FirstStepsContext = createContext(null);
 
@@ -41,6 +43,7 @@ export function FirstStepsProvider({ children }) {
   // it knows nothing about plans, and a tenant that goes productive must be able to save the
   // two steps that just appeared.
   const firstSteps = useFirstSteps({ allowedIds: toggleableStepIds(plan) });
+  const dataTransfer = useDemoDataTransfer();
   const { completed, seen, dismissed, loading, error, toggleStep, markSeen, setDismissed } =
     firstSteps;
   const value = useMemo(() => ({
@@ -57,17 +60,19 @@ export function FirstStepsProvider({ children }) {
     // This also holds back the dashboard's one-time redirect (`useFirstStepsRedirect` gates on
     // `!loading`) until the plan is in — deliberately, since the page it redirects to would
     // otherwise render the productive list and drop two rows a moment later.
-    loading: loading || planLoading,
+    loading: loading || planLoading || dataTransfer.loading,
     error,
     toggleStep,
     markSeen,
     setDismissed,
     plan,
     steps: visibleFirstSteps(plan),
-    completedCount: countCompletedSteps(completed, plan),
+    dataTransfer,
+    completedCount: countCompletedSteps(completed, plan,
+      ['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'].includes(dataTransfer.status)),
     total: firstStepsTotal(plan),
   }), [completed, seen, dismissed, loading, planLoading, error, toggleStep, markSeen,
-    setDismissed, plan]);
+    setDismissed, plan, dataTransfer]);
   return <FirstStepsContext.Provider value={value}>{children}</FirstStepsContext.Provider>;
 }
 

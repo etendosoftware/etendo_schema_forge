@@ -70,8 +70,43 @@ function isStepLocked(step, done) {
   return done && !step.keepActionWhenDone;
 }
 
-function StepAction({ step, done, ui, onConfigure }) {
+function DataTransferAction({ transfer, ui, onRetryError }) {
+  const products = transfer.products?.total != null
+    ? ui('firstStepsDemoDataTransferProducts', transfer.products) : null;
+  const contacts = transfer.contacts?.total != null
+    ? ui('firstStepsDemoDataTransferContacts', transfer.contacts) : null;
+  const progress = [products, contacts].filter(Boolean).join(' · ');
+  if (transfer.status === 'FAILED') {
+    const retry = async () => {
+      try {
+        await transfer.retry();
+      } catch {
+        onRetryError();
+      }
+    };
+    return <button type="button" onClick={retry}
+      className="rounded-md border px-3 py-1 text-xs font-medium text-foreground hover:bg-muted/50"
+      data-testid="first-steps-data-transfer-retry">{ui('firstStepsDemoDataTransferRetry')}</button>;
+  }
+  if (transfer.status === 'RUNNING') {
+    return <span className="text-xs text-muted-foreground" data-testid="first-steps-data-transfer-progress">
+      {progress || ui('firstStepsDemoDataTransferStarting')}
+    </span>;
+  }
+  if (transfer.status === 'COMPLETED') {
+    return <span className="text-xs text-muted-foreground" data-testid="first-steps-data-transfer-result">
+      {progress || ui('firstStepsDemoDataTransferCompleted')}
+    </span>;
+  }
+  if (transfer.error) return <span className="text-xs text-destructive">{ui('genericError')}</span>;
+  return <span className="text-xs text-muted-foreground">{ui('firstStepsDemoDataTransferSkipped')}</span>;
+}
+
+function StepAction({ step, done, ui, onConfigure, dataTransfer, onRetryError }) {
   const locked = isStepLocked(step, done);
+  if (step.action === 'dataTransfer') {
+    return <DataTransferAction transfer={dataTransfer} ui={ui} onRetryError={onRetryError} />;
+  }
   if (step.action === 'import') {
     return (
       <FirstStepsImportButton
@@ -132,7 +167,7 @@ function StepGateQuestion({ step, ui, loading, onAnswer }) {
 
 function StepRow({
   step, done, expanded, loading, gateAnswered,
-  onToggle, onOpen, onConfigure, onGateAnswer, ui,
+  onToggle, onOpen, onConfigure, onGateAnswer, ui, dataTransfer, onRetryError,
 }) {
   const Icon = FIRST_STEPS_ICONS[step.iconName];
   const expandable = isStepExpandable(step);
@@ -183,6 +218,8 @@ function StepRow({
                       done={done}
                       ui={ui}
                       onConfigure={onConfigure}
+                      dataTransfer={dataTransfer}
+                      onRetryError={onRetryError}
                       data-testid="StepAction__45a28a" />
                     {Boolean(step.minutes) && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -193,7 +230,7 @@ function StepRow({
                   </div>
                 </>
               )}
-              <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+              {step.action !== 'dataTransfer' && <label className="flex w-fit items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={done}
@@ -213,7 +250,7 @@ function StepRow({
                   {done && <Check className="h-3 w-3" data-testid={`first-steps-toggle-check-${step.id}`} />}
                 </span>
                 {ui('markAsCompleted')}
-              </label>
+              </label>}
             </div>
           )}
         </div>
@@ -256,7 +293,8 @@ export default function FirstStepsPage() {
   // firstStepsConfig.js), and the page, the sidebar badge and the progress bar must all be
   // counting the same rows.
   const { completed, loading, toggleStep, plan, steps, completedCount, total, dismissed,
-    setDismissed } = useFirstStepsState();
+    setDismissed, dataTransfer } = useFirstStepsState();
+  const dataTransferDone = ['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'].includes(dataTransfer.status);
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
@@ -309,20 +347,21 @@ export default function FirstStepsPage() {
     breadcrumb: ui('firstStepsPageTitle'),
   });
 
-  const allSet = areAllStepsDone(completed, plan);
+  const allSet = areAllStepsDone(completed, plan, dataTransferDone);
 
   // `null` means "nothing opened by hand yet", which is what lets the default follow the
   // loading state: the first incomplete row opens once the real completion state arrives,
   // instead of latching onto the empty state the page rendered with. Once the user clicks a
   // row, their choice wins for the rest of the visit — including closing every row.
   const [openedStepId, setOpenedStepId] = useState(null);
-  const expandedStepId = openedStepId === null ? findExpandedStepId(completed, plan) : openedStepId;
+  const expandedStepId = openedStepId === null
+    ? findExpandedStepId(completed, plan, dataTransferDone) : openedStepId;
   const handleOpen = useCallback((id) => {
     setOpenedStepId((current) => {
-      const effective = current === null ? findExpandedStepId(completed, plan) : current;
+      const effective = current === null ? findExpandedStepId(completed, plan, dataTransferDone) : current;
       return effective === id ? '' : id;
     });
-  }, [completed, plan]);
+  }, [completed, plan, dataTransferDone]);
 
   // Gate acted on here, after every hook above has already been called unconditionally on
   // every render (see the ETP-5395 comment at the top of this component).
@@ -422,7 +461,7 @@ export default function FirstStepsPage() {
               <StepRow
                 key={step.id}
                 step={step}
-                done={isStepDone(step, completed)}
+                done={isStepDone(step, completed, dataTransferDone)}
                 expanded={step.id === expandedStepId}
                 loading={loading}
                 gateAnswered={Boolean(gateAnswered[step.id])}
@@ -430,6 +469,8 @@ export default function FirstStepsPage() {
                 onOpen={handleOpen}
                 onConfigure={(target) => navigate(target.to)}
                 onGateAnswer={handleGateAnswer}
+                dataTransfer={dataTransfer}
+                onRetryError={() => toast.error(ui('genericError'))}
                 ui={ui}
                 data-testid="StepRow__45a28a" />
             ))}

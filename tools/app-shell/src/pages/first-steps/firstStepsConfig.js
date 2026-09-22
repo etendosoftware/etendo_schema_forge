@@ -127,6 +127,22 @@ export const FIRST_STEPS = [
     alwaysDone: false,
   },
   {
+    // This job is created by the server after a paid productive tenant is ready. It is not a
+    // checkbox because completion is a durable migration result, not a user assertion.
+    id: 'demo-data-transfer',
+    iconName: 'ArrowsClockwise',
+    titleKey: 'firstStepsDemoDataTransfer',
+    descKey: 'firstStepsDemoDataTransferDesc',
+    minutes: null,
+    action: 'dataTransfer',
+    to: null,
+    importSpec: null,
+    keepActionWhenDone: true,
+    productiveOnly: true,
+    gateQuestionKey: null,
+    alwaysDone: false,
+  },
+  {
     id: 'products',
     iconName: 'Package',
     titleKey: 'firstStepsProducts',
@@ -220,12 +236,13 @@ export function firstStepsTotal(plan) {
  */
 export function toggleableStepIds(plan) {
   return visibleFirstSteps(plan)
-    .filter((step) => !step.alwaysDone)
+    .filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
     .map((step) => step.id);
 }
 
 /** True when the step renders as completed — always-done, or user-completed. */
-export function isStepDone(step, completed) {
+export function isStepDone(step, completed, dataTransferDone = false) {
+  if (step.action === 'dataTransfer') return dataTransferDone;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
@@ -236,13 +253,14 @@ export function isStepDone(step, completed) {
  * then had its plan read back as free would otherwise count a row that is not on screen, and
  * the badge would claim 6/5.
  */
-export function countCompletedSteps(completed, plan) {
-  return visibleFirstSteps(plan).filter((step) => isStepDone(step, completed)).length;
+export function countCompletedSteps(completed, plan, dataTransferDone = false) {
+  return visibleFirstSteps(plan)
+    .filter((step) => isStepDone(step, completed, dataTransferDone)).length;
 }
 
 /** True once every visible step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed, plan) {
-  return countCompletedSteps(completed, plan) === firstStepsTotal(plan);
+export function areAllStepsDone(completed, plan, dataTransferDone = false) {
+  return countCompletedSteps(completed, plan, dataTransferDone) === firstStepsTotal(plan);
 }
 
 /**
@@ -252,9 +270,9 @@ export function areAllStepsDone(completed, plan) {
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed, plan) {
+export function findExpandedStepId(completed, plan, dataTransferDone = false) {
   const next = visibleFirstSteps(plan)
-    .find((step) => !step.alwaysDone && !isStepDone(step, completed));
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed, dataTransferDone));
   return next ? next.id : null;
 }
 
