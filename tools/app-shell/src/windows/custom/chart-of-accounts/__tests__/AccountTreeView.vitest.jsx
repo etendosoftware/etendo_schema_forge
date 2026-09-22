@@ -80,12 +80,16 @@ const DATA = [
   },
 ];
 
+// Most tests don't need a self-fetch in flight (`apiBaseUrl` absent skips it
+// entirely — see the component docblock). Only the self-fetch and
+// active/inactive-toggle describe blocks below pass this explicitly.
+const TEST_API_BASE_URL = '/sws/neo/chart-of-accounts';
+
 const defaultProps = {
   data: DATA,
   onNavigate: vi.fn(),
   onDataMutated: vi.fn(),
   token: 'test-token',
-  apiBaseUrl: '/sws/neo/chart-of-accounts',
 };
 
 // Full 6-level PGC hierarchy, matching the live example from the CoA investigation:
@@ -618,12 +622,13 @@ describe('AccountTreeView', () => {
       mockFetchPatch();
     });
 
-    it('renders checked for an active leaf and unchecked for an inactive one', () => {
+    it('renders checked for an active leaf and unchecked for an inactive one', async () => {
       const data = [
         { ...DATA[0], active: true },
         { ...DATA[1], active: false },
       ];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
       expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
@@ -633,12 +638,13 @@ describe('AccountTreeView', () => {
     // ETP-4884 bugfix — NEO can return `active` as the raw AD string 'Y'/'N'
     // rather than a JS boolean. A strict `=== true` check rendered a genuinely
     // active account ('Y') as OFF; the toggle must accept 'Y'/'N' too.
-    it('renders checked for an active leaf and unchecked for an inactive one when active is a string', () => {
+    it('renders checked for an active leaf and unchecked for an inactive one when active is a string', async () => {
       const data = [
         { ...DATA[0], active: 'Y' },
         { ...DATA[1], active: 'N' },
       ];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
       expect(screen.getByTestId('account-tree-active-toggle-acc-40000001')).toHaveAttribute('aria-checked', 'true');
@@ -647,13 +653,14 @@ describe('AccountTreeView', () => {
 
     it('PATCHes elementValue/{id} with { active: checked } on toggle', async () => {
       const data = [{ ...DATA[0], active: true }];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
       fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${defaultProps.apiBaseUrl}/elementValue/acc-40000001`,
+        `${TEST_API_BASE_URL}/elementValue/acc-40000001`,
         expect.objectContaining({
           method: 'PATCH',
           body: JSON.stringify({ active: false }),
@@ -664,7 +671,8 @@ describe('AccountTreeView', () => {
     it('rolls back the toggle and shows an error toast when the PATCH fails', async () => {
       mockFetchPatch({ ok: false });
       const data = [{ ...DATA[0], active: true }];
-      render(<AccountTreeView {...defaultProps} data={data} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
 
       fireEvent.click(screen.getByTestId('account-tree-active-toggle-acc-40000001'));
@@ -674,15 +682,17 @@ describe('AccountTreeView', () => {
       expect(toast.error).toHaveBeenCalled();
     });
 
-    it('disables the toggle for a protected 0000-suffixed placeholder leaf', () => {
-      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+    it('disables the toggle for a protected 0000-suffixed placeholder leaf', async () => {
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={HIERARCHY_DATA} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument());
       expandFullAncestorChain();
 
       expect(screen.getByTestId('account-tree-active-toggle-acc-20000000')).toBeDisabled();
     });
 
-    it('never renders a toggle on a virtual folder row', () => {
-      render(<AccountTreeView {...defaultProps} data={DATA} />);
+    it('never renders a toggle on a virtual folder row', async () => {
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
       expect(screen.queryByTestId('account-tree-active-toggle-group-4000')).not.toBeInTheDocument();
     });
   });
@@ -824,10 +834,10 @@ describe('AccountTreeView', () => {
     it('fetches the complete dataset from apiBaseUrl/token on mount', async () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
-      render(<AccountTreeView {...defaultProps} data={[]} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
-        `${defaultProps.apiBaseUrl}/elementValue?_startRow=0&_endRow=9999`,
+        `${TEST_API_BASE_URL}/elementValue?_startRow=0&_endRow=9999`,
         expect.objectContaining({ headers: { Authorization: `Bearer ${defaultProps.token}`, 'Accept-Language': 'es_ES' } }),
       ));
     });
@@ -836,7 +846,7 @@ describe('AccountTreeView', () => {
       mockFetchOnce({ response: { data: FULL_DATASET } });
 
       // `data` (ListView's first page) only carries 2 of the 4 roots.
-      render(<AccountTreeView {...defaultProps} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
 
       await waitFor(() => {
         expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
@@ -856,10 +866,56 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
     });
 
+    it('shows the skeleton (no partial data, no empty-state message) while the initial fetch is in flight', () => {
+      // Never resolves within this test — we only care about the synchronous
+      // render right after mount, before the fetch has settled.
+      globalThis.fetch = vi.fn(() => new Promise(() => {}));
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[]} />);
+
+      expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
+      expect(screen.queryByText('accountTreeNoAccounts')).not.toBeInTheDocument();
+    });
+
+    it('shows the skeleton even when the paginated data prop already has rows', () => {
+      globalThis.fetch = vi.fn(() => new Promise(() => {}));
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={DATA} />);
+
+      expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
+    });
+
+    it('replaces the skeleton with the full tree in one shot once the fetch resolves — no partial-tree frame', async () => {
+      mockFetchOnce({ response: { data: FULL_DATASET } });
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={[FULL_DATASET[0], FULL_DATASET[1]]} />);
+
+      expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
+
+      await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
+      // All 4 roots present the moment the skeleton is gone — not just the 2
+      // from the paginated `data` prop.
+      expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-P')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-PYG')).toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-O')).toBeInTheDocument();
+    });
+
+    it('when apiBaseUrl is absent, no skeleton ever appears', () => {
+      globalThis.fetch = vi.fn();
+
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} />);
+
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+    });
+
     it('falls back to the data prop and shows an error toast when the full fetch fails', async () => {
       globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
 
-      render(<AccountTreeView {...defaultProps} />);
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
       // Original paginated data prop still renders — the tree didn't crash or go blank.
@@ -867,15 +923,41 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-row-group-5000')).toBeInTheDocument();
     });
 
-    it('refetches the full dataset after a new sub-account is saved', async () => {
-      mockFetchOnce({ response: { data: [] } });
-      render(<AccountTreeView {...defaultProps} />);
+    it('refetches the full dataset after a new sub-account is saved, without re-showing the skeleton', async () => {
+      mockFetchOnce({ response: { data: DATA } });
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
 
       fireEvent.click(screen.getByText('+ newSubAccount'));
       fireEvent.click(screen.getByTestId('modal-save'));
 
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+      // The background refetch never re-shows the full-page skeleton — the
+      // already-rendered tree (from the `data` prop fallback) stays visible.
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+    });
+
+    it('when the FIRST fetch fails and a LATER refetch is triggered, the skeleton does not come back', async () => {
+      globalThis.fetch = vi.fn(() => Promise.reject(new Error('network down')));
+      render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} />);
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
+      // Fallback tree from the `data` prop is showing, not the skeleton.
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+
+      // Trigger a retry (save flow bumps fetchGeneration); still fails.
+      fireEvent.click(screen.getByText('+ newSubAccount'));
+      fireEvent.click(screen.getByTestId('modal-save'));
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+      // Naive `fetchedData === null` gate would flip the skeleton back on here —
+      // this is the regression test for that.
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
     });
   });
 });
