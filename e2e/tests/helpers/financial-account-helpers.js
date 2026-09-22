@@ -143,6 +143,64 @@ const FINANCIAL_ACCOUNT_SPEC = '/sws/neo/financial-account';
 const ACCOUNT_ENTITY = `${FINANCIAL_ACCOUNT_SPEC}/account`;
 
 /**
+ * Opens an account row's kebab menu (`account-row-menu-trigger-<id>`) reliably, on ANY
+ * viewport, regardless of how wide `AccountsHeaderTable`'s columns add up to.
+ *
+ * ## Why this exists
+ * The row kebab lives inside `DataTable`'s shared `rowQuickActions` cell
+ * (`tools/app-shell/src/components/contract-ui/DataTable.jsx`), which is
+ * `position: sticky` — it only becomes visually pinned to the right edge of the
+ * table's scroll container while the row is hovered (`group-hover/row:sticky`).
+ * Before any horizontal scroll happens, a sticky element still sits at its normal
+ * (un-stuck) in-flow position, which for Cuentas' column set is off the right edge
+ * of the viewport (the list's columns already sum wider than a 1280px viewport).
+ *
+ * Playwright's `.click()` auto-scroll (`scrollIntoViewIfNeeded()`) has a known
+ * limitation with `position: sticky` elements: it cannot reliably compute how far
+ * to scroll one into view, because a sticky element's on-screen position is
+ * scroll-state-dependent rather than a fixed point in the layout. The observed
+ * failure is a `locator.click: Timeout … element is outside of the viewport`,
+ * repeated until the click times out — even though `row.hover()` and the
+ * visibility assertions on the same element succeed (`toBeVisible()` does not
+ * need the element to be scrolled into view).
+ *
+ * The fix sidesteps Playwright's auto-scroll entirely: scroll the table's real
+ * horizontal scroll container to its right edge FIRST (`scrollLeft = scrollWidth`,
+ * same technique already used by the "row actions stay pinned…" test in
+ * `financial-accounts-page.mocked.spec.js`), so the sticky cell's "stuck" resting
+ * position becomes the already-visible one before hover/click ever happen.
+ *
+ * `Table__eb5261` is the `<Table>` primitive's own testid
+ * (`DataTable.jsx`); its DIRECT PARENT is the real `overflow-auto` scrolling
+ * element (schema_forge_core's `table.jsx` wrapper div) — not the outer
+ * `DataTable` div, which never itself overflows (see the doc comment above the
+ * `overflow-x-auto` wrapper in `DataTable.jsx`).
+ *
+ * A no-op (zero writes, zero throws) when the table isn't wide enough to
+ * overflow — `scrollLeft = scrollWidth` degenerates to `scrollLeft = clientWidth`
+ * with no effect, and dispatching `scroll` on an unscrolled container is harmless.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} accountId
+ * @returns {Promise<import('@playwright/test').Locator>} the row locator, so callers can keep
+ *   scoping further assertions/clicks (e.g. `account-row-menu-delete-<id>`) to it.
+ */
+export async function openAccountRowMenu(page, accountId) {
+  const row = page.getByTestId(`row-${accountId}`);
+  const scrollContainer = page.getByTestId('Table__eb5261').locator('..');
+
+  await scrollContainer.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+    element.dispatchEvent(new Event('scroll'));
+  });
+
+  await row.hover();
+  await row.getByTestId(`account-row-menu-trigger-${accountId}`).click();
+
+  return row;
+}
+
+/**
  * The generic selector endpoint behind the business partner's "PO Payment
  * Method" field — the exact thing `ensureVendorPaymentFieldsSet` needs to be
  * non-empty, queried through the same URL the UI itself builds.
