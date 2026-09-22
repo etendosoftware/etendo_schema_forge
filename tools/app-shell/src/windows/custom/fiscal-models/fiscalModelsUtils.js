@@ -683,7 +683,11 @@ export function applyOverrides(boxes, overrides) {
 // also routes through `applyComputeResult`) shares this one call, so `box70`/`box109` are
 // guaranteed non-negative by the time `computeBox111` reads them, by construction rather than by
 // caller discipline.
-export function recomputeDerivedBoxes(boxArrRaw) {
+// `identChecks` (optional; defaults to `{}`) is read for its `rectificativa` flag only, forwarded
+// to `computeBox111`'s explicit `isRectificativa` guard — the formula's own spec requires it
+// ("SI es autoliquidación rectificativa Y..."), same convention as `isBankIbanRequired` elsewhere
+// in this file. A caller that omits it gets box 111 forced blank, never a false positive.
+export function recomputeDerivedBoxes(boxArrRaw, identChecks) {
   const boxArr = clampNegativeBoxes(toBoxArray(boxArrRaw));
   const r2 = v => Math.round(v * 100) / 100;
   const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
@@ -697,12 +701,13 @@ export function recomputeDerivedBoxes(boxArrRaw) {
   const box71 = r2(box69 - get(70) + get(109) - get(112));
   const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
 
-  // box70 read again here (not via `derived`/`get` reuse) on purpose: `computeBox111` needs the
-  // RAW box70 entry's presence/absence ("casilla_70 tiene valor" in the spec), not `get`'s
-  // always-numeric 0-for-missing fallback used by the arithmetic above.
+  // box70 read again here (not via `derived`/`get` reuse) on purpose: `computeBox111` tests
+  // "casilla_70 > 0" against the RAW box70 entry, not `get`'s always-numeric 0-for-missing
+  // fallback used by the arithmetic above (a missing entry and an explicit 0 both fail the
+  // `> 0` test either way, but keeping the raw read avoids relying on that coincidence).
   const box70Entry = boxArr.find(b => b.num === 70);
   const box111 = computeBox111({
-    box69,
+    isRectificativa: identChecks?.rectificativa === true,
     box70: box70Entry != null ? box70Entry.value : null,
     box71,
   });

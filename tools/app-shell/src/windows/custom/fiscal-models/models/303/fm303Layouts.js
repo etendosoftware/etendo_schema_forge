@@ -210,18 +210,24 @@ const TIPO_DECLARACION_FIELD = {
   ],
 };
 
-// ETP-5431 pt.2 — casilla 111 (rectificacion_importe) autocompletion formula. CONFIRMED SPEC
-// (closed with the user/PM, not this team's own reading, unlike the Nota 3 field-selection
-// decisions above):
-//   SI casilla_71 < 0 Y casilla_70 tiene valor:
-//       SI casilla_69 es positiva: 111 = 70 - 69, SOLO SI el resultado es positivo (si no, vacía)
-//       SI casilla_69 es negativa: 111 = mismo valor que 70
-//   SI NO se cumple la condición de arriba: 111 queda vacía
+// ETP-5431 pt.2 — casilla 111 (rectificacion_importe) autocompletion formula.
 //
-// IMPLEMENTATION DECISION (not covered by the closed spec, which only enumerates "positiva" /
-// "negativa" for box 69): box69 === 0 matches neither branch, so it falls through to "111 queda
-// vacía" — the same outcome as the explicit fallthrough case. Flag for revisit if AEAT clarifies
-// the exact-zero case.
+// REPLACES an earlier draft that branched on the sign of casilla 69 (positive / negative / zero).
+// That draft had a CONFIRMED BUG: its `box69 === 0` case fell through to "111 queda vacía", which
+// a real ServValiDos submission got rejected for (errors 35100, E030292, 35068) — AEAT's own
+// official "Negativa/Saldo cero" example shows box 111 must still carry the full box 70 value in
+// that case, not go blank. The formula below is the corrected, CONFIRMED SPEC (closed with the
+// user/PM, verified algebraically against 4 official AEAT examples):
+//
+//   SI es autoliquidación rectificativa Y casilla_71 < 0 Y casilla_70 > 0:
+//       casilla 111 = MIN(casilla_70, ABS(casilla_71))
+//   EN OTRO CASO:
+//       casilla 111 = vacía
+//
+// Casilla 69 is deliberately NOT read anywhere in this formula (hence no `box69` param) — it is
+// already folded into casilla 71 via the official `71 = 69-70+109-112` formula, so re-branching on
+// its sign was both unnecessary and the source of the bug above. `MIN`/`ABS` subsumes every branch
+// of the old draft wherever it was correct, and fixes the one case where it wasn't.
 //
 // This box is no longer user-editable (see the `rectificacion_importe` row below, which now
 // carries neither `editable` nor `derivedValue` — its value comes exclusively from this
@@ -234,18 +240,16 @@ const TIPO_DECLARACION_FIELD = {
 // authoritative call site is `recomputeDerivedBoxes` (fiscalModelsUtils.js), which imports this
 // function directly — the formula still lives here, next to the field definition, exactly like
 // every other `derivedValue`, it just has a different (array-writing) consumer than the
-// display-only ones. `valueMap` uses the same box-number-keyed shape `computeDerivedValue`'s
-// declarative combos already read (`box69`/`box70`/`box71`), so this same convention is directly
-// reusable by `computeDerivedValue`'s `compute` extension (FmBoxes303.jsx) if a future rule needs
-// a three-branch custom formula for a genuinely display-only box.
-export function computeBox111({ box69, box70, box71 }) {
-  if (!(box71 < 0) || box70 == null) return null;
-  if (box69 > 0) {
-    const diff = box70 - box69;
-    return diff > 0 ? diff : null;
-  }
-  if (box69 < 0) return box70;
-  return null;
+// display-only ones.
+//
+// `isRectificativa` is the explicit guard the formula's own spec states ("SI es autoliquidación
+// rectificativa Y...") — mirrors `identChecks?.rectificativa === true`, the same flag
+// `isBankIbanRequired`/`_BANK_RECTIFICATIVA_BRANCH` already gate on elsewhere in this window.
+// `recomputeDerivedBoxes` is the sole caller and passes it through from its own `identChecks` arg.
+export function computeBox111({ isRectificativa, box70, box71 }) {
+  if (!isRectificativa) return null;
+  if (!(box71 < 0) || !(box70 > 0)) return null;
+  return Math.min(box70, Math.abs(box71));
 }
 
 // ── Base layout (current / default form) ─────────────────────────

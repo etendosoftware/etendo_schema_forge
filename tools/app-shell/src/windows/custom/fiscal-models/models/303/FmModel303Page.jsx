@@ -43,16 +43,16 @@ function statusLabelKey(status) {
 // fiscalModelsUtils.js (ETP-5272 pt.6) — shared with FmListPage.jsx so the
 // override-merge + derived-box formula lives in exactly one place.
 
-function removeBox108FromLive(prev) {
+function removeBox108FromLive(prev, identChecks) {
   if (prev == null) return prev;
-  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108));
+  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108), identChecks);
 }
 
-function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
+function applyBoxChange(prev, boxNum, value, fallbackBoxes, identChecks) {
   const base = prev != null ? toBoxArray(prev) : toBoxArray(fallbackBoxes);
   const filtered = base.filter(b => b.num !== boxNum);
   const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
-  return recomputeDerivedBoxes(updated);
+  return recomputeDerivedBoxes(updated, identChecks);
 }
 
 // ETP-5431 pt.2 — mirrors box 111's freshly-`recomputeDerivedBoxes`-derived value into
@@ -86,9 +86,9 @@ function parseBoxInput(rawValue) {
 // exact object `generate303File`'s `applyBoxParams` and "Guardar"'s `persistManualData` both
 // read box 111 from (BOX_PARAM_MAP -> AEAT's `RectifyingAmount`) — would silently drop a visibly
 // non-empty box 111 from the generated file / saved declaration. See `syncBox111Override` below.
-function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides) {
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks) {
   if (!res) return;
-  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
+  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides), identChecks);
   setLiveBoxes(mergedBoxes);
   if (setManualOverrides) setManualOverrides(prev => syncBox111Override(prev, mergedBoxes));
   // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
@@ -270,7 +270,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     setIdentChecks(prev => ({ ...prev, [id]: value }));
     if (id === 'motivo_rectificacion' && value !== 'D') {
       setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
-      setLiveBoxes(removeBox108FromLive);
+      setLiveBoxes(prev => removeBox108FromLive(prev, identChecks));
     }
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
@@ -425,7 +425,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // updater read — nothing else touches `liveBoxes` state between here and that call — so this
     // is not a behavior change for box78/69/71, only a relocation of where the same computation
     // happens.
-    const applied = applyBoxChange(currentBoxes, boxNum, value, fallback);
+    const applied = applyBoxChange(currentBoxes, boxNum, value, fallback, identChecks);
     const finalBoxes = !box78WasClamped
       ? applied
       // applyBoxChange already ran recomputeDerivedBoxes once, but it did so against the
@@ -434,7 +434,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       // Splice in the corrected box78 and recompute a SECOND time so 69/71/111 all reflect the
       // final, clamped figure instead of a materially wrong one that would otherwise only
       // self-heal on the next edit.
-      : recomputeDerivedBoxes(applied.map(b => (b.num === 78 ? { ...b, value: nextBox78 } : b)));
+      : recomputeDerivedBoxes(applied.map(b => (b.num === 78 ? { ...b, value: nextBox78 } : b)), identChecks);
 
     setManualOverrides(prev => {
       let next = { ...prev, [boxNum]: value };
@@ -493,7 +493,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides);
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
     } finally {
       setComputing(false);
     }
@@ -538,7 +538,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // initial state above and the user's saved manual edits are invisible until they
     // manually re-run "Calcular". No new network call: this reuses the payload we already have.
     if (decl._precomputed?.boxes != null) {
-      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides);
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
       return;
     }
     if (liveBoxes != null) return;

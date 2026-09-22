@@ -1146,20 +1146,37 @@ gating above. It is now autocompleted, per a **CONFIRMED SPEC** (closed with the
 the Nota 3 field-selection calls elsewhere in this document, which are this team's own reading):
 
 ```
-SI casilla_71 < 0 Y casilla_70 tiene valor:
-    SI casilla_69 es positiva: 111 = 70 - 69, SOLO SI el resultado es positivo (si no, vacía)
-    SI casilla_69 es negativa: 111 = mismo valor que 70
-SI NO se cumple la condición de arriba: 111 queda vacía
+SI es autoliquidación rectificativa Y casilla_71 < 0 Y casilla_70 > 0:
+    casilla 111 = MIN(casilla_70, ABS(casilla_71))
+EN OTRO CASO:
+    casilla 111 = vacía
 ```
 
-Implemented as `computeBox111({ box69, box70, box71 })` in `fm303Layouts.js`, right next to the
-`rectificacion_importe` row definition (`resultado_final` section, `bicolumn_resultado` rows) —
-which now carries neither `editable` nor `derivedValue`, just a plain `cells: [111]`, rendering
-exactly like the `resultado_69`/`resultado_declaracion` total rows above it.
+**This REPLACES an earlier draft of the same rule** that branched on the sign of casilla 69
+(positive / negative / exactly zero), with `box69 === 0` falling through to "111 queda vacía". That
+draft shipped with a confirmed bug: a real ServValiDos test submission was rejected (errors
+`35100`, `E030292`, `35068`) that, once an unrelated test-data issue was fixed, landed exactly on
+`box69 = 0` with `box70 = 43,52` — and AEAT's own official "Negativa/Saldo cero" example shows box
+111 must still carry the full box 70 value in that case, not go blank. The `MIN`/`ABS` formula
+above is algebraically equivalent to the old per-branch draft wherever it was correct, and fixes
+the one case where it wasn't — casilla 69 is no longer read at all, because it is already folded
+into casilla 71 via the official `71 = 69-70+109-112` formula, so re-branching on its sign was
+never necessary. Verified against 4 of AEAT's own published examples (Manual Práctico IVA, capítulo
+8, autoliquidación rectificativa).
 
-*Implementation decision, not part of the closed spec:* the spec only enumerates "positiva" /
-"negativa" for box 69 — `box69 === 0` matches neither branch and falls through to "111 queda
-vacía". Flag for revisit if this needs to be something else.
+Implemented as `computeBox111({ isRectificativa, box70, box71 })` in `fm303Layouts.js`, right next
+to the `rectificacion_importe` row definition (`resultado_final` section, `bicolumn_resultado`
+rows) — which now carries neither `editable` nor `derivedValue`, just a plain `cells: [111]`,
+rendering exactly like the `resultado_69`/`resultado_declaracion` total rows above it.
+
+`isRectificativa` is the explicit guard the spec itself states ("SI es autoliquidación
+rectificativa Y...") — `recomputeDerivedBoxes` (`fiscalModelsUtils.js`) now takes an `identChecks`
+parameter and forwards `identChecks?.rectificativa === true`, mirroring the same flag
+`isBankIbanRequired`/`_BANK_RECTIFICATIVA_BRANCH` already gate on elsewhere in this window. Every
+production call site of `recomputeDerivedBoxes` (`FmModel303Page.jsx`'s `applyBoxChange`,
+`removeBox108FromLive`, `applyComputeResult`, and `FmListPage.jsx`'s list-row result recompute) was
+updated to pass its `identChecks`/`decl.manualData?.identification` through — a caller that omits
+it gets box 111 forced blank rather than silently reusing a stale flag.
 
 *Why this isn't routed through `FmBoxes303`'s existing `derivedValue`/`computeDerivedValue`
 mechanism* (used by box 87/107/`importe_devolucion` elsewhere in this doc): that mechanism is
@@ -1218,6 +1235,13 @@ coverage"):
 Their replacements reach a non-zero box 111 through the formula (seeding boxes
 69/70/71-relevant values, or seeding `decl.boxes`/`liveBoxes` directly) instead of typing into the
 box.
+
+**Rule A, second correction (ETP-5431, confirmed AEAT ServValiDos rejection) — the `box69 === 0`
+draft above was replaced by the `MIN`/`ABS` formula.** Any pre-existing test that asserted the OLD
+per-branch behaviour at `box69 = 0` (empty box 111) now has an outdated expectation — the correct
+result at `box69 = 0` is `box70` (via `MIN(box70, ABS(box71))`), not blank. These were identified
+but deliberately left untouched by the fix itself (testing is a separate pipeline phase): they need
+review/rewrite before the fix is considered fully verified.
 
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
