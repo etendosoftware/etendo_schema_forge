@@ -36,7 +36,23 @@ export default function RolesOverviewPage() {
   });
 
   return (
-    <div className="h-full overflow-y-auto space-y-6 p-6" data-testid="RolesOverviewPage">
+    <div className="h-full overflow-y-auto px-6 pb-6" data-testid="RolesOverviewPage">
+      {/* ETP-5402 split-out sticky-header fix — `pt-6` moved from the scroll container
+          above (was `p-6`) onto this NON-scrolling-container child instead. `position:
+          sticky` computes its offset against the nearest scrolling ancestor's PADDING
+          edge, but `overflow: auto` clips at that same ancestor's BORDER edge — so a
+          `padding-top` living on the scroll container itself opens a gap between "where
+          the browser clips" and "where sticky pins to", and that gap scrolls WITH the
+          content (CSS overflow spec: a scroll container's own padding is part of its
+          scrollable overflow region). The result: whatever row is mid-scroll bleeds
+          through in that gap, over/under the "stuck" `<thead>`, at every scroll position
+          — looking exactly like the header reordering below a body row, though the
+          header's `top: 0` offset is geometrically correct the whole time (verified via
+          `getBoundingClientRect()` live). `UserRolesTab.jsx`'s own scroll ancestor (a
+          `DetailView.jsx` column) has zero top padding, which is why its sticky `<thead>`
+          never showed this. Moving the top padding onto scrolled CONTENT instead of the
+          scroll container's own box removes the gap entirely. */}
+      <div className="pt-6 space-y-6">
       {(() => {
         if (loading) {
           return (
@@ -97,6 +113,7 @@ export default function RolesOverviewPage() {
           </div>
         );
       })()}
+      </div>
     </div>
   );
 }

@@ -42,9 +42,9 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
   const tMenu = useMenuLabel();
 
   return (
-    <div className="overflow-x-auto" data-testid="RolesAccessMatrix">
+    <div data-testid="RolesAccessMatrix">
       <table className="w-full text-sm">
-        <thead>
+        <thead className="sticky top-0 z-10 bg-card">
           <tr className="border-b border-border/50">
             <th className="py-2.5 pr-4 text-left text-sm font-semibold text-foreground">
               {ui('rolesMatrixWindowColumn')}
