@@ -129,7 +129,54 @@ export const DECLARATION_TYPE_INGRESO = 'I';
 // AEAT-can-never-be-negative rule as 111/77 above, no new mechanism needed (toast, `min="0"`,
 // clamp are all driven off this Set already). 70 additionally feeds `computeBox111` below — see
 // the ordering note on `recomputeDerivedBoxes` for why this clamp must run before that formula.
+//
+// ETP-5431 [B1 fix, review round 2] — this Set now backs TWO independent enforcement points,
+// not one: `clampNegativeBoxes` (silent, structural — folded into `recomputeDerivedBoxes` itself
+// so every boxArr path is covered by construction) and `clampNegativeOverrides` (same clamp,
+// applied to the separate `manualOverrides` map at hydration — see both functions below for why
+// neither one alone is sufficient). `FmModel303Page.jsx`'s `handleBoxChange` still clamps too,
+// but only as the interactive-input layer (it also owns the user-facing toast); it is redundant
+// with, not a substitute for, the two functions below.
 export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 109, 70]);
+
+// Silently zeroes any NEGATIVE_NOT_ALLOWED_BOXES entry in a box array. "Silent" is deliberate:
+// this runs on every boxArr regardless of how it got here (a fresh backend response, a value
+// hydrated from a declaration saved months before this rule existed, or a live typed edit
+// already routed through it), and most of those paths are not a direct reaction to something
+// the user just did — surfacing a toast here would either fire on page load for old data or
+// double-fire for a typed edit that `handleBoxChange` already toasted about. The toast, where one
+// belongs, stays the responsibility of the interactive-input layer (`handleBoxChange`); this
+// function only owns the numeric invariant.
+function clampNegativeBoxes(boxArr) {
+  return boxArr.map(b => (
+    NEGATIVE_NOT_ALLOWED_BOXES.has(b.num) && typeof b.value === 'number' && b.value < 0
+      ? { ...b, value: 0 }
+      : b
+  ));
+}
+
+// Same clamp as `clampNegativeBoxes` above, but for the separate `manualOverrides` map
+// (`{ [boxNum]: value }`, e.g. `decl.manualData.manualOverrides` as hydrated on mount).
+// `clampNegativeBoxes`/`recomputeDerivedBoxes` alone are NOT enough to make a negative
+// override safe: `applyBoxParams` (below) reads box 70/109/77's AEAT param straight off
+// `manualOverrides[boxNum]`, bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely, so a
+// negative value sitting in a hydrated `manualOverrides` would still reach AEAT as e.g. a
+// negative `ComplementaryAmt` even though `computeBox111`/box111 are already protected.
+// Called once at hydration (`FmModel303Page.jsx`'s `manualOverrides` initial state) — every
+// write to `manualOverrides` after that already goes through a clamped value (`handleBoxChange`
+// clamps before storing; `syncBox111Override` only ever writes an already-clamped box111).
+export function clampNegativeOverrides(overrides) {
+  const ov = overrides ?? {};
+  let changed = false;
+  const next = { ...ov };
+  for (const key of Object.keys(next)) {
+    if (NEGATIVE_NOT_ALLOWED_BOXES.has(Number(key)) && next[key] < 0) {
+      next[key] = 0;
+      changed = true;
+    }
+  }
+  return changed ? next : ov;
+}
 
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
@@ -624,14 +671,20 @@ export function applyOverrides(boxes, overrides) {
 // guarantee for free.
 //
 // Ordering dependency (box70 clamp -> box111 formula), by construction rather than by careful
-// sequencing here: `get(70)` above reads straight out of `boxArr`, and every caller that can put
-// a NEGATIVE value into `boxArr` for box 70 already clamps it to 0 before this function ever
-// runs — `FmModel303Page.jsx`'s `handleBoxChange` clamps a typed box 70 (now in
-// `NEGATIVE_NOT_ALLOWED_BOXES`) BEFORE calling `applyBoxChange`/`recomputeDerivedBoxes`, and the
-// backend/`res.boxes` path (`applyComputeResult`) has no interactive input to clamp in the first
-// place. So `box70` here is always already non-negative by the time `computeBox111` reads it —
-// there is no separate clamp step to sequence inside this function.
-export function recomputeDerivedBoxes(boxArr) {
+// sequencing between callers: [B1, review round 2] a previous version of this comment claimed
+// "the backend/res.boxes path has no interactive input to clamp in the first place" and relied on
+// each CALLER clamping box 70/109 before invoking this function. That was wrong on two real
+// paths — `manualOverrides` hydrated from a declaration persisted before this rule existed
+// (`FmModel303Page.jsx`'s initial `manualOverrides` state), and `computeBoxes303`'s "Calcular"
+// response itself can carry a negative box 70/109 in `res.boxes`, with nothing upstream of
+// `applyComputeResult` ever clamping it. So the clamp now lives HERE instead, as the first thing
+// this function does to its own input (`clampNegativeBoxes` below) — every caller (typed edits via
+// `applyBoxChange`, the "Calcular" flow via `applyComputeResult`, and initial hydration, which
+// also routes through `applyComputeResult`) shares this one call, so `box70`/`box109` are
+// guaranteed non-negative by the time `computeBox111` reads them, by construction rather than by
+// caller discipline.
+export function recomputeDerivedBoxes(boxArrRaw) {
+  const boxArr = clampNegativeBoxes(toBoxArray(boxArrRaw));
   const r2 = v => Math.round(v * 100) / 100;
   const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
   const box65entry = boxArr.find(b => b.num === 65);

@@ -20,6 +20,7 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
+  clampNegativeOverrides,
 } from '../../fiscalModelsUtils.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
@@ -273,7 +274,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
-  const [manualOverrides, setManualOverrides] = useState(decl.manualData?.manualOverrides ?? {});
+  // ETP-5431 [B1 fix, review round 2] — `clampNegativeOverrides` here, not just
+  // `recomputeDerivedBoxes` on `liveBoxes`: a declaration persisted before this rule existed can
+  // carry e.g. `manualOverrides[70] = -100`, and `applyBoxParams` (fiscalModelsUtils.js) reads
+  // box 70/109/77's AEAT param straight off THIS map, bypassing `liveBoxes` entirely. Clamping
+  // once here (silently — this is a hydration, not a reaction to a user edit, so no toast) is
+  // enough: every later write to `manualOverrides` already stores an already-clamped value
+  // (`handleBoxChange` clamps before storing; `syncBox111Override` only ever writes an
+  // already-clamped box 111).
+  const [manualOverrides, setManualOverrides] = useState(
+    () => clampNegativeOverrides(decl.manualData?.manualOverrides ?? {}));
   // ETP-5338 (Guardar) — drives the Save/Loader2 icon swap and disables the button while a
   // flush is in flight, same convention as the shared `saveActions.jsx` Save buttons.
   const [isSavingManualData, setIsSavingManualData] = useState(false);
@@ -370,6 +380,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // AEAT303Report engine hard-rejects a negative value for either at file-generation
     // time. Clamp to 0 here (same "make the invalid state structurally impossible"
     // approach as the box78/box110 clamp below) instead of letting it reach submission.
+    //
+    // ETP-5431 [B1 fix, review round 2] — this clamp is NOT redundant with the structural one
+    // `recomputeDerivedBoxes` now does on every boxArr (fiscalModelsUtils.js). The two serve
+    // different jobs: this one is the interactive-input layer — it owns the user-facing toast,
+    // and it keeps the RAW value that gets stored into `manualOverrides[boxNum]` below
+    // non-negative (that map is read directly by `applyBoxParams` for AEAT submission,
+    // bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely — see `clampNegativeOverrides`'s
+    // doc comment). `recomputeDerivedBoxes`'s clamp is silent by design (a hydration or a
+    // "Calcular" response is not a reaction to something the user just typed, so it must not
+    // toast) and exists precisely so a value that reaches it WITHOUT going through this
+    // interactive path (hydration, "Calcular") is still guaranteed non-negative. Removing either
+    // one reopens a gap the other doesn't cover.
     if (value != null && value < 0 && NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum)) {
       value = 0;
       toast.error(t('fm.box.error.negative_not_allowed', { box: boxNum }) ??

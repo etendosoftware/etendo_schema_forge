@@ -1184,13 +1184,17 @@ helper, called from both `handleBoxChange` (typing any box that participates in 
 "Calcular" click and the precomputed-on-mount hydration).
 
 **Ordering dependency (box 70's clamp before box 111's formula).** Box 70 feeds `computeBox111`
-directly. This is guaranteed by construction rather than by a sequencing step inside
-`recomputeDerivedBoxes`: every caller that can put a negative value into the box array for box 70
-already clamps it to 0 first (see Rule B below) — `handleBoxChange` clamps a typed box 70 before
-ever calling `applyBoxChange`/`recomputeDerivedBoxes`, and the backend/`res.boxes` path
-(`applyComputeResult`) has no interactive input to clamp in the first place. So `recomputeDerivedBoxes`
-always reads an already-non-negative box 70 — there is nothing left to sequence at the point where
-box 111 is computed.
+directly. [Review round 2 correction — the previous version of this note claimed every caller
+already clamped box 70/109 before calling `recomputeDerivedBoxes`, which was false on two real
+paths: `manualOverrides` hydrated from a declaration persisted before this rule existed, and
+`computeBoxes303`'s "Calcular" response, which can itself carry a negative box 70/109 in
+`res.boxes` with nothing upstream clamping it.] The clamp now lives inside
+`recomputeDerivedBoxes` itself (`clampNegativeBoxes`, applied to its own input as the very first
+step), so it is guaranteed by construction rather than by caller discipline — every caller (typed
+edits via `applyBoxChange`, the "Calcular" flow and initial hydration via `applyComputeResult`)
+shares this one call. `manualOverrides` is separately clamped at hydration
+(`clampNegativeOverrides`, `FmModel303Page.jsx`) because `applyBoxParams` reads box 70/109's AEAT
+param straight off that map, bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely.
 
 **Rule B — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) can never be negative.** Same
 existing mechanism boxes 111/77 already used (`NEGATIVE_NOT_ALLOWED_BOXES` in
@@ -1198,9 +1202,10 @@ existing mechanism boxes 111/77 already used (`NEGATIVE_NOT_ALLOWED_BOXES` in
 toast in `FmModel303Page.jsx`'s `handleBoxChange`, `min="0"` on the input in `FmBoxes303.jsx`. No
 new mechanism was needed; adding the two box numbers to the Set was sufficient.
 
-**Tests invalidated by Rule A (not rewritten here — flagged for the test-generator agent):** every
-test that used to drive Nota 3 scenarios by directly typing into casilla 111's now-removed pencil
-editor. As of this change, these fail:
+**Tests invalidated by Rule A — rewritten in `d73efa31f`:** every test that used to drive Nota 3
+scenarios by directly typing into casilla 111's now-removed pencil editor was broken by this
+change and has since been rewritten (commit `d73efa31f`, "Rewrite box111 tests, add autocomplete
+coverage"):
 - `FmBoxes303.vitest.jsx` — "box 111: types -12, commits (blur), parent clamps to 0…"
 - `FmModel303Page.negativeBoxClamp.vitest.jsx` — both box111 clamp cases (negative -> 0, and
   "accepts a positive value unchanged")
@@ -1210,7 +1215,7 @@ editor. As of this change, these fail:
   and all 6 "marca SEPA reactivity (ETP-5431)" cases (its shared `setBoxValue`/`renderInNota3`
   helper drives Nota 3 exclusively by typing box 111 directly)
 
-Their replacements need to reach a non-zero box 111 through the formula (seeding boxes
+Their replacements reach a non-zero box 111 through the formula (seeding boxes
 69/70/71-relevant values, or seeding `decl.boxes`/`liveBoxes` directly) instead of typing into the
 box.
 

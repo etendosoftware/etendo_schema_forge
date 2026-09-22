@@ -21,7 +21,7 @@
 // ticket actually added to the set.
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 const { toastErrorMock } = vi.hoisted(() => ({ toastErrorMock: vi.fn() }));
@@ -30,15 +30,25 @@ vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock, success: vi.fn() } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
+
+// ETP-5431 [B1 fix, review round 2] — `computeBoxes303` needs to be per-test controllable (not
+// a fixed `mockResolvedValue(null)`) so the new "Calcular" scenario below can hand back a
+// negative box70 the way the real backend can. Same hoisted-fn pattern as
+// FmModel303Page.box111Autocomplete.vitest.jsx.
+const computeBoxes303 = vi.fn();
+// `persistManualData` deliberately kept REAL (not stubbed) — same convention as
+// FmModel303Page.box111Autocomplete.vitest.jsx — so the manualOverrides-clamp assertion below
+// reads the ACTUAL PUT body, not an internal ref/flag.
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
     formatAmount: (n) => (n == null ? '—' : String(n)),
     formatPeriod: (p) => p,
-    computeBoxes303: vi.fn().mockResolvedValue(null),
+    computeBoxes303: (...args) => computeBoxes303(...args),
     generate303File: vi.fn().mockResolvedValue({ ok: false }),
     checkModified303: vi.fn(),
+    fetchDeclarationIncidents: vi.fn().mockResolvedValue(null),
   };
 });
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
@@ -96,6 +106,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
+import { jsonResponse } from '@/test/realApiFetch.js';
 
 const BASE_DECL = {
   id: '303-2026-T2', model: '303', year: 2026, period: 'T2', type: 'ord',
@@ -104,10 +115,18 @@ const BASE_DECL = {
   identification: { tipo_declaracion: 'N' },
 };
 
+// `boxes: []`/`summary: {}` — not `_precomputed: null` — so the mount effect's own auto-compute
+// (ETP-4755) never independently calls `computeBoxes303` before the "Calcular" click does. Same
+// convention as FmModel303Page.box111Autocomplete.vitest.jsx.
+const CALCULAR_DECL = { ...BASE_DECL, _precomputed: { boxes: [], summary: {}, sources: [] } };
+
 const defaultProps = {
   onBack: vi.fn(),
   onStatusChange: vi.fn(),
 };
+
+const TOKEN = 'test-token';
+const API_BASE_URL = '/sws/neo/fiscal-models';
 
 function boxValue(num) {
   const arr = JSON.parse(screen.getByTestId('boxes-json').textContent);
@@ -119,8 +138,42 @@ function commit(boxNum, rawValue) {
   fireEvent.change(screen.getByTestId(`commit-${boxNum}`), { target: { value: rawValue } });
 }
 
+function putCalls() {
+  return globalThis.fetch.mock.calls.filter(
+    ([, options]) => String(options?.method || '').toUpperCase() === 'PUT',
+  );
+}
+
+function overridesOf(call) {
+  return JSON.parse(call[1].body).manualData.manualOverrides;
+}
+
+function clickSave() {
+  fireEvent.click(screen.getByTestId('FmModel303Page__save'));
+}
+
+async function clickCalcular() {
+  const btn = Array.from(document.querySelectorAll('button'))
+    .find(b => b.textContent.includes('fm.action.compute'));
+  await act(async () => {
+    fireEvent.click(btn);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+function installImmediateServer() {
+  globalThis.fetch = vi.fn((_url, options = {}) => Promise.resolve(
+    String(options.method || 'GET').toUpperCase() === 'PUT'
+      ? jsonResponse({ manualDataApplied: true })
+      : jsonResponse({ response: { data: [] } }),
+  ));
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  computeBoxes303.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -208,5 +261,69 @@ describe('FmModel303Page — negative value rejected on boxes 111 and 77 (ETP-53
     expect(toastErrorMock).toHaveBeenCalled();
     expect(boxValue(70)).toBe(0); // Rule B clamp applied.
     expect(boxValue(111)).toBe(0); // Rule A formula read the ALREADY-clamped box70, never -300.
+  });
+});
+
+// ETP-5431 [B1 fix, review round 2] — Alex (REVIEW) rejected the original delivery because the
+// clamp above only fired inside `handleBoxChange` (i.e. only for a box70/109 the user TYPED).
+// Two real paths never went through `handleBoxChange` at all and could carry a negative box70/109
+// straight into `computeBox111`/AEAT submission:
+//   1. The "Calcular" flow — `computeBoxes303` (the real backend) can itself return a negative
+//      box70/109 in `res.boxes`, with nothing upstream ever clamping it.
+//   2. Hydration from a persisted declaration — `manualOverrides` seeded from
+//      `decl.manualData.manualOverrides` can carry a negative box70/109 saved before this rule
+//      existed (or by any future bug), and the mount effect merges it straight into `liveBoxes`
+//      via `applyComputeResult` with no clamp in between.
+// The fix moved the clamp into `recomputeDerivedBoxes` itself (`clampNegativeBoxes`, applied to
+// its own input first) — the ONE choke point every path already shares — plus a matching
+// `clampNegativeOverrides` at `manualOverrides`' hydration, since `applyBoxParams`
+// (fiscalModelsUtils.js) reads box 70/109's AEAT param straight off that map, bypassing
+// `liveBoxes` entirely. Both cases below reproduce Alex's exact scenarios and assert (a) the
+// clamp lands in the displayed `liveBoxes`, and (b) box 111 never comes out negative.
+describe('FmModel303Page — box70/109 clamp applies even when handleBoxChange never runs (ETP-5431 B1 fix)', () => {
+  it('"Calcular" returning a negative box70 in res.boxes is clamped before box111 is derived', async () => {
+    // box27 = -500 drives box69 negative (see the ordering test above for the full chain), and
+    // box70 = -300 arrives DIRECTLY from the backend response — never typed, never routed
+    // through handleBoxChange's own clamp.
+    computeBoxes303.mockResolvedValue({
+      boxes: [{ num: 27, value: -500 }, { num: 70, value: -300 }],
+      summary: { accrued: 0, deductible: 0, result: 0 },
+      sources: [],
+    });
+    render(<FmModel303Page decl={CALCULAR_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
+
+    await clickCalcular();
+
+    expect(boxValue(70)).toBe(0); // clamped by recomputeDerivedBoxes, not by handleBoxChange.
+    expect(boxValue(111)).toBe(0); // never negative, despite the -300 the backend returned.
+  });
+
+  it('a negative box70 hydrated from a persisted manualOverrides is clamped on mount, before any click', async () => {
+    // Simulates a declaration saved BEFORE Rule B existed (or by any future bug): box70 = -300
+    // sits in manualOverrides from the very first render, with no interactive input at all.
+    const decl = {
+      ...BASE_DECL,
+      _precomputed: { boxes: [{ num: 27, value: -500 }], summary: {}, sources: [] },
+      manualData: { identification: { tipo_declaracion: 'N' }, manualOverrides: { 70: -300 } },
+    };
+    installImmediateServer();
+    render(<FmModel303Page decl={decl} token={TOKEN} apiBaseUrl={API_BASE_URL} {...defaultProps} />);
+
+    // The mount effect (`decl._precomputed?.boxes != null` -> `applyComputeResult`) runs
+    // synchronously off props, no click/await needed for the box/box111 assertions themselves.
+    expect(boxValue(70)).toBe(0); // clamped on mount, not after a user edit.
+    expect(boxValue(111)).toBe(0); // never negative, despite the persisted -300.
+
+    // The clamp must also reach the `manualOverrides` MAP itself (not just the displayed
+    // `liveBoxes`), because `applyBoxParams` reads box 70's AEAT param straight off that map,
+    // bypassing `liveBoxes` entirely — a stale unclamped -300 there would still reach AEAT as a
+    // negative `ComplementaryAmt` even with box111 fixed. Commit an unrelated box (27, to its
+    // own current value) to arm the pending-edit flag so "Guardar" actually flushes, then assert
+    // the PUT body's manualOverrides[70] is the clamped 0, never the persisted -300.
+    commit(27, '-500');
+    await act(async () => { clickSave(); await Promise.resolve(); await Promise.resolve(); });
+
+    expect(putCalls()).toHaveLength(1);
+    expect(overridesOf(putCalls()[0])[70]).toBe(0);
   });
 });
