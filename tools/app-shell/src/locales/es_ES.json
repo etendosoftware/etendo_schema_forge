@@ -17202,11 +17202,13 @@
     "backendError.assetSearchKeyDuplicate": "Ya existe un activo con este identificador en esta organización.",
     "backendError.productNotStockable": "Este producto es de tipo Servicio y no admite movimientos de inventario.",
     "processAssetCompleted": "Amortización creada",
+    "processNowCompleted": "Períodos creados correctamente",
     "reactivated": "Documento reactivado",
     "post": "Contabilizar",
     "unpost": "Descontabilizar",
     "documentPosted": "Documento contabilizado correctamente",
     "documentUnposted": "Documento descontabilizado correctamente",
+    "documentConfirmed": "Documento confirmado correctamente",
     "notPostedDocuments": "Documentos no contabilizados",
     "postSelected": "Contabilizar seleccionados",
     "postingComplete": "Todos los documentos contabilizados",
@@ -17389,6 +17391,10 @@
     "allShipmentsAlreadyInvoiced": "Todos los envíos seleccionados ya están facturados",
     "selectShipmentsSameCustomer": "Selecciona envíos del mismo cliente",
     "selectShipmentsSameCurrency": "Selecciona envíos en la misma moneda",
+    "receipt": "albarán",
+    "allReceiptsAlreadyInvoiced": "Todos los albaranes seleccionados ya están facturados",
+    "selectReceiptsSameVendor": "Selecciona albaranes del mismo proveedor",
+    "selectReceiptsSameCurrency": "Selecciona albaranes en la misma moneda",
     "invoiceCreatedAsDraftToast": "Factura creada y confirmada",
     "failedToCreateInvoice": "Error al crear la factura",
     "failedToGeneratePdf": "Error al generar el PDF",
@@ -17858,6 +17864,7 @@
     "accessTierReadOnly": "Solo lectura",
     "rolesWindowCount": "{count} Ventanas",
     "rolesMatrixWindowColumn": "Ventana",
+    "rolesMatrixInformesHeader": "Informes",
     "rolesUserCount": "{count} Usuarios",
     "rolesSummaryCardNavigateAria": "Ver usuarios con el rol {role}",
     "userRolesTabLabel": "Roles del usuario",
@@ -20323,7 +20330,7 @@
     "soConfirmedTitle": "Pedido confirmado",
     "soConfirmedSubtitle": "Se generaron los siguientes documentos en borrador:",
     "soConfirmActionOnly": "Confirmar pedido",
-    "soManageDocsTitle": "Gestionar documentos",
+    "soManageDocsTitle": "Generar factura",
     "soCreateDocsBtn": "Crear →",
     "soDocsCreatedTitle": "Documentos creados",
     "soOrderConfirmed": "Pedido confirmado",
@@ -20504,6 +20511,7 @@
     "assetsDepEndDateLabel": "Fecha de fin de amortización",
     "assetsAssetValueLabel": "Valor del activo",
     "assetsResidualValueLabel": "Valor residual del activo",
+    "assetsPendingDepreciationLabel": "Pendiente de Amortizar",
     "assetsDepreciationAmtLabel": "Monto de amortización",
     "assetsPrevDepreciatedLabel": "Valor amortizado previamente",
     "poSave": "Guardar",
@@ -20634,6 +20642,7 @@
     "goBack": "Volver",
     "deleteRow": "Eliminar",
     "editLineTooltip": "Editar línea",
+    "savingLineTooltip": "Guardando línea",
     "selectRow": "Seleccionar fila",
     "recordDeleted": "Registro eliminado",
     "recordsDeleted": "{count} registro(s) eliminado(s)",
@@ -21518,6 +21527,11 @@
     "firstStepsTeamDesc": "Invita a las personas que trabajarán contigo y decide qué puede hacer cada una.",
     "firstStepsAllSetTitle": "Ya lo tienes todo listo",
     "firstStepsAllSetSubtitle": "Tu cuenta está configurada. Crea tu primera factura y empieza a trabajar.",
+    "firstStepsFinishSetup": "Finalizar configuración inicial",
+    "firstStepsFinishSetupHint": "Oculta Primeros pasos del menú. Puedes volver a mostrarlo desde esta página cuando quieras.",
+    "firstStepsDismissedTitle": "Primeros pasos está oculto",
+    "firstStepsDismissedSubtitle": "Ya no aparece en el menú. Vuelve a mostrarlo cuando quieras repasar la configuración.",
+    "firstStepsReopen": "Volver a mostrarlo en el menú",
     "inviteUser": "Invitar usuario",
     "inviteUserDescriptionTitle": "Invitaciones de usuarios",
     "inviteUserDescription": "Invita personas a unirse a tu empresa por correo. Pueden aceptar con una cuenta existente o registrar una nueva.",
@@ -22321,8 +22335,13 @@
     "amortizationErrorFullyDepreciated": "Este activo ya está completamente amortizado. No se pueden generar nuevas líneas de amortización.",
     "assetsValidationAnnualDepreciationMax": "El % de Amortización Anual no puede ser superior al 100%. Corregí el valor antes de crear la amortización.",
     "amortizationConfirmAction": "Confirmar amortización",
-    "amortizationErrorLineAmountInvalid": "Hay líneas con importe cero o negativo. Corregilas antes de confirmar.",
-    "amortizationErrorLinePercentageMissing": "Hay líneas sin porcentaje de amortización. Corregilas antes de confirmar.",
+    "amortizationErrorLineAmountInvalid": "Hay líneas con importe cero o negativo.",
+    "amortizationErrorLinePercentageMissing": "Hay líneas sin porcentaje de amortización.",
+    "amortizationBulkAlreadyConfirmed": "Ya está confirmada",
+    "amortizationProcessedDirectUpdateBlocked": "Procesado no se puede actualizar directamente.",
+    "amortizationBulkNoLines": "No tiene líneas de amortización.",
+    "amortizationBulkValidationFailed": "No se pudo validar el documento",
+    "amortizationBulkNotConfirmed": "No está confirmada, no hay nada que reactivar",
     "assetsAnnualDepreciationLabel": "% Amortización anual",
     "returnToVendorPdfGenerating": "Generando albarán de devolución de compra...",
     "returnToVendorPdfError": "No se pudo generar el PDF del albarán de devolución de compra.",
@@ -22495,18 +22514,15 @@
     "glc.section.identity.title": "Identidad del esquema",
     "glc.section.identity.subtitle": "Configuración básica del esquema contable.",
     "glc.section.calendar.title": "Calendario y moneda",
-    "glc.section.policies.title": "Políticas contables",
-    "glc.section.policies.subtitle": "Reglas que afectan el registro y cálculo contable.",
     "glc.field.name": "Nombre del esquema",
     "glc.field.gaap": "Esquema contable",
     "glc.field.organization": "Organización",
-    "glc.field.accrual": "Criterio contable",
     "glc.field.description": "Descripción",
     "glc.field.calendar": "Calendario fiscal",
     "glc.field.currency": "Moneda principal",
+    "glc.toggle.allowNegative": "Permitir negativos",
     "glc.accrual.accrual": "Devengo",
     "glc.accrual.cash": "Caja",
-    "glc.toggle.allowNegative": "Permitir negativos",
     "glc.unbacked.label": "Sin conexión a datos",
     "glc.unbacked.tooltip": "Este campo es una vista previa de diseño y todavía no se guarda.",
     "glc.readonly.fromOrgInfo": "Definido en la organización",
@@ -25190,6 +25206,7 @@
     "documentSequenceSalesOrder": "Pedido de venta",
     "documentSequenceSalesInvoice": "Factura de venta",
     "documentSequenceSalesCorrectiveInvoice": "Factura de venta rectificativa",
+    "documentSequencePurchaseInvoice": "Factura de compra",
     "documentSequencePurchaseCorrectiveInvoice": "Factura de compra rectificativa",
     "backendError.returnInvoiceAlreadyExists": "Ya existe una factura rectificativa para este documento de devolución.",
     "backendError.rectifiedInvoiceRequired": "Selecciona al menos una factura a rectificar: sin ella la factura rectificativa no se puede confirmar.",
@@ -26530,6 +26547,30 @@
     },
     "Account": {
       "label": "Plan de cuentas"
+    },
+    "Tax Report": {
+      "label": "Informe de Impuestos"
+    },
+    "Aging Report (Receivables)": {
+      "label": "Informe Antigüedad de Cobros"
+    },
+    "Aging Report (Payables)": {
+      "label": "Informe Antigüedad de Pagos"
+    },
+    "Stock Report": {
+      "label": "Informe de Stock"
+    },
+    "Balance Sheet": {
+      "label": "Balance de Situación"
+    },
+    "Profit & Loss": {
+      "label": "Pérdidas y Ganancias"
+    },
+    "General Ledger": {
+      "label": "Libro Mayor"
+    },
+    "Journal Entries": {
+      "label": "Diario de Asientos"
     }
   },
   "statuses": {

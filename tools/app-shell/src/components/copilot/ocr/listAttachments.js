@@ -27,7 +27,7 @@ function detectAttachmentsBase(apiBaseUrl) {
  * @param {{ token: string, tableName: string, recordId: string, apiBaseUrl?: string }} params
  */
 export async function listAttachments({ token, tableName, recordId, apiBaseUrl } = {}) {
-  if (!token || !tableName || !recordId) return [];
+  if (!tableName || !recordId) return [];
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/${tableName}/${recordId}`;
   try {
@@ -60,7 +60,7 @@ export async function listAttachments({ token, tableName, recordId, apiBaseUrl }
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
 export async function uploadAttachment({ token, tableName, recordId, file, fileName, apiBaseUrl } = {}) {
-  if (!token || !tableName || !recordId || !file) return { ok: false, error: 'missing_params' };
+  if (!tableName || !recordId || !file) return { ok: false, error: 'missing_params' };
   const base = detectAttachmentsBase(apiBaseUrl);
   const form = new FormData();
   const name = fileName || file.name;
@@ -91,7 +91,7 @@ export async function uploadAttachment({ token, tableName, recordId, file, fileN
  * @returns {Promise<{ ok: boolean, error?: string }>}
  */
 export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {}) {
-  if (!token || !attachmentId) return { ok: false, error: 'missing_params' };
+  if (!attachmentId) return { ok: false, error: 'missing_params' };
   const base = detectAttachmentsBase(apiBaseUrl);
   try {
     const res = await apiFetch(`${base}/sws/neo/attachments/file/${attachmentId}`, {
@@ -116,7 +116,7 @@ export async function deleteAttachment({ token, attachmentId, apiBaseUrl } = {})
  * @param {{ token: string, attachmentId: string, apiBaseUrl?: string }} params
  */
 export async function fetchAttachmentBlob({ token, attachmentId, apiBaseUrl } = {}) {
-  if (!token || !attachmentId) return null;
+  if (!attachmentId) return null;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}`;
   try {
@@ -153,7 +153,7 @@ export async function fetchAttachmentBlobUrl({ token, attachmentId, apiBaseUrl }
  * @param {{ token: string, tableName: string, recordId: string, apiBaseUrl?: string }} params
  */
 export async function fetchMainAttachment({ token, tableName, recordId, apiBaseUrl } = {}) {
-  if (!token || !tableName || !recordId) return null;
+  if (!tableName || !recordId) return null;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/${tableName}/${recordId}/main`;
   try {
@@ -182,7 +182,7 @@ export async function fetchMainAttachment({ token, tableName, recordId, apiBaseU
 export async function uploadAndMarkMainAttachment({
   token, tableName, recordId, file, fileName, apiBaseUrl,
 } = {}) {
-  if (!token || !tableName || !recordId || !file) return null;
+  if (!tableName || !recordId || !file) return null;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/${tableName}/${recordId}?markAsMain=true`;
   const form = new FormData();
@@ -210,7 +210,7 @@ export async function uploadAndMarkMainAttachment({
  * @param {{ token: string, attachmentId: string, isMain: boolean, apiBaseUrl?: string }} params
  */
 export async function markAttachmentAsMain({ token, attachmentId, isMain, apiBaseUrl } = {}) {
-  if (!token || !attachmentId) return false;
+  if (!attachmentId) return false;
   const base = detectAttachmentsBase(apiBaseUrl);
   const url = `${base}/sws/neo/attachments/file/${attachmentId}/main`;
   try {

@@ -127,7 +127,7 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
 }
 
 function fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch) {
-  if (!token || !apiBaseUrl) return;
+  if (!apiBaseUrl) return;
   apiFetch(`${neoBase(apiBaseUrl)}/session`, { baseUrl: '' })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -504,7 +504,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   useEffect(() => {
     // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
     // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     refreshIncidents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id, token, apiBaseUrl]);
@@ -587,7 +587,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       return;
     }
     if (liveBoxes != null) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
@@ -679,7 +679,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // is correct for them — they never race a same-tick recompute.
   async function persistEditableFields({ manualOverridesOverride } = {}) {
     if (isSubmitted) return { ok: true };
-    if (!hasPendingManualDataEditRef.current || !token || !apiBaseUrl) return { ok: true };
+    // ETP-4576 — `!token` is deliberately NOT part of this gate. Under the cookie session
+    // `useAuth()` holds no token, so including it made `persistEditableFields` return `{ ok: true }`
+    // without saving anything: the user pressed Guardar, got the success toast the `ok` drives, and
+    // their manual identification/box edits were silently discarded. Under bearer the gate was
+    // redundant anyway — the header builder omits the credential when none is held. What genuinely
+    // blocks a save is having nothing pending or no base URL to send it to.
+    if (!hasPendingManualDataEditRef.current || !apiBaseUrl) return { ok: true };
     const manualOverridesToPersist = manualOverridesOverride ?? manualOverrides;
     setIsSavingManualData(true);
     let ok = true;
@@ -866,9 +872,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // click that scheduled it. There is no more background debounce effect here: identChecks/
   // manualOverrides are local-only state now, flushed exclusively by an explicit "Guardar" or
   // "Calcular" click (see `persistEditableFields`).
+  // ETP-4576 — `token` is not a dependency: the body stopped reading it when the eligibility
+  // check dropped the credential, and leaving it listed reads as though a token change still
+  // re-evaluates eligibility. It does not, and under the cookie session there is no token to
+  // change.
   useEffect(() => {
-    isManualDataEligible.current = !isSubmitted && !!token && !!apiBaseUrl;
-  }, [isSubmitted, token, apiBaseUrl]);
+    isManualDataEligible.current = !isSubmitted && Boolean(apiBaseUrl);
+  }, [isSubmitted, apiBaseUrl]);
 
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)

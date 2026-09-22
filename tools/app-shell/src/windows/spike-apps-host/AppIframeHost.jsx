@@ -26,10 +26,6 @@ export default function AppIframeHost({ appUrl, appId, token }) {
   const apiFetch = useApiFetch();
 
   useEffect(() => {
-    if (!token) {
-      setError('Missing Etendo session token');
-      return;
-    }
     (async () => {
       try {
         const appToken = await fetchAppToken(appId, token, apiFetch);
