@@ -89,6 +89,7 @@ vi.mock('../ConfirmPaymentModal', () => ({
 // --- Imports ---
 
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { formatCurrency } from '@/lib/formatCurrency.js';
@@ -139,6 +140,10 @@ afterEach(() => {
 // --- Tests ---
 
 describe('PaymentHeaderTableBase — sidebar', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok-1' }));
+
   it('shows the loading skeleton and placeholder widgets when data is null', () => {
     render(<PaymentHeaderTableBase {...BASE_PROPS} dir="in" data={null} onDataMutated={vi.fn()} />);
     expect(screen.getByTestId('PaymentSidebar__panel')).toBeInTheDocument();

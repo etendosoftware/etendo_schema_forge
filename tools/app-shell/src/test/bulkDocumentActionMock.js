@@ -16,6 +16,10 @@ import { vi } from 'vitest';
  * was added to the real module: every spec mocking BulkDocumentAction had to grow the
  * same two lines. Keeping the full surface here means the next export added to the
  * real module is a one-line change in ONE place instead of a copy-paste across specs.
+ * `isRowPosted` / `isRowProcessed` (ETP-5414) went from module-private helpers to named
+ * exports so the amortization row-kebab's "Contabilizar" entry could reuse the same
+ * posted/processed predicates the bulk Descontabilizar pair already used, instead of a
+ * third hand-written copy — mocked here as neutral `() => false` stubs, not builders.
  *
  * The `default` export is deliberately NOT provided: each spec needs its own stub
  * (one records props, another renders a `data-testid` probe), so unifying it would
@@ -39,6 +43,8 @@ import { vi } from 'vitest';
 export function bulkDocumentActionNamedExports(overrides = {}) {
   return {
     buildInOutActions: vi.fn(() => []),
+    isRowPosted: vi.fn(() => false),
+    isRowProcessed: vi.fn(() => false),
     buildPostActions: vi.fn(() => []),
     postRowFilter: vi.fn(),
     buildUnpostActions: vi.fn(() => []),

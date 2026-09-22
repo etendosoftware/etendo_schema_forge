@@ -36,10 +36,44 @@ import { buildRowKey } from './useRolesOverviewData.js';
  * Each row's window name is translated via `useMenuLabel()`, same convention
  * as every other real-AD-window-name display in this app (e.g. the pre-
  * ETP-4907 version of this page's window chips).
+ *
+ * **ETP-5402 — "Informes" subsection.** `reportsMatrix` (same `[{category, rows}]`
+ * shape as `matrix`, from `useRolesOverviewData()`'s new `adaptReportsMatrix`) is
+ * rendered NESTED inside each category block, right after that category's real
+ * window rows, behind a small "Informes" sub-header row — the ticket's ask is a
+ * per-relevant-category subsection, not a 6th standalone top-level section. A
+ * category present only in `reportsMatrix` (none today, but not assumed to stay
+ * that way) still gets its own full category block, Informes rows included.
+ * Row keys are suffixed `--informes` (see `reportRowKey`) so a report id can
+ * never collide with a real window id sharing the same category, even though in
+ * practice the two id-spaces never overlap (see `SFRolesOverview.java`'s
+ * `ReportRow` javadoc).
+ *
+ * **No sticky column headers here (deliberately, ETP-5402 QA follow-up).** A sticky
+ * header was attempted through 6 different CSS strategies in one session — all
+ * failed live with the same "header visually overlaps/ghosts a body row during and
+ * after scroll" symptom (confirmed via screen recordings and DevTools bounding-box
+ * inspection), even though `UserRolesTab.jsx`'s own sticky `<thead>` (same
+ * `AppLayout.jsx` scroll chrome) works fine. Split out to its own ticket —
+ * **ETP-5435** — rather than keep blocking this ticket on it.
  */
-export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
+function reportRowKey(category, reportId) {
+  return `${buildRowKey(category, reportId)}--informes`;
+}
+
+export default function RolesAccessMatrix({ cards, matrix, reportsMatrix, iconFor }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
+
+  // Union of both matrices' categories, `matrix`'s own order first (it already
+  // reflects the real sidebar order via `adaptMatrix`'s menu.json-driven sort),
+  // then any category `reportsMatrix` introduces that `matrix` doesn't have.
+  const windowGroupsByCategory = new Map(matrix.map((g) => [g.category, g]));
+  const reportGroupsByCategory = new Map((reportsMatrix ?? []).map((g) => [g.category, g]));
+  const categories = [
+    ...matrix.map((g) => g.category),
+    ...[...reportGroupsByCategory.keys()].filter((category) => !windowGroupsByCategory.has(category)),
+  ];
 
   return (
     <div data-testid="RolesAccessMatrix">
@@ -68,39 +102,70 @@ export default function RolesAccessMatrix({ cards, matrix, iconFor }) {
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
-          {matrix.map((group) => (
-            <Fragment key={group.category}>
-              <tr className="bg-muted/30" data-testid={`RolesAccessMatrix__category-${group.category}`}>
-                <th
-                  colSpan={cards.length + 1}
-                  // scope="row" not "rowgroup": this <tbody> is shared across all categories
-                  // (no per-group <tbody>), so "rowgroup" would wrongly associate this header
-                  // with every later category's rows too — "row" is inert here (own <tr>) but
-                  // still resolves the ARIA role to rowheader.
-                  scope="row"
-                  className="py-1.5 pr-4 text-left text-xs font-medium text-muted-foreground"
-                >
-                  {tMenu(group.category)}
-                </th>
-              </tr>
-              {group.rows.map((row) => {
-                const rowKey = buildRowKey(group.category, row.windowId);
-                return (
-                  <tr key={rowKey} data-testid={`RolesAccessMatrix__row-${rowKey}`}>
-                    <td className="py-2.5 pr-4 text-foreground">{tMenu(row.windowName)}</td>
-                    {cards.map((role) => (
-                      <td key={role.id} className="py-2.5 px-3 text-center">
-                        <AccessTierPill
-                          tier={row.access?.[role.id] ?? 'none'}
-                          data-testid={`RolesAccessMatrix__cell-${rowKey}-${role.id}`}
-                        />
-                      </td>
-                    ))}
+          {categories.map((category) => {
+            const windowRows = windowGroupsByCategory.get(category)?.rows ?? [];
+            const reportRows = reportGroupsByCategory.get(category)?.rows ?? [];
+            return (
+              <Fragment key={category}>
+                <tr className="bg-muted/30" data-testid={`RolesAccessMatrix__category-${category}`}>
+                  <th
+                    colSpan={cards.length + 1}
+                    // scope="row" not "rowgroup": this <tbody> is shared across all categories
+                    // (no per-group <tbody>), so "rowgroup" would wrongly associate this header
+                    // with every later category's rows too — "row" is inert here (own <tr>) but
+                    // still resolves the ARIA role to rowheader.
+                    scope="row"
+                    className="py-1.5 pr-4 text-left text-xs font-medium text-muted-foreground"
+                  >
+                    {tMenu(category)}
+                  </th>
+                </tr>
+                {windowRows.map((row) => {
+                  const rowKey = buildRowKey(category, row.windowId);
+                  return (
+                    <tr key={rowKey} data-testid={`RolesAccessMatrix__row-${rowKey}`}>
+                      <td className="py-2.5 pr-4 text-foreground">{tMenu(row.windowName)}</td>
+                      {cards.map((role) => (
+                        <td key={role.id} className="py-2.5 px-3 text-center">
+                          <AccessTierPill
+                            tier={row.access?.[role.id] ?? 'none'}
+                            data-testid={`RolesAccessMatrix__cell-${rowKey}-${role.id}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+                {reportRows.length > 0 && (
+                  <tr className="bg-muted/10" data-testid={`RolesAccessMatrix__informesHeader-${category}`}>
+                    <th
+                      colSpan={cards.length + 1}
+                      scope="row"
+                      className="py-1 pr-4 pl-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70"
+                    >
+                      {ui('rolesMatrixInformesHeader')}
+                    </th>
                   </tr>
-                );
-              })}
-            </Fragment>
-          ))}
+                )}
+                {reportRows.map((row) => {
+                  const rowKey = reportRowKey(category, row.windowId);
+                  return (
+                    <tr key={rowKey} data-testid={`RolesAccessMatrix__row-${rowKey}`}>
+                      <td className="py-2.5 pr-4 pl-3 text-foreground">{tMenu(row.windowName)}</td>
+                      {cards.map((role) => (
+                        <td key={role.id} className="py-2.5 px-3 text-center">
+                          <AccessTierPill
+                            tier={row.access?.[role.id] ?? 'none'}
+                            data-testid={`RolesAccessMatrix__cell-${rowKey}-${role.id}`}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

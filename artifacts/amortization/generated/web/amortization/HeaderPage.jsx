@@ -7,6 +7,7 @@ import HeaderTable from './HeaderTable';
 import HeaderForm from './HeaderForm';
 import AmortizationLinesTable from '@/windows/custom/amortization/AmortizationLinesTable';
 import { AttachmentsTab } from '@/components/attachments';
+import AmortizationBulkActions from '../../../custom/AmortizationBulkActions';
 import catalogs from './mockCatalogs';
 
 import AmortizationConfirmModal from '../../../custom/AmortizationConfirmModal';
@@ -309,6 +310,7 @@ export default function HeaderPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      bulkActions={(ctx) => <AmortizationBulkActions {...ctx} />}
       listbarPaddingX="px-2"
       tablePaddingX="px-2"
       hidePrint
