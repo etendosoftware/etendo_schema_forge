@@ -21,6 +21,9 @@ vi.mock('@/i18n', () => ({
       processExecutedWithOmitted: '{ok} processed, {omitted} omitted, {failed} failed',
       actionFailed: 'Action failed',
       'backendError.countryIban': 'País necesario en una cuenta IBAN.',
+      // ETP-5316 — the AD_MESSAGE-key route's locale entries.
+      'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
+      'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
     };
     return map[key] || key;
   },
@@ -40,22 +43,16 @@ describe('useBulkActionToast', () => {
     expect(toast.success).toHaveBeenCalledWith('5 processed, 0 failed');
   });
 
-  // ETP-5316: ok > 0 with 2+ failed rows takes the multi-record path, which now ALSO carries
-  // a `{description}` second arg (buildFailureDetail) alongside the unchanged generic summary.
-  // buildFailureDetail now ALWAYS runs each row's message through translateBackendError — these
-  // fixtures are plain strings with no `.message` property at all, so there is nothing to
-  // translate and each row falls back to `ui('actionFailed')`, giving a populated (not empty)
-  // description. See the dedicated 'mixed ok/failed' test below for the case with realistic
-  // {documentNo, message} rows, and the 'translated message among the rows' test for a row whose
-  // message IS a real BACKEND_ERROR_MAP entry.
+  // ETP-5316 QA rejection: a mass/multi-record action must NEVER surface per-row backend
+  // errors as toast description — ok > 0 with 2+ failed rows takes the generic mixed-summary
+  // branch, which now calls toast.warning with ONLY the templated count message, no second arg.
   it('showResult calls toast.warning when some ok and some failures', () => {
     const { result } = renderHook(() => useBulkActionToast());
     act(() => {
       result.current.showResult({ ok: 3, failed: ['err1', 'err2'] });
     });
-    expect(toast.warning).toHaveBeenCalledWith('3 processed, 2 failed', {
-      description: 'Action failed\nAction failed',
-    });
+    expect(toast.warning).toHaveBeenCalledWith('3 processed, 2 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
   });
 
   // ETP-5316: rewritten from the original "toast.error when all failed" test. A SINGLE failed
@@ -99,28 +96,12 @@ describe('useBulkActionToast', () => {
     expect(toast.error).toHaveBeenCalledWith('Action failed');
   });
 
-  // ETP-5316: multiple records, mixed ok/failed (ok > 0) — the generic count summary stays the
-  // main message, but the toast now ALSO carries a `{description}` with each failed row's
-  // `documentNo: message`, newline-joined.
-  it('showResult builds a per-row description for a mixed ok/failed result', () => {
-    const { result } = renderHook(() => useBulkActionToast());
-    act(() => {
-      result.current.showResult({
-        ok: 2,
-        failed: [
-          { documentNo: 'DOC-1', message: 'err1' },
-          { documentNo: 'DOC-2', message: 'err2' },
-        ],
-      });
-    });
-    expect(toast.warning).toHaveBeenCalledWith('2 processed, 2 failed', {
-      description: 'DOC-1: err1\nDOC-2: err2',
-    });
-  });
-
-  // ETP-5316: 2+ failed records with ok===0 must NOT take the single-failure fast path — it stays
-  // on the generic "all failed" summary, now with the same per-row description as the mixed case.
-  it('showResult builds a per-row description for an all-failed multi-record result', () => {
+  // ETP-5316 QA rejection: 2+ failed records with ok===0 must NOT take the single-failure fast
+  // path — it stays on the generic "all failed" summary branch (failed.length>0, ok===0,
+  // omitted===0), calling toast.error with ONLY the templated count message, no per-row
+  // description. This is distinct branch coverage from the single-failure fast-path tests above
+  // (which require failed.length===1) and from the mixed ok/failed warning branch above.
+  it('showResult calls toast.error with the generic summary for an all-failed multi-record result', () => {
     const { result } = renderHook(() => useBulkActionToast());
     act(() => {
       result.current.showResult({
@@ -131,50 +112,8 @@ describe('useBulkActionToast', () => {
         ],
       });
     });
-    expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed', {
-      description: 'DOC-3: err3\nDOC-4: err4',
-    });
-  });
-
-  // ETP-5316: multi-row description where one failed row's message DOES match a real
-  // BACKEND_ERROR_MAP entry ('Country needed in an IBAN account.' -> backendError.countryIban,
-  // the same mapping the single-record 'translated message' test above exercises). The
-  // translated Spanish text must appear in the joined description for that row, while the
-  // sibling row with an unmapped message stays passed through verbatim.
-  it('showResult builds a per-row description with a translated message among the rows', () => {
-    const { result } = renderHook(() => useBulkActionToast());
-    act(() => {
-      result.current.showResult({
-        ok: 1,
-        failed: [
-          { documentNo: 'FIN-01', message: 'Country needed in an IBAN account.' },
-          { documentNo: 'DOC-2', message: 'err2' },
-        ],
-      });
-    });
-    expect(toast.warning).toHaveBeenCalledWith('1 processed, 2 failed', {
-      description: 'FIN-01: País necesario en una cuenta IBAN.\nDOC-2: err2',
-    });
-  });
-
-  // ETP-5316: a failed row with `documentNo` but no `message` at all, inside a MULTI-row result
-  // (so the single-failure fast path does not apply), must render 'documentNo: <actionFailed
-  // translation>' — not the literal string 'DOC-1: undefined' the old raw-join implementation
-  // would have produced for a missing message.
-  it('showResult renders the actionFailed fallback for a multi-row entry with documentNo but no message', () => {
-    const { result } = renderHook(() => useBulkActionToast());
-    act(() => {
-      result.current.showResult({
-        ok: 0,
-        failed: [
-          { documentNo: 'DOC-1' },
-          { documentNo: 'DOC-2', message: 'err2' },
-        ],
-      });
-    });
-    expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed', {
-      description: 'DOC-1: Action failed\nDOC-2: err2',
-    });
+    expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed');
+    expect(toast.error.mock.calls[0]).toHaveLength(1);
   });
 
   // ETP-5316 regression: an all-succeed result must stay a plain toast.success with no second
@@ -191,13 +130,16 @@ describe('useBulkActionToast', () => {
 
   // ETP-5316: an omitted-only result (failed: [], omitted.length > 0, even a single omitted row)
   // must NOT be mistaken for the single-failure case — `failed.length === 1` is required for that
-  // branch, and here `failed.length === 0`.
+  // branch, and here `failed.length === 0`. Also verifies the QA-mandated "no second arg at all"
+  // rule: the call must have exactly ONE argument, not `(msg, undefined)` — an explicit
+  // `undefined` second arg is a distinct call shape from omitting it entirely.
   it('omitted-only result does not trigger the single-failure branch', () => {
     const { result } = renderHook(() => useBulkActionToast());
     act(() => {
       result.current.showResult({ ok: 0, failed: [], omitted: ['ROW-1'] });
     });
-    expect(toast.warning).toHaveBeenCalledWith('0 processed, 1 omitted, 0 failed', undefined);
+    expect(toast.warning).toHaveBeenCalledWith('0 processed, 1 omitted, 0 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
   });
 
   it('showResult with persist=true stores in sessionStorage', () => {
@@ -213,16 +155,14 @@ describe('useBulkActionToast', () => {
   // ETP-5316: same multi-record "mixed" case as above, but replayed through the mount-time
   // useEffect (persistBulkActionResult + reload), since that is the actual code path bulk
   // actions use in production (BulkDocumentAction.jsx writes to sessionStorage, then the page
-  // reloads and this hook's effect reads it back). The fixture is a plain string with no
-  // `.message`, so — same as the direct showResult() equivalent above — it falls back to
-  // `ui('actionFailed')` and produces a populated description, not `undefined`.
+  // reloads and this hook's effect reads it back). Per the QA rejection, this generic branch
+  // now calls toast.warning with ONLY the templated count message, no description.
   it('reads and clears persisted result on mount', () => {
     persistBulkActionResult({ ok: 4, failed: ['x'] });
     renderHook(() => useBulkActionToast());
     // Should have shown toast from persisted result
-    expect(toast.warning).toHaveBeenCalledWith('4 processed, 1 failed', {
-      description: 'Action failed',
-    });
+    expect(toast.warning).toHaveBeenCalledWith('4 processed, 1 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
     // Should have cleared storage
     expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
   });
@@ -299,6 +239,186 @@ describe('useBulkActionToast', () => {
     expect(stored.ok).toBe(5);
     expect(stored.failed).toEqual(['err1']);
   });
+
+  // ETP-5316 — the single-record fast path is the ONLY branch that renders a backend message, so
+  // it is the only one that can use the AD_MESSAGE keys. The multi/mixed branches keep rendering
+  // the generic counter summary, still as a single toast argument (no `description`) — that is a
+  // separate, earlier fix in this same ticket and must not regress here.
+  describe('AD_MESSAGE key mapping on the single-failure fast path (ETP-5316)', () => {
+    it('renders the key-mapped string instead of the core sentence citing AD line numbers', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{
+            documentNo: 'ALB-01',
+            message: 'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces la '
+              + 'cantidad movida no debe ser cero.',
+            messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+          }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('Hay líneas sin cantidad.');
+      expect(toast.error.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('falls back to the backend sentence when the keys are not recognised', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{ documentNo: 'ALB-02', message: 'Some unmapped backend error', messageKeys: ['NopeNotAKey'] }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('Some unmapped backend error');
+    });
+
+    it('still maps by key when the failure carries no message at all', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{ documentNo: 'ALB-03', messageKeys: ['lockedProduct'] }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith(
+        'Hay líneas con productos bloqueados que no pueden entregarse.',
+      );
+    });
+
+    it('survives the sessionStorage round-trip on the reload replay flow', () => {
+      persistBulkActionResult({
+        ok: 0,
+        failed: [{
+          documentNo: 'ALB-04',
+          message: 'En la línea 10, 20, la cantidad movida no debe ser cero.',
+          messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+        }],
+      });
+      renderHook(() => useBulkActionToast());
+      expect(toast.error).toHaveBeenCalledWith('Hay líneas sin cantidad.');
+      expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
+    });
+
+    it('does not use the keys on a multi-failure result — the generic summary stays, with no description', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [
+            { documentNo: 'ALB-05', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] },
+            { documentNo: 'ALB-06', message: 'y', messageKeys: ['lockedProduct'] },
+          ],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('0 processed, 2 failed');
+      expect(toast.error.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('does not use the keys on a mixed result — the warning summary stays, with no description', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 2,
+          failed: [{ documentNo: 'ALB-07', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] }],
+        });
+      });
+      expect(toast.warning).toHaveBeenCalledWith('2 processed, 1 failed');
+      expect(toast.warning.mock.calls[0]).toHaveLength(1);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('does not use the keys when a single failure is accompanied by an omitted row', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          omitted: [{ documentNo: 'ALB-08', message: 'bulkRowAlreadyPosted' }],
+          failed: [{ documentNo: 'ALB-09', message: 'x', messageKeys: ['ProductNotNullAndMovementQtyZero'] }],
+        });
+      });
+      expect(toast.warning).toHaveBeenCalledWith('0 processed, 1 omitted, 1 failed');
+      expect(toast.warning.mock.calls[0]).toHaveLength(1);
+    });
+  });
+});
+
+// ================================================================
+// ETP-4994 — sessionStorage must never escalate to a broken render
+// ================================================================
+// This hook runs inside ListView's render tree. With site data blocked (strict
+// private mode, corporate policy) the accessor itself throws — an unguarded
+// access there unmounts the whole grid instead of losing one toast.
+describe('useBulkActionToast — storage unavailable', () => {
+  const realDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+
+  const installSessionStorage = (descriptor) => {
+    Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, ...descriptor });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (realDescriptor) {
+      Object.defineProperty(globalThis, 'sessionStorage', realDescriptor);
+    } else {
+      delete globalThis.sessionStorage;
+    }
+  });
+
+  it('mounts without throwing when reading the accessor throws', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.warning).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('mounts without throwing when getItem throws', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => { throw new DOMException('denied', 'SecurityError'); },
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    expect(() => renderHook(() => useBulkActionToast())).not.toThrow();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('still shows the toast when persisting hits the quota', () => {
+    installSessionStorage({
+      value: {
+        getItem: () => null,
+        setItem: () => { throw new DOMException('quota', 'QuotaExceededError'); },
+        removeItem: vi.fn(),
+      },
+      writable: true,
+    });
+
+    const { result } = renderHook(() => useBulkActionToast());
+    expect(() => {
+      act(() => {
+        result.current.showResult({ ok: 2, failed: [] }, { persist: true });
+      });
+    }).not.toThrow();
+    expect(toast.success).toHaveBeenCalledWith('2 processed, 0 failed');
+  });
+
+  it('persistBulkActionResult swallows a throwing accessor', () => {
+    installSessionStorage({
+      get() { throw new DOMException('The operation is insecure.', 'SecurityError'); },
+    });
+
+    expect(() => persistBulkActionResult({ ok: 1, failed: [] })).not.toThrow();
+  });
 });
 
 // ETP-5302 — `showBulkActionToast` went from module-private to EXPORTED so a caller
@@ -327,23 +447,26 @@ describe('showBulkActionToast — exported pure helper (ETP-5302)', () => {
     expect(sessionStorage.getItem('bulkActionResult')).toBeNull();
   });
 
+  // ETP-5316 QA rejection — every multi-record branch shows ONLY the generic count
+  // summary. The helper passes no second argument at all, so `toHaveLength(1)` is the
+  // assertion that actually pins it: `toHaveBeenCalledWith(msg)` alone would still pass
+  // if a `description` object came back.
   it('shows an error toast when every attempted row failed', () => {
     showBulkActionToast(ui, { ok: 0, failed: ['e1', 'e2'] });
-    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed', {
-      description: 'actionFailed\nactionFailed',
-    });
+    expect(toast.error).toHaveBeenCalledWith('0 ok, 2 failed');
+    expect(toast.error.mock.calls[0]).toHaveLength(1);
   });
 
   it('shows a warning toast on a partial failure', () => {
     showBulkActionToast(ui, { ok: 2, failed: ['e1'] });
-    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed', {
-      description: 'actionFailed',
-    });
+    expect(toast.warning).toHaveBeenCalledWith('2 ok, 1 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
   });
 
   it('switches to the 3-count message when rows were omitted', () => {
     showBulkActionToast(ui, { ok: 1, omitted: ['skipped'], failed: [] });
-    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed', undefined);
+    expect(toast.warning).toHaveBeenCalledWith('1 ok, 1 omitted, 0 failed');
+    expect(toast.warning.mock.calls[0]).toHaveLength(1);
   });
 
   it('normalizes a null result instead of throwing', () => {

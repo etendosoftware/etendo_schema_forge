@@ -2,9 +2,100 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { usePriceListPicker, PriceListSelectField } from './PriceListPicker';
+import { useRectifiableInvoices, RectifiableInvoiceField } from './RectifiableInvoicePicker';
+
+/** POSTs one NEO action and throws the backend's own message when it refuses. */
+async function postAction(apiFetch, url, body) {
+  const res = await apiFetch(url, { method: 'POST', body: JSON.stringify(body) });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    throw buildBackendError(errBody, res.status);
+  }
+  return res;
+}
+
+/**
+ * Derives the four gates the modal renders and validates against.
+ *
+ * `invoiceRequested` is the toggle's effective value: a caller that skips the document action
+ * is by definition here only to invoice, so the toggle is not offered and the answer is always
+ * yes. The other three are each that gate AND the thing they gate being configured at all.
+ */
+function deriveGates({ skipDocumentAction, createInvoice, showPriceListPicker, invoiceAction,
+  hasLinkedOrder, rectifiableInvoicesUrl }) {
+  const invoiceRequested = skipDocumentAction || createInvoice;
+  const pickerActive = showPriceListPicker && !!invoiceAction && invoiceRequested;
+  return {
+    invoiceRequested,
+    pickerActive,
+    priceListRequired: pickerActive && !hasLinkedOrder,
+    // ETP-5381: only relevant while the invoice toggle is on — confirming the return document
+    // without generating a rectificative invoice needs no rectified invoice.
+    rectifyActive: !!rectifiableInvoicesUrl && !!invoiceAction && invoiceRequested,
+  };
+}
+
+/**
+ * Builds the body of the invoice action. Only the keys the backend actually needs travel:
+ * NEO drops anything outside the spec silently, so an always-present `priceListId: undefined`
+ * would be invisible noise.
+ */
+function buildInvoiceBody({ pickerActive, priceListId, rectifyActive, selectedIds }) {
+  const body = {};
+  if (pickerActive && priceListId) {
+    body.priceListId = priceListId;
+  }
+  // ETP-5381: the rectificative invoice cannot be confirmed without this link.
+  if (rectifyActive && selectedIds.length > 0) {
+    body.originInvoices = selectedIds;
+  }
+  return body;
+}
+
+/**
+ * Runs the confirm sequence: complete the document (unless the caller already did), then create
+ * the invoice when one was requested. Returns the created invoice, or `null` when none was.
+ *
+ * Module-level rather than a closure inside the component on purpose: the component was over
+ * Sonar's cognitive-complexity budget (javascript:S3776), and a nested function's branches count
+ * toward the function that encloses it, with a nesting surcharge on each one.
+ */
+async function runConfirm({ apiFetch, actionBase, skipDocumentAction, invoiceRequested,
+  invoiceAction, invoiceBody }) {
+  if (!skipDocumentAction) {
+    await postAction(apiFetch, `${actionBase}/documentAction`, { docAction: 'CO' });
+  }
+  if (!invoiceRequested || !invoiceAction) {
+    return null;
+  }
+  const invRes = await postAction(apiFetch, `${actionBase}/${invoiceAction}`, invoiceBody);
+  const invData = (await invRes.json())?.response?.data;
+  return {
+    id: invData?.id ?? null,
+    documentNo: invData?.documentNo || '',
+    amount: invData?.grandTotalAmount ?? null,
+    // ETP-5381: the result modal badges off this — the invoice is confirmed on creation,
+    // while the shipment shown beside it is still a draft.
+    documentStatus: invData?.documentStatus ?? null,
+  };
+}
+
+/**
+ * Turns a failed NEO action response into an Error carrying BOTH the backend sentence and, when
+ * the backend sent them, the AD_MESSAGE search keys behind it (ETP-5316). The keys are what lets
+ * `translateBackendError` resolve a core document-action failure whose text embeds AD line
+ * numbers and so can never be matched as a literal. An older backend simply sends no keys and the
+ * Error is exactly what it used to be.
+ */
+function buildBackendError(body, status) {
+  const err = new Error(body?.response?.message || body?.message || `Error (${status})`);
+  err.status = status;
+  err.messageKeys = extractBackendMessageKeys(body);
+  return err;
+}
 
 /**
  * Generic confirm modal for InOut documents (goods-receipt, goods-shipment, return-receipt).
@@ -44,6 +135,8 @@ export default function ConfirmInOutModal({
   isSOTrx = true,
   hasLinkedOrder = false,
   defaultPriceListId = undefined,
+  rectifiableInvoicesUrl,
+  token,
   onConfirmed,
   onClose,
 }) {
@@ -53,9 +146,10 @@ export default function ConfirmInOutModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const invoiceRequested = skipDocumentAction || createInvoice;
-  const pickerActive = showPriceListPicker && !!invoiceAction && invoiceRequested;
-  const priceListRequired = pickerActive && !hasLinkedOrder;
+  const { invoiceRequested, pickerActive, priceListRequired, rectifyActive } = deriveGates({
+    skipDocumentAction, createInvoice, showPriceListPicker, invoiceAction,
+    hasLinkedOrder, rectifiableInvoicesUrl,
+  });
   const { priceLists, priceListId, setPriceListId, loading: loadingPriceLists } = usePriceListPicker({
     enabled: pickerActive,
     isSOTrx,
@@ -64,9 +158,14 @@ export default function ConfirmInOutModal({
     defaultPriceListId,
     allowGenericFallback: !priceListRequired,
   });
-  const canConfirm = !priceListRequired || !!priceListId;
+  const rectify = useRectifiableInvoices({
+    enabled: rectifyActive,
+    url: rectifiableInvoicesUrl,
+    token,
+  });
+  const canConfirm = (!priceListRequired || !!priceListId) && rectify.isSatisfied;
 
-  const { documentNo, bpName, total, currency } = docInfo || {};
+  const { documentNo, bpName, total, currency } = docInfo ?? {};
 
   const subtitleParts = [
     documentNo,
@@ -79,39 +178,19 @@ export default function ConfirmInOutModal({
     setLoading(true);
     setError(null);
     try {
-      const actionBase = `/${specName}/${entityName}/${recordId}/action`;
-
-      if (!skipDocumentAction) {
-        const res = await apiFetch(`${actionBase}/documentAction`, {
-          method: 'POST', body: JSON.stringify({ docAction: 'CO' }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
-        }
-      }
-
-      let invoice = null;
-      if (invoiceRequested && invoiceAction) {
-        const invoiceBody = pickerActive && priceListId ? { priceListId } : {};
-        const invRes = await apiFetch(`${actionBase}/${invoiceAction}`, {
-          method: 'POST', body: JSON.stringify(invoiceBody),
-        });
-        if (!invRes.ok) {
-          const body = await invRes.json().catch(() => null);
-          throw new Error(body?.response?.message || body?.message || `Error (${invRes.status})`);
-        }
-        const invData = (await invRes.json())?.response?.data;
-        invoice = {
-          id: invData?.id ?? null,
-          documentNo: invData?.documentNo || '',
-          amount: invData?.grandTotalAmount ?? null,
-        };
-      }
-
+      const invoice = await runConfirm({
+        apiFetch,
+        actionBase: `/${specName}/${entityName}/${recordId}/action`,
+        skipDocumentAction,
+        invoiceRequested,
+        invoiceAction,
+        invoiceBody: buildInvoiceBody({
+          pickerActive, priceListId, rectifyActive, selectedIds: rectify.selectedIds,
+        }),
+      });
       onConfirmed({ invoice });
     } catch (err) {
-      setError(translateBackendError(err.message, ui));
+      setError(translateBackendError(err.message, ui, { messageKeys: err.messageKeys }));
       setLoading(false);
     }
   };
@@ -237,6 +316,25 @@ export default function ConfirmInOutModal({
               loading={loadingPriceLists}
               idPrefix="confirm-modal-price-list"
               data-testid="confirm-modal-price-list-field" />
+          )}
+
+          {rectifyActive && (
+            <RectifiableInvoiceField
+              invoices={rectify.invoices}
+              selectedIds={rectify.selectedIds}
+              onToggle={rectify.toggle}
+              onApply={rectify.setSelectedIds}
+              loading={rectify.loading}
+              isEmpty={rectify.isEmpty}
+              selectedInvoices={rectify.selectedInvoices}
+              search={rectify.search}
+              onSearchChange={rectify.setSearch}
+              onReachBottom={rectify.loadMore}
+              loadingMore={rectify.loadingMore}
+              loadError={rectify.loadError}
+              onRetry={rectify.retry}
+              idPrefix="confirm-modal-rectify"
+              data-testid="RectifiableInvoiceField__3b3aca" />
           )}
 
           {error && (

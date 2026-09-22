@@ -22,7 +22,20 @@ import {
   localizeFields,
   validateStatementRow,
 } from '../financial-account/bankStatementImportPipeline.js';
-import '../contacts/contactsImportDescriptor.js';
+import { TAX_ID_KEY_VALUES } from '../contacts/contactsImportDescriptor.js';
+// ETP-5373 — the BROWSER MIRRORS of the Java rules `BusinessPartnerHandler` applies at confirm
+// time. Imported, never restated: `lib/taxIdValidation.js` mirrors `SpanishTaxIdValidator.java`
+// and `recipientEdits.js` mirrors the handler's EMAIL_PATTERN / isDomainShaped / isPlausiblePhone,
+// so a third copy of a check-digit table or a domain regex here would drift from both.
+import { getTaxIdError, getTaxIdFieldError, isTaxIdField } from '../../../lib/taxIdValidation.js';
+import {
+  getEmailFieldError,
+  getPhoneFieldError,
+  getWebsiteFieldError,
+  isEmailField,
+  isPhoneField,
+  isWebsiteField,
+} from '../../../components/contract-ui/recipientEdits.js';
 import '../product/productImportDescriptor.js';
 
 /**
@@ -40,7 +53,7 @@ import '../product/productImportDescriptor.js';
  * descriptor defaults (etgoIsperson, productType, uOM) must NOT come back as required, or
  * validateRow rejects the untouched template all over again.
  */
-function importConfigFor(window) {
+function frontendContractFor(window) {
   // Walk up from the cwd to the repo root. Not `import.meta.url` (Vite serves test modules
   // under a /@fs prefix, which is not a real filesystem path) and not a fixed relative path
   // (the cwd differs between `npx vitest --root tools/app-shell` from the repo root and
@@ -52,7 +65,11 @@ function importConfigFor(window) {
     dir = parent;
   }
   const path = resolve(dir, 'artifacts', window, 'contract.json');
-  return JSON.parse(readFileSync(path, 'utf8')).frontendContract.window.import;
+  return JSON.parse(readFileSync(path, 'utf8')).frontendContract;
+}
+
+function importConfigFor(window) {
+  return frontendContractFor(window).window.import;
 }
 
 /** Mirrors ImportDialog's own renameRowKeys: raw headers → target-keyed row. */
@@ -156,7 +173,10 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
       name: 'Acme Iberia SL',
       etgoEmail: 'contacto@acme.example',
       etgoPhone: '+34 910 000 001',
-      taxID: 'B12345678',
+      // A CIF with a VALID check digit (ETP-5373): this row is handed to buildOperations, so
+      // it is the payload the backend would judge, and `B12345678` — the value the template
+      // used to ship — is refused by SpanishTaxIdValidator.
+      taxID: 'B12345674',
     });
 
     const { headers, rows } = parseDelimited(csv);
@@ -200,7 +220,7 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
     assert.deepEqual(errors.map((e) => e.target), ['taxID']);
 
     assert.deepEqual(
-      validateRow({ name: 'Con NIF S.L.', taxID: 'B12345678' }, { requiredTargets, emailTargets: [] }).errors,
+      validateRow({ name: 'Con NIF S.L.', taxID: 'B12345674' }, { requiredTargets, emailTargets: [] }).errors,
       [],
     );
   });
@@ -234,6 +254,150 @@ describe('ETP-4995 — the downloaded CSV template round-trips', () => {
     assert.equal(ops.length, 1); // no price columns filled → product only
     assert.equal(ops[0].body.productType, 'I');
     assert.equal(ops[0].body.uOM, 'UOM-DEFAULT');
+  });
+});
+
+/**
+ * ETP-5373 — the template's own example values, judged by the rules that will actually judge
+ * them: the ones `BusinessPartnerHandler` runs at confirm time.
+ *
+ * What was broken: `artifacts/contacts/decisions.json` shipped `taxID: "B12345678"` (a CIF
+ * whose check digit does not match — the repo's own `taxIdValidation.test.js` uses it as its
+ * BAD_CHECK_DIGIT fixture) and `etgoWeb: "https://distribucionesgarcia.es"` (a domain carrying
+ * a scheme, where the column stores only the host). Every client-side check in this file passed
+ * them — `validateRow` knows about required/email/numeric and nothing else — so the review
+ * screen showed the row as correct and the backend then refused it, one field per attempt. The
+ * template could not be imported as downloaded.
+ *
+ * The cause was structural, not a typo: nothing connected the examples to the rules that would
+ * judge them. This block is that connection, and it is deliberately NOT a list of the two values
+ * that happened to be wrong. It asks the SAME detectors production uses — `isTaxIdField`,
+ * `isEmailField`, `isWebsiteField`, `isPhoneField` — which columns are format-validated, so the
+ * next import column named `*email*`, `*phone*`, `*web*` or `taxID` is covered the day it is
+ * declared, with nobody having to remember this file exists.
+ *
+ * The invariant it encodes, which is what the `etgoWeb` example actually got wrong: an import
+ * example is the value that will be STORED, not the one a user sees in the form. `etgoWeb`
+ * renders behind a fixed `https://` chip (`inputPrefix` on the contract's own field descriptor),
+ * so the stored value — and therefore the template cell — is the bare host. Reading the prefix
+ * off the descriptor rather than hardcoding it is what keeps the two in step.
+ */
+
+/** Every format rule the backend enforces on a stored contacts value, by how production detects it. */
+const BACKEND_FORMAT_RULES = [
+  { name: 'tax id — SpanishTaxIdValidator', applies: isTaxIdField, error: getTaxIdFieldError },
+  { name: 'email — EMAIL_PATTERN', applies: isEmailField, error: getEmailFieldError },
+  { name: 'website — isDomainShaped', applies: isWebsiteField, error: getWebsiteFieldError },
+  { name: 'phone — isPlausiblePhone', applies: isPhoneField, error: getPhoneFieldError },
+];
+
+/** The `oBTIKTaxIDKey` labels that resolve to code '1', the only one the NIF algorithm runs for. */
+const NIF_TYPE_LABELS = TAX_ID_KEY_VALUES[1];
+
+/**
+ * Contract field types whose template CELL IS the value that gets stored.
+ *
+ * Everything else — `enum`, `boolean`, `foreignKey` — ships a human LABEL that the window's
+ * import descriptor resolves into a code or an id before sending ("Empresa" -> 'N',
+ * "NIF" -> '1', "España" -> a C_Country_ID). Judging those cells by the column's own rules
+ * would be judging the wrong string: `etgoIsperson`'s column is one character wide, and its
+ * example is seven. The format rules above already refuse them for the same reason (all four
+ * detectors are text-input-only), so this set is where that shared premise is written down.
+ */
+const STORED_AS_TYPED_TYPES = new Set(['string', 'textarea']);
+
+/**
+ * The real field descriptor behind an import target, looked up across every entity of the
+ * window's contract — that is where `inputPrefix` and the AD column's `maxLength` live, and
+ * both change what counts as a valid stored value.
+ *
+ * `phone` exists on two entities (contact and locationAddress) with identical shape, so the
+ * first match is not a choice that can go wrong; the import's own `headerScope` says contact.
+ */
+function storedFieldProbe(contract, target) {
+  for (const entity of Object.values(contract.entities ?? {})) {
+    const field = (entity.fields ?? []).find((f) => f.apiKey === target || f.name === target);
+    if (field) {
+      return {
+        key: target,
+        column: field.column,
+        type: field.type,
+        inputPrefix: field.inputPrefix,
+        maxLength: field.validation?.maxLength,
+      };
+    }
+  }
+  // A target with no entity field of its own (e.g. `category`, `country`) is resolved by the
+  // descriptor into some other column; it carries no format rule, and the detectors say so.
+  return { key: target };
+}
+
+describe('ETP-5373 — the template example row satisfies the backend format rules', () => {
+  it('ships an example the backend would accept for every format-validated column, both windows', () => {
+    const checked = [];
+    for (const window of ['contacts', 'product']) {
+      const contract = frontendContractFor(window);
+      for (const field of contract.window.import.fields) {
+        if (field.example == null || field.example === '') continue;
+        const probe = storedFieldProbe(contract, field.target);
+        for (const rule of BACKEND_FORMAT_RULES) {
+          if (!rule.applies(probe)) continue;
+          checked.push(`${window}.${field.target}`);
+          assert.equal(
+            rule.error(probe, field.example), null,
+            `${window}: example ${JSON.stringify(field.example)} for "${field.target}" fails ${rule.name}`,
+          );
+        }
+      }
+    }
+
+    // Without this the test would pass just as happily if the detectors stopped matching
+    // anything — which is the one way a guard like this dies silently.
+    assert.deepEqual(checked.sort(), [
+      'contacts.email', 'contacts.etgoEmail', 'contacts.etgoPhone', 'contacts.etgoWeb',
+      'contacts.phone', 'contacts.taxID',
+    ], 'the set of format-validated template columns changed');
+  });
+
+  // The NIF algorithm only runs when the row declares document type NIF. The template declares
+  // it in a SIBLING column, so the two examples are one fact, not two, and asserting the tax id
+  // without asserting the type would leave the rule free to stop applying.
+  it('declares a tax-id type that puts its own tax-id example under the NIF rules', () => {
+    const config = importConfigFor('contacts');
+    const typeExample = config.fields.find((f) => f.target === 'oBTIKTaxIDKey').example;
+    const taxIdExample = config.fields.find((f) => f.target === 'taxID').example;
+
+    assert.ok(NIF_TYPE_LABELS.includes(typeExample),
+      `tax-id type example ${JSON.stringify(typeExample)} does not resolve to NIF`);
+    assert.equal(getTaxIdError(taxIdExample), null);
+  });
+
+  // No example may exceed its AD column, because the backend caps there too — `etgoPhone`'s
+  // 15 is exactly `BusinessPartnerHandler.PHONE_MAX_LENGTH`, read from the same column.
+  it('keeps every example inside its own AD column length, both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const contract = frontendContractFor(window);
+      for (const field of contract.window.import.fields) {
+        if (field.example == null || field.example === '') continue;
+        const { maxLength, type } = storedFieldProbe(contract, field.target);
+        if (maxLength == null || !STORED_AS_TYPED_TYPES.has(type)) continue;
+        assert.ok(String(field.example).length <= maxLength,
+          `${window}: example for "${field.target}" is ${String(field.example).length} chars, column allows ${maxLength}`);
+      }
+    }
+  });
+
+  // The guard has to BITE, not merely pass. These are the exact two values the template shipped
+  // before this ticket; if either stops being rejected, the rules above have gone soft and the
+  // block would keep reporting green on a template the backend still refuses.
+  it('rejects the two values the template used to ship', () => {
+    const contract = frontendContractFor('contacts');
+    const taxIdProbe = storedFieldProbe(contract, 'taxID');
+    const webProbe = storedFieldProbe(contract, 'etgoWeb');
+
+    assert.ok(isTaxIdField(taxIdProbe) && isWebsiteField(webProbe), 'both columns must still be detected');
+    assert.equal(getTaxIdFieldError(taxIdProbe, 'B12345678'), 'taxIdInvalidCheckDigit');
+    assert.equal(getWebsiteFieldError(webProbe, 'https://distribucionesgarcia.es'), 'websiteInsecureUrl');
   });
 });
 
@@ -414,41 +578,42 @@ describe('ETP-4954 — the bank-statement CSV template round-trips', () => {
  * header strings from them — nothing here restates a label, so renaming
  * `financeAccountStatementsManualColOut` in any locale file fails these tests.
  */
+/**
+ * Locate `src/locales` the same way `importConfigFor` locates `artifacts/`: walk up from the
+ * cwd, which differs between `npx vitest --root tools/app-shell` run from the repo root and
+ * `npm run vitest` run from inside `tools/app-shell`.
+ */
+function localesDir() {
+  let dir = process.cwd();
+  for (;;) {
+    for (const candidate of ['src/locales', 'tools/app-shell/src/locales']) {
+      const path = resolve(dir, candidate, 'en_US.json');
+      if (existsSync(path)) return dirname(path);
+    }
+    const parent = dirname(dir);
+    if (parent === dir) throw new Error(`could not locate src/locales from ${process.cwd()}`);
+    dir = parent;
+  }
+}
+
+/** Every shipped locale, derived from the directory rather than from a hardcoded list. */
+function shippedLocales() {
+  const dir = localesDir();
+  return readdirSync(dir)
+    .filter((file) => /^[a-z]{2}_[A-Z]{2}\.json$/.test(file))
+    .sort()
+    .map((file) => ({
+      locale: file.replace(/\.json$/, ''),
+      dict: JSON.parse(readFileSync(resolve(dir, file), 'utf8')),
+    }));
+}
+
+/** A `useUI()`-shaped translator backed by a real locale dictionary. */
+const uiFor = (dict) => (key) => dict.genericLabels?.[key] ?? key;
+
 describe('ETP-4954 — the bank-statement template round-trips across languages', () => {
   const FIELDS = BANK_STATEMENT_IMPORT_FIELDS;
 
-  /**
-   * Locate `src/locales` the same way `importConfigFor` locates `artifacts/`: walk up from the
-   * cwd, which differs between `npx vitest --root tools/app-shell` run from the repo root and
-   * `npm run vitest` run from inside `tools/app-shell`.
-   */
-  function localesDir() {
-    let dir = process.cwd();
-    for (;;) {
-      for (const candidate of ['src/locales', 'tools/app-shell/src/locales']) {
-        const path = resolve(dir, candidate, 'en_US.json');
-        if (existsSync(path)) return dirname(path);
-      }
-      const parent = dirname(dir);
-      if (parent === dir) throw new Error(`could not locate src/locales from ${process.cwd()}`);
-      dir = parent;
-    }
-  }
-
-  /** Every shipped locale, derived from the directory rather than from a hardcoded list. */
-  function shippedLocales() {
-    const dir = localesDir();
-    return readdirSync(dir)
-      .filter((file) => /^[a-z]{2}_[A-Z]{2}\.json$/.test(file))
-      .sort()
-      .map((file) => ({
-        locale: file.replace(/\.json$/, ''),
-        dict: JSON.parse(readFileSync(resolve(dir, file), 'utf8')),
-      }));
-  }
-
-  /** A `useUI()`-shaped translator backed by a real locale dictionary. */
-  const uiFor = (dict) => (key) => dict.genericLabels?.[key] ?? key;
 
   const LOCALES = shippedLocales();
 
@@ -747,5 +912,111 @@ describe('ETP-4954 — the template sample row is localized and still round-trip
     for (const { dict } of LOCALES) templateRowFor(dict);
     assert.deepEqual(FIELDS.map((f) => f.example), before,
       'localizeFields must return new objects, not edit the shared descriptor');
+  });
+});
+
+/**
+ * ETP-5350 — every import column a user sees must be translatable.
+ *
+ * `useWindowImportDialog.fieldLabelFn` resolves a header as `labelKey` -> AD label for `column`
+ * -> `field.label`, and that last step is a hardcoded English string. Thirteen of the twenty
+ * contacts fields and five of the eight product fields reached it, so a Spanish session
+ * downloaded a template and opened a mapping step written half in English. ETP-5223 translated
+ * the dialog's own chrome; the column names it lists come from per-window config and were left
+ * behind.
+ *
+ * Reads the GENERATED contract, like its sibling suites above, so it fails until
+ * `make regen ONLY=contacts,product` has carried a new `decisions.json` through.
+ */
+describe('ETP-5350 — every import column is translatable', () => {
+  const LOCALES = shippedLocales();
+
+  it('gives every field either a labelKey or an AD column, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      const untranslatable = config.fields
+        .filter((field) => !field.labelKey && !field.column)
+        .map((field) => field.target);
+      assert.deepEqual(untranslatable, [],
+        `${window}: these columns would render their hardcoded English label`);
+    }
+  });
+
+  it('translates every declared labelKey in every shipped locale, for both windows', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      for (const { locale, dict } of LOCALES) {
+        for (const field of config.fields.filter((f) => f.labelKey)) {
+          const header = uiFor(dict)(field.labelKey);
+          assert.notEqual(header, field.labelKey,
+            `${locale}: no translation for "${field.labelKey}" (${window}.${field.target})`);
+        }
+      }
+    }
+  });
+
+  /**
+   * The scope suffix is appended by `fieldLabelFn`, so a label that already spelled it out came
+   * back doubled — "Email (Contact) (Contact)". The base label is the field's own name.
+   */
+  it('leaves the scope suffix out of the label itself', () => {
+    for (const window of ['contacts', 'product']) {
+      const config = frontendContractFor(window).window.import;
+      for (const field of config.fields.filter((f) => f.headerScope)) {
+        assert.doesNotMatch(String(field.label ?? ''), /\((Contact|Address)\)\s*$/,
+          `${window}.${field.target}: headerScope already adds this suffix`);
+      }
+    }
+  });
+
+  /**
+   * ETP-5350 — the header the template PRINTS must never be read back as a different field.
+   *
+   * This is the one that mattered. `etgoFirstname` carries no `labelKey`, so its header came
+   * from the AD label, which `labelOverrides.es_ES` sets to "Nombre" — and "nombre" is a
+   * declared alias of `name`. A template downloaded in Spanish therefore had a column headed
+   * "Nombre" holding first names, and re-importing it wrote every one of them into the
+   * commercial name. Reported from the field as "the mapping confuses nombre with nombre
+   * comercial" and never reproduced, because it is invisible unless you round-trip the file.
+   *
+   * The header is resolved the way `useWindowImportDialog.fieldLabelFn` resolves it —
+   * `labelKey`, then the AD label through `labelOverrides`, then `label` — because reading only
+   * `labelKey` is exactly what let this through: the field that broke had none.
+   *
+   * Unmapped is tolerated, mis-mapped is not: `ImportDialog` adds the session language's own
+   * header to the field's aliases, which rescues a header nobody else claims (every scoped
+   * field's "… (Contacto)" lands here). It cannot rescue one another field already owns,
+   * because `mapColumns` awards a shared alias to the FIRST field that declares it.
+   */
+  it('never prints a header that another field would claim, in any locale, for both windows', () => {
+    const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .trim().toLowerCase();
+    const SCOPE = { contact: 'importHeaderScopeContact', address: 'importHeaderScopeAddress' };
+
+    for (const window of ['contacts', 'product']) {
+      const contract = frontendContractFor(window).window;
+      const fields = contract.import.fields;
+      for (const { locale, dict } of LOCALES) {
+        const ui = uiFor(dict);
+        // `useLabel(labelOverrides)`: the window's override first, then the AD dictionary.
+        const adLabel = (column) => contract.labelOverrides?.[locale]?.[column]
+          ?? dict.fields?.[column]?.label ?? null;
+        const headerFor = (f) => {
+          const base = (f.labelKey ? ui(f.labelKey) : null)
+            || (f.column ? adLabel(f.column) : null) || f.label || f.target;
+          const scope = f.headerScope ? ui(SCOPE[f.headerScope]) : null;
+          return !scope || norm(base) === norm(scope) ? base : `${base} (${scope})`;
+        };
+        for (const field of fields) {
+          const header = norm(headerFor(field));
+          const owner = fields.find((candidate) => [candidate.label, ...(candidate.aliases ?? [])]
+            .some((known) => norm(known) === header));
+          if (!owner) continue;
+          assert.equal(owner.target, field.target,
+            `${locale}/${window}: "${field.target}" prints the header "${header}", `
+            + `which the import reads back as "${owner.target}"`);
+        }
+      }
+    }
   });
 });

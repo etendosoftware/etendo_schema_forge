@@ -146,6 +146,9 @@ export default function OrderConfirmModal({
           id:         shipment?.id ?? null,
           documentNo: shipment?.documentNo || '',
           total:      shipment?.grandTotal != null ? formatCurrency(currency, shipment.grandTotal) : '',
+          // ETP-5381: the pill below badges off this. An auto-generated invoice is confirmed
+          // on creation, so a hardcoded "Borrador" would be a lie the user acts on.
+          documentStatus: shipment?.documentStatus ?? null,
         };
       }
 
@@ -169,6 +172,9 @@ export default function OrderConfirmModal({
           id:         invoice?.id ?? null,
           documentNo: invoice?.documentNo || '',
           total:      invoice?.grandTotal != null ? formatCurrency(currency, invoice.grandTotal) : '',
+          // ETP-5381: the pill below badges off this. An auto-generated invoice is confirmed
+          // on creation, so a hardcoded "Borrador" would be a lie the user acts on.
+          documentStatus: invoice?.documentStatus ?? null,
         };
       }
 
@@ -214,7 +220,6 @@ export default function OrderConfirmModal({
   if (createdDocs) {
     const { shipment, invoice } = createdDocs;
     const both = !!(shipment && invoice);
-    const statusLabel = ui('statusDraft');
 
     return (
       <div style={overlayStyle}>
@@ -237,14 +242,14 @@ export default function OrderConfirmModal({
                 <DocPill
                   label={ui('shipmentDoc', { number: shipment.documentNo })}
                   total={shipment.total}
-                  statusLabel={statusLabel}
+                  documentStatus={shipment.documentStatus}
                 />
               )}
               {invoice && (
                 <DocPill
                   label={ui('invoiceDoc', { number: invoice.documentNo })}
                   total={invoice.total}
-                  statusLabel={statusLabel}
+                  documentStatus={invoice.documentStatus}
                 />
               )}
             </div>
@@ -434,7 +439,17 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
 
 /* ── Doc pill ─────────────────────────────────────────────────── */
 
-function DocPill({ label, total, statusLabel }) {
+/**
+ * One created-document pill. The badge reads the document's OWN status: ETP-5381 makes an
+ * auto-generated invoice arrive confirmed while the shipment beside it is still a draft, so
+ * the two can legitimately disagree. Same palette and label rule as ConfirmResultModal.
+ */
+function DocPill({ label, total, documentStatus }) {
+  const ui = useUI();
+  const confirmed = documentStatus === 'CO';
+  const tone = confirmed
+    ? { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)' }
+    : { bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)' };
   return (
     <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
       <span>{label}</span>
@@ -443,9 +458,9 @@ function DocPill({ label, total, statusLabel }) {
       )}
       <span style={{
         fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-        background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
+        background: tone.bg, color: tone.fg,
       }}>
-        {statusLabel}
+        {ui(confirmed ? 'statusCompleted' : 'statusDraft')}
       </span>
     </div>
   );

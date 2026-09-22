@@ -10,13 +10,16 @@ import { useSavedPreviewRecord } from './useSavedPreviewRecord.js';
 import { useRowEmailModal } from './useRowEmailModal.jsx';
 import OrderPreview from './OrderPreview.jsx';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
+import { readOrderPendingDocs } from './orderPendingDocs.js';
 
 export function useOrderWindow({
   windowName,
   token,
   apiBaseUrl,
   specName,
-  deliveryKey,
+  // ETP-5295 — `deliveryKey` (the per-window percent column: `deliveryStatus` /
+  // `deliveryStatusPurchase`) is gone: the manage decision no longer reads any percent column.
+  // See the comment inside `menuActions` below.
   manageLabelKeys,
   confirmLabelKey,
   // ETP-5295 — describe the confirm-flow's default result title, and the shape of the two
@@ -99,10 +102,28 @@ export function useOrderWindow({
     onEmail: onRowEmail,
     onDelete: requestDelete,
     menuActions: ({ row, status }) => {
-      const delivery = Number(row?.[deliveryKey] ?? 100);
-      const invoice  = Number(row?.invoiceStatus  ?? 100);
-      const needsPrimary = status === 'CO' && delivery < 100;
-      const needsInvoice = status === 'CO' && invoice  < 100;
+      // ETP-5295 — the manage item's visibility AND its label come from the backend
+      // annotations `needsPrimaryDoc` / `needsInvoiceDoc`, NOT from the list's
+      // `DeliveryStatus` / `InvoiceStatus` percent columns this used to read. Those percents
+      // answer a different question than the one the flow actually applies: a DRAFT shipment /
+      // receipt / invoice already covers the pending work while the percent still reads < 100.
+      // So the kebab offered an item whose `ManageDocsLauncher` then closed silently, hid the
+      // item in cases where the detail-form button still offered it, and could promise a section
+      // ("... y factura") that the modal would not render. The annotations are computed
+      // server-side with the detail form's exact formula (`AbstractOrderHeaderHandler`, the same
+      // GET enrichment that already feeds `hasLinkedDocuments` used by `reactivate` below), so
+      // all three surfaces now answer "what is still pending?" identically. See
+      // `orderPendingDocs.js` for the wire shape.
+      //
+      // ABSENT annotation (legacy backend, or a spec whose handler does not annotate) reads as
+      // NOT pending, so the item is hidden. Deliberate: defaulting to "pending" would reinstate
+      // exactly the reported bug — a menu entry that leads nowhere — whereas hiding it only
+      // removes a shortcut. The same flow stays reachable from the order's detail page, which
+      // derives the answer from the shipments/invoices/lines it fetches itself and therefore
+      // never depends on the annotation being present.
+      const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(row);
+      const needsPrimary = status === 'CO' && needsPrimaryDoc === true;
+      const needsInvoice = status === 'CO' && needsInvoiceDoc === true;
       let manageLabelKey = null;
       if      (needsPrimary && needsInvoice) manageLabelKey = manageLabelKeys.both;
       else if (needsPrimary)                 manageLabelKey = manageLabelKeys.primary;
@@ -156,7 +177,7 @@ export function useOrderWindow({
     onMenuActionExecuted: (action) => {
       if (action.documentAction) setRefreshKey(k => k + 1);
     },
-  }), [navigate, windowName, requestDelete, ui, deliveryKey, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail]);
+  }), [navigate, windowName, requestDelete, ui, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail]);
 
   const confirmPortal = confirmRow && !confirmedDocs ? createPortal(
     <ConfirmModal
@@ -216,7 +237,9 @@ export function useOrderWindow({
       title={confirmedTitle || ui(confirmedTitleKey)}
       docs={[
         confirmedDocs?.[primaryDoc.key]?.id && { type: primaryDoc.type, num: confirmedDocs[primaryDoc.key].documentNo, amount: confirmedDocs[primaryDoc.key].amount, route: `/${primaryDoc.route}/${confirmedDocs[primaryDoc.key].id}` },
-        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
+        // ETP-5381: documentStatus on the invoice entry only — the primary doc (shipment or
+        // receipt) is still created as a draft, so it must keep the default Borrador badge.
+        confirmedDocs?.[invoiceDoc.key]?.id && { type: invoiceDoc.type, num: confirmedDocs[invoiceDoc.key].documentNo, amount: confirmedDocs[invoiceDoc.key].amount, documentStatus: confirmedDocs[invoiceDoc.key].documentStatus, route: `/${invoiceDoc.route}/${confirmedDocs[invoiceDoc.key].id}` },
       ].filter(Boolean)}
       currency={(confirmRow || manageRow)?.['currency$_identifier'] || ''}
       navigate={navigate}

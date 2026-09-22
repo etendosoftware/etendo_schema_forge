@@ -1,8 +1,23 @@
 import '@testing-library/jest-dom/vitest';
 import { configure } from '@testing-library/react';
+import { beforeEach } from 'vitest';
 import { installMemoryLocalStorage } from './localStorage.js';
 
 installMemoryLocalStorage();
+
+// ETP-4994 — ListView now snapshots its grid state (filters + sort) into sessionStorage per
+// window, and restores it on mount. Inside one test FILE every test shares the same jsdom
+// realm, so without this reset a test that applies a filter silently seeds the next test that
+// mounts the same window, and assertions on the "pristine" grid fail for reasons that have
+// nothing to do with the test. Clearing between tests restores per-test isolation; the
+// round-trip behaviour itself is asserted explicitly by the ETP-4994 suites.
+beforeEach(() => {
+  try {
+    globalThis.sessionStorage?.clear();
+  } catch {
+    /* no sessionStorage in this environment — nothing to reset */
+  }
+});
 
 // jsdom doesn't implement scroll APIs — stub them so components that
 // scroll-to-bottom on new content (chat threads, message lists) don't throw.

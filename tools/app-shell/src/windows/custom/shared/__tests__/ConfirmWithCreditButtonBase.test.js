@@ -99,10 +99,14 @@ describe('ConfirmWithCreditButtonBase', () => {
 
   // ── ETP-4940 follow-up: save pending edits before confirm ─────────────────
 
+  // The assertion deliberately does NOT pin the full named-import list: this module
+  // legitimately pulls more helpers from detailViewHelpers.jsx over time (ETP-5408 added
+  // getButtonClass/getSaveBtnCls), and a test that breaks every time a sibling import is
+  // added tests the import statement, not the contract. What matters is the origin.
   it('imports maybeSaveBeforeConfirm from detailViewHelpers', () => {
     assert.match(
       src,
-      /import \{ maybeSaveBeforeConfirm \} from '@\/components\/contract-ui\/detailViewHelpers\.jsx'/,
+      /import \{[^}]*\bmaybeSaveBeforeConfirm\b[^}]*\} from '@\/components\/contract-ui\/detailViewHelpers\.jsx'/,
     );
   });
 
@@ -137,6 +141,68 @@ describe('ConfirmWithCreditButtonBase', () => {
   it('gates the click handler too, not just the disabled attribute', () => {
     const drButton = src.match(/action-confirm-with-credit[\s\S]*?\{confirmDrLabel\}/)[0];
     assert.match(drButton, /if \(confirmBlocked\) return;/);
+  });
+
+  // ── ETP-5408: the DR Confirm renders the shared positive process button ────
+  //
+  // The bug was a hand-rolled `<button>` with an inline `style={{...}}` object and no
+  // icon — the only Confirmar in the product without the checkmark. These assertions
+  // are the structural half of the guard (the behavioural half lives in
+  // ConfirmWithCreditButtonBase.vitest.jsx): they exist so a revert to a bespoke
+  // element, or a hand-copied class string, cannot land silently.
+
+  // The whole DR branch, from its guard to the start of the CO branch. Slicing here
+  // rather than from the testid because `<Button` / `<GateTooltip` precede it.
+  const drBlock = src.slice(
+    src.indexOf("{status === 'DR' && ("),
+    src.indexOf("{status === 'CO' &&"),
+  );
+
+  it('imports the shared Button from @/components/ui/button.jsx', () => {
+    assert.match(src, /import \{[^}]*\bButton\b[^}]*\} from '@\/components\/ui\/button\.jsx'/);
+  });
+
+  it('imports the Check icon from lucide-react', () => {
+    assert.match(src, /import \{[^}]*\bCheck\b[^}]*\} from 'lucide-react'/);
+  });
+
+  it('renders the DR confirm action through the shared Button, never a raw <button>', () => {
+    assert.ok(drBlock.length > 0, 'expected to isolate the DR branch');
+    assert.match(drBlock, /<Button\b/);
+    assert.doesNotMatch(drBlock, /<button\b/);
+  });
+
+  it('renders a Check icon inside the DR confirm button', () => {
+    assert.match(drBlock, /<Check\b[^>]*size=\{16\}/);
+  });
+
+  it('carries no inline style object on the DR confirm button', () => {
+    assert.doesNotMatch(drBlock, /style=\{\{/);
+  });
+
+  it('derives the DR button classes from the shared helpers instead of restating them', () => {
+    assert.match(
+      src,
+      /const CONFIRM_BTN_CLS = [\s\S]*?getButtonClass\([\s\S]*?getSaveBtnCls\(/,
+    );
+    assert.match(drBlock, /className=\{CONFIRM_BTN_CLS\}/);
+  });
+
+  // The shared Button carries `disabled:pointer-events-none`, so a native `title` on the
+  // blocked button never fires — the exact failure mode ETP-4933 fixed for Save. The
+  // wrapper must come from saveActions.jsx: a local copy would be a second place for the
+  // gate explanation to rot.
+  it('reuses GateTooltip from saveActions.jsx rather than declaring a local copy', () => {
+    assert.match(
+      src,
+      /import \{[^}]*\bGateTooltip\b[^}]*\} from '@\/components\/contract-ui\/saveActions\.jsx'/,
+    );
+    assert.doesNotMatch(src, /function GateTooltip/);
+  });
+
+  it('wraps the DR confirm button in GateTooltip fed by the gate title', () => {
+    assert.match(drBlock, /<GateTooltip\b[\s\S]*?<Button\b/);
+    assert.match(drBlock, /<GateTooltip title=\{saveGate\?\.blocked \? saveGate\.title : undefined\}/);
   });
 
 });

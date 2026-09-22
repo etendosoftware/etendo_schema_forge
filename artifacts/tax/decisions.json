@@ -19,14 +19,16 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "Description": "Descripción"
+        "Description": "Descripción",
+        "C_TaxCategory_ID": "Categoría de impuesto"
       },
       "en_US": {
         "Name": "Name",
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "Description": "Description"
+        "Description": "Description",
+        "C_TaxCategory_ID": "Tax Category"
       }
     },
     "headerExtra": {
@@ -87,7 +89,8 @@
           "grid": true,
           "searchable": true,
           "section": "principal",
-          "seq": 1
+          "seq": 1,
+          "grow": true
         },
         "rate": {
           "visibility": "readOnly",
@@ -100,9 +103,19 @@
           "visibility": "readOnly",
           "name": "applicableTo",
           "grid": true,
+          "searchable": true,
+          "backendFilterKey": "salesPurchaseType",
+          "backendSortKey": "salesPurchaseType",
           "section": "principal",
           "seq": 3,
           "cellType": "taxScope"
+        },
+        "taxCategory": {
+          "visibility": "editable",
+          "grid": true,
+          "form": true,
+          "section": "principal",
+          "seq": 4
         },
         "validFromDate": {
           "visibility": "readOnly",
@@ -110,24 +123,23 @@
           "grid": false,
           "form": true,
           "section": "principal",
-          "seq": 4
+          "seq": 5
         },
         "docTaxAmount": {
           "visibility": "readOnly",
           "grid": false,
           "form": true,
           "section": "principal",
-          "seq": 5
+          "seq": 6
         },
         "baseAmount": {
           "visibility": "readOnly",
           "grid": false,
           "form": true,
           "section": "principal",
-          "seq": 6
+          "seq": 7
         },
         "description": { "visibility": "discarded" },
-        "taxCategory": { "visibility": "discarded" },
         "summaryLevel": {
           "visibility": "system",
           "reason": "ETP-4888: needed client-side (not shown in UI) so TaxSifModal.jsx can detect a compound/summary tax and resolve down to its rate-component child instead of editing the summary tax's own (always-blank) SIF columns."

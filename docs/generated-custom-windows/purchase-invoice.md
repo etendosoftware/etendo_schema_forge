@@ -260,6 +260,27 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 
 Two new line-import flows are now available on draft purchase invoices when a business partner is selected:
 
+
+**Header order reference (`C_Invoice.C_Order_ID`) — ETP-5381.** Adding a line that carries a
+`salesOrderLine` re-derives the parent invoice's order reference server-side, in
+`InvoiceLineHandler#syncInvoiceOrderReferenceAfterLineSave` (`com.etendoerp.go`, POST only). It
+replicates Classic's `Create Lines From` rule verbatim
+(`UpdateInvoiceLineInformation#setOrderReferenceInInvoiceHeaderIfLinkedOnlyToTheSameOrderOrBlankIt`):
+the header points at the line's order, and is **blanked to null** as soon as the invoice also holds
+a line from a different order, rather than naming an arbitrary one. It is derived from the persisted
+lines, not from the set of documents the popup sent, so importing from a SHIPMENT that traces back
+to an order links the header too, and a second import from another order self-corrects.
+
+This **cannot** be done with a frontend PATCH after import: `C_Order_ID` is `isreadonly='Y'` on the
+`header` entity of both invoice specs, so `NeoFieldFilter#filterWriteRequest` strips it — HTTP 200,
+nothing written. The goods-receipt import modal's `afterImport` does PATCH `salesOrder`, and that
+works only because the field is `isreadonly='N'` in ITS spec; copying that code into an invoice
+window produces a silent no-op. Before the fix the invoice showed "Sin documentos relacionados"
+while the same invoice built in Classic showed its order chip — `RelatedDocuments.jsx` reads the
+header's `salesOrder`. GO's own auto-generation path was never affected
+(`CreateDraftInvoiceHandler` already called `invoice.setSalesOrder`); only the manual
+import-lines path left it empty.
+
 **Import from Purchase Order** (`artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx`):
 - Lists confirmed purchase orders (`documentStatus=CO`) for the same supplier with `invoiceStatus < 100`.
 - Expanding an order row lazy-loads its lines with product name, ordered quantity, unit price, and discount.
@@ -1539,14 +1560,18 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
-## OCR reader — create-contact pre-fill — ETP-4855
+## OCR reader — create-contact pre-fill — ETP-4855 (superseded by ETP-5332)
 
 When the OCR reader cannot match the invoice's supplier to an existing business partner, the
-vendor field offers "create contact" and opens `CreateContactModal`. That popup used to open
-**completely empty**, discarding everything the extraction had already read — the user retyped
-the name, tax ID and address by hand.
+vendor field offers "create contact". Originally this opened `CreateContactModal`, a hand-rolled
+reimplementation of the Contacts window, which used to open **completely empty**, discarding
+everything the extraction had already read. ETP-4855 fixed the empty-popup problem by pre-filling
+it; ETP-5332 then deleted `CreateContactModal`/`EntityCreationModal` entirely and replaced the
+popup with `RecordCreateModal` mounting the **real** Contacts window (`docs/ui-customization.md`
+§19/§19b), so the pre-fill mechanism below had to move with it — and it now covers less ground
+than it used to, per the known gap section further down.
 
-### The pre-fill chain
+### The pre-fill chain today
 
 Four links, each of which has to carry the data:
 
@@ -1555,52 +1580,61 @@ Four links, each of which has to carry the data:
 | 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
 | 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
 | 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
-| 4 | `CreateContactModalAdapter.jsx` | forwards the whole map as the modal's `prefill` prop |
+| 4 | `CreateContactModalAdapter.jsx` → `buildOcrContactSeed` | narrows the map to the `businessPartner` **header** fields and hands it to `RecordCreateModal` as `initialData` |
 
-`createPrefilledFrom` is keyed by **form field id**, not by AD column: `name`, `taxID`,
-`address`, `postalCode`, `city`, `country`, `etgoEmail`, `etgoPhone`. Adding a field to the
-popup is one entry there plus one `extraHeaderFields` entry — no component change.
+`createPrefilledFrom` still lists all eight keys — `name`, `taxID`, `address`, `postalCode`,
+`city`, `country`, `etgoEmail`, `etgoPhone` — matching what the vision model extracts, but
+`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
+`vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
+new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
+`buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
 
-### Why `country` is special
+### Why `address`, `postalCode`, `city` and `country` are no longer seeded
 
-Text fields are seeded straight into `EntityCreationModal`'s `initialValues`. `country` (and
-`region`) cannot be: the form holds an **option id**, while the invoice prints a **label**
-("España"). Writing the label in would satisfy the required-field check with a value the API
-rejects.
+The window-mode popup runs the Contacts window's **own** `useEntity`, whose `initialData` option
+(the `§19b` seeding mechanism) only reaches the **header** record (`businessPartner` fields).
+`address`/`postalCode`/`city`/`country` belong to the `locationAddress` **child tab**, created
+through a different code path (`LocationEditorModal.jsx`) that `initialData` does not touch.
+Seeding a child tab's first row is a different mechanism from `useEntity.handleNew` and was not
+built as part of ETP-5332 — so a match extracted by OCR is simply not pre-filled today, and the
+user types the address by hand as they would for a manually opened "+ Crear contacto". This is
+tracked as debt `ocr-contact-address-prefill` in `flags-registry.json`.
 
-So those two are resolved through `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) against
-the country selector — accent- and case-insensitive, exact match first, then a prefix match in
-either direction so `España` still finds `ESPAÑA (ES)`. **No match leaves the field empty**
-rather than guessing: a wrong country id is invisible to the user, an empty picker is not.
+The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
+against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
+value once the selector loaded) belonged entirely to the deleted fallback form and no longer
+exists in the OCR path. `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) itself is not
+deleted — it now backs `src/lib/defaultCountry.js` — but nothing in the create-contact flow
+calls it any more.
 
-The selector options are fetched *after* the modal mounts, and `EntityCreationModal` snapshots
-`initialValues` in a `useState` initializer — so a late value cannot be delivered through it.
-That is what the `patchValues` prop is for: it merges into fields that are **still empty**,
-which makes it both idempotent and safe against clobbering something the user typed while the
-options were loading. Resolving the country also seeds `currentCountry`, because the region
-selector only loads once a country is known.
+### Side effect that no longer applies
 
-### Side effect worth knowing
-
-`CreateContactModal` creates the BP up front (`BP → address → contacts → banks → billing
-PATCH`) and posts the address whenever `address || city || country` is set. Pre-filling the
-address block therefore means the new BP now gets a location — which is what
+Before ETP-5332, `CreateContactModal` created the BP up front (`BP → address → contacts → banks
+→ billing PATCH`) and posted the address whenever `address || city || country` was set, so a
+pre-filled address block meant the new BP got a location immediately — which is what
 `resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
-header's `partnerAddress` (NOT NULL on `C_Invoice`). Before this change, a BP created from the
-OCR popup had no location at all.
+header's `partnerAddress` (NOT NULL on `C_Invoice`). Since the address is no longer seeded (see
+above), a BP created from the OCR popup today has no location until someone adds one.
+
+**That is not a dead end, and the mandatory address the old modal enforced was redundant against
+the affordance that already existed.** `partnerAddress` is a `C_BPartner_Location_ID` column, and
+`EntityForm`'s `DependentFkField` dispatches exactly that column to `PartnerAddressPicker`, which
+renders a **"+ Añadir dirección"** row in the dropdown and opens `LocationEditorModal` with `bpId`
+set to the partner just selected. So a contact that arrives on the invoice without a location gets
+one created inline, on the document, against the right parent. The Contacts window itself has
+always permitted a partner with no location; only the deleted popup forced one, and it forced it
+on one of the two paths. What remains is the typing, which is what
+`ocr-contact-address-prefill` covers.
 
 ### Automated evidence
 
-- `src/lib/__tests__/matchOptionLabel.test.js` — label matching, including the refusal to
-  prefix-match a 2-character option label and the empty-on-no-match contract.
-- `src/components/contract-ui/__tests__/CreateContactModal.vitest.jsx` → `describe('CreateContactModal — pre-fill')`
-  — free-text seeding, country label kept out of the form, resolution once the selector loads,
-  and `initialQuery` precedence.
-- `src/components/contract-ui/__tests__/EntityCreationModal.vitest.jsx` → `describe('EntityCreationModal — patchValues')`
-  — fills empty, never overwrites typed input, successive patches.
 - `src/components/copilot/ocr/__tests__/ocrDocTypes.prefill.vitest.js` — every
   `createPrefilledFrom` source must be a key the extraction schema actually emits. A typo there
   fails silently at runtime (the field just looks unextracted), so it is asserted in CI.
+- `CreateContactModalAdapter.jsx`'s own `buildOcrContactSeed` has no dedicated test file today —
+  it is exercised indirectly through whatever OCR/create-contact E2E coverage exists.
+- `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
+  `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
 
 ## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
 
@@ -1838,3 +1872,33 @@ secondary line at all.
 - `artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` — `selectorPriceCurrency="org"` passed to
   `DetailView`.
 - `sf-validate-pipeline --scope=purchase-invoice` — clean.
+
+### Invoice quantity is no longer capped against the shipment — ETP-5381
+
+`AbstractInvoiceHeaderHandler.validateLineQtyBeforeComplete` (and its helper
+`checkInoutEntryForOverInvoicing`) have been **removed**, together with the `ETGO_InvoiceLineAlreadyInvoiced`
+AD_MESSAGE, its `backendErrors.js` matcher and its i18n keys. Do not reinstate them.
+
+The guard capped every invoice line at the pending quantity of the shipment/receipt line it pointed
+at. It took that ceiling from `ABS(sil.movementqty)` in `NeoInvoiceSupport.queryPendingQtyPerLine`,
+whose row filter is `WHERE sil.m_inout_id = ? AND sil.isactive = 'Y'` — **no docstatus filter on the
+shipment**. (Every `docstatus NOT IN ('VO','CL','DR')` clause in that query filters INVOICES, not the
+shipment.) So an unconfirmed shipment, which has delivered nothing, capped the invoice.
+
+Reported case: order for 15 → shipment created from it, edited down to 10, left in **draft** →
+invoice created from the ORDER, reactivated and set to 12 → completion refused with *"the quantity to
+invoice (12) exceeds the pending quantity (10). It may already be invoiced in another document."*
+Both clauses were false: 15 were pending on the order, and no other invoice existed.
+`InvoiceLineLinker` had attached the invoice line to the draft shipment line — its query matches on
+`C_OrderLine_ID` and does not look at the shipment's status either — which is what handed the guard
+the wrong ceiling.
+
+**What still protects over-invoicing:** the core, in `C_INVOICE_POST`. For every invoice line carrying
+a `C_OrderLine_ID` it computes `ABS(ol.qtyordered) - ABS(ol.qtyinvoiced + qty)` and raises
+`@QtyInvoicedHigherOrdered@` when that goes negative. That ceiling is measured against the **order**,
+which is the commitment, and it is Classic's own behaviour.
+
+**Known gap, accepted:** that core check is conditional on `C_OrderLine_ID`, so an invoice line with
+no order behind it (invoiced straight from a standalone shipment) now has no quantity ceiling at all.
+Flagged rather than papered over; covering it would need a validation against the *confirmed*
+shipment, which is a separate decision.

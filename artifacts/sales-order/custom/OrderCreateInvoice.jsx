@@ -9,6 +9,7 @@ import { ConfirmResultModal } from '@/components/contract-ui';
 import { incrementSurveyCounter } from '@/lib/surveys/survey-state.js';
 import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
+import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 // ETP-5024: headers built locally here (instead of the shared `buildHeaders()`
@@ -156,7 +157,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           title={confirmedTitle || ui('soConfirmedTitle')}
           docs={[
             confirmedDocs?.shipment?.id && { type: 'salida', num: confirmedDocs.shipment.documentNo, amount: confirmedDocs.shipment.amount, route: `/goods-shipment/${confirmedDocs.shipment.id}` },
-            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
+            confirmedDocs?.invoice?.id && { type: 'facturaVenta', num: confirmedDocs.invoice.documentNo, amount: confirmedDocs.invoice.amount, documentStatus: confirmedDocs.invoice.documentStatus, route: `/sales-invoice/${confirmedDocs.invoice.id}` },
           ].filter(Boolean)}
           currency={data?.['currency$_identifier'] || ''}
           navigate={navigate}
@@ -239,10 +240,20 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
     currency = data?.['currency$_identifier'] || '';
 
-    // Acción pendiente = hay qty/importe pendiente Y no hay borrador cubriendo esa acción
-    // (si hay borrador, el chip en topbar ya lo cubre — el botón Gestionar no la incluye)
-    const needsShip    = qtyPending !== 0 && shipmentsDraft.length === 0;
-    const needsInvoice = totalPending !== 0 && !invoiceDraft;
+    // Pending action = there is pending qty/amount AND no draft document already covering it
+    // (when a draft exists the topbar chip already covers it — the Manage button leaves it out).
+    //
+    // ETP-5295 — that rule now has ONE owner: the backend annotations `needsPrimaryDoc` /
+    // `needsInvoiceDoc` on the order GET record, computed server-side with exactly the formula
+    // written out below. The list row kebab (`useOrderWindow.jsx`) reads the same two flags, so
+    // the kebab can no longer offer work this button considers done, nor hide work it offers.
+    // The local derivation is kept as the fallback for a record that carries no annotation
+    // (legacy backend / unannotated spec): unlike the kebab, this component has already fetched
+    // the real shipments, invoices and lines, so falling back costs nothing and keeps both the
+    // label AND the modal's sections (`derived.needsShip` / `derived.needsInvoice` below) working.
+    const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
+    const needsShip    = needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0);
+    const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
 
     if      (needsShip && needsInvoice) buttonLabel = ui('soManageShipmentAndInvoice');
     else if (needsShip)                 buttonLabel = ui('soManageShipment');
@@ -464,10 +475,15 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
-          throw new Error(ui('soOrderConfirmedInvoiceError') + (e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`));
+          // ETP-5381: was the only branch here not running the backend message through
+          // translateBackendError (the shipment branch above always did), so the new
+          // duplicate-invoice and completion messages would have surfaced in English.
+          throw new Error(ui('soOrderConfirmedInvoiceError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
         }
         const doc = (await res.json())?.response?.data;
-        currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        currentInvoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         setInvoiceResult(currentInvoice);
         trackDocumentCreated('sales-invoice');
       } catch (e) {
@@ -646,15 +662,23 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
 
 // ── SoCheckboxCard ─────────────────────────────────────────────────────────────
 
-function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, testId }) {
+/**
+ * @param implied the action is the only one available, so there is nothing to choose: the card
+ *     states what will happen instead of asking. It keeps the selected styling (this IS what the
+ *     dialog will do) but drops the tick box and the click handler, because a control that cannot
+ *     change anything invites a click that does nothing.
+ */
+function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, implied, testId }) {
+  const interactive = !disabled && !implied;
   return (
     <div
       data-testid={testId}
-      onClick={disabled ? undefined : onChange}
+      data-implied={implied ? 'true' : 'false'}
+      onClick={interactive ? onChange : undefined}
       style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: checked ? '11px 13px' : '12px 14px', borderRadius: 8,
-        cursor: disabled ? 'default' : 'pointer',
+        cursor: interactive ? 'pointer' : 'default',
         border: disabled ? '2px solid var(--status-success-border)' : (checked ? '2px solid var(--status-info-border)' : '1px solid hsl(var(--border-subtle))'),
         background: disabled ? 'var(--status-success-bg)' : (checked ? 'var(--status-info-bg)' : 'hsl(var(--card))'),
         opacity: disabled ? 0.85 : 1,
@@ -670,20 +694,22 @@ function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, te
           {subtitle}
         </div>
       </div>
-      {/* Checkbox indicator */}
-      <div style={{
-        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-        border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
-        background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'background 0.15s',
-      }}>
-        {(checked || disabled) && (
-          <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="1 4 4 7.5 10 1" />
-          </svg>
-        )}
-      </div>
+      {/* Checkbox indicator — omitted entirely when the action is implied (see `implied`). */}
+      {!implied && (
+        <div style={{
+          width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+          border: (checked || disabled) ? 'none' : '1.5px solid hsl(var(--border-subtle))',
+          background: disabled ? 'var(--status-success-fg)' : (checked ? 'var(--status-info-fg)' : 'hsl(var(--card))'),
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'background 0.15s',
+        }}>
+          {(checked || disabled) && (
+            <svg width="11" height="9" viewBox="0 0 11 9" fill="none" stroke="hsl(var(--card))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 4 7.5 10 1" />
+            </svg>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -721,14 +747,23 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         : ui('soAmountPendingInvoice', { pending: formatCurrency(currency, totalPending) }))
     : ui('soCreateInvoiceCheckDesc');
 
+  // ETP-5381: with only ONE action left, the tick is a confirmation of a confirmation. The user
+  // already chose by opening a dialog whose only button says "Crear", and there is nothing to
+  // choose between — so the sole pending action is implied, its card renders without a checkbox,
+  // and the button is live on open. With BOTH pending it is a real choice and the checkboxes stay.
+  // Same reasoning that removed the redundant checkbox from CreateInvoiceConfirmModal (a84798d2a).
+  const soleAction = needsShip !== needsInvoice;
+  const shipWanted = soleAction ? needsShip : createShipment;
+  const invoiceWanted = soleAction ? needsInvoice : createInvoice;
+
   const handleCreate = async () => {
-    if (loading || (!createShipment && !createInvoice)) return;
+    if (loading || (!shipWanted && !invoiceWanted)) return;
     setLoading(true);
     setError(null);
     try {
       const result = {};
 
-      if (createShipment) {
+      if (shipWanted) {
         const res = await fetch(`${base}/sales-order/header/${orderId}/action/createShipment`,
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
@@ -740,7 +775,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
         trackDocumentCreated('goods-shipment');
       }
 
-      if (createInvoice) {
+      if (invoiceWanted) {
         const res = await fetch(`${base}/sales-order/header/${orderId}/action/createDraftInvoice`,
           { method: 'POST', headers, body: JSON.stringify({}) });
         if (!res.ok) {
@@ -748,7 +783,9 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
         }
         const doc = (await res.json())?.response?.data;
-        result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null };
+        // ETP-5381: carry documentStatus so the result modal badges the invoice as Confirmada
+        // instead of defaulting to Borrador — it is confirmed on creation now.
+        result.invoice = { id: doc?.id ?? null, documentNo: doc?.documentNo ?? '', amount: doc?.grandTotalAmount ?? null, documentStatus: doc?.documentStatus ?? null };
         trackDocumentCreated('sales-invoice');
       }
 
@@ -760,7 +797,7 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
     }
   };
 
-  const canCreate = createShipment || createInvoice;
+  const canCreate = shipWanted || invoiceWanted;
 
   return (
     <div data-testid="sales-order-manage-docs-modal" onClick={onClose} style={overlayStyle}>
@@ -788,27 +825,31 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
           </div>
         </div>
 
-        {/* Only show checkboxes for pending actions; subtitle shows outstanding qty/amount */}
+        {/* Only show cards for pending actions; subtitle shows outstanding qty/amount */}
         <div style={{ padding: '0 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
-            {ui('soGenerateDocs')}
+            {/* "(optional)" is only true while there is something to opt out of. With one action
+                left it is not optional — it is what the button does. */}
+            {soleAction ? ui('soGenerateDocsImplied') : ui('soGenerateDocs')}
           </div>
           {needsShip && (
             <SoCheckboxCard
-              checked={createShipment}
+              checked={shipWanted}
               onChange={() => setCreateShipment(v => !v)}
               icon="🚚"
               title={ui('soCreateShipmentTitle')}
               subtitle={shipmentSubtitle}
+              implied={soleAction}
             testId="sales-order-manage-shipment-card" />
           )}
           {needsInvoice && (
             <SoCheckboxCard
-              checked={createInvoice}
+              checked={invoiceWanted}
               onChange={() => setCreateInvoice(v => !v)}
               icon="🧾"
               title={ui('soCreateInvoiceTitle')}
               subtitle={invoiceSubtitle}
+              implied={soleAction}
             testId="sales-order-manage-invoice-card" />
           )}
         </div>
@@ -879,8 +920,13 @@ const closeBtn = {
 // Self-contained mount point for the "Gestionar envío/factura" flow from the
 // list-view row kebab. Replicates the fetch+derive logic that OrderCreateInvoice
 // runs in the detail page (shipments / invoices / order lines → pending qty &
-// amount) and opens CreateDocsModal once derived data is ready. If nothing is
-// pending the launcher closes silently.
+// amount) and opens CreateDocsModal once derived data is ready.
+//
+// ETP-5295 — "if nothing is pending it closes silently" is no longer a state a user can reach by
+// clicking the kebab item: the kebab only offers the item when the backend annotated this record
+// as still pending, and this launcher reads those same annotations. The silent close survives
+// only as the defence for the no-annotation fallback path and for a record that changed between
+// the list load and the click.
 export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, onCreated }) {
   const ui = useUI();
   const [fetched, setFetched] = useState(null);
@@ -931,10 +977,16 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const totalInvoiced = invoicesComplete.reduce((s, i) => s + (Number(i.grandTotalAmount) || 0), 0);
   const totalPending  = totalOrder - totalInvoiced;
 
-  // `fetched != null` gates all three: while still loading, neither "needs" flag may read true off
-  // the placeholder empty arrays above, or the close-effect below could fire before data ever loads.
-  const needsShip    = fetched != null && qtyPending !== 0 && shipmentsDraft.length === 0;
-  const needsInvoice = fetched != null && totalPending !== 0 && !invoiceDraft;
+  // ETP-5295 — same single source as the detail-page button above: the `needsPrimaryDoc` /
+  // `needsInvoiceDoc` annotations the backend put on this very row, with the local derivation as
+  // the no-annotation fallback. Reading the same flags the kebab used to decide to SHOW this
+  // launcher is what makes "the option opens an empty flow and closes itself" impossible: both
+  // ends now read one value off one record instead of two independent computations.
+  // `fetched != null` still gates both: while loading, neither "needs" flag may read true off the
+  // placeholder empty arrays above, or the close-effect below could fire before data ever loads.
+  const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);
+  const needsShip    = fetched != null && (needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0));
+  const needsInvoice = fetched != null && (needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft));
   const nothingToManage = fetched != null && !needsShip && !needsInvoice;
 
   // Close asynchronously when there's nothing pending — avoids the

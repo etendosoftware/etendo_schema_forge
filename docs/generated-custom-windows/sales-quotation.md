@@ -10,7 +10,7 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Add, edit, and remove quotation lines with product, description, quantity, Net List Price, discount, tax, and line gross amount.
 - Render Net List Price in the quotation grid as a currency-formatted `amount` column backed by `PriceList`, instead of exposing the derived `unitPrice` (`PriceActual`) as the visible price column.
 - Keep the quotation in draft while the commercial proposal is being prepared, then explicitly send that draft into an `Under Evaluation` state before final conversion.
-- From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a draft sales invoice.
+- From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a sales invoice (confirmed on creation since ETP-5381).
 - Send the quotation document by email from the record view, once it is no longer in `Draft` (from `Under Evaluation` onward).
 - Inspect related downstream sales orders and invoices from the quotation record when those documents exist.
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
@@ -65,16 +65,23 @@ The "Facturar directamente" action on the confirmation modal calls
 to `CreateDraftInvoiceHandler` in `com.etendoerp.go`. The handler reuses the
 sales-order code path: it copies the quotation header (business partner,
 currency, payment terms, price list) and the lines (product, quantity, prices)
-into a new sales invoice in `DR` (Draft) status via the native
-`CreateInvoiceLinesFromProcess`.
+into a new sales invoice via the native `CreateInvoiceLinesFromProcess`. Since
+ETP-5381 the handler does not stop there: the same request also completes the
+invoice through `InvoiceCompletionService`, so it reaches the user in `CO`
+(Confirmed), never in `DR`. The action keeps its name — `createDraftInvoice` —
+but no longer leaves a draft behind. See "Invoice is created and confirmed in
+one step — ETP-5381" below.
 
 The success state of `QuotationConfirmModal` displays the invoice doc number
 followed by the formatted grand total and the quotation's currency identifier
 (e.g. `Factura #10000083 · 48.40 EUR`). The order branch already rendered the
 currency; the invoice branch was previously dropping the suffix.
 
-After the invoice is persisted, the source quotation's DocStatus is set to
-`ETGO_CI` ("Closed - Invoice Created") via a direct OBDal write. This mirrors
+After the invoice is **completed** (ETP-5381 moved this write to after the
+completion, not merely after the insert), the source quotation's DocStatus is
+set to `ETGO_CI` ("Closed - Invoice Created") via a direct OBDal write, so
+`ETGO_CI` now means "a confirmed invoice exists for this quotation" rather than
+"one was attempted". This mirrors
 the standard Etendo pattern in `ConvertQuotationIntoOrder`, which sets DocStatus
 to `CA` ("Closed - Order Created") when an order is generated from a
 quotation. The transition is performed without invoking `C_Order_Post`, so it
@@ -84,6 +91,15 @@ of the quotation's `Processed` flag or prior status.
 The line quantity invoiced is `orderedQuantity − invoicedQuantity` per line.
 Lines whose pending is zero are skipped; if every line is fully invoiced, the
 handler returns HTTP 400 with "No hay líneas a facturar en este pedido".
+
+Before that generic check runs, **guard P6** (ETP-5381) rejects a quotation
+already closed as invoiced: `assertQuotationNotInvoiced`
+(`CreateDraftInvoiceHandler.java:291-296`) throws `AlreadyInvoicedException`
+with "An invoice has already been generated for this quotation." when
+`documentStatus == 'ETGO_CI'`, surfaced as **HTTP 409**. The pending-quantity
+check would also have stopped the request, but with a message ("no lines to
+invoice") that tells the user nothing about what actually happened; P6 runs
+before any write, so a duplicate request leaves no trace.
 
 ETP-4006 (IV-11) extends the same handler to carry the discount surface
 to the new invoice. `NeoCommercialDocumentFactory.createInvoiceFromOrderHeader`
@@ -116,7 +132,7 @@ the discount. The earlier client-side factor double-applied it.
 ## Gap assessment
 
 - The kebab (⋮) menu now exposes only the `Reject` action (visible when `documentStatus === 'UE'`). Both the previous `Duplicate` entry (redundant with the topbar `Clonar` button) and the previous `Cancel` placeholder (wired to an empty `onClick` and never functional) were removed.
-- The detail page includes a draft-only confirmation modal that can create an order or draft invoice. Quotation-to-order remains the documented core conversion rule kept in decisions; the quotation-to-draft-invoice path is implemented in `CreateDraftInvoiceHandler` (com.etendoerp.go) by mirroring the sales-order branch — see "Invoice creation flow" above.
+- The detail page includes a draft-only confirmation modal that can create an order or an invoice. Quotation-to-order remains the documented core conversion rule kept in decisions; the quotation-to-invoice path is implemented in `CreateDraftInvoiceHandler` (com.etendoerp.go) by mirroring the sales-order branch — since ETP-5381 that branch creates **and confirms** the invoice in one step, so the quotation never yields a draft invoice. See "Invoice creation flow" above.
 - `lineGrossAmount` updates instantly in the grid on every `orderedQuantity`, `listPrice`, or `discount` keystroke (client-side). Header totals (`summedLineAmount`, `grandTotalAmount`) only refresh after a line save — that timing gap is expected and not a bug.
 - The decisions file keeps a rule that should default `validUntil` from `orderDate`, but the generated form only shows `orderDate` with an explicit default value. The intended validity-date default is therefore not clearly evidenced in the current UI layer.
 - Related documents are clearly enabled for orders, but invoice lookup currently queries sales invoices by `salesOrder` using the quotation record id. That may work only if backend linkage matches this assumption; otherwise invoice visibility from the quotation tab is an open ambiguity.
@@ -395,3 +411,75 @@ Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`
 `documentPdf.template.vitest.jsx`, plus
 `lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
 the cache invalidation.
+
+## Invoice is created and confirmed in one step — ETP-5381
+
+Confirming a quotation with "Facturar directamente" used to leave a **draft**
+sales invoice behind. A draft reserves nothing — `c_orderline.qtyinvoiced` is
+only written when the invoice is completed — so the same quotation could be
+invoiced twice, and `invoiceStatus` (which filters `docstatus NOT IN ('VO','CL','DR')`)
+stayed at 0%, blinding every visual guard built on top of it.
+
+`createDraftInvoice` now creates and completes the invoice in a **single atomic
+request**. `CreateDraftInvoiceHandler` calls
+`InvoiceCompletionService.completeInvoiceOrThrow` (`InvoiceCompletionService.java:167`),
+which runs the `CO` document action through core `ProcessInvoiceUtil` — not
+`C_Invoice_Post0` directly — so the `ProcessInvoiceHook` CDI chain (Verifactu /
+TBAI) fires, which it never did through NEO's generic process dispatch.
+
+**Rollback is all-or-nothing.** The creation handler only `flush()`es; the commit
+belongs to `ProcessInvoiceUtil`, which rolls back on error. A failed completion
+therefore reverts the header, its lines, the discount line, the line links **and
+the document-number sequence advance** together — no orphan draft, no burned
+document number. Because the session is closed mid-request, the handler captures
+the invoice id before completing and re-reads the entity afterwards
+(`CreateDraftInvoiceHandler.java:228-241`); the re-read also picks up the
+`DocumentNo` the completion may have reassigned from the document type's
+sequence.
+
+**Ordering.** `markQuotationAsInvoiceCreated` now runs **after** the completion
+(`CreateDraftInvoiceHandler.java:232-237`). This is the invariant guard P6 relies
+on: `ETGO_CI` is only written once a confirmed invoice exists.
+
+**To modify an auto-generated invoice**, the user reactivates it: both
+`sales-invoice` and `purchase-invoice` expose a `reactivate` menu action
+(`documentAction: 'RE'`, `preUnpost: true`, `visibleWhenStatus: 'CO'` —
+`artifacts/sales-invoice/contract.json:26-34`), which is now the only route back
+to `DR`. Editing before confirming is no longer an option on this path.
+
+**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes `status: 'Draft'` on
+the result card — it reads the real `documentStatus` from the response
+(`status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft')`),
+so the badge renders "Completado" / "Completed" in success green instead of a
+false "Borrador". `backendErrors.js` maps the new 409 literal to
+`backendError.quotationAlreadyInvoiced` ("Ya se ha generado una factura para este
+presupuesto." / "An invoice has already been generated for this quotation.").
+
+**Known residual gap (UI copy, not behavior):** the confirm modal's invoice card
+still describes the outcome as a draft. `soCreateInvoiceCheckDesc` reads "Se
+generará una factura en borrador con las cantidades del pedido" / "A draft
+invoice will be created using order quantities", and `rmrCreateInvoiceConfirmDesc`
+still offers to "revisarla y confirmarla antes de enviarla". Those keys were not
+reworded in this ticket; the invoice they describe is now confirmed on creation.
+
+### Manual verification
+
+1. On a quotation in `UE`, confirm with "Facturar directamente" and verify the
+   generated invoice opens in **Confirmado**, not Borrador, and that the result
+   card's badge reads "Completado" in success green.
+2. Verify the quotation moved to `ETGO_CI` and that the invoice's document number
+   is the one shown in the result card.
+3. Trigger the same action again on that quotation and verify it is rejected with
+   the translated 409 message ("Ya se ha generado una factura para este
+   presupuesto."), and that **no** second invoice and no burned document number
+   are left behind.
+4. Force the completion to fail (e.g. a Verifactu/TBAI configuration error) and
+   verify nothing is persisted — no draft invoice, and the next successful run
+   reuses the same next document number.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
+- `CreateDraftInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow and guard P6.
+- `AbstractInvoiceHeaderHandlerTest.java`'s 131 tests (including its 8 completion tests) pass unmodified — `completeInvoiceIfNeeded` keeps its guard and simply delegates to the new service.
+- `artifacts/sales-quotation/custom/__tests__/QuotationConfirmModal.test.js` gained a `created-document status badge (ETP-5381)` block: it asserts the status is derived from the backend `documentStatus` and never a hardcoded `Draft`, that `'CO'` maps to the Completed badge state, that the fallback to `Draft` applies only when an older backend sends no status at all, that the status is read off the response payload (not the request or the quotation), that the badge colours warning for a draft and success otherwise, that both states go through `ui()`, and that the order branch's `RE -> DR -> Draft` reactivation mapping is untouched.

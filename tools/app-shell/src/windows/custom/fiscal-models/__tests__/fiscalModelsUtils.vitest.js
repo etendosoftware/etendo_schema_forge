@@ -14,6 +14,7 @@ import {
   countUpcomingDeadlines,
   generate303File,
   applyIdentParams,
+  roundEur,
 } from '../fiscalModelsUtils.js';
 
 // ── STATUSES ──────────────────────────────────────────────────────────────────
@@ -780,6 +781,29 @@ describe('deriveBoxes303', () => {
     });
   });
 
+  // ── roundEur (ETP-5409 — exported for reuse by FmModel303Page.jsx's parseBoxInput) ──
+  describe('roundEur (exported, ETP-5409)', () => {
+    it('rounds a value with more than 2 decimals to 2 decimals', () => {
+      expect(roundEur(12.345)).toBe(Math.round(12.345 * 100) / 100);
+    });
+
+    it('leaves an already-2-decimal value unchanged', () => {
+      expect(roundEur(12.35)).toBe(12.35);
+    });
+
+    it('rounds an integer value unchanged', () => {
+      expect(roundEur(500)).toBe(500);
+    });
+
+    it('handles negative values', () => {
+      expect(roundEur(-12.345)).toBe(Math.round(-12.345 * 100) / 100);
+    });
+
+    it('handles zero', () => {
+      expect(roundEur(0)).toBe(0);
+    });
+  });
+
   describe('combined scenario', () => {
     it('correctly totals accrued across multiple rates', () => {
       const data = {
@@ -1135,17 +1159,44 @@ describe('generate303File', () => {
     }
   });
 
-  it('returns { ok: false, error: iban_required } for tipo=I when rectificativa is checked and IBAN is empty (ETP-4456 follow-up fix)', async () => {
+  it('returns { ok: false, error: iban_required } for tipo=I when rectificativa is checked, IBAN is empty AND box 111 is non-zero (ETP-4456 follow-up fix, narrowed by ETP-5393 Bug E)', async () => {
     // Mirrors AeatSubmitFlow's client-side pre-flight guard: tipo I alone is
-    // not IBAN-required, but a rectificativa filed under tipo I still shows
-    // the bank section, so the download flow must gate on it too.
+    // not IBAN-required, but a rectificativa filed under tipo I with a non-zero
+    // box 111 still shows the bank section, so the download flow must gate on it too.
     vi.stubGlobal('fetch', vi.fn());
     const result = await generate303File(DECL, {
       token: TOKEN, apiBaseUrl: API_BASE,
       identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+      liveBoxes: [{ num: 111, value: 500 }],
     });
     expect(result).toEqual({ ok: false, error: 'iban_required' });
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  // ETP-5393 [B1 re-review] — reproduces the exact state Alex's rejection reported: the
+  // pre-flight guard used to test only `identChecks?.rectificativa === true`, ignoring box 111
+  // entirely. With Bug E's visibility narrowed to also require `_box111NonZero`, tipo I +
+  // rectificativa + box 111 === 0 leaves the bank block correctly HIDDEN (nothing to fill in),
+  // but the old guard still demanded an IBAN — blocking "Generar fichero" with no way for the
+  // user to resolve it. Must now proceed to fetch, same as any other non-IBAN-required case.
+  it('does NOT require IBAN for tipo=I when rectificativa is checked but box 111 is 0 (ETP-5393 [B1] regression)', async () => {
+    mockFetchOk();
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+      liveBoxes: [{ num: 111, value: 0 }],
+    });
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT require IBAN for tipo=I when rectificativa is checked and no liveBoxes/box 111 info is available (defaults to non-required)', async () => {
+    mockFetchOk();
+    const result = await generate303File(DECL, {
+      token: TOKEN, apiBaseUrl: API_BASE,
+      identChecks: { tipo_declaracion: 'I', bank_iban: '', rectificativa: true },
+    });
+    expect(result.ok).toBe(true);
   });
 
   it('still proceeds to fetch for tipo=I when rectificativa is absent/false, even with an empty IBAN', async () => {

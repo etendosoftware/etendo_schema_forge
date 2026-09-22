@@ -511,11 +511,14 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     // 5. Modal title "Gestionar documentos" appears
     await expect(page.getByText('Gestionar documentos')).toBeVisible({ timeout: 8_000 });
 
-    // 6. "Generar documentos (opcional)" section visible
-    await expect(page.getByText('Generar documentos (opcional)')).toBeVisible({ timeout: 5_000 });
-
-    // 7. "Crear factura" card (InvoiceCheckboxCard) visible (uses soCreateInvoiceTitle key)
-    await expect(page.getByText('Crear factura', { exact: true })).toBeVisible({ timeout: 5_000 });
+    // 6-7. ETP-5381 (commit a84798d2a) removed the "Generar documentos (opcional)" heading
+    //      and the "Crear factura" checkbox card from CreateInvoiceConfirmModal: the button
+    //      that opens this modal already says "Crear factura", so the checkbox was a
+    //      confirmation of a confirmation, and unticking it left a dialog whose only action
+    //      did nothing. The pending-units subtitle it used to carry is now rendered directly
+    //      under the amount panel — asserted in step 8 below, which is what this section was
+    //      really guarding. (The optional-extra checkbox in ConfirmInOutModal is a different
+    //      control and is still covered by its own test.)
 
     // 8. Pending qty subtitle: pendingInvoiceLines returns 3+2=5 units
     //    The component formats: "{pending} pendientes de facturar"

@@ -1013,6 +1013,10 @@ export function useEntity(entity, childEntity, {
     // the "Others" tab mounts only while it is the active tab. Optional: surfaces
     // whose form predates the static fall back to the registry (see below).
     contractFields = null,
+    // Field values to seed a NEW record with, e.g. when the creation form is opened from a
+    // lookup that already knows the name the user typed and the role (customer/vendor) the
+    // calling document implies. Applied by `handleNew`; ignored on every other path.
+    initialData = null,
 }) {
     const ui = useUI();
     const apiFetch = useApiFetch(apiBaseUrl);
@@ -1028,7 +1032,26 @@ export function useEntity(entity, childEntity, {
     const [children, setChildren] = useState([]);
     const [childDefaults, setChildDefaults] = useState({});
     const [childrenLoading, setChildrenLoading] = useState(false);
-    const [loading, setLoading] = useState(false);
+    // Bug fix: initialize `loading` to match whether a list fetch is actually
+    // guaranteed to start on mount. When `skipListFetch` is false (the common
+    // case), the mount effect below unconditionally calls `loadList(false)`,
+    // whose very first line is `setLoading(true)` — but that only takes effect
+    // on the SECOND render (after the effect runs), so the FIRST render was
+    // rendering with the stale `loading: false` default. `ListView.jsx`'s
+    // `ListTableRegion` branches on `loading && items.length === 0` to decide
+    // between a skeleton and the real `<Table>`; with the old default, the very
+    // first render evaluated that condition as false and mounted `<Table>`
+    // prematurely (before any data existed), which was then unmounted on the
+    // next render once `loading` correctly flipped to `true`, and mounted a
+    // THIRD time once the fetch resolved — an extra, spurious mount+unmount
+    // cycle on every list page load. Any `<Table>`/`headerTable` that runs its
+    // own data fetch in a mount effect (e.g. Users' `UserHeaderTable`) paid for
+    // that spurious cycle as a real, duplicate network request. Seeding
+    // `loading` from `!skipListFetch` makes the very first render already
+    // reflect reality: true when a fetch WILL start (skeleton immediately, no
+    // premature Table mount), false when `skipListFetch` genuinely means no
+    // fetch will ever be triggered (e.g. DetailView, which doesn't need a list).
+    const [loading, setLoading] = useState(!skipListFetch);
     // ETP-5034: outcome of the last fetchById, when it did NOT yield a record.
     // null = nothing wrong (never fetched, or the record loaded fine).
     // 'notFound' = the backend answered but carried no row: the id does not exist,
@@ -1095,6 +1118,12 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
+    // the moment handleNew runs, and putting it in that callback's dependency array would
+    // rebuild handleNew on every render for any caller passing an object literal — which
+    // re-fires the `useNewRouteEditingReset` effect that depends on it.
+    const initialDataRef = useRef(initialData);
+    initialDataRef.current = initialData;
     // ETP-4741: monotonic id of the current defaults fetch. A response (or its
     // timer) only acts while its epoch is still current — bumping the epoch is
     // how the timeout and newer handleNew calls make in-flight responses inert,
@@ -1569,7 +1598,7 @@ export function useEntity(entity, childEntity, {
         userChangedKeysRef.current.delete(key);
     }, []);
 
-    const handleSelect = useCallback((row) => {
+    const handleSelect = useCallback((row, { force = false } = {}) => {
         // Reset the per-session changed-keys set when a different record is loaded,
         // so format validation (email/website/phone) only ever re-checks fields the
         // user actually edits in THIS record — never legacy values inherited from a
@@ -1588,12 +1617,26 @@ export function useEntity(entity, childEntity, {
         setBlockingCondition(null);
         setSelected(row);
         setEditing(row ? { ...row } : null);
-        fetchChildren(row?.id);
+        // `force` defaults to false — every pre-existing caller reselects a record to LOAD it
+        // (mount, a list row click, a parent switching secondary tabs) and reusing a fresh cached
+        // child list there is correct, not stale. A caller passes `force: true` when it just
+        // wrote a child and a ≤30s-old cache entry for the exact same query key would otherwise
+        // hide it — see `customAddModal`'s `onSaved` in DetailView.jsx, added for ETP-5332's
+        // Dirección tab (LocationEditorModal): the address saved, but a cache hit served the
+        // list from before the save, so the popup and the window both showed the old rows until
+        // the cache aged out or a reload bypassed it entirely.
+        fetchChildren(row?.id, { force });
     }, [fetchChildren, neutralizePendingDefaults]);
 
     const handleNew = useCallback(async () => {
+        const seed = initialDataRef.current ?? {};
         backendDefaultKeysRef.current = new Set();
-        userChangedKeysRef.current = new Set();
+        // Seeded keys count as user-changed. That single fact is what makes the seed safe:
+        // `mergeDefaultsPreservingUserEdits` below already refuses to overwrite a
+        // user-changed key, so the in-flight `/defaults` response cannot clobber the seed
+        // and no new race handling is needed. It also keeps `shouldSkipPayloadField` from
+        // dropping a seeded legacy-looking FK id out of the POST payload.
+        userChangedKeysRef.current = new Set(Object.keys(seed));
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -1602,7 +1645,7 @@ export function useEntity(entity, childEntity, {
         // ETP-5024: same as handleSelect — a fresh/new record starts with no blocking banner.
         setBlockingCondition(null);
         setSelected(null);
-        setEditing({}); // Start with empty so UI is responsive
+        setEditing({ ...seed }); // Start with just the seed so UI is responsive
 
         // ETP-4741 — the defaults GET races the user, who can already be typing
         // into the open form. Guards: an epoch check discards any response whose

@@ -365,12 +365,39 @@ describe('buildJsreportHelpersString — behavioural parity between the emitted 
       ['2026-08-06'], ['2026-8-6'], ['2026-08-06T00:00:00'],
       ['abc'], ['dddd-dd-dd'], ['06/08/2026'],
     ],
+    // ETP-5401: a "Saldo a <date>" column header must match the Período
+    // filter's own locale order (dd/MM/yyyy es_ES, MM/dd/yyyy en_US), not a
+    // single fixed format. Covers both locales over a plain date and a full
+    // timestamp (only the leading YYYY-MM-DD is used), a missing locale
+    // (defaults to the es_ES order), and the non-ISO/empty/nullish passthrough.
+    formatDateLocale: [
+      [null, 'es_ES'], [undefined, 'en_US'], ['', 'es_ES'], [0, 'es_ES'],
+      ['2026-09-01', 'es_ES'], ['2026-09-01', 'en_US'],
+      ['2026-09-01T12:00:00Z', 'es_ES'],
+      ['not-a-date', 'es_ES'], [123, 'en_US'],
+      ['2026-09-01', undefined], ['2026-01-05', 'en_US'],
+    ],
     sumRowsByCategory: [
       [null, 'AS', 'amount'], [undefined, 'AS', 'amount'], ['nope', 'AS', 'amount'],
       [[{ category: 'ASSET', amount: 10 }, { category: 'LIAB', amount: 5 }], 'AS', 'amount'],
       [[{ amount: 10 }, { category: 'ASSET', amount: 'x' }], 'AS', 'amount'],
       [[{ category: 'ASSET', amount: null }, { category: 'ASSET', amount: '2' }], 'AS', 'amount'],
       [[{ category: 'ASSET', amount: 1 }], 'ZZ', 'amount'],
+    ],
+    // ETP-5401: Trial Balance's Epígrafe grand total sums only the rows whose
+    // own account has no ancestor at the same requested level (`is_root`) —
+    // summing every returned row double-counts a leaf once per nesting depth.
+    // Covers: non-array rows, an empty array, a mix of root/non-root rows, a
+    // non-numeric field value alongside a numeric one, and the missing-flag
+    // case (falsy on a row that never got the column at all).
+    sumFieldWhere: [
+      [null, 'is_root', 'amount'], [undefined, 'is_root', 'amount'], ['nope', 'is_root', 'amount'],
+      [[], 'is_root', 'amount'],
+      [[{ is_root: true, amount: 1 }, { is_root: false, amount: 2.5 }], 'is_root', 'amount'],
+      [[{ is_root: true, amount: 'abc' }, { is_root: true, amount: 3 }], 'is_root', 'amount'],
+      [[{ is_root: true, amount: null }, { is_root: true, amount: '' }, { is_root: true, amount: '4' }], 'is_root', 'amount'],
+      [[{ is_root: false, amount: 100 }], 'is_root', 'amount'],
+      [[{ amount: 5 }], 'is_root', 'amount'],
     ],
     // ETP-5013: docbasetype+isreturn based document-type translation. Covers a
     // known docbasetype in both locales, the MMR/MMR_RETURN and MMS/MMS_RETURN

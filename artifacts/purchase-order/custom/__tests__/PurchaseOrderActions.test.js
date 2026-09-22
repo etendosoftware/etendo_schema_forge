@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
+// `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
+import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'PurchaseOrderActions.jsx'), 'utf8');
@@ -415,8 +418,14 @@ describe('PurchaseOrderActions', () => {
       assert.match(src, /function PoCheckboxCard\(\{[^}]*disabled[^}]*\}\)/);
     });
 
-    it('blocks onClick when disabled', () => {
-      assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
+    // ETP-5381: the click gate moved from `disabled` to `interactive` (= !disabled && !implied).
+    // A disabled card must still be inert — that is what this test has always guarded — and an
+    // implied card must be inert too: it renders no tick box, so a click could only do nothing.
+    // The `interactive` VALUE is proven for all four (disabled, implied) combinations in
+    // "ETP-5381 … / PoCheckboxCard — an implied card is inert" below; what is pinned here is that
+    // the handler is wired to that value instead of re-deriving its own gate.
+    it('blocks onClick when the card is not interactive (disabled or implied)', () => {
+      assert.match(src, /onClick=\{interactive \? onChange : undefined\}/);
     });
 
     it('switches to semantic success roles when disabled', () => {
@@ -427,6 +436,250 @@ describe('PurchaseOrderActions', () => {
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  // ETP-5381 — "Gestionar documentos" on a COMPLETED order (CreateDocsModal). When only ONE
+  // action is still pending there is nothing to choose between: the dialog's only button already
+  // says "Crear", so the tick was a confirmation of a confirmation. That sole action is now
+  // IMPLIED — its card keeps the selected styling but drops the tick box and the click handler,
+  // the section label drops "(optional)", and the button is live on open. With BOTH pending it is
+  // a real choice, so the checkboxes stay — and the CONFIRM-the-order modal keeps its checkboxes
+  // unconditionally, because there both actions are genuinely optional.
+  //
+  // The decision expressions are extracted from the source and EVALUATED rather than pinned as
+  // text: a rewritten-but-wrong expression must fail, a rewritten-and-still-correct one must not.
+  // Mirrors the same block in sales-order's OrderCreateInvoice.test.js — same modal, other side.
+  describe('ETP-5381 — the sole pending action is implied, and only there', () => {
+    function idxOf(source, marker) {
+      const i = source.indexOf(marker);
+      assert.ok(i !== -1, `marker not found: ${marker}`);
+      return i;
+    }
+
+    function sliceBetween(source, startMarker, endMarker) {
+      const start = idxOf(source, startMarker);
+      const end = source.indexOf(endMarker, start);
+      assert.ok(end !== -1, `marker not found after "${startMarker}": ${endMarker}`);
+      return source.slice(start, end);
+    }
+
+    // Text inside the parentheses of the `if (` at `ifIdx`.
+    function condFrom(source, ifIdx) {
+      assert.ok(ifIdx !== -1, 'no `if (` found near the requested marker');
+      const start = source.indexOf('(', ifIdx);
+      let depth = 1;
+      let i = start + 1;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.equal(depth, 0, 'unbalanced parens in the extracted condition');
+      return source.slice(start + 1, i);
+    }
+
+    const condAfter = (source, marker) => condFrom(source, source.indexOf('if (', idxOf(source, marker)));
+    const condBefore = (source, marker) => condFrom(source, source.lastIndexOf('if (', idxOf(source, marker)));
+
+    function grabDecl(source, name) {
+      const m = new RegExp(`\\bconst ${name}\\s*=[^;]*;`).exec(source);
+      assert.ok(m, `declaration not found: const ${name}`);
+      return m[0];
+    }
+
+    const cardSrc = sliceBetween(src, 'function PoCheckboxCard({', 'export function CreateDocsModal');
+    const createDocsSrc = src.slice(idxOf(src, 'export function CreateDocsModal'));
+    const confirmSrc = sliceBetween(src, 'export function ConfirmModal', '// ── PoCheckboxCard');
+
+    /**
+     * Evaluate CreateDocsModal's real decision chain for a given modal state, plus the three
+     * gates that state has to pass to reach the network: the early return in handleCreate and
+     * the two per-endpoint branches.
+     */
+    function docsDecision({
+      needsReceipt = false, needsInvoice = false,
+      createReceipt = false, createInvoice = false, loading = false,
+    } = {}) {
+      const decls = ['soleAction', 'receiptWanted', 'invoiceWanted', 'canCreate']
+        .map(n => grabDecl(createDocsSrc, n)).join('\n');
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('needsReceipt', 'needsInvoice', 'createReceipt', 'createInvoice', 'loading', `
+        ${decls}
+        return {
+          soleAction:    Boolean(soleAction),
+          receiptWanted: Boolean(receiptWanted),
+          invoiceWanted: Boolean(invoiceWanted),
+          canCreate:     Boolean(canCreate),
+          bailsOut:      Boolean(${condAfter(createDocsSrc, 'const handleCreate')}),
+          postsReceipt:  Boolean(${condBefore(createDocsSrc, 'action/createGoodsReceipt')}),
+          postsInvoice:  Boolean(${condBefore(createDocsSrc, 'action/createPurchaseInvoice')}),
+        };`);
+      return fn(needsReceipt, needsInvoice, createReceipt, createInvoice, loading);
+    }
+
+    describe('PoCheckboxCard — an implied card is inert', () => {
+      function interactive(disabled, implied) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('disabled', 'implied',
+          `${grabDecl(cardSrc, 'interactive')}\nreturn Boolean(interactive);`)(disabled, implied);
+      }
+
+      it('is inert when implied, inert when disabled, and clickable otherwise', () => {
+        assert.equal(interactive(false, true), false, 'an implied card must not be clickable');
+        assert.equal(interactive(true, false), false, 'a disabled card must not be clickable');
+        assert.equal(interactive(true, true), false);
+        assert.equal(interactive(false, false), true, 'an ordinary card must still toggle');
+      });
+
+      it('wires the click handler to that value rather than re-deriving a gate', () => {
+        assert.match(cardSrc, /onClick=\{interactive \? onChange : undefined\}/);
+      });
+
+      it('omits the tick box entirely when implied — it is not merely hidden or greyed', () => {
+        const gateIdx = cardSrc.indexOf('{!implied && (');
+        assert.ok(gateIdx !== -1, 'the tick box must be gated on !implied');
+        const boxIdx = cardSrc.indexOf('width: 18, height: 18');
+        assert.ok(boxIdx > gateIdx, 'the 18x18 tick box must sit inside the !implied gate');
+      });
+
+      it('exposes the implied state to the DOM for the e2e specs', () => {
+        assert.match(cardSrc, /data-implied=\{implied \? 'true' : 'false'\}/);
+      });
+    });
+
+    describe('CreateDocsModal — both actions pending (a real choice, unchanged)', () => {
+      const both = { needsReceipt: true, needsInvoice: true };
+
+      it('is not a sole action, so neither card is implied', () => {
+        assert.equal(docsDecision(both).soleAction, false);
+      });
+
+      it('starts with nothing selected, so the button is disabled on open', () => {
+        const r = docsDecision(both);
+        assert.equal(r.receiptWanted, false);
+        assert.equal(r.invoiceWanted, false);
+        assert.equal(r.canCreate, false);
+      });
+
+      it('creates nothing if the submit is somehow reached without a tick', () => {
+        const r = docsDecision(both);
+        assert.equal(r.bailsOut, true);
+        assert.equal(r.postsReceipt, false);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the receipt posts only the receipt', () => {
+        const r = docsDecision({ ...both, createReceipt: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.bailsOut, false);
+        assert.equal(r.postsReceipt, true);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the invoice posts only the invoice', () => {
+        const r = docsDecision({ ...both, createInvoice: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.postsReceipt, false);
+        assert.equal(r.postsInvoice, true);
+      });
+
+      it('renders both cards with a tick box, since implied tracks soleAction', () => {
+        assert.equal((createDocsSrc.match(/implied=\{soleAction\}/g) || []).length, 2);
+      });
+
+      it('keeps the "(optional)" section label while there is something to opt out of', () => {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        const label = new Function('soleAction', 'ui',
+          `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+        assert.equal(label(false, k => k), 'soGenerateDocs');
+      });
+    });
+
+    for (const [side, state, expected] of [
+      ['receipt', { needsReceipt: true }, { receiptWanted: true, invoiceWanted: false, postsReceipt: true, postsInvoice: false }],
+      ['invoice', { needsInvoice: true }, { receiptWanted: false, invoiceWanted: true, postsReceipt: false, postsInvoice: true }],
+    ]) {
+      describe(`CreateDocsModal — only the ${side} is pending (implied)`, () => {
+        // No tick is simulated anywhere below: createReceipt/createInvoice stay false, which is
+        // exactly the user's position the instant the dialog opens.
+        const r = docsDecision(state);
+
+        it('treats it as the sole action', () => {
+          assert.equal(r.soleAction, true);
+        });
+
+        it('has the button enabled on open, with no interaction', () => {
+          assert.equal(r.canCreate, true);
+          assert.equal(r.bailsOut, false);
+        });
+
+        it(`posts the ${side} and nothing else`, () => {
+          assert.equal(r.receiptWanted, expected.receiptWanted);
+          assert.equal(r.invoiceWanted, expected.invoiceWanted);
+          assert.equal(r.postsReceipt, expected.postsReceipt);
+          assert.equal(r.postsInvoice, expected.postsInvoice);
+        });
+
+        it('drops "(optional)" from the section label', () => {
+          // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+          const label = new Function('soleAction', 'ui',
+            `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+          assert.equal(label(true, k => k), 'soGenerateDocsImplied');
+        });
+
+        it('hides the button behind loading, not behind a tick', () => {
+          assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
+          assert.match(createDocsSrc, /onClick=\{handleCreate\} disabled=\{loading \|\| !canCreate\}/);
+        });
+      });
+    }
+
+    // Blast radius. Applying `implied` to the CONFIRM modal would silently create documents the
+    // user never asked for — far worse than the redundant tick this ticket removed. There both
+    // actions are genuinely optional, which is the distinction drawn in a84798d2a.
+    describe('ConfirmModal — both checkboxes stay, and still gate creation', () => {
+      it('renders two cards, neither of them implied', () => {
+        assert.equal((confirmSrc.match(/<PoCheckboxCard/g) || []).length, 2);
+        assert.doesNotMatch(confirmSrc, /implied/);
+      });
+
+      it('has no soleAction shortcut of its own', () => {
+        assert.doesNotMatch(confirmSrc, /soleAction/);
+      });
+
+      it('keeps the "(optional)" label and never borrows the implied one', () => {
+        assert.match(confirmSrc, /ui\('soGenerateDocs'\)/);
+        assert.doesNotMatch(confirmSrc, /soGenerateDocsImplied/);
+      });
+
+      it('starts with both boxes unticked', () => {
+        assert.match(confirmSrc, /const \[createReceipt,\s+setCreateReceipt\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /const \[createInvoice,\s+setCreateInvoice\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /setCreateReceipt\(v => !v\)/);
+        assert.match(confirmSrc, /setCreateInvoice\(v => !v\)/);
+      });
+
+      it('creates no document when neither box was ticked', () => {
+        assert.equal(confirmCreates('createGoodsReceipt', {}), false);
+        assert.equal(confirmCreates('createPurchaseInvoice', {}), false);
+      });
+
+      it('creates only the document whose box was ticked', () => {
+        assert.equal(confirmCreates('createGoodsReceipt', { createReceipt: true }), true);
+        assert.equal(confirmCreates('createPurchaseInvoice', { createReceipt: true }), false);
+        assert.equal(confirmCreates('createPurchaseInvoice', { createInvoice: true }), true);
+        assert.equal(confirmCreates('createGoodsReceipt', { createInvoice: true }), false);
+      });
+
+      function confirmCreates(endpoint, {
+        createReceipt = false, createInvoice = false,
+        receiptResult = null, invoiceResult = null,
+      }) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('createReceipt', 'createInvoice', 'receiptResult', 'invoiceResult',
+          `return Boolean(${condBefore(confirmSrc, `action/${endpoint}`)});`)(
+          createReceipt, createInvoice, receiptResult, invoiceResult);
+      }
     });
   });
 
@@ -570,12 +823,23 @@ describe('PurchaseOrderActions', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
-      // ETP-5295 — ManageDocsLauncher's needsInvoice line now carries an extra
-      // `fetched != null && ` guard (hooks hoisted above the loading early-return, so
-      // the derivation must be null-safe); the main-component occurrence has no such
-      // guard. The optional non-capturing group matches both.
+      // ETP-5295 — ManageDocsLauncher's needs* lines carry an extra `fetched != null && `
+      // guard (hooks hoisted above the loading early-return, so the derivation must be
+      // null-safe); the main-component occurrence has no such guard. The optional
+      // non-capturing group matches both.
+      //
+      // ETP-5295 — the block now STARTS one line earlier, at the
+      // `const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);`
+      // destructuring, instead of at `const ${needsVarName}`. That line is part of the
+      // computation under test now: without it, `needsPrimaryDoc`/`needsInvoiceDoc` would be
+      // free variables inside the `new Function(...)` harness and the eval threw
+      // `ReferenceError: needsReceipt is not defined`. Including it keeps the harness feeding on
+      // the LITERAL source (the whole point of this suite) rather than on a hand-copied
+      // re-implementation of the `??` fallback.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?totalPending !== 0 && !invoiceDraft;`,
+        `const \\{ needsPrimaryDoc, needsInvoiceDoc \\} = readOrderPendingDocs\\(data\\);`
+        + `[\\s\\S]*?const ${needsVarName}\\s*=\\s*(?:fetched != null && )?\\(?needsPrimaryDoc \\?\\? \\(qtyPending !== 0`
+        + `[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?\\(?needsInvoiceDoc \\?\\? \\(totalPending !== 0 && !invoiceDraft\\)\\)?;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -589,14 +853,41 @@ describe('PurchaseOrderActions', () => {
       assert.equal(needsBlocks.length, 2);
     });
 
-    function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], receiptsDraft = [], invoiceDraft = null }) {
+    // ETP-5295 — two free variables remain in the extracted source and each is wired
+    // DELIBERATELY, not merely "made to run":
+    //
+    //   `fetched`              — only present in the ManageDocsLauncher occurrence's
+    //                            `fetched != null && ` guard. Passed as always-loaded (`true`):
+    //                            this suite's concern is the pending arithmetic, not the loading
+    //                            state, which `useOrderWindow`/launcher render tests cover.
+    //   `readOrderPendingDocs` — the REAL shared reader is injected (imported at the top of this
+    //                            file), NOT a stub. So what the annotation branch does is decided
+    //                            by production code, and the default `data` below (which carries
+    //                            only `grandTotalAmount`, no `needsPrimaryDoc`/`needsInvoiceDoc`)
+    //                            makes it return `undefined` for both flags. `undefined` is what
+    //                            makes `??` fall through to the local derivation — which is
+    //                            exactly the arithmetic the ETP-4567 cases below were written to
+    //                            measure, so they keep measuring it and nothing else. Hard-coding
+    //                            a `() => ({})` stub would have measured the same thing today but
+    //                            would stop tracking the real absent-annotation contract (e.g. a
+    //                            reader that ever returned `false` instead of `undefined` for an
+    //                            absent flag would break every caller and not one test here).
+    //
+    // `annotations` lets the ETP-5295 cases further down flip the other branch on, through the
+    // same real reader and the same literal source.
+    function evaluate(siteIndex, {
+      grandTotalAmount, invoicesComplete = [], receiptsDraft = [], invoiceDraft = null, annotations = {},
+    }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsReceipt, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      // `fetched` is a free variable inside the ManageDocsLauncher occurrence's
-      // `fetched != null && ` guard (ETP-5295); pass it as always-loaded (`true`) since
-      // this test's concern is the pending arithmetic, not the loading state.
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', 'fetched', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, receiptsDraft, invoiceDraft, true);
+      const fn = new Function(
+        'data', 'orderLines', 'invoicesComplete', 'receiptsDraft', 'invoiceDraft', 'fetched', 'readOrderPendingDocs',
+        body,
+      );
+      return fn(
+        { grandTotalAmount, ...annotations },
+        [], invoicesComplete, receiptsDraft, invoiceDraft, true, readOrderPendingDocs,
+      );
     }
 
     const sites = [
@@ -649,6 +940,87 @@ describe('PurchaseOrderActions', () => {
       const { needsReceipt, needsInvoice } = evaluate(1, { grandTotalAmount: -450.75 });
       const nothingToManage = !needsReceipt && !needsInvoice;
       assert.equal(nothingToManage, false);
+    });
+    // ETP-5295 — the branch the ETP-4567 cases above deliberately never reach: a record that
+    // DOES carry the backend annotations. The whole point of the fix is that the server's answer
+    // wins over this component's own arithmetic, so that the list kebab (which has nothing but
+    // the annotation) and this component (which has the real receipts/invoices/lines) can never
+    // disagree again. Each case below sets up local arithmetic that would produce the OPPOSITE
+    // answer, so a regression that dropped the annotation — or subordinated it to the local
+    // derivation — turns the test red instead of silently reinstating two sources of truth.
+    describe('backend annotation wins over the local derivation (ETP-5295)', () => {
+      for (const [siteName, siteIndex] of sites) {
+        describe(siteName, () => {
+          it('needsInvoiceDoc:false suppresses an invoice entry the local arithmetic would have set true', () => {
+            // Local derivation says TRUE (100 ordered, nothing invoiced, no draft).
+            const local = evaluate(siteIndex, { grandTotalAmount: 100 });
+            assert.equal(local.needsInvoice, true, 'precondition: local arithmetic must say true here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsInvoiceDoc: false },
+            });
+            assert.equal(needsInvoice, false);
+          });
+
+          it('needsPrimaryDoc:false suppresses a receipt entry the local arithmetic would have set true', () => {
+            const { needsReceipt } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: false },
+            });
+            assert.equal(needsReceipt, false);
+          });
+
+          it('needsInvoiceDoc:true forces the invoice entry on even though the document is fully invoiced locally', () => {
+            const local = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+            });
+            assert.equal(local.needsInvoice, false, 'precondition: local arithmetic must say false here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+              annotations: { needsInvoiceDoc: true },
+            });
+            assert.equal(needsInvoice, true);
+          });
+
+          it('needsPrimaryDoc:true forces the receipt entry on even though a draft receipt already covers it', () => {
+            const { needsReceipt } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              receiptsDraft: [{ documentStatus: 'DR' }],
+              annotations: { needsPrimaryDoc: true },
+            });
+            assert.equal(needsReceipt, true);
+          });
+
+          it("accepts the AD string form ('N' is false, not truthy)", () => {
+            const { needsReceipt, needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: 'N', needsInvoiceDoc: 'N' },
+            });
+            assert.equal(needsReceipt, false);
+            assert.equal(needsInvoice, false);
+          });
+        });
+      }
+
+      // `readAnnotatedFlag` returns `undefined` — never `false` — for an ABSENT annotation, and
+      // the fallback operator is `??`, never `||`. That pairing is the load-bearing detail: with
+      // `||`, a genuine `needsInvoiceDoc: false` from the server would be discarded and the local
+      // arithmetic would silently take over, reinstating precisely the two-sources-of-truth
+      // disagreement this ticket removed. A source-text assertion is used here on purpose — the
+      // difference between `??` and `||` is invisible to a behavioural test whenever the local
+      // derivation happens to agree with the annotation.
+      it('uses ?? (not ||) so an explicit false annotation is not discarded', () => {
+        for (const block of needsBlocks) {
+          assert.match(block, /needsPrimaryDoc \?\? \(/);
+          assert.match(block, /needsInvoiceDoc \?\? \(/);
+          assert.doesNotMatch(block, /needsPrimaryDoc \|\|/);
+          assert.doesNotMatch(block, /needsInvoiceDoc \|\|/);
+        }
+      });
     });
   });
 

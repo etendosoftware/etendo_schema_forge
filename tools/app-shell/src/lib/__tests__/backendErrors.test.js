@@ -1,6 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { translateBackendError, parseBackendErrorMessage } from '../backendErrors.js';
+import {
+  extractBackendMessageKeys,
+  translateBackendError,
+  parseBackendErrorMessage,
+} from '../backendErrors.js';
 
 /**
  * Unit tests for translateBackendError.
@@ -444,89 +448,21 @@ describe('translateBackendError — cost not calculated exact match (ETP-4706)',
   });
 });
 
-// ── ETP-4831: "shipment already invoiced" parameterized enrichment ──────────────
-//
-// com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced` AD_MESSAGE ("The shipment
-// @docNo@ cannot be invoiced: quantity to invoice (@invoiced@) exceeds pending
-// quantity (@pending@). The shipment may already be invoiced in another document.")
-// has zero AD_Message_Trl rows for ANY language, because com.etendoerp.go has no
-// companion translation module (AD_MODULE.ISTRANSLATIONREQUIRED = N) — the same root
-// cause as the ETP-4706 "Account could not be found" messages above. The backend
-// always renders this with the literal docNo/invoiced/pending values substituted in
-// (never the raw `@token@` placeholders), so a matcher must parse those three values
-// back out of the rendered string via plain string slicing (same ReDoS-safe style as
-// `matchAccountNotFound` / ACCOUNT_NOT_FOUND_PREFIX above — a document number and
-// quantities are effectively free-form data, so no backtracking-prone regex).
-//
-// EXPECTED (not yet implemented): a `matchInvoiceLineAlreadyInvoiced` parameterized
-// matcher wired into `translateParameterized`, re-rendering via a new
-// `backendError.invoiceLineAlreadyInvoiced` i18n key. Until that lands, these tests
-// MUST fail: translateBackendError has no exact-match entry and no matcher for this
-// message shape, so it falls through to returning `msg` unchanged.
-describe('translateBackendError — "shipment already invoiced" parameterized match (ETP-4831)', () => {
-  const en = fakeUiTranslator({
-    'backendError.invoiceLineAlreadyInvoiced':
-      'Shipment {docNo} cannot be invoiced: quantity to invoice ({invoiced}) exceeds pending quantity ({pending}). It may already be invoiced in another document.',
-  });
-  const es = fakeUiTranslator({
-    'backendError.invoiceLineAlreadyInvoiced':
-      'El albarán {docNo} no se puede facturar: la cantidad a facturar ({invoiced}) supera la cantidad pendiente ({pending}). Puede que ya esté facturado en otro documento.',
-  });
-  const RAW = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). The shipment may already be invoiced in another document.';
-
-  it('translates the rendered backend message to es_ES, interpolating docNo/invoiced/pending', () => {
-    assert.equal(
-      translateBackendError(RAW, es),
-      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2) supera la cantidad pendiente (0). Puede que ya esté facturado en otro documento.',
-    );
-  });
-
-  it('translates the rendered backend message to en_US, interpolating docNo/invoiced/pending', () => {
-    assert.equal(
-      translateBackendError(RAW, en),
-      'Shipment 10000039 cannot be invoiced: quantity to invoice (2) exceeds pending quantity (0). It may already be invoiced in another document.',
-    );
-  });
-
-  it('returns the original message unchanged when the translation key is missing (guard)', () => {
-    const missingT = (k) => k; // echoes the key back — simulates an unmapped locale
-    assert.equal(translateBackendError(RAW, missingT), RAW);
-  });
-
-  // BUG-1 (QA finding, ETP-4831): the backend builds @invoiced@/@pending@ from
-  // BigDecimal#toPlainString() (AbstractInvoiceHeaderHandler.checkInoutEntryForOverInvoicing
-  // in com.etendoerp.go), so for a product with fractional UOM precision the rendered
-  // values are decimal, not just integers — e.g. "2.50" / "0.75". The matcher does plain
-  // digit-agnostic string slicing between fixed delimiters, so it must parse a decimal
-  // quantity exactly like an integer one.
-  it('translates a rendered message with decimal invoiced/pending quantities to es_ES', () => {
-    const decimalRaw = 'The shipment 10000039 cannot be invoiced: quantity to invoice (2.50) exceeds pending quantity (0.75). The shipment may already be invoiced in another document.';
-    assert.equal(
-      translateBackendError(decimalRaw, es),
-      'El albarán 10000039 no se puede facturar: la cantidad a facturar (2.50) supera la cantidad pendiente (0.75). Puede que ya esté facturado en otro documento.',
-    );
-  });
-});
-
 // ── ETP-4831 case 2: "No hay líneas a facturar en este pedido" always in Spanish ──
 //
 // CreateDraftInvoiceHandler#createFromOrder (com.etendoerp.go) throws
 // `new OBException("No hay líneas a facturar en este pedido")` — a hardcoded
-// Spanish literal with NO AD_Message/i18n involvement at all, so it always
-// renders in Spanish even in an en_US session (the inverse symptom of case 1,
-// which always rendered in English regardless of locale).
+// Spanish literal with NO AD_Message/i18n involvement at all, so the backend
+// renders it in Spanish in every session, including an en_US one.
 //
-// Unlike the parameterized messages above, this string carries no dynamic/
-// interpolated value — it's a fixed literal — so it belongs in the plain
-// exact-match BACKEND_ERROR_MAP (same style as 'A tariff marked as default
-// cannot be deactivated.' / the costing-engine entry), not a parameterized
-// matcher. Suggested key: `backendError.noLinesToInvoice`.
+// The string carries no dynamic/interpolated value — it's a fixed literal — so
+// it lives in the plain exact-match BACKEND_ERROR_MAP (same style as 'A tariff
+// marked as default cannot be deactivated.' / the costing-engine entry) rather
+// than in a parameterized matcher, under `backendError.noLinesToInvoice`.
 //
-// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
-// Spanish literal to `backendError.noLinesToInvoice`. Until that lands, these
-// tests MUST fail: translateBackendError has no matching key for this message,
-// so it falls through to returning `msg` unchanged (still Spanish, even for an
-// en_US translator).
+// These tests guarantee that entry stays wired: translateBackendError must
+// resolve the raw Spanish literal through the caller's translator in both
+// directions, so an en_US session sees English instead of the backend's Spanish.
 describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 case 2)', () => {
   const RAW = 'No hay líneas a facturar en este pedido';
 
@@ -558,11 +494,9 @@ describe('translateBackendError — "no lines to invoice" exact match (ETP-4831 
 // Both throw sites emit the exact same string, so ONE BACKEND_ERROR_MAP entry
 // covers both. Suggested key: `backendError.noPendingLinesToInvoiceShipment`.
 //
-// EXPECTED (not yet implemented): a `BACKEND_ERROR_MAP` entry mapping the raw
-// Spanish literal to `backendError.noPendingLinesToInvoiceShipment`. Until that
-// lands, these tests MUST fail: translateBackendError has no matching key for
-// this message, so it falls through to returning `msg` unchanged (still
-// Spanish, even for an en_US translator).
+// These tests guarantee that entry stays wired: translateBackendError must
+// resolve the raw Spanish literal through the caller's translator in both
+// directions, so an en_US session sees English instead of the backend's Spanish.
 describe('translateBackendError — "no pending lines to invoice" shipment exact match (ETP-4831 case 3)', () => {
   const RAW = 'No hay líneas pendientes de facturar en este albarán';
 
@@ -585,16 +519,15 @@ describe('translateBackendError — "no pending lines to invoice" shipment exact
 //
 // Verified directly against com.etendoerp.go source. Two families:
 //
-//  A) Exact-match literals (no interpolation) — belong in BACKEND_ERROR_MAP, same
+//  A) Exact-match literals (no interpolation) — live in BACKEND_ERROR_MAP, same
 //     style as case 2/3 above.
-//  B) Parameterized literals (fixed prefix + a dynamic ID appended) — need NEW
+//  B) Parameterized literals (fixed prefix + a dynamic ID appended) — handled by
 //     matchers wired into translateParameterized, same plain-string-slicing style
-//     (no regex, ReDoS-safe) as matchAccountNotFound / matchInvoiceLineAlreadyInvoiced.
+//     (no regex, ReDoS-safe) as matchAccountNotFound.
 //
-// EXPECTED (not yet implemented): none of the BACKEND_ERROR_MAP entries, matcher
-// functions, or i18n keys below exist yet. Until they land, ALL tests in this
-// block MUST fail: translateBackendError falls through to returning `msg`
-// unchanged for every one of these raw messages.
+// These tests guarantee every one of those entries, matchers and i18n keys stays
+// wired: translateBackendError must resolve each raw message through the caller's
+// translator rather than falling through and returning `msg` unchanged.
 
 describe('translateBackendError — ETP-4831 case 4 (9 more hardcoded messages)', () => {
   // A.1) CreateShipmentHandler.java:136 — hardcoded Spanish literal, no
@@ -1833,6 +1766,381 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
   });
 });
 
+// ── ETP-5316: matching by AD_MESSAGE key ─────────────────────────────────────────
+//
+// The third mechanism in backendErrors.js, next to the exact-match map and the parameterized
+// matchers. A core PL/SQL document-action failure (M_INOUT_POST and friends) reaches us as a
+// sentence assembled from AD_MESSAGE tokens plus run-time data — "En la línea 10, 20, 30, 40,
+// Cuando el producto no esta vacío entonces la cantidad movida no debe ser cero." — so it is
+// unmatchable by text (the embedded values differ per document) AND unhelpful (10/20/30 are AD
+// line numbers, not the row positions the user sees). Etendo GO now also sends the keys it
+// extracted BEFORE translating, so the SPA resolves the failure by identity and owns the wording.
+//
+// Two invariants these tests exist to protect:
+//   1. The key route runs FIRST and wins over the text route.
+//   2. Everything about the two-argument call is unchanged — the two repos deploy separately, so
+//      "frontend ahead of backend, no keys on the wire" is the normal steady state for a while.
+
+const DOC_LINES_KEYS = {
+  'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
+  'backendError.docLinesWithoutLocator': 'Hay líneas sin ubicación asignada.',
+  'backendError.docLinesLocatorNotAvailable': 'Hay líneas cuya ubicación no está disponible.',
+  'backendError.docLinesInactiveProduct': 'Hay líneas con productos inactivos.',
+  'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+  'backendError.docLinesAttributeRequired': 'Hay líneas cuyo producto requiere que se indique su atributo.',
+  'backendError.docLinesNotExploded': 'Hay líneas con productos que deben desglosarse antes de confirmar.',
+  'backendError.docLinesQtyExceedsOrdered': 'Hay líneas que superan la cantidad pedida.',
+};
+
+// Mimics useUI(): returns the locale entry, or echoes the key back when there is none.
+const keyT = (k) => DOC_LINES_KEYS[k] ?? k;
+
+// The real sentence core produces for @Inline@ + @ProductNotNullAndMovementQtyZero@. It is not in
+// any exact-match map and never can be — the line numbers change per document.
+const CORE_DOC_LINES_SENTENCE =
+  'En la línea 10, 20, 30, 40, Cuando el producto no esta vacío entonces la cantidad movida '
+  + 'no debe ser cero.';
+
+describe('extractBackendMessageKeys (ETP-5316)', () => {
+  it('reads messageKeys from the top-level envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ status: 'error', messageKeys: ['Inline', 'lockedProduct'] }),
+      ['Inline', 'lockedProduct'],
+    );
+  });
+
+  it('reads messageKeys from the response.* envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ response: { messageKeys: ['InActiveProducts'] } }),
+      ['InActiveProducts'],
+    );
+  });
+
+  it('reads messageKeys from the error.* envelope', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ error: { status: 400, messageKeys: ['MovementQtyCheck'] } }),
+      ['MovementQtyCheck'],
+    );
+  });
+
+  it('prefers the top-level envelope when more than one carries keys', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({
+        messageKeys: ['Inline'],
+        response: { messageKeys: ['lockedProduct'] },
+        error: { messageKeys: ['InActiveProducts'] },
+      }),
+      ['Inline'],
+    );
+  });
+
+  it('prefers response.* over error.* when the top level has none', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({
+        response: { messageKeys: ['lockedProduct'] },
+        error: { messageKeys: ['InActiveProducts'] },
+      }),
+      ['lockedProduct'],
+    );
+  });
+
+  // `undefined`, never `[]`: an empty array would read as "the backend answered, with no keys",
+  // which is a different statement from "this backend does not send keys at all".
+  it('returns undefined — never an empty array — when the body carries no keys', () => {
+    assert.equal(extractBackendMessageKeys({ status: 'error', message: 'boom' }), undefined);
+    assert.equal(extractBackendMessageKeys({}), undefined);
+  });
+
+  it('returns undefined for a null / undefined body (res.json() failed)', () => {
+    assert.equal(extractBackendMessageKeys(null), undefined);
+    assert.equal(extractBackendMessageKeys(undefined), undefined);
+  });
+
+  it('returns undefined when messageKeys is present but not an array', () => {
+    assert.equal(extractBackendMessageKeys({ messageKeys: 'Inline' }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: { 0: 'Inline' } }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: 42 }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: null }), undefined);
+  });
+
+  it('returns undefined when every entry is junk (nothing usable survives the filter)', () => {
+    assert.equal(extractBackendMessageKeys({ messageKeys: [1, '', null] }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: [] }), undefined);
+    assert.equal(extractBackendMessageKeys({ messageKeys: [undefined, {}, false] }), undefined);
+  });
+
+  it('keeps the usable entries and drops the junk around them', () => {
+    assert.deepEqual(
+      extractBackendMessageKeys({ messageKeys: [1, 'Inline', '', null, 'lockedProduct'] }),
+      ['Inline', 'lockedProduct'],
+    );
+  });
+
+  it('never throws on a hostile body shape', () => {
+    assert.doesNotThrow(() => extractBackendMessageKeys('a string'));
+    assert.doesNotThrow(() => extractBackendMessageKeys(0));
+    assert.doesNotThrow(() => extractBackendMessageKeys([]));
+  });
+});
+
+describe('translateBackendError — messageKeys route (ETP-5316)', () => {
+  it('maps the real core document-action sentence via its keys, dropping the AD line numbers', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, {
+        messageKeys: ['Inline', 'ProductNotNullAndMovementQtyZero'],
+      }),
+      'Hay líneas sin cantidad.',
+    );
+  });
+
+  it('maps each of the eight M_INOUT_POST keys to its own locale entry', () => {
+    const EXPECTED = [
+      ['ProductNotNullAndMovementQtyZero', 'Hay líneas sin cantidad.'],
+      ['InoutLineWithoutLocator', 'Hay líneas sin ubicación asignada.'],
+      ['LocatorWithNotAvailableStatus', 'Hay líneas cuya ubicación no está disponible.'],
+      ['InActiveProducts', 'Hay líneas con productos inactivos.'],
+      ['lockedProduct', 'Hay líneas con productos bloqueados que no pueden entregarse.'],
+      ['productWithoutAttributeSet', 'Hay líneas cuyo producto requiere que se indique su atributo.'],
+      ['InoutLineNotExploded', 'Hay líneas con productos que deben desglosarse antes de confirmar.'],
+      ['MovementQtyCheck', 'Hay líneas que superan la cantidad pedida.'],
+    ];
+    for (const [key, expected] of EXPECTED) {
+      assert.equal(
+        translateBackendError('whatever the backend said', keyT, { messageKeys: [key] }),
+        expected,
+        `key ${key}`,
+      );
+    }
+  });
+
+  // The key is a stable identity; the prose it produced may embed per-document values. When both
+  // could match, identity has to win — otherwise a message that happens to also be an exact-map
+  // literal would silently keep the old, line-number-bearing wording.
+  it('the key wins over an exact-match text that would also have matched', () => {
+    assert.equal(
+      translateBackendError('Country needed in an IBAN account.', keyT, {
+        messageKeys: ['lockedProduct'],
+      }),
+      'Hay líneas con productos bloqueados que no pueden entregarse.',
+    );
+  });
+
+  // Core emits the structural @Inline@ token before the real failure, so "first RECOGNISED key"
+  // (not "first key") is the rule — an unknown token must not shadow the failure behind it.
+  it('skips unrecognised keys and resolves the first one it knows', () => {
+    assert.equal(
+      translateBackendError('anything', keyT, {
+        messageKeys: ['Inline', 'SomeUnknownToken', 'InoutLineNotExploded'],
+      }),
+      'Hay líneas con productos que deben desglosarse antes de confirmar.',
+    );
+  });
+
+  it('resolves the FIRST recognised key when several are known', () => {
+    assert.equal(
+      translateBackendError('anything', keyT, {
+        messageKeys: ['InActiveProducts', 'lockedProduct'],
+      }),
+      'Hay líneas con productos inactivos.',
+    );
+  });
+
+  it('falls back to the text route when no key is recognised', () => {
+    assert.equal(
+      translateBackendError('Country needed in an IBAN account.', (k) => (
+        k === 'backendError.countryIban' ? 'País necesario en una cuenta IBAN.' : keyT(k)
+      ), { messageKeys: ['TotallyUnknownKey'] }),
+      'País necesario en una cuenta IBAN.',
+    );
+  });
+
+  it('falls back to the backend sentence when no key is recognised and no text matches either', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: ['TotallyUnknownKey'] }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  // A locale gap must not render the raw i18n key at the user: an untranslated result is
+  // indistinguishable from no result, same convention as translateSingleMessage.
+  it('falls back to the text when the mapped locale entry is missing (t echoes the key)', () => {
+    const missingT = (k) => k;
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, missingT, {
+        messageKeys: ['ProductNotNullAndMovementQtyZero'],
+      }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  it('falls back to the text when the mapped locale entry is an empty string', () => {
+    const emptyT = (k) => (k === 'backendError.docLinesWithoutQuantity' ? '' : k);
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, emptyT, {
+        messageKeys: ['ProductNotNullAndMovementQtyZero'],
+      }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  // The keys alone say what failed, so an empty/absent sentence is still translatable — the old
+  // code returned early on a falsy `msg` before ever looking at them.
+  it('translates from the keys alone when the message is empty', () => {
+    assert.equal(
+      translateBackendError('', keyT, { messageKeys: ['ProductNotNullAndMovementQtyZero'] }),
+      'Hay líneas sin cantidad.',
+    );
+    assert.equal(
+      translateBackendError(undefined, keyT, { messageKeys: ['lockedProduct'] }),
+      'Hay líneas con productos bloqueados que no pueden entregarse.',
+    );
+  });
+
+  it('ignores a non-array messageKeys and behaves as a text-only call', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: 'lockedProduct' }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, { messageKeys: null }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+  });
+
+  it('still returns the message untouched when t is not a function, keys or no keys', () => {
+    assert.equal(
+      translateBackendError(CORE_DOC_LINES_SENTENCE, undefined, { messageKeys: ['lockedProduct'] }),
+      CORE_DOC_LINES_SENTENCE,
+    );
+    assert.equal(
+      translateBackendError(null, {}, { messageKeys: ['lockedProduct'] }),
+      null,
+    );
+  });
+
+  // ── regression: the two-argument call is exactly what it was ──────────────────
+  // The frontend ships ahead of the backend, so most calls have no third argument for a while.
+  describe('two-argument behaviour is unchanged (pre-ETP-5316 regression guard)', () => {
+    it('an exact-match message still translates with no third argument', () => {
+      const t = (k) => (k === 'backendError.countryIban' ? 'País necesario en una cuenta IBAN.' : k);
+      assert.equal(
+        translateBackendError('Country needed in an IBAN account.', t),
+        'País necesario en una cuenta IBAN.',
+      );
+    });
+
+    it('an unmapped message is still returned verbatim with no third argument', () => {
+      assert.equal(translateBackendError(CORE_DOC_LINES_SENTENCE, keyT), CORE_DOC_LINES_SENTENCE);
+    });
+
+    it('null / empty input is still returned unchanged with no third argument', () => {
+      assert.equal(translateBackendError(null, keyT), null);
+      assert.equal(translateBackendError(undefined, keyT), undefined);
+      assert.equal(translateBackendError('', keyT), '');
+    });
+
+    it('an explicitly empty options object behaves exactly like omitting it', () => {
+      assert.equal(translateBackendError(CORE_DOC_LINES_SENTENCE, keyT, {}), CORE_DOC_LINES_SENTENCE);
+      assert.equal(translateBackendError('', keyT, {}), '');
+      assert.equal(translateBackendError(null, keyT, {}), null);
+    });
+  });
+});
+
+// ── ETP-5397: "tercero" → "Contacto" terminology fix on the goods-receipt header ──
+//
+// AD_MESSAGE 20552 and its sibling 20502 (module org.openbravo, core-owned, not fixed there)
+// use core's "business partner" / "tercero" wording, which is wrong Etendo Go terminology — the
+// equivalent concept in this UI is "Contact" / "Contacto". Both the EN and the ES AD_MESSAGE_TRL
+// literals are mapped so the header save path (DetailView.jsx) renders the correct term
+// regardless of which language the backend responded in.
+describe('translateBackendError — "cannot change business partner" terminology fix (ETP-5397)', () => {
+  const en = fakeUiTranslator({
+    'backendError.cannotChangeBpWithLines': 'You cannot change the Contact once the document has lines.',
+    'backendError.cannotChangeBpOrPriceListWithLines':
+      'You cannot change the Contact or the price list once the document has lines.',
+  });
+  const es = fakeUiTranslator({
+    'backendError.cannotChangeBpWithLines': 'No se puede modificar el Contacto cuando hay líneas.',
+    'backendError.cannotChangeBpOrPriceListWithLines':
+      'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+  });
+
+  describe('AD_MESSAGE 20552 — "Cannot change business partner if there are lines."', () => {
+    const RAW_EN = 'Cannot change business partner if there are lines.';
+    const RAW_ES = 'No se puede modificar el tercero cuando hay líneas.';
+
+    it('translates the raw English literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, en),
+        'You cannot change the Contact once the document has lines.',
+      );
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, es),
+        'No se puede modificar el Contacto cuando hay líneas.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, en),
+        'You cannot change the Contact once the document has lines.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, es),
+        'No se puede modificar el Contacto cuando hay líneas.',
+      );
+    });
+  });
+
+  describe('AD_MESSAGE 20502 — "Cannot change business partner or price list if there are lines."', () => {
+    const RAW_EN = 'Cannot change business partner or price list if there are lines.';
+    const RAW_ES = 'No se puede cambiar de tercero ni la tarifa de la factura por existir líneas.';
+
+    it('translates the raw English literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, en),
+        'You cannot change the Contact or the price list once the document has lines.',
+      );
+    });
+
+    it('translates the raw English literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_EN, es),
+        'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to en_US', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, en),
+        'You cannot change the Contact or the price list once the document has lines.',
+      );
+    });
+
+    it('translates the raw Spanish (AD_MESSAGE_TRL) literal to es_ES', () => {
+      assert.equal(
+        translateBackendError(RAW_ES, es),
+        'No se puede cambiar el Contacto ni la tarifa cuando hay líneas.',
+      );
+    });
+  });
+
+  it('does not cross-match the two sibling messages (20552 key vs 20502 raw)', () => {
+    const raw20502 = 'Cannot change business partner or price list if there are lines.';
+    assert.notEqual(
+      translateBackendError(raw20502, en),
+      'You cannot change the Contact once the document has lines.',
+    );
+  });
+});
+
 // ── ETP-5323: parseBackendErrorMessage's response.errors (MAP) fallback ──────────
 //
 // A line PATCH that goes through core's DefaultJsonDataService (not NeoCrudHandler's own
@@ -1960,5 +2268,33 @@ describe('parseBackendErrorMessage — response.errors MAP fallback (ETP-5323)',
     const res = { json: async () => { throw new Error('not JSON'); } };
     const raw = await parseBackendErrorMessage(res);
     assert.equal(raw, undefined);
+  });
+});
+
+// ETP-5411 — UserRoleAssignmentHandler#rejectNonOwnerEditingOwner's owner-modification guard
+// (com.etendoerp.go, part of the ETP-4830 owner-protection concern) was previously unmapped,
+// unlike its siblings cannotDeactivateOwnAccount/cannotDeleteOwner — so it reached the toast
+// untranslated regardless of session locale. Suggested key: backendError.cannotModifyOwnerAccount.
+describe('"tenant owner — only the owner can modify" exact match (UserRoleAssignmentHandler)', () => {
+  const RAW = 'This user is the tenant owner — only the owner can modify this account';
+
+  it('translates the raw English literal to en_US', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'This user is the tenant owner — only the owner can modify this account.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'This user is the tenant owner — only the owner can modify this account.',
+    );
+  });
+
+  it('translates the raw English literal to es_ES', () => {
+    const t = (k) => (k === 'backendError.cannotModifyOwnerAccount'
+      ? 'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.'
+      : k);
+    assert.equal(
+      translateBackendError(RAW, t),
+      'Este usuario es el propietario de la empresa — solo el propietario puede modificar esta cuenta.',
+    );
   });
 });

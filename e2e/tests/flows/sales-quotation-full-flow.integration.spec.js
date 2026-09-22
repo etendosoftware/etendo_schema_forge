@@ -31,7 +31,9 @@ import {
  *      "Ver albarán" into the newly-created Goods Shipment
  *   6. Confirm the shipment with "Crear factura" ON, "Ver factura" into the
  *      newly-created Sales Invoice
- *   7. Confirm the invoice → Completed
+ *   7. Verify the invoice arrived ALREADY Completed — ETP-5381 creates and
+ *      confirms a generated invoice in one step, so it has no draft stage and
+ *      renders no Confirmar action
  *
  * At every stage that carries a monetary line (quotation, order, invoice —
  * goods shipments are movement-only and carry no price/amount fields)
@@ -763,36 +765,38 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThanOrEqual(0.05);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 12: Confirm the invoice — the negative sign must survive
-    // completion
+    // STEP 12: The invoice arrives completed — the negative sign must have
+    // survived the completion the backend performed on creation
     // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ETP-5381: an invoice generated from another document is created AND
+    // confirmed in one step, so there is no draft stage to confirm here. A
+    // completed draftMode document renders no save-actions row at all
+    // (shouldRenderSaveActionsRow in DetailView.jsx), which is precisely how
+    // this spec failed after the change — `action-save` was simply absent.
+    //
+    // The ETP-4567 assertions this test exists for are unchanged, and now run
+    // unconditionally instead of hiding behind an `if (onDetailView)` guard
+    // that only existed to tolerate the post-confirm navigation.
 
-    const invoiceConfirmBtn = page.getByTestId('action-save');
-    await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
-    await invoiceConfirmBtn.click();
-    await waitForConfirmResponse(page);
-    await page.waitForTimeout(2_000);
+    await waitForDetailReady(page);
 
-    const closeBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await closeBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await closeBtn.click();
-      await slow(page);
-    }
+    const statusPill = page.getByTestId('document-status-pill').first();
+    await expect(statusPill,
+      '[ETP-5381] The invoice generated from the shipment should arrive already Completed',
+    ).toHaveAttribute('data-status', 'CO', { timeout: 15_000 });
+    await expect(statusPill,
+      '[ETP-4567] Invoice should read Completed, negative line still present',
+    ).toContainText(/completado|registrado|booked|completed/i, { timeout: 15_000 });
+    await expect(page.getByTestId('action-save'),
+      '[ETP-5381] A document that arrives confirmed must offer no Confirmar action',
+    ).toBeHidden({ timeout: 10_000 });
 
-    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
-    if (onDetailView) {
-      await waitForDetailReady(page);
-      const statusPill = page.getByTestId('document-status-pill').first();
-      await expect(statusPill,
-        '[ETP-4567] Invoice should show Completed after confirmation, negative line still present',
-      ).toContainText(/completado|registrado|booked|completed/i, { timeout: 15_000 });
-
-      const negCompletedRow = await findNegativeLineRow(page, 'invoicedQuantity');
-      const completedQtyText = await negCompletedRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
-      expect(parseAmount(completedQtyText),
-        '[ETP-4567] Invoiced quantity should remain negative after the invoice is completed',
-      ).toBeLessThan(0);
-    }
+    const negCompletedRow = await findNegativeLineRow(page, 'invoicedQuantity');
+    const completedQtyText = await negCompletedRow.locator('[data-cell-key="invoicedQuantity"]').textContent();
+    expect(parseAmount(completedQtyText),
+      '[ETP-4567] Invoiced quantity should remain negative on the completed invoice',
+    ).toBeLessThan(0);
     await slow(page);
   });
 
@@ -1131,37 +1135,34 @@ test.describe('Sales Quotation — Full flow to invoice with a negative-quantity
     ).toBeLessThanOrEqual(0.05);
 
     // ═══════════════════════════════════════════════════════════════════════
-    // Confirm the invoice — the negative sign must survive completion
+    // The invoice arrives completed — the negative sign must have survived
+    // the completion the backend performed on creation
     // ═══════════════════════════════════════════════════════════════════════
+    //
+    // ETP-5381 removed the manual confirm step here (see the sibling test
+    // above): the invoice is created AND confirmed in one step by the shipment
+    // confirm, so no Confirmar action is rendered on it.
 
-    const invoiceConfirmBtn = page.getByTestId('action-save');
-    await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
-    await invoiceConfirmBtn.click();
-    await waitForConfirmResponse(page);
-    await page.waitForTimeout(2_000);
+    await waitForDetailReady(page);
 
-    const closeBtn = page.getByRole('button', { name: 'Cerrar', exact: true });
-    if (await closeBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await closeBtn.click();
-      await slow(page);
-    }
+    const statusPill = page.getByTestId('document-status-pill').first();
+    await expect(statusPill,
+      '[ETP-5381] The invoice generated from the fully-negative shipment should arrive already Completed',
+    ).toHaveAttribute('data-status', 'CO', { timeout: 15_000 });
+    await expect(statusPill,
+      '[ETP-4567] Invoice should read Completed, still fully negative',
+    ).toContainText(/completado|registrado|booked|completed/i, { timeout: 15_000 });
+    await expect(page.getByTestId('action-save'),
+      '[ETP-5381] A document that arrives confirmed must offer no Confirmar action',
+    ).toBeHidden({ timeout: 10_000 });
 
-    const onDetailView = await page.getByTestId('detail-view').isVisible({ timeout: 5_000 }).catch(() => false);
-    if (onDetailView) {
-      await waitForDetailReady(page);
-      const statusPill = page.getByTestId('document-status-pill').first();
-      await expect(statusPill,
-        '[ETP-4567] Invoice should show Completed after confirmation, still fully negative',
-      ).toContainText(/completado|registrado|booked|completed/i, { timeout: 15_000 });
-
-      const completedRows = page.locator('[data-testid^="line-row-"]');
-      const completedRowCount = await completedRows.count();
-      for (let i = 0; i < completedRowCount; i++) {
-        const qtyText = await completedRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
-        expect(parseAmount(qtyText),
-          `[ETP-4567] Every invoice line quantity should remain negative after completion (row ${i})`,
-        ).toBeLessThan(0);
-      }
+    const completedRows = page.locator('[data-testid^="line-row-"]');
+    const completedRowCount = await completedRows.count();
+    for (let i = 0; i < completedRowCount; i++) {
+      const qtyText = await completedRows.nth(i).locator('[data-cell-key="invoicedQuantity"]').textContent();
+      expect(parseAmount(qtyText),
+        `[ETP-4567] Every invoice line quantity should remain negative on the completed invoice (row ${i})`,
+      ).toBeLessThan(0);
     }
     await slow(page);
   });
