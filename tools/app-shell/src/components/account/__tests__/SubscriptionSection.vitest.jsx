@@ -61,16 +61,20 @@ function renderSection(props = {}) {
   return render(<SubscriptionSection apiBaseUrl="/api" {...props} />);
 }
 
+// The backend's `status` is Stripe's own live subscription status — lowercase, e.g. `active`,
+// `past_due`, `trialing`, `canceled` — never the uppercase `EnvironmentAccessPolicy` enum names.
+// Whether the grace banner shows is decided by a non-null `graceEndsAt` (the backend already
+// derives it from the stored projection), not by matching `status` against a literal.
 const ACTIVE = {
   hasSubscription: true,
   plan: 'Pro',
   amountMinor: 2900,
   currency: 'EUR',
-  status: 'CURRENT',
+  status: 'active',
   renewalAt: '2026-11-15T00:00:00Z',
   cancelAtPeriodEnd: false,
   graceEndsAt: null,
-  graceDaysRemaining: null,
+  graceDaysRemaining: 0,
 };
 
 describe('SubscriptionSection', () => {
@@ -121,7 +125,10 @@ describe('SubscriptionSection', () => {
 
       expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
       expect(screen.getByTestId('SubscriptionSection__root')).toBeInTheDocument();
-      expect(screen.getByTestId('SubscriptionSection__status')).toBeInTheDocument();
+      // The badge shows a translated label for the live Stripe status, never the raw provider
+      // string — `active` maps onto the same `subscriptionCurrent` key the stored
+      // `EnvironmentAccessPolicy` projection already uses.
+      expect(screen.getByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionCurrent');
 
       // Formatting is locale-driven (ETP-4314) — only assert the amount rendered and carries
       // the value's digits, not an exact separator/symbol placement.
@@ -141,22 +148,66 @@ describe('SubscriptionSection', () => {
       expect(await screen.findByTestId('SubscriptionSection__cancelsOn')).toBeInTheDocument();
       expect(screen.queryByTestId('SubscriptionSection__renewsOn')).not.toBeInTheDocument();
     });
+
+    // Falls back to the raw provider string rather than hiding the badge or throwing, for a
+    // Stripe status this section's label map has no entry for yet.
+    it('falls back to the raw status string for a status the label map does not know', async () => {
+      getSubscription.mockResolvedValue({ ...ACTIVE, status: 'some_future_stripe_status' });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__status'))
+        .toHaveTextContent('some_future_stripe_status');
+    });
   });
 
-  it('shows the remaining grace days while the subscription is past due', async () => {
-    getSubscription.mockResolvedValue({
-      ...ACTIVE,
-      status: 'PAST_DUE',
-      renewalAt: null,
-      cancelAtPeriodEnd: false,
-      graceEndsAt: '2026-10-01T00:00:00Z',
-      graceDaysRemaining: 7,
-    });
-    renderSection();
+  describe('the grace banner', () => {
+    it('shows the remaining grace days while the subscription is past due', async () => {
+      getSubscription.mockResolvedValue({
+        ...ACTIVE,
+        status: 'past_due',
+        renewalAt: null,
+        cancelAtPeriodEnd: false,
+        graceEndsAt: '2026-10-01T00:00:00Z',
+        graceDaysRemaining: 7,
+      });
+      renderSection();
 
-    const grace = await screen.findByTestId('SubscriptionSection__graceRemaining');
-    expect(grace.textContent).toMatch(/7/);
-    expect(screen.queryByTestId('SubscriptionSection__renewsOn')).not.toBeInTheDocument();
+      const grace = await screen.findByTestId('SubscriptionSection__graceRemaining');
+      expect(grace.textContent).toMatch(/7/);
+      expect(screen.getByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionPastDue');
+      expect(screen.queryByTestId('SubscriptionSection__renewsOn')).not.toBeInTheDocument();
+    });
+
+    // Regression: the signal is `graceEndsAt`, not the `status` string. A past-due account with
+    // no grace end date (the backend never derived one) must not show a banner it cannot back
+    // with a real deadline — matching the same "never write PAST_DUE without a due date" rule
+    // the backend lifecycle applier enforces (see the design doc §4.4). The status badge is
+    // unaffected: it still reads live off `status`, independent of the grace signal.
+    it('shows no grace banner for a past-due subscription with no derived grace end date', async () => {
+      getSubscription.mockResolvedValue({
+        ...ACTIVE,
+        status: 'past_due',
+        renewalAt: null,
+        cancelAtPeriodEnd: false,
+        graceEndsAt: null,
+        graceDaysRemaining: 0,
+      });
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionPastDue');
+      expect(screen.queryByTestId('SubscriptionSection__graceRemaining')).not.toBeInTheDocument();
+    });
+
+    // Regression: an active subscription never shows the grace banner, even if a stale
+    // `graceDaysRemaining` value lingered in the payload — `graceEndsAt` null is what rules it
+    // out, covered together here with the active fixture (`ACTIVE.graceEndsAt` is null).
+    it('never shows a grace banner for an active subscription', async () => {
+      getSubscription.mockResolvedValue(ACTIVE);
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__plan')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__graceRemaining')).not.toBeInTheDocument();
+    });
   });
 
   describe('managing the subscription', () => {

@@ -9,6 +9,29 @@ import { formatCalendarDate } from '@/lib/dateOnly.js';
 import { getSubscription, createPortalSession, getCheckoutToken } from '@/lib/upgrade/api.js';
 
 /**
+ * Maps Stripe's live subscription `status` (lowercase, provider-defined — see
+ * `StripeCustomerPortalService.SubscriptionDetail.fromProviderJson`, which reads it verbatim
+ * from `subscription.status` in the provider's API response) to a translated label key.
+ * `active` and `past_due` intentionally reuse the existing `subscriptionCurrent` /
+ * `subscriptionPastDue` keys (already shipped for the stored `EnvironmentAccessPolicy`
+ * projection) because the words apply just as well to the live provider value. There is no
+ * mapping to `subscriptionExpired` here: that key names the STORED policy state reached only
+ * after the grace period elapses, which is a different signal than any single live Stripe
+ * status (see the `graceEndsAt` note below) and reusing it here would say something the
+ * provider isn't saying.
+ */
+const STRIPE_STATUS_LABEL_KEYS = {
+  active: 'subscriptionCurrent',
+  trialing: 'subscriptionTrialing',
+  past_due: 'subscriptionPastDue',
+  canceled: 'subscriptionCanceled',
+  unpaid: 'subscriptionUnpaid',
+  incomplete: 'subscriptionIncomplete',
+  incomplete_expired: 'subscriptionIncompleteExpired',
+  paused: 'subscriptionPaused',
+};
+
+/**
  * The account owner's Subscription section on `/account` (ETP-5443).
  *
  * Only `status` and the grace due date are durable — they feed `EnvironmentAccessPolicy` at ERP
@@ -69,11 +92,18 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
   }, [apiBaseUrl]);
 
   const hasSubscription = subscription?.hasSubscription === true;
-  const isPastDue = subscription?.status === 'PAST_DUE';
+  // `graceEndsAt` is only ever non-null when the STORED projection is PAST_DUE with a due
+  // date (see buildBillingSubscriptionJson in EtendoGoJwtServlet.java) — the authoritative
+  // signal for the grace banner. The live Stripe `status` is a display-only value and must
+  // not drive this: Stripe's own status vocabulary (active/past_due/trialing/canceled/...)
+  // can disagree in timing with the stored grace window.
+  const inGracePeriod = subscription?.graceEndsAt != null;
   const cancelsAtPeriodEnd = subscription?.cancelAtPeriodEnd === true;
   const renewalDate = subscription?.renewalAt
     ? formatCalendarDate(subscription.renewalAt, locale)
     : null;
+  const statusLabelKey = STRIPE_STATUS_LABEL_KEYS[subscription?.status];
+  const statusLabel = statusLabelKey ? ui(statusLabelKey) : subscription?.status;
 
   return (
     <Card data-testid={dataTestId}>
@@ -107,7 +137,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
 
         {status === 'loaded' && !hasSubscription && (
           <p className="mt-4 text-sm text-muted-foreground" data-testid="SubscriptionSection__none">
-            {ui('subscriptionNone')}
+            {ui('subscriptionNoActive')}
           </p>
         )}
 
@@ -129,7 +159,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>{ui('subscriptionStatus')}</span>
               <Badge variant="secondary" data-testid="SubscriptionSection__status">
-                {subscription.status}
+                {statusLabel}
               </Badge>
             </div>
 
@@ -145,7 +175,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
               </p>
             )}
 
-            {isPastDue && (
+            {inGracePeriod && (
               <p
                 className="text-sm text-destructive"
                 data-testid="SubscriptionSection__graceRemaining"
