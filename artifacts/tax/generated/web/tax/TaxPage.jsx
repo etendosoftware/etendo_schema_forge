@@ -18,6 +18,7 @@ const breadcrumb = 'Finance / Tax';
 const summary = [
   { key: 'name', column: 'Name', type: 'string' },
   { key: 'validFrom', column: 'ValidFrom', type: 'date' },
+  { key: 'taxCategory', column: 'C_TaxCategory_ID', type: 'selector' },
   { key: 'rate', column: 'Rate', type: 'number' },
   { key: 'applicableTo', column: 'SOPOType', type: 'enum' },
   { key: 'docTaxAmount', column: 'DocTaxAmount', type: 'enum' },
