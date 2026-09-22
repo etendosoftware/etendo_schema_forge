@@ -135,7 +135,6 @@ export const GENERAL_SEED = {
   accrual: true, // IsAccrual fixed to true (Devengo) — hidden field, not user-editable (ETP-5372)
   description: '',
   currency: 'EUR',
-  allowNegative: false, // Allownegative=N ⇒ toggle OFF
 };
 
 // Offline fallback for the read-only org-scoped values (fiscal calendar +

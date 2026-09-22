@@ -181,19 +181,6 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     });
   });
 
-  test('allow negative toggle: turning it ON maps to allowNegative=true', async ({ page }) => {
-    const toggle = page.getByTestId('glc-toggle-allow-negative-switch');
-    // Seed allowNegative=false ⇒ toggle starts OFF.
-    await expect(toggle).not.toBeChecked();
-    await toggle.click();
-    await expect(toggle).toBeChecked();
-
-    await page.getByTestId('glc-save').click();
-
-    await expect.poll(() => post.last).not.toBeNull();
-    expect(post.last.general).toMatchObject({ allowNegative: true });
-  });
-
   test('dimensions: toggling an optional row marks dirty and POSTs the dimension change', async ({ page }) => {
     await page.getByTestId('glc-tab-2').click();
     await expect(page.getByTestId('glc-section-dimensions')).toBeVisible();
