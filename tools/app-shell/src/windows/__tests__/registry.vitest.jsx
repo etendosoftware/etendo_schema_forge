@@ -416,6 +416,7 @@ describe('registry', () => {
         new Set(),
         { isAdminOrClientAdmin: false },
         {},
+        undefined,
         { 'aging-payable': 'full' },
       );
       const finance = result.find(g => g.group === 'Finance');
@@ -430,6 +431,7 @@ describe('registry', () => {
         new Set(),
         { isAdminOrClientAdmin: false },
         {},
+        undefined,
         {},
       );
       const finance = result.find(g => g.group === 'Finance');
@@ -445,6 +447,7 @@ describe('registry', () => {
         new Set(),
         { isAdminOrClientAdmin: false },
         {},
+        undefined,
         { 'inventory-stock-report': 'full' },
       );
       const finance = result.find(g => g.group === 'Finance');
