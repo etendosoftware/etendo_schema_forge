@@ -275,6 +275,23 @@ export default function UserHeaderTable(props) {
     });
   }, [props.data, roleFilter, adminRoleId, assignments]);
 
+  // Bug fix (reported live on app.etendo.software, post-ETP-5188) — `ListView` only
+  // forwards its own `loading` to `Table` for the TRUE initial fetch (see
+  // `ListTableRegion` in `ListView.jsx`: once `hook.items.length > 0`, it renders
+  // `<Table {...tableProps} />` with no `loading` prop at all). That's fine for the
+  // unfiltered grid, but `filteredData` above ALSO depends on `assignments` from
+  // `useUserRoleGridData()` — a second, independent fetch `ListView` knows nothing
+  // about. When arriving via a role card (`/user?role=<id>`), the base list can
+  // resolve before `assignments` does (routine on a slow connection): `filteredData`
+  // then filters against an empty/stale `assignments` map, `DataTable` renders its
+  // real "Sin registros aún" empty state, and the correct rows pop in ~1s later once
+  // `assignments` catches up — no skeleton at any point, since nothing told `DataTable`
+  // a fetch was still in flight. Direct entry (no `role` param) never hits this: line
+  // 262 returns `rows` unfiltered without ever touching `assignments`. Forcing
+  // `DataTable`'s own `loading` (skeleton) exactly while a role filter is waiting on
+  // `assignments` closes that gap without touching `ListView`.
+  const showRoleFilterLoading = Boolean(roleFilter) && loading;
+
   return (
     <>
       {userDebugModeActive && (
@@ -292,6 +309,7 @@ export default function UserHeaderTable(props) {
         filters={filters}
         {...props}
         data={filteredData}
+        loading={props.loading || showRoleFilterLoading}
         labelOverrides={labelOverrides}
         data-testid="DataTable__UserHeaderTable" />
     </>
