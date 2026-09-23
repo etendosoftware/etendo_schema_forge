@@ -214,7 +214,20 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Why it has its own section:** the checklist is a declarative catalogue. Anything a row does
   that is not "show a description and a button" is a FIELD in
   `tools/app-shell/src/pages/first-steps/firstStepsConfig.js`, never an `if` in
-  `FirstStepsPage`. That file's header is the contract; this is the functional summary.
+  `FirstStepsPage`. The catalogue declares each row and its action type; the page implements
+  each action type. The catalogue's header is the contract; this is the functional summary.
+- **Plan and progress.** A trial tenant sees five steps and starts at 1/5 because account
+  creation is always complete. A productive tenant sees eight steps, including three
+  productive-only rows: fiscal configuration, demo data transfer, and invoice numbering.
+  Progress includes the transfer row only when its server-owned status is `COMPLETED`,
+  `SKIPPED`, or `NOT_REQUESTED`. A `RUNNING` or `FAILED` transfer keeps that row incomplete;
+  the number of completed steps depends on the returned status. The provider waits for the
+  initial transfer response before exposing progress to the page and sidebar.
+- **Demo data transfer (`action: 'dataTransfer'`).** This productive-only row reports the
+  persisted transfer job for products and contacts. It is not a checkbox, and its id is not
+  written to `ETGO_ACCOUNT.FIRST_STEPS.completed`. The row shows progress while the job runs,
+  result counts when it completes, and a retry button if it fails. Closing the page does not
+  cancel the job; reopening the page reads its latest server status.
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
@@ -234,8 +247,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   afterwards, and landing there first made the step read as a different, later job.
 - **Automated evidence:**
   - `tools/app-shell/src/pages/first-steps/__tests__/firstStepsConfig.vitest.js` —
-    `isStepGated` across answered/completed, that only `fiscal-config` declares a gate, and that
-    the team row points at `/user`.
+    plan-dependent totals, transfer completion, `isStepGated` across answered/completed, that
+    only `fiscal-config` declares a gate, and that the team row points at `/user`.
   - `tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx` — the gate's yes / no /
     failed-write / re-ask-after-untick paths.
   - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
@@ -246,6 +259,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Answer **Sí** and confirm the Configurar button appears and reaches `/fiscal-config`.
   3. Answer **No** instead and confirm the step ticks; reload and confirm it is still ticked.
   4. Un-tick it and confirm the question comes back rather than the Configurar button.
+  5. On a productive tenant, inspect demo data transfer while it runs, after completion, and
+     after a failed job; confirm the row shows progress, result counts, and retry respectively.
+     Reload after completion and confirm the completed row and progress count remain in place.
 
 ### 4. Entity list/detail data flow
 
@@ -466,31 +482,26 @@ actual gallery cards, while missing these 5 real ones.
   3. Navigate to another route or refocus the tab and confirm the app reloads onto the new assets.
   4. Re-enter an environment from `/onboarding` and confirm the browser reaches `/dashboard` without serving stale cached shell assets.
 
-### 7b. Role/permission change notification (ETP-5189)
+### 7b. Role/permission change refresh (ETP-5189; visible banner removed in ETP-5423)
 
-- **User goal / entry point:** Learn that an administrator changed my role/permissions while I have an active session, and reload to apply them.
+- **User goal / entry point:** None — there is no user-facing notification. When an administrator changes a user's role/permissions while their session is active, the app self-heals silently in the background; the user simply finds their menu/access already up to date on the next natural re-render.
 - **Main path behavior:**
-  - `AuthContext.jsx` (`@etendosoftware/app-shell-core`, ETP-5195) already silently refreshes the session on mount, on tab focus/`visibilitychange`, and on a fixed 5-minute poll. Every refresh re-fetches `windowAccess`/`capabilities` (`SFWindowAccessMap`) through the host's `fetchWindowAccess` callback and diffs them; a real diff bumps `authRevision` and swaps the object references, which every consumer that reads them (`useWindowAccessSafe()`, `useCapabilitiesSafe()`, `useRoleMenu()` via `authRevision`) picks up live, with no reload — this already self-heals a template-role composition change or an Admin promote/demote for window/capability access.
-  - **ETP-5189 addition — `menuAccess`:** `fetchWindowAccess()` (`App.jsx`) now also calls `fetchMenuAccess()`, which flattens the role-filtered menu tree (`fetchMenuTree()` + `collectAllowedIds()`, `lib/menuTree.js` — the same `SFListMenu` source `useRoleMenu()` reads) into a `{id: true}` map and merges it into the payload as `menuAccess`. `AuthContext.jsx`'s diff now compares `menuAccess` the same way as the other two maps, so a menu-item-only or process-only grant/revocation (one that never touches a window/capability tier) also bumps `authRevision` — closing a gap where such a change previously left the sidebar permanently stale.
-  - `useRoleChangeNotice()` (`tools/app-shell/src/hooks/useRoleChangeNotice.js`) tracks the `windowAccess`/`capabilities`/`menuAccess` object references (not raw `authRevision`, which also bumps on a same-role pure token rotation) and flags `true` only on a genuine post-login change — the first settle after login/reload is captured as a silent baseline, never shown as a change.
-  - `RoleChangedBanner` (`tools/app-shell/src/components/RoleChangedBanner.jsx`) renders a fixed, top-of-viewport, non-dismissible `InfoBanner` (`tone: warning`) when that hook flags `true`, with a "Reload now" button (`window.location.reload()`). Mounted as a sibling of `ServiceWorkerManager`/`SurveyManager` inside `<AppShellRuntime>` (`App.jsx`) — i.e. inside the runtime's internal `AuthProvider` but outside `AppLayout`'s own layout box — so it is visible regardless of which window is open, and a fixed overlay rather than a document-flow element so it does not push `AppLayout`'s `h-screen`-style chrome down.
-  - The reload button is an explicit, user-triggered fallback/reassurance, not the only fix: the underlying access maps are already correct in the background (ETP-5195's own mechanism) by the time the banner is visible — reloading just makes every surface (menu labels, open forms) pick up the fresh state immediately instead of waiting for their own next re-render trigger.
+  - `AuthContext.jsx` (`@etendosoftware/app-shell-core`, ETP-5195) silently refreshes the session on mount, on tab focus/`visibilitychange`, and on a fixed 5-minute poll. Every refresh re-fetches `windowAccess`/`capabilities` (`SFWindowAccessMap`) through the host's `fetchWindowAccess` callback and diffs them; a real diff bumps `authRevision` and swaps the object references, which every consumer that reads them (`useWindowAccessSafe()`, `useCapabilitiesSafe()`, `useRoleMenu()` via `authRevision`) picks up live, with no reload — this self-heals a template-role composition change or an Admin promote/demote for window/capability access.
+  - **ETP-5189 addition — `menuAccess`:** `fetchWindowAccess()` (`App.jsx`) also calls `fetchMenuAccess()`, which flattens the role-filtered menu tree (`fetchMenuTree()` + `collectAllowedIds()`, `lib/menuTree.js` — the same `SFListMenu` source `useRoleMenu()` reads) into a `{id: true}` map and merges it into the payload as `menuAccess`. `AuthContext.jsx`'s diff compares `menuAccess` the same way as the other two maps, so a menu-item-only or process-only grant/revocation (one that never touches a window/capability tier) also bumps `authRevision` — closing a gap where such a change previously left the sidebar permanently stale.
+  - **ETP-5423 removal:** ETP-5189 originally shipped a visible companion to this silent refresh — `useRoleChangeNotice()` and a `RoleChangedBanner` component that flagged a genuine post-login access change and rendered a non-dismissible "Reload now" banner. That hook/component pair (and its tests) were removed in ETP-5423: the functional analyst determined they were pure dead-weight on top of ETP-5195's own silent refresh (the underlying access maps are already correct in the background by the time any notification could render — a reload was never the fix, just a reassurance UI). The refresh mechanism above is unchanged; there is simply no visible artifact of it firing anymore.
 - **Failure or edge behavior:**
   - A failed `SFWindowAccessMap` or `SFListMenu` fetch inside `fetchWindowAccess()` fails the whole call closed (returns `null`), resetting `windowAccess`/`capabilities`/`menuAccess` together rather than diffing a half-fetched result — this can look like a real access change (all three maps going to `{}`) and is a pre-existing tradeoff shared with ETP-5195's own `windowAccess`/`capabilities` handling, not a new regression.
-  - The banner is deliberately **not dismissible** without reloading (no close button) — the ticket's own acceptance criteria require that the user cannot keep silently navigating on stale permissions.
-  - A same-role token rotation (no metadata or access change) never shows the banner — the hook keys off object-reference changes to the three access maps, which a pure rotation does not touch.
-  - **Known gap, out of scope for this iteration:** a change that revokes access to a specific field-level or record-level rule (not a window/process/menu-tree grant) does not participate in this diff and will not trigger the banner.
+  - **Known gap, unchanged by ETP-5423:** a change that revokes access to a specific field-level or record-level rule (not a window/process/menu-tree grant) does not participate in this diff, so it will not bump `authRevision` and will not be picked up by `WindowAccessGuard`/`useRoleMenu` until the user's next full login.
 - **Automated evidence:**
   - Core (`schema_forge_core`): `AuthContext.jsx`/`sessionController.js` `menuAccess` diff coverage lives alongside the existing ETP-5195 refresh-contract tests in `packages/app-shell-core/src/auth/__tests__/`.
-  - Functional: `tools/app-shell/src/__tests__/App.vitest.jsx` covers `fetchWindowAccess()`'s merged `menuAccess` payload and its fail-closed behavior; hook/component-level tests for `useRoleChangeNotice`/`RoleChangedBanner` live under `tools/app-shell/src/hooks/__tests__/` and `tools/app-shell/src/components/__tests__/`.
+  - Functional: `tools/app-shell/src/__tests__/App.vitest.jsx` covers `fetchWindowAccess()`'s merged `menuAccess` payload and its fail-closed behavior.
 - **Manual verification path:**
   1. Sign in as user A with a template role that has Sales Order access; keep the session open on any page.
   2. As an admin (different session), reassign user A's template-role composition to remove Sales Order access.
-  3. Within 5 minutes (or trigger sooner by refocusing user A's tab), confirm the banner appears with a "Reload now" button, and that the sidebar/`WindowAccessGuard` already reflect the reduced access even before clicking it.
-  4. Click "Reload now" and confirm Sales Order is no longer reachable.
-  5. Repeat steps 1-4 with an Admin promote/demote instead of a template-composition change.
-  6. As an admin, revoke a single process grant or menu-tree entry for user A without changing any window/capability tier; confirm the banner still appears (this is the `menuAccess` gap this ticket closes) and the sidebar entry disappears after reload.
-  7. Confirm that an unrelated silent refresh (e.g. a plain alt-tab with no role change) never shows the banner.
+  3. Within 5 minutes (or trigger sooner by refocusing user A's tab), confirm the sidebar/`WindowAccessGuard` already reflect the reduced access — silently, with no banner or reload prompt of any kind.
+  4. Repeat steps 1-3 with an Admin promote/demote instead of a template-composition change.
+  5. As an admin, revoke a single process grant or menu-tree entry for user A without changing any window/capability tier; confirm the sidebar entry disappears silently on the next refresh (this is the `menuAccess` gap ETP-5189 closed).
+  6. Confirm that no notification of any kind ever appears — the refresh is, and is meant to be, fully silent.
 
 ## DocumentTotalsPanel — real-time totals and discount breakdown
 

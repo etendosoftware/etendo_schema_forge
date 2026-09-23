@@ -353,3 +353,28 @@ describe('openSecondaryTab effect — captures openCustomTabAdd + customTabResto
     expect(stubProps.restoreDraft).toBeNull();
   });
 });
+
+// [ETP-5205] — found live: this 'tab'-placement mount site (renderCustomTabPanels,
+// used by Attachments and every other placement:'tab' custom tab, e.g. the real
+// Purchase Order "Adjuntos" tab) is a SEPARATE code path from the 'footer'-placement
+// mount site (footerCustomTabs.map, fixed earlier in this ticket) — fixing one never
+// touched the other. Live-testing Purchase Order under a read-only role showed the
+// Attachments upload dropzone still enabled and "Eliminar todo" still visible despite
+// the earlier fix, because Attachments is wired as placement:'tab', not 'footer'.
+describe('renderCustomTabPanels — passes isDocumentReadOnly through (ETP-5205)', () => {
+  it('passes isDocumentReadOnly=true when the window is read-only', async () => {
+    await act(async () => {
+      renderView({ api: { window: { readOnly: true } } });
+    });
+
+    expect(stubProps.isDocumentReadOnly).toBe(true);
+  });
+
+  it('regression: passes a falsy isDocumentReadOnly when the window is NOT read-only', async () => {
+    await act(async () => {
+      renderView();
+    });
+
+    expect(stubProps.isDocumentReadOnly).toBeFalsy();
+  });
+});

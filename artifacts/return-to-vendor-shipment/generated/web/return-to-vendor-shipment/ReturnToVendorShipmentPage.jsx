@@ -40,7 +40,13 @@ const processes = [
 // @sf-generated-end processes:returnToVendorShipment
 
 // @sf-generated-start draftMode:returnToVendorShipment
-const draftMode = null;
+const draftMode = {
+  "enabled": true,
+  "processField": "documentAction",
+  "processValue": "CO",
+  "label": "Confirmar",
+  "disableWhenEmpty": true
+};
 // @sf-generated-end draftMode:returnToVendorShipment
 
 // @sf-generated-start requiredHeaderFields:returnToVendorShipment
@@ -316,6 +322,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
+        draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         addLineGuard={(_, children) => children.length < 0}
         labelOverrides={labelOverrides}

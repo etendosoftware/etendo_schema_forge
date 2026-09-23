@@ -1,8 +1,8 @@
 {
-  "version": "0.19.0",
+  "version": "0.20.0",
   "generatedAt": "2026-07-29T14:51:09.206Z",
-  "updatedAt": "2026-09-07T23:51:02.313Z",
-  "checksum": "bc6284c27edb979c",
+  "updatedAt": "2026-09-22T18:22:40.602Z",
+  "checksum": "b62bcf5b84a570e9",
   "frontendContract": {
     "window": {
       "id": "170",
@@ -83,7 +83,10 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "hintKeys": {
+            "D": "goodsMovementsPostedDisabledHint"
+          },
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },
@@ -167,6 +170,49 @@
             }
           },
           {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
+            }
+          },
+          {
             "name": "project",
             "apiKey": "project",
             "column": "C_Project_ID",
@@ -192,7 +238,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -221,7 +267,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === 'Y'"
+              "js": "record['posted'] === true"
             }
           },
           {
@@ -302,6 +348,13 @@
             "derivation": {
               "type": "computed",
               "source": "@#Date@"
+            }
+          },
+          {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
             }
           },
           {
@@ -634,7 +687,10 @@
           "field": "posted",
           "trueKey": "postedStatus",
           "falseKey": "notPostedStatus",
-          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+          "hintKeys": {
+            "D": "goodsMovementsPostedDisabledHint"
+          },
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
         }
       ]
     },
@@ -696,8 +752,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "system",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -1218,12 +1274,6 @@
       },
       {
         "entity": "movement",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/goods-movements/movement/{id}/action/posted"
-      },
-      {
-        "entity": "movement",
         "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
         "url": "/sws/neo/goods-movements/movement/{id}/action/etblkpBulkposting",
@@ -1279,14 +1329,6 @@
         "field": "moveBetweenLocators",
         "runner": "node",
         "description": "Action endpoint for 'moveBetweenLocators' in movement should exist"
-      },
-      {
-        "id": "t-action-endpoint-movement-posted",
-        "category": "action-endpoint",
-        "entity": "movement",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in movement should exist"
       },
       {
         "id": "t-action-endpoint-movement-processNow",
@@ -1351,6 +1393,14 @@
         "description": "Display logic for 'costCenter' in movement should have evaluable flag"
       },
       {
+        "id": "t-displaylogic-evaluable-movement-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "movement",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in movement should have evaluable flag"
+      },
+      {
         "id": "t-displaylogic-evaluable-movement-project",
         "category": "displaylogic-evaluable",
         "entity": "movement",
@@ -1365,6 +1415,14 @@
         "field": "costCenter",
         "runner": "node",
         "description": "Display logic for 'costCenter' in movement should be valid JS"
+      },
+      {
+        "id": "t-displaylogic-valid-movement-posted",
+        "category": "displaylogic-valid",
+        "entity": "movement",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in movement should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-movement-project",
@@ -1413,6 +1471,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in movement"
+      },
+      {
+        "id": "t-field-presence-movement-posted",
+        "category": "field-presence",
+        "entity": "movement",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in movement"
       },
       {
         "id": "t-field-presence-movement-processed",
@@ -1525,6 +1591,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should have type 'string' in movement"
+      },
+      {
+        "id": "t-field-type-movement-posted",
+        "category": "field-type",
+        "entity": "movement",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in movement"
       },
       {
         "id": "t-field-type-movement-processed",
@@ -2027,14 +2101,6 @@
         "description": "System field 'organization' should exist in backend but not frontend for movement"
       },
       {
-        "id": "t-system-field-movement-posted",
-        "category": "system-field",
-        "entity": "movement",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for movement"
-      },
-      {
         "id": "t-system-field-movement-processNow",
         "category": "system-field",
         "entity": "movement",
@@ -2226,25 +2292,25 @@
       }
     ],
     "summary": {
-      "total": 122,
+      "total": 124,
       "byCategory": {
-        "action-endpoint": 4,
+        "action-endpoint": 3,
         "crud-flags": 2,
         "default-value-type": 4,
-        "displaylogic-evaluable": 2,
-        "displaylogic-valid": 2,
-        "field-presence": 14,
-        "field-type": 14,
+        "displaylogic-evaluable": 3,
+        "displaylogic-valid": 3,
+        "field-presence": 15,
+        "field-type": 15,
         "readonlylogic-evaluable": 11,
         "readonlylogic-valid": 11,
         "rule-declared": 12,
         "searchable-filters": 3,
         "selector-endpoint": 6,
-        "system-field": 35,
+        "system-field": 34,
         "visibility": 2
       },
       "byRunner": {
-        "node": 122,
+        "node": 124,
         "junit": 0
       }
     }

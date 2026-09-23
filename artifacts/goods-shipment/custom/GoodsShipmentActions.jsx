@@ -457,7 +457,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         onClose={() => setWizardOpen(false)}
         shipmentData={data}
         lines={returnLines}
-        apiBaseUrl={apiBaseUrl}
+        base={base}
         onSuccess={(returnData) => {
           setWizardOpen(false);
           if (returnData?.id) {

@@ -53,6 +53,16 @@ describe('SendToSifButton', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not render when isDocumentReadOnly is true, even with pending SII/TBAI targets (ETP-5205)', () => {
+    renderButton({ isDocumentReadOnly: true });
+    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  it('regression: renders when isDocumentReadOnly is false/absent (existing behavior)', () => {
+    renderButton();
+    expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+  });
+
   it('renders for completed invoices with pending fiscal targets', async () => {
     renderButton();
     await waitFor(() => {

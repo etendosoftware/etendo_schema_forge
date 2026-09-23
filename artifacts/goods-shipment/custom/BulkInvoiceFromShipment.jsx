@@ -260,7 +260,14 @@ export default function BulkInvoiceFromShipment({ selectedRows, clearSelection, 
     ? undefined
     : (quoteAmount != null
       ? formatCurrency(currencyCode, quoteAmount)
-      : `${invoiceableCount} ${ui('shipment')}${invoiceableCount !== 1 ? 's' : ''}`);
+      // ETP-5378 QA follow-up — the count and the noun live in the locale, not in JS.
+      // This used to be `${count} ${ui('shipment')}${count !== 1 ? 's' : ''}`: English plural
+      // grammar applied to a Spanish noun, which rendered "2 albaráns", and a Spanish value
+      // ("envío") that disagreed with the Purchases side calling the same document "albarán".
+      // Two key pairs rather than one shared pair because ENGLISH distinguishes the two windows
+      // (shipment / receipt) while SPANISH deliberately does not — both read "albarán".
+      : ui(invoiceableCount === 1 ? 'shipmentCount_one' : 'shipmentCount_plural',
+        { count: invoiceableCount }));
 
   if (selectedRows.length < 1) return null;
 
