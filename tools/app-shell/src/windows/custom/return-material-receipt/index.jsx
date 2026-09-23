@@ -9,7 +9,7 @@ import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
 import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
@@ -35,6 +35,22 @@ function ReturnMaterialReceiptBulkActions(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__4e1c28" />
+      {/* ETP-5378 QA follow-up (SEL-05 / SEL-06) — bulk Descontabilizar, the counterpart of
+          the unpost entry this window's row kebab already offers via
+          buildDocumentRowQuickActionsPostMenu({ includeUnpost: true }). Without it a posted
+          row showed "Descontabilizar" on hover but the selection bar offered nothing at all,
+          since buildPostActions only fires on not-yet-posted rows. Its own button rather than
+          a second option inside "Contabilizar" (same reasoning as Goods Shipment: that button
+          would then be named after the opposite of what it does), and a plain `unpost`
+          neoAction with no pre-step, matching what the kebab runs. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnMaterialReceipt"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}

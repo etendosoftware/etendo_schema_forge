@@ -2892,7 +2892,7 @@ export function DetailView({
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={hook.handleProcess}
-        onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+        onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
         onSave={() => hook.handleSave({ silent: true })}
         isDirty={isDirty}
         saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
@@ -2934,7 +2934,7 @@ export function DetailView({
                   api={api}
                   onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
-                  onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+                  onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                   data-testid="TopbarExtraComponent__fa3275" />
               );
             })()}
@@ -3218,6 +3218,8 @@ export function DetailView({
                   onAddChild: hook.handleAddChild,
                   onRefresh: (parentId = data?.id || recordId) => {
                     if (!parentId) return;
+                    // ETP-5378 — a line write can change the header column the grid shows.
+                    hook.invalidateEntityCache?.();
                     hook.fetchChildren?.(parentId, { force: true });
                     hook.fetchById?.(parentId, { force: true });
                   },
@@ -3432,6 +3434,7 @@ export function DetailView({
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
+                                  hook.invalidateEntityCache?.();
                                   hook.fetchChildren?.(data?.id || recordId, { force: true });
                                   hook.fetchById?.(data?.id || recordId, { force: true });
                                 }}
@@ -3637,6 +3640,7 @@ export function DetailView({
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
+                                          hook.invalidateEntityCache?.();
                                           hook.fetchChildren?.(data?.id || recordId, { force: true });
                                           hook.fetchById?.(data?.id || recordId, { force: true });
                                         }}
@@ -3848,7 +3852,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4328,7 +4332,10 @@ export function DetailView({
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
             onParentRefresh={() => {
-              if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
+              if (!parentRecordId) return;
+              // ETP-5378 — the modal just wrote the parent; the cached list holds the old row.
+              hook.invalidateEntityCache?.();
+              hook.fetchById(parentRecordId, { force: true });
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

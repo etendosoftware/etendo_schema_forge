@@ -16,6 +16,7 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
+import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
 import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
@@ -100,12 +101,45 @@ function CustomQuotationTable(props) {
   );
 }
 
-function SalesQuotationBulkActions({ selectedRows, windowName }) {
+/**
+ * ETP-5378 QA follow-up (SEL-08) — a Borrador quotation could be confirmed from the row kebab
+ * but the selection bar offered only copy-link / print / clone / delete, unlike Pedido de Venta,
+ * whose bar has "Procesar". This window simply never mounted a `BulkDocumentAction`.
+ *
+ * Reuses the generic component rather than driving `SendToEvaluationModal`: that modal is a
+ * per-document summary (total, line count, no-lines guard), which has no meaning for N selected
+ * records. Quotation and Order are BOTH rows of `C_Order` and both resolve DocAction to the same
+ * classic process 104 (see each window's `contract.json` apiPrediction), so the wire call is
+ * identical to the one Pedido's bar already performs — only the entity segment differs.
+ *
+ * `buildInOutActions` (not the component's default) on purpose: it offers CO when a draft is
+ * selected and never offers RE. Reactivating a quotation is a different flow with its own
+ * modal, and the bar must not smuggle it in.
+ */
+const quotationBulkRowFilter = (row, action, ui) => {
+  // Without this, a mixed selection (one Borrador + one Cerrado) would run CO against BOTH,
+  // because buildInOutActions fires on ANY draft present. QA flagged that union behaviour as a
+  // minor observation on the return windows; there is no reason to reproduce it here.
+  if (action !== 'CO') return true;
+  if ((row.documentStatus || row.docStatus) !== 'DR') return ui('bulkRowNotDraft');
+  return true;
+};
+
+function SalesQuotationBulkActions(props) {
   return (
-    <CopyLinkButton
-      selectedRows={selectedRows}
-      windowName={windowName}
-      data-testid="CopyLinkButton__bc8637" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        entity="quotation"
+        buildActions={buildInOutActions}
+        rowFilter={quotationBulkRowFilter}
+        labelKey="process"
+        data-testid="BulkDocumentAction__bc8637" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__bc8637" />
+    </>
   );
 }
 
