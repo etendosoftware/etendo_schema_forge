@@ -51,16 +51,22 @@ const STRIPE_STATUS_LABEL_KEYS = {
  * bearer), never from a token this component reads, and the portal POST carries the `X-Go-CSRF`
  * write proof `apiFetch` adds on unsafe methods.
  *
+ * ETP-5455 — billing accepts only a platform credential, so a legacy bearer session is refused here
+ * with a 401 while /me still answers. That is not an outage and Retry cannot fix it, so it is not
+ * drawn as `unavailable`: the section hands it to `onSessionExpired`, and the host (AccountSettings)
+ * replaces the page with its session-expired state. With no host listening it says so itself.
+ *
  * `SubscriptionSection__root` is the stable inner anchor and is always present, even when the
  * caller also sets its own outer `data-testid` (AccountSettingsPage sets
  * `SubscriptionSection__account` on the whole composed section) — the outer id names the
  * section for a caller composing several of these; the inner one is this component's own,
  * caller-independent hook for its tests.
  */
-export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
+export function SubscriptionSection({ apiBaseUrl, onSessionExpired, 'data-testid': dataTestId }) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
-  const [status, setStatus] = useState('loading'); // 'loading' | 'loaded' | 'unavailable'
+  // 'loading' | 'loaded' | 'unavailable' | 'sessionExpired'
+  const [status, setStatus] = useState('loading');
   const [subscription, setSubscription] = useState(null);
   const [managing, setManaging] = useState(false);
   const [manageError, setManageError] = useState(false);
@@ -72,11 +78,16 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
       const result = await getSubscription(apiBaseUrl);
       setSubscription(result || null);
       setStatus('loaded');
-    } catch {
+    } catch (err) {
       setSubscription(null);
+      if (err?.status === 401) {
+        setStatus('sessionExpired');
+        onSessionExpired?.();
+        return;
+      }
       setStatus('unavailable');
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, onSessionExpired]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -87,12 +98,17 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
       const session = await createPortalSession(apiBaseUrl);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
-    } catch {
+    } catch (err) {
+      if (err?.status === 401) {
+        setStatus('sessionExpired');
+        onSessionExpired?.();
+        return;
+      }
       setManageError(true);
     } finally {
       setManaging(false);
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, onSessionExpired]);
 
   const hasSubscription = subscription?.hasSubscription === true;
   const cancelsAtPeriodEnd = subscription?.cancelAtPeriodEnd === true;
@@ -156,6 +172,15 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
               {ui('retry')}
             </Button>
           </div>
+        )}
+
+        {status === 'sessionExpired' && (
+          <p
+            className="mt-4 text-sm text-muted-foreground"
+            data-testid="SubscriptionSection__sessionExpired"
+          >
+            {ui('accountSessionExpired')}
+          </p>
         )}
 
         {status === 'loaded' && !hasSubscription && (
