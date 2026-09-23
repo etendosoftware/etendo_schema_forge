@@ -418,4 +418,19 @@ describe('FmListPage — submitted declarations with a persisted submission snap
     await waitFor(() => expect(cell().textContent).toContain('250'));
     expect(cell().textContent).not.toContain('7.777');
   });
+
+  // ETP-5438 scope decision — the snapshot keeps only the invoice COUNT (`sourceCount`); the
+  // "zero" vs "no result" distinction of a 0.00 result must still work from it.
+  it('a figures-only 303 snapshot tells "resultado cero" from "sin resultado" via sourceCount', async () => {
+    const withInvoices = makeRow({ id: 'zero-303', submittedSnapshot: { boxes: {}, summary: { result: 0 }, sourceCount: 5 } });
+    const noInvoices = makeRow({ id: 'none-303', period: 'T2', submittedSnapshot: { boxes: {}, summary: { result: 0 }, sourceCount: 0 } });
+    const { container } = render(
+      <FmListPage declarations={[withInvoices, noInvoices]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    const texts = [...container.querySelectorAll('tbody tr')].map(r => r.querySelectorAll('td')[5].textContent);
+    expect(texts).toContain('fm.result.zero');
+    expect(texts).toContain('fm.result.N');
+  });
 });

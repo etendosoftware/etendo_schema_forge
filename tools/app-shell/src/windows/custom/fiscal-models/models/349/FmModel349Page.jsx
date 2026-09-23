@@ -621,6 +621,17 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
   );
 }
 
+// ETP-5438 — shown in place of the per-invoice tabs of a declaration served from its submission
+// snapshot, which keeps only the figures (see `snapshotServed`).
+function InvoiceDetailNotKept({ t }) {
+  return (
+    <div className="fm-snapshot-note" style={{ padding: 24, color: 'hsl(var(--muted-foreground))' }}
+      data-testid="fm-snapshot-no-invoice-detail">
+      {t('fm.snapshot.invoice_detail_not_kept') ?? 'El detalle por factura no se conserva en las declaraciones presentadas.'}
+    </div>
+  );
+}
+
 function DetailTabContent({
   activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
   originFilter, onClearOriginFilter,
@@ -683,6 +694,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // mount-time auto-compute effect below for how it is consumed.
   const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
     ? decl.submittedSnapshot : null;
+  // ETP-5438 — the snapshot keeps operators and the key totals, plus the invoice/rectification
+  // COUNTS (`invoiceCount`, `rectificationCount`); the per-invoice `invoices`/`rectifications`
+  // rows are not kept. While served from a snapshot those two tabs show a note instead of a list
+  // (and the operators' "Origen" counts, derived from those rows, read "—").
+  const snapshotServed = isSubmitted && Array.isArray(submittedSnapshot?.operators);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -751,7 +767,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     .reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
   const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
-  const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
+  const rectifications = snapshotServed
+    ? (Number(submittedSnapshot.rectificationCount) || 0)
+    : (Array.isArray(rectifRows) ? rectifRows.length : 0);
 
   // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
   // caller can react to a rejected transition — see `handlePresent`.
@@ -1052,7 +1070,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
     { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: snapshotServed ? (Number(submittedSnapshot.invoiceCount) || 0) : (liveInvoices?.length ?? null), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
@@ -1354,7 +1372,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           </div>
         )}
 
-        {activeTab === 'rectif' && (
+        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} />}
+        {activeTab === 'rectif' && !snapshotServed && (
           <RectificationsTabContent
             rows={rectifRows}
             t={t}
@@ -1365,8 +1384,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
+      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} />}
       <DetailTabContent
-        activeTab={activeTab}
+        activeTab={snapshotServed && activeTab === 'invoices' ? null : activeTab}
         decl={decl}
         liveInvoices={liveInvoices}
         blocking={blocking}

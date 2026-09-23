@@ -1,0 +1,89 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest';
+import React from 'react';
+import { render, waitFor, fireEvent, screen } from '@testing-library/react';
+
+vi.mock('@/i18n', () => ({
+  useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
+}));
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
+vi.mock('../../../fiscalModelsUtils.js', () => ({
+  formatAmount: (n) => (n == null ? '—' : String(n)),
+  compute349Operators: vi.fn().mockResolvedValue(null),
+  generate349File: vi.fn().mockResolvedValue({ ok: false }),
+}));
+vi.mock('../use349Pdf.js', () => ({
+  use349Pdf: () => ({ pdfUrl: null, loading: false, generatePdf: vi.fn(), clearPdf: vi.fn() }),
+}));
+vi.mock('../../../FmCommon.jsx', () => ({
+  StatusPillMenu: () => null,
+  MoreOptionsMenu: () => null,
+  KpiWidget: ({ value, label }) => React.createElement(
+    'div', { className: 'test-kpi349', 'data-kpi-label': label },
+    React.createElement('span', { className: 'test-kpi349-value' }, value),
+  ),
+  Tabs: ({ tabs, onSelect }) => React.createElement('div', null, tabs.map(tab => React.createElement(
+    'button', { key: tab.id, 'data-testid': `tab-${tab.id}`, onClick: () => onSelect(tab.id) },
+    `${tab.id}:${tab.badge ?? ''}`,
+  ))),
+  Banner: () => null,
+}));
+vi.mock('../../../FmTabContent.jsx', () => ({ SourcesTab: () => null, IncidentsTab: () => null }));
+vi.mock('../../../FmOverlays.jsx', () => ({ PresentModal: () => null, FileGenModal: () => null }));
+vi.mock('../../../../../../components/contract-ui/DocumentPreview.jsx', () => ({
+  DocumentPreview: () => null,
+}));
+vi.mock('../../../fiscal-models.css', () => ({}));
+vi.mock('lucide-react', () => ({
+  Download: () => null, FileDown: () => null, CircleCheck: () => null, Search: () => null,
+  RefreshCw: () => null, Globe: () => null, Eye: () => null, MoreVertical: () => null,
+  ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
+  Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
+  Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
+  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
+  Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
+  FileCheck: () => null,
+}));
+
+import FmModel349Page from '../FmModel349Page.jsx';
+
+// ETP-5438 scope decision — the 349 snapshot keeps operators and the key totals plus the
+// invoice/rectification COUNTS, never the per-invoice rows. Those two tabs show a note instead.
+const decl = {
+  id: 'decl-349-contents', model: '349', year: 2026, period: 'T3',
+  type: 'ord', status: 'submitted', nif: 'B12345678',
+  incidents: { blocking: 0 }, _precomputed: null,
+  submittedSnapshot: {
+    operators: [{ bpId: '9', nif: 'FR40123456789', name: 'Snapshot SARL', key: 'E', base: '321.00', vies: 'valid' }],
+    summary: { totalE: '321.00', totalS: '0.00', totalA: '0.00', totalI: '0.00' },
+    rectificativeSummary: { totalE: '0.00', totalS: '0.00', totalA: '0.00', totalI: '0.00' },
+    invoiceCount: 42,
+    rectificationCount: 2,
+  },
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  sessionStorage.clear();
+});
+
+describe('FmModel349Page — figures-only submission snapshot (ETP-5438)', () => {
+  it('renders the operators, uses the counts as badges and shows the note in both per-invoice tabs', async () => {
+    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+    render(<FmModel349Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} token="tok" apiBaseUrl="/api" />);
+
+    await waitFor(() => expect(document.body.textContent).toContain('Snapshot SARL'));
+    expect(screen.getByTestId('tab-invoices').textContent).toBe('invoices:42');
+    expect(screen.getByTestId('tab-rectif').textContent).toBe('rectif:2');
+
+    fireEvent.click(screen.getByTestId('tab-invoices'));
+    expect(screen.getByTestId('fm-snapshot-no-invoice-detail')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('tab-rectif'));
+    expect(screen.getByTestId('fm-snapshot-no-invoice-detail').textContent)
+      .toBe('fm.snapshot.invoice_detail_not_kept');
+    expect(compute349Operators).not.toHaveBeenCalled();
+  });
+});

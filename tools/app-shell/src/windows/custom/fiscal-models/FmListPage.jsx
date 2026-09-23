@@ -1014,7 +1014,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 // trusting the re-derived box 71 (same guard as FmModel303Page's applyComputeResult).
                 const box71Derived = getBoxValue(mergedBoxes, 71);
                 const r = Number.isFinite(box71Derived) ? box71Derived : computed.summary.result;
-                const hasInvoices = (computed.sources?.length ?? 0) > 0;
+                // A submission snapshot keeps only the invoice COUNT (`sourceCount`), not the
+                // per-invoice `sources` (ETP-5438) — either one answers "has invoices".
+                const hasInvoices = (computed.sources?.length ?? (Number(computed.sourceCount) || 0)) > 0;
                 const kind = deriveResultKind({ ...computed.summary, result: r }, { hasInvoices });
                 displayResult = { kind, amount: Math.abs(r) };
               }

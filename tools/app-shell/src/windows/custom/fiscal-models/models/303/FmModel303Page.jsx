@@ -224,6 +224,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // mount-time auto-compute effect below for how it is consumed.
   const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
     ? decl.submittedSnapshot : null;
+  // ETP-5438 — the snapshot keeps only the figures (boxes + summary) and the invoice COUNT
+  // (`sourceCount`); the per-invoice `sources` drilldown is not kept (a period can hold tens of
+  // thousands of invoices). While this page is served from a snapshot the "Facturas" tab shows a
+  // note instead of a list, and nothing here recomputes to fill it.
+  const snapshotServed = isSubmitted && submittedSnapshot?.boxes != null;
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
@@ -553,6 +558,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
+
+  // ETP-5438 QA BUG-2 — a snapshot can arrive AFTER mount: a telematic filing's snapshot is
+  // delivered by FiscalModelsPage's re-read of the declaration (`handleSubmittedRemotely`), which
+  // updates `decl.submittedSnapshot` without changing `decl.id`, so the mount effect above never
+  // sees it. Apply it whenever it changes — display only, no compute call.
+  useEffect(() => {
+    if (isSubmitted && submittedSnapshot?.boxes != null) {
+      applyComputeResult(submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submittedSnapshot]);
 
   async function handleGenerate({ filename } = {}) {
     // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
@@ -887,7 +903,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // card already displays, via the single shared `deriveResultKind` also used by FmListPage.jsx,
   // so both screens agree on the same label for the same declaration.
   const sourcesForResult = liveSources ?? decl.sources ?? [];
-  const resultKind = deriveResultKind(summary, { hasInvoices: sourcesForResult.length > 0 });
+  const invoiceCount = snapshotServed ? (Number(submittedSnapshot.sourceCount) || 0) : sourcesForResult.length;
+  const resultKind = deriveResultKind(summary, { hasInvoices: invoiceCount > 0 });
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
@@ -901,7 +918,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
       icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
     { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
-      badge: (liveSources ?? decl.sources)?.length ?? null,
+      badge: snapshotServed ? invoiceCount : ((liveSources ?? decl.sources)?.length ?? null),
       icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
     { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       badge: incidentCount > 0 ? incidentCount : null,
@@ -1218,7 +1235,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       )}
       {activeTab !== 'boxes' && (
         <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
-          {activeTab === 'sources' && (
+          {activeTab === 'sources' && snapshotServed && (
+            <div className="fm-snapshot-note" style={{ padding: 24, color: 'hsl(var(--muted-foreground))' }}
+              data-testid="fm-snapshot-no-invoice-detail">
+              {t('fm.snapshot.invoice_detail_not_kept') ?? 'El detalle por factura no se conserva en las declaraciones presentadas.'}
+            </div>
+          )}
+          {activeTab === 'sources' && !snapshotServed && (
             <SourcesTab
               decl={{ ...decl, sources: liveSources ?? decl.sources, incidents }}
               t={t}
