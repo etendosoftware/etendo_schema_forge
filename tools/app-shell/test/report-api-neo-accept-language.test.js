@@ -56,11 +56,18 @@ function loadMiddleware() {
   return handler;
 }
 
+// ETP-5460 — session cookie replaces the Bearer token as the identity
+// source. A POST (render) needs the matching X-Go-CSRF; GET (data) is a safe
+// method and never needs one — resolveReportSession enforces that.
+const SESSION_COOKIE = '__Host-go_session=abc123';
+const VALID_CSRF = 'good-csrf';
+
 function makeReq(method, url, body) {
   const req = Readable.from(body ? [body] : []);
   req.method = method;
   req.url = url;
-  req.headers = { authorization: 'Bearer test-token' };
+  req.headers = { cookie: SESSION_COOKIE };
+  if (method !== 'GET') req.headers['x-go-csrf'] = VALID_CSRF;
   return req;
 }
 
@@ -86,7 +93,18 @@ function stubFetch() {
   fetchCalls = [];
   originalFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
-    fetchCalls.push({ url: String(url), init });
+    const urlStr = String(url);
+    fetchCalls.push({ url: urlStr, init });
+    if (urlStr.includes('/sws/go/session')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          environment: { clientId: 'C1', orgId: 'O1', roleId: 'R1', userId: 'U1' },
+          csrfToken: VALID_CSRF,
+        }),
+      };
+    }
     return {
       ok: true,
       status: 200,
@@ -174,20 +192,21 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
   });
 
   describe('pre-existing headers (regression guard)', () => {
-    it('still sends Content-Type and Authorization alongside Accept-Language', async () => {
+    it('still sends Content-Type and the session Cookie alongside Accept-Language', async () => {
       const headers = await renderAndCaptureNeoHeaders('tax-report', { locale: 'es_ES' });
       assert.equal(headers['Content-Type'], 'application/json');
-      assert.equal(headers.Authorization, 'Bearer test-token');
+      assert.equal(headers.Cookie, SESSION_COOKIE);
+      assert.equal(headers.Authorization, undefined, 'must never send a Bearer header anymore (ETP-5460)');
       assert.equal(headers['Accept-Language'], 'es_ES');
     });
 
-    it('still sends Content-Type and Authorization when no locale is supplied', async () => {
+    it('still sends Content-Type and the session Cookie when no locale is supplied', async () => {
       const handler = loadMiddleware();
       const res = makeRes();
       await handler(makeReq('GET', '/api/reports/tax-report/data'), res, () => {});
       const headers = lastNeoCall().init.headers;
       assert.equal(headers['Content-Type'], 'application/json');
-      assert.equal(headers.Authorization, 'Bearer test-token');
+      assert.equal(headers.Cookie, SESSION_COOKIE);
     });
   });
 
@@ -232,13 +251,13 @@ describe('report-api NEO fetch — Accept-Language (ETP-5013)', () => {
       // The piece most likely to be silently dropped in a refactor: the header
       // code would still look correct while receiving `undefined` forever.
       assert.match(PLUGIN_SRC,
-        /fetchReportData\(reportId, \{ limit, authToken, params, locale \}\)/);
+        /fetchReportData\(reportId, \{ limit, session, params, locale \}\)/);
     });
 
     it('deliberately does NOT pass a locale at the /data call site', () => {
       // /data has no render/locale concept; the asymmetry is intentional and is
       // what keeps the "absent key" branch alive in production, not just in tests.
-      assert.match(PLUGIN_SRC, /fetchReportData\(reportId, \{ limit, authToken \}\)/);
+      assert.match(PLUGIN_SRC, /fetchReportData\(reportId, \{ limit, session \}\)/);
     });
   });
 });
