@@ -1,4 +1,4 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api generate-base-public-api-manifest gateway-link-local-core gateway-dev-local-core docs-api-sync docs-api-generate docs-api-build docs-api-dev mcp-test mcp-login mcp-ui sync-agents sync-agents-check
+.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api generate-base-public-api-manifest gateway-link-local-core gateway-dev-local-core docs-api-sync docs-api-generate docs-api-build docs-api-dev mcp-test mcp-login mcp-ui sync-agents sync-agents-check logs logs-check
 
 export SF_ROOT := $(CURDIR)
 
@@ -126,6 +126,12 @@ stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe
 CMD ?= fail
 stripe-past-due: ## Drive a real Stripe test-mode subscription past due and back (ID=<checkout-request-or-billing-event-id> [CMD=fail|recover|status])
 	tools/stripe-subscription-past-due.sh $(CMD) $(ID) $(ARGS)
+
+logs: ## Tail CloudWatch logs (ENV=experimental|production|demo1, ARGS="--since 1h --all")
+	scripts/tail-logs.sh --env $(or $(ENV),experimental) $(ARGS)
+
+logs-check: ## Verify the AWS CLI setup used by `make logs`
+	scripts/tail-logs.sh --check
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10
