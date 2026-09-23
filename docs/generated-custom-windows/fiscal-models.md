@@ -127,6 +127,12 @@ that already carries it is just as frozen as one presented through either curren
     `originSales` (`Fiscal349BoxesHandler#foldPerInvoiceAggregates`, same `nif|key` grouping as
     the frontend's `originByNif` / `originByRectification`) — one pair per partner, still bounded.
 
+  **Known, accepted limit (349).** The 349 snapshot still grows with the number of OPERATOR rows
+  (~264 chars each, one per intra-community partner and key), so beyond roughly 3,800 operator
+  rows it exceeds the column's `FIELDLENGTH` of 1,000,000. Presenting such a declaration then fails
+  safely: the PUT answers `500` with nothing written (the telematic path is 303-only). Accepted as
+  a documented limit — far beyond any realistic 349.
+
   Why: a period can hold tens of thousands of invoices, and the snapshot is also returned by every
   `GET /fiscal303/declarations` (the list), so keeping per-invoice rows would grow without bound.
   Product decision: once presented nothing is recalculated — what was there at submission stays —
@@ -191,7 +197,8 @@ that already carries it is just as frozen as one presented through either curren
   por factura no se conserva en las declaraciones presentadas.") instead of a list, with the kept
   counts as tab badges; nothing recomputes to fill them. The 349 operators' "Origen" column reads
   the folded `originPurchases`/`originSales` (`formatOrigin` falls back to them when the invoice
-  rows are absent). Legacy submitted, draft and ready
+  rows are absent) and renders them as plain text, not the link to "Facturas origen"/"Rectificaciones"
+  (which would only land on the note). Legacy submitted, draft and ready
   declarations are unchanged. **Legacy fallback** (no snapshot):
   `submittedDecls303`/`submittedDecls349` are carved out of the
   pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into

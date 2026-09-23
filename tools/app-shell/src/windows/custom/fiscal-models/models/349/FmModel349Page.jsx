@@ -1367,10 +1367,16 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                           </td>
                           <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
                           <td>
-                            {formatOrigin(op)
-                              ? <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
-                              : <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
-                            }
+                            {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
+                                invoice rows, so the link would land on the "not kept" note:
+                                plain text there, link everywhere else. */}
+                            {formatOrigin(op) && snapshotServed && (
+                              <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
+                            )}
+                            {formatOrigin(op) && !snapshotServed && (
+                              <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
+                            )}
+                            {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
                           </td>
                         </tr>
                       ))}

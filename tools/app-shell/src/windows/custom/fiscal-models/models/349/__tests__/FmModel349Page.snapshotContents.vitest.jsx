@@ -98,5 +98,9 @@ describe('FmModel349Page — figures-only submission snapshot (ETP-5438)', () =>
     await waitFor(() => expect(document.body.textContent).toContain('Snapshot SARL'));
     expect(document.body.textContent).toContain('3 facturas venta');
     expect(document.body.textContent).toContain('1 compra, 2 venta');
+    // Plain text, not the goToOrigin link: the invoice tab only holds the "not kept" note.
+    expect(document.querySelectorAll('.fm-origin-link')).toHaveLength(0);
+    expect(screen.getAllByTestId('fm-origin-text').map(n => n.textContent))
+      .toEqual(expect.arrayContaining(['3 facturas venta', '1 compra, 2 venta']));
   });
 });
