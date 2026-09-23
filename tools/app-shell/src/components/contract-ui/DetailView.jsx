@@ -4105,7 +4105,7 @@ export function DetailView({
                                         data={data}
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
-                                        api={api}
+                                        api={api} isDocumentReadOnly={isDocumentReadOnly}
                                         layout="chips"
                                         docsRefreshSignal={docsRefreshSignal}
                                         {...(ct.props || {})}

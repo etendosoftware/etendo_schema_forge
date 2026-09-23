@@ -57,6 +57,7 @@ export default function AttachmentsTab({
   isNew,
   onSaveHeader,
   onGoToSavedRecord,
+  isDocumentReadOnly,
 }) {
   const ui = useUI();
   const saveBeforeAttach = !!config.saveBeforeAttach;
@@ -154,16 +155,16 @@ export default function AttachmentsTab({
       <UploadDropzone
         onFiles={handleUpload}
         config={effectiveConfig}
-        disabled={!recordId || isSavingBeforeAttach}
+        disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
         data-testid="UploadDropzone__281340" />
       <AttachmentsTable
         items={items}
         loading={loading}
         uploadingFiles={uploadingFiles}
         onDownload={download}
-        onDelete={setDeletingAttachment}
+        onDelete={isDocumentReadOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
-        onDeleteAll={items.length > 0 ? () => setConfirmDeleteAll(true) : undefined}
+        onDeleteAll={isDocumentReadOnly ? undefined : (items.length > 0 ? () => setConfirmDeleteAll(true) : undefined)}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
       <ConfirmDeleteDialog
