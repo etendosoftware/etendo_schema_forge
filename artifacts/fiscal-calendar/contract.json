@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-07-07T11:18:10.164Z",
-  "updatedAt": "2026-08-31T19:00:17.030Z",
-  "checksum": "fb2e294be2e96e38",
+  "updatedAt": "2026-09-22T15:19:48.238Z",
+  "checksum": "407a9c37dc6d18b9",
   "frontendContract": {
     "window": {
       "id": "117",
@@ -36,8 +36,16 @@
                   "label": "January - December"
                 },
                 {
+                  "value": "APRIL",
+                  "label": "April - March"
+                },
+                {
                   "value": "JULY",
                   "label": "July - June"
+                },
+                {
+                  "value": "OCTOBER",
+                  "label": "October - September"
                 }
               ]
             },
@@ -186,8 +194,16 @@
                   "label": "January - December"
                 },
                 {
+                  "value": "APRIL",
+                  "label": "April - March"
+                },
+                {
                   "value": "JULY",
                   "label": "July - June"
+                },
+                {
+                  "value": "OCTOBER",
+                  "label": "October - September"
                 }
               ]
             },

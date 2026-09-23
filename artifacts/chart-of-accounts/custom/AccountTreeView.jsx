@@ -6,6 +6,7 @@ import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel, ELEMENT_LEVEL_UI_KEYS, elementLevelLabel } from './accountTypeLabels';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -345,6 +346,29 @@ function isProtectedLeafCode(item) {
   return typeof item.searchKey === 'string' && item.searchKey.endsWith('0000');
 }
 
+/**
+ * Full-page loading state for the initial (never-yet-settled) self-fetch — mirrors
+ * DataTable.jsx's TableSkeleton convention. Matches the real header row's 5 columns
+ * (code, name, Element Level, account type, active) plus the toggle-chevron spacer,
+ * so it doesn't read as a stale/different table while it's showing.
+ */
+function AccountTreeSkeleton() {
+  return (
+    <div data-testid="account-tree-skeleton" className="divide-y divide-[hsl(var(--border-subtle))]">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ opacity: 1 - i * 0.1 }}>
+          <Skeleton className="h-4 w-4 shrink-0" />
+          <Skeleton className="h-4 w-24 shrink-0" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-4 w-32 shrink-0" />
+          <Skeleton className="h-4 w-40 shrink-0" />
+          <Skeleton className="h-4 w-10 shrink-0" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui, activeChecked, activeDisabled, onActiveToggle }) {
   const isSummary = item.summaryLevel === 'Y';
   const indent = (item.depth ?? 0) * 16;
@@ -496,8 +520,16 @@ export default function AccountTreeView({
   // one-page `data` prop) whenever `apiBaseUrl` is available. See the component
   // docblock above for why the tree needs this instead of incremental pagination.
   const [fetchedData, setFetchedData] = useState(null);
-  const [isFetchingFull, setIsFetchingFull] = useState(false);
+  const [isFetchingFull, setIsFetchingFull] = useState(() => !!apiBaseUrl);
   const [fetchGeneration, setFetchGeneration] = useState(0);
+  // "Has any self-fetch attempt ever settled, success or failure?" — set once in
+  // the effect's `finally` and never reset. This is deliberately NOT the same as
+  // `fetchedData !== null`: a failed first attempt leaves `fetchedData` null
+  // forever, but must still stop gating on the initial skeleton on every later
+  // background retry (save, active-toggle) — otherwise a retry after a failed
+  // first load would wipe the already-visible fallback tree and re-show the
+  // full-page skeleton for what should be a quiet background refresh.
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
@@ -523,7 +555,10 @@ export default function AccountTreeView({
           toast.error(ui('accountTreeFetchError'));
         }
       } finally {
-        if (!cancelled) setIsFetchingFull(false);
+        if (!cancelled) {
+          setIsFetchingFull(false);
+          setHasLoadedOnce(true);
+        }
       }
     })();
 
@@ -563,6 +598,12 @@ export default function AccountTreeView({
   // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
   const effectiveData = fetchedData ?? data;
+
+  // True only from first render through the FIRST attempt settling (success or
+  // failure); false forever after, including every later background refetch. Gates
+  // the tree render so the partial `data` prop is never painted while the real
+  // dataset is still in flight — see the component docblock and ETP-5387.
+  const showInitialSkeleton = !!apiBaseUrl && !hasLoadedOnce && isFetchingFull;
 
   const { tree, indexById } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
@@ -652,7 +693,9 @@ export default function AccountTreeView({
   }, [onDataMutated, refetchFull]);
 
   let treeBody;
-  if (effectiveData.length === 0) {
+  if (showInitialSkeleton) {
+    treeBody = <AccountTreeSkeleton />;
+  } else if (effectiveData.length === 0) {
     treeBody = (
       <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
         {ui('accountTreeNoAccounts')}

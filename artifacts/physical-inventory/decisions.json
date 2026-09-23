@@ -57,6 +57,15 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "statusPills": [
@@ -303,7 +312,7 @@
       "type": "process",
       "entity": "inventory",
       "decision": "Keep",
-      "description": "Post to accounting — exposed via menuActions post action, visible when processed=Y and not yet posted."
+      "description": "Post/Unpost accounting — exposed via menuActions post (visible when processed=Y and not yet posted) and unpost (visible when posted=Y) actions, plus the row-hover kebab (Post only) and the grid bulk-select toolbar (Post and Unpost). ETP-5360."
     }
   },
   "discardPatterns": [
