@@ -62,7 +62,7 @@
  * is created with. They appear when the tenant goes productive, which is also when the whole
  * checklist is offered again.
  *
- * Every plan-aware helper here takes the plan as its LAST argument and an unknown plan
+ * Every plan-aware helper here takes the plan as its last REQUIRED argument and an unknown plan
  * (`undefined`, a session with no platform token, a failed `/environments` call) is treated as
  * productive — it shows everything. That direction is deliberate: hiding invoice numbering from
  * a tenant that paid for it is a worse failure than showing two extra rows to a trial, and it
@@ -79,7 +79,18 @@
  * flag, which already round-trips through `POST /sws/go/onboarding/first-steps`. Un-ticking the
  * step therefore brings the question back, which is exactly the escape hatch a user who
  * answered wrongly needs, and it costs no new backend field.
+ *
+ * ## The demo data transfer row (flag `demo-data-transfer`)
+ *
+ * Not in `FIRST_STEPS`: it lives in `demoDataTransferStep.js` and is spliced in only when the
+ * backend exposes the transfer. Every helper that sizes or walks the list therefore takes the
+ * transfer state (`demoDataTransferStepState(...)`) as an optional trailing argument, defaulting
+ * to `NO_DEMO_DATA_TRANSFER` — the catalogue as it was before ETP-5364.
  */
+import {
+  NO_DEMO_DATA_TRANSFER,
+  withDemoDataTransferStep,
+} from './demoDataTransferStep.js';
 
 /** The plan value that unlocks `productiveOnly` steps. Mirrors TenantPlanService.PLAN_PRODUCTIVE. */
 export const PLAN_PRODUCTIVE = 'productive';
@@ -124,22 +135,6 @@ export const FIRST_STEPS = [
     keepActionWhenDone: false,
     productiveOnly: true,
     gateQuestionKey: 'firstStepsFiscalConfigQuestion',
-    alwaysDone: false,
-  },
-  {
-    // This job is created by the server after a paid productive tenant is ready. It is not a
-    // checkbox because completion is a durable migration result, not a user assertion.
-    id: 'demo-data-transfer',
-    iconName: 'ArrowsClockwise',
-    titleKey: 'firstStepsDemoDataTransfer',
-    descKey: 'firstStepsDemoDataTransferDesc',
-    minutes: null,
-    action: 'dataTransfer',
-    to: null,
-    importSpec: null,
-    keepActionWhenDone: true,
-    productiveOnly: true,
-    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -216,13 +211,15 @@ export function isProductivePlan(plan) {
  * component should iterate: `FIRST_STEPS` is the full catalogue and includes rows a trial
  * tenant must not be offered.
  */
-export function visibleFirstSteps(plan) {
-  return isProductivePlan(plan) ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
+export function visibleFirstSteps(plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  const productive = isProductivePlan(plan);
+  const steps = productive ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
+  return withDemoDataTransferStep(steps, transfer, productive);
 }
 
 /** Number of steps in the progress counter (`x/TOTAL`) for this plan. Derived, never hardcoded. */
-export function firstStepsTotal(plan) {
-  return visibleFirstSteps(plan).length;
+export function firstStepsTotal(plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return visibleFirstSteps(plan, transfer).length;
 }
 
 /**
@@ -236,13 +233,13 @@ export function firstStepsTotal(plan) {
  */
 export function toggleableStepIds(plan) {
   return visibleFirstSteps(plan)
-    .filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
+    .filter((step) => !step.alwaysDone)
     .map((step) => step.id);
 }
 
 /** True when the step renders as completed — always-done, or user-completed. */
-export function isStepDone(step, completed, dataTransferDone = false) {
-  if (step.action === 'dataTransfer') return dataTransferDone;
+export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER) {
+  if (step.action === 'dataTransfer') return transfer.done;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
@@ -253,14 +250,14 @@ export function isStepDone(step, completed, dataTransferDone = false) {
  * then had its plan read back as free would otherwise count a row that is not on screen, and
  * the badge would claim 6/5.
  */
-export function countCompletedSteps(completed, plan, dataTransferDone = false) {
-  return visibleFirstSteps(plan)
-    .filter((step) => isStepDone(step, completed, dataTransferDone)).length;
+export function countCompletedSteps(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return visibleFirstSteps(plan, transfer)
+    .filter((step) => isStepDone(step, completed, transfer)).length;
 }
 
 /** True once every visible step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed, plan, dataTransferDone = false) {
-  return countCompletedSteps(completed, plan, dataTransferDone) === firstStepsTotal(plan);
+export function areAllStepsDone(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return countCompletedSteps(completed, plan, transfer) === firstStepsTotal(plan, transfer);
 }
 
 /**
@@ -270,9 +267,9 @@ export function areAllStepsDone(completed, plan, dataTransferDone = false) {
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed, plan, dataTransferDone = false) {
-  const next = visibleFirstSteps(plan)
-    .find((step) => !step.alwaysDone && !isStepDone(step, completed, dataTransferDone));
+export function findExpandedStepId(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  const next = visibleFirstSteps(plan, transfer)
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed, transfer));
   return next ? next.id : null;
 }
 

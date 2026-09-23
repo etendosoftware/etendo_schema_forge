@@ -63,6 +63,7 @@ import {
   toggleableStepIds,
   visibleFirstSteps,
 } from '@/pages/first-steps/firstStepsConfig.js';
+import { demoDataTransferStepState } from '@/pages/first-steps/demoDataTransferStep.js';
 
 const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
 
@@ -72,7 +73,10 @@ const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
  * The plan-derived fields are computed the same way `FirstStepsProvider` computes them rather
  * than being passed in loose, so a change to the gate shows up here as a behaviour difference
  * instead of a stale fixture that keeps asserting the old list. Defaults to productive, which
- * is the full 8-step productive checklist every test below expects unless it says otherwise.
+ * is the full 7-step checklist every test below expects unless it says otherwise.
+ *
+ * The transfer defaults to what the backend answers with flag `demo-data-transfer` OFF (a 404,
+ * so `available: false`): no transfer row. The transfer suite passes `available: true`.
  */
 function setHook({ completed = [], loading = false, error = null, toggleResult = true,
   plan = PLAN_PRODUCTIVE, dismissed = false, dismissResult = true,
@@ -85,10 +89,12 @@ function setHook({ completed = [], loading = false, error = null, toggleResult =
     products: {},
     contacts: {},
     loading: false,
+    available: false,
     error: false,
     retry: vi.fn(async () => ({ status: 'RUNNING', products: {}, contacts: {} })),
     ...dataTransfer,
   };
+  const demoDataTransfer = demoDataTransferStepState(transfer);
   hookState.value = {
     completed,
     seen: false,
@@ -99,11 +105,11 @@ function setHook({ completed = [], loading = false, error = null, toggleResult =
     markSeen,
     setDismissed,
     plan,
-    steps: visibleFirstSteps(plan),
-    completedCount: countCompletedSteps(completed, plan,
-      ['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'].includes(transfer.status)),
-    total: firstStepsTotal(plan),
+    steps: visibleFirstSteps(plan, demoDataTransfer),
+    completedCount: countCompletedSteps(completed, plan, demoDataTransfer),
+    total: firstStepsTotal(plan, demoDataTransfer),
     dataTransfer: transfer,
+    demoDataTransfer,
   };
   return { toggleStep, markSeen, setDismissed, dataTransfer: transfer };
 }
@@ -140,17 +146,17 @@ describe('FirstStepsPage — smoke and wiring', () => {
 });
 
 describe('FirstStepsPage — progress counter', () => {
-  it('reads 2/8 on a fresh productive account (account and no-request transfer already count)', () => {
+  it('reads 1/7 on a fresh account (the always-done step already counts)', () => {
     setHook({ completed: [] });
     render(<FirstStepsPage />);
-    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('2/8');
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('1/7');
   });
 
   it('advances one per completed step', () => {
     for (const [completed, expected] of [
-      [['company-data'], '3/8'],
-      [['company-data', 'products'], '4/8'],
-      [['company-data', 'products', 'contacts'], '5/8'],
+      [['company-data'], '2/7'],
+      [['company-data', 'products'], '3/7'],
+      [['company-data', 'products', 'contacts'], '4/7'],
     ]) {
       setHook({ completed });
       const { unmount } = render(<FirstStepsPage />);
@@ -159,16 +165,16 @@ describe('FirstStepsPage — progress counter', () => {
     }
   });
 
-  it('reads 8/8 once every toggleable step is complete', () => {
+  it('reads 7/7 once every toggleable step is complete', () => {
     setHook({ completed: ALL_DONE });
     render(<FirstStepsPage />);
-    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('8/8');
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('7/7');
   });
 
   it('sizes the progress bar from the same figures', () => {
     setHook({ completed: [] });
     const { unmount } = render(<FirstStepsPage />);
-    expect(screen.getByTestId('first-steps-progress-bar')).toHaveStyle({ width: '25%' });
+    expect(screen.getByTestId('first-steps-progress-bar')).toHaveStyle({ width: `${(1 / 7) * 100}%` });
     unmount();
 
     setHook({ completed: ALL_DONE });
@@ -219,16 +225,35 @@ describe('FirstStepsPage — a trial tenant sees the shorter checklist', () => {
     // checklist rather than carrying the trial's "done" over.
     setHook({ completed: TRIAL_DONE, plan: PLAN_PRODUCTIVE });
     render(<FirstStepsPage />);
-    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('6/8');
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('5/7');
     expect(screen.getByTestId('first-steps-heading')).toHaveTextContent('firstStepsPrepareAccount');
     expect(screen.queryByTestId('first-steps-create-invoice')).not.toBeInTheDocument();
     expect(screen.getByTestId('first-steps-toggle-fiscal-config')).toBeInTheDocument();
   });
 });
 
+describe('FirstStepsPage — flag demo-data-transfer OFF (ETP-5443)', () => {
+  it('renders no transfer row and the pre-ETP-5364 figures when the backend hides the transfer', () => {
+    setHook({ plan: PLAN_PRODUCTIVE, dataTransfer: { available: false, status: 'RUNNING' } });
+    render(<FirstStepsPage />);
+
+    expect(screen.queryByTestId('first-steps-step-demo-data-transfer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-data-transfer-progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('1/7');
+  });
+});
+
+/**
+ * Flag `demo-data-transfer` ON: the backend answered the status read, so `available` is true.
+ * Every test here goes through `transferHook`, which is what keeps them testing the feature
+ * rather than the flag-off catalogue the rest of this file runs on.
+ */
 describe('FirstStepsPage — demo-to-productive data transfer', () => {
+  const transferHook = ({ dataTransfer = {}, ...rest } = {}) =>
+    setHook({ ...rest, dataTransfer: { available: true, ...dataTransfer } });
+
   it('keeps the durable transfer row in the productive checklist', () => {
-    setHook({ plan: PLAN_PRODUCTIVE });
+    transferHook({ plan: PLAN_PRODUCTIVE });
     render(<FirstStepsPage />);
 
     expect(screen.getByTestId('first-steps-step-demo-data-transfer')).toBeInTheDocument();
@@ -236,7 +261,7 @@ describe('FirstStepsPage — demo-to-productive data transfer', () => {
   });
 
   it('does not expose the productive transfer row to a free tenant', () => {
-    setHook({ plan: 'free' });
+    transferHook({ plan: 'free' });
     render(<FirstStepsPage />);
 
     expect(screen.queryByTestId('first-steps-step-demo-data-transfer')).not.toBeInTheDocument();
@@ -245,7 +270,7 @@ describe('FirstStepsPage — demo-to-productive data transfer', () => {
 
   it('shows the persisted server progress while the transfer is running', async () => {
     const user = userEvent.setup();
-    setHook({ dataTransfer: {
+    transferHook({ dataTransfer: {
       status: 'RUNNING',
       products: { completed: 12, total: 20 },
       contacts: { completed: 3, total: 8 },
@@ -262,7 +287,7 @@ describe('FirstStepsPage — demo-to-productive data transfer', () => {
 
   it('offers retry only for a failed transfer and starts the server-owned retry', async () => {
     const user = userEvent.setup();
-    const { dataTransfer } = setHook({ dataTransfer: { status: 'FAILED' } });
+    const { dataTransfer } = transferHook({ dataTransfer: { status: 'FAILED' } });
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));
@@ -275,7 +300,7 @@ describe('FirstStepsPage — demo-to-productive data transfer', () => {
   it('reports a failed retry through the page error feedback', async () => {
     const user = userEvent.setup();
     const retry = vi.fn(async () => { throw new Error('temporary server failure'); });
-    setHook({ dataTransfer: { status: 'FAILED', retry } });
+    transferHook({ dataTransfer: { status: 'FAILED', retry } });
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));

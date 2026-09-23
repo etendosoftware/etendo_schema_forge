@@ -293,8 +293,7 @@ export default function FirstStepsPage() {
   // firstStepsConfig.js), and the page, the sidebar badge and the progress bar must all be
   // counting the same rows.
   const { completed, loading, toggleStep, plan, steps, completedCount, total, dismissed,
-    setDismissed, dataTransfer } = useFirstStepsState();
-  const dataTransferDone = ['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'].includes(dataTransfer.status);
+    setDismissed, dataTransfer, demoDataTransfer } = useFirstStepsState();
 
   // The optimistic rollback in `useFirstSteps` is invisible on its own — without this the row
   // would silently un-check itself after a failed POST.
@@ -347,7 +346,7 @@ export default function FirstStepsPage() {
     breadcrumb: ui('firstStepsPageTitle'),
   });
 
-  const allSet = areAllStepsDone(completed, plan, dataTransferDone);
+  const allSet = areAllStepsDone(completed, plan, demoDataTransfer);
 
   // `null` means "nothing opened by hand yet", which is what lets the default follow the
   // loading state: the first incomplete row opens once the real completion state arrives,
@@ -355,13 +354,14 @@ export default function FirstStepsPage() {
   // row, their choice wins for the rest of the visit — including closing every row.
   const [openedStepId, setOpenedStepId] = useState(null);
   const expandedStepId = openedStepId === null
-    ? findExpandedStepId(completed, plan, dataTransferDone) : openedStepId;
+    ? findExpandedStepId(completed, plan, demoDataTransfer) : openedStepId;
   const handleOpen = useCallback((id) => {
     setOpenedStepId((current) => {
-      const effective = current === null ? findExpandedStepId(completed, plan, dataTransferDone) : current;
+      const effective = current === null
+        ? findExpandedStepId(completed, plan, demoDataTransfer) : current;
       return effective === id ? '' : id;
     });
-  }, [completed, plan, dataTransferDone]);
+  }, [completed, plan, demoDataTransfer]);
 
   // Gate acted on here, after every hook above has already been called unconditionally on
   // every render (see the ETP-5395 comment at the top of this component).
@@ -461,7 +461,7 @@ export default function FirstStepsPage() {
               <StepRow
                 key={step.id}
                 step={step}
-                done={isStepDone(step, completed, dataTransferDone)}
+                done={isStepDone(step, completed, demoDataTransfer)}
                 expanded={step.id === expandedStepId}
                 loading={loading}
                 gateAnswered={Boolean(gateAnswered[step.id])}
