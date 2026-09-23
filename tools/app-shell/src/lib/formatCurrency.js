@@ -37,6 +37,35 @@ function splitSign(digits) {
   return { negative, digits: negative ? digits.slice(1) : digits };
 }
 
+// ETP-5456 — matches an EXACT, already-2-decimal-rounded decimal literal: optional '-', digits,
+// optional '.' + exactly 2 digits. A value in this shape (e.g. a fiscal-models box value that
+// `buildValidatedBoxValue`/`buildExactDecimalValue` in fiscal-models/fiscalModelsUtils.js
+// deliberately keeps as a STRING once its magnitude exceeds float64's exact-decimal range, 15+
+// integer digits) must be formatted via pure string manipulation below — `Number(value)` would
+// silently re-corrupt exactly the digits that string was built to preserve (confirmed in manual
+// QA: `Number('123456789012345.35')` alone, no arithmetic, already yields `...34`).
+const EXACT_DECIMAL_STRING = /^-?\d+(\.\d{2})?$/;
+
+/**
+ * Groups an EXACT decimal STRING (already sign + digits + at most 2 decimal digits, see
+ * `EXACT_DECIMAL_STRING`) with thousands separators — no `Number()`/rounding involved at all, so
+ * a magnitude beyond float64's exact-decimal range still displays its true typed digits.
+ */
+function groupExactDecimalString(str, thousandsSeparator, decimalSeparator) {
+  const { negative, digits } = splitSign(str);
+  const [intRaw, decRaw] = digits.split('.');
+  const intPart = groupThousands(intRaw, thousandsSeparator);
+  // Always pad to exactly 2 decimals, even when the input string had none (e.g. a plain "0" or
+  // "8000") — matches `groupWithSeparators`'s own hardcoded `minFrac=2, maxFrac=2` contract for
+  // every OTHER (non-exact-decimal-string) `formatCurrency` caller. Regressed once, caught by
+  // `make test`: DataTable/ContactsFinancialPanel/NewTransactionModal all pass a plain numeric
+  // STRING with no decimal part and expect it formatted as "0,00"/"50,00"/"8.000,00" — this path
+  // was initially only built with a fiscal-models box value in mind (always 2 explicit decimals
+  // by construction there), so a decimal-less string fell through without padding.
+  const decPart = (decRaw ?? '').padEnd(2, '0').slice(0, 2);
+  return `${negative ? '-' : ''}${intPart}${decimalSeparator}${decPart}`;
+}
+
 /**
  * Moves the symbol from suffix (what `Intl`'s compact-notation formatter always
  * produces under `es-ES`, regardless of currency) to prefix, for a currency whose
@@ -195,10 +224,19 @@ export function formatPlainDecimal(value) {
 }
 
 export function formatCurrency(currencyCode, value, { compact = false } = {}) {
-  if (value == null || !Number.isFinite(Number(value))) return '—';
+  // ETP-5456 — an exact-decimal-string `value` (see `EXACT_DECIMAL_STRING`'s doc comment) is
+  // accepted even though `Number(value)` may not be `Number.isFinite` in the exact sense that
+  // matters (it always parses fine here; the concern is precision loss, not finiteness) — a
+  // string only reaches this function already validated by its producer.
+  const isExactDecimalString = typeof value === 'string' && EXACT_DECIMAL_STRING.test(value.trim());
+  if (value == null || (!isExactDecimalString && !Number.isFinite(Number(value)))) return '—';
 
   const amount = Number(value);
 
+  // `compact` mode is Intl-driven and has exactly one real caller today (NewPaymentEntryModal.jsx
+  // via MoneyAmount), unrelated to fiscal-models box display — an exact-decimal-string value
+  // falls through to the ordinary lossy `Number(value)` path here, which is an accepted,
+  // out-of-scope trade-off for that mode only.
   if (compact) {
     // Deliberately still Intl-driven, es-ES fixed — compact notation (magnitude
     // detection + "mil"/"M"/"B" style suffixes) has exactly one real caller today
@@ -228,7 +266,9 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   }
 
   const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
-  const formattedNumber = groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
+  const formattedNumber = isExactDecimalString
+    ? groupExactDecimalString(value.trim(), thousandsSeparator, decimalSeparator)
+    : groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
 
   // Validate currencyCode the same way the old single combined Intl.NumberFormat
   // call did — an invalid/missing code throws here (e.g. undefined, or a

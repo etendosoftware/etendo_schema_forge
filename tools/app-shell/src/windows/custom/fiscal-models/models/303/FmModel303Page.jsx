@@ -20,7 +20,7 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
-  clampNegativeOverrides,
+  clampNegativeOverrides, buildValidatedBoxValue,
 } from '../../fiscalModelsUtils.js';
 import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -91,10 +91,17 @@ function parseBoxInput(rawValue) {
 // render happen). Computed straight off the `manualOverrides` param (the same source
 // `mergedBoxes` itself was derived from just above) rather than re-read via a `prev =>`
 // updater, so the return value and what actually lands in state can never disagree.
-function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks) {
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes) {
   if (!res) return manualOverrides;
   const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides), identChecks);
   setLiveBoxes(mergedBoxes);
+  // ETP-5456 — an AUTOCALCULATED box (69, 71, or any other `recomputeDerivedBoxes` formula
+  // result) can overflow the AEAT record-length ceiling exactly like a manual value can; the
+  // fiscal-advisory decision is the same either way — report it as a blocking error, never
+  // round/truncate/saturate the computed result. `mergedBoxes.outOfRangeBoxes` is populated by
+  // `recomputeDerivedBoxes` itself (fiscalModelsUtils.js) — surfaced here so the page can gate
+  // Guardar/Generar/Presentar and render the blocking banner (see the `outOfRangeBoxes` state).
+  if (setOutOfRangeBoxes) setOutOfRangeBoxes(mergedBoxes.outOfRangeBoxes ?? []);
   const syncedOverrides = syncBox111Override(manualOverrides, mergedBoxes);
   if (setManualOverrides) setManualOverrides(syncedOverrides);
   // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
@@ -303,8 +310,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     const recomputed = recomputeDerivedBoxes(baseBoxes, nextIdentChecks);
     setManualOverrides(prev => syncBox111Override(prev, recomputed));
     setLiveBoxes(recomputed);
+    // ETP-5456 — an ident-checks edit can change box 111's formula inputs (rectificativa/motivo),
+    // so it can also change whether a derived box ends up out of range — same gate every other
+    // `recomputeDerivedBoxes` call site updates.
+    setOutOfRangeBoxes(recomputed.outOfRangeBoxes ?? []);
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
+  // ETP-5456 — box numbers whose AUTOCALCULATED value currently overflows the AEAT record-length
+  // ceiling (see `recomputeDerivedBoxes`'s `.outOfRangeBoxes` in fiscalModelsUtils.js). Non-empty
+  // means the declaration is NOT presentable as-is — gates Guardar/Generar fichero/Registrar-
+  // Presentar below (each with its own toast) and drives a one-shot toast when the set changes
+  // (see the effect near `outOfRangeToast` further down) — NOT a persistent banner: manual QA
+  // asked for this to read exactly like every other box-level notice in this window (negative
+  // clamp, etc.), not a fixed strip of layout pinned above the action toolbar. Kept as a separate
+  // state (not derived inline from `liveBoxes` on every render) because the check is cheap to run
+  // once per recompute but the formula-vs-range logic belongs with `recomputeDerivedBoxes`, not
+  // duplicated here.
+  // Starts empty regardless of `decl._precomputed` — that raw hydration payload has never been
+  // through `recomputeDerivedBoxes` yet, so it can't carry `.outOfRangeBoxes`; the mount-time
+  // `applyComputeResult` call (below) runs it through and populates this properly before the user
+  // can interact with the page.
+  const [outOfRangeBoxes, setOutOfRangeBoxes] = useState([]);
   // ETP-5431 [B1 fix, review round 2] — `clampNegativeOverrides` here, not just
   // `recomputeDerivedBoxes` on `liveBoxes`: a declaration persisted before this rule existed can
   // carry e.g. `manualOverrides[70] = -100`, and `applyBoxParams` (fiscalModelsUtils.js) reads
@@ -423,10 +449,31 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // toast) and exists precisely so a value that reaches it WITHOUT going through this
     // interactive path (hydration, "Calcular") is still guaranteed non-negative. Removing either
     // one reopens a gap the other doesn't cover.
+    let negativeClamped = false;
     if (value != null && value < 0 && NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum)) {
       value = 0;
+      negativeClamped = true;
       toast.error(t('fm.box.error.negative_not_allowed', { box: boxNum }) ??
         `La casilla ${boxNum} no admite valores negativos.`);
+    }
+    // ETP-5456 (UX refinement, final) — an out-of-range MANUAL value is now structurally
+    // impossible to type at all: `FmBoxes303.jsx`'s cell input hard-stops further keystrokes
+    // once the integer part reaches boxNum's ceiling (`exceedsTypedIntegerDigits`), so `rawValue`
+    // reaching this point should already be within range. This is NOT a clamp/truncate — it just
+    // re-derives the exact value end to end (string/`BigInt` only, no lossy `Number()`/`*100`
+    // round-trip) so a legitimate value near the ceiling (e.g. "123456789012345.35") is preserved
+    // EXACTLY rather than silently corrupted by `parseBoxInput`'s own float rounding at that
+    // magnitude — see `buildValidatedBoxValue`'s doc comment in fiscalModelsUtils.js. Skipped
+    // entirely when the negative-not-allowed clamp above already forced `value` to 0
+    // (`negativeClamped`) — re-deriving from `rawValue` at that point would re-read the box's
+    // original, still-negative typed digits and could undo the 0 the user just saw enforced.
+    // `valid: false` should never happen from the real UI (the keystroke hard-stop prevents it)
+    // — kept as a silent no-toast fallback only for a caller that bypasses that UI entirely (e.g.
+    // a stale hydrated override), per the fiscal-advisory decision that a format-length ceiling
+    // must never be "fixed" by silently declaring a different amount.
+    if (!negativeClamped) {
+      const { value: validated, valid } = buildValidatedBoxValue(boxNum, value, rawValue);
+      value = valid ? validated : null;
     }
     const fallback = decl._precomputed?.boxes ?? decl.boxes;
 
@@ -481,6 +528,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     });
     setLiveSummary(null);
     setLiveBoxes(finalBoxes);
+    // ETP-5456 — every path above ends in a `recomputeDerivedBoxes` call (directly via
+    // `applyBoxChange`, or the box78-clamp branch's own second recompute), so `finalBoxes.
+    // outOfRangeBoxes` is always populated — surfaced here so the page can gate
+    // Guardar/Generar/Presentar and render the blocking banner.
+    setOutOfRangeBoxes(finalBoxes.outOfRangeBoxes ?? []);
   }
 
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
@@ -529,7 +581,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      return applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
+      return applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes);
     } finally {
       setComputing(false);
     }
@@ -589,7 +641,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // initial state above and the user's saved manual edits are invisible until they
     // manually re-run "Calcular". No new network call: this reuses the payload we already have.
     if (decl._precomputed?.boxes != null) {
-      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes);
       return;
     }
     if (liveBoxes != null) return;
@@ -605,7 +657,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
       if (cached?.boxes != null) {
-        applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+        applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, undefined, undefined, setOutOfRangeBoxes);
       }
       return;
     }
@@ -630,6 +682,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       missingRequiredFieldsToast(
         'fm.validation.missing_required_generate',
         "Completá {fields} antes de generar el fichero.",
+      );
+      return;
+    }
+    // ETP-5456 — an autocalculated box out of the AEAT record-length range must block file
+    // generation outright: the file cannot be written with a rounded/truncated stand-in for the
+    // real computed amount. See `outOfRangeBoxes`'s own doc comment above.
+    if (outOfRangeBoxes.length > 0) {
+      outOfRangeToast(
+        'fm.validation.out_of_range_generate',
+        'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
       );
       return;
     }
@@ -769,6 +831,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // `!isSubmitted`) and the button is hidden once submitted, but the explicit guard is kept so a
   // stray call is still a no-op.
   async function handleSave() {
+    // ETP-5456 — a declaration currently holding an out-of-range autocalculated box must not be
+    // saved at all: persisting it would record a snapshot that can never be legally filed as-is,
+    // and the "Guardar" success toast would misleadingly read as "this is fine to present".
+    if (outOfRangeBoxes.length > 0) {
+      outOfRangeToast(
+        'fm.validation.out_of_range_save',
+        'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de guardar.',
+      );
+      return;
+    }
     const { ok } = await persistEditableFields();
     if (ok) {
       toast.success(t('recordSaved') ?? 'Registro guardado');
@@ -828,6 +900,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       missingRequiredFieldsToast(
         'fm.validation.missing_required_present',
         "Completá {fields} antes de marcar la declaración como presentada.",
+      );
+      return;
+    }
+    // ETP-5456 — an autocalculated box out of the AEAT record-length range must block "Registrar/
+    // Presentar" outright, same reasoning as handleGenerate above: there is no correct way to
+    // round/truncate the real computed amount into range, so the declaration cannot legally be
+    // marked presented in this state.
+    if (outOfRangeBoxes.length > 0) {
+      outOfRangeToast(
+        'fm.validation.out_of_range_present',
+        'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de marcar la declaración como presentada.',
       );
       return;
     }
@@ -893,6 +976,60 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   function missingRequiredFieldsToast(actionKey, fallback) {
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
+
+  // ETP-5456 — same gate shape as `missingRequiredFields` above, for AUTOCALCULATED boxes that
+  // overflow the AEAT record-length ceiling (see `recomputeDerivedBoxes`'s `.outOfRangeBoxes` in
+  // fiscalModelsUtils.js). Blocks Guardar/Generar fichero/Registrar-Presentar — see
+  // handleSave/handleGenerate/handlePresent below and their button pre-checks — because the
+  // format-length ceiling is a presentation constraint, not a fiscal rule: the declaration must
+  // not be saved, filed or marked presented while any of its computed amounts can't legally fit
+  // the AEAT record, since there is no correct way to round/truncate it into range.
+  const outOfRangeFieldNames = outOfRangeBoxes.map(n => `[${n}]`).join(', ');
+  // ETP-5456 (copy correction) — subject/verb agreement: "la casilla [N] excede" for exactly one
+  // offending box, "las casillas [N], [M] exceden" for more than one. Resolved via their own tiny
+  // i18n fragments (`_one`/`_other`) rather than hand-picking Spanish text in JS, so the English
+  // locale gets the same singular/plural agreement ("box {boxes} exceeds" / "boxes {boxes}
+  // exceed") instead of a fixed, possibly-wrong-count phrase.
+  const isOutOfRangePlural = outOfRangeBoxes.length > 1;
+  const outOfRangeSubject = t(
+    isOutOfRangePlural ? 'fm.validation.out_of_range_subject_other' : 'fm.validation.out_of_range_subject_one',
+    { boxes: outOfRangeFieldNames },
+  ) ?? (isOutOfRangePlural ? `las casillas ${outOfRangeFieldNames}` : `la casilla ${outOfRangeFieldNames}`);
+  const outOfRangeVerb = t(
+    isOutOfRangePlural ? 'fm.validation.out_of_range_verb_other' : 'fm.validation.out_of_range_verb_one',
+  ) ?? (isOutOfRangePlural ? 'exceden' : 'excede');
+
+  function outOfRangeToast(actionKey, fallback) {
+    toast.error(
+      t(actionKey, { subject: outOfRangeSubject, verb: outOfRangeVerb })
+        ?? fallback.replace('{subject}', outOfRangeSubject).replace('{verb}', outOfRangeVerb),
+    );
+  }
+
+  // ETP-5456 (UX correction) — manual QA reported the out-of-range error reading as a persistent
+  // banner pinned above the action toolbar, occupying layout space permanently. Replaced with a
+  // TOAST, same as every other box-level notice in this window (negative clamp, etc.) — the
+  // blocking is unchanged (Guardar/Generar fichero/Registrar-Presentar still refuse and toast
+  // their own error on click, see those handlers above), only how the user is informed changes.
+  // Fires once per DISTINCT out-of-range box set — compares against a ref snapshot, not just
+  // "is it non-empty", so it doesn't re-toast on every unrelated edit that leaves the same boxes
+  // still out of range (e.g. editing box 42 while box 69 stays out of range), only when the set
+  // actually changes (newly appears, grows, or shrinks to a different non-empty combination) or
+  // when the declaration first mounts already in that state.
+  const outOfRangeSignatureRef = useRef('');
+  useEffect(() => {
+    const signature = [...outOfRangeBoxes].sort((a, b) => a - b).join(',');
+    if (signature && signature !== outOfRangeSignatureRef.current) {
+      outOfRangeToast(
+        'fm.validation.out_of_range_banner',
+        'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de guardar, generar el fichero o presentar la declaración.',
+      );
+    }
+    outOfRangeSignatureRef.current = signature;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `outOfRangeToast`/`t` are stable
+    // enough per render for this one-shot-per-signature notice; including them would re-fire the
+    // effect (and re-toast) on every unrelated render, defeating the signature guard above.
+  }, [outOfRangeBoxes]);
 
   // Keeps `isManualDataEligible` current so a QUEUED explicit-save replay (see
   // `persistEditableFields`/`writeManualData`) can re-check the same preconditions right before
@@ -1065,6 +1202,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
                 );
                 return;
               }
+              // ETP-5456 — same gate handleGenerate itself enforces; checked here too so the
+              // "Generar fichero 303" modal never even opens while a computed box is out of range.
+              if (outOfRangeBoxes.length > 0) {
+                outOfRangeToast(
+                  'fm.validation.out_of_range_generate',
+                  'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
+                );
+                return;
+              }
               setShowFilegen(true);
             }}
             disabled={generating}
@@ -1092,6 +1238,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
                 missingRequiredFieldsToast(
                   'fm.validation.missing_required_present',
                   "Completá {fields} antes de marcar la declaración como presentada.",
+                );
+                return;
+              }
+              // ETP-5456 — same gate handlePresent itself enforces; checked here too so the
+              // "Marcar como Presentado" modal never even opens while a computed box is out of
+              // range (checked before requiresRectificativa, same ordering rationale as the
+              // required-fields check above it).
+              if (outOfRangeBoxes.length > 0) {
+                outOfRangeToast(
+                  'fm.validation.out_of_range_present',
+                  'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de marcar la declaración como presentada.',
                 );
                 return;
               }

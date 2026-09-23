@@ -1537,6 +1537,133 @@ raw layout-data assertions for the 7 alphanumeric fields), and `FiscalDeclCrudHa
 (the widened box111/77 set plus the new oversized-field guard, mirroring the existing 111/77 test
 style).
 
+### Numeric box max-length enforcement (ETP-5456)
+
+The ETP-5438 audit above fixed the sign gap; a follow-up audit ("Casillas numéricas: revisar que
+no superen los caracteres permitidos") cross-referenced the `Lon` (length) column of the same
+official "Diseño de registro" (DR303e26v101 v1.01, sheets DP30301-DP30305) against every box
+number `fm303Layouts.js` renders, box by box (not assuming uniformity — the spec's own footer
+warns lengths can differ per box). The result turned out uniform in practice for this window:
+
+| Box class | `Lon` | Integer digits | Decimal digits | Sign |
+|---|---|---|---|---|
+| Amount box, `Num` (unsigned) — e.g. 111, 77, 70, 78, 109, 110 (the `NEGATIVE_NOT_ALLOWED_BOXES` set) | 17 | 15 | 2 | never negative |
+| Amount box, `N` (signed) — e.g. 27, 45, 46, 64, 66, 69, 71 and most other boxes | 17 | 15 (non-negative) / **14** (negative — the minus sign consumes one of the 17 characters) | 2 | may be negative |
+| Percent box — 65, 89, 90, 91, 92, 107 | 5 | 3 | 2 | never negative |
+
+Every one of the ~97 box numbers this window renders (1-46, 59-78, 87, 89-92, 95, 97-98, 107-111,
+120-128, 150-170) was checked individually against the excel and came back `Lon=17` for amount
+boxes / `Lon=5` for percent boxes — no box in this window's layout deviates from the general
+pattern above.
+
+**Percent boxes were already fully compliant, no code change needed.** `FmBoxes303.jsx`'s
+`clampPercentValue` (ETP-5391) already clamps every committed percent value to `[0, 100]` rounded
+to 2 decimals — its largest possible output, `"100.00"`, is exactly 3 integer digits + 2 decimals,
+so it can never overflow `Lon=5` regardless of what the user types.
+
+#### FINAL behavior — fiscal-advisory correction (supersedes an earlier clamp/truncate draft)
+
+Two earlier drafts of this fix (a numeric-constant clamp, then a raw-string truncate that forced
+decimals to `"00"` on overflow) were built, manually QA'd, and both **reverted mid-ticket** on
+explicit guidance from external fiscal advisory: **the AEAT record-length ceiling (`Lon`) is a
+PRESENTATION-FORMAT constraint on how the file is written, not a fiscal rule.** Rounding,
+truncating or saturating an out-of-range amount to make it "fit" declares a *different* amount
+than the real one — never acceptable for a tax return, whether the box is typed by hand or
+computed by a formula. The current, final design instead makes an out-of-range value
+**unreachable** for manual input, and **blocking-but-non-destructive** for computed values:
+
+**1. Manual input — keystroke/paste hard-stop, not a clamp.** `FmBoxes303.jsx`'s cell input
+(`renderCellInput`'s `onChange`) refuses the keystroke/paste outright, on BOTH axes independently:
+- **Integer part**: refused once it would reach `maxIntDigits` for that box/sign —
+  `exceedsTypedIntegerDigits(boxNum, rawStr)` in `fiscalModelsUtils.js`. 15 digits for a `Num` box
+  or a non-negative `N` box, 14 once the value is negative.
+- **Decimal part**: refused once a 3rd decimal digit would be typed —
+  `exceedsTypedDecimalDigits(rawStr)`, box/sign-independent (always exactly 2). Added after manual
+  QA caught a 4-decimal value ("...9012345.2057") going through uncaught on box 42 — the integer
+  guard's name only ever promised to cover the integer side, and no decimal-side guard existed at
+  all in the first drafts.
+
+Reaching one ceiling never blocks typing on the other side (an integer-ceiling amount can still
+get its 2 decimals; a decimal-ceiling amount can still extend its integer part). Percent cells are
+exempt from both — they keep their own, separate `[0, 100]` range enforced on commit
+(`clampPercentValue`). Because the hard-stop runs at every keystroke/paste, an out-of-range manual
+value is **structurally impossible to type in the first place** — there is no "invalid but typed"
+state left to reject, clamp, or revert after the fact. `handleBoxChange`
+(`FmModel303Page.jsx`) still calls `buildValidatedBoxValue(boxNum, value, rawValue)` on commit, but
+only to re-derive the EXACT value end to end (string/`BigInt` arithmetic, never a lossy
+`Number()`/`*100` round-trip) — see the "exact value preservation" note below — `valid: false`
+from that call should never happen from the real UI and is a silent no-op fallback only for a
+caller that bypasses the input entirely (e.g. a stale hydrated override).
+
+**2. Autocalculated boxes — blocking validation, value never altered.** A DERIVED box (45, 46, 64,
+66, 69, 71, and the box 111 formula) can overflow its range exactly like a manual value can (e.g.
+`[69] = 66+77-78+68+108`, `[71] = 69-70+109-112`). `recomputeDerivedBoxes` (fiscalModelsUtils.js)
+computes every derived box exactly as before (plain float arithmetic is exact for any realistic
+tax-amount magnitude — the precision concern only exists near the ~15-digit ceiling itself, which
+no real declaration reaches) and additionally attaches `.outOfRangeBoxes` — the list of derived
+box numbers whose result overflows its own ceiling, via `isDerivedValueOutOfRange` (same
+`NEGATIVE_NOT_ALLOWED_BOXES`-driven Num/N distinction as the manual-input guard). **The computed
+value itself is never rounded, truncated, or otherwise altered** — only its validity is reported.
+`FmModel303Page.jsx` surfaces this as `outOfRangeBoxes` state, updated from every
+`recomputeDerivedBoxes` call site (`handleBoxChange`, `handleIdentChange`, `applyComputeResult`'s
+three call sites), and:
+- **Blocks** Guardar (`handleSave`), Generar fichero 303 (`handleGenerate` + its button's
+  pre-modal-open check), and Registrar/Presentar (`handlePresent` + its button's pre-modal-open
+  check) — each with its own contextual toast (`fm.validation.out_of_range_{save,generate,present}`).
+- **Toasts** (not a persistent banner — see below) once per DISTINCT out-of-range box set, via a
+  `useEffect` on `outOfRangeBoxes` compared against a ref'd signature (`outOfRangeSignatureRef`),
+  so it fires when the set first appears or changes, not on every unrelated render/edit that
+  leaves the same boxes still out of range.
+- **Singular/plural agreement**: `"la casilla [N] excede"` for exactly one offending box,
+  `"las casillas [N], [M] exceden"` for more than one (`"box {boxes} exceeds"` /
+  `"boxes {boxes} exceed"` in English) — resolved via small shared i18n fragments
+  (`fm.validation.out_of_range_subject_one/other`, `_verb_one/other`), not hand-picked text in JS,
+  so the English locale gets correct agreement too.
+
+**UX history on this point (manual QA cycles):**
+- An early draft rendered a **persistent destructive banner** pinned above the action toolbar.
+  Manual QA reported this reading as fixed layout clutter, always occupying space — reverted to a
+  **toast**, same as every other box-level notice in this window (negative-value clamp, etc.). The
+  blocking itself was never in question, only how the user is informed.
+- A still-earlier draft (before the "no clamp" pivot above) clamped/truncated the computed value
+  — reverted for the same fiscal-advisory reason as the manual-input clamp.
+
+**3. Exact value preservation (float64 boundary).** A boundary-legal value (15 integer digits + 2
+decimals, e.g. `"123456789012345.35"`) is a 17-significant-digit decimal — past what IEEE 754
+double precision can hold exactly. `Number('123456789012345.35')` alone, no arithmetic at all,
+already rounds to `"...34"` — manual QA caught this as **silent data corruption on a value that
+was never even close to the ceiling**, not a clamp/truncate case at all.
+`buildValidatedBoxValue`/`buildExactDecimalValue` (fiscalModelsUtils.js) fix this by reconstructing
+the value from the RAW TYPED STRING via string/`BigInt` arithmetic and preferring a plain `Number`
+only when it round-trips exactly (`Number(canonical).toFixed(2) === canonical`); when it doesn't,
+the function returns the canonical **decimal STRING** itself instead of a lossy `Number`. Because a
+box's stored `value` can therefore be a string:
+- `recomputeDerivedBoxes`'s `get()` coerces via `Number(...)` for FORMULA arithmetic only (`s +
+  get(n)` on a raw string would silently STRING-CONCATENATE — the exact ETP-5393 Bug B class of
+  bug `toBoxArray`'s own comment warns about) — lossy at this magnitude, same as any arithmetic on
+  a number this size would be, and orthogonal to the box's own displayed digits.
+- `lib/formatCurrency.js`'s `formatCurrency`/`formatAmount` gained an exact-decimal-string fast
+  path (`EXACT_DECIMAL_STRING` regex + `groupExactDecimalString`) so a string box value displays
+  its literal digits with correct thousands grouping, never re-coerced through `Number()`
+  (`formatCurrency`'s own `toFixedHalfUp` display-rounding trick has an unrelated, separate float64
+  quirk one digit earlier than the storage-layer concern here — out of scope for this ticket, not
+  fixed).
+- `applyBoxParams`'s `String(v)` for AEAT submission already handles either shape correctly (a
+  no-op for a string, unchanged for a number) — this incidentally makes telematic submission MORE
+  accurate at this magnitude too, not just display.
+
+Regression tests: `fiscalModelsUtils.boxRange.vitest.js` (pure-function unit tests —
+`exceedsTypedIntegerDigits`/`exceedsTypedDecimalDigits`/`boxValueOutOfRange`/
+`buildValidatedBoxValue`, and `recomputeDerivedBoxes`'s `outOfRangeBoxes` including the cascade
+case), `FmBoxes303.hardStop.vitest.jsx` (the keystroke-level hard-stop on both axes through the
+real component, including the percent-cell exemption), `FmModel303Page.outOfRange.vitest.jsx`
+(mount-time and edit-triggered toasts with correct singular/plural wording, the "no re-toast on an
+unrelated edit" signature guard, and the Guardar/Generar fichero/Registrar-Presentar blocking
+gates), `FmModel303Page.exactValuePreservation.vitest.jsx` (the REAL, unmocked `FmBoxes303` grid —
+a boundary-legal value round-trips exactly), and two updated cases in `FmBoxes303.vitest.jsx`
+("percent cell input attributes" describe block) covering the new amount-cell decimal hard-stop
+and its digit-by-digit vs. one-shot-paste distinction.
+
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
 The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`
