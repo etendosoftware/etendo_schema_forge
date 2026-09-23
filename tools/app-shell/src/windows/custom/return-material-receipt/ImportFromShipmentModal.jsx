@@ -1,5 +1,6 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { apiFetch } from '@/auth/api.js';
+import { enrichReturnLine, getReturnDocDisplay, submitReturnImportBatch } from '@/windows/custom/shared/importReturnLinesHelpers.js';
 
 const ACTION_BASE = (base) =>
   `${base}/return-material-receipt/returnMaterialReceipt/_/action`;
@@ -20,25 +21,10 @@ const fetchLines = async ({ base, docId }) => {
   });
   if (!res.ok) return [];
   const raw = (await res.json())?.response?.data || [];
-  return raw.map((line) => ({
-    ...line,
-    _maxQty: Math.max(0, Number(line.movementQuantity) || 0),
-    _productName: line['product$_identifier'] || line.id,
-  }));
+  return raw.map(enrichReturnLine);
 };
 
-const getDocDisplay = (doc) => ({ docNo: doc.documentNo || doc.id, date: doc.movementDate });
-
-const submitImport = async ({ lines, base, invoiceId }) => {
-  const res = await apiFetch(IMPORT_ACTION_URL(base, invoiceId), {
-    baseUrl: '',
-    method: 'POST',
-    body: JSON.stringify({ lines: lines.map(({ line, qty }) => ({ sourceLineId: line.id, returnQuantity: qty })) }),
-  });
-  if (!res.ok) return { ok: false };
-  const body = await res.json();
-  return { ok: true, count: body?.response?.data?.importedCount ?? lines.length };
-};
+const submitImport = (args) => submitReturnImportBatch({ ...args, actionUrl: IMPORT_ACTION_URL });
 
 export default function ImportFromShipmentModal({ targetId, ...props }) {
   return (
@@ -52,7 +38,7 @@ export default function ImportFromShipmentModal({ targetId, ...props }) {
       successMessageKey="linesImportedFromShipment"
       fetchDocuments={fetchDocuments}
       fetchLines={fetchLines}
-      getDocDisplay={getDocDisplay}
+      getDocDisplay={getReturnDocDisplay}
       submitImport={submitImport}
       showPriceColumns={false}
       filterZeroQty
