@@ -197,8 +197,41 @@ test.describe('First Steps page — completion run', () => {
 
   test('sends the fiscal step to the Fiscal Configuration window', async ({ page }) => {
     await page.getByTestId('first-steps-title-fiscal-config').click();
+    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
+    // window. "Yes" is what puts the Configure button on screen.
+    await page.getByTestId('first-steps-gate-yes-fiscal-config').click();
     await page.getByTestId('first-steps-configure-fiscal-config').click();
     await expect(page).toHaveURL(/\/fiscal-config/);
+  });
+
+  test('completes the fiscal step outright when the tenant reports to no SIF', async ({ page }) => {
+    // ETP-5364 — "No" is not a dismissal: a tenant that reports to no invoicing system has
+    // nothing to configure, so the answer IS the completed state and it persists like any
+    // other tick.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
+
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+    await expect(progress(page)).toContainText('2/7');
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toHaveCount(0);
+    expect(mock.writes.at(-1).completed).toContain('fiscal-config');
+  });
+
+  test('asks the fiscal question again after the step is unticked', async ({ page }) => {
+    // The answer is deliberately not persisted — only the step's completed flag is. Unticking
+    // is therefore the escape hatch for someone who answered wrongly.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+
+    const row = page.getByTestId('first-steps-step-fiscal-config');
+    await row.locator('label:has([data-testid="first-steps-toggle-fiscal-config"])').click();
+
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
   });
 
   test('locks a completed step controls, and unlocks them when it is unticked', async ({ page }) => {

@@ -184,13 +184,23 @@ changes, and BOTH are required — either alone is a silent no-op:
 A sequence nothing points at shows a configurable prefix that governs no numbering; a doctype
 flipped with no sequence to read falls back to the counter it was already using.
 
-**Preventive only.** Both rows reach a tenant through the onboarding dataset, so they apply to
-tenants provisioned **from this change on**. The 107 already-provisioned tenants keep
-`IsDocNoControlled='N'` and own no `AP Invoice` sequence: their window shows five rows instead of
-six — the name filter matches nothing, which is the entire failure mode — and their purchase
-invoices keep taking the fallback number. Retrofitting them is a data-fix that was deliberately
-not written here; it would change the numbering of documents those tenants have already issued,
-which is the same fiscal premise R38's header documents.
+**Both fronts.** The two dataset rows above make every tenant provisioned from this change on born
+with six series. Already-provisioned tenants are closed by
+`cli/src/data-fixes/sql/20260922T120000Z__R39-ap-invoice-fc-series.sql` (gap `N7`), which inserts
+the sequence with a **per-tenant** uuid — never the dataset's GOClient id — and then flips the
+doctype to point at it.
+
+That corrective was declined when this section was first written, and **the objection has not gone
+away**: it starts a numbering series over purchase invoices numbered by the `DocumentNo_C_Invoice`
+fallback, so the series both splits and moves backwards. It was accepted on 2026-09-22 on two
+premises — no tenant is productive, and going productive creates a *new* tenant born from the
+corrected dataset, so a split demo series never becomes a legal one. **Unlike R38 there is no guard
+to restore** the day the first premise stops holding: a tenant with issued purchase invoices needs a
+manual starting-number decision, not this file.
+
+A tenant that has not run R39 shows five rows instead of six — the name filter matches nothing,
+which is the entire failure mode — and its purchase invoices keep taking the fallback number. That
+is the expected state, not a regression.
 
 ### Why no `DocumentNo_*` sequence is listed
 
@@ -471,3 +481,22 @@ not edit R31's `VALUES` to "agree": tenants have already applied it as written.
 that may already have issued documents.** Both rest on the same premise a human accepted on
 2026-09-02: there are no production tenants yet. R38's header carries the restore instructions for
 the day that stops being true — read them before running it anywhere real.
+
+### The Description column carries no engineering notes (ETP-5364)
+
+`Description` is the grid's second column and it is **editable**, so whatever the dataset writes
+there is copy the tenant reads next to its own series. Three rows used to carry an internal note
+instead: both rectificativas shipped `ETP-4737: sequence for the unified … rectificative invoice`
+and `AP Invoice` briefly shipped `ETP-5364: sequence for the purchase invoice series`.
+
+- *Preventive*: the `<DESCRIPTION>` element is gone from all three rows in
+  `GOClient/AD_SEQUENCE.xml`, and R39's insert above writes `description` NULL so the N7 corrective
+  cannot put one back.
+- *Corrective*: `cli/src/data-fixes/sql/20260922T130000Z__R39-document-sequence-clear-descriptions.sql`
+  (gap `N9`) nulls it on already-provisioned tenants.
+
+The text reached a tenant by **two** routes — the dataset and `R17-rectificativa-doctype-sequence`,
+which is immutable and already applied — so the fix matches by `NAME`. It is guarded by
+`description LIKE 'ETP-%'` rather than the exact strings: the column is editable, so a
+tenant-authored description has to survive, and a tenant does not start one with a ticket key.
+`@risk: low` — it touches no prefix, no counter and no document.
