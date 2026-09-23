@@ -12,7 +12,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
-import { invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
+import { invalidateFiscalComputeCache, getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
 
@@ -673,6 +673,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // rationale: distinguishes the manual "Presentado" paths from a real AEAT telematic
   // submission (303-only; a 349 declaration only ever reaches the two manual paths).
   const [submissionMethod, setSubmissionMethod] = useState(decl.submissionMethod);
+  // Computed from `status` state (not `decl.status`) so it tracks a same-session
+  // presentation (`handlePresent` -> `handleStatusChange` -> `setStatus`) without a
+  // remount. Declared early — before the mount-time auto-compute effect below, which
+  // reads it (ETP-5438) — and reused at the action-bar gates further down.
+  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -847,10 +852,34 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // "Calcular" button used to do manually. Scoped to `decl.id` only (not
   // `liveOperators`/`decl._precomputed`) so it fires exactly once per opened
   // declaration instead of looping once `handleCompute` populates state.
+  //
+  // ETP-5438 — once `isSubmitted`, this effect must NEVER call `handleCompute()`
+  // (= a live `GET /fiscal349/operators`, which always recomputes from whatever
+  // invoices exist RIGHT NOW, regardless of who calls it or when — that live
+  // recompute silently picking up invoices added/removed after presentation was
+  // the actual "sigue tomando facturas aun presentada" bug). Instead it falls back
+  // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s
+  // own submitted-family bucket already populated once this session (see its
+  // `neverModifiedFn` comment) — network-free, so it can never observe a later
+  // invoice change. If nothing was ever cached (declaration opened cold, with no
+  // `_precomputed` AND no prior FmListPage compute this session), the tabs simply
+  // show no data — "Calcular" is itself hidden once submitted, so there is no
+  // in-page affordance to populate it, matching the frozen-once-presented intent.
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
     if (!apiBaseUrl) return;
+    // ETP-4576 — `!token` is deliberately NOT part of this gate; see FmModel303Page.jsx's
+    // identical comment. Under the cookie session the client holds no token, so a `!token`
+    // gate is permanently false and the request would simply never fire.
+    if (isSubmitted) {
+      const cached = getCachedFiscalCompute(decl.id);
+      if (cached?.operators) setLiveOperators(cached.operators);
+      if (cached?.invoices) setLiveInvoices(cached.invoices);
+      if (cached?.rectifications) setLiveRectifications(cached.rectifications);
+      if (cached?.rectificativeSummary) setLiveRectifSummary(cached.rectificativeSummary);
+      return;
+    }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
@@ -858,6 +887,14 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   async function handleGenerate({
     phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
   } = {}) {
+    // ETP-5438 — the button that opens FileGenModal is itself hidden once submitted, so this
+    // is a belt-and-braces second check (same double-check pattern FmModel303Page.jsx already
+    // uses for missingRequiredFields), not the primary gate. The real defense-in-depth against a
+    // direct/malformed API call is server-side, in Fiscal349BoxesHandler#handleGenerate.
+    if (isSubmitted) {
+      toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
+      return;
+    }
     setGenerating(true);
     const result = await generate349File(decl, {
       token, apiBaseUrl, phone, contact,
@@ -958,8 +995,6 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
-  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
-
   return (
     <div className="fm-page fm-page--freeflow">
       {/* ── Title bar ────────────────────────────────────────────── */}
@@ -1045,15 +1080,23 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           </button>
         )}
 
-        <button
-          className="fm-btn"
-          onClick={() => setShowFilegen(true)}
-          disabled={generating}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
-        >
-          <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
-          {t('fm.action.gen349') ?? 'Generar fichero 349'}
-        </button>
+        {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
+            re-generated, matching "Calcular"/"Registrar-Presentar"'s existing `!isSubmitted`
+            gate above. Previously always visible regardless of status (see
+            docs/generated-custom-windows/fiscal-models.md's Modelo 303 "Action bar" note for
+            the ANALOGOUS, still-deliberate 303 behavior — NOT changed here, out of this
+            ticket's scope). */}
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={() => setShowFilegen(true)}
+            disabled={generating}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
+          >
+            <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+            {t('fm.action.gen349') ?? 'Generar fichero 349'}
+          </button>
+        )}
 
         {!isSubmitted && (
           <button

@@ -2,6 +2,11 @@ import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
 import { parseCalendarDate } from '../../../lib/dateOnly.js';
 import { toast } from 'sonner';
+// ETP-5431 pt.2 — box 111's autocompletion formula lives next to its field definition in
+// fm303Layouts.js (like every other `derivedValue`); `recomputeDerivedBoxes` below is its single
+// authoritative consumer. One-directional dependency only (fm303Layouts.js imports nothing from
+// this file), so no import cycle.
+import { computeBox111 } from './models/303/fm303Layouts.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
@@ -53,8 +58,23 @@ const IDENT_PARAM_MAP = [
   ['bank_ciudad',        'BankCity'],
   ['bank_pais',          'CountryIso'],
   ['bank_sepa',          'SEPA'],
-  ['baja_domiciliacion', 'Cancel_Modify_Debit'],
+  // NOTE: `baja_domiciliacion` is deliberately NOT here — see `isCancelModifyDebitRequested`
+  // and `applyIdentParams` below. It is a checkbox, and this map stringifies its value as-is.
 ];
+
+// ETP-5431 — `baja_domiciliacion` ("dar de baja/modificar la domiciliación efectuada") used to
+// travel through IDENT_PARAM_MAP, which forwards a value verbatim. The checkbox holds a boolean,
+// so a checked box reached the backend as `Cancel_Modify_Debit=true` — and every reader on the
+// Java side tests `StringUtils.equals("Y", ...)` (`AEAT303Report2024#generatePage3`, which writes
+// position 440 of page 3, and `#isCancelOrModifyDebitRequested`, which applies Nota 3's
+// exception). So from the Go frontend the flag never took effect at all: the mark was never
+// written to the file and the Nota 3 exception could never fire. It now goes through the same
+// explicit Y-flag convention every other checkbox here already uses (`sin_actividad`,
+// `redeme`, `concurso`). The `'Y'` string is accepted alongside the boolean so any value already
+// persisted in `manualData.identification` in that shape keeps working.
+export function isCancelModifyDebitRequested(identChecks) {
+  return identChecks?.baja_domiciliacion === true || identChecks?.baja_domiciliacion === 'Y';
+}
 
 // Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
 // IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
@@ -73,10 +93,18 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
 // with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
 // declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+// ETP-5431 — condition B no longer applies when the declaration marks `baja_domiciliacion`
+// ("dar de baja/modificar la domiciliación efectuada", sent as `Cancel_Modify_Debit`): that is
+// the single exception Nota 3 states to the box-111 bank-data obligation, and both
+// `_BANK_RECTIFICATIVA_BRANCH` in fm303Layouts.js and `isCancelOrModifyDebitRequested` in
+// AEAT303Report2024.java now honour it. Condition A (tipo U/D/X) is untouched: those types need
+// an account by virtue of the type itself, which is outside Nota 3's scope.
 export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
   return (
     IBAN_REQUIRED_TIPOS.includes(tipo) ||
-    (identChecksWithBox111Flag?.rectificativa === true && identChecksWithBox111Flag?._box111NonZero === true)
+    (identChecksWithBox111Flag?.rectificativa === true
+      && identChecksWithBox111Flag?._box111NonZero === true
+      && !isCancelModifyDebitRequested(identChecksWithBox111Flag))
   );
 }
 
@@ -92,12 +120,76 @@ export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
 export const DECLARATION_TYPE_INGRESO = 'I';
 
 // ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
-// importación liquidado por la Aduana pendiente de ingreso) are the only editable boxes the
+// importación liquidado por la Aduana pendiente de ingreso) are editable boxes the
 // classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
 // 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
 // literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
 // `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
-export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77]);
+// ETP-5431 pt.2 — 109 (devoluciones en tramitación) and 70 (a deducir) added to the set: same
+// AEAT-can-never-be-negative rule as 111/77 above, no new mechanism needed (toast, `min="0"`,
+// clamp are all driven off this Set already). 70 additionally feeds `computeBox111` below — see
+// the ordering note on `recomputeDerivedBoxes` for why this clamp must run before that formula.
+//
+// ETP-5431 [B1 fix, review round 2] — this Set now backs TWO independent enforcement points,
+// not one: `clampNegativeBoxes` (silent, structural — folded into `recomputeDerivedBoxes` itself
+// so every boxArr path is covered by construction) and `clampNegativeOverrides` (same clamp,
+// applied to the separate `manualOverrides` map at hydration — see both functions below for why
+// neither one alone is sufficient). `FmModel303Page.jsx`'s `handleBoxChange` still clamps too,
+// but only as the interactive-input layer (it also owns the user-facing toast); it is redundant
+// with, not a substitute for, the two functions below.
+//
+// ETP-5438 (AEAT spec audit) — boxes 70 (Resultados a ingresar de anteriores autoliquidaciones),
+// 78 (Cuotas a compensar de periodos anteriores aplicadas), 109 (Devoluciones acordadas por la
+// AT de anteriores autoliquidaciones) and 110 (Cuotas a compensar pendientes de periodos
+// anteriores) are declared "Num" (numérico sin signo / unsigned) in the official Modelo 303
+// "Diseño de registro" (DR303e26v101 v1.01), exactly like 111 and 77 — the spec's own "Nota"
+// footer on every page: "1. Los campos deben ser A (Alfabético) An (Alfanumérico), Num
+// (Numérico sin signo) o N (Numérico con signo)." These were editable in the UI with no negative
+// guard until this audit found the gap; widened into the SAME set/mechanism rather than a
+// parallel one. Note box78 also carries its own, unrelated relative clamp (≤ box110) in
+// `FmModel303Page.jsx`'s `handleBoxChange` — that clamp runs on the value AFTER this set's
+// floor-at-0 has already applied, so a negative box110 commit floors to 0 first and box78 can
+// never inherit a negative ceiling from it.
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110]);
+
+// Silently zeroes any NEGATIVE_NOT_ALLOWED_BOXES entry in a box array. "Silent" is deliberate:
+// this runs on every boxArr regardless of how it got here (a fresh backend response, a value
+// hydrated from a declaration saved months before this rule existed, or a live typed edit
+// already routed through it), and most of those paths are not a direct reaction to something
+// the user just did — surfacing a toast here would either fire on page load for old data or
+// double-fire for a typed edit that `handleBoxChange` already toasted about. The toast, where one
+// belongs, stays the responsibility of the interactive-input layer (`handleBoxChange`); this
+// function only owns the numeric invariant.
+function clampNegativeBoxes(boxArr) {
+  return boxArr.map(b => (
+    NEGATIVE_NOT_ALLOWED_BOXES.has(b.num) && typeof b.value === 'number' && b.value < 0
+      ? { ...b, value: 0 }
+      : b
+  ));
+}
+
+// Same clamp as `clampNegativeBoxes` above, but for the separate `manualOverrides` map
+// (`{ [boxNum]: value }`, e.g. `decl.manualData.manualOverrides` as hydrated on mount).
+// `clampNegativeBoxes`/`recomputeDerivedBoxes` alone are NOT enough to make a negative
+// override safe: `applyBoxParams` (below) reads box 70/109/77's AEAT param straight off
+// `manualOverrides[boxNum]`, bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely, so a
+// negative value sitting in a hydrated `manualOverrides` would still reach AEAT as e.g. a
+// negative `ComplementaryAmt` even though `computeBox111`/box111 are already protected.
+// Called once at hydration (`FmModel303Page.jsx`'s `manualOverrides` initial state) — every
+// write to `manualOverrides` after that already goes through a clamped value (`handleBoxChange`
+// clamps before storing; `syncBox111Override` only ever writes an already-clamped box111).
+export function clampNegativeOverrides(overrides) {
+  const ov = overrides ?? {};
+  let changed = false;
+  const next = { ...ov };
+  for (const key of Object.keys(next)) {
+    if (NEGATIVE_NOT_ALLOWED_BOXES.has(Number(key)) && next[key] < 0) {
+      next[key] = 0;
+      changed = true;
+    }
+  }
+  return changed ? next : ov;
+}
 
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
@@ -208,6 +300,8 @@ export function applyIdentParams(params, identChecks) {
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
+  // ETP-5431 — see isCancelModifyDebitRequested: this must reach AEAT303Report2024 as "Y".
+  if (isCancelModifyDebitRequested(identChecks)) params.set('Cancel_Modify_Debit', 'Y');
   applyConcursoParams(params, identChecks);
   applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
@@ -220,7 +314,13 @@ export function applyIdentParams(params, identChecks) {
   if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
-function applyBoxParams(params, manualOverrides) {
+// ETP-5431 — exported so AeatSubmitFlow.jsx's handleSubmit can apply the exact same
+// manualOverrides -> AEAT param mapping generate303File already uses below. Before this
+// export, AeatSubmitFlow had no way to forward box overrides (box 111, box 70, etc.) to
+// POST /fiscal303/submit at all, so any manually-overridden box value reached "Generar
+// fichero 303" (which calls applyBoxParams) but never the AEAT telematic submission
+// itself — the two endpoints silently diverged. See AeatSubmitFlow.jsx's own import site.
+export function applyBoxParams(params, manualOverrides) {
   for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
     const v = manualOverrides[Number(boxNum)];
     if (v != null) params.set(paramName, String(v));
@@ -585,7 +685,32 @@ export function applyOverrides(boxes, overrides) {
 // 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
 // territorial-split box 65) is reflected in the final liquidation result. Always
 // call this AFTER applyOverrides.
-export function recomputeDerivedBoxes(boxArr) {
+//
+// ETP-5431 pt.2 — also the single authoritative place that (re)derives box 111
+// (rectificacion_importe, formula: `computeBox111` in fm303Layouts.js). This is the ONE choke
+// point both interactive typing (FmModel303Page's `applyBoxChange`) and the "Calcular" flow
+// (`applyComputeResult`) already route through for 45/46/64/66/69/71, so box 111 gets the same
+// guarantee for free.
+//
+// Ordering dependency (box70 clamp -> box111 formula), by construction rather than by careful
+// sequencing between callers: [B1, review round 2] a previous version of this comment claimed
+// "the backend/res.boxes path has no interactive input to clamp in the first place" and relied on
+// each CALLER clamping box 70/109 before invoking this function. That was wrong on two real
+// paths — `manualOverrides` hydrated from a declaration persisted before this rule existed
+// (`FmModel303Page.jsx`'s initial `manualOverrides` state), and `computeBoxes303`'s "Calcular"
+// response itself can carry a negative box 70/109 in `res.boxes`, with nothing upstream of
+// `applyComputeResult` ever clamping it. So the clamp now lives HERE instead, as the first thing
+// this function does to its own input (`clampNegativeBoxes` below) — every caller (typed edits via
+// `applyBoxChange`, the "Calcular" flow via `applyComputeResult`, and initial hydration, which
+// also routes through `applyComputeResult`) shares this one call, so `box70`/`box109` are
+// guaranteed non-negative by the time `computeBox111` reads them, by construction rather than by
+// caller discipline.
+// `identChecks` (optional; defaults to `{}`) is read for its `rectificativa` flag only, forwarded
+// to `computeBox111`'s explicit `isRectificativa` guard — the formula's own spec requires it
+// ("SI es autoliquidación rectificativa Y..."), same convention as `isBankIbanRequired` elsewhere
+// in this file. A caller that omits it gets box 111 forced blank, never a false positive.
+export function recomputeDerivedBoxes(boxArrRaw, identChecks) {
+  const boxArr = clampNegativeBoxes(toBoxArray(boxArrRaw));
   const r2 = v => Math.round(v * 100) / 100;
   const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
   const box65entry = boxArr.find(b => b.num === 65);
@@ -597,9 +722,22 @@ export function recomputeDerivedBoxes(boxArr) {
   const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
   const box71 = r2(box69 - get(70) + get(109) - get(112));
   const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+
+  // box70 read again here (not via `derived`/`get` reuse) on purpose: `computeBox111` tests
+  // "casilla_70 > 0" against the RAW box70 entry, not `get`'s always-numeric 0-for-missing
+  // fallback used by the arithmetic above (a missing entry and an explicit 0 both fail the
+  // `> 0` test either way, but keeping the raw read avoids relying on that coincidence).
+  const box70Entry = boxArr.find(b => b.num === 70);
+  const box111 = computeBox111({
+    isRectificativa: identChecks?.rectificativa === true,
+    box70: box70Entry != null ? box70Entry.value : null,
+    box71,
+  });
+
   return [
-    ...boxArr.filter(b => !(b.num in derived)),
+    ...boxArr.filter(b => !(b.num in derived) && b.num !== 111),
     ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+    ...(box111 != null ? [{ num: 111, value: r2(box111) }] : []),
   ];
 }
 

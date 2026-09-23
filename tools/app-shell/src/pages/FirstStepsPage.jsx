@@ -105,7 +105,8 @@ function DataTransferAction({ transfer, ui, onRetryError }) {
 function StepAction({ step, done, ui, onConfigure, dataTransfer, onRetryError }) {
   const locked = isStepLocked(step, done);
   if (step.action === 'dataTransfer') {
-    return <DataTransferAction transfer={dataTransfer} ui={ui} onRetryError={onRetryError} />;
+    return <DataTransferAction transfer={dataTransfer} ui={ui} onRetryError={onRetryError}
+      data-testid="DataTransferAction__45a28a" />;
   }
   if (step.action === 'import') {
     return (

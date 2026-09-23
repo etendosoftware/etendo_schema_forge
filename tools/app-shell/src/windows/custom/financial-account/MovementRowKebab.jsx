@@ -192,7 +192,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         toast.success(ui('documentPosted'));
         onReload?.();
       } else {
-        toast.error(message || ui('financeAccountMovementsRowPostError'));
+        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowPostError'));
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowPostError'));
@@ -210,7 +210,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         toast.success(ui('documentUnposted'));
         onReload?.();
       } else {
-        toast.error(message || ui('financeAccountMovementsRowUnpostError'));
+        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowUnpostError'));
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowUnpostError'));
