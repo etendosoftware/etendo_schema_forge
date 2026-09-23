@@ -160,7 +160,7 @@ The `/mcp` and `/oauth2/*` behaviors attach a CloudFront Function (viewer-reques
 ## Public API gateway (production)
 
 The ETP-5345 NestJS gateway is deployed as an isolated ECS service behind the
-production ALB and is exposed through the existing `app.etendo.software`
+production ALB and is exposed through the existing production
 CloudFront distribution. The public documentation entrypoint does not require
 an app session; data operations under `/api/v1/*` still require an API key.
 
@@ -169,7 +169,7 @@ an app session; data operations under `/api/v1/*` still require an API key.
 | ECR repository | `etendo/public-api-gateway` |
 | ECS cluster / service | `etendo-production` / `etendo-public-api-service` |
 | Target group | `etendo-public-api-production-tg` (HTTP :4300) |
-| CloudFront distribution | `EGLVB9A5GHHEQ` (`app.etendo.software`) |
+| CloudFront distribution | `EGLVB9A5GHHEQ` (`app.etendo.ai`) |
 | ALB routes | `/api`, `/api/openapi.json`, `/api/v1/*` → public API target group |
 
 The existing `/api/reports` and `/api/report-selectors` rules retain priority
