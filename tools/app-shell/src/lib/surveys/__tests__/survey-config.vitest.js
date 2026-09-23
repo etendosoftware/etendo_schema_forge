@@ -17,6 +17,7 @@ import {
   DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS,
   DEFAULT_SURVEY_CSAT_MIN_DOCS,
   DEFAULT_SURVEY_CSAT_DOC_GAP,
+  DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS,
 } from '../survey-config.js';
 
 const MS_DAY = 86_400_000;
@@ -178,6 +179,40 @@ describe('getSurveyTypeConfig', () => {
       setRemoteSurveyConfig({});
       const config = getSurveyTypeConfig('csat_invoicing', {});
       expect(config.minDocuments).toBe(DEFAULT_SURVEY_CSAT_MIN_DOCS);
+    });
+  });
+
+  // ETP-4353 Phase 2: minAccountAgeMs now picks a different env var + default depending on
+  // surveyKey — csat_onboarding gets its own 1-day-default knob instead of inheriting nps's
+  // 60-day one, so an unconfigured csat_onboarding row keeps its pre-refactor 24h behavior.
+  describe('per-surveyKey minAccountAgeMs selection (csat_onboarding vs nps)', () => {
+    it('resolves csat_onboarding to the 1-day default, not the nps 60-day default', () => {
+      const config = getSurveyTypeConfig('csat_onboarding', {});
+      expect(config.minAccountAgeMs).toBe(DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS * MS_DAY);
+      expect(config.minAccountAgeMs).toBe(1 * MS_DAY);
+    });
+
+    it('resolves nps to its own 60-day default, unaffected by the new csat_onboarding branch', () => {
+      const config = getSurveyTypeConfig('nps', {});
+      expect(config.minAccountAgeMs).toBe(DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY);
+    });
+
+    it('VITE_SURVEY_ONBOARDING_DELAY_DAYS overrides csat_onboarding only, not nps', () => {
+      const env = { VITE_SURVEY_ONBOARDING_DELAY_DAYS: '3' };
+      expect(getSurveyTypeConfig('csat_onboarding', env).minAccountAgeMs).toBe(3 * MS_DAY);
+      expect(getSurveyTypeConfig('nps', env).minAccountAgeMs).toBe(DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY);
+    });
+
+    it('VITE_SURVEY_NPS_MIN_AGE_DAYS overrides nps only, not csat_onboarding', () => {
+      const env = { VITE_SURVEY_NPS_MIN_AGE_DAYS: '20' };
+      expect(getSurveyTypeConfig('nps', env).minAccountAgeMs).toBe(20 * MS_DAY);
+      expect(getSurveyTypeConfig('csat_onboarding', env).minAccountAgeMs).toBe(DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS * MS_DAY);
+    });
+
+    it('a remote perSurvey.csat_onboarding.minAccountAgeDays takes precedence over both env var and default', () => {
+      setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { minAccountAgeDays: 5 } } });
+      const config = getSurveyTypeConfig('csat_onboarding', { VITE_SURVEY_ONBOARDING_DELAY_DAYS: '3' });
+      expect(config.minAccountAgeMs).toBe(5 * MS_DAY);
     });
   });
 });
