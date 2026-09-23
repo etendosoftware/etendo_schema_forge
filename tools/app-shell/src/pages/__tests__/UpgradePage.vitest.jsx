@@ -15,7 +15,11 @@ vi.mock('@/i18n', () => ({
 // Both accessors, same session: useEnvironmentSwitch reads the optional one (ETP-5216 mounts
 // its callers in trees with no provider), and a mock that declares only the strict one makes
 // every render of this page throw before it can assert anything.
-const UPGRADE_SESSION = { isAuthenticated: true, csrfToken: null, session: null };
+// `clientId` is the session's current environment — what useEnvironmentSwitch exposes as
+// `currentClientId` and UpgradePage matches against the environment list to prefill the
+// tenant name (ETP-5443). Reset to null in beforeEach; a case sets it to name the environment
+// the browser is inside.
+const UPGRADE_SESSION = { isAuthenticated: true, csrfToken: null, session: null, clientId: null };
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => UPGRADE_SESSION,
   useAuthOptional: () => UPGRADE_SESSION,
@@ -57,6 +61,8 @@ import { track } from '@/lib/observability.js';
  */
 const PLATFORM_TOKEN_KEY = 'sf_platform_token';
 const EXISTING_TENANT = 'Acme Trial';
+/** Client id of the environment the session is inside, matched against the environments list. */
+const CURRENT_CLIENT_ID = 'CURRENT-CLIENT';
 
 /**
  * Private sessionStorage keys `runUpgrade`/the resume effect in UpgradePage.jsx
@@ -252,6 +258,7 @@ beforeEach(() => {
   globalThis.localStorage.clear();
   globalThis.localStorage.setItem(PLATFORM_TOKEN_KEY, 'platform-token');
   globalThis.sessionStorage.clear();
+  UPGRADE_SESSION.clientId = null;
   // The page mocks AuthContext away, so nothing publishes the session credentials the request
   // builders read — without this the scheme stays on its bearer default and a case asserting the
   // CSRF proof would see only a Content-Type. See src/test/sessionContract.js.
@@ -268,7 +275,9 @@ describe('UpgradePage — hosted checkout', () => {
     installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
 
-    expect(await screen.findByTestId('upgrade-tenant-from-demo')).toBeInTheDocument();
+    // The tenant-name field is always rendered and editable now (ETP-5443) — there is no
+    // separate read-only "from demo" box anymore.
+    expect(await screen.findByTestId('upgrade-tenant-name-input')).toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-cardholder')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-card-number')).not.toBeInTheDocument();
     expect(screen.queryByTestId('upgrade-expiry')).not.toBeInTheDocument();
@@ -348,15 +357,15 @@ describe('UpgradePage — hosted checkout', () => {
  * that runs it twice can see that.
  *
  * What `develop` changed underneath, and what it did NOT change: the write moved to
- * `/sws/go/billing/purchases` and the tenant name is no longer typed — it is derived from the demo
- * environment and rendered read-only. Neither touches what this block is about, which is what the
+ * `/sws/go/billing/purchases`, and the tenant name is an always-visible input prefilled from the
+ * current or demo environment (ETP-5443). Neither touches what this block is about, which is what the
  * requests CARRY.
  */
 describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
   /**
    * Drives the flow to the point where the checkout write has gone out.
    *
-   * There is no tenant name to type: `develop` removed the input, so the name comes from the demo
+   * No tenant name is typed: the always-visible input (ETP-5443) is prefilled from the demo
    * environment. It is asserted on screen here rather than assumed, because a blank name would
    * still produce a POST and every header assertion below would pass on a request that means
    * nothing.
@@ -365,7 +374,7 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
     const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
-    expect(screen.getByTestId('upgrade-tenant-from-demo')).toHaveTextContent(EXISTING_TENANT);
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
     await user.click(screen.getByTestId('upgrade-submit'));
     await waitFor(() => expect(assignMock).toHaveBeenCalled());
   }
@@ -672,6 +681,168 @@ describe('UpgradePage — checkout funnel tracking', () => {
 
     await screen.findByTestId('upgrade-enter-error');
     expect(trackedEvents('upgrade_enter_tenant_failed')).toEqual([{}]);
+  });
+});
+
+/**
+ * Regression coverage for the empty-`clientName` bug: there is no name input on
+ * this page — `handleSubmit` computes a fallback from the demo environment and
+ * calls `setForm` (async), but `runUpgrade` closes over the render's own `form`
+ * variable, so a `clientName: ''` request can reach the backend (400 "clientName
+ * is required") even though a resolvable name was available. See the current
+ * `handleSubmit`/`runUpgrade` split in UpgradePage.jsx.
+ */
+describe('UpgradePage — clientName resolution on submit (upgrade clientName bug)', () => {
+  it('prefills the tenant-name input with the demo environment name and sends it unedited', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    await renderUpgradePage();
+
+    // The field is always rendered now (ETP-5443) — prefilled from the demo since the session
+    // names no current environment in this test.
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe(EXISTING_TENANT);
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe(EXISTING_TENANT);
+  });
+
+  it('never calls createBillingPurchase and surfaces a tenant-name error when no name can be resolved', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameRequired');
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('renders the editable tenant-name field when the account owns no demo environment', async () => {
+    installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-tenant-name-input-label')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-tenant-from-demo')).not.toBeInTheDocument();
+  });
+
+  it('sends the typed tenant name as clientName when there is no demo to fall back on', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Acme Second Co');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toEqual({
+      action: 'productive-tenant',
+      clientName: 'Acme Second Co',
+      upgradeAction: 'create-productive',
+      language: 'es_ES',
+    });
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe('Acme Second Co');
+  });
+});
+
+/**
+ * The tenant-name field is always visible and required, and prefilled from the environment the
+ * session is currently inside (its `clientId`, matched against the environments list — never the
+ * legacy `sf_auth_client_name` key, which the cookie session purges) ahead of the
+ * demo-environment fallback. Submitting a name that matches an
+ * owned PRODUCTIVE environment is a collision — the backend would resume that tenant instead of
+ * creating a new one — and is blocked client-side with a distinct "taken" error. A match against
+ * a demo environment's name is explicitly allowed: that is the demo-to-productive conversion
+ * path (ETP-5443).
+ */
+describe('UpgradePage — current-environment prefill and taken-name guard (ETP-5443)', () => {
+  it('prefills the tenant-name input from the current environment, ahead of the demo fallback', async () => {
+    UPGRADE_SESSION.clientId = CURRENT_CLIENT_ID;
+    installFetch({ environments: [
+      { clientName: 'Acme Demo', clientId: 'DEMO-CLIENT', plan: 'demo' },
+      { clientName: 'My Current Env', clientId: CURRENT_CLIENT_ID, plan: 'productive' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('My Current Env');
+  });
+
+  it('prefills from the demo when the current environment IS the demo, and submits it without error', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = CURRENT_CLIENT_ID;
+    const requests = installFetch({ environments: [
+      { clientName: EXISTING_TENANT, clientId: CURRENT_CLIENT_ID, plan: 'demo' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe(EXISTING_TENANT);
+    expect(screen.queryByTestId('upgrade-tenant-name-taken')).not.toBeInTheDocument();
+  });
+
+  it('blocks submission with a "taken" error, case-insensitively, when the name matches an owned productive environment', async () => {
+    const user = userEvent.setup();
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    // Deliberately different casing from the environment's stored clientName above, to prove
+    // the collision check normalizes case rather than doing an exact match.
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'ACME PRODUCTIVE');
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-taken')).toHaveTextContent('upgradeTenantNameTaken');
+    expect(screen.queryByTestId('upgrade-tenant-name-error')).not.toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('sends an edited, non-colliding name and clears a prior required-name error as soon as the field changes', async () => {
+    const user = userEvent.setup();
+    // No current environment and no demo, so the field starts empty and the first submit hits
+    // the required-name error before the user types anything.
+    const requests = installFetch({ environments: [{ clientName: 'Acme Productive', plan: 'productive' }] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toBeInTheDocument();
+
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'Acme New Co');
+    expect(screen.queryByTestId('upgrade-tenant-name-error')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('Acme New Co');
+  });
+
+  it('shows a required-name error and sends no request when the field is cleared to whitespace', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = CURRENT_CLIENT_ID;
+    const requests = installFetch({ environments: [
+      { clientName: 'Acme Productive', clientId: CURRENT_CLIENT_ID, plan: 'productive' },
+    ] });
+    await renderUpgradePage();
+
+    await user.clear(screen.getByTestId('upgrade-tenant-name-input'));
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), '   ');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameRequired');
+    expect(requests).toHaveLength(0);
+    expect(assignMock).not.toHaveBeenCalled();
   });
 });
 
