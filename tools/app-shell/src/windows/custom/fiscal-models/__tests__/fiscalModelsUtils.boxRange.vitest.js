@@ -53,6 +53,18 @@ describe('exceedsTypedIntegerDigits (ETP-5456)', () => {
     it('blocks the 15th digit once negative', () => {
       expect(exceedsTypedIntegerDigits(27, '-123456789012345')).toBe(true);
     });
+
+    // ETP-5456 (QA follow-up) — a positive value already sitting at the 15-digit ceiling must
+    // become retroactively invalid the instant a leading '-' is typed/pasted, because the sign
+    // itself consumes one of the 15 slots for an N box. There is no incremental state here: every
+    // keystroke re-evaluates the FULL current string (see FmBoxes303.jsx's onChange, which always
+    // hard-stops on `next`, the entire input value, not a delta) — this is what makes the flip
+    // retroactive rather than "the old positive value just sits there unchecked".
+    it('a value at the 15-digit positive ceiling becomes out of range the moment it is flipped negative', () => {
+      const atCeiling = '123456789012345';
+      expect(exceedsTypedIntegerDigits(27, atCeiling)).toBe(false);
+      expect(exceedsTypedIntegerDigits(27, `-${atCeiling}`)).toBe(true);
+    });
   });
 
   describe('tolerant of a mid-edit, not-yet-complete string', () => {
