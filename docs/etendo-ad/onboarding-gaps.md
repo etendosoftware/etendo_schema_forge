@@ -12,6 +12,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | A3 | Accounting | Schema not predefined (Allow Negatives/Centrally Maintained=N); only 5 of 8 dimensions enabled (Cost Center/User1/User2 missing) | Onboarding sampledata XML (`C_ACCTSCHEMA.xml`, `C_ACCTSCHEMA_ELEMENT.xml`) — dataset-only, no new service | ETP-4245 |
 | A3b | Accounting | `C_ACCTSCHEMA_DEFAULT` Defaults tab: 6 of 15 accounts NULL (doubtful debt, bad-debt expense/revenue, allowance for doubtful debt, deferred product expense/revenue) | Onboarding sampledata XML (`C_ACCTSCHEMA_DEFAULT.xml`) — dataset-only, no new service | ETP-4245 |
 | A4 | Accounting | `A_Amortization` table (`AD_Table_id 800060`) inactive on `c_acctschema_table` — amortization documents cannot post | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service | ETP-4452 |
+| A4b | Accounting | `M_Internal_Consumption` table (`AD_Table_id 800168`) inactive on `c_acctschema_table` — Internal Consumption documents cannot post nor appear in unposted documents | Onboarding sampledata XML (`C_ACCTSCHEMA_TABLE.xml`) — dataset-only, no new service; corrective `R40` | ETP-5445 |
 | A2b | Accounting | Posting a Goods Receipt fails with generic "Account could not be found." — `C_BP_Group_Acct.NotInvoicedReceipts_Acct` stuck NULL on one stale pre-existing row (GOClient "Cliente" group) | Corrective-only data-fix (`R17`) — CONFIRMED no preventive gap: current onboarding code already wires this column correctly for every group created today | ETP-4706 |
 | A2b (generalized) | Accounting | Same stale-row class of drift, generalized to the other 11 `*_acct` columns on `C_BP_Group_Acct`; 4 of them (`DoubtfulDebt_Acct`/`BadDebtExpense_Acct`/`BadDebtRevenue_Acct`/`AllowanceForDoubtful_Acct`) turned out to be an ONGOING preventive gap too — neither the core `c_bp_group_trg()` trigger nor `BP_GROUP_ACCT_SQL` ever populated them | Both fronts closed (`R21` corrective + `OnboardingAccountingWiringService#patchBpGroupAcctMissingColumns` preventive) | ETP-4720 |
 | A2c | Accounting | `FIN_Financial_Account_Acct` / `M_Warehouse_Acct` missing entirely for already-onboarded tenants — both source tables are bulk-imported with triggers disabled, so their native `_trg` triggers never provisioned the posting-account rows | Preventive already shipped (ETP-4565, `OnboardingAccountingWiringService`); corrective data-fix (`R22`) backfills legacy tenants; CUT bumped to close the loop | ETP-4743 |
@@ -778,6 +779,32 @@ remain. **All 9 client/schema rows are now `isactive='Y'`, confirmed live — no
 |---|---|
 | **Corrective — every tenant** | `cli/src/data-fixes/sql/20260708T100000Z__R13-amortization-table-active.sql` — single guarded `UPDATE`, scoped only by `:client_id AND ad_table_id='800060' AND isactive <> 'Y'` (no chart-family marker, no allowlist). Live-validated: acreedortest/acreetest2/empresa/QA Testing (both schemas)/TaxesOrg all `APPLIED`, GOClient/F&B International Group `SKIPPED_NOT_NEEDED` (already correct); full re-run confirms idempotency (`SKIPPED_NOT_NEEDED` across all 7 tenants). |
 | **Preventive** | `referencedata/sampledata/GOClient/C_ACCTSCHEMA_TABLE.xml` — row `DAE3C688574C4919B889DA7EFAD6CC5C`'s `ISACTIVE` flipped from `N` to `Y`. `ONBOARDING_PROVISIONED_THROUGH` bumped to `2026-07-08T10:00:00Z` in `OnboardingBaselineService.java`. QA Testing and TaxesOrg have no dedicated sampledata directory (only `GOClient/` exists) — nothing further to fix preventively for either. |
+
+---
+
+### A4b — `M_Internal_Consumption` table inactive on `C_AcctSchema_Table` (ETP-5445, 2026-09-23)
+
+**Symptom:** Internal Consumption documents (`M_Internal_Consumption`, `AD_Table_id 800168`) cannot be
+posted and do not appear in "Documentos no contabilizados" — the posting engine skips a table whose
+`c_acctschema_table.isactive` is `'N'`.
+
+**Root cause:** same dataset drift as A4. The curated `GOClient/C_ACCTSCHEMA_TABLE.xml` ships the 800168
+row with `ISACTIVE='N'`, so every tenant born from the dataset inherits it. TC-39's table checklist never
+included `M_Internal_Consumption`.
+
+**Live sweep (2026-09-23, local dev DB):** 7 non-System clients, 9 accounting schemas — every schema has
+the 800168 row and every one is `'N'` (GOClient, F&B International Group x2, QA Testing x2, four
+"E2E User ..." tenants). No schema is missing the row. Other tables still `'N'` on GOClient (e.g.
+`M_CostAdjustment`, `M_LandedCost`, `C_Order`, the `M_Match*` family) are out of scope here.
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260923T120000Z__R40-internal-consumption-table-active.sql` — single guarded `UPDATE`, scoped by `:client_id AND ad_table_id='800168' AND isactive IS DISTINCT FROM 'Y'`; `@report` flags any schema still inactive or missing the row (INSERT case, out of scope). |
+| **Preventive** | Dataset-only: `GOClient/C_ACCTSCHEMA_TABLE.xml` 800168 row flipped to `ISACTIVE='Y'` (shipped separately under ETP-5445). `ONBOARDING_PROVISIONED_THROUGH` need not be bumped (newborn tenant is `SKIPPED_NOT_NEEDED`); if bumped, it must equal `2026-09-23T12:00:00Z`. |
+
+**Posting prerequisites (unchanged by this gap):** `DocInternalConsumption` posts COGS vs. Asset per line
+from `M_Product_Acct` and needs the transaction cost calculated. Every tenant's `C_AcctSchema_Default`
+has both accounts; only 4 F&B International Group products have a NULL `P_Cogs_Acct`.
 
 ---
 

@@ -191,6 +191,13 @@ const BACKEND_ERROR_MAP = {
   // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
   // same actionable retry-later copy as the other transient costing message, not costing internals.
   'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
+  // Core `NotCalculatedCost` AD_MESSAGE, returned verbatim by DocumentPostingService's cost
+  // pre-check (OBMessageUtils.messageBD, already resolved to the session language) when posting a
+  // Physical Inventory or Internal Consumption whose line transactions are not costed yet
+  // (ETP-5445). Both the en_US MSGTEXT and the es_ES AD_MESSAGE_TRL text are mapped, exact match.
+  ...sameKeyEntries('backendError.costNotCalculated',
+    'Cost has not yet been calculated for all products in the document.',
+    'El coste aún no ha sido calculado para todos los productos en el documento.'),
   // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
