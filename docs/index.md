@@ -12,6 +12,7 @@
 | [document-email-contract-implementation.md](document-email-contract-implementation.md) | Agent/developer tutorial for defining document-send email contracts and wiring frontend/backend behavior |
 | [NEO Headless API Reference](../modules/com.etendoerp.go/docs/neo-headless.md) | Full API reference for the runtime module (NeoServlet, selectors, processes, webhooks) |
 | [NEO Headless Extensibility Guide](neo-headless-extensibility.md) | How to extend/customize NEO Headless: NeoHandler hooks, configuration, patterns |
+| [Usage Measurement (ETP-5050)](usage-measurement.md) | Per-tenant daily usage measurement in shadow mode: the resource catalog, declarative vs strategy counting, the settling window and sealing pass, and the open **stock resource** problem |
 | [NEO Entity Naming Investigation](neo-entity-naming-investigation.md) | Investigation report on `push-to-neo` naming, duplicate entities/fields, runtime endpoint resolution, and unification rule |
 | [NEO Constraints](neo-pending-constraints.md) | UNIQUE constraints applied to ETGO_SF_* tables (2026-04-13) — regression guard against duplicate inserts |
 | [NEO Duplicates Report 2026-04-13](neo-duplicates-report-2026-04-13.md) | Snapshot of spec/entity/field duplicates found on 2026-04-13 (pre-dedupe), plus the 54 AD-label naming cases |
@@ -24,7 +25,7 @@
 |------|-------------|
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
 | [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
-| [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix |
+| [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) |
 
 ## Tooling
 
@@ -162,6 +163,8 @@ Plans follow a lifecycle: active in `plans/`, completed in `plans/completed/YYYY
 | File | Description |
 |------|-------------|
 | [plans/2026-08-27-recurring-billing-and-resource-limits-prd.md](plans/2026-08-27-recurring-billing-and-resource-limits-prd.md) | Recurring monthly billing, configurable resource limits and plan change (ETP-5045/5046/5047/5048/5049/5050/5051/5053) — supersedes the one-off checkout PRD for forward scope. **Draft for team validation** |
+| [plans/2026-09-22-etp-5443-subscription-lifecycle-design.md](plans/2026-09-22-etp-5443-subscription-lifecycle-design.md) | ETP-5443 — Wires Stripe subscription/invoice webhooks into the `EnvironmentAccessPolicy` access decision and gives the account owner a Subscription section on `/account` reaching the Stripe Customer Portal; implements part of the recurring-billing PRD above. **Approved for implementation** |
+| [plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md](plans/2026-09-22-etp-5443-subscription-lifecycle-plan.md) | ETP-5443 — Task-by-task implementation plan for the design above (pure lifecycle interpretation, webhook correlation, the two account endpoints, API clients, the Subscription section, E2E) |
 | [plans/2026-08-03-etp-4315-attachment-preview-sync.md](plans/2026-08-03-etp-4315-attachment-preview-sync.md) | ETP-4315 — Purchase invoice/goods receipt attachment vs. preview sync: root cause, window inventory, reverse-plan rejection, forward-plan cost, open questions — **investigation in progress** |
 | [plans/completed/2026-03-12/process-and-report-pipeline.md](plans/completed/2026-03-12/process-and-report-pipeline.md) | Process & Report Pipeline — **All 4 phases complete** (processes, reports, form detection, unified entry point) |
 | [plans/neo-report-endpoint.md](plans/neo-report-endpoint.md) | NEO Headless Report Endpoint — **Implemented** (NeoReportService, binary responses, OpenAPI docs) |

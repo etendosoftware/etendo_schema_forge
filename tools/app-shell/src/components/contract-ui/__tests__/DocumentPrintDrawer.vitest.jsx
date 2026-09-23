@@ -297,11 +297,14 @@ describe('printDocuments (ETP-4728)', () => {
     });
   };
 
-  it('does nothing when token or documentIds are missing', async () => {
+  it('does nothing when token or documentIds are missing — inverted: the cookie carries the session', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await printDocuments('order', [], 'tok');
     await printDocuments('order', ['d1'], '');
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchSpy).toHaveBeenCalled();
   });
 
   it('toasts a service-unavailable message when jsreport is unreachable, using the injected translator', async () => {

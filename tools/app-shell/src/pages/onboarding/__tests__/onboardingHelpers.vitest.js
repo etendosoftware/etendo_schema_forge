@@ -40,8 +40,11 @@ describe('onboarding readiness helpers', () => {
     expect(result.ready).toBe(true);
     expect(result.failures).toEqual([]);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // ETP-4576 — the probes authenticate with the server-side `__Host-` session cookie
+    // (NeoAuthenticator accepts it on /sws/neo/*), so they opt into credentials and carry no
+    // Authorization header: the new session contract hands no bearer out at all.
     expect(fetchImpl).toHaveBeenCalledWith(expect.stringContaining('/etendo/sws/neo/session'), {
-      headers: { Authorization: 'Bearer env-token', 'Accept-Language': 'es_ES' },
+      credentials: 'include',
     });
   });
 
