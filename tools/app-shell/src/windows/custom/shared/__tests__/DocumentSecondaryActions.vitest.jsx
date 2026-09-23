@@ -195,3 +195,18 @@ describe('DocumentSecondaryActions', () => {
     expect(screen.queryByTestId('stub-clone-modal')).not.toBeInTheDocument();
   });
 });
+
+describe('DocumentSecondaryActions — respects isDocumentReadOnly (ETP-5205)', () => {
+  it('hides Clone and Send when isDocumentReadOnly is true, but Copy link stays visible', () => {
+    renderActions({ clone: true, showSend: true, isDocumentReadOnly: true });
+    expect(screen.queryByTestId('stub-clone')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('stub-send')).not.toBeInTheDocument();
+    expect(screen.getByTestId('stub-copy-link')).toBeInTheDocument();
+  });
+
+  it('regression: shows Clone and Send when isDocumentReadOnly is false/absent (existing behavior)', () => {
+    renderActions({ clone: true, showSend: true });
+    expect(screen.getByTestId('stub-clone')).toBeInTheDocument();
+    expect(screen.getByTestId('stub-send')).toBeInTheDocument();
+  });
+});

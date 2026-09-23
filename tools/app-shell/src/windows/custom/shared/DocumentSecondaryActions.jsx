@@ -80,6 +80,7 @@ export default function DocumentSecondaryActions({
   clone = false,
   showSend = false,
   onSendClick,
+  isDocumentReadOnly,
   children = null,
 }) {
   const navigate = useNavigate();
@@ -88,7 +89,7 @@ export default function DocumentSecondaryActions({
 
   if (!recordId) return null;
 
-  const cloneConfig = clone === true ? {} : (clone || null);
+  const cloneConfig = !isDocumentReadOnly && (clone === true ? {} : (clone || null));
   const headers = headersProp ?? (token ? buildHeaders(token) : undefined);
 
   return (
@@ -102,7 +103,7 @@ export default function DocumentSecondaryActions({
           title={ui(cloneConfig.titleKey || 'cloneOrderBtn')}
           data-testid="DocumentSecondaryActions__clone" />
       )}
-      {showSend && (
+      {showSend && !isDocumentReadOnly && (
         <SendDocumentButton onClick={onSendClick} data-testid="DocumentSecondaryActions__send" />
       )}
       {children}
