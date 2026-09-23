@@ -1664,6 +1664,75 @@ a boundary-legal value round-trips exactly), and two updated cases in `FmBoxes30
 ("percent cell input attributes" describe block) covering the new amount-cell decimal hard-stop
 and its digit-by-digit vs. one-shot-paste distinction.
 
+### Sticky sections while scrolling (ETP-5456, layout follow-up)
+
+The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes
+`.fm-page` itself (`overflow-y: auto`) the one real scrolling ancestor for the whole detail
+view, instead of each tab/panel scrolling independently. On both models, the tabs bar
+(`.fm-tabs-sticky`, `position: sticky; top: 0`, from the shared `Tabs` component in
+`FmCommon.jsx`) already stuck to the top of that scroll; the identification/liquidación
+navigation and the summary panels next to the tables did not, and would scroll away with the
+rest of the page — which for 303's 4-section box nav in particular meant losing your place
+while scrolling a long "Casillas" tab.
+
+**303 — `CasillasTab`'s left section-nav sidebar** (`FmModel303Page.jsx`) now has
+`position: sticky; top: 49` (49 = `.fm-tabs__tab`'s 48px height + 1px border, i.e. it docks
+directly under the tabs bar). Getting there also required removing redundant nested
+`overflow: auto` wrappers that used to sit between the sidebar and `.fm-page` — any of those
+would have created their own scroll container and made `.fm-page`'s ancestor-chain `sticky`
+resolve against the wrong box (a scrollport other than the one the user is actually scrolling).
+
+**349 — the Operadores tab's totals panel and filter/search row** (`FmModel349Page.jsx` +
+`.fm-349-totals` / the filter-row's inline style in `fiscal-models.css`). Two elements stack
+below the tabs bar here:
+1. The filter/search row (key dropdown + NIF-IVA search box) — `position: sticky; top: 49`,
+   `zIndex: 15`, an explicit `background` (needed so table rows scrolling underneath don't show
+   through once it's pinned). Its old `marginTop`/`marginBottom` were converted to
+   `paddingTop`/`paddingBottom` — for a sticky element `top` is measured from the *margin* edge,
+   so keeping a margin there would have shifted the actual stick point away from 49px.
+2. `TotalsCard` (`.fm-349-totals`) — `position: sticky; top: 97px` (97 = 49 for the tabs bar +
+   48 for the filter row's own rendered height: 8 paddingTop + 36 content + 4 paddingBottom), so
+   it docks below *both* sticky bars instead of overlapping either.
+
+**Why `alignItems: 'flex-start'` matters just as much as `position: sticky` itself.** Both
+sticky sidebars/panels are flex items in a `display: flex` row alongside the tall scrollable
+content next to them (303: nav + casillas content; 349: totals panel + operators table).
+Without `alignItems: 'flex-start'` on that row, the default `stretch` forces the sticky item to
+be exactly as tall as its sibling — a box that already spans virtually the whole scrollable
+range has no room left to visibly reposition itself, so `position: sticky` silently does
+nothing even though it's correctly declared. This bit 349 specifically because of one extra
+wrinkle (below); it is the same root cause behind "I added `position: sticky` and it isn't
+doing anything," so both rows in this window now set `alignItems: 'flex-start'` explicitly.
+
+**Why the old `padding-bottom: 100vh; margin-bottom: -100vh` hack had to go, not just be left
+alone.** `.fm-349-totals` used to carry that pair as a "full-height divider" trick — relying on
+a block box's `padding-bottom` and a following/own negative `margin-bottom` collapsing against
+each other so the visible divider border reaches the bottom of the viewport without the box's
+*layout* height actually growing. That collapse is a **block-formatting-context** behavior.
+`.fm-349-totals` is a **flex item** (child of the totals+table `display: flex` row), and the
+CSS Flexbox spec explicitly excludes flex items from margin collapsing — so inside this row the
+negative margin did **not** cancel the padding's contribution to the box's own rendered height.
+The box was actually rendering ~100vh+ tall (border-box, not just visually), which caused two
+distinct symptoms in manual QA before the fix: (1) a giant phantom vertical scroll even on an
+empty operators table, and (2) the sticky panel not visibly sticking at all — an item that
+already spans nearly the whole scrollable range has nothing left to reposition, same mechanism
+as the `alignItems` issue above, just caused by a stale hack instead of plain `stretch`. Fixed
+by removing the hack outright and relying on `alignItems: 'flex-start'` + a plain `border-right`
+(no artificial height) instead — the divider now only spans the panel's own natural content
+height. That's a deliberate visual trade-off versus the old "always reaches the bottom of the
+viewport" illusion; if a true full-row-height divider is wanted again later it needs a different
+mechanism entirely (e.g. an absolutely-positioned divider anchored to the row, which naturally
+stretches to match the table) — not a repeat of the padding/margin hack, which cannot coexist
+with `position: sticky` on a flex item.
+
+**If a future change reintroduces this bug class** (a sticky region that "isn't sticking"),
+check, in order: (1) every ancestor between it and `.fm-page` for `overflow` other than
+`.fm-page` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
+block or scrollport and breaks `position: sticky`; (2) whether its flex-row parent has
+`alignItems: 'flex-start'` — `stretch` (the default) silently defeats sticky the same way; (3)
+whether any sibling sticky element's `top` value still accounts for the combined height of
+everything stacked above it.
+
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
 The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`
