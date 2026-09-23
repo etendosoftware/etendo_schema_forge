@@ -2895,7 +2895,7 @@ export function DetailView({
         onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
         onSave={() => hook.handleSave({ silent: true })}
         isDirty={isDirty}
-        saveGate={saveGate}
+        saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly}
         data-testid={testId} />
     );
   })();
