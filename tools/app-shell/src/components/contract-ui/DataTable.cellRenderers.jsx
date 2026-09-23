@@ -317,19 +317,26 @@ export function renderMultiFieldCell({ row, col, token, apiBaseUrl }) {
 }
 
 export function renderDefaultCell({ row, col, display, visibleColumns }) {
+  // ETP-5281 capped every text cell at 200px so a long value truncates instead of
+  // overflowing into the next column — correct for a fixed-basis column, but it also
+  // clobbered a `col.grow` column's whole reason for existing: `columnFlex()` already
+  // hands that ONE column the leftover row width (verified live on `tax`'s `name`
+  // column — cell width 1018px, this span capped at a hardcoded 200px regardless).
+  // A grow column caps at `max-w-full` instead — 100% of the width it was already
+  // given — so it still truncates once text exceeds ITS OWN (much larger) box rather
+  // than an unrelated fixed constant.
+  const capClass = col.grow ? 'max-w-full' : 'max-w-[200px]';
   if (isFirstVisibleStringColumn(col, visibleColumns)) {
     const pill = col.pill;
     const pillLabel = getPillLabel(pill, row);
     return (
-      // ETP-5281 — capped at the same 200px the non-first-column branch below uses,
-      // so a long value here truncates instead of overflowing into the next
-      // column. `min-w-0` on the inner text span is required: a flex/inline-flex
+      // `min-w-0` on the inner text span is required: a flex/inline-flex
       // child's default `min-width: auto` sizes it to its own content (here, the
       // full un-wrapped text width from `truncate`'s `whitespace-nowrap`), which
       // blocks `flex-shrink` from ever letting it shrink enough to actually
       // truncate — `min-w-0` overrides that floor. The pill badge is `shrink-0`
       // so it always stays fully visible next to the truncated text.
-      <span className="inline-flex items-center gap-2 max-w-[200px]">
+      <span className={`inline-flex items-center gap-2 ${capClass}`}>
         {/* ETP-5268 follow-up — "necesito agregarlas para saber que dice cada
             parte del registro": `TruncatedText` (already used elsewhere, e.g.
             ReconciliationSplitPanel) swaps the plain native `title` tooltip
@@ -351,7 +358,7 @@ export function renderDefaultCell({ row, col, display, visibleColumns }) {
   }
   const val = display;
   if (typeof val === 'string' && val.length > 30) {
-    return <TruncatedText text={val} className="max-w-[200px]" data-testid="TruncatedText__a91437" />;
+    return <TruncatedText text={val} className={capClass} data-testid="TruncatedText__a91437" />;
   }
   return val;
 }

@@ -1009,7 +1009,10 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                 // row's manualOverrides, re-derive box 71) instead of trusting the raw summary, so
                 // the list and the detail page can never disagree on the same declaration's result.
                 const manualOverrides = decl.manualData?.manualOverrides ?? {};
-                const mergedBoxes = recomputeDerivedBoxes(applyOverrides(computed.boxes, manualOverrides));
+                const mergedBoxes = recomputeDerivedBoxes(
+                  applyOverrides(computed.boxes, manualOverrides),
+                  decl.manualData?.identification,
+                );
                 // ETP-5393 Bug B — `??` doesn't catch NaN; require a finite number before
                 // trusting the re-derived box 71 (same guard as FmModel303Page's applyComputeResult).
                 const box71Derived = getBoxValue(mergedBoxes, 71);

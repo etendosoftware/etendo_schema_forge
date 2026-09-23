@@ -64,6 +64,22 @@ async function installFirstStepsMock(page, initial = null) {
   return { writes, state };
 }
 
+/**
+ * Keep this checklist suite on the pre-transfer contract. `login()` installs a broad
+ * successful `/sws/**` fallback; without this explicit 404, the newly added
+ * `/sws/go/demo-data-transfer` endpoint appears enabled and inserts the productive-only
+ * transfer row. The real backend uses 404 to mean the `demo-data-transfer` flag is off.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function installDemoDataTransferDisabledMock(page) {
+  await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+    status: 404,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'error' }),
+  }));
+}
+
 const progress = (page) => page.getByTestId('first-steps-progress');
 
 /**
@@ -105,6 +121,7 @@ async function waitForCopyTranslated(page) {
  */
 async function setupFirstSteps(page, initial = null) {
   await login(page);
+  await installDemoDataTransferDisabledMock(page);
   const mock = await installFirstStepsMock(page, initial);
   return mock;
 }
@@ -197,8 +214,41 @@ test.describe('First Steps page — completion run', () => {
 
   test('sends the fiscal step to the Fiscal Configuration window', async ({ page }) => {
     await page.getByTestId('first-steps-title-fiscal-config').click();
+    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
+    // window. "Yes" is what puts the Configure button on screen.
+    await page.getByTestId('first-steps-gate-yes-fiscal-config').click();
     await page.getByTestId('first-steps-configure-fiscal-config').click();
     await expect(page).toHaveURL(/\/fiscal-config/);
+  });
+
+  test('completes the fiscal step outright when the tenant reports to no SIF', async ({ page }) => {
+    // ETP-5364 — "No" is not a dismissal: a tenant that reports to no invoicing system has
+    // nothing to configure, so the answer IS the completed state and it persists like any
+    // other tick.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
+
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+    await expect(progress(page)).toContainText('2/7');
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toHaveCount(0);
+    expect(mock.writes.at(-1).completed).toContain('fiscal-config');
+  });
+
+  test('asks the fiscal question again after the step is unticked', async ({ page }) => {
+    // The answer is deliberately not persisted — only the step's completed flag is. Unticking
+    // is therefore the escape hatch for someone who answered wrongly.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+
+    const row = page.getByTestId('first-steps-step-fiscal-config');
+    await row.locator('label:has([data-testid="first-steps-toggle-fiscal-config"])').click();
+
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
   });
 
   test('locks a completed step controls, and unlocks them when it is unticked', async ({ page }) => {
@@ -337,6 +387,7 @@ test.describe('First Steps page — completion run', () => {
 test.describe('First Steps page — degraded backend', () => {
   test('still renders the list when the state cannot be read', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     await page.route('**/sws/go/onboarding/first-steps**', (route) => route.fulfill({
       status: 500, contentType: 'application/json', body: JSON.stringify({ status: 'error' }),
     }));
@@ -395,6 +446,7 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 
   test('does not bounce when the state cannot be read — `seen` is unknown, not false', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     const counter = { posts: 0 };
     await page.route('**/sws/go/onboarding/first-steps**', (route) => {
       if (route.request().method() === 'POST') counter.posts += 1;
