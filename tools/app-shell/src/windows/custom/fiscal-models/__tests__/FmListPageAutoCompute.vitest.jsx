@@ -394,4 +394,28 @@ describe('FmListPage — submitted declarations with a persisted submission snap
     expect(call).toBeTruthy();
     expect(typeof call[1].checkModifiedFn).toBe('function');
   });
+
+  // ETP-5438 — right after an AEAT telematic filing, FiscalModelsPage pushes the refetched
+  // snapshot down as a declStatusPatch: the row must switch to the snapshot-based Resultado
+  // (and leave every compute hook) without a reload.
+  it('a declStatusPatch carrying a snapshot switches the row to the snapshot-based Resultado', async () => {
+    const decl = makeRow({ id: 'tele-303', status: 'draft' });
+    const { container, rerender } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+    const cell = () => container.querySelector('tbody tr').querySelectorAll('td')[5];
+    expect(cell().textContent).toContain('7.777');
+
+    rerender(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL}
+        declStatusPatch={{ id: 'tele-303', patch: {
+          status: 'submitted_ack', submissionMethod: 'aeat_telematic',
+          submittedSnapshot: { boxes: { 27: 250 }, summary: { result: 250 }, sources: [] },
+        } }} />
+    );
+
+    await waitFor(() => expect(cell().textContent).toContain('250'));
+    expect(cell().textContent).not.toContain('7.777');
+  });
 });

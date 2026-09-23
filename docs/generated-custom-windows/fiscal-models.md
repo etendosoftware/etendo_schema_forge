@@ -128,7 +128,9 @@ that already carries it is just as frozen as one presented through either curren
     declaration freezes without a refetch.
   - AEAT telematic filing (303) — `Fiscal303SubmissionSupport#handleSubmit` computes it after
     generating the `.303` file and **before** calling the AEAT; `persistSuccessfulSubmission`
-    stores it with the `submitted_ack` status in the single commit. Test mode takes none.
+    stores it with the `submitted_ack` status in the single commit. Test mode takes none. The
+    frontend sends no status PUT afterwards (it would be a `409`): `FiscalModelsPage` re-reads the
+    declaration to pick the snapshot up — see "AEAT electronic submission" below.
 - **Fails closed.** If the snapshot cannot be computed, the submission fails and nothing is written:
   the PUT answers `500` with a message ("its figures could not be computed"); the telematic path
   answers `500` `SNAPSHOT_FAILED` without contacting the AEAT. The detail pages roll their
@@ -1522,7 +1524,7 @@ resurfaced the stale path-selection screen instead of returning to the main page
 
 2. **Submit** — `POST /fiscal303/submit?year=&period=&tipo=&id=` via `useApiFetch`. No separate "check certificate" pre-flight call is made — the endpoint is called directly and `errorCode: NO_CERTIFICATE` in the response is what triggers the "no certificate" message (simpler than a `GET /neo/certificate` probe beforehand, and the backend already has the definitive answer). Full request/response contract, all `errorCode` values, and the backend-side idempotency guard: `../../../modules/com.etendoerp.go/docs/aeat-303-submit-endpoint.md`.
 3. **Result screen**, branching on `response.status`:
-   - `SUCCESS` — CSV, presentation date, registry/justificante numbers; a PDF download button decodes `pdfBase64` client-side (`triggerBase64Download`, new export in `fiscalModelsUtils.js`) and triggers a browser download. If `pdfDownloadFailed` is true, a distinct message is shown instead ("submitted OK, PDF fetch failed") — never implying the submission itself failed. Also calls `onSuccess('submitted_ack')`, which flows through the same `handleStatusChange` the 2 manual paths use (one extra, harmless PUT to `/fiscal303/declarations` re-asserting the status the backend already set server-side, kept for consistency with the existing list-sync mechanism).
+   - `SUCCESS` — CSV, presentation date, registry/justificante numbers; a PDF download button decodes `pdfBase64` client-side (`triggerBase64Download`, new export in `fiscalModelsUtils.js`) and triggers a browser download. If `pdfDownloadFailed` is true, a distinct message is shown instead ("submitted OK, PDF fetch failed") — never implying the submission itself failed. Also calls `onSuccess('submitted_ack')`, handled by `FmModel303Page#handleTelematicSuccess` — **not** by `handleStatusChange` (ETP-5438): the backend already persisted `submitted_ack`, `submissionMethod: 'aeat_telematic'` and the submission snapshot, and the old extra PUT re-asserting the status became a submitted → submitted transition that `rejectRepresentation` answers with `409`, so the list never learned about the filing. The page updates its own `status`/`submissionMethod` and calls `onSubmittedRemotely(id, 'submitted_ack')`; `FiscalModelsPage#handleSubmittedRemotely` patches the detail view and the list (`declStatusPatch`) immediately, then re-reads the declaration (`fetchDeclaration` → `GET /fiscal303/declarations`, filtered by id) and patches both again with `status`, `submissionMethod` and `submittedSnapshot`, so the list's "Resultado" freezes on the snapshot without a manual reload. No PUT is sent on this path.
    - `TEST_SUCCESS` — prominent "Envío de prueba — declaración NO presentada" banner; still offers the draft PDF if present. Declaration status is **not** changed.
    - `ERROR` — renders `errors[]` as a list, except for three `errorCode` values that get a specific, actionable message instead (`resolveErrorCodeKey` in `AeatSubmitFlow.jsx`):
      - `MISSING_PRESENTER` (`fm.aeat.error.missingPresenter`) — production submission missing presenter NIF/name.
@@ -1615,7 +1617,7 @@ end-to-end: the dated section in
 `../plans/2026-07-15-ETP-4456-aeat-303-electronic-submission.md`.
 
 **Why `key={status}` on the tab's `AttachmentsTab`:** `status` is local state that changes on
-`handleStatusChange` (i.e. exactly when a submission succeeds). Since the automatic AEAT attach is
+`handleStatusChange`/`handleTelematicSuccess` (i.e. exactly when a submission succeeds). Since the automatic AEAT attach is
 invisible server-side, remounting the tab (and its internal `useAttachments` fetch) on every status
 change is the only way for the tab to notice the new file without inventing a separate manual-refresh
 mechanism. **Known accepted edge case (Alex REVIEW, W3):** if `status` changes concurrently from
@@ -1642,7 +1644,7 @@ expected, pure amplification of the same root cause above, not a separate bug.
 
 **Refresh decoupled from `status` for test-mode successes.** The tab's `AttachmentsTab` remounts
 (forcing a fresh fetch) on `key={`${status}-${receiptRefreshTick}`}` instead of `key={status}`
-alone. `status` still covers production successes (`handleStatusChange`). `receiptRefreshTick` is a
+alone. `status` still covers production successes (`handleTelematicSuccess`). `receiptRefreshTick` is a
 counter bumped by `handleAeatAttached` (`FmModel303Page.jsx`), which `AeatSubmitFlow` calls via a new
 `onAttached` prop whenever the backend response carries `pdfBase64` — for both `SUCCESS` and
 `TEST_SUCCESS`. This lets a test-mode submission (which now also gets a PDF attached server-side)

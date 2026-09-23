@@ -374,6 +374,27 @@ async function readSubmittedSnapshot(res) {
 }
 
 /**
+ * Re-reads one declaration (ETP-5438) — `GET /fiscal303/declarations` (generic across models,
+ * there is no single-record GET) filtered by id. Used after a server-side status change the
+ * client did not PUT itself (the AEAT telematic filing sets `submitted_ack`, `submissionMethod`
+ * and `submittedSnapshot` server-side), so the detail view and the list can pick those up.
+ * Resolves the declaration object, or `null` when it is missing or the request fails.
+ */
+export async function fetchDeclaration(id, { token, apiBaseUrl } = {}) {
+  if (!apiBaseUrl) return null;
+  try {
+    const base = apiBaseUrl.replace(/\/[^/]+$/, '');
+    const res = await apiFetch(`${base}/fiscal303/declarations`, { baseUrl: '', token });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const list = Array.isArray(data?.data) ? data.data : [];
+    return list.find(d => d.id === id) ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
  * Calls DELETE /fiscal303/declarations?id=... to remove a draft declaration (ETP-5187, row hover
  * "delete" action in `FmListPage.jsx`). Despite the URL, this endpoint is generic across fiscal
  * models — both 303 and 349 declarations live in the same backend table. The backend

@@ -30,10 +30,16 @@ vi.mock('../FmListPage.jsx', () => ({
 }));
 
 vi.mock('../models/303/FmModel303Page.jsx', () => ({
-  default: ({ onStatusChange }) => (
-    <button data-testid="present-303" onClick={() => onStatusChange('303-2026-T2', 'submitted')}>
-      present 303
-    </button>
+  default: ({ decl, onStatusChange, onSubmittedRemotely }) => (
+    <>
+      <button data-testid="present-303" onClick={() => onStatusChange('303-2026-T2', 'submitted')}>
+        present 303
+      </button>
+      <button data-testid="telematic-303" onClick={() => onSubmittedRemotely('303-2026-T2', 'submitted_ack')}>
+        telematic 303
+      </button>
+      <div data-testid="view-decl">{JSON.stringify(decl)}</div>
+    </>
   ),
 }));
 
@@ -142,5 +148,57 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
 
     // A failed persist must never make the list LOOK like it succeeded.
     expect(screen.getByTestId('decl-status-patch').textContent).toBe('');
+  });
+});
+
+// ETP-5438 — after a successful AEAT telematic filing the backend already holds submitted_ack and
+// the submission snapshot. Sending the status PUT would be a submitted -> submitted transition
+// (409 from rejectRepresentation), so the page patches locally and re-reads the declaration.
+describe('FiscalModelsPage — AEAT telematic success refresh (ETP-5438)', () => {
+  beforeEach(() => { vi.spyOn(global, 'fetch'); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const snapshot = { boxes: { 46: '55.00' }, summary: { result: '55.00' }, sources: [] };
+
+  it('sends ZERO PUTs, patches the status at once and applies the refetched snapshot', async () => {
+    fetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [
+        { id: 'other', status: 'draft' },
+        { id: '303-2026-T2', status: 'submitted_ack', submissionMethod: 'aeat_telematic', submittedSnapshot: snapshot },
+      ] }),
+    });
+
+    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('telematic-303'));
+
+    await waitFor(() => {
+      const patch = JSON.parse(screen.getByTestId('decl-status-patch').textContent);
+      expect(patch).toEqual({ id: '303-2026-T2', patch: {
+        status: 'submitted_ack', submissionMethod: 'aeat_telematic', submittedSnapshot: snapshot,
+      } });
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('http://host/neo/fiscal303/declarations');
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(fetch.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(false);
+    const viewDecl = JSON.parse(screen.getByTestId('view-decl').textContent);
+    expect(viewDecl.status).toBe('submitted_ack');
+    expect(viewDecl.submittedSnapshot).toEqual(snapshot);
+  });
+
+  it('still patches the status locally when the refetch fails', async () => {
+    fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+
+    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('telematic-303'));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const patch = JSON.parse(screen.getByTestId('decl-status-patch').textContent);
+    expect(patch).toEqual({ id: '303-2026-T2', patch: { status: 'submitted_ack', submissionMethod: 'aeat_telematic' } });
+    expect(fetch.mock.calls.some(([, i]) => i?.method === 'PUT')).toBe(false);
   });
 });

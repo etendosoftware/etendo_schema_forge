@@ -203,7 +203,7 @@ function buildIncidentVariants(blocking, warning, t) {
 
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange, onManualDataSaved, token, apiBaseUrl }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmittedRemotely, onManualDataSaved, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
@@ -228,8 +228,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
   // this feature shipped) and updated locally by handlePresent's two manual paths; the
-  // AEAT telematic path sets it server-side only (see handleSubmit's onSuccess below) and
-  // does not update this local state until the declaration is next refetched.
+  // AEAT telematic path sets it server-side; `handleTelematicSuccess` below mirrors it locally.
   const [submissionMethod, setSubmissionMethod] = useState(decl.submissionMethod);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
@@ -610,6 +609,17 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   }
 
   useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch); }, [token, apiBaseUrl, apiFetch]);
+
+  // ETP-5438 — AEAT telematic success. The backend already persisted `submitted_ack`,
+  // `submissionMethod: 'aeat_telematic'` and the submission snapshot, so this must NOT go through
+  // `handleStatusChange`/`onStatusChange` (that PUTs the status, and a submitted -> submitted PUT
+  // is rejected with 409 by `rejectRepresentation`). Update local state and hand the refresh to
+  // the parent (`onSubmittedRemotely`), which patches the list and re-reads the declaration.
+  function handleTelematicSuccess(newStatus) {
+    setStatus(newStatus);
+    setSubmissionMethod('aeat_telematic');
+    onSubmittedRemotely?.(decl.id, newStatus);
+  }
 
   // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
   // caller can react to a rejected transition — see `handlePresent`.
@@ -1256,7 +1266,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           summary={summary}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onSuccess={(newStatus) => handleStatusChange(newStatus)}
+          onSuccess={handleTelematicSuccess}
           onAttached={handleAeatAttached}
           onIncidentsChanged={refreshIncidents}
           onClose={() => setShowAeatFlow(false)}
