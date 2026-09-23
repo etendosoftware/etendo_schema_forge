@@ -216,10 +216,15 @@ export async function fetchWindowAccess(session) {
       // was cut off (demo trial expired / subscription grace elapsed — see
       // lib/environmentAccessGate.js), not "this role has no access". Record the decision
       // so AppLayout can show the real reason instead of the generic empty-access screen
-      // that folding this into `null` (below, unchanged) used to produce. Any other
-      // failure (401, network error, a differently-worded 402) clears a stale decision —
-      // this is the only place a demo/subscription block can be detected, so anything
-      // else finishing here means access is not currently known to be blocked.
+      // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
+      // recognized decision text, record it; for any other resolved non-ok response (401,
+      // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
+      // the only place a demo/subscription block can be detected, so a resolved response that
+      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
+      // in the outer catch below, which deliberately leaves the decision untouched so a
+      // transient network failure does not replace the last server-confirmed block with a
+      // misleading "your role has no access" screen.
       setEnvironmentAccessDecision(
         res.status === 402 ? parseEnvironmentAccessDecision(await readNeoErrorMessage(res)) : null
       );
@@ -262,6 +267,7 @@ export async function fetchWindowAccess(session) {
     const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
     return { ...payload, menuAccess };
   } catch {
+    // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
   }
 }
