@@ -48,12 +48,28 @@ function loadMiddleware() {
   return handler;
 }
 
+// ETP-5460 — session cookie replaces the Bearer token as the identity source.
+const SESSION_COOKIE = '__Host-go_session=abc123';
+const VALID_CSRF = 'good-csrf';
+
 function makeReq(method, url, body) {
   const req = Readable.from(body ? [body] : []);
   req.method = method;
   req.url = url;
-  req.headers = { authorization: 'Bearer test-token' };
+  req.headers = { cookie: SESSION_COOKIE };
+  if (method !== 'GET') req.headers['x-go-csrf'] = VALID_CSRF;
   return req;
+}
+
+function sessionResponse() {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      environment: { clientId: 'C1', orgId: 'O1', roleId: 'R1', userId: 'U1' },
+      csrfToken: VALID_CSRF,
+    }),
+  };
 }
 
 function makeRes() {
@@ -75,6 +91,7 @@ function stubFetch() {
   globalThis.fetch = async (url) => {
     const urlStr = String(url);
     fetchCalls.push({ url: urlStr });
+    if (urlStr.includes('/sws/go/session')) return sessionResponse();
     if (urlStr.includes('/api/report')) {
       // jsreport response
       return {
@@ -141,6 +158,7 @@ describe('report-api meta.isInteractive (ETP-5013)', () => {
       let capturedBody;
       const originalFetchFn = globalThis.fetch;
       globalThis.fetch = async (url, init) => {
+        if (String(url).includes('/sws/go/session')) return sessionResponse();
         if (String(url).includes('/api/report')) {
           capturedBody = JSON.parse(init.body);
           return { ok: true, status: 200, headers: { get: () => 'application/pdf' }, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' };
@@ -162,6 +180,7 @@ describe('report-api meta.isInteractive (ETP-5013)', () => {
       const res = makeRes();
       let capturedBody;
       globalThis.fetch = async (url, init) => {
+        if (String(url).includes('/sws/go/session')) return sessionResponse();
         if (String(url).includes('/api/report')) {
           capturedBody = JSON.parse(init.body);
           return { ok: true, status: 200, headers: { get: () => 'application/vnd.ms-excel' }, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' };
@@ -183,6 +202,7 @@ describe('report-api meta.isInteractive (ETP-5013)', () => {
       const res = makeRes();
       let capturedBody;
       globalThis.fetch = async (url, init) => {
+        if (String(url).includes('/sws/go/session')) return sessionResponse();
         if (String(url).includes('/api/report')) {
           capturedBody = JSON.parse(init.body);
           return { ok: true, status: 200, headers: { get: () => 'text/csv' }, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' };
@@ -204,6 +224,7 @@ describe('report-api meta.isInteractive (ETP-5013)', () => {
       const res = makeRes();
       let capturedBody;
       globalThis.fetch = async (url, init) => {
+        if (String(url).includes('/sws/go/session')) return sessionResponse();
         if (String(url).includes('/api/report')) {
           capturedBody = JSON.parse(init.body);
           return { ok: true, status: 200, headers: { get: () => 'text/html' }, arrayBuffer: async () => new ArrayBuffer(0), text: async () => '' };
