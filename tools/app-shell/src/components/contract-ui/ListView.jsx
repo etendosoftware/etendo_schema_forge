@@ -1105,7 +1105,7 @@ export function ListView({
                     this one sit directly on the pill background and only highlight
                     on hover. Nothing is hidden behind a menu — just narrower and
                     borderless. */}
-                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                {!windowReadOnly && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1117,7 +1117,7 @@ export function ListView({
                     {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
-                {onCloneRow && (
+                {onCloneRow && !windowReadOnly && (
                   <Button
                     variant="ghost"
                     size="icon"

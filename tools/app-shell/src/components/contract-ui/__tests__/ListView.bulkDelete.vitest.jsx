@@ -276,6 +276,40 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
   });
 });
 
+describe('ListView — bulk-toolbar Clone button respects windowReadOnly (ETP-5205)', () => {
+  const defaultProps = {
+    entity: 'testEntity',
+    Table: SelectableCapturingTable,
+    entityLabel: 'Test Entity',
+    windowName: 'test-entity',
+    token: 'fake-token',
+    apiBaseUrl: 'http://localhost/api',
+    onCloneRow: vi.fn(),
+  };
+
+  function selectRows() {
+    fireEvent.click(screen.getByTestId('trigger-select'));
+  }
+
+  it('shows the Clone button when onCloneRow is provided and the window is NOT read-only', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.queryByTitle('cloneOrderBtn')).toBeInTheDocument();
+  });
+
+  it('hides the Clone button when the window is read-only, even though onCloneRow is provided', () => {
+    render(<ListView {...defaultProps} api={{ window: { readOnly: true }, crud: {} }} />);
+    selectRows();
+    expect(screen.queryByTitle('cloneOrderBtn')).not.toBeInTheDocument();
+  });
+
+  it('hides the bulk-toolbar Print button when the window is read-only', () => {
+    render(<ListView {...defaultProps} api={{ window: { readOnly: true }, crud: {} }} />);
+    selectRows();
+    expect(screen.queryByTitle('print')).not.toBeInTheDocument();
+  });
+});
+
 // Regression — the idle top-right toolbar's "Print" button (opens the
 // whole-list report via setShowReport) used to stay visible even while rows
 // were selected, duplicating the SelectionToolbar's own separate Print icon
