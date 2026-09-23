@@ -100,7 +100,7 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false, windowReadOnly },
   ref,
 ) {
   const [filters, setFilters] = useState({
@@ -343,6 +343,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onReload={onReload}
           onEdit={setEditMovement}
           accountCurrencyId={account?.currencyId}
+          windowReadOnly={windowReadOnly}
           data-testid="MovementsTable__c1f76a" />
       </div>
       {batchDeleteDialog}
