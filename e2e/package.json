@@ -7,7 +7,7 @@
     "test:headed": "npx playwright test --headed",
     "test:ui": "npx playwright test --ui",
     "test:debug": "npx playwright test --debug",
-    "test:etendogo-contextual-selectors": "E2E_ETENDOGO_CONTEXT_SELECTORS=1 npx playwright test tests/flows/etendogo-contextual-selectors.integration.spec.js",
+    "test:etendogo-contextual-selectors": "E2E_ETENDOGO_CONTEXT_SELECTORS=1 npx playwright test tests/flows/platform/etendogo-contextual-selectors.integration.spec.js",
     "report": "npx playwright show-report"
   },
   "devDependencies": {

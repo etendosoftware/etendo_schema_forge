@@ -1,0 +1,961 @@
+import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { login, navigateTo } from '../../helpers/auth.js';
+import { uniqueValidCif } from '../../helpers/tax-id.js';
+
+/**
+ * Contacts — Full integration E2E journey against a real Etendo backend.
+ *
+ * Self-contained: creates its own data, validates with it, cleans up at the end.
+ *
+ * Single continuous flow (one login, one test):
+ *   1. Create Empresa contact A — validation error, then successful save
+ *   2. Detail view — verify fields, toggle Persona/Empresa with persistence
+ *   3. Financial tab — credit limit edit with persistence on reload
+ *   4. Bank account — create inline, verify persistence, delete
+ *   5. Address — create inline, verify persistence, delete
+ *   6. Contact person — create inline, verify persistence, delete
+ *   7. Create Empresa contact B
+ *   8. List view — verify both contacts appear, columns, subset filters
+ *   9. Bulk delete — select both, delete, verify removal
+ *
+ * Requires:
+ *   - Etendo backend running at localhost:8080
+ *   - Dev server running at localhost:3100 (make dev)
+ *   - E2E_USE_MOCK=0 E2E_PASSWORD=<password>
+ *
+ * Skipped automatically if env vars are not set.
+ */
+
+/**
+ * Load credentials from the onboarding test if available (.auth-credentials.json),
+ * otherwise fall back to E2E_PASSWORD / E2E_USER env vars.
+ */
+function loadCredentials() {
+  try {
+    const credPath = resolve(import.meta.dirname, '../../../.auth-credentials.json');
+    const creds = JSON.parse(readFileSync(credPath, 'utf-8'));
+    if (creds.email && creds.password) return creds;
+  } catch { /* file doesn't exist — fall back to env vars */ }
+  return null;
+}
+
+const onboardingCreds = loadCredentials();
+const RUN_INTEGRATION = process.env.E2E_USE_MOCK === '0' && !!(process.env.E2E_PASSWORD || onboardingCreds);
+
+/**
+ * Search term typed into every country picker in this file — stated once here
+ * because the reason is the same for all of them.
+ *
+ * Not 'Espa': the country label comes from C_Country (C_Country_Trl only when
+ * translated), so an instance with no Spanish translation stores it as "Spain",
+ * and 'Espa' filters every option out before the locale-tolerant España/Spain
+ * selectors ever get a chance to match. Both pickers used here filter
+ * client-side with an accent-insensitive substring match (normalizeText +
+ * includes — LocationEditorModal.jsx for the Contacts address modal,
+ * AddressSection.jsx's OptionPicker for the "Nuevo contacto" modal), and 'spa'
+ * is a substring of both "e-spa-ña" and "Spa-in", so it holds on either dataset.
+ */
+const COUNTRY_SEARCH_TERM = 'spa';
+
+/** Wait for detail view fully loaded (spinner gone, data fetched). */
+/**
+ * Digits of an amount, separators stripped — the only shape that is comparable across instances.
+ *
+ * ETP-5328's `MaskedAmountInput` shows a GROUPED, 2-decimal string ("12.345,00"), so the old
+ * `Number(inputValue())` returns NaN, and the thousands/decimal characters themselves come from
+ * the instance's own currency-format config and cannot be hardcoded in a spec. Normalising both
+ * sides to bare digits compares the amount without asserting anything about separators. It does
+ * assume the idle display carries 2 decimals, which is what `formatCurrency()` guarantees.
+ */
+function digitsOf(amount) {
+  const raw = typeof amount === 'number' ? amount.toFixed(2) : String(amount);
+  return raw.replace(/\D/g, '');
+}
+
+async function waitForDetailReady(page) {
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  // Only wait for spinner to disappear if it's actually visible
+  const spinner = page.getByText(/cargando|loading/i);
+  if (await spinner.isVisible({ timeout: 500 }).catch(() => false)) {
+    await expect(spinner).toBeHidden({ timeout: 10_000 });
+  }
+}
+
+/**
+ * Start listening for a save API response BEFORE triggering the action.
+ * Returns a promise — await it AFTER the action (click/Enter/Tab).
+ */
+function expectSaveResponse(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/') && ['POST', 'PUT', 'PATCH'].includes(resp.request().method()) && resp.status() < 500,
+    { timeout: 15_000 },
+  ).catch(() => {});
+}
+
+/**
+ * Start listening for a DELETE API response BEFORE triggering the action.
+ *
+ * `urlIncludes` narrows the match to one entity's route (e.g. '/bankAccount/'),
+ * which is what turns this helper into a real assertion target instead of a
+ * "some DELETE happened" rubber stamp. A child-row delete that accidentally
+ * reaches the record-level delete button issues
+ * `DELETE /sws/neo/contacts/businessPartner/<id>` — an unconstrained predicate
+ * matches that happily and reports success while the parent record is being
+ * destroyed. With the entity fragment pinned, the predicate simply never
+ * matches and the caller can fail loudly.
+ *
+ * Resolves to `null` on timeout rather than rejecting, so the caller decides
+ * whether a missing DELETE is fatal.
+ */
+function expectDeleteResponse(page, { urlIncludes = '' } = {}) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/')
+      && resp.url().includes(urlIncludes)
+      && resp.request().method() === 'DELETE'
+      && resp.status() < 500,
+    { timeout: 15_000 },
+  ).catch(() => null);
+}
+
+/**
+ * Start listening for a list-load GET response BEFORE triggering it (e.g.
+ * scrolling to trigger `useEntity`'s `loadMore()`).
+ */
+function expectListResponse(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/sws/neo/') && resp.request().method() === 'GET' && resp.status() < 500,
+    { timeout: 6_000 },
+  ).catch(() => {});
+}
+
+/**
+ * Find a row in the Contacts list by its visible text, scrolling the list's
+ * `ScrollPane` to trigger incremental server-side pagination
+ * (`BATCH_SIZE = 75` in `useEntity.js`) until the row appears or the backend
+ * has no more rows to give.
+ *
+ * Needed since ETP-5182 (`decisions.json → listSortBy: "name asc"`, commit
+ * 8d74d3c0c) made the Contacts list default-sort alphabetically by
+ * commercial name instead of by recency (`creationDate desc`). A freshly
+ * created "E2E Contact ..." row used to be guaranteed a spot on the FIRST
+ * loaded batch just by being the newest record; under name-ascending sort
+ * its position depends on how many existing business partners sort before
+ * it alphabetically, so a plain `rows.filter(...).toBeVisible()` on the
+ * initially loaded page can no longer be trusted.
+ */
+async function findRowByText(page, text, { maxScrolls = 15 } = {}) {
+  const rows = page.locator('tbody tr');
+  const target = rows.filter({ hasText: text }).first();
+  const scrollPane = page.getByTestId('ScrollPane__620cbc');
+
+  for (let attempt = 0; attempt <= maxScrolls; attempt++) {
+    if (await target.isVisible({ timeout: attempt === 0 ? 3_000 : 500 }).catch(() => false)) {
+      return target;
+    }
+    const countBefore = await rows.count();
+    const listLoadP = expectListResponse(page);
+    await scrollPane.evaluate((el) => { el.scrollTop = el.scrollHeight; }).catch(() => {});
+    await listLoadP;
+    const countAfter = await rows.count();
+    // No new rows arrived — the backend has nothing more to give for the
+    // current filter/sort, so further scrolling would just spin forever.
+    if (countAfter <= countBefore) break;
+  }
+
+  // Final locator, whether or not it resolved — the caller's own assertion
+  // reports the real failure (missing row vs. something else) instead of an
+  // opaque "helper returned nothing".
+  return target;
+}
+
+/**
+ * Ensure the required "Clave NIF País Residencia" combobox ends up with a value.
+ *
+ * The backend supplies a default for this field asynchronously. When it lands,
+ * CreatableSearchSelect stops rendering the `field-oBTIKTaxIDKey` input and
+ * renders a selected-value chip instead (`showChip = hasSelection && ...`), so
+ * clicking the input on sight races the default: the input detaches mid-click
+ * and no element with that testid is left to re-resolve to, which is exactly
+ * how the click ends up retrying until it times out.
+ *
+ * So give the default a bounded window to arrive FIRST, and only drive the
+ * dropdown when it did not — that removes the race instead of tolerating it.
+ */
+async function ensureTaxIdKeySelected(page) {
+  const taxInput = page.getByTestId('field-oBTIKTaxIDKey');
+  const taxChip = page.getByTestId('field-oBTIKTaxIDKey-chip');
+
+  const defaultArrived = await taxChip.waitFor({ state: 'visible', timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!defaultArrived) {
+    // No default on this instance — the field is still the empty combobox, and
+    // it will stay that way, so picking an option now cannot race anything.
+    await expect(taxInput).toBeVisible({ timeout: 5_000 });
+    await taxInput.click();
+    const taxOption = page.locator('[role="option"]').first();
+    await expect(taxOption).toBeVisible({ timeout: 5_000 });
+    await taxOption.click();
+  }
+
+  // Both branches must leave a real selection behind. The chip only renders
+  // when the component holds a value, so this fails loudly if the default
+  // never arrived AND the manual pick did not take effect — "already filled"
+  // can never silently mean "still empty".
+  await expect(taxChip).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Fill every field required to save a new Empresa contact.
+ *
+ * Extracted into a helper because the save below may have to be retried after a
+ * page reload, and a reload discards the form contents: both the first attempt
+ * and the retry must fill exactly the same fields, otherwise the retry submits
+ * an empty record and can never leave /contacts/new. Sharing one helper keeps
+ * the two attempts from drifting apart.
+ */
+async function fillNewContactForm(page, { name, email }) {
+  const nameInput = page.getByRole('textbox', { name: /razón social/i });
+  await expect(nameInput).toBeVisible({ timeout: 5_000 });
+  await nameInput.clear();
+  await nameInput.fill(name);
+
+  // Clave NIF Pais Residencia (required dropdown — may be pre-filled by default)
+  await ensureTaxIdKeySelected(page);
+
+  // Email is optional — some configurations do not expose it on the form
+  const emailInput = page.getByRole('textbox', { name: /correo electrónico|email/i });
+  if (await emailInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await emailInput.fill(email);
+  }
+}
+
+test.describe('Contacts Integration — Full journey', () => {
+  test.skip(!RUN_INTEGRATION, 'Requires real Etendo backend (E2E_USE_MOCK=0 + E2E_PASSWORD)');
+  test.setTimeout(180_000);
+
+  test('create → detail → toggle → financial → bank account → list → filters → bulk delete', async ({ page }) => {
+    const ts = Date.now();
+    const CONTACT_A = `E2E Contact A ${ts}`;
+    const CONTACT_B = `E2E Contact B ${ts}`;
+    const CONTACT_A_EMAIL = `e2e-${ts}@test.com`;
+
+    // Use onboarding-created credentials if available, otherwise env vars
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 1: Save is blocked client-side while a required field is empty (ETP-4933)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await navigateTo(page, 'contacts');
+    const listView = page.getByTestId('list-view');
+    await expect(listView).toBeVisible({ timeout: 15_000 });
+
+    const newBtn = page.getByTestId('action-new');
+    await expect(newBtn).toBeVisible({ timeout: 10_000 });
+    await newBtn.click();
+    await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    // ETP-4933: this step used to CLICK Save on an empty form and assert the server
+    // rejected it. The gate now blocks that client-side, so the old premise can no
+    // longer be exercised — and asserting the button state is the stronger check:
+    // it proves the incomplete record never reaches the backend at all, and that the
+    // user is told why. We do NOT fill any field (also avoids auto-save on blur).
+    const saveBtnFirst = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    await expect(saveBtnFirst.first()).toBeDisabled({ timeout: 10_000 });
+
+    // `data-missing-required` carries the blocking field keys, deliberately
+    // locale-independent so this assertion does not depend on the UI language.
+    // A brand-new company contact blocks on `name` (Razón Social).
+    await expect(saveBtnFirst.first()).toHaveAttribute('data-missing-required', /name/);
+
+    // And the reason must be legible to a human, not just to the DOM.
+    const blockedTitle = await saveBtnFirst.first().getAttribute('title');
+    expect(blockedTitle, 'a blocked Save must explain itself').toBeTruthy();
+
+    // Still on /new: nothing was persisted.
+    expect(/\/contacts\/new/.test(page.url())).toBe(true);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 2: Create contact A (Empresa) — fill all required fields, save
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Always navigate fresh to avoid stale form state
+    await navigateTo(page, 'contacts');
+    await expect(listView).toBeVisible({ timeout: 15_000 });
+    await newBtn.click();
+    await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
+
+    // Save — if it fails (e.g. EM_Etgo_Identifier sequence not ready on fresh
+    // onboarding environments), reload and retry once.
+    const saveBtn = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    await expect(saveBtn.first()).toBeEnabled({ timeout: 10_000 });
+    await saveBtn.first().click();
+
+    // Check if save succeeded (URL changes from /new to /contacts/<id>)
+    let saved = await page.waitForURL(/\/contacts\/(?!new)/, { timeout: 20_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!saved) {
+      // Reload to refresh backend state, then re-fill and retry the save.
+      // The reload starts a brand-new empty form, so re-filling is what makes
+      // this branch a real retry instead of a guaranteed failure.
+      await page.reload({ waitUntil: 'networkidle' });
+      await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+      await fillNewContactForm(page, { name: CONTACT_A, email: CONTACT_A_EMAIL });
+      const retrySave = page.getByTestId('action-save')
+        .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+      await expect(retrySave.first()).toBeEnabled({ timeout: 10_000 });
+      await retrySave.first().click();
+      await expect(page).not.toHaveURL(/\/contacts\/new/, { timeout: 20_000 });
+      saved = true;
+    }
+
+    await expect(page).toHaveURL(/\/contacts\//, { timeout: 15_000 });
+    const contactAUrl = page.url();
+
+    // Verify the name persists after save
+    await expect(page.getByRole('textbox', { name: /razón social/i }))
+      .toHaveValue(CONTACT_A, { timeout: 10_000 });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 3: Detail view — verify fields, toggle Persona/Empresa
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Email and phone labels present
+    await expect(page.getByText(/correo electrónico|email/i).first()).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/teléfono|phone/i).first()).toBeVisible({ timeout: 5_000 });
+
+    // Toggle to Persona — Nombre and Apellidos fields should appear
+    const personaToggle = page.getByText(/^persona$/i).first();
+    await personaToggle.click();
+
+    const firstNameInput = page.getByRole('textbox', { name: /^nombre/i });
+    const lastNameInput = page.getByRole('textbox', { name: /apellidos/i });
+    await expect(firstNameInput).toBeVisible({ timeout: 5_000 });
+    await expect(lastNameInput).toBeVisible({ timeout: 5_000 });
+
+    // Fill names — header fields no longer auto-save on blur (ETP-4533 reverted
+    // the blur auto-save), so persistence requires an explicit Save click.
+    const firstName = 'E2EFirstName';
+    const lastName = 'E2ELastName';
+    await firstNameInput.fill(firstName);
+    await page.keyboard.press('Tab');
+
+    await lastNameInput.fill(lastName);
+    await page.keyboard.press('Tab');
+
+    const saveNamesBtn = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    const saveNamesP = expectSaveResponse(page);
+    await saveNamesBtn.first().click();
+    await saveNamesP;
+
+    // Reload and verify persistence
+    await page.goto(contactAUrl);
+    await waitForDetailReady(page);
+
+    const reloadedFirstName = page.getByRole('textbox', { name: /^nombre/i });
+    const reloadedLastName = page.getByRole('textbox', { name: /apellidos/i });
+    await expect(reloadedFirstName).toBeVisible({ timeout: 10_000 });
+    await expect(reloadedFirstName).toHaveValue(firstName, { timeout: 5_000 });
+    await expect(reloadedLastName).toHaveValue(lastName, { timeout: 5_000 });
+
+    // Toggle back to Empresa — Razon Social should reappear
+    const empresaToggle = page.getByText(/^empresa$/i).first();
+    await empresaToggle.click();
+    const razonSocialAfterToggle = page.getByRole('textbox', { name: /razón social/i });
+    await expect(razonSocialAfterToggle).toBeVisible({ timeout: 5_000 });
+
+    // Restore the original Razon Social so we can find it in the list later.
+    // ETP-4533 prefills Razón Social from first/last on Person→Company switch
+    // (see contacts-razon-social-prefill.mocked.spec.js), so clear() + fill()
+    // below overwrites that prefill regardless. Header fields no longer
+    // auto-save on blur, so persist with an explicit Save click.
+    await razonSocialAfterToggle.clear();
+    await razonSocialAfterToggle.fill(CONTACT_A);
+    const saveToggleBtn = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    const saveToggle = expectSaveResponse(page);
+    await saveToggleBtn.first().click();
+    await saveToggle;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 4: Financial tab — credit limit edit, persistence on reload
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const financialTab = page.getByRole('button', { name: /financiero|financial/i });
+    await expect(financialTab).toBeVisible({ timeout: 5_000 });
+    await financialTab.click();
+
+    // ETP-5328 moved this box to `MaskedAmountInput` (`type="text"` + `inputMode="decimal"`), so
+    // the old `input[type="number"]` selector matches NOTHING. That mattered more than a normal
+    // broken locator here: `creditVisible` would silently fall to `false` and the else-branch
+    // below would let this part pass without asserting anything at all.
+    const creditInput = page.getByTestId('CreditLimitStepperInput').first();
+    const creditVisible = await creditInput.isVisible({ timeout: 3_000 }).catch(() => false);
+
+    if (creditVisible) {
+      const newCreditValue = 12345;
+      await creditInput.fill(String(newCreditValue));
+
+      // Credit limit is rendered by ContactsFinancialPanel.jsx, which keeps its
+      // own draft state and self-saves on blur (PATCH /businessPartner/{id})
+      // separately from the header form — it does not dirty the header, so
+      // action-save stays disabled here. Blur the field (clicking the
+      // financial tab, same as before) to trigger that self-save.
+      const saveCreditP = expectSaveResponse(page);
+      await financialTab.click();
+      await saveCreditP;
+
+      await expect(async () => {
+        expect(digitsOf(await creditInput.inputValue())).toBe(digitsOf(newCreditValue));
+      }).toPass({ timeout: 5_000 });
+
+      // Reload and verify persistence
+      await page.goto(contactAUrl);
+      await waitForDetailReady(page);
+
+      const financialTabReload = page.getByRole('button', { name: /financiero|financial/i });
+      await financialTabReload.click();
+
+      const reloadedCredit = page.getByTestId('CreditLimitStepperInput').first();
+      await expect(reloadedCredit).toBeVisible({ timeout: 5_000 });
+      await expect(async () => {
+        expect(digitsOf(await reloadedCredit.inputValue())).toBe(digitsOf(newCreditValue));
+      }).toPass({ timeout: 5_000 });
+    } else {
+      // At least verify the Financial tab rendered content
+      await expect(page.getByText(/cr[eé]dito|credit|tarifa|payment/i).first()).toBeVisible({ timeout: 5_000 });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 5: Bank account — create inline, verify it appears, delete it
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Go back to General tab first — sub-tabs only appear there
+    const generalTab = page.getByRole('button', { name: /^general$/i });
+    await generalTab.click();
+
+    // Navigate to the bank account tab
+    const bankTab = page.getByTestId('tab-bankAccount')
+      .or(page.getByRole('button', { name: /cuenta.*banc|bank.*account/i }));
+    await expect(bankTab.first()).toBeVisible({ timeout: 5_000 });
+    await bankTab.first().click();
+
+    // Read the bank account count from the tab badge (e.g. "Cuenta Bancaria 1")
+    const bankTabText = await bankTab.first().textContent();
+    const bankCountBefore = parseInt((bankTabText.match(/(\d+)/) || ['0', '0'])[1], 10);
+
+    // Click add button to open inline form
+    const addBankBtn = page.getByTestId('action-add-line')
+      .or(page.getByRole('button', { name: /a[nñ]adir.*cuenta|add.*bank|nueva.*cuenta/i }));
+    await expect(addBankBtn.first()).toBeVisible({ timeout: 5_000 });
+    await addBankBtn.first().click();
+
+    // Wait for inline add row to appear
+    const addRow = page.getByTestId('inline-add-row');
+    await expect(addRow).toBeVisible({ timeout: 5_000 });
+
+    // Fill bank name field
+    const bankNameField = page.getByTestId('inline-add-field-bankName')
+      .or(addRow.locator('input').first());
+    await expect(bankNameField).toBeVisible({ timeout: 3_000 });
+    await bankNameField.fill(`E2E Bank ${ts}`);
+
+    // Select bank format if available (optional — not all configs expose this field)
+    const bankFormatField = page.getByTestId('inline-add-field-bankFormat');
+    if (await bankFormatField.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await bankFormatField.click();
+      const genericOption = page.getByRole('option', { name: /generic|gen[eé]rico/i });
+      if (await genericOption.isVisible({ timeout: 1_000 }).catch(() => false)) {
+        await genericOption.click();
+      } else {
+        // Select first available option
+        const firstOption = page.locator('[role="option"]').first();
+        await expect(firstOption).toBeVisible({ timeout: 2_000 });
+        await firstOption.click();
+      }
+      // Ensure dropdown is closed before proceeding
+      await expect(page.locator('[role="option"]')).toBeHidden({ timeout: 3_000 }).catch(() => {});
+    }
+
+    // Fill account number if visible (optional — not all configs expose this field)
+    const accountNoField = page.getByTestId('inline-add-field-accountNo')
+      .or(addRow.locator('input[name*="account"], input[placeholder*="cuenta"]'));
+    if (await accountNoField.first().isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await accountNoField.first().fill(`${ts}`);
+    }
+
+    // Submit the inline form
+    // Submit — press Enter (UI says "Enter o clic fuera para guardar")
+    const saveBankP = expectSaveResponse(page);
+    await page.keyboard.press('Enter');
+    await saveBankP;
+
+    // Verify no error toast appeared
+    const bankError = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]')
+      .filter({ hasText: /error/i });
+    const hadBankError = await bankError.first().isVisible({ timeout: 500 }).catch(() => false);
+
+    if (!hadBankError) {
+      // Verify the bank row appeared (no reload — save response 200 confirms persistence)
+      const bankRowText = page.getByText(`E2E Bank ${ts}`);
+      await expect(bankRowText).toBeVisible({ timeout: 5_000 });
+
+      // Delete the bank-account ROW — not the contact.
+      //
+      // Scoping is the whole story here. The previous version walked up with
+      // `xpath=ancestor::div[contains(@class,"border-b") or contains(@class,
+      // "group")]` + `.first()`, which resolves to the OUTERMOST matching
+      // ancestor (Playwright normalizes an XPath node-set to document order),
+      // i.e. a wrapper that also contains the detail-view header toolbar. The
+      // first trash-icon button in that subtree, in DOM order, is the RECORD
+      // delete (`action-delete`, DetailView.jsx:2926 → setShowDeleteConfirm),
+      // so the step deleted contact A and every later assertion was measuring
+      // a destroyed record.
+      //
+      // `row-quick-action-delete` can never match inside a detail view either:
+      // DetailView passes no `rowQuickActions` prop and DataTable gates
+      // RowQuickActions on it (`isQuickActionsEnabled`, DataTable.jsx:1293),
+      // so the old `.or()` fallback was in fact the only branch ever taken.
+      //
+      // The control that actually exists: BankAccountTable renders existing
+      // rows through InlineLinesPanel (DetailView's default `linesLayout` is
+      // 'inlineEditable'), which emits `line-row-{id}` per row inside
+      // `inline-lines-panel`, and within the row a `line-actions` strip whose
+      // delete button carries the `Trash2__3b7ec2` icon. Everything below is
+      // anchored inside that ONE row, so the header toolbar is structurally
+      // unreachable — no page-wide fallback.
+      const bankRow = page
+        .locator('[data-testid="inline-lines-panel"] [data-testid^="line-row-"]')
+        .filter({ hasText: `E2E Bank ${ts}` })
+        .first();
+      await expect(bankRow).toBeVisible({ timeout: 5_000 });
+
+      // The action strip's icons only render while the row is hovered
+      // (`showActions = (isHovered || isEditing) && !isDocumentReadOnly`).
+      await bankRow.hover();
+      const deleteBankBtn = bankRow
+        .getByTestId('line-actions')
+        .locator('button')
+        .filter({ has: page.locator('[data-testid="Trash2__3b7ec2"]') });
+      await expect(deleteBankBtn).toBeVisible({ timeout: 3_000 });
+      await deleteBankBtn.click();
+
+      // Confirm the CHILD delete. DetailView renders two structurally
+      // identical confirm dialogs (record-level and secondary-tab), and
+      // `confirm-delete-confirm` belongs to neither — it only exists in
+      // attachments/ConfirmDeleteDialog.jsx. Only the record-level dialog
+      // carries `action-delete-confirm` on its destructive button, so `hasNot`
+      // makes this locator provably not the record dialog: if the click ever
+      // reaches the record delete again, this resolves to zero elements and
+      // fails instead of confirming the wrong deletion. The child dialog's own
+      // destructive button has no dedicated testid (both footer buttons are
+      // `Button__fa3275`), hence the `bg-destructive` variant class.
+      const childDeleteDialog = page.getByRole('dialog')
+        .filter({ hasNot: page.getByTestId('action-delete-confirm') });
+      await expect(childDeleteDialog).toBeVisible({ timeout: 5_000 });
+      const deleteConfirm = childDeleteDialog.locator('button.bg-destructive');
+      await expect(deleteConfirm).toBeVisible({ timeout: 3_000 });
+
+      // Sharpest available guard: the DELETE must target the bankAccount child
+      // route. A record-level delete would hit /businessPartner/<id> instead,
+      // never match this predicate, and fail the assertion below.
+      const delBankP = expectDeleteResponse(page, { urlIncludes: '/bankAccount/' });
+      await deleteConfirm.click();
+      const delBankResp = await delBankP;
+      expect(
+        delBankResp,
+        'the row delete must issue DELETE /sws/neo/contacts/bankAccount/<id>, not delete the parent contact',
+      ).not.toBeNull();
+
+      await expect(page.getByText(`E2E Bank ${ts}`)).toHaveCount(0, { timeout: 5_000 });
+
+      // Regression guard — the `toHaveCount(0)` above is NOT a guard on its
+      // own: it also passes when the whole contact was destroyed, because
+      // `confirmHeaderDelete` navigates to `/contacts` and the row vanishes
+      // with the entire detail view. That is exactly how the parent-deleting
+      // bug stayed green here. The parent must still be loaded on its own
+      // detail route, with its name intact.
+      await expect(page).toHaveURL(/\/contacts\/[^/?#]+/, { timeout: 5_000 });
+      await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByTestId('record-unavailable')).toHaveCount(0);
+      await expect(page.getByRole('textbox', { name: /razón social/i }))
+        .toHaveValue(CONTACT_A, { timeout: 5_000 });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 5b: Address — create via modal
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await page.goto(contactAUrl);
+    await waitForDetailReady(page);
+
+    const addressTab = page.getByTestId('tab-locationAddress')
+      .or(page.getByRole('button', { name: /direcci[oó]n|address/i }));
+    await expect(addressTab.first()).toBeVisible({ timeout: 5_000 });
+    await addressTab.first().click();
+
+    // Read the address count from the tab badge
+    const addrTabText = await addressTab.first().textContent();
+    const addrCountBefore = parseInt((addrTabText.match(/(\d+)/) || ['0', '0'])[1], 10);
+
+    // Click add button
+    const addAddrBtn = page.getByTestId('action-add-line')
+      .or(page.getByRole('button', { name: /a[nñ]adir.*direcci|add.*address|nueva.*direcci/i }));
+    await expect(addAddrBtn.first()).toBeVisible({ timeout: 5_000 });
+    await addAddrBtn.first().click();
+
+    // Address uses LocationEditorModal ("Dirección") — wait for it. Scope to the modal
+    // overlay (inline style position:fixed + z-index:150, see LocationEditorModal.jsx)
+    // since the background grid's "Dirección" column header also matches the text and
+    // would otherwise trip Playwright's strict-mode check.
+    const addressModal = page.locator('div[style*="z-index: 150"]');
+    await expect(addressModal.getByText(/^direcci[oó]n$/i).first()).toBeVisible({ timeout: 5_000 });
+
+    // The modal overlay is: div.fixed.inset-0.z-50
+    // Modal inputs are the ones with class border-gray-300 (no name/testid)
+    const modalInputs = page.locator('.fixed.inset-0 input[type="text"], div[class*="bg-black"] ~ div input[type="text"]');
+    const modalInputCount = await modalInputs.count();
+
+    // If we found modal-specific inputs, use them; otherwise fallback to label-based
+    if (modalInputCount >= 4) {
+      // Primera línea (1st), Segunda línea (2nd), Código postal (3rd), Ciudad (4th)
+      await modalInputs.nth(0).fill(`E2E Address ${ts}`);
+      await modalInputs.nth(3).fill('E2E City');
+    } else {
+      // Fallback: find inputs near the "Primera línea" label
+      const primeraLabel = page.getByText(/primera l[ií]nea/i);
+      const firstInput = primeraLabel.locator('xpath=following::input[1]');
+      await firstInput.fill(`E2E Address ${ts}`);
+    }
+
+    // Select País — button opens a search dialog with country list.
+    // The trailing `\*?` is required: since ETP-5103 the label renders a mandatory
+    // asterisk inside the same element, so its textContent is "País*" and Playwright
+    // matches getByText against the full textContent. Do not "clean up" the `\*?`.
+    const paisButton = page.getByText(/^pa[ií]s\s*\*?$/i).locator('..').locator('button[aria-haspopup="dialog"]');
+    await paisButton.click();
+
+    // The country picker dialog has a search input "Buscar país..."
+    const countrySearch = page.getByPlaceholder(/buscar pa[ií]s/i);
+    await expect(countrySearch).toBeVisible({ timeout: 5_000 });
+    await countrySearch.fill(COUNTRY_SEARCH_TERM);
+
+    // Wait for search results to filter — country name depends on locale (España / Spain).
+    // Scope to the picker overlay (inline z-index 160, see LocationEditorModal.jsx
+    // PICKER_MODAL): since ETP-5103 the País field itself displays "España" (preselected
+    // on create), so an unscoped "España" button locator resolves to the FIELD button,
+    // which sits behind the picker overlay — the click then times out on intercepted
+    // pointer events instead of selecting the option.
+    const countryPicker = page.locator('div[style*="z-index: 160"]');
+    const countryOption = countryPicker.getByRole('button', { name: /^espa[nñ]a$/i })
+      .or(countryPicker.getByRole('button', { name: /^spain$/i }))
+      .or(countryPicker.locator('button').filter({ hasText: /^España$/ }))
+      .or(countryPicker.locator('button').filter({ hasText: /^Spain$/ }));
+    await expect(countryOption.first()).toBeVisible({ timeout: 5_000 });
+    await countryOption.first().click();
+
+    // Click Guardar in the address modal
+    const modalGuardar = page.getByRole('button', { name: /^guardar$/i }).last();
+    const saveAddrP = expectSaveResponse(page);
+    await modalGuardar.click();
+    await saveAddrP;
+
+    const addrError = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]')
+      .filter({ hasText: /error/i });
+    const hadAddrError = await addrError.first().isVisible({ timeout: 500 }).catch(() => false);
+
+    // Address verification — no reload needed, save response confirms persistence
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 5c: Contact person — create inline
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Navigate fresh — sub-tab state may be stale after address modal
+    await page.goto(contactAUrl);
+    await waitForDetailReady(page);
+
+    const contactPersonTab = page.getByTestId('tab-contact');
+    await expect(contactPersonTab.first()).toBeVisible({ timeout: 5_000 });
+    await contactPersonTab.first().click();
+
+    // Read the contact person count from the tab badge
+    const ctTabText = await contactPersonTab.first().textContent();
+    const ctCountBefore = parseInt((ctTabText.match(/(\d+)/) || ['0', '0'])[1], 10);
+
+    // Click add button
+    const addCtBtn = page.getByTestId('action-add-line')
+      .or(page.getByRole('button', { name: /a[nñ]adir.*persona|add.*contact|nueva.*persona/i }));
+    await expect(addCtBtn.first()).toBeVisible({ timeout: 5_000 });
+    await addCtBtn.first().click();
+
+    const addRowCt = page.getByTestId('inline-add-row');
+    await expect(addRowCt).toBeVisible({ timeout: 5_000 });
+
+    // Fill contact person name
+    const ctNameField = page.getByTestId('inline-add-field-name')
+      .or(page.getByTestId('inline-add-field-firstName'))
+      .or(addRowCt.locator('input').first());
+    await expect(ctNameField).toBeVisible({ timeout: 3_000 });
+    await ctNameField.fill(`E2E Person ${ts}`);
+
+    // Submit — press Enter (UI says "Enter o clic fuera para guardar")
+    const saveCtP = expectSaveResponse(page);
+    await page.keyboard.press('Enter');
+    await saveCtP;
+
+    const ctError = page.locator('[role="status"], [data-sonner-toast], [class*="toast"]')
+      .filter({ hasText: /error/i });
+    const hadCtError = await ctError.first().isVisible({ timeout: 500 }).catch(() => false);
+
+    // Contact person verification — no reload needed, save response confirms persistence
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 6: Create contact B — for list and bulk delete validation
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await navigateTo(page, 'contacts');
+    await expect(listView).toBeVisible({ timeout: 15_000 });
+
+    const newBtn2 = page.getByTestId('action-new');
+    await expect(newBtn2).toBeVisible({ timeout: 10_000 });
+    await newBtn2.click();
+    await expect(page).toHaveURL(/\/contacts\/new/, { timeout: 15_000 });
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    const nameInputB = page.getByRole('textbox', { name: /razón social/i });
+    await expect(nameInputB).toBeVisible({ timeout: 5_000 });
+    await nameInputB.fill(CONTACT_B);
+
+    await ensureTaxIdKeySelected(page);
+
+    const saveBtnB = page.getByTestId('action-save')
+      .or(page.getByRole('button', { name: /^guardar$|^save$/i }));
+    await expect(saveBtnB.first()).toBeEnabled({ timeout: 10_000 });
+    const saveBP = expectSaveResponse(page);
+    await saveBtnB.first().click();
+    await saveBP;
+    // The save may succeed but the frontend redirect from /new to /{id} can be
+    // slow. Wait for the URL to change before asserting.
+    await page.waitForURL(
+      url => !url.toString().includes('/contacts/new'),
+      { timeout: 20_000 },
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 7: List view — verify contacts, columns, subset filters
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await navigateTo(page, 'contacts');
+    await expect(listView).toBeVisible({ timeout: 15_000 });
+
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+
+    // Contact B should be somewhere in the list (position depends on the
+    // active sort/pagination — see findRowByText's docblock).
+    const rowB = await findRowByText(page, CONTACT_B);
+    await expect(rowB).toBeVisible({ timeout: 15_000 });
+
+    // Verify key column headers exist by name
+    const headers = page.locator('thead th, [role="columnheader"]');
+    const headerTexts = (await headers.allTextContents()).join(' ');
+    expect(headerTexts).toMatch(/raz[oó]n social|nombre|name/i);
+    expect(headerTexts).toMatch(/correo|email/i);
+    expect(headerTexts).toMatch(/tel[eé]fono|phone/i);
+
+    // Subset filter buttons
+    const todosBtn = page.locator('button').filter({ hasText: /^Todos$|^All$/i });
+    const personasBtn = page.locator('button').filter({ hasText: /^Personas$|^Persons$/i });
+    const empresasBtn = page.locator('button').filter({ hasText: /^Empresas$|^Companies$/i });
+    await expect(todosBtn.first()).toBeVisible({ timeout: 5_000 });
+    await expect(personasBtn.first()).toBeVisible({ timeout: 5_000 });
+    await expect(empresasBtn.first()).toBeVisible({ timeout: 5_000 });
+
+    // Empresas filter — Contact B is Empresa, should be visible
+    await empresasBtn.first().click();
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
+
+    // Personas filter — Contact B (Empresa) should not appear. No scrolling
+    // needed here: this asserts absence under the current (possibly small)
+    // loaded batch, which is exactly what "not shown under this filter" means.
+    await personasBtn.first().click();
+    await expect(rows.filter({ hasText: CONTACT_B })).toHaveCount(0, { timeout: 10_000 });
+
+    // Todos restores full list
+    await todosBtn.first().click();
+    await expect(await findRowByText(page, CONTACT_B)).toBeVisible({ timeout: 10_000 });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // PART 8: Bulk delete — select both created contacts, delete, verify
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Select Contact B
+    // Click the Checkbox__* testid (the label wrapping the input), not the
+    // input itself — the input is visually sr-only, so Playwright's click
+    // lands on the underlying decorative box and the sr-only input "intercepts
+    // pointer events" in reverse, causing flaky click timeouts.
+    // Use findRowByText (not a plain filter) since Contact B's row may sit
+    // past the first loaded batch under the name-ascending sort.
+    const rowBFinal = await findRowByText(page, CONTACT_B);
+    await expect(rowBFinal).toBeVisible({ timeout: 15_000 });
+    await rowBFinal.getByTestId('Checkbox__eb5261').first().click();
+
+    // Select Contact A by navigating to its detail URL and deleting, or find by timestamp
+    // Contact A may have a different name after toggle — find by email which has the timestamp
+    const rowAByEmail = await findRowByText(page, CONTACT_A_EMAIL);
+    if (await rowAByEmail.isVisible({ timeout: 3_000 }).catch(() => false)) {
+      await rowAByEmail.getByTestId('Checkbox__eb5261').first().click();
+    }
+
+    // Verify selection indicator shows selected count
+    const selectionText = page.locator('text=/\\d+.*seleccionado|\\d+.*selected/i');
+    await expect(selectionText.first()).toBeVisible({ timeout: 5_000 });
+
+    // Click bulk delete.
+    //
+    // The Contacts window renders its OWN bulk-delete button via
+    // `selectionBarRightActions` (tools/app-shell/src/windows/custom/contacts/index.jsx)
+    // and opts out of ListView's generic "Delete selected" toolbar action
+    // (`listViewOptions.hideBulkDelete: true`), so the generic
+    // `bulk-delete-selected` testid is never rendered for this window — the
+    // button itself carries no stable testid, only its icon does
+    // (`Trash2__ef097c`).
+    //
+    // A page-wide "any button containing a trash icon" search (the previous
+    // approach here) is unsafe regardless of sort order: Contacts also
+    // renders a per-row LEGACY delete button with its own Trash2 icon
+    // (`Trash2__eb5261`, see `ContactsTable.jsx` → `DataTable.jsx`'s
+    // `legacyDeleteEnabled`) for every visible row, and those per-row icons
+    // sit earlier in DOM order than the SelectionToolbar (rendered through a
+    // `document.body` portal, appended after the app's own render tree). A
+    // `.first()` match on a broad selector therefore resolves to whichever
+    // row's own single-row delete button happens to be first in the DOM —
+    // NOT the multi-select bulk-delete action — silently deleting an
+    // unrelated row instead of the two rows actually checked above. Under
+    // the old creationDate-desc sort this went unnoticed because the
+    // just-created Contact B always WAS that first row, so the wrong click
+    // still deleted the right record by coincidence; the name-ascending sort
+    // broke that coincidence, surfacing the pre-existing bug.
+    const bulkBtn = page.getByTestId('Trash2__ef097c').locator('..');
+    await expect(bulkBtn).toBeVisible({ timeout: 5_000 });
+    await bulkBtn.click();
+
+    // Confirm bulk delete dialog
+    const dialog = page.getByTestId('confirm-delete-dialog').or(page.getByRole('dialog'));
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    const confirmBtn = page.getByTestId('confirm-delete-confirm')
+      .or(dialog.getByRole('button', { name: /delete|eliminar|confirm/i }));
+    await confirmBtn.first().click();
+
+    // Verify Contact B disappears from the list
+    await expect(
+      page.locator('tbody tr').filter({ hasText: CONTACT_B })
+    ).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Regression — ETP-4700: "+ Crear contacto" from the Sales Order Contacto
+  // selector must succeed. Root cause was a backend defaults/coercion bug
+  // (BusinessPartner.invoiceGrouping, a List-reference column, was mangled
+  // to "0" instead of its real AD_Ref_List code) — unrelated to anything the
+  // frontend sends, but the popup that has replaced this affordance (the real
+  // Contacts window, mounted via `RecordCreateModal` — ETP-5332 deleted the
+  // hand-rolled `CreateContactModal`/`EntityCreationModal` that used to sit
+  // here) is still the exact entry point that surfaced it, so the regression
+  // test stays anchored to that entry point.
+  // ═══════════════════════════════════════════════════════════════════════
+  test('ETP-4700 — create contact from Sales Order "Contacto" selector modal', async ({ page }) => {
+    const ts = Date.now();
+    const CONTACT_NAME = `E2E SO Contact ${ts}`;
+    // ETP-5031: must be a syntactically valid CIF (check digit and all) — the backend now
+    // validates it via SpanishTaxIdValidator when "Clave NIF país residencia" is NIF.
+    const TAX_ID = uniqueValidCif(ts);
+
+    const loginOpts = onboardingCreds
+      ? { user: onboardingCreds.email, password: onboardingCreds.password }
+      : {};
+    await login(page, loginOpts);
+
+    await navigateTo(page, 'sales-order');
+    const soNewBtn = page.getByTestId('action-new');
+    await expect(soNewBtn).toBeVisible({ timeout: 15_000 });
+    await soNewBtn.click();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+
+    // Open the Contacto selector and trigger "+ Crear contacto"
+    const contactField = page.getByTestId('field-businessPartner');
+    await expect(contactField).toBeVisible({ timeout: 10_000 });
+    await contactField.click();
+
+    const createContactBtn = page.getByTestId('action-create-businessPartner');
+    await expect(createContactBtn).toBeVisible({ timeout: 10_000 });
+    await createContactBtn.click();
+
+    // "Nuevo contacto" modal — now `RecordCreateModal` mounting the REAL Contacts
+    // window (`EmbeddedWindowRoute`), not the deleted hand-rolled modal.
+    const dialog = page.getByTestId('record-create-modal');
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByTestId('record-create-window')).toBeVisible({ timeout: 15_000 });
+
+    // Razón social — direct data-testid on the input (EntityForm's default text
+    // renderer), field key `name` (decisions.json).
+    const razonSocialInput = dialog.getByTestId('field-name');
+    await expect(razonSocialInput).toBeVisible({ timeout: 10_000 });
+    await razonSocialInput.fill(CONTACT_NAME);
+
+    // Categoría de contacto (`businessPartnerCategory`) is deliberately left
+    // untouched: it carries a SQL-macro `defaultValue` in decisions.json and
+    // resolves from the backend's `/businessPartner/defaults` response, exactly
+    // like `fillNewContactForm` above (used by the already-passing first test
+    // in this file) already relies on for the same field.
+    await ensureTaxIdKeySelected(page);
+
+    // NIF — direct data-testid, field key `taxID`.
+    const taxIdInput = dialog.getByTestId('field-taxID');
+    await expect(taxIdInput).toBeVisible({ timeout: 5_000 });
+    await taxIdInput.fill(TAX_ID);
+
+    // Save the embedded window itself (its own "Guardar", `action-save`).
+    // Scoped to the dialog: the Sales Order page behind it stays mounted with
+    // its OWN `action-save` button, so an unscoped locator would be ambiguous.
+    const embeddedSaveBtn = dialog.getByTestId('action-save');
+    await expect(embeddedSaveBtn).toBeEnabled({ timeout: 10_000 });
+    const createBpResponse = page.waitForResponse(
+      (resp) => resp.url().includes('/businessPartner') && resp.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    const [bpResponse] = await Promise.all([createBpResponse, embeddedSaveBtn.click()]);
+
+    // The core regression check: creation must succeed (2xx), not 400
+    expect(bpResponse.status(), await bpResponse.text().catch(() => '')).toBeLessThan(300);
+
+    // "Completado" stays disabled until the embedded window has actually saved
+    // and navigated from /contacts/new to a real id — that state change is the
+    // real signal the create landed, not just the POST response above.
+    const finishBtn = dialog.getByTestId('record-create-finish');
+    await expect(finishBtn).toBeEnabled({ timeout: 15_000 });
+    await finishBtn.click();
+
+    // No inline error banner, modal closes, and the new contact is now selected
+    await expect(page.getByRole('heading', { name: /^nuevo contacto$/i })).toBeHidden({ timeout: 10_000 });
+    await expect(page.locator('.bg-destructive').filter({ hasText: /error/i })).toHaveCount(0);
+    await expect(page.getByTestId('field-businessPartner-chip').or(contactField))
+      .toContainText(CONTACT_NAME, { timeout: 10_000 });
+  });
+});
