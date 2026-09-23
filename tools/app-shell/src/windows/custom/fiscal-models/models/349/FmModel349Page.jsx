@@ -804,6 +804,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       setStatus(previous.status);
       setSubmissionMethod(previous.submissionMethod);
       toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+      return;
+    }
+    // ETP-5438 — show exactly the operators the backend froze in this same request (the PUT
+    // echoes the snapshot), so the page matches what the list and every later reopen show.
+    if (result?.submittedSnapshot?.operators) {
+      applyOperatorsResult(result.submittedSnapshot);
     }
   }
 
@@ -895,8 +901,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // `liveOperators`/`decl._precomputed`) so it fires exactly once per opened
   // declaration instead of looping once `handleCompute` populates state.
   //
-  // ETP-5438 — once `isSubmitted`, this effect computes at most ONCE per browser
-  // session (a live `GET /fiscal349/operators` always recomputes from whatever
+  // ETP-5438 — Legacy (no snapshot): for a submitted declaration presented before the
+  // backend persisted submission snapshots, this effect computes at most ONCE per browser
+  // session (a declaration WITH `submittedSnapshot` is served from it — first branch below —
+  // and never reaches any of this; a live `GET /fiscal349/operators` always recomputes from whatever
   // invoices exist RIGHT NOW, regardless of who calls it or when — recomputing on
   // every mount silently picked up invoices added/removed after presentation, the
   // "sigue tomando facturas aun presentada" bug). It first reuses
@@ -905,8 +913,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // network-free. Only on a cold cache (new tab, reload, another browser, with no
   // `_precomputed` handed down) does it compute once (`computeSubmittedOnce`) and
   // write the result back to that same cache entry, so later mounts and the list
-  // stay frozen on it. "Calcular" stays hidden once submitted. Known trade-off: a
-  // cold session recomputes from the invoice data as it is at that moment.
+  // stay frozen on it. "Calcular" stays hidden once submitted. Legacy-only trade-off:
+  // a cold session recomputes from the invoice data as it is at that moment.
   useEffect(() => {
     // ETP-5438 — a declaration presented once snapshots existed carries the exact
     // `GET /fiscal349/operators` payload persisted server-side at submission time

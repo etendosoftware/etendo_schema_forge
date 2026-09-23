@@ -54,7 +54,8 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 // ETP-5438 — only LEGACY submitted declarations (presented before the backend started
 // persisting a submission snapshot) still go through this path; a declaration with
 // `submittedSnapshot` is served from it directly (see `snapshotMap` below).
-// Passed as `checkModifiedFn` for the submitted-family buckets below instead of omitting it
+// Legacy (no snapshot): passed as `checkModifiedFn` for the legacy submitted-family buckets
+// below instead of omitting it
 // (the way the pre-existing `otherDecls303`/`otherDecls349` buckets do): omitting it makes
 // `useFiscalAutoCompute`'s mount effect skip its own cache-consult branch and unconditionally
 // recompute from live invoice data on every mount — which is exactly the ETP-5438 root cause
@@ -69,7 +70,7 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 // the `boxes`/`operators` READS open for submitted declarations (only `generate` returns 409 —
 // ETP-5438 follow-up): a 409 there made every cold cache (new tab, reload, another browser)
 // render "Error de cálculo". The detail pages write their own cold-cache compute into this same
-// cache (`setCachedFiscalCompute`), so list and detail stay on one frozen payload. Known
+// cache (`setCachedFiscalCompute`), so list and detail stay on one frozen payload. Legacy-only
 // trade-off: a cold session recomputes from the invoice data as it is at that moment.
 async function neverModifiedFn() {
   return false;

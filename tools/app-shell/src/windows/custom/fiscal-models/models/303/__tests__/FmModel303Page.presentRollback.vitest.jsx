@@ -104,4 +104,21 @@ describe('FmModel303Page — rejected presentation rolls back (ETP-5438)', () =>
     expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByText('fm.action.submit')).toBeNull();
   });
+
+  it('applies the snapshot echoed by the PUT so the page shows exactly the frozen figures', async () => {
+    const onStatusChange = vi.fn().mockResolvedValue({
+      ok: true,
+      submittedSnapshot: { boxes: { 27: 777, 29: 77, 45: 77, 46: 700 }, summary: { accrued: 777, deductible: 77, result: 700 }, sources: [] },
+    });
+    const { container } = render(<FmModel303Page decl={decl} onBack={vi.fn()} onStatusChange={onStatusChange} token="tok" apiBaseUrl="/api" />);
+
+    fireEvent.click(screen.getByText('fm.action.submit'));
+    fireEvent.click(await screen.findByTestId('confirm-present'));
+
+    await waitFor(() => {
+      const values = [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+      expect(values).toContain('777');
+      expect(values).toContain('700');
+    });
+  });
 });

@@ -94,4 +94,20 @@ describe('FmModel349Page — rejected presentation rolls back (ETP-5438)', () =>
     expect(toast.error).not.toHaveBeenCalled();
     expect(screen.queryByText('fm.action.present')).toBeNull();
   });
+
+  it('applies the snapshot echoed by the PUT so the page shows exactly the frozen operators', async () => {
+    const onStatusChange = vi.fn().mockResolvedValue({
+      ok: true,
+      submittedSnapshot: {
+        operators: [{ bpId: '4', nif: 'IT01234567890', name: 'Frozen Srl', key: 'E', base: '88.00', vies: 'valid' }],
+        invoices: [],
+      },
+    });
+    render(<FmModel349Page decl={decl} onBack={vi.fn()} onStatusChange={onStatusChange} token="tok" apiBaseUrl="/api" />);
+
+    fireEvent.click(screen.getByText('fm.action.present'));
+    fireEvent.click(await screen.findByTestId('confirm-present'));
+
+    await waitFor(() => expect(document.body.textContent).toContain('Frozen Srl'));
+  });
 });

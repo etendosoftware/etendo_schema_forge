@@ -799,7 +799,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     // submissionMethod (ETP-4755): the two manual paths PresentModal can report here —
     // 'submitted_ack' always carries the uploaded acuse (see canConfirm in PresentModal),
     // 'submitted' never does. Neither collides with the AEAT telematic path's own
-    // 'aeat_telematic' value, set server-side only (see handleSubmit's onSuccess below).
+    // 'aeat_telematic' value, set server-side only (see handleTelematicSuccess above).
     const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
     // ETP-5438 — the backend rejects the presentation when it cannot compute the submission
     // snapshot (nothing is written server-side). Roll the optimistic status back and say so,
@@ -810,6 +810,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       setStatus(previous.status);
       setSubmissionMethod(previous.submissionMethod);
       toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+      return;
+    }
+    // ETP-5438 — show exactly the figures the backend froze in this same request (the PUT
+    // echoes the snapshot), through the same helper a live compute uses, so the page matches
+    // what the list and every later reopen will show.
+    if (result?.submittedSnapshot?.boxes != null) {
+      applyComputeResult(result.submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
     }
   }
 

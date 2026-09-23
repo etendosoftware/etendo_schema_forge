@@ -125,7 +125,9 @@ that already carries it is just as frozen as one presented through either curren
     `NeoBuiltInEndpointHandler`) routes the compute to the handler owning the declaration's model.
     The PUT response echoes the snapshot (`{"ok":true,"submittedSnapshot":{…}}`), and
     `FiscalModelsPage` carries it into the detail view and the list patch, so a just-presented
-    declaration freezes without a refetch.
+    declaration freezes without a refetch; the detail page's `handlePresent` also applies it at
+    once (`applyComputeResult` on 303, `applyOperatorsResult` on 349), so the figures on screen
+    are exactly the frozen ones.
   - AEAT telematic filing (303) — `Fiscal303SubmissionSupport#handleSubmit` computes it after
     generating the `.303` file and **before** calling the AEAT; `persistSuccessfulSubmission`
     stores it with the `submitted_ack` status in the single commit. Test mode takes none. The
@@ -144,7 +146,7 @@ that already carries it is just as frozen as one presented through either curren
 - **Reads.** `declToJson` exposes it as `submittedSnapshot` (parsed object, or `null` when absent
   or unparseable — never `{}`, which would freeze a declaration on no figures).
   `GET /fiscal303/boxes` / `GET /fiscal349/operators` (`AbstractFiscalHandler#snapshotOrCompute`)
-  return the snapshot, byte for byte, when the **latest** declaration for the natural key
+  return the snapshot — the same payload, re-serialized through `JSONObject` — when the **latest** declaration for the natural key
   (highest `DECL_SEQ`, same rule as `findLatestDeclarationStatus`) is submitted and has one — the
   compute is never reached. Submitted without a snapshot (legacy), draft and ready declarations
   compute live, exactly as before.
