@@ -86,6 +86,7 @@ export default function BulkDocumentAction({
   // is `name`) passes its own `rowLabel={(row) => row.name || row.id}` instead of
   // patching this default for every caller.
   rowLabel = (row) => row.documentNo || row.id,
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
@@ -129,7 +130,7 @@ export default function BulkDocumentAction({
     return out;
   }, [selectedRows, buildActions]);
 
-  if (selectedRows.length === 0 || actions.length === 0) return null;
+  if (selectedRows.length === 0 || actions.length === 0 || windowReadOnly) return null;
 
   const handleOpen = () => {
     setSelectedAction(actions[0].value);

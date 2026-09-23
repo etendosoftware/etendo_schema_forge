@@ -1155,7 +1155,7 @@ export function ListView({
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
-                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList })}
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList, windowReadOnly })}
                 {selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
