@@ -5,7 +5,7 @@
  * items, searches visible items, and exercises top-bar scope interactions.
  *
  * Mock mode only — no Etendo backend required.
- * Run: cd e2e && npx playwright test tests/flows/command-palette-etp4003.mocked.spec.js
+ * Run: cd e2e && npx playwright test tests/flows/platform/command-palette-etp4003.mocked.spec.js
  * Requires dev server: make dev (http://localhost:3100)
  */
 

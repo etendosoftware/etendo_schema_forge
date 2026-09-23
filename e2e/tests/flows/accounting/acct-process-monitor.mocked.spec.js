@@ -25,7 +25,7 @@ import { login } from '../../helpers/auth.js';
  *   npx vite --port 3105        # flag off (default) — the flag-off menu test runs
  *   VITE_FEATURE_FLAGS='{"acct-process-monitor":true}' npx vite --port 3105
  *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3105 E2E_ACCT_PROCESS_MONITOR_FLAG=on \
- *     npx playwright test tests/flows/acct-process-monitor.mocked.spec.js --project=mocked
+ *     npx playwright test tests/flows/accounting/acct-process-monitor.mocked.spec.js --project=mocked
  *
  * Mock mode only. Routes are installed AFTER `login()` so they beat its generic `/sws/**` stub.
  * Run against plain `make dev`/`npx vite`, never `make dev-mock` — `VITE_MOCK=true` replaces

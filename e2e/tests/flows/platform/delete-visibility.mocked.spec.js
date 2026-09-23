@@ -31,7 +31,7 @@ import { login } from '../../helpers/auth.js';
  *
  * Mock mode only — no backend required. See docs/e2e-testing-guide.md
  * ("Writing a mocked list/detail spec") and
- * e2e/tests/flows/row-quick-actions.mocked.spec.js for the canonical pattern
+ * e2e/tests/flows/platform/row-quick-actions.mocked.spec.js for the canonical pattern
  * this spec follows.
  */
 

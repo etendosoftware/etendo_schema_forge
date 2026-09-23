@@ -13,7 +13,7 @@ import { login } from '../../helpers/auth.js';
  * handlers AFTER login()'s generic /sws/** stub so the specific routes win
  * (Playwright matches routes in reverse registration order). No backend needed —
  * run against `make dev`:
- *   cd e2e && npm test -- tests/flows/financial-account-new-transaction.mocked.spec.js
+ *   cd e2e && npm test -- tests/flows/finance/financial-account-new-transaction.mocked.spec.js
  *
  * Default app locale is es_ES (see useLocaleState.DEFAULT_LOCALE), so copy
  * assertions target the Spanish strings.

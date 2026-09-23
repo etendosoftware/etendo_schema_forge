@@ -26,7 +26,7 @@ import { loadCredentials } from '../../helpers/purchase-helpers.js';
  *
  *   cd e2e
  *   E2E_ORGANIZATION_INTEGRATION=1 E2E_USE_MOCK=0 E2E_PASSWORD=<pass> \
- *     npx playwright test tests/flows/organization-save.integration.spec.js --project=integration
+ *     npx playwright test tests/flows/system/organization-save.integration.spec.js --project=integration
  *
  * `E2E_USER`/`E2E_PASSWORD` are used unless `e2e/.auth-credentials.json` exists (written by
  * the onboarding project), same as the other integration specs.

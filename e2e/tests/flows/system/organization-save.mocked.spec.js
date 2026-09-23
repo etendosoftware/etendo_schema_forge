@@ -38,7 +38,7 @@ import { login, MOCK_ORG_ID } from '../../helpers/auth.js';
  *
  * Mock mode only — this spec installs entity-specific routes on top of the generic
  * `/sws/**` mock that `login()` seeds, so it needs no backend.
- * Run with: `cd e2e && npx playwright test tests/flows/organization-save.mocked.spec.js`
+ * Run with: `cd e2e && npx playwright test tests/flows/system/organization-save.mocked.spec.js`
  */
 
 // AD_Org and AD_OrgInfo share this id on purpose — that is the real Etendo shape and

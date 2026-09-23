@@ -61,7 +61,7 @@ import { login } from '../../helpers/auth.js';
  *
  * Run with (the dev server must NOT be in `VITE_MOCK` mode — see docs/e2e-testing-guide.md
  * § "Gotcha: `VITE_MOCK=true` silently bypasses `page.route()` mocks"):
- *   cd e2e && npx playwright test tests/flows/purchase-order-confirm-stale-token.mocked.spec.js \
+ *   cd e2e && npx playwright test tests/flows/purchases/purchase-order-confirm-stale-token.mocked.spec.js \
  *     --project=mocked
  */
 

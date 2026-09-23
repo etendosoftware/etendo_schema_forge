@@ -46,12 +46,12 @@ import { login } from '../../helpers/auth.js';
  *   # BEFORE  (base epic, pre-4564 — no shared cache for these read paths)
  *   git checkout epic/ETP-3504        # or the pre-4564 commit
  *   make dev &                        # published preview already ships app-shell-core/data
- *   cd e2e && npx playwright test tests/flows/contacts-cache-request-count.mocked.spec.js
+ *   cd e2e && npx playwright test tests/flows/contacts/contacts-cache-request-count.mocked.spec.js
  *
  *   # AFTER   (this branch, feature/ETP-4564 — reads routed through the cache)
  *   git checkout feature/ETP-4564
  *   make dev &
- *   cd e2e && npx playwright test tests/flows/contacts-cache-request-count.mocked.spec.js
+ *   cd e2e && npx playwright test tests/flows/contacts/contacts-cache-request-count.mocked.spec.js
  *
  * The delta is the win: on BEFORE, reopening the same contact re-issues the
  * record/children/KPI GETs (counts scale with the number of opens) and
@@ -76,7 +76,7 @@ import { login } from '../../helpers/auth.js';
  *   required here. (LOCAL_CORE is only needed when the preview package predates
  *   the `data` export; run `make dev-local-core` in that case.)
  * - Run command used:
- *     cd e2e && npx playwright test tests/flows/contacts-cache-request-count.mocked.spec.js --project=mocked
+ *     cd e2e && npx playwright test tests/flows/contacts/contacts-cache-request-count.mocked.spec.js --project=mocked
  */
 
 const CHILD_ENTITIES = ['contact', 'bankAccount', 'locationAddress', 'customerAccounting', 'vendorAccounting'];

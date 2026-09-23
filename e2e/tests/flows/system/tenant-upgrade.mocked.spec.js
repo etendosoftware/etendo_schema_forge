@@ -19,7 +19,7 @@ import { login } from '../../helpers/auth.js';
  *
  *   npx vite --port 3101
  *   E2E_USE_MOCK=1 BASE_URL=http://localhost:3101 \
- *     npx playwright test tests/flows/tenant-upgrade.mocked.spec.js --project=mocked
+ *     npx playwright test tests/flows/system/tenant-upgrade.mocked.spec.js --project=mocked
  */
 
 const EXISTING_TENANT = 'Acme Trial';

@@ -51,7 +51,7 @@ import { login } from '../../helpers/auth.js';
  * catch-all (Playwright matches routes in reverse registration order).
  *
  * Run with (dev server must NOT be in `VITE_MOCK` mode — see the guide's gotcha on `dev-mock`):
- *   cd e2e && npx playwright test tests/flows/fiscal-303-manual-data-single-flight.mocked.spec.js \
+ *   cd e2e && npx playwright test tests/flows/fiscal/fiscal-303-manual-data-single-flight.mocked.spec.js \
  *     --project=mocked
  */
 
