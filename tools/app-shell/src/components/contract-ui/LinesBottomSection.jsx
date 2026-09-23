@@ -35,6 +35,13 @@ export default function LinesBottomSection({
   apiBaseUrl,
   api,
   isDocumentReadOnly,
+  // ETP-5205: DetailView's `windowReadOnly` (static decisions.json api.window.readOnly OR
+  // the runtime Solo-Lectura tier), used ONLY for the Notes field below. Notes are
+  // documented to stay editable even on a completed document and even on a brand-new
+  // record — unlike `isReadOnly` below (documentStatus !== 'DR' || isDocumentReadOnly),
+  // which is the correct, unchanged rule for the total-discount field: that one IS meant
+  // to lock once the document leaves Draft.
+  windowReadOnly,
   notesField,
   onFieldChange,
   notesFocused,
@@ -114,7 +121,7 @@ export default function LinesBottomSection({
                 {ui('notes')}
               </span>
               <div className="flex-1" data-testid="notes-textarea">
-                {notesFocused && !isReadOnly ? (
+                {notesFocused && !windowReadOnly ? (
                   <textarea
                     value={data?.[notesField] || ''}
                     onChange={(e) => onFieldChange?.(notesField, e.target.value)}
@@ -128,8 +135,8 @@ export default function LinesBottomSection({
                   <div
                     tabIndex={0}
                     role="textbox"
-                    onClick={() => !isReadOnly && setNotesFocused?.(true)}
-                    onFocus={() => !isReadOnly && setNotesFocused?.(true)}
+                    onClick={() => !windowReadOnly && setNotesFocused?.(true)}
+                    onFocus={() => !windowReadOnly && setNotesFocused?.(true)}
                     className="w-full min-h-[1.5rem] cursor-text rounded border border-transparent px-2.5 py-1.5 text-xs text-foreground/80 transition-colors hover:border-border-subtle"
                   >
                     {data?.[notesField] || <span className="text-muted-foreground/40">{ui('addNoteHint')}</span>}

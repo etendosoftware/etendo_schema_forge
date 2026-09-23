@@ -80,7 +80,14 @@ export default function DocumentSecondaryActions({
   clone = false,
   showSend = false,
   onSendClick,
-  isDocumentReadOnly,
+  // ETP-5205: `windowReadOnly` (static decisions.json api.window.readOnly OR the
+  // runtime Solo-Lectura tier), deliberately NOT `isDocumentReadOnly` — cloning or
+  // sending a PROCESSED document is a normal, common flow (cloning a completed doc
+  // as a template is often the whole point), so `isDocumentReadOnly`'s extra
+  // completion-lock component must not hide these buttons. Discovered live: an
+  // evaluated (UE) sales-quotation lost its Clone button under full access because
+  // `isDocumentReadOnly` folds in getDocumentReadOnly's processed-record lock.
+  windowReadOnly,
   children = null,
 }) {
   const navigate = useNavigate();
@@ -89,7 +96,7 @@ export default function DocumentSecondaryActions({
 
   if (!recordId) return null;
 
-  const cloneConfig = !isDocumentReadOnly && (clone === true ? {} : (clone || null));
+  const cloneConfig = !windowReadOnly && (clone === true ? {} : (clone || null));
   const headers = headersProp ?? (token ? buildHeaders(token) : undefined);
 
   return (
@@ -103,7 +110,7 @@ export default function DocumentSecondaryActions({
           title={ui(cloneConfig.titleKey || 'cloneOrderBtn')}
           data-testid="DocumentSecondaryActions__clone" />
       )}
-      {showSend && !isDocumentReadOnly && (
+      {showSend && !windowReadOnly && (
         <SendDocumentButton onClick={onSendClick} data-testid="DocumentSecondaryActions__send" />
       )}
       {children}

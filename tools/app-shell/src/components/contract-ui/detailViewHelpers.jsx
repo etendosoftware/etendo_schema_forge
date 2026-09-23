@@ -1066,8 +1066,12 @@ export function getSecondaryTabEntityKey(secondaryTabs, index) {
   return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
 }
 
-export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, isDocumentReadOnly) {
-  return notesFocused && !isDocumentReadOnly ? (
+// ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json
+// `api.window.readOnly` OR the runtime Solo-Lectura tier), NOT `isDocumentReadOnly` —
+// notes are documented to stay editable past document completion, so they must not
+// lock on `isDocumentReadOnly`'s extra `getDocumentReadOnly` (completion-lock) component.
+export function renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly }) {
+  return notesFocused && !readOnly ? (
       <textarea
           value={data[notesField] || ''}
           onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
@@ -1084,8 +1088,8 @@ export function renderNotesField(notesFocused, data, notesField, handleChangeWit
       <div
           tabIndex={0}
           role="textbox"
-          onClick={() => !isDocumentReadOnly && setNotesFocused(true)}
-          onFocus={() => !isDocumentReadOnly && setNotesFocused(true)}
+          onClick={() => !readOnly && setNotesFocused(true)}
+          onFocus={() => !readOnly && setNotesFocused(true)}
           className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
       >
         {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}

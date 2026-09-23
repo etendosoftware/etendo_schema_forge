@@ -189,18 +189,47 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
     expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
   });
 
-  it('opt-out: also hides selectionBarRightActions when the window is read-only (ETP-5205)', () => {
+  it('opt-out: also hides selectionBarRightActions under the RUNTIME read-only tier (ETP-5205)', () => {
+    // The runtime Solo-Lectura tier flows through the `window` prop (effectiveWindow, set by
+    // each generated Page component), NOT api.window.readOnly (see the next test) — same
+    // channel DetailView's menuActionsReadOnly reads.
     const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
     render(
       <ListView
         {...defaultProps}
         selectionBarRightActions={selectionBarRightActions}
+        window={{ readOnly: true }}
+      />
+    );
+    selectRows();
+    expect(screen.queryByTestId('host-own-action')).not.toBeInTheDocument();
+  });
+
+  it('regression (ETP-5205): does NOT hide bulkActions/selectionBarRightActions from a window ' +
+    'declared readOnly in decisions.json (api.window.readOnly) alone — that flag means "no generic ' +
+    'CRUD", not "no custom actions", and is orthogonal to the runtime Solo-Lectura tier. ' +
+    'matched-purchase-invoices sets window.readOnly:true for exactly this reason yet must still ' +
+    'offer its Post/Unpost bulkActions under full access — conflating the two hid the button.', () => {
+    const bulkActions = ({ windowReadOnly }) => (
+      <button data-testid="host-bulk-action">{windowReadOnly ? 'hidden-by-flag' : 'Procesar'}</button>
+    );
+    const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
+    render(
+      <ListView
+        {...defaultProps}
+        bulkActions={bulkActions}
+        selectionBarRightActions={selectionBarRightActions}
         api={{ window: { readOnly: true }, crud: {} }}
       />
     );
     selectRows();
+    // The generic "Delete selected" button DOES stay gated by api.window.readOnly (unrelated,
+    // pre-existing behavior, unaffected by this fix).
     expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('host-own-action')).not.toBeInTheDocument();
+    // But custom bulkActions/selectionBarRightActions must render — and bulkActions must receive
+    // windowReadOnly: false, not true.
+    expect(screen.getByTestId('host-bulk-action')).toHaveTextContent('Procesar');
+    expect(screen.getByTestId('host-own-action')).toBeInTheDocument();
   });
 
   it('does NOT infer an opt-out from the host supplying selectionBarRightActions alone (must opt out explicitly)', () => {

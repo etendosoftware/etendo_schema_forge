@@ -2507,7 +2507,7 @@ export function DetailView({
 
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
-    if (!currentId || isNew || !notesField || isDocumentReadOnly) return;
+    if (!currentId || isNew || !notesField || windowReadOnly) return; // ETP-5205: excludes only the completion lock, notes still respect the static/tier flags
     if (value !== undefined && value.length > 255) {
       toast.error(ui('notesMaxLengthExceeded'));
       return;
@@ -2527,7 +2527,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, notesField, isDocumentReadOnly, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
+  }, [data?.id, recordId, isNew, notesField, windowReadOnly, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   // Guard that controls whether "+ Add Lines" is shown.
   // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
@@ -2895,7 +2895,7 @@ export function DetailView({
         onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
         onSave={() => hook.handleSave({ silent: true })}
         isDirty={isDirty}
-        saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly}
+        saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
         data-testid={testId} />
     );
   })();
@@ -4042,7 +4042,7 @@ export function DetailView({
                           data={data}
                           token={token}
                           apiBaseUrl={apiBaseUrl}
-                          api={api} isDocumentReadOnly={isDocumentReadOnly}
+                          api={api} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
                           summary={summary}
                           notesField={notesField}
                           onFieldChange={handleChangeWithCallout}
@@ -4119,7 +4119,7 @@ export function DetailView({
                               <div className={getNotesRowClassName(embedded)}>
                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
                                 <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
-                                  {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, isDocumentReadOnly)}
+                                  {renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly: windowReadOnly })}
                                 </div>
                               </div>
                             )}

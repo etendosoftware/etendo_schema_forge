@@ -150,6 +150,8 @@ export default function AttachmentsTab({
     }
   };
 
+  const onDeleteAll = !isDocumentReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
+
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
       <UploadDropzone
@@ -164,7 +166,7 @@ export default function AttachmentsTab({
         onDownload={download}
         onDelete={isDocumentReadOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
-        onDeleteAll={isDocumentReadOnly ? undefined : (items.length > 0 ? () => setConfirmDeleteAll(true) : undefined)}
+        onDeleteAll={onDeleteAll}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
       <ConfirmDeleteDialog
