@@ -37,6 +37,10 @@ Backed by the real Etendo Classic AD_Window **`Organization`, ID `110`** — thi
 
 The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) are entirely out of scope for this ticket — none of their fields are extracted, curated, or exposed anywhere in this window.
 
+## Window-access gate (ETP-5395 Fix 3)
+
+`OrganizationPage.jsx` is a fully hand-written custom page (`registry.js` loads it directly for `"organization"`, never a generated `Page.jsx`), so it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window despite this window carrying a real `AD_Window_ID` (`110`) — the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the `organization`/`information` fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useOrganizationData.js`'s HTTP-status-only error message rendered raw ("HTTP 403" + a Retry button that can never help). Fixed by adding `const windowAccessTier = useWindowAccess('110'); if (windowAccessTier === 'none') return <WindowAccessGuard windowId="110" />;`, checked after every other hook (Rules-of-Hooks-safe) and before the `loading`/`error` early returns.
+
 ## Interaction model
 
 - Route: `/organization` (list-style single route; no `:recordId` — this is a per-organization settings screen, not a record-based CRUD window).
@@ -327,7 +331,7 @@ case list, deliberately).
 - `tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx` / `InlineSearchCombo.jsx` — QA-found pagination fixes (scroll-triggered "load more" was cutting results short) plus the `searchGenerationRef` fix (ETP-4975 BUG-2): a new search fired while a scroll-page fetch was still in flight could otherwise let the stale page's results land after the new search's, since both fixes share the same "tag every fetch with its search generation, discard a resolved fetch whose generation is no longer current" pattern.
 - `tools/app-shell/src/lib/imageUpload.js` — `sanitizeImageName()`, shared by this window's `OrgLogoField.jsx` and the generic `ImageField.jsx` (contract-ui): truncates upload filenames to AD_Image's 60-char `Name` limit.
 - `tools/app-shell/src/windows/custom/organization/__tests__/useOrganizationData.vitest.js` — load/save behavior (including the direct AD_OrgInfo contact columns), error handling.
-- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard.
+- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.
 - `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/AeatSubmitFlow.missingIaeGuard.vitest.jsx` — the "Marcar como Presentado" pre-flight guard: blocks/proceeds cases, fail-open on fetch error, CTA navigation (ETP-4975).
