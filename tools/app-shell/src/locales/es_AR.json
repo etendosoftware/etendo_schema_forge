@@ -17644,6 +17644,7 @@
     "upgradeBillingOverviewBody": "El estado de la compra y la preparación se guarda en tu cuenta.",
     "upgradeUnnamedPurchase": "Entorno sin nombre",
     "upgradePurchaseAlreadyExists": "Ya hay una compra en curso para este entorno. Actualizá la actividad de facturación para continuar.",
+    "upgradeDataTransferSelectionMissing": "Esta compra no tiene guardada la selección de transferencia. La configuración del entorno continuará sin copiar los datos de la demo. Contactá a soporte si necesitás transferirlos.",
     "upgradeDataTransferTitle": "Traé tus datos de la demo automáticamente",
     "upgradeDataTransferBody": "Elegí los productos y contactos de la demo que querés transferir antes del pago. Cuando el entorno productivo esté listo, el servidor inicia la transferencia automáticamente; Primeros pasos muestra el progreso persistente y te permite reintentarla si falla. No tenés que exportar ni importar nada.",
     "upgradeMigrationTitle": "Transferencia de datos",

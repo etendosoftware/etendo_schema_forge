@@ -529,10 +529,24 @@ The browser follows the backend instead: `useDemoDataTransfer` reports `availabl
 catalogue — same rows and same `x/TOTAL` as before ETP-5364. Any other failure before a first
 successful read is treated the same way: an unknown answer hides the row.
 
-`UpgradePage` keeps sending the `dataTransfer` selection it has sent since ETP-5421. With the flag
-off the copy on the checkout-session request is ignored, and the copy on `POST /sws/go/onboarding`
-still drives ETP-5421's synchronous `OnboardingDataTransferService`, exactly as before ETP-5364. Owned paths, specs and the preconditions for switching it on
-are in [`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
+`UpgradePage` sends the selected products and contacts in the billing purchase request (and the
+legacy checkout-session request). A purchase with a recorded selection returns it as
+`dataTransfer: { products, contacts }`; resume uses that server-owned selection rather than the
+current state of the checkboxes. The purchase projection also reports `dataTransferEnabled`.
+When it is true and the purchase has no saved selection, the page shows a warning and continues
+provisioning without a transfer request; it cannot reconstruct the choice from browser state.
+The durable transfer then remains `NOT_REQUESTED` and requires operator recovery if the buyer
+expected data to move. With the flag off, resume may
+use an explicitly saved browser choice or one made in the current checkout form. It never defaults
+a missing choice to both options. The checkout selection is ignored by the durable job and the
+selection on `POST /sws/go/onboarding` continues to drive ETP-5421's synchronous
+`OnboardingDataTransferService`. With the flag on, Go records the immutable checkout selection
+before contacting the payment provider, skips the synchronous copy, and starts the durable job
+only after onboarding commits. The product copy reuses system UOMs, copies client UOM EDI codes,
+and resolves the target tax category; a missing category fails the job with a named reason so it
+can be repaired and retried. The job also rejects a source and destination with the same tenant
+ID. Owned paths, specs and remaining work are in
+[`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
 
 ## Proof of Concept menu (`proof-of-concept-menu`)
 

@@ -17754,6 +17754,7 @@
     "upgradeBillingOverviewBody": "Purchase and provisioning status is saved to your account.",
     "upgradeUnnamedPurchase": "Unnamed environment",
     "upgradePurchaseAlreadyExists": "A purchase for this environment is already in progress. Refresh billing activity to continue.",
+    "upgradeDataTransferSelectionMissing": "This purchase has no saved data transfer choice. Your environment setup will continue without copying demo data. Contact support if you need the data transferred.",
     "upgradeDataTransferTitle": "Bring your demo data automatically",
     "upgradeDataTransferBody": "Choose the demo products and contacts to transfer before payment. Once your productive environment is ready, the server starts the transfer automatically; First Steps shows persistent progress and lets you retry it if it fails. No export or import is required.",
     "upgradeMigrationTitle": "Data transfer",
