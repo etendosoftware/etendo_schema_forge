@@ -4,6 +4,7 @@ import { ArrowRight, Check, CircleAlert, CreditCard, Loader2, Rocket } from 'luc
 import { initialSetupSteps, applyProgressMessage, fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding';
 import { useUI, getStoredLocale } from '@/i18n';
 import { detectBaseUrl } from '@/auth/api.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { track } from '@/lib/observability.js';
 import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '@/lib/observability/events.js';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,18 +84,74 @@ function getUpgradeBaseUrl() {
   return import.meta.env?.DEV ? '' : detectBaseUrl();
 }
 
-function readPendingDataTransfer(storage) {
+/** Reset the account-level checklist once after a productive purchase succeeds. */
+async function resetFirstStepsAfterProvisioning(apiFetch, purchaseId) {
+  const resetKey = purchaseId ? `sf_first_steps_reset_${purchaseId}` : null;
+  if (resetKey) {
+    try {
+      if (window.localStorage.getItem(resetKey) === 'true') return;
+    } catch (error) {
+      console.warn('Could not check the First Steps reset marker', error);
+    }
+  }
   try {
-    return JSON.parse(storage.getItem(PENDING_CHECKOUT_DATA_TRANSFER) || '') || DEFAULT_DATA_TRANSFER;
-  } catch {
-    return DEFAULT_DATA_TRANSFER;
+    const readResponse = await apiFetch('/sws/go/onboarding/first-steps');
+    if (!readResponse.ok) {
+      console.warn(`Could not read First Steps after productive provisioning (HTTP ${readResponse.status})`);
+      return;
+    }
+    const current = await readResponse.json();
+    const firstSteps = current?.firstSteps;
+    const writeResponse = await apiFetch('/sws/go/onboarding/first-steps', {
+      method: 'POST',
+      body: JSON.stringify({
+        firstSteps: {
+          v: 1,
+          // `seen` only controls the one-time dashboard redirect; keep that history intact.
+          seen: firstSteps?.seen === true,
+          dismissed: false,
+          // `create-account` is alwaysDone and is intentionally absent from persisted IDs.
+          completed: [],
+        },
+      }),
+    });
+    if (!writeResponse.ok) {
+      console.warn(`Could not reset First Steps after productive provisioning (HTTP ${writeResponse.status})`);
+      return;
+    }
+    if (resetKey) window.localStorage.setItem(resetKey, 'true');
+  } catch (error) {
+    // Provisioning is already successful; a checklist persistence issue must not turn it into
+    // a failed upgrade. The next visit can still retry the reset through this success path.
+    console.warn('Could not reset First Steps after productive provisioning', error);
   }
 }
 
-async function resolveCheckoutTenantName({ baseUrl, requestId, storedTenantName }) {
-  if (storedTenantName) return storedTenantName;
-  const purchase = await getBillingPurchase(baseUrl, requestId);
-  return purchase?.clientName || '';
+function readPendingDataTransfer(storage) {
+  try {
+    const selection = JSON.parse(storage.getItem(PENDING_CHECKOUT_DATA_TRANSFER) || 'null');
+    return normalizeDataTransfer(selection);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeDataTransfer(selection) {
+  if (!selection || typeof selection.products !== 'boolean'
+    || typeof selection.contacts !== 'boolean') return null;
+  return { products: selection.products, contacts: selection.contacts };
+}
+
+function purchaseDataTransfer(purchase, explicitFallback) {
+  const recorded = normalizeDataTransfer(purchase?.dataTransfer);
+  if (recorded) return recorded;
+  if (purchase?.dataTransferEnabled === true) return null;
+  return normalizeDataTransfer(explicitFallback);
+}
+
+function isMissingRecordedSelection(purchase) {
+  return purchase?.dataTransferEnabled === true
+    && !normalizeDataTransfer(purchase.dataTransfer);
 }
 
 async function waitForCheckoutPayment({ baseUrl, requestId }) {
@@ -149,24 +206,27 @@ async function resumeCheckoutProvisioning({
   onTenantName,
   onPendingProvisioning,
   onDataTransfer,
+  onTransferWarning,
   onReady,
 }) {
-  const tenantName = await resolveCheckoutTenantName({
-    baseUrl, requestId, storedTenantName,
-  });
+  const purchase = await getBillingPurchase(baseUrl, requestId);
+  const tenantName = purchase?.clientName || storedTenantName;
   if (!tenantName) throw new Error('Purchase has no environment name');
   onTenantName(tenantName);
 
   const status = await waitForCheckoutPayment({ baseUrl, requestId });
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
 
-  const selectedTransfer = readPendingDataTransfer(storage);
+  // The recorded purchase is authoritative when it has a selection. An explicit local choice
+  // remains available for older/flag-off purchases, where the backend does not persist it.
+  const selectedTransfer = purchaseDataTransfer(purchase, readPendingDataTransfer(storage));
+  onTransferWarning(isMissingRecordedSelection(purchase));
   onPendingProvisioning({
     clientName: status.clientName || tenantName,
     paymentToken: requestId,
     upgradeAction,
     language: getStoredLocale(),
-    dataTransfer: selectedTransfer,
+    ...(selectedTransfer ? { dataTransfer: selectedTransfer } : {}),
     startedAt,
   });
   if (isCancelled()) return;
@@ -175,7 +235,7 @@ async function resumeCheckoutProvisioning({
   storage.removeItem(PENDING_CHECKOUT_ACTION);
   storage.removeItem(PENDING_CHECKOUT_STARTED_AT);
   window.history.replaceState({}, '', '/upgrade');
-  onDataTransfer(selectedTransfer);
+  if (selectedTransfer) onDataTransfer(selectedTransfer);
   onReady();
   storage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
 }
@@ -473,6 +533,7 @@ function formatOfferPrice(offer, locale) {
 export default function UpgradePage() {
   const ui = useUI();
   const navigate = useNavigate();
+  const apiFetch = useApiFetch(getUpgradeBaseUrl());
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
   const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
@@ -500,6 +561,8 @@ export default function UpgradePage() {
   const [enterError, setEnterError] = useState(false);
   const [pendingProvisioning, setPendingProvisioning] = useState(null);
   const [dataTransfer, setDataTransfer] = useState(DEFAULT_DATA_TRANSFER);
+  const [dataTransferChosen, setDataTransferChosen] = useState(false);
+  const [transferWarning, setTransferWarning] = useState(false);
 
   const startProvisioning = async () => {
     if (!pendingProvisioning) return;
@@ -512,6 +575,7 @@ export default function UpgradePage() {
       await runPaidOnboarding(getUpgradeBaseUrl(), onboardingInput, message => {
         setSteps(previous => applyProgressMessage(previous, message));
       });
+      await resetFirstStepsAfterProvisioning(apiFetch, onboardingInput.paymentToken);
       setPendingProvisioning(null);
       setEntering(false);
       setPhase('success');
@@ -545,6 +609,8 @@ export default function UpgradePage() {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
+    const selectedTransfer = purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null);
+    setTransferWarning(isMissingRecordedSelection(purchase));
     setResumingPurchaseId(purchase.purchaseId);
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setFormError(null);
@@ -554,7 +620,7 @@ export default function UpgradePage() {
       paymentToken: purchase.purchaseId,
       upgradeAction: 'create-productive',
       language: getStoredLocale(),
-      dataTransfer: dataTransfer,
+      ...(selectedTransfer ? { dataTransfer: selectedTransfer } : {}),
       startedAt: Date.now(),
     });
     setResumingPurchaseId(null);
@@ -571,6 +637,7 @@ export default function UpgradePage() {
       try {
         const current = await getBillingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
         if (current?.status === 'PROVISIONED') {
+          await resetFirstStepsAfterProvisioning(apiFetch, purchase.purchaseId);
           setPhase('success');
           return;
         }
@@ -584,12 +651,14 @@ export default function UpgradePage() {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+    const selectedTransfer = purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null);
+    setTransferWarning(isMissingRecordedSelection(purchase));
     setPendingProvisioning({
       clientName: purchase.clientName,
       paymentToken: purchase.purchaseId,
       upgradeAction: 'create-productive',
       language: getStoredLocale(),
-      dataTransfer: dataTransfer,
+      ...(selectedTransfer ? { dataTransfer: selectedTransfer } : {}),
     });
     setFormError(null);
     setPhase('running');
@@ -684,7 +753,11 @@ export default function UpgradePage() {
         setForm(previous => ({ ...previous, tenantName, upgradeAction }));
       },
       onPendingProvisioning: setPendingProvisioning,
-      onDataTransfer: setDataTransfer,
+      onDataTransfer: selection => {
+        setDataTransfer(selection);
+        setDataTransferChosen(true);
+      },
+      onTransferWarning: setTransferWarning,
       onReady: () => setPhase('running'),
     }).catch(error => {
       if (cancelled) return;
@@ -706,6 +779,7 @@ export default function UpgradePage() {
   // including an empty string when the field was never populated (ETP-5443).
   const runUpgrade = async tenantName => {
     setPhase('running');
+    setTransferWarning(false);
     // Duration is measured from here to the terminal event in the resume
     // effect above, so it covers the full round trip through Stripe's hosted
     // page — not just this request. There is no `startedAt` local variable
@@ -720,6 +794,7 @@ export default function UpgradePage() {
           clientName: tenantName,
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
+          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
@@ -834,6 +909,12 @@ export default function UpgradePage() {
             </div>
           )}
         </div>
+        {transferWarning && (phase === 'running' || phase === 'success') && (
+          <div role="status" className="rounded-md border border-status-warning-border bg-status-warning p-3 text-sm text-status-warning-foreground"
+            data-testid="upgrade-transfer-selection-warning">
+            {ui('upgradeDataTransferSelectionMissing')}
+          </div>
+        )}
       {showCheckout && checkoutStep === 'plan' && <>
       <div className="grid gap-5 md:grid-cols-3">
         <PlanCard
@@ -868,8 +949,14 @@ export default function UpgradePage() {
         <AddonsStep
           ui={ui}
           dataTransfer={dataTransfer}
-          onDataTransferChange={(key, checked) => setDataTransfer(previous => ({ ...previous, [key]: checked }))}
-          onContinue={() => setCheckoutStep('payment')}
+          onDataTransferChange={(key, checked) => {
+            setDataTransferChosen(true);
+            setDataTransfer(previous => ({ ...previous, [key]: checked }));
+          }}
+          onContinue={() => {
+            setDataTransferChosen(true);
+            setCheckoutStep('payment');
+          }}
           data-testid="AddonsStep__58bad7" />
       )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}

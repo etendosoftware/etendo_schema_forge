@@ -1,0 +1,432 @@
+import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { useUI } from '@/i18n';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
+
+// Same shape as ImportLinesModal's classifyQtyDraft — a draft is valid when it
+// parses to a finite magnitude in (0, maxQty]. Duplicated locally rather than
+// imported: the two components have no other shared dependency, and this keeps
+// each free to evolve its own validation independently.
+function classifyQtyDraft(raw, maxQty) {
+  if (raw === undefined || raw.trim() === '') return { valid: false, tooHigh: false };
+  const parsed = Number(raw);
+  const isNumeric = Number.isFinite(parsed);
+  const magnitude = Math.abs(parsed);
+  if (isNumeric && magnitude > 0 && magnitude <= maxQty) return { valid: true, tooHigh: false };
+  return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
+}
+
+function MiniCheck({ checked, onChange }) {
+  return (
+    <span
+      role="checkbox"
+      aria-checked={checked}
+      tabIndex={0}
+      onClick={onChange}
+      onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); onChange(); } }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 14,
+        height: 14,
+        borderRadius: 3,
+        border: checked ? 'none' : '1px solid hsl(var(--border-control))',
+        backgroundColor: checked ? 'hsl(var(--primary))' : 'hsl(var(--card))',
+        cursor: 'pointer',
+        flexShrink: 0,
+        transition: 'background-color 150ms, border-color 150ms',
+      }}
+    >
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="hsl(var(--primary-foreground))" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+const RETURN_RECEIPT_ICON = (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2h-5" />
+    <path d="M12 15l-3 3 3 3" />
+    <path d="M9 18h8" />
+  </svg>
+);
+
+function StepIndicator({ current, total }) {
+  const ui = useUI();
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={`step-${i}`}
+          className="w-2 h-2 rounded-full"
+          style={{ backgroundColor: i + 1 === current ? 'hsl(var(--primary))' : 'hsl(var(--foreground) / 0.3)' }}
+        />
+      ))}
+      <span className="ml-1">{ui('stepOf').replace('{step}', current).replace('{total}', total)}</span>
+    </div>
+  );
+}
+
+export default function CreateReturnWizard({
+  open,
+  onClose,
+  sourceData,
+  lines = [],
+  base,
+  headers,
+  onSuccess,
+  onError,
+  titleKey,
+  refLabelKey,
+  docTypeLabelKey,
+  docTypeDescriptionKey,
+  createActionUrl,
+  showAmountColumn = false,
+  fetchPrices,
+}) {
+  const ui = useUI();
+  const apiFetch = useApiFetch(base);
+  const [step, setStep] = useState(1);
+  const [selected, setSelected] = useState(() => new Set());
+  const [quantities, setQuantities] = useState({});
+  const [qtyDrafts, setQtyDrafts] = useState({});
+  const [reason, setReason] = useState('');
+  const [prices, setPrices] = useState({});
+  const [currency, setCurrency] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Reset state every time the dialog opens
+  useEffect(() => {
+    if (open && lines.length > 0) {
+      setStep(1);
+      setSelected(new Set(lines.map((l) => l.id)));
+      const q = {};
+      for (const l of lines) q[l.id] = Math.abs(Number(l.movementQuantity) || 0);
+      setQuantities(q);
+      setQtyDrafts({});
+      setReason('');
+      setPrices({});
+      setCurrency('');
+
+      if (showAmountColumn && fetchPrices) {
+        fetchPrices({ base, sourceData })
+          .then(({ priceMap, currency: cur } = {}) => {
+            if (priceMap) setPrices(priceMap);
+            if (cur) setCurrency(cur);
+          })
+          .catch(() => {});
+      }
+    }
+  }, [open, lines, sourceData, base, showAmountColumn, fetchPrices]);
+
+  const toggleLine = useCallback((id) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelected(new Set(lines.map((l) => l.id)));
+  }, [lines]);
+
+  const deselectAll = useCallback(() => {
+    setSelected(new Set());
+  }, []);
+
+  const selectedLines = lines.filter((l) => selected.has(l.id));
+  const totalReturnQty = selectedLines.reduce((sum, l) => sum + (quantities[l.id] || 0), 0);
+  const effectiveCurrency = currency || sourceData?.['currency$_identifier'] || '';
+
+  const getLinePrice = (line) => prices[line.product] ?? 0;
+  const getLineAmount = (line) => (quantities[line.id] || 0) * getLinePrice(line);
+  const totalAmount = selectedLines.reduce((sum, l) => sum + getLineAmount(l), 0);
+  const fmtAmount = (val) => formatCurrency(effectiveCurrency, typeof val === 'string' ? parseFloat(val) : val);
+
+  const documentNo = sourceData?.documentNo || '';
+  const bpName = sourceData?.['businessPartner$_identifier'] || sourceData?.businessPartner$_identifier || '';
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(createActionUrl(base, sourceData.id), {
+        baseUrl: '',
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          lines: selectedLines.map((l) => ({ lineId: l.id, returnQuantity: quantities[l.id] })),
+          reason,
+        }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        // `body?.error?.message` covers the standard `NeoResponse.error(int, String)` envelope
+        // (`{"error":{"message","status"}}`) used by most NEO action handlers — same fallback
+        // chain as useNeoAction.js (ETP-4706); without it the real backend message (e.g. "A
+        // return already exists for shipment: ...") is silently dropped for the generic HTTP
+        // reason phrase.
+        const rawMessage = body?.error?.message ?? body?.response?.error?.message
+          ?? body?.response?.message ?? body?.message ?? `Request failed (${res.status})`;
+        throw new Error(translateBackendError(rawMessage, ui, { messageKeys: extractBackendMessageKeys(body) }));
+      }
+      onClose();
+      if (onSuccess) onSuccess(body?.response?.data);
+    } catch (err) {
+      if (onError) onError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const canProceed = selectedLines.length > 0 && selectedLines.every((l) => quantities[l.id] > 0);
+
+  const cellStyle = { borderBottom: '0.5px solid hsl(var(--border) / 0.5)' };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => { if (!v) onClose(); }}
+      data-testid="Dialog__955eac">
+      <DialogContent
+        className="sm:max-w-[640px] p-0 gap-0 shadow-none bg-card"
+        style={{ border: '0.5px solid hsl(var(--border))', boxShadow: 'none' }}
+        data-testid="DialogContent__955eac">
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4" style={{ backgroundColor: 'hsl(var(--card))', borderBottom: '1px solid hsl(var(--border-subtle))', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}>
+          <StepIndicator current={step} total={2} data-testid="StepIndicator__955eac" />
+          <DialogHeader data-testid="DialogHeader__955eac">
+            <DialogTitle className="text-base font-semibold" data-testid="DialogTitle__955eac">{ui(titleKey)}</DialogTitle>
+            <DialogDescription
+              className="text-sm text-muted-foreground"
+              data-testid="DialogDescription__955eac">
+              {ui(refLabelKey)}{documentNo} &middot; {bpName}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        {/* Step 1: Review items */}
+        {step === 1 && (
+          <div className="px-6 pb-4 border-b border-border">
+            <div className="max-h-[280px] overflow-y-auto" style={{ marginTop: 16 }}>
+              <table className="w-full" style={{ fontSize: 13, tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: 32 }} />
+                  <col style={{ width: '50%' }} />
+                  <col style={{ width: '25%' }} />
+                  <col style={{ width: '25%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
+                    <th className="text-left px-1" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>
+                      <MiniCheck
+                        checked={selected.size === lines.length && lines.length > 0}
+                        onChange={() => { selected.size === lines.length ? deselectAll() : selectAll(); }}
+                        data-testid="MiniCheck__955eac" />
+                    </th>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('delivered')}</th>
+                    <th className="text-right px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('returnQty')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((line) => {
+                    const isSelected = selected.has(line.id);
+                    const maxQty = Math.abs(Number(line.movementQuantity) || 0);
+                    const currentQty = quantities[line.id] ?? maxQty;
+                    const draft = qtyDrafts[line.id];
+                    const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+                    return (
+                      <tr key={line.id} className={isSelected ? '' : 'opacity-40'}>
+                        <td className="px-1" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
+                          <MiniCheck
+                            checked={isSelected}
+                            onChange={() => toggleLine(line.id)}
+                            data-testid="MiniCheck__955eac" />
+                        </td>
+                        <td className="px-2 text-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {line['product$_identifier'] || line.product$_identifier || '—'}
+                        </td>
+                        <td className="px-2 text-right tabular-nums text-muted-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
+                          {maxQty}
+                        </td>
+                        <td style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, textAlign: 'right', paddingLeft: 8, paddingRight: 8 }}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={maxQty}
+                            value={draft ?? currentQty}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              setQtyDrafts((prev) => ({ ...prev, [line.id]: raw }));
+                            }}
+                            onBlur={() => {
+                              const raw = qtyDrafts[line.id];
+                              if (raw !== undefined) {
+                                const check = classifyQtyDraft(raw, maxQty);
+                                if (check.valid) {
+                                  setQuantities((prev) => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
+                                } else if (check.tooHigh) {
+                                  toast.error(ui('qtyMaxAllowed', { max: maxQty }));
+                                } else {
+                                  toast.error(ui('qtyMustBePositive'));
+                                }
+                                setQtyDrafts((prev) => { const n = { ...prev }; delete n[line.id]; return n; });
+                              }
+                            }}
+                            disabled={!isSelected}
+                            className={`border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${draftInvalid ? 'border-destructive' : 'border-border'}`}
+                            style={{ width: 70, textAlign: 'center', borderWidth: '0.5px', borderRadius: 4, fontSize: 13, paddingTop: 4, paddingBottom: 4, paddingLeft: 4, paddingRight: 4, marginLeft: 'auto', display: 'block' }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Reason field */}
+            <div className="mt-4">
+              <label className="block text-xs text-muted-foreground mb-1">{ui('reasonForReturn')}</label>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={ui('optional')}
+                className="w-full text-sm border rounded px-3 py-2 bg-background text-foreground placeholder:text-muted-foreground/50"
+                style={{ borderWidth: '0.5px' }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Confirm */}
+        {step === 2 && (
+          <div className="px-6 pb-4 border-b border-border">
+            <p className="text-sm text-muted-foreground mb-4" style={{ paddingTop: 16 }}>
+              {ui('followingDocumentsWillBeCreated')}
+            </p>
+
+            <div className="flex flex-col mb-5" style={{ gap: 8 }}>
+              <div
+                className="flex items-center gap-3"
+                style={{ border: '1px solid hsl(var(--border-subtle))', borderRadius: 8, padding: 12 }}
+              >
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'var(--status-info-bg)' }}>
+                  <span className="text-status-info-foreground">{RETURN_RECEIPT_ICON}</span>
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{ui(docTypeLabelKey)}</p>
+                  <p className="text-xs text-muted-foreground">{ui(docTypeDescriptionKey)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-b border-border mb-4" />
+
+            <div className="max-h-[180px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))', letterSpacing: '0.05em' }}>
+                    <th className="text-left px-2" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('product')}</th>
+                    <th className="text-right px-2 w-20" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('qty')}</th>
+                    {showAmountColumn && <th className="text-right px-2 w-32" style={{ paddingTop: 6, paddingBottom: 6, borderBottom: '1px solid hsl(var(--border-subtle))' }}>{ui('amount')}</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedLines.map((line) => (
+                    <tr key={line.id}>
+                      <td className="py-2 px-2 text-foreground" style={cellStyle}>
+                        {line['product$_identifier'] || line.product$_identifier || '—'}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
+                        {quantities[line.id] || 0}
+                      </td>
+                      {showAmountColumn && (
+                        <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
+                          {getLinePrice(line) ? fmtAmount(getLineAmount(line)) : '—'}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="font-medium">
+                    <td className="py-2 px-2 text-foreground">{ui('total')}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{totalReturnQty}</td>
+                    {showAmountColumn && (
+                      <td className="py-2 px-2 text-right tabular-nums">{totalAmount > 0 ? fmtAmount(totalAmount) : '—'}</td>
+                    )}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {reason && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                <span className="font-medium">{ui('reason')}</span> {reason}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <DialogFooter
+          className="px-6 pt-5 pb-4"
+          style={{ backgroundColor: 'hsl(var(--muted))', borderTop: '1px solid hsl(var(--border-subtle))' }}
+          data-testid="DialogFooter__955eac">
+          {step === 1 && (
+            <>
+              <Button variant="ghost" size="sm" onClick={onClose} data-testid="Button__955eac">
+                {ui('cancel')}
+              </Button>
+              <Button
+                size="sm"
+                disabled={!canProceed}
+                onClick={() => setStep(2)}
+                data-testid="Button__955eac">
+                {ui('next')}
+              </Button>
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep(1)}
+                data-testid="Button__955eac">
+                {ui('back')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirm}
+                disabled={loading}
+                data-testid="Button__955eac">
+                {loading ? ui('creating') : ui('createReturn')}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

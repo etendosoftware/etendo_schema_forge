@@ -10,6 +10,20 @@ const src = readFileSync(join(__dirname, '..', 'BulkInvoiceFromReceipt.jsx'), 'u
 // Mirrors artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js — same
 // shared modal, same slot contract, same guards. isSOTrx={false} and the purchase-side
 // endpoint/route are the only differences.
+
+/**
+ * The source with comments removed, for the `doesNotMatch` assertions only.
+ *
+ * Same rationale as the goods-shipment sibling: the ETP-5378 notes in these components name
+ * the very patterns the negative assertions forbid (the old `? 's' : ''` plural, the bare
+ * `ui('shipment')` call). A negative regex over raw text would then fail on an ACCURATE
+ * comment and push the next reader to delete the explanation rather than keep the code right.
+ * Positive assertions still run against `src`.
+ */
+const code = src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
 describe('BulkInvoiceFromReceipt', () => {
   it('exports a default function component', () => {
     assert.match(src, /export default function BulkInvoiceFromReceipt/);
@@ -75,10 +89,36 @@ describe('BulkInvoiceFromReceipt', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?showPriceListPicker[\s\S]*?isSOTrx=\{false\}/);
     });
 
-    it('passes a computed cardAmountLabel (real quote when resolvable, "N receipts" fallback otherwise)', () => {
+    it('passes a computed cardAmountLabel (real quote when resolvable, receipt-count fallback otherwise)', () => {
       assert.match(src, /cardAmountLabel=\{cardAmountLabel\}/);
-      assert.match(src, /\$\{invoiceableCount\} \$\{ui\('receipt'\)\}/);
-      assert.doesNotMatch(src, /ui\('shipment'\)/);
+    });
+
+    // The ETP-5410 anti-flash guard lives in the ORDER of this ternary: quoteLoading wins
+    // first (-> undefined, so the modal shows its skeleton placeholder), only then a resolved
+    // quote, and the count label last. Checked with two narrow assertions rather than one
+    // multiline regex because ETP-5378 inserted an explanatory comment between the
+    // formatCurrency arm and the fallback arm, and a prose edit must not read as a regression.
+    it('gates the label behind quoteLoading first, then a resolved quote, then the count fallback', () => {
+      assert.match(
+        src,
+        /const cardAmountLabel = quoteLoading\s*\n\s*\?\s*undefined\s*\n\s*:\s*\(quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)/,
+      );
+      // Both indices are asserted present BEFORE they are compared. `indexOf` returns -1 for a
+      // missing needle, so a bare `a < b` would pass vacuously the moment the quote arm is
+      // renamed away (-1 < anything) — i.e. the guard would go green exactly when the thing it
+      // guards disappeared.
+      const quoteArm = src.indexOf('formatCurrency(currencyCode, quoteAmount)');
+      const countArm = src.indexOf("ui(invoiceableCount === 1 ? 'receiptCount_one' : 'receiptCount_plural'");
+      assert.ok(quoteArm >= 0, 'the resolved-quote arm must exist for the ordering check to mean anything');
+      assert.ok(countArm >= 0, 'the count-label arm must exist for the ordering check to mean anything');
+      assert.ok(quoteArm < countArm, 'the count label must be the LAST arm, after the resolved-quote arm');
+    });
+
+    it('falls back to the receipt count label once loading has settled and no quote could be resolved', () => {
+      assert.match(
+        src,
+        /:\s*ui\(invoiceableCount === 1 \? 'receiptCount_one' : 'receiptCount_plural',\s*\n\s*\{ count: invoiceableCount \}\)\);/,
+      );
     });
 
     // ETP-5410 follow-up: the fallback used to render on EVERY open (quoteAmount starts null)
@@ -237,6 +277,66 @@ describe('BulkInvoiceFromReceipt', () => {
 
     it('does not refetch on a plain cancel/close of the confirm modal', () => {
       assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
+    });
+  });
+
+  // ETP-5378 QA follow-up — mirrors the matching block in the goods-shipment sibling spec.
+  // Two defects in one small label: this window read `ui('receipt')` ("albaran") while sales
+  // read `ui('shipment')` ("envio") for the SAME kind of document, and the count was
+  // pluralised by appending a literal 's' to the noun — English grammar on a Spanish word,
+  // which rendered "2 albarans" here. The count and the noun now both live in the locale.
+  //
+  // WHY THIS WINDOW HAS ITS OWN KEY PAIR, AND WHY THAT IS NOT DUPLICATION:
+  // `receiptCount_*` and `shipmentCount_*` exist as two pairs ONLY because ENGLISH needs two
+  // nouns (receipt / shipment). In Spanish both windows deliberately render the SAME word,
+  // "albaran" — that identity is the actual QA requirement, since the reported defect was the
+  // two windows naming one document differently. So the pairs are not interchangeable here
+  // (this file must read the receipt pair) and they are not collapsible either; the locale
+  // spec asserts the Spanish string equality that makes the split safe.
+  describe('ETP-5378 — the count label is a locale-owned plural, on this window\'s own key pair', () => {
+    it('selects receiptCount_one for exactly one document and receiptCount_plural otherwise', () => {
+      assert.match(
+        src,
+        /ui\(invoiceableCount === 1 \? 'receiptCount_one' : 'receiptCount_plural'/,
+      );
+    });
+
+    it('passes { count: invoiceableCount } so the locale string owns where the number goes', () => {
+      assert.match(src, /'receiptCount_plural',\s*\n\s*\{ count: invoiceableCount \}\)/);
+    });
+
+    it('reads the receipt pair, never the sibling window\'s shipment pair', () => {
+      assert.doesNotMatch(code, /shipmentCount_(one|plural)/);
+    });
+
+    // Run against `code` (comments stripped), not `src`: these components' ETP-5378 notes quote
+    // the defect verbatim, so a raw-text negative regex would fail on ACCURATE prose and teach
+    // the next reader to delete the explanation.
+    it('never pluralises by appending a literal "s" to the noun (the "2 albarans" defect)', () => {
+      assert.doesNotMatch(code, /\?\s*'s'\s*:/);
+    });
+
+    it('no longer reads the single-use bare-noun shipment / receipt labels', () => {
+      // Anchored on the closing quote+paren so the guard cannot fire on the LEGITIMATE
+      // `ui('receiptCount_one')` call — a guard that rejects correct code is worse than none.
+      // Proven against a literal sample rather than trusted by inspection.
+      const bareShipment = /ui\('shipment'\)/;
+      const bareReceipt = /ui\('receipt'\)/;
+      assert.doesNotMatch(
+        "ui('receiptCount_one') ui('shipmentCount_plural')",
+        bareReceipt,
+        'the bare-noun guard must not match the count keys',
+      );
+      assert.doesNotMatch(
+        "ui('receiptCount_one') ui('shipmentCount_plural')",
+        bareShipment,
+        'the bare-noun guard must not match the count keys',
+      );
+      // ...and it still catches the real thing it was written for.
+      assert.match("ui('receipt')", bareReceipt, 'the guard must still detect the bare noun');
+
+      assert.doesNotMatch(code, bareShipment);
+      assert.doesNotMatch(code, bareReceipt);
     });
   });
 });

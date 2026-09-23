@@ -483,3 +483,13 @@ reworded in this ticket; the invoice they describe is now confirmed on creation.
 - `CreateDraftInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow and guard P6.
 - `AbstractInvoiceHeaderHandlerTest.java`'s 131 tests (including its 8 completion tests) pass unmodified — `completeInvoiceIfNeeded` keeps its guard and simply delegates to the new service.
 - `artifacts/sales-quotation/custom/__tests__/QuotationConfirmModal.test.js` gained a `created-document status badge (ETP-5381)` block: it asserts the status is derived from the backend `documentStatus` and never a hardcoded `Draft`, that `'CO'` maps to the Completed badge state, that the fallback to `Draft` applies only when an older backend sends no status at all, that the status is read off the response payload (not the request or the quotation), that the badge colours warning for a draft and success otherwise, that both states go through `ui()`, and that the order branch's `RE -> DR -> Draft` reactivation mapping is untouched.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E')` →
+`'none' | 'read-only' | 'full'`) must hide every mutating control in a window the Solo Lectura role
+can see. For this window: the row-kebab Confirmar/Rechazar entries. Window-level tier wiring is
+independent of the shared `useOrderWindow` hook other windows on this page use — `QuotationPage.jsx`
+calls `useWindowAccess` itself, forces `effectiveWindow.readOnly`, and renders `WindowAccessGuard`
+directly. Not live-testable in this session — the quotation list was empty for the available
+read-only-tier test role; relies on unit-test coverage.

@@ -90,6 +90,7 @@ export function MovementsToolbar({
   // Rendered node, not sort props: the toolbar stays presentational and the tab that owns the
   // sort state decides what goes here. Absent = nothing rendered.
   sortControl = null,
+  windowReadOnly,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -144,11 +145,13 @@ export function MovementsToolbar({
         data-testid="RefreshButton__f863ac" />
       {/* Split button: primary "Nuevo movimiento" (opens the GL-item modal) +
           a ▾ menu with "Transferir fondos". */}
-      <MovementsSplitButton
-        ui={ui}
-        onNewMovement={onNewMovement}
-        onTransfer={onTransfer}
-        data-testid="MovementsSplitButton__f863ac" />
+      {!windowReadOnly && (
+        <MovementsSplitButton
+          ui={ui}
+          onNewMovement={onNewMovement}
+          onTransfer={onTransfer}
+          data-testid="MovementsSplitButton__f863ac" />
+      )}
     </div>
   );
 }

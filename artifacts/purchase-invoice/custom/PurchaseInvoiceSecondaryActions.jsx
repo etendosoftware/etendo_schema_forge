@@ -35,7 +35,7 @@ import SendToSifButton from '@/windows/custom/shared/SendToSifButton.jsx';
  * mirroring how `SalesInvoiceTopbar` forwards them to `InvoiceTopbarExtra`.
  */
 export default function PurchaseInvoiceSecondaryActions(props) {
-  const { data, recordId, apiBaseUrl, onSave, isDirty } = props;
+  const { data, recordId, apiBaseUrl, onSave, isDirty, isDocumentReadOnly } = props;
 
   return (
     <DocumentSecondaryActions
@@ -50,6 +50,7 @@ export default function PurchaseInvoiceSecondaryActions(props) {
         status={data?.documentStatus}
         onSave={onSave}
         isDirty={isDirty}
+        isDocumentReadOnly={isDocumentReadOnly}
         data-testid="SendToSifButton__PurchaseInvoiceSecondaryActions" />
     </DocumentSecondaryActions>
   );

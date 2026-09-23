@@ -6,8 +6,8 @@ import { createRef } from 'react';
 //   - MovementsTable: just emits the current filtered movements as JSON for assertions
 //   - AccountSummaryStrip: just a marker
 vi.mock('../MovementsToolbar/index.jsx', () => ({
-  MovementsToolbar: ({ filters, onFiltersChange, onAdvancedFilterChange, onTransfer }) => (
-    <div data-testid="toolbar">
+  MovementsToolbar: ({ filters, onFiltersChange, onAdvancedFilterChange, onTransfer, windowReadOnly }) => (
+    <div data-testid="toolbar" data-window-read-only={String(!!windowReadOnly)}>
       <span data-testid="filters">{JSON.stringify(filters)}</span>
       {/* Quick filters driven via onFiltersChange */}
       <button data-testid="set-type-bpd" onClick={() => onFiltersChange('type')('BPD')}>
@@ -826,5 +826,28 @@ describe('MovementsTab — new transaction modal callbacks', () => {
         screen.getByTestId('modal-close').click();
       });
     }).not.toThrow();
+  });
+});
+
+describe('MovementsTab — respects windowReadOnly (ETP-5205)', () => {
+  it('forwards windowReadOnly to MovementsToolbar so it can hide its own New/Transfer button', () => {
+    renderTab({ windowReadOnly: true });
+    expect(screen.getByTestId('toolbar')).toHaveAttribute('data-window-read-only', 'true');
+  });
+
+  it('NewTransactionModal never mounts open when windowReadOnly, even with autoOpenNewMovement true', () => {
+    renderTab({ windowReadOnly: true, autoOpenNewMovement: true });
+    expect(screen.getByTestId('new-transaction-modal')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('bulk delete selection bar never mounts when windowReadOnly, even with a row selected', () => {
+    renderTab({ windowReadOnly: true });
+    act(() => screen.getByTestId('toggle-select-a').click());
+    // Without the fix, selecting a row here would surface
+    // `bulk-delete-selection-count` (proven by the sibling "bulk delete
+    // selection bar" describe block's own baseline test) — under
+    // windowReadOnly the whole BulkDeleteSelectionBar must never mount at
+    // all, not just stay visually hidden by count===0.
+    expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
   });
 });
