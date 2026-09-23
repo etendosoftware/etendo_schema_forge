@@ -17017,6 +17017,7 @@
     "postedStatusDisabledBackground": "Disabled for background",
     "postedStatusPostPrepared": "Ready to post",
     "postedStatusPendingRefresh": "Pending refresh",
+    "goodsMovementsPostedDisabledHint": "This movement cannot be posted yet: the cost engine has not calculated the cost of its transactions. Wait for the cost calculation background process to finish, then try again.",
     "rectificativeLabel": "Rectificative",
     "rectificationsTab": "Rectifications",
     "rectifiedInvoice": "Rectified Invoice",

@@ -17247,6 +17247,7 @@
     "postedStatusDisabledBackground": "Desactivado para background",
     "postedStatusPostPrepared": "Preparado para contabilizar",
     "postedStatusPendingRefresh": "Pendiente de refresco",
+    "goodsMovementsPostedDisabledHint": "Este movimiento todavía no puede contabilizarse: el motor de costes aún no calculó el coste de sus transacciones. Espere a que finalice el proceso de cálculo de costes e intente contabilizar de nuevo.",
     "rectificativeLabel": "Rectificativa",
     "rectificationsTab": "Rectificaciones",
     "rectifiedInvoice": "Factura rectificada",
