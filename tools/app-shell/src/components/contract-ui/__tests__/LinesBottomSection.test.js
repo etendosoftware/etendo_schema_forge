@@ -60,7 +60,8 @@ describe('LinesBottomSection', () => {
 
   it('shows notes as a textarea when notesFocused, plain text otherwise', () => {
     assert.match(src, /<textarea/);
-    assert.match(src, /notesFocused\s*\?/);
+    // ETP-5205: the ternary now also requires !isReadOnly — see the dedicated test below.
+    assert.match(src, /notesFocused\s*&&\s*!isReadOnly\s*\?/);
   });
 
   it('renders NotesExtraComponent slot when provided', () => {
@@ -119,5 +120,15 @@ describe('LinesBottomSection', () => {
 
   it('derives isReadOnly from documentStatus OR isDocumentReadOnly (ETP-5205)', () => {
     assert.match(src, /documentStatus\s*!==\s*'DR'\s*\|\|\s*isDocumentReadOnly/);
+  });
+
+  it('locks the notes field (own inline textarea/div) when isReadOnly, not just when unfocused (ETP-5205)', () => {
+    // This file renders its OWN notes textarea/div — a separate implementation from
+    // detailViewHelpers.jsx's renderNotesField, discovered live: Purchase Order (and every
+    // other window using this bottomSection) never went through DetailView's generic
+    // renderNotesField call site at all, so gating only that one left this copy unfixed.
+    assert.match(src, /notesFocused\s*&&\s*!isReadOnly\s*\?/);
+    assert.match(src, /onClick=\{\(\)\s*=>\s*!isReadOnly\s*&&\s*setNotesFocused\?\.\(true\)\}/);
+    assert.match(src, /onFocus=\{\(\)\s*=>\s*!isReadOnly\s*&&\s*setNotesFocused\?\.\(true\)\}/);
   });
 });
