@@ -184,3 +184,19 @@ Por la política del repo, la escritura/extensión de estos tests se delega a **
 - **REVIEW** — Alex: confirmar que el patrón replica fielmente el de `useRoleMenu.js` (mismo ticket, mismo repo); confirmar que no se toca `AuthContext.jsx`/paquete publicado; `npx sf-validate-pipeline` no debería reportar nada (no hay cambios en `decisions.json`/`generated/`).
 - **QA** — Sentinel: los dos casos Given/When/Then del ticket, más el ciclo logout→login sin recarga (ver §6), verificados en el entorno que esté disponible (local o PRO).
 - **DOCS** — Sage: no hay guía de ventana afectada (el banner es transversal, no de una ventana); revisar si existe alguna doc general de sesión/auth que mencione `RoleChangedBanner`/ETP-5189 y deba actualizarse con la nota del fix.
+
+## 8. Cambio de alcance — decisión funcional de eliminar la notificación (2026-09-23)
+
+Con el fix descripto en las secciones anteriores ya commiteado (`ace088cd8`) y bloqueado en el push por un gap no relacionado en un fixture de test, el analista funcional del ticket revisó el flujo completo y decidió que la notificación entera es obsoleta: el problema que originalmente justificaba el banner (avisar al usuario que sus permisos cambiaron para que recargue) ya está resuelto de forma transparente por el refresh silencioso de ETP-5195 en `AuthContext.jsx` — el propio comentario de `RoleChangedBanner.jsx` admitía que el banner solo se dispara DESPUÉS de que el fix real ya se aplicó en silencio. En vista de eso, se pidió eliminar la notificación por completo (no ocultarla ni dejarla apagada para reutilización futura).
+
+Se eliminó:
+- `tools/app-shell/src/components/RoleChangedBanner.jsx` y su test (`__tests__/RoleChangedBanner.vitest.jsx`)
+- `tools/app-shell/src/hooks/useRoleChangeNotice.js` y su test (`__tests__/useRoleChangeNotice.vitest.jsx`)
+- El import y el montaje de `<RoleChangedBanner />` en `App.jsx`
+- La clave de i18n `roleChangedBannerMessage` en `en_US.json` y `es_ES.json`
+- El bloque `dismissRoleChangedBanner` (MutationObserver) en el helper E2E `e2e/tests/helpers/auth.js`
+- Las referencias al banner en `docs/generated-custom-windows/app-shell-functional-flows.md` (sección 7b), reescritas para reflejar que el refresh de acceso sigue existiendo pero ya no tiene ningún artefacto visible
+
+El mecanismo de refresh silencioso en sí (`AuthContext.jsx`, el diff de `windowAccess`/`capabilities`/`menuAccess`, la adición de `menuAccess` de ETP-5189) no se toca — sigue viviendo en el paquete publicado `@etendosoftware/app-shell-core` y queda fuera de este alcance.
+
+Esto deja el fix original de `isAuthenticated` sin efecto práctico, ya que el archivo que tocaba (`useRoleChangeNotice.js`) ya no existe. El commit `ace088cd8` se mantiene igual en el historial de git como un paso intermedio legítimo — no se revierte ni se amenda.
