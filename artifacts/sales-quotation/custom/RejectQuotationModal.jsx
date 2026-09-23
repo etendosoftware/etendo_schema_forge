@@ -373,7 +373,7 @@ const asteriskStyle = {
   color: 'hsl(var(--destructive))',
 };
 
-// Input matches Figma frame "Text Input": 335×40, border 1px hsl(var(--foreground)), radius 8.
+// Input matches Figma frame "Text Input": 335×40, border 1px hsl(var(--border-control)), radius 8.
 // Spec composes its inner layout as nested wraps (text wrap padding 0 8,
 // chevron wrap 28 wide padding 0 4 0 0, chevron 24×24). We collapse that
 // into explicit input padding so the visual placement of text and chevron
@@ -432,8 +432,11 @@ const noResultsStyle = {
 const errorStyle = {
   padding: '8px 20px',
   fontFamily: 'Inter, sans-serif', fontSize: 12,
-  color: 'hsl(var(--destructive))', background: 'hsl(var(--card))',
-  borderTop: '0.5px solid hsl(var(--destructive))',
+  // ETP-5378 QA follow-up — the error strip lost its tint to the same ETP-4554 mis-mapping:
+  // the Figma red wash became `--card`, the surface white, so the strip read as an ordinary
+  // row. Matches CreateRejectReasonModal, which this modal opens.
+  color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)',
+  borderTop: '0.5px solid hsl(var(--destructive) / 0.35)',
 };
 
 const buttonsRowStyle = {
