@@ -138,7 +138,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
             className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"
             data-testid="SubscriptionSection__loading"
           >
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" data-testid="Loader2__769a8e" />
             {ui('loading')}
           </div>
         )}
@@ -167,7 +167,9 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
         {status === 'loaded' && hasSubscription && (
           <div className="mt-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <CreditCard className="h-4 w-4 text-muted-foreground" />
+              <CreditCard
+                className="h-4 w-4 text-muted-foreground"
+                data-testid="CreditCard__769a8e" />
               <span className="text-xs text-muted-foreground">{ui('subscriptionPlan')}</span>
               <span className="text-sm font-medium" data-testid="SubscriptionSection__plan">
                 {subscription.plan}
@@ -230,7 +232,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
                 data-testid="SubscriptionSection__manage"
               >
                 {managing
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" data-testid="Loader2__769a8e" />
                   : ui('subscriptionManage')}
               </Button>
               {manageError && (

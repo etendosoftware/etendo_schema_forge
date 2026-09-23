@@ -1388,7 +1388,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           </div>
         )}
 
-        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} />}
+        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
         {activeTab === 'rectif' && !snapshotServed && (
           <RectificationsTabContent
             rows={rectifRows}
@@ -1400,7 +1400,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
-      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} />}
+      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
       <DetailTabContent
         activeTab={snapshotServed && activeTab === 'invoices' ? null : activeTab}
         decl={decl}
