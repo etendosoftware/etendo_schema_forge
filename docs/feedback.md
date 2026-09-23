@@ -2806,13 +2806,19 @@ window that maps to a real `AD_Window_ID`, check for this gate first — grep th
 `index.jsx`/`Page.jsx` for `WindowAccessGuard`, don't assume the generic mechanism applies just
 because the contract has a `window.id`.
 
-**Not fixed in this pass, flagged only:** `fiscal-monitor` shares the identical gap — its
-`useFiscalMonitor.js` reuses the same `fetchAllRows()` helper from `useFiscalConfig.js`, and it has
-zero `WindowAccessGuard`/`useWindowAccess` references anywhere in its own custom directory. Not
-touched here since it was not part of the QA report and the fix was scoped to the two named
-windows; a natural next candidate if this class of gap is swept more broadly. Also unrelated but
-found in the same investigation: the "Roles del usuario" admin role-assignment UI
-(`AssignTemplateRolesControl.jsx` → `neoWebhookClient.js`) is currently broken under the cookie
+~~**Not fixed in this pass, flagged only:** `fiscal-monitor` shares the identical gap.~~
+**Fixed same day (user-requested follow-up, 2026-09-23).** `useFiscalMonitor.js` reuses the same
+`fetchAllRows()` helper from `useFiscalConfig.js`, and had zero `WindowAccessGuard`/`useWindowAccess`
+references anywhere in its own custom directory. Fixed identically: `FiscalMonitorPage.jsx` now
+checks `useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C')` right after its last hook
+(`useSetPageMeta`), before `handleRefresh`/the render branches — one difference from the
+`organization`/`fiscal-config` fix: the check is `!debugOverrideActive && windowAccessTier ===
+'none'`, matching this page's own existing `loading`/`error` gates, which already respect the
+developer-only debug/mock profile override the same way. Regression test added to
+`FiscalMonitorPage.vitest.jsx`, verified to fail without the fix and pass with it.
+
+Also unrelated but found in the same investigation: the "Roles del usuario" admin role-assignment
+UI (`AssignTemplateRolesControl.jsx` → `neoWebhookClient.js`) is currently broken under the cookie
 scheme (`getToken()` still reads the legacy `localStorage.sf_auth_token`, which a cookie session
 never populates) — a real, independent regression from the ETP-4576 migration, tracked separately,
 not fixed here.
