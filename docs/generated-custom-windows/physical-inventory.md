@@ -63,8 +63,10 @@ Physical Inventory should let a warehouse user create an inventory count session
 14. **(ETP-5052)** Given a saved header with no lines, when the first count line is added (manually or via "Generate lines automatically"), then `Warehouse` becomes read-only.
 15. **(ETP-5052)** Given a header with at least one line and a locked `Warehouse`, when the last remaining line is removed, then `Warehouse` becomes editable again.
 16. **(ETP-5360)** Process a header (Confirm), so `processed = true` and `posted = false`. Confirm the ⋮ button is now visible (not hidden as before) and offers **Post**. Click it and confirm the record shows as posted and the kebab now offers **Unpost** instead.
-17. **(ETP-5360)** From the list, hover a processed-but-unposted row and confirm the row-hover kebab offers **Post**; run it and confirm the row updates without a full page reload.
+17. **(ETP-5360)** From the list, hover a processed-but-unposted row and confirm the row-hover kebab offers **Post**; run it and confirm the row updates without a full page reload. Hover the same row again (now posted) and confirm the kebab is still there and offers **Unpost** (QA reject F1).
 18. **(ETP-5360)** From the list, multi-select one or more processed-but-unposted rows and confirm the grid toolbar shows a **Post** bulk button; select one or more posted rows and confirm an **Unpost** bulk button appears instead. Run each and confirm the result toast and in-place refresh.
+19. **(ETP-5360)** With the inventory's accounting period closed, run **Unpost** from the grid, the row hover and the form kebab. Every toast must read the translated "period closed" message, never the raw `@PeriodClosedForUnPosting@` token.
+20. **(ETP-5360)** Post a processed inventory whose line transactions have no calculated cost yet. The toast must read the generic "cost not calculated yet, try again in a few minutes" message (`backendError.costNotCalculated`), not the core "El coste aún no ha sido calculado para todos los productos en el documento." text.
 
 ## Automated evidence
 - `docs/generated-custom-windows/app-shell-functional-flows.md` documents the shared generated-window routing model for `/:windowName` and `/:windowName/:recordId`.
@@ -211,10 +213,10 @@ Posted Documents" window as the only way to post it manually. Fixed on all three
 - **Row hover and grid bulk-select had no wiring at all** — `InventoryPage.jsx` generated
   `rowQuickActions={{}}` and the custom wrapper did not supply `bulkActions`. Added, mirroring
   `goods-shipment`/`goods-receipt` (the closest analogous inventory-type documents):
-  - `rowQuickActions` — spreads `buildDocumentRowQuickActionsPostMenu({ ui, onRefresh })` from
-    `tools/app-shell/src/windows/custom/shared/buildDocumentRowQuickActions.js`. **Post only**,
-    not Unpost — same precedent as goods-shipment/goods-receipt: Unpost stays reachable from the
-    detail kebab and the bulk toolbar.
+  - `rowQuickActions` — spreads `buildDocumentRowQuickActionsPostMenu({ ui, onRefresh,
+    includeUnpost: true })` from
+    `tools/app-shell/src/windows/custom/shared/buildDocumentRowQuickActions.js`. Post while
+    processed and not posted, **Unpost** once posted (see the QA reject cycle below).
   - `bulkActions` — two `BulkDocumentAction` instances (`entity="inventory"`,
     `actionMode="neoAction"`), one with `buildPostActions`/`postRowFilter` (labelKey `post`), one
     with `buildUnpostActions`/`unpostRowFilter` (labelKey `unpost`), both from
@@ -235,3 +237,33 @@ The pre-existing test that asserted the now-removed `data?.processed === true` /
 `tools/app-shell/src/windows/custom/physical-inventory/__tests__/index.test.js` that evaluates the
 real `!data?.id`-only predicate against boolean `true`, ADempiere string `'Y'`, draft, and
 no-id/no-data cases.
+
+### QA reject cycle — ETP-5360
+
+- **F1 — no Unpost on row hover.** The first delivery spread the Post-only
+  `buildPostMenuActions` into `rowQuickActions`, so a posted row got an empty menu-action list and
+  `RowQuickActions` dropped the ⋮ button entirely. `buildDocumentRowQuickActions.js` gained
+  `buildPostUnpostMenuActions` (Post while processed and unposted, Unpost once posted — the same
+  gates as the form kebab and the bulk pair) and an opt-in `includeUnpost` flag on
+  `buildDocumentRowQuickActionsPostMenu`. Only this window opts in; `goods-shipment` and
+  `goods-receipt` keep the Post-only default and have the same gap (reported, not changed here).
+- **F2 — raw `@PeriodClosedForUnPosting@` toast.** Core `ResetAccounting` throws
+  `new OBException("@PeriodClosedForUnPosting@")`, and `DocumentPostingService.unpost`
+  (com.etendoerp.go) returns `e.getMessage()` without `parseTranslation`. The backend fix is
+  pending in com.etendoerp.go. On this side, `translateBackendError`
+  (`tools/app-shell/src/lib/backendErrors.js`) now treats `@Key@` tokens in the message text as
+  message keys when the backend sent no `messageKeys`, and `PeriodClosedForUnPosting` maps to the
+  new `backendError.periodClosedForUnposting` key. This is generic: any window whose unpost hits a
+  closed period benefits.
+- **F3 — cost-not-calculated wording.** `DocumentPostingService`'s Physical Inventory pre-check
+  returns core `NotCalculatedCost`, already resolved in the session language. Both its base text
+  and its es_ES translation now map to the existing generic `backendError.costNotCalculated`
+  message ("…try posting the document again in a few minutes"), which invoices and shipments
+  already use for the other two costing messages. The `NotCalculatedCost` key is mapped too, for
+  when the backend starts sending `messageKeys`.
+- **F4 — no confirmation on form Unpost.** Not changed. `DetailMoreActionsMenu` and
+  `RowQuickActions` have no confirmation step for any menu action. The grid path asks because
+  `BulkDocumentAction` is itself a modal. Adding one is a shared-component feature (a
+  `confirmKey` menuAction option through the generator in schema_forge_core), so it is out of
+  scope for this reject cycle.
+

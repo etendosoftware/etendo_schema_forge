@@ -172,6 +172,12 @@ const BACKEND_ERROR_MAP = {
   // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
   // same actionable retry-later copy as the other transient costing message, not costing internals.
   'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
+  // ETP-5360 — core `NotCalculatedCost` AD_MESSAGE, which DocumentPostingService (com.etendoerp.go)
+  // returns ALREADY resolved via messageBD, so no `@Key@` token survives for the key route above.
+  // Both the base text and the es_ES AD_MESSAGE_TRL text are listed: messageBD resolves in the
+  // session language. Replaced by the generic, actionable "wait for the costing process" copy.
+  'Cost has not yet been calculated for all products in the document.': 'backendError.costNotCalculated',
+  'El coste aún no ha sido calculado para todos los productos en el documento.': 'backendError.costNotCalculated',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — hardcoded Spanish literal with no
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
@@ -309,7 +315,28 @@ const BACKEND_ERROR_KEY_MAP = {
   productWithoutAttributeSet: 'backendError.docLinesAttributeRequired',
   InoutLineNotExploded: 'backendError.docLinesNotExploded',
   MovementQtyCheck: 'backendError.docLinesQtyExceedsOrdered',
+  // ETP-5360 — core ResetAccounting throws `new OBException("@PeriodClosedForUnPosting@")` for
+  // every unpost in a closed period. A NEO path that forwards `e.getMessage()` without
+  // parseTranslation hands the browser the bare token, which the raw-token route in
+  // translateBackendError resolves here.
+  PeriodClosedForUnPosting: 'backendError.periodClosedForUnposting',
+  // ETP-5360 — core `NotCalculatedCost` ("Cost has not yet been calculated for all products in
+  // the document."), returned by DocumentPostingService's Physical Inventory pre-check. Mapped to
+  // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
+  NotCalculatedCost: 'backendError.costNotCalculated',
 };
+
+// ETP-5360 — a message that IS still an untranslated `@Key@` token (or carries some) is its own
+// key list: the backend skipped OBMessageUtils.parseTranslation, so the stable identity is right
+// there in the text. Used only when the backend sent no `messageKeys`. Same `\w`-only class as
+// NeoMessageTranslator.MESSAGE_KEY_TOKEN (com.etendoerp.go), so it cannot swallow a delimiter.
+const RAW_MESSAGE_KEY_TOKEN = /@(\w+)@/g;
+
+function extractRawMessageKeys(msg) {
+  if (typeof msg !== 'string' || !msg.includes('@')) return undefined;
+  const keys = Array.from(msg.matchAll(RAW_MESSAGE_KEY_TOKEN), (m) => m[1]);
+  return keys.length > 0 ? keys : undefined;
+}
 
 /**
  * Reads the `messageKeys` array out of a parsed NEO error body, whatever envelope it arrived in.
@@ -937,7 +964,7 @@ export function translateBackendError(msg, t, options = {}) {
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
-  const byKey = translateByMessageKey(options.messageKeys, t);
+  const byKey = translateByMessageKey(options.messageKeys ?? extractRawMessageKeys(msg), t);
   if (byKey !== null) return byKey;
 
   if (!msg) return msg;

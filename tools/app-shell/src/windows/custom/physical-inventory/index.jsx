@@ -77,7 +77,9 @@ export default function PhysicalInventoryWindow(props) {
   // kebab (decisions.json menuActions) and the bulk toolbar above.
   const rowQuickActions = useMemo(() => ({
     enabled: true,
-    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) }),
+    // ETP-5360 — includeUnpost: a posted inventory keeps its row-hover kebab with
+    // Descontabilizar, matching the form kebab and the bulk Unpost button.
+    ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1), includeUnpost: true }),
   }), [ui]);
 
   return (

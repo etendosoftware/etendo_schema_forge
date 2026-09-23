@@ -30,6 +30,22 @@ export function buildPostMenuActions({ row } = {}) {
   return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
 }
 
+// ETP-5360 — Post OR Unpost, whichever the row's state allows: Post while processed and
+// not yet posted (same gate as buildPostMenuActions), Unpost once posted. Mirrors the
+// form-view menuActions and the bulk Post/Unpost pair, so a posted document keeps a
+// row-hover kebab (Descontabilizar) instead of losing it entirely. A SEPARATE builder
+// rather than a change to buildPostMenuActions: windows that expose no standalone
+// unpost anywhere (see BulkDocumentAction.jsx's buildUnpostActions note) keep the
+// Post-only behavior untouched; a window opts in through
+// buildDocumentRowQuickActionsPostMenu({ includeUnpost: true }).
+export function buildPostUnpostMenuActions({ row } = {}) {
+  const isPosted = row?.posted === 'Y' || row?.posted === true;
+  if (isPosted) {
+    return [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }];
+  }
+  return buildPostMenuActions({ row });
+}
+
 // RowQuickActions deliberately never shows a toast itself ("toast/snackbar is the
 // host's responsibility"); this is the host-side half for the row-kebab Post
 // action, mirroring DetailMoreActionsMenu's runNeoMenuAction for the exact same
@@ -38,7 +54,7 @@ export function buildMenuActionExecutedHandler(ui, onRefresh) {
   return (action, result) => {
     if (!action.neoAction) return;
     if (result?.success === false) {
-      toast.error(translateBackendError(result?.message, ui) || ui?.('actionFailed'));
+      toast.error(translateBackendError(result?.message, ui, { messageKeys: result?.messageKeys }) || ui?.('actionFailed'));
     } else {
       toast.success((action.successKey ? ui?.(action.successKey) : action.successMessage) || ui?.('actionCompleted'));
     }
@@ -49,9 +65,11 @@ export function buildMenuActionExecutedHandler(ui, onRefresh) {
 // Convenience composite for the common call shape: spread the result into a
 // window's own rowQuickActions object literal, e.g.
 // `...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) })`.
-export function buildDocumentRowQuickActionsPostMenu({ ui, onRefresh } = {}) {
+// `includeUnpost: true` (ETP-5360) swaps in buildPostUnpostMenuActions; the default keeps
+// the Post-only builder so existing callers are unaffected.
+export function buildDocumentRowQuickActionsPostMenu({ ui, onRefresh, includeUnpost = false } = {}) {
   return {
-    menuActions: buildPostMenuActions,
+    menuActions: includeUnpost ? buildPostUnpostMenuActions : buildPostMenuActions,
     onMenuActionExecuted: buildMenuActionExecutedHandler(ui, onRefresh),
   };
 }
