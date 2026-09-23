@@ -114,6 +114,22 @@ describe('FiscalModelsPage — onStatusChange persistence (303)', () => {
     });
   });
 
+  // ETP-5438 — the snapshot the backend froze at submission rides the list patch, so the
+  // always-mounted list freezes the row on it without refetching.
+  it('carries the echoed submittedSnapshot into the declStatusPatch', async () => {
+    const snapshot = { boxes: { 46: '1.00' }, summary: { result: '1.00' }, sources: [] };
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, submittedSnapshot: snapshot }) });
+
+    render(<FiscalModelsPage token={TOKEN} apiBaseUrl={API_BASE} />);
+    fireEvent.click(screen.getByTestId('select-303'));
+    fireEvent.click(screen.getByTestId('present-303'));
+
+    await waitFor(() => {
+      const patch = JSON.parse(screen.getByTestId('decl-status-patch').textContent);
+      expect(patch).toEqual({ id: '303-2026-T2', patch: { status: 'submitted', submittedSnapshot: snapshot } });
+    });
+  });
+
   it('does NOT push a declStatusPatch when the status PUT fails', async () => {
     fetch.mockResolvedValueOnce({ ok: false, status: 500 });
 

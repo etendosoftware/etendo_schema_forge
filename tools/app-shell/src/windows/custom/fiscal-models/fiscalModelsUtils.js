@@ -335,7 +335,11 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * sent from here). Omitted entirely for any status change that isn't one of the manual
  * "Presentado" paths (see `FmModel303Page.jsx`/`FmModel349Page.jsx`'s `handlePresent`),
  * so the backend's "explicit null means not sent" contract for this field is honored.
- * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+ * Returns { ok: true } on success, or { ok: false, error: string } on failure. When the change
+ * presented the declaration, the success result also carries `submittedSnapshot` (ETP-5438):
+ * the boxes/operators payload the backend froze and persisted in the same request, so callers
+ * can freeze the declaration on it without refetching the list. A presentation whose snapshot
+ * the backend could not compute is rejected (HTTP 500) and resolves `{ ok: false }`.
  */
 export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
   if (!apiBaseUrl) return { ok: false, error: 'no_token' };
@@ -350,9 +354,22 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
       body: JSON.stringify(body),
     });
     if (!res.ok) return { ok: false, error: `http_${res.status}` };
-    return { ok: true };
+    const snapshot = await readSubmittedSnapshot(res);
+    return snapshot ? { ok: true, submittedSnapshot: snapshot } : { ok: true };
   } catch (_) {
     return { ok: false, error: 'network' };
+  }
+}
+
+// Best-effort read of the PUT response's `submittedSnapshot` (ETP-5438). The status change
+// already succeeded at this point, so an unreadable/empty body only means "no snapshot echoed".
+async function readSubmittedSnapshot(res) {
+  try {
+    const data = typeof res.json === 'function' ? await res.json() : null;
+    const snapshot = data?.submittedSnapshot;
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
+  } catch (_) {
+    return null;
   }
 }
 

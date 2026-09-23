@@ -219,6 +219,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // auto-compute effect below, which reads it (ETP-5438) — and reused at the
   // action-bar gates further down. Mirrors FmModel349Page.jsx's identical hoist.
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
+  // ETP-5438 — the boxes payload the backend persisted when this declaration was presented
+  // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
+  // mount-time auto-compute effect below for how it is consumed.
+  const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
+    ? decl.submittedSnapshot : null;
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
@@ -502,6 +507,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
   // per opened declaration instead of looping once `handleCompute` populates state.
   useEffect(() => {
+    // ETP-5438 — a declaration presented once snapshots existed carries the exact
+    // `GET /fiscal303/boxes` payload persisted server-side at submission time
+    // (`decl.submittedSnapshot`). It is the single source of truth for its figures: applied
+    // through the same `applyComputeResult` (so saved `manualOverrides` and the box 71
+    // derivation behave exactly as for a live compute), with no compute call and no
+    // sessionStorage involvement. Checked first so nothing below can ever recompute it.
+    if (isSubmitted && submittedSnapshot?.boxes != null) {
+      applyComputeResult(submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return;
+    }
     // ETP-5272 pt.6 — `decl._precomputed` is the RAW, override-free auto-compute result
     // `FmListPage`'s `useFiscalAutoCompute` already fetched for every draft declaration
     // before this page ever mounted. Route it through `applyComputeResult` (same helper
@@ -515,7 +530,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
     if (liveBoxes != null) return;
     if (!apiBaseUrl) return;
-    // ETP-5438 — once `isSubmitted`, compute at most ONCE per browser session: `computeBoxes303`
+    // ETP-5438 — legacy fallback: a declaration presented BEFORE snapshots existed has none
+    // (no data-fix for those, product decision), so it keeps this once-per-session freeze.
+    // Once `isSubmitted`, compute at most ONCE per browser session: `computeBoxes303`
     // (= `GET /fiscal303/boxes`) always recomputes from whatever invoices exist RIGHT NOW,
     // regardless of who calls it or when — see FmModel349Page.jsx's identical fix and
     // comment for the full rationale (same bug class, "en todos los modelos tiene que
@@ -594,10 +611,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
 
   useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch); }, [token, apiBaseUrl, apiFetch]);
 
+  // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
+  // caller can react to a rejected transition — see `handlePresent`.
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
     if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
-    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
+    return onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
   // ETP-5338 (architecture change) — the single write path for `identChecks`/`manualOverrides`,
@@ -772,7 +791,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // 'submitted' never does. Neither collides with the AEAT telematic path's own
     // 'aeat_telematic' value, set server-side only (see handleSubmit's onSuccess below).
     const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
-    handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5438 — the backend rejects the presentation when it cannot compute the submission
+    // snapshot (nothing is written server-side). Roll the optimistic status back and say so,
+    // instead of leaving the page showing "Presentado" for a declaration that is still a draft.
+    const previous = { status, submissionMethod };
+    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    if (result?.ok === false) {
+      setStatus(previous.status);
+      setSubmissionMethod(previous.submissionMethod);
+      toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+    }
   }
 
   const blocking = incidents?.blocking ?? 0;

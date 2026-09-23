@@ -678,6 +678,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // remount. Declared early — before the mount-time auto-compute effect below, which
   // reads it (ETP-5438) — and reused at the action-bar gates further down.
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
+  // ETP-5438 — the operators payload the backend persisted when this declaration was presented
+  // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
+  // mount-time auto-compute effect below for how it is consumed.
+  const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
+    ? decl.submittedSnapshot : null;
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -748,10 +753,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
   const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
 
+  // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
+  // caller can react to a rejected transition — see `handlePresent`.
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
     if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
-    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
+    return onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
   // ETP-5338 pt.5 — 349's "Guardar", added for cross-model consistency once the requirement
@@ -782,14 +789,22 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // from. Fire-and-forget — useAttachments.upload() already toasts its
   // own errors and never rethrows, so a failed upload must not block the
   // status change the user explicitly confirmed.
-  function handlePresent({ status: newStatus, acuseFile }) {
+  async function handlePresent({ status: newStatus, acuseFile }) {
     if (newStatus === 'submitted_ack' && acuseFile) {
       uploadReceipt(acuseFile);
     }
     // submissionMethod (ETP-4755) — see FmModel303Page.jsx's handlePresent for the
     // identical rationale; 349 only ever exercises these two manual paths.
     const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
-    handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5438 — roll back a presentation the backend rejected (it could not compute the
+    // submission snapshot); see FmModel303Page.jsx's handlePresent.
+    const previous = { status, submissionMethod };
+    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    if (result?.ok === false) {
+      setStatus(previous.status);
+      setSubmissionMethod(previous.submissionMethod);
+      toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+    }
   }
 
   function applyOperatorsResult(res) {
@@ -893,6 +908,16 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // stay frozen on it. "Calcular" stays hidden once submitted. Known trade-off: a
   // cold session recomputes from the invoice data as it is at that moment.
   useEffect(() => {
+    // ETP-5438 — a declaration presented once snapshots existed carries the exact
+    // `GET /fiscal349/operators` payload persisted server-side at submission time
+    // (`decl.submittedSnapshot`): the single source of truth for its data, applied through the
+    // same `applyOperatorsResult` with no compute call and no sessionStorage involvement.
+    // Checked first so nothing below can ever recompute it. Legacy declarations presented
+    // before snapshots existed have none and keep the once-per-session freeze below.
+    if (isSubmitted && submittedSnapshot?.operators) {
+      applyOperatorsResult(submittedSnapshot);
+      return;
+    }
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
     if (!apiBaseUrl) return;

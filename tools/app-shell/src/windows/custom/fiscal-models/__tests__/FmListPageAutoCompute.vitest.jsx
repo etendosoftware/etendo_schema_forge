@@ -293,3 +293,105 @@ describe('FmListPage — "Resultado" column merges manualData.manualOverrides', 
     expect(resultCell.textContent).toContain('1.000');
   });
 });
+
+// ── ETP-5438 (option 1) — persisted submission snapshot ─────────────────────
+// A submitted declaration presented once the backend persists a snapshot carries it as
+// `decl.submittedSnapshot`. The list must render "Resultado" straight from it — the declaration
+// is handed to NO auto-compute hook (so nothing can compute it), and the result goes through the
+// same derivation as a live compute (303 box 71 with manualOverrides, 349 key totals). Legacy
+// submitted declarations without a snapshot keep the frozen once-per-session bucket.
+describe('FmListPage — submitted declarations with a persisted submission snapshot', () => {
+  const TOKEN = 'test-token';
+  const API_BASE_URL = 'http://host/neo/fiscal-models';
+
+  const makeRow = (overrides) => ({
+    id: `row-${Math.random()}`,
+    model: '303',
+    year: 2026,
+    period: 'T1',
+    type: 'ord',
+    status: 'submitted',
+    result: null,
+    incidents: { blocking: 0, warning: 0 },
+    updatedAt: '2026-01-20',
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    useFiscalAutoCompute.mockClear();
+    // Every hook answers with a WRONG live figure for whatever it receives: a row that renders
+    // the snapshot figure can only have taken it from the snapshot.
+    useFiscalAutoCompute.mockImplementation((decls) => {
+      const map = {};
+      decls.forEach(d => {
+        map[d.id] = d.model === '349'
+          ? { summary: { totalE: '7777', totalS: '0', totalA: '0', totalI: '0' }, operators: [], error: null }
+          : { summary: { result: 7777 }, error: null, boxes: { 27: 7777 } };
+      });
+      return { computedMap: map };
+    });
+    globalThis.fetch = vi.fn((url) => {
+      if (String(url).includes('fiscal-models-catalog')) {
+        return Promise.resolve({ ok: true, json: async () => ({ '303': true, '349': true }) });
+      }
+      return Promise.resolve({ ok: false, status: 404 });
+    });
+  });
+
+  async function waitForCatalogLoad() {
+    await waitFor(() => expect(screen.queryByText('loading')).not.toBeInTheDocument());
+  }
+
+  const handedToAnyHook = (id) =>
+    useFiscalAutoCompute.mock.calls.some(call => call[0].some(d => d.id === id));
+
+  it('a 303 snapshot is never handed to a compute hook and renders its own box-71 result', async () => {
+    const decl = makeRow({
+      id: 'snap-303',
+      submittedSnapshot: { boxes: { 27: 1000 }, summary: { result: 9999 }, sources: [{}] },
+      manualData: { manualOverrides: { 42: 400 } },
+    });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    expect(handedToAnyHook('snap-303')).toBe(false);
+    const resultCell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    // box45 = 400 (override on 42) -> box 71 = 1000 - 400 = 600; never the raw summary 9999
+    // and never the hook's live 7777.
+    expect(resultCell.textContent).toContain('600');
+    expect(resultCell.textContent).not.toContain('9999');
+    expect(resultCell.textContent).not.toContain('7777');
+  });
+
+  it('a 349 snapshot is never handed to a compute hook and renders its own key totals', async () => {
+    const decl = makeRow({
+      id: 'snap-349',
+      model: '349',
+      status: 'submitted_ack',
+      submittedSnapshot: {
+        operators: [], summary: { totalE: '100.00', totalS: '20.00', totalA: '3.00', totalI: '0.00' },
+      },
+    });
+    const { container } = render(
+      <FmListPage declarations={[decl]} token={TOKEN} apiBaseUrl={API_BASE_URL} />
+    );
+    await waitForCatalogLoad();
+
+    expect(handedToAnyHook('snap-349')).toBe(false);
+    const resultCell = container.querySelector('tbody tr').querySelectorAll('td')[5];
+    expect(resultCell.textContent).toContain('123');
+    expect(resultCell.textContent).not.toContain('7777');
+  });
+
+  it('a legacy submitted declaration (no snapshot) still goes through the frozen bucket', async () => {
+    const legacy = makeRow({ id: 'legacy-303', submittedSnapshot: null });
+    render(<FmListPage declarations={[legacy]} token={TOKEN} apiBaseUrl={API_BASE_URL} />);
+    await waitForCatalogLoad();
+
+    const call = useFiscalAutoCompute.mock.calls.find(c => c[0].some(d => d.id === 'legacy-303'));
+    expect(call).toBeTruthy();
+    expect(typeof call[1].checkModifiedFn).toBe('function');
+  });
+});

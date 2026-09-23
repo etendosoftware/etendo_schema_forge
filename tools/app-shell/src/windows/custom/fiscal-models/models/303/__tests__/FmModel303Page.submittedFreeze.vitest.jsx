@@ -205,3 +205,65 @@ describe('FmModel303Page — mount-time auto-compute runs at most once per sessi
     expect(computeBoxes303).not.toHaveBeenCalled();
   });
 });
+
+// ETP-5438 (option 1) — a declaration presented once the backend persists a submission snapshot
+// carries it as `decl.submittedSnapshot`: the page renders it directly, with no compute call and
+// no sessionStorage dependency. Legacy submitted declarations (no snapshot) keep the
+// once-per-session path pinned above.
+describe('FmModel303Page — submitted declaration with a persisted submission snapshot (ETP-5438)', () => {
+  const cacheKeyFor = (declId) => `fiscal_ac_v3_${declId}`;
+  const snapshot = {
+    boxes: { 27: 500, 29: 100, 45: 100, 46: 400, 71: 400 },
+    summary: { accrued: 500, deductible: 100, result: 400 },
+    sources: [],
+  };
+  const kpiValues = (container) =>
+    [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+
+  it.each(['submitted', 'submitted_ack', 'submitted_ext'])(
+    '%s + snapshot: renders the snapshot with ZERO compute calls and never touches the session cache',
+    async (status) => {
+      const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+      const decl = makeDecl({ status, submittedSnapshot: snapshot });
+      const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+      await waitFor(() => expect(kpiValues(container)).toContain('500'));
+      await new Promise(r => setTimeout(r, 0));
+      expect(computeBoxes303).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem(cacheKeyFor(decl.id))).toBeNull();
+    },
+  );
+
+  it('snapshot wins over a stale session cache entry for the same declaration', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    const decl = makeDecl({ status: 'submitted', submittedSnapshot: snapshot });
+    sessionStorage.setItem(cacheKeyFor(decl.id), JSON.stringify({
+      result: { boxes: { 27: 999 }, summary: { accrued: 999, deductible: 0, result: 999 }, sources: [] },
+      computedAt: Date.now(),
+    }));
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+    await waitFor(() => expect(kpiValues(container)).toContain('500'));
+    expect(kpiValues(container)).not.toContain('999');
+    expect(computeBoxes303).not.toHaveBeenCalled();
+  });
+
+  it('merges the saved manualOverrides and re-derives box 71 exactly like a live compute', async () => {
+    const decl = makeDecl({
+      status: 'submitted',
+      submittedSnapshot: snapshot,
+      manualData: { identification: { tipo_declaracion: 'I' }, manualOverrides: { 70: 50 } },
+    });
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+    // box 71 = box 69 (400) - box 70 (50) — not the raw snapshot summary.result (400).
+    await waitFor(() => expect(kpiValues(container)).toContain('350'));
+  });
+
+  it('a draft never reads a snapshot: it still computes live', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    render(<FmModel303Page decl={makeDecl({ status: 'draft', submittedSnapshot: snapshot })} {...defaultProps} />);
+
+    await waitFor(() => expect(computeBoxes303).toHaveBeenCalledTimes(1));
+  });
+});

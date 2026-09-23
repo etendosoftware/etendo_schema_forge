@@ -51,6 +51,9 @@ async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
 // spread), so a new named export there would silently become `undefined` in those suites.
 const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack']);
 
+// ETP-5438 — only LEGACY submitted declarations (presented before the backend started
+// persisting a submission snapshot) still go through this path; a declaration with
+// `submittedSnapshot` is served from it directly (see `snapshotMap` below).
 // Passed as `checkModifiedFn` for the submitted-family buckets below instead of omitting it
 // (the way the pre-existing `otherDecls303`/`otherDecls349` buckets do): omitting it makes
 // `useFiscalAutoCompute`'s mount effect skip its own cache-consult branch and unconditionally
@@ -70,6 +73,12 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 // trade-off: a cold session recomputes from the invoice data as it is at that moment.
 async function neverModifiedFn() {
   return false;
+}
+
+// ETP-5438 — true when the declaration carries the snapshot the backend persisted when it was
+// presented (see `snapshotMap` below). Legacy submitted declarations have `null` there.
+function hasSubmittedSnapshot(decl) {
+  return Boolean(decl.submittedSnapshot) && typeof decl.submittedSnapshot === 'object';
 }
 
 // Generic filter dropdown — handles year, model and status filters
@@ -670,16 +679,31 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     [decls]
   );
 
-  // ETP-5438 — submitted-family declarations: compute once (bootstrap, so "Resultado" is never
-  // stuck on "—" for a freshly-presented declaration), then frozen via `neverModifiedFn` — see
-  // its comment above for the full rationale.
+  // ETP-5438 — submitted-family declarations WITH a persisted submission snapshot
+  // (`decl.submittedSnapshot`, the exact boxes/operators payload the backend froze when the
+  // declaration was presented): that snapshot IS their computed result. It is fed straight into
+  // the non-draft computed map below — no compute call, no sessionStorage — so "Resultado" goes
+  // through the exact same derivation (303 box 71 with manualOverrides included) as a live
+  // compute, and can never pick up an invoice added/removed after submission.
+  const snapshotMap = useMemo(() => {
+    const map = {};
+    for (const d of decls) {
+      if (SUBMITTED_STATUSES.has(d.status) && hasSubmittedSnapshot(d)) map[d.id] = d.submittedSnapshot;
+    }
+    return map;
+  }, [decls]);
+
+  // ETP-5438 — legacy submitted-family declarations (presented BEFORE snapshots existed, so no
+  // `submittedSnapshot`; no data-fix for those, product decision): compute once (bootstrap, so
+  // "Resultado" is never stuck on "—"), then frozen via `neverModifiedFn` — see its comment
+  // above for the full rationale.
   const submittedDecls303 = useMemo(
-    () => decls.filter(d => d.model === '303' && SUBMITTED_STATUSES.has(d.status)),
+    () => decls.filter(d => d.model === '303' && SUBMITTED_STATUSES.has(d.status) && !hasSubmittedSnapshot(d)),
     [decls]
   );
 
   const submittedDecls349 = useMemo(
-    () => decls.filter(d => d.model === '349' && SUBMITTED_STATUSES.has(d.status)),
+    () => decls.filter(d => d.model === '349' && SUBMITTED_STATUSES.has(d.status) && !hasSubmittedSnapshot(d)),
     [decls]
   );
 
@@ -734,13 +758,15 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   // Union the "other" (ready/skipped) and "submitted" one-time-compute maps into a single map
   // per model — `getComputedForDecl` only ever needs "the non-draft compute for this decl.id",
   // it doesn't care which of the two hooks produced it.
+  // `snapshotMap` is keyed by declaration id (unique across models), so it is safe to spread into
+  // both per-model maps; it goes last so a persisted snapshot always wins.
   const computedMapOther303Merged = useMemo(
-    () => ({ ...computedMapOther303, ...computedMapSubmitted303 }),
-    [computedMapOther303, computedMapSubmitted303]
+    () => ({ ...computedMapOther303, ...computedMapSubmitted303, ...snapshotMap }),
+    [computedMapOther303, computedMapSubmitted303, snapshotMap]
   );
   const computedMapOther349Merged = useMemo(
-    () => ({ ...computedMapOther349, ...computedMapSubmitted349 }),
-    [computedMapOther349, computedMapSubmitted349]
+    () => ({ ...computedMapOther349, ...computedMapSubmitted349, ...snapshotMap }),
+    [computedMapOther349, computedMapSubmitted349, snapshotMap]
   );
 
   useEffect(() => {
@@ -836,7 +862,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
     persistDeclarationStatus(reactivateTarget.id, 'draft', { token, apiBaseUrl })
       .then((result) => {
         if (result.ok) {
-          setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft' } : d));
+          // The backend cleared the submission snapshot (ETP-5438): a draft computes live again.
+          setDecls(ds => ds.map(d => d.id === reactivateTarget.id ? { ...d, status: 'draft', submittedSnapshot: null } : d));
           setReactivateTarget(null);
         } else {
           toast.error(t('fm.list.reactivate_failed') ?? 'No se pudo reactivar la declaración.');

@@ -181,3 +181,50 @@ describe('FmModel349Page — mount-time auto-compute runs at most once per sessi
     expect(compute349Operators).not.toHaveBeenCalled();
   });
 });
+
+// ETP-5438 (option 1) — a declaration presented once the backend persists a submission snapshot
+// carries it as `decl.submittedSnapshot`: rendered directly, no compute call, no sessionStorage.
+describe('FmModel349Page — submitted declaration with a persisted submission snapshot (ETP-5438)', () => {
+  const snapshot = {
+    operators: [
+      { bpId: '9', nif: 'FR40123456789', name: 'Snapshot SARL', key: 'A', base: '321.00', vies: 'valid' },
+    ],
+    invoices: [],
+    summary: { totalE: '0.00', totalS: '0.00', totalA: '321.00', totalI: '0.00' },
+  };
+
+  it.each(['submitted', 'submitted_ack', 'submitted_ext'])(
+    '%s + snapshot: renders the snapshot with ZERO compute calls and never touches the session cache',
+    async (status) => {
+      const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+      const decl = makeDecl({ status, submittedSnapshot: snapshot });
+      render(<FmModel349Page decl={decl} {...defaultProps} />);
+
+      await waitFor(() => expect(document.body.textContent).toContain('Snapshot SARL'));
+      await new Promise(r => setTimeout(r, 0));
+      expect(compute349Operators).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem(cacheKeyFor(decl.id))).toBeNull();
+    },
+  );
+
+  it('snapshot wins over a stale session cache entry for the same declaration', async () => {
+    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+    const decl = makeDecl({ status: 'submitted', submittedSnapshot: snapshot });
+    sessionStorage.setItem(cacheKeyFor(decl.id), JSON.stringify({
+      result: { operators: [{ bpId: '1', nif: 'X', name: 'Stale Cache Ltd', key: 'E', base: '1.00' }] },
+      computedAt: Date.now(),
+    }));
+    render(<FmModel349Page decl={decl} {...defaultProps} />);
+
+    await waitFor(() => expect(document.body.textContent).toContain('Snapshot SARL'));
+    expect(document.body.textContent).not.toContain('Stale Cache Ltd');
+    expect(compute349Operators).not.toHaveBeenCalled();
+  });
+
+  it('a draft never reads a snapshot: it still computes live', async () => {
+    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+    render(<FmModel349Page decl={makeDecl({ status: 'draft', submittedSnapshot: snapshot })} {...defaultProps} />);
+
+    await waitFor(() => expect(compute349Operators).toHaveBeenCalledTimes(1));
+  });
+});
