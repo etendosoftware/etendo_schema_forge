@@ -153,4 +153,41 @@ describe('SalesQuotationWindow custom wrapper', () => {
       );
     });
   });
+  // ETP-5378 — row-hover "Confirmar": reuses the SAME two modals
+  // QuotationTopbarActions dispatches to from the form, rather than inventing a
+  // third flow (see the doc comment on openQuotationConfirm in index.jsx).
+  describe('row-hover "Confirmar" (ETP-5378)', () => {
+    it('imports the same two modals the form dispatches to', () => {
+      assert.match(src, /import SendToEvaluationModal from '@generated\/sales-quotation\/custom\/SendToEvaluationModal';/);
+      assert.match(src, /import QuotationConfirmModal from '@generated\/sales-quotation\/custom\/QuotationConfirmModal';/);
+    });
+
+    it('refetches the record through useApiFetch before opening either modal', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js';/);
+      assert.match(src, /apiFetch\(`\/quotation\/\$\{row\.id\}`\)/);
+    });
+
+    it('gates the row kebab Confirm entry to DR, CO and UE — the only statuses the form actually reacts to', () => {
+      assert.match(src, /row\?\.documentStatus === 'DR' \|\| row\?\.documentStatus === 'CO' \|\| row\?\.documentStatus === 'UE'/);
+    });
+
+    it('composes with customMenuActions instead of replacing it, so Reject keeps rendering too', () => {
+      assert.match(src, /rowMenuActions = useCallback\(\(\{ row, status \}\) => \[/);
+      assert.match(src, /\.\.\.customMenuActions\(\{ status \}\)/);
+    });
+
+    it('wires rowMenuActions (not customMenuActions) into the row-hover rowQuickActions', () => {
+      assert.match(src, /menuActions: rowMenuActions,/);
+    });
+
+    it('opens SendToEvaluationModal on a Draft record and QuotationConfirmModal otherwise', () => {
+      assert.match(src, /confirmRow\.documentStatus === 'DR' \? \(/);
+      assert.match(src, /<SendToEvaluationModal/);
+      assert.match(src, /<QuotationConfirmModal/);
+    });
+
+    it('refreshes the LIST after QuotationConfirmModal creates an order/invoice, not the form', () => {
+      assert.match(src, /onRefresh=\{\(\) => setRefreshKey\(k => k \+ 1\)\}/);
+    });
+  });
 });

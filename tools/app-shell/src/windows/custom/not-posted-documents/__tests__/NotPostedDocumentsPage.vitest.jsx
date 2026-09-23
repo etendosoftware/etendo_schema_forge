@@ -3,8 +3,9 @@ import { render, screen, waitFor, fireEvent, act, within } from '@testing-librar
 import { toast } from 'sonner';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
+import { useUI } from '@/i18n';
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: vi.fn(() => (key) => key) }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -455,6 +456,44 @@ describe('NotPostedDocumentsPage', () => {
     });
 
     expect(toast.error).toHaveBeenCalledWith('Accounting period closed');
+  });
+
+  // ETP-5330 — the backend returns a raw AD_MESSAGE whose @product@ placeholder never
+  // resolves (Etendo Core bug — see backendErrors.test.js "cost not calculated exact
+  // match (ETP-4706)"). postRow must route the message through translateBackendError()
+  // (same as DetailView.jsx) instead of showing the raw, unresolved string verbatim.
+  it('translates a mapped backend error (cost not calculated) instead of showing it verbatim', async () => {
+    // translateBackendError() only accepts a mapped key as "translated" when t(key) differs from
+    // the key itself (see backendErrors.js translateSingleMessage's guard) — with the file's
+    // default identity useUI mock, t(key) === key always, so the translation would be silently
+    // rejected and the raw @product@ string would pass through untouched either way. Override the
+    // translator for this test only (mirrors backendErrors.test.js's own costNotCalculated tests),
+    // then restore the identity default so it doesn't leak into later tests.
+    const TRANSLATED = 'No se pudo calcular el costo de uno o más productos.';
+    useUI.mockImplementation(() => (key) => (key === 'backendError.costNotCalculated' ? TRANSLATED : key));
+
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    globalThis.fetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        json: async () => ({
+          success: false,
+          message: 'The cost of the product @product@ has not been calculated.',
+        }),
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith(TRANSLATED);
+    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('@product@'));
+
+    useUI.mockImplementation(() => (key) => key);
   });
 
   // ── postRow: ambiguous/unparseable body must not be treated as success ─────

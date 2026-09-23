@@ -1766,6 +1766,69 @@ describe('translateBackendError — "zero or negative quantity (process)" parame
   });
 });
 
+// AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414). Simple exact-match
+// BACKEND_ERROR_MAP entries, same shape as the "duplicate email" block above — no dynamic
+// value, so no fakeUiTranslator/regex match needed. Three of the four reuse the SAME key
+// `validateConfirmEligibility` (artifacts/amortization/custom/AmortizationBulkActions.jsx)
+// already ships for the identical client-side checks, so a translator with only the client
+// dictionary loaded (no separate `backendError.*` entry) already resolves them correctly —
+// asserted explicitly below, since that reuse is the whole point of not minting three new keys.
+describe('translateBackendError — AmortizationConfirmGuard server-side checks (ETP-5414)', () => {
+  it('translates "no lines" to the SAME key the client-side check already uses', () => {
+    const t = (k) => (k === 'amortizationBulkNoLines' ? 'No tiene líneas de amortización.' : k);
+    assert.equal(
+      translateBackendError('Has no amortization lines.', t),
+      'No tiene líneas de amortización.',
+    );
+  });
+
+  it('translates "missing percentage" to the SAME key the client-side check already uses', () => {
+    const t = (k) => (k === 'amortizationErrorLinePercentageMissing'
+      ? 'Hay líneas sin porcentaje de amortización.'
+      : k);
+    assert.equal(
+      translateBackendError('There are lines with a missing amortization percentage.', t),
+      'Hay líneas sin porcentaje de amortización.',
+    );
+  });
+
+  it('translates "invalid amount" to the SAME key the client-side check already uses', () => {
+    const t = (k) => (k === 'amortizationErrorLineAmountInvalid'
+      ? 'Hay líneas con importe cero o negativo.'
+      : k);
+    assert.equal(
+      translateBackendError('There are lines with a zero or negative amount.', t),
+      'Hay líneas con importe cero o negativo.',
+    );
+  });
+
+  it('translates the PATCH/PUT direct-write block to its own new key (no client-side equivalent)', () => {
+    const t = (k) => (k === 'amortizationProcessedDirectUpdateBlocked'
+      ? 'Procesado no se puede actualizar directamente.'
+      : k);
+    assert.equal(
+      translateBackendError('Processed cannot be updated directly.', t),
+      'Procesado no se puede actualizar directamente.',
+    );
+  });
+
+  it('leaves an unrelated message untouched (no accidental substring match)', () => {
+    const raw = 'Has no amortization lines to speak of.';
+    assert.equal(translateBackendError(raw, (k) => k), raw);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = 'Has no amortization lines.';
+    const missingT = (k) => k;
+    assert.equal(translateBackendError(raw, missingT), raw);
+  });
+
+  it('does not match the old no-trailing-period MSGTEXT shape (regression guard for the wording change)', () => {
+    const old = 'Has no amortization lines';
+    assert.equal(translateBackendError(old, (k) => k), old);
+  });
+});
+
 // ── ETP-5316: matching by AD_MESSAGE key ─────────────────────────────────────────
 //
 // The third mechanism in backendErrors.js, next to the exact-match map and the parameterized

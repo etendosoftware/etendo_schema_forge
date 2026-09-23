@@ -346,6 +346,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                           onChange={e => onIdentChange?.(f.id, e.target.value)}
                           autoComplete="off"
                           disabled={readOnly}
+                          maxLength={f.maxLength}
                         />
                       </div>
                     );
@@ -409,6 +410,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         onChange={e => onIdentChange?.(f.id, e.target.value)}
                         autoComplete="off"
                         disabled={readOnly}
+                        maxLength={f.maxLength}
                       />
                     </div>
                   );

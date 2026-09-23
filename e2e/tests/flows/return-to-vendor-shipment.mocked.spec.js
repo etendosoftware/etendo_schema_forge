@@ -541,8 +541,9 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // ── Case 5: create return invoice from CO ─────────────────────────────
     await createInvoiceBtn.click();
 
-    // CreateInvoiceConfirmModal — modal title is soManageDocsTitle ("Gestionar documentos")
-    await expect(page.getByText('Gestionar documentos')).toBeVisible({ timeout: 8_000 });
+    // CreateInvoiceConfirmModal — modal title is soManageDocsTitle ("Generar factura",
+    // ETP-5410 follow-up: was "Gestionar documentos")
+    await expect(page.getByText('Generar factura')).toBeVisible({ timeout: 8_000 });
 
     // Blue summary card shows BP name (small text) and documentNo (large text)
     await expect(page.getByText('Proveedor Test S.L.').first()).toBeVisible({ timeout: 8_000 });

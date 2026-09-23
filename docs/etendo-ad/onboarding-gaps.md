@@ -35,6 +35,9 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
 | N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
 | N6 | Initial dataset configuration | The curated `AD_SEQUENCE.xml` ships the tenant's document series with NO prefix at all (`Purchase Order`, `Standard Order`, `AR Invoice`) or with ETP-4737's interim `REC-` (both rectificativas), and `AR Invoice` starts at 10000000 instead of 1000000 — so a tenant's invoices and orders are numbered `1000000`, indistinguishable from each other, instead of the product's `PC`/`PV`/`FV`/`FVR`/`FCR` series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` sets the five prefixes and drops `AR Invoice` to 1000000); corrective data-fix (`R38-document-sequence-series-prefixes`) applies the same to already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it. The sixth series the ticket names, `FC` (Factura de compra), is NOT covered: `AP Invoice` is `IsDocNoControlled='N'` with no sequence in 76/76 doctypes, so giving it a series is a product decision, tracked separately | ETP-5285 |
+| N7 | Initial dataset configuration | `AP Invoice` ships with stock Openbravo's `IsDocNoControlled='N'` and no sequence (107 of 107 doctypes), so a purchase invoice takes its proposed number from the shared, per-doctype-agnostic `DocumentNo_C_Invoice` fallback and the tenant has no `FC` series to configure — the sixth series ETP-5285 named and could not ship | **Preventive only, dataset-only, no new service.** `GOClient/AD_SEQUENCE.xml` ships an `AP Invoice` sequence (prefix `FC`, 1000000) and `GOClient/C_DOCTYPE.xml` flips the `AP Invoice` doctype to `ISDOCNOCONTROLLED='Y'` pointing at it; `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` grows to six. Corrective data-fix (`R39-ap-invoice-fc-series`) creates the sequence and flips the doctype on already-onboarded tenants — **decision REVERSED on 2026-09-22**, see the detail section: the retrofit starts a numbering series over documents numbered by the fallback counter, accepted because no tenant is productive and going productive creates a NEW tenant born correct. CUT deliberately NOT bumped — a newborn tenant is born correct, so `R39`'s `@check` returns 0 rows for it | ETP-5364 |
+| N8 | Initial dataset configuration | Every `DocumentNo_*` sequence exists **twice** per tenant — 9888 surplus `AD_Sequence` rows across 103 of 125 clients. Openbravo's `InitialClientSetup` creates the 97 `DocumentNo_<table>` rows for a new client, and the GO dataset then imported 96 of the same names again from `GOClient/AD_SEQUENCE.xml` as fresh rows. Numbering survives by accident (`ad_sequence_doc` increments every row matching the name and reads one back non-`STRICT`), but 140 pairs have already diverged, and editing one of a pair makes the applied value non-deterministic | **Preventive only.** A new `TableCounterSequenceFilter` in `OnboardingDatasetNormalizer` drops the 96 colliding rows at IMPORT time; the source `GOClient/AD_SEQUENCE.xml` stays complete, because `install.source` seeds the GOClient sample client from it wholesale and never runs `InitialClientSetup` — deleting them there would leave the sample client unable to number a document, with no dangling FK to announce it. Same source/import split as N4b. **No corrective data-fix by decision** — the 103 existing tenants keep both copies. CUT deliberately NOT bumped: a newborn tenant is born correct and there is no fix to skip | ETP-5364 |
+| N9 | Initial dataset configuration | Three document series carry an internal, ticket-tagged `DESCRIPTION` — both rectificativas ship ETP-4737's `"ETP-4737: sequence for the unified ... rectificative invoice"` and the new purchase-invoice series briefly shipped `"ETP-5364: sequence ..."`. `artifacts/document-sequence/decisions.json` declares `description` as an **editable, grid-visible** column of the "Secuencia de documentos" window, so that engineering note is copy the tenant reads next to its own series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element on all three rows); corrective data-fix (`R39-document-sequence-clear-descriptions`) nulls it on already-onboarded tenants. The text reaches a tenant by TWO routes — the dataset and `R17-rectificativa-doctype-sequence`, which is immutable and already applied — so the fix matches by NAME, and only on `description LIKE 'ETP-%'` so a tenant-authored description survives. CUT deliberately NOT bumped | ETP-5364 |
 | P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 
@@ -299,8 +302,21 @@ comment, and the updated JUnit test) were initially blocked by this session's to
 boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
 writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
 allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
-working tree was clean) — all deliverables above were then completed on that branch. All changes in
-both repos remain **unstaged/uncommitted**, pending REVIEW.
+working tree was clean) — all deliverables above were then completed on that branch. Both fronts
+above (R29 corrective + the preventive dataset/CUT bump) are merged into `develop` — this was the
+first, default-only fix; superseded by the follow-up below.
+
+**Follow-up (2026-09-21) — superseded by full elimination, not just a default fix.** After this A3c
+fix shipped and QA approved it (checkbox defaults OFF, stays editable), the product decision changed:
+remove the "Permitir negativos" checkbox from the UI entirely, and close the backend write path too,
+not merely default it to `N`. This is now closed on a separate `feature/ETP-4947` branch pair (the
+Jira ticket number is reused — same ticket, later scope). `decisions.json` marks `allowNegative`
+`system`-visibility, the "Políticas contables" section is gone from `GeneralTab.jsx`, and
+`GeneralLedgerConfigurationHandler.applyGeneralChanges()` no longer accepts a client-supplied value —
+GET still reports the persisted value via `buildGeneral()`. This A3c fix (R29 + the dataset default)
+is still what guarantees that persisted value stays `N` for every onboarded tenant; nothing here is
+retired. See `docs/generated-custom-windows/general-ledger-configuration.md` and
+`artifacts/general-ledger-configuration/figma-spec.md` for the current (post-elimination) state.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 
@@ -2479,7 +2495,197 @@ five. See `docs/generated-custom-windows/document-sequence.md`. The ticket's "de
 records" is not executable — the other ~235 rows are record-ID counters `ad_sequence_doc` depends
 on — so hiding them from the window is the reading that shipped.
 
+### N7 — `AP Invoice` has no document series of its own (ETP-5364, 2026-09-21)
+
+**Symptom.** The Document Sequence window shows five series. The sixth the product defines,
+`FC` (Factura de compra), is simply absent, and a purchase invoice created in Etendo GO is
+numbered `10000024` — no prefix, and from a counter shared with every other doctype that has no
+sequence.
+
+```sql
+SELECT name, docbasetype, isdocnocontrolled, docnosequence_id
+FROM c_doctype WHERE docbasetype IN ('API','ARI') AND ad_client_id = '<client>';
+```
+
+| `C_DocType.Name` | `DocBaseType` | `IsDocNoControlled` | sequence |
+|---|---|---|---|
+| `AR Invoice` | ARI | `Y` | `AR Invoice` (`FV`) |
+| `Corrective Sales Invoice` | ARI | `Y` | `Factura Rectificativa (Ventas)` (`FVR`) |
+| `Corrective Purchase Invoice` | API | `Y` | `Factura Rectificativa (Compras)` (`FCR`) |
+| **`AP Invoice`** | **API** | **`N`** | **none** |
+
+**Why it looked like a non-gap.** This is stock Openbravo, not a provisioning defect: 107 of 107
+`API` default doctypes across the fleet carry `IsDocNoControlled='N'`, because a purchase invoice
+is numbered by the supplier and the ERP only proposes a value. ETP-5285 measured exactly this and
+declared `FC` out of scope for that reason. ETP-5364 is the **product decision** that reverses it:
+in Etendo GO a purchase invoice is numbered by the tenant's own series, like every other invoice.
+
+**Both halves are required.** A sequence nothing points at shows a configurable prefix that
+governs no numbering; a doctype flipped with no sequence to read keeps using the fallback. Either
+one alone is a silent no-op.
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service. `GOClient/AD_SEQUENCE.xml` gains an `AP Invoice` sequence (prefix `FC`, `STARTNO`/`CURRENTNEXT` 1000000, mask `#######`, id `B1BF521B12684968B31531D88B9F20AB`); `GOClient/C_DOCTYPE.xml` sets the `AP Invoice` doctype to `ISDOCNOCONTROLLED='Y'` with `DOCNOSEQUENCE_ID` pointing at it. Both tables are already in `OnboardingDatasetDefinition.INCLUDED_TABLES` |
+| Corrective | **`R39-ap-invoice-fc-series` — the decision above was REVERSED on 2026-09-22.** Three guarded statements: insert the `AP Invoice` sequence (per-tenant uuid, prefix `FC`, 1000000), align it if the tenant somehow already owned one, then flip the doctype to `ISDOCNOCONTROLLED='Y'` pointing at it. See **Why the decision changed** below |
+
+**Why the decision changed (2026-09-22).** The objection was real and is unchanged: on a tenant
+that has already issued purchase invoices, those documents carry numbers minted by the shared
+`DocumentNo_C_Invoice` fallback (typically 10000000+, no prefix), so creating the series makes the
+next one `FC1000000` — the numbering both SPLITS and moves BACKWARDS. What changed is the premise it
+was weighed against:
+
+1. There are no productive tenants. Every tenant in the fleet holds trial/demo data — the same
+   premise `R38`'s header carries, restated and re-dated.
+2. **Going productive does not convert the current tenant, it creates a NEW one**, provisioned from
+   the already-corrected dataset (the app's `/upgrade` flow: *"Conserva el entorno demo y añade otro
+   entorno productivo"*). So a series split in a demo tenant never becomes a legal series, and the
+   productive environment is born with six correct series.
+
+Argument 2 is specific to this fix and is stronger than R38's, which rests on premise 1 alone.
+
+**There is no guard that makes this safe once premise 1 stops holding.** Unlike R38, which merely
+rewrites an existing series, this one starts a series over a population of documents numbered by
+something else. The correct treatment for a tenant with issued purchase invoices is a manual
+decision about the starting number, not this file — the fix's header says so in those words.
+
+**Why it is a new file and not a widened `R38`.** `R38` is already on `develop` (ETP-5285) and the
+framework's rule 3 makes an applied fix immutable. The mechanism is what bites: the runner never
+re-reads a fix in a `PROCESSED` state, so the FC half added to a widened `R38` would silently never
+run on any tenant that had already applied it — `R38`'s own header records 94 tenants `WOULD_APPLY`
+on a dry-run. A new dated file also keeps attribution honest: `R38` is ETP-5285's five series, `R39`
+is ETP-5364's sixth.
+
+**What a tenant that has NOT run `R39` sees.** Five rows in the Document Sequence window instead of
+six, and purchase invoices that keep taking the `DocumentNo_C_Invoice` number. Nothing errors: the
+window's name filter matches no row and simply returns one fewer. Treat a five-row list on such a
+tenant as expected, not as a regression.
+
+**Window side (same ticket).** `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` grows from five
+names to six and `artifacts/document-sequence/decisions.json` gains the matching `enumValues`
+entry plus `documentSequencePurchaseInvoice` in all three locale files. The enum values are
+`AD_Sequence.Name` strings, so `cli/test/document-sequence.contract.test.js` asserts them against
+the handler's list byte for byte — a mismatch there hides the row with no error anywhere. See
+`docs/generated-custom-windows/document-sequence.md`.
+
+---
+
+### N8 — The curated dataset re-ships the `DocumentNo_*` sequences the client setup already creates (ETP-5364, 2026-09-21)
+
+**Symptom.** Every `DocumentNo_*` sequence exists twice in a provisioned tenant.
+
+```sql
+SELECT count(*) AS dup_groups, sum(n - 1) AS surplus_rows, count(DISTINCT ad_client_id) AS clients
+FROM (SELECT ad_client_id, ad_org_id, name, count(*) n
+      FROM ad_sequence GROUP BY 1, 2, 3 HAVING count(*) > 1) d;
+```
+
+→ **9888 dup groups, 9888 surplus rows, 103 of 125 clients.** Every duplicated name starts with
+`DocumentNo_`; not one of the named document series is duplicated. (Rows differing only by
+organization are NOT this — per-org numbering is legitimate. The grouping is client *and* org.)
+
+**Cause — and it is not the one previously recorded.** Two creation passes ~45s apart on the same
+client:
+
+| Pass | `CREATEDBY` | `MASK` | Rows | Who |
+|---|---|---|---|---|
+| 1 | `0` | *(empty)* | 97 | Openbravo's `InitialClientSetup`, which creates a `DocumentNo_<table>` sequence per table for the new client |
+| 2 | the tenant admin | `#######` | 145 | the GO onboarding dataset import, of which **96 names collide** with pass 1 |
+
+Earlier notes blamed `EtendoGoJwtServlet.generateOnboardingSequences` (Etendo's classic *Create
+Sequences*). That is wrong and worth stating explicitly, because it sent the fix to the wrong
+place: `SequencesGenerator` names its rows `<Table>-<Column>` and sets `AD_Column_ID`, and there
+are only **206 such rows fleet-wide** — `SELECT count(*) FROM ad_sequence WHERE ad_column_id IS
+NOT NULL` — so it produced none of the 9888. The duplicates all carry `AD_Column_ID IS NULL` and
+the `#######` mask `SequencesGenerator` never leaves empty.
+
+**Why it matters.** `ad_sequence_doc` increments **every** row matching the name (`WHERE Name = …
+AND ad_client_id = …`, no org, no id) and then reads one back with a non-`STRICT` `SELECT INTO`,
+so PL/pgSQL takes an arbitrary row rather than raising. While the copies hold the same value
+either answer is correct — **140 pairs have already diverged**, and from that point the value
+applied is non-deterministic, with PostgreSQL free to relocate an updated row.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | A fourth sub-filter in `OnboardingDatasetNormalizer`'s `RowExclusionFilter` composite: `TableCounterSequenceFilter` drops every `AD_SEQUENCE` row whose `NAME` starts with `DocumentNo_`, except `DocumentNo_C_ExtBP_Config_Filter_Opt` and `DocumentNo_C_ExtBP_Config_Prop_Opt` — verified to be the only two such names `InitialClientSetup` does **not** create (exactly one row per client, in all 105 clients that have them, versus two for every other). 96 rows dropped, 46 imported. Stateless and keyed on the name prefix, like `DemoMasterDataFilter`: the property that makes a row droppable is that the client setup creates it, and the `DocumentNo_<table>` name is exactly what encodes that |
+| Corrective | **None, by decision.** Deleting one row of each pair means choosing which id survives and carrying `max(currentnext)` onto it, on 103 live tenants, for counters the DAL reads by name on every insert. The 103 existing tenants keep both copies and the guidance stands: do not edit a `DocumentNo_*` row on them |
+
+**Why NOT delete them from `GOClient/AD_SEQUENCE.xml`, which is the obvious fix.** Same trap as
+§N4b, reached from a different direction. That file has two consumers: `install.source` →
+`import.sample.data` seeds the GOClient **sample client** from all 121 files wholesale and never
+runs `InitialClientSetup`, so for that consumer the XML is the only source of these counters — the
+sample client would be left unable to number a document. What makes this variant worse than N4b's
+is that it is **silent**: the removed rows are referenced by nothing (verified — zero `_ID`
+references to any of the 96 ids anywhere in the dataset), so there is no dangling foreign key,
+`enableAllFK` succeeds and `OnboardingDatasetReferentialIntegrityTest` stays green. Nothing would
+report the breakage until someone created a document in GOClient.
+`OnboardingDatasetReferentialIntegrityTest#testTheTableCounterSequencesStayInTheSourceDatasetForGoClient`
+is the guard that now makes that deletion fail loudly, with a message naming the filter.
+
+**Verifying by hand needs a Tomcat restart.** Same caveat as N4b: `INCLUDED_TABLES` and the filters
+are Java, loaded once per JVM, while the dataset XMLs are re-read on every provisioning. Expected
+end state on a newly provisioned tenant: `SELECT name, count(*) FROM ad_sequence WHERE ad_client_id
+= '<client>' GROUP BY name HAVING count(*) > 1` returns **zero rows**, and the tenant holds 97
+`DocumentNo_*` sequences (the client setup's) plus the two GO-only ones.
+
+**What the preventive change does NOT do.** It does not make any `DocumentNo_*` name worth showing
+in the Document Sequence window. Those rows are table-level *fallback* counters shared by every
+doctype without a sequence, so a prefix on one configures a series belonging to no document type —
+that objection is independent of the duplication and survives it. `DocumentSequenceHandlerTest`
+keeps the regression guard that no allowlisted name starts with `DocumentNo_`.
+
+**CUT not bumped** (`ONBOARDING_PROVISIONED_THROUGH`), for both N7 and N8: neither gap has a
+corrective fix for a newborn tenant to skip, so there is nothing for the constant to gate.
+
 ## P — Scheduled Processes
+
+### N9 — The document series ship an internal, ticket-tagged description the tenant reads (ETP-5364, 2026-09-22)
+
+**Symptom.** Opening "Secuencia de documentos" shows, next to the tenant's own series, text like
+`ETP-4737: sequence for the unified sales rectificative invoice (Factura Rectificativa, AR).`
+
+**Why that is a defect and not a harmless note.** `artifacts/document-sequence/decisions.json`
+declares `description` as an **editable** column with `grid: true` and `gridOrder: 2` — second
+column in the list, right after the name. Whatever sits in `AD_Sequence.Description` is therefore
+product copy, read by the end user, on a window ETP-5285 deliberately narrowed to five fields
+precisely so that everything on it is something a tenant should see.
+
+**Which rows, and where the text comes from.** Three of the six product series, by two independent
+routes — which is why the fix matches on `NAME` and not on provenance:
+
+| Series | Text | Written by |
+|---|---|---|
+| `Factura Rectificativa (Ventas)` | `ETP-4737: sequence for the unified sales rectificative invoice (Factura Rectificativa, AR).` | `GOClient/AD_SEQUENCE.xml` **and** `R17-rectificativa-doctype-sequence` step 1a |
+| `Factura Rectificativa (Compras)` | `ETP-4737: sequence for the unified purchase rectificative invoice (Factura Rectificativa, AP).` | `GOClient/AD_SEQUENCE.xml` **and** `R17` step 2a |
+| `AP Invoice` | `ETP-5364: sequence for the purchase invoice series (Factura de compra, FC).` | `GOClient/AD_SEQUENCE.xml` (added earlier in this same ticket) |
+
+`R17` is immutable and already `APPLIED`, so the text it wrote can only be removed by a later fix.
+The other three series (`Purchase Order`, `Standard Order`, `AR Invoice`) never had a description
+and are out of scope on both fronts.
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service. `GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element from all three rows. `R39-ap-invoice-fc-series` likewise inserts its new row with `description` NULL, so the corrective for N7 cannot reintroduce what this one removes |
+| Corrective | `R39-document-sequence-clear-descriptions` — one guarded `UPDATE` setting `description = NULL` on those three names, scoped by `ad_client_id` |
+
+**Why the guard is `description LIKE 'ETP-%'` and not the exact strings.** The column is editable,
+so a tenant may legitimately have typed its own description, and that text must survive. The
+ticket-key prefix is narrow enough to match only the engineering notes and wide enough to catch a
+row whose text drifted between `R17` and the dataset. A tenant-authored description does not start
+with a ticket key.
+
+**Risk is `low`, unlike its N7 sibling.** This touches no prefix, no counter and no document, so it
+cannot renumber anything. `NULL` rather than `''` so a fixed tenant and a newborn one end up
+byte-identical.
+
+**Regression guard.** `OnboardingDatasetCorrectionsSampleDataTest#testTheProductSeriesShipWithoutAnInternalDescription`
+fails if any of the six product series ships a `DESCRIPTION` starting with `ETP-`. The regression
+path is the usual one for this class: a dataset re-export from an instance where someone pasted a
+ticket reference into the field.
+
+---
 
 ### P1 — No scheduled "Costing Background process" reaches a new tenant (ETP-5245, 2026-09-10)
 

@@ -23,27 +23,27 @@ import { translateBackendError } from '../../../lib/backendErrors.js';
 // action (BulkDocumentAction.jsx's buildPostActions/postRowFilter) and the
 // decisions.json-driven form-view Post action: a row must be processed AND not
 // yet posted for Post to appear.
-export function buildPostMenuActions({ row } = {}) {
+//
+// ETP-5378 added the opt-in `includeUnpost` knob, defaulting to the pre-existing
+// behavior so goods-shipment and goods-receipt are untouched: it also emits an
+// `unpost` entry once the row IS posted, mirroring goods-receipt's hand-rolled
+// form-view menuActions. Off by default because a window that declares no `unpost`
+// in its decisions.json must not grow one in the grid only.
+export function buildPostMenuActions({ row, includeUnpost = false } = {}) {
   const isPosted = row?.posted === 'Y' || row?.posted === true;
   const isProcessed = row?.processed === 'Y' || row?.processed === true;
-  if (isPosted || !isProcessed) return [];
-  return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
-}
-
-// ETP-5360 — Post OR Unpost, whichever the row's state allows: Post while processed and
-// not yet posted (same gate as buildPostMenuActions), Unpost once posted. Mirrors the
-// form-view menuActions and the bulk Post/Unpost pair, so a posted document keeps a
-// row-hover kebab (Descontabilizar) instead of losing it entirely. A SEPARATE builder
-// rather than a change to buildPostMenuActions: windows that expose no standalone
-// unpost anywhere (see BulkDocumentAction.jsx's buildUnpostActions note) keep the
-// Post-only behavior untouched; a window opts in through
-// buildDocumentRowQuickActionsPostMenu({ includeUnpost: true }).
-export function buildPostUnpostMenuActions({ row } = {}) {
-  const isPosted = row?.posted === 'Y' || row?.posted === true;
-  if (isPosted) {
-    return [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }];
+  if (!isProcessed) return [];
+  if (!isPosted) {
+    return [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }];
   }
-  return buildPostMenuActions({ row });
+  if (!includeUnpost) return [];
+  return [{
+    key: 'unpost',
+    labelKey: 'unpost',
+    neoAction: 'unpost',
+    successKey: 'documentUnposted',
+    destructive: true,
+  }];
 }
 
 // RowQuickActions deliberately never shows a toast itself ("toast/snackbar is the
@@ -52,8 +52,11 @@ export function buildPostUnpostMenuActions({ row } = {}) {
 // neoAction shape.
 export function buildMenuActionExecutedHandler(ui, onRefresh) {
   return (action, result) => {
-    if (!action.neoAction) return;
+    // ETP-5378 — widened from `neoAction` only, so a documentAction row entry (e.g.
+    // reactivate) also gets its toast and list refresh.
+    if (!action.neoAction && !action.documentAction) return;
     if (result?.success === false) {
+      // ETP-5360 — forward the AD_MESSAGE keys so translateBackendError can map by identity.
       toast.error(translateBackendError(result?.message, ui, { messageKeys: result?.messageKeys }) || ui?.('actionFailed'));
     } else {
       toast.success((action.successKey ? ui?.(action.successKey) : action.successMessage) || ui?.('actionCompleted'));
@@ -65,11 +68,33 @@ export function buildMenuActionExecutedHandler(ui, onRefresh) {
 // Convenience composite for the common call shape: spread the result into a
 // window's own rowQuickActions object literal, e.g.
 // `...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1) })`.
-// `includeUnpost: true` (ETP-5360) swaps in buildPostUnpostMenuActions; the default keeps
-// the Post-only builder so existing callers are unaffected.
-export function buildDocumentRowQuickActionsPostMenu({ ui, onRefresh, includeUnpost = false } = {}) {
+export function buildDocumentRowQuickActionsPostMenu({
+  ui, onRefresh, includeUnpost = false, extraMenuActions = null,
+} = {}) {
   return {
-    menuActions: includeUnpost ? buildPostUnpostMenuActions : buildPostMenuActions,
+    // RowQuickActions calls this with `{ row, data, status }`. With no knob set, hand it
+    // buildPostMenuActions ITSELF rather than a wrapper: callers memoize the slice and a
+    // fresh closure per call would be a new prop identity on every render (pinned by
+    // buildDocumentRowQuickActions.test.js). Only a window that opts into a knob pays
+    // for the wrapper.
+    //
+    // ETP-5378 — `extraMenuActions(row)` lets a window prepend its own entries (the
+    // albarán windows put "Confirmar" ahead of Post/Unpost, mirroring the order Pedido
+    // de Venta uses). It may return one descriptor, an array, or nothing.
+    menuActions: (includeUnpost || extraMenuActions)
+      ? ({ row }) => [
+        ...normalizeExtra(extraMenuActions, row),
+        ...buildPostMenuActions({ row, includeUnpost }),
+      ]
+      : buildPostMenuActions,
     onMenuActionExecuted: buildMenuActionExecutedHandler(ui, onRefresh),
   };
+}
+
+/** Accepts a descriptor, an array of them, or nothing, and always yields an array. */
+function normalizeExtra(extraMenuActions, row) {
+  if (typeof extraMenuActions !== 'function') return [];
+  const extra = extraMenuActions(row);
+  if (!extra) return [];
+  return Array.isArray(extra) ? extra : [extra];
 }

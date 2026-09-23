@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { toast } from 'sonner';
 import {
   buildPostMenuActions,
-  buildPostUnpostMenuActions,
   buildMenuActionExecutedHandler,
   buildDocumentRowQuickActionsPostMenu,
 } from '../buildDocumentRowQuickActions.js';
@@ -52,6 +51,43 @@ describe('buildDocumentRowQuickActions', () => {
     });
   });
 
+  // ETP-5378 — the two return windows need Descontabilizar in the same kebab, so the
+  // gate grew an opt-in `unpost` branch. It must stay OFF by default: goods-shipment and
+  // goods-receipt declare their own unpost elsewhere, and a window that declares none in
+  // decisions.json must not grow one in the grid only.
+  describe('buildPostMenuActions — includeUnpost (ETP-5378)', () => {
+    const UNPOST = {
+      key: 'unpost',
+      labelKey: 'unpost',
+      neoAction: 'unpost',
+      successKey: 'documentUnposted',
+      destructive: true,
+    };
+
+    it('offers unpost instead of post once the row is posted', () => {
+      assert.deepEqual(
+        buildPostMenuActions({ row: { processed: 'Y', posted: 'Y' }, includeUnpost: true }),
+        [UNPOST],
+      );
+    });
+
+    it('still offers post (and never unpost) while the row is not posted', () => {
+      assert.deepEqual(
+        buildPostMenuActions({ row: { processed: 'Y', posted: 'N' }, includeUnpost: true }),
+        [{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }],
+      );
+    });
+
+    it('offers nothing at all on a draft row, posted or not', () => {
+      assert.deepEqual(buildPostMenuActions({ row: { processed: false, posted: 'N' }, includeUnpost: true }), []);
+      assert.deepEqual(buildPostMenuActions({ row: { processed: false, posted: 'Y' }, includeUnpost: true }), []);
+    });
+
+    it('stays off by default — a posted row yields no unpost entry', () => {
+      assert.deepEqual(buildPostMenuActions({ row: { processed: 'Y', posted: 'Y' } }), []);
+    });
+  });
+
   describe('buildMenuActionExecutedHandler / onRefresh (ETP-5209)', () => {
     it('calls onRefresh when a neoAction menu action completes', () => {
       let refreshCalls = 0;
@@ -67,6 +103,15 @@ describe('buildDocumentRowQuickActions', () => {
       assert.equal(refreshCalls, 0);
     });
 
+    // ETP-5378 — the guard used to be `if (!action.neoAction) return`, which silently
+    // swallowed the toast and skipped the refresh for a documentAction row entry.
+    it('also handles a documentAction menu action (ETP-5378)', () => {
+      let refreshCalls = 0;
+      const handler = buildMenuActionExecutedHandler(fakeUi, () => { refreshCalls += 1; });
+      handler({ documentAction: 'RE', successKey: 'reactivated' }, { success: true });
+      assert.equal(refreshCalls, 1);
+    });
+
     it('does not throw when onRefresh is not provided (optional chaining)', () => {
       const handler = buildMenuActionExecutedHandler(fakeUi);
       assert.doesNotThrow(() => handler({ neoAction: 'post' }, { success: true }));
@@ -78,32 +123,21 @@ describe('buildDocumentRowQuickActions', () => {
     });
   });
 
-  describe('buildPostUnpostMenuActions (ETP-5360 — row-hover Post OR Unpost)', () => {
-    it('offers only a destructive unpost when the row is posted (Y)', () => {
-      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'Y', posted: 'Y' } }), [UNPOST_ACTION]);
-    });
-
+  // ETP-5360 — physical-inventory opts into includeUnpost; these cover the edge cases the
+  // ETP-5378 suite above does not (boolean flags, missing row).
+  describe('buildPostMenuActions — includeUnpost edge cases (ETP-5360)', () => {
     it('offers only a destructive unpost when the row is posted (boolean true)', () => {
-      const actions = buildPostUnpostMenuActions({ row: { processed: true, posted: true } });
+      const actions = buildPostMenuActions({ row: { processed: true, posted: true }, includeUnpost: true });
       assert.deepEqual(actions, [UNPOST_ACTION]);
-      assert.equal(actions[0].destructive, true);
-      assert.equal(actions[0].successKey, 'documentUnposted');
     });
 
-    it('offers only post when the row is processed and not posted', () => {
-      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'Y', posted: 'N' } }), [POST_ACTION]);
-      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: true, posted: false } }), [POST_ACTION]);
+    it('offers only post when the row is processed and not posted (boolean flags)', () => {
+      assert.deepEqual(buildPostMenuActions({ row: { processed: true, posted: false }, includeUnpost: true }), [POST_ACTION]);
     });
 
-    it('returns no actions for a draft (unprocessed, unposted) row', () => {
-      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'N', posted: 'N' } }), []);
-      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: false, posted: false } }), []);
-    });
-
-    it('returns no actions for an empty row, a missing row, or no arguments', () => {
-      assert.deepEqual(buildPostUnpostMenuActions({ row: {} }), []);
-      assert.deepEqual(buildPostUnpostMenuActions({}), []);
-      assert.deepEqual(buildPostUnpostMenuActions(), []);
+    it('returns no actions for an empty or missing row', () => {
+      assert.deepEqual(buildPostMenuActions({ row: {}, includeUnpost: true }), []);
+      assert.deepEqual(buildPostMenuActions({ includeUnpost: true }), []);
     });
   });
 
@@ -167,19 +201,22 @@ describe('buildDocumentRowQuickActions', () => {
       assert.doesNotThrow(() => buildDocumentRowQuickActionsPostMenu());
     });
 
-    it('defaults to the Post-only builder when includeUnpost is omitted or false (ETP-5360)', () => {
-      assert.equal(buildDocumentRowQuickActionsPostMenu().menuActions, buildPostMenuActions);
+    it('defaults to the Post-only builder when includeUnpost is false (ETP-5360)', () => {
       assert.equal(
         buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, onRefresh: () => {}, includeUnpost: false }).menuActions,
         buildPostMenuActions,
       );
     });
 
-    it('uses buildPostUnpostMenuActions when includeUnpost is true (ETP-5360)', () => {
-      const slice = buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, onRefresh: () => {}, includeUnpost: true });
-      assert.equal(slice.menuActions, buildPostUnpostMenuActions);
-      assert.deepEqual(slice.menuActions({ row: { processed: 'Y', posted: 'Y' } }), [UNPOST_ACTION]);
-      assert.equal(typeof slice.onMenuActionExecuted, 'function');
+    // ETP-5378 — opting into unpost necessarily wraps the gate, so identity is traded for
+    // the knob; only windows that ask for it pay that price.
+    it('binds includeUnpost through to the menuActions gate', () => {
+      const slice = buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, includeUnpost: true });
+      assert.notEqual(slice.menuActions, buildPostMenuActions);
+      assert.deepEqual(
+        slice.menuActions({ row: { processed: 'Y', posted: 'Y' } }),
+        [{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }],
+      );
     });
   });
 });

@@ -274,6 +274,8 @@ Owner: whoever next touches the goods-shipment window.
 - Also discovered while wiring this in: for sales-invoice/purchase-invoice, `InvoiceLinesTable.jsx` (and its per-window wrapper components `SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx`) are **not currently reachable from the running app** — neither window's `decisions.json` sets `window.customLinesComponent`, so `HeaderPage.jsx` renders the plain generated `LinesTable.jsx` (a separate file with its own hardcoded columns, no project/costcenter, no dimensionsPanel) via `DetailTable={LinesTable}`, never `InvoiceLinesTable.jsx` via `CustomLines`. This predates ETP-4529 (the wrapper files exist since ETP-3908/ETP-3569) and is unrelated to this fix's correctness — flagged for the coordinator since it means neither ETP-4543's original columns nor ETP-4529's `dimensionsPanel` column render live for these two windows today without further wiring work (and, per the point above, `customLinesComponent`'s contract doesn't fit `InvoiceLinesTable.jsx` as-is either).
 
 **Resolved (ETP-4529, generator support in `schema_forge_core`):** the "coordinator decision" and the "no equivalent override mechanism" gap called out above are both closed — not by adding a lines-tab override point, but by extending the generator itself. `generate-frontend.js`'s `generateTableComponent` now emits the synthetic `dimensionsPanel` column directly from a new `decisions.json` field flag (`dimensionsPanel: true`, read independently of `grid` — see `docs/decisions-reference.md`), for ANY pipeline-generated lines table. This sidesteps the `InvoiceLinesTable.jsx` reachability gap entirely for sales-invoice/purchase-invoice (that component stays dead code; the fix lives in the ACTUALLY-rendered generated `LinesTable.jsx`) and gives goods-shipment/goods-receipt the column for the first time. All four windows now set `lines.project.dimensionsPanel`/`lines.costcenter.dimensionsPanel` to `true` (grid stays `false`) and were regenerated. Verified additive: `generateTableComponent` on an entity with zero `dimensionsPanel: true` fields (e.g. `physical-inventory`) produces a byte-identical `contract.json`/generated output (same checksum, only `updatedAt` differs). Full generator design + verification: see the ETP-4529 developer delivery report (or `git log` on `cli/src/generate-frontend.js`/`resolve-curated.js`/`generate-contract.js` in `schema_forge_core` for "ETP-4529"). One pre-existing, unrelated item surfaced while regenerating these 4 windows: their committed `apiPrediction.actions` were stale relative to already-published core behavior (a `field` key dropped in favor of richer `name`/`actionType`/`parameters`/etc. metadata) — confirmed to reproduce with the plain published `@etendosoftware/schema-forge-cli@0.3.9` too, unrelated to this change; worth a coordinator-scheduled `make regen` sweep across the repo.
+
+**Dead code deleted (ETP-5133).** `InvoiceLinesTable.jsx`, `SalesInvoiceLinesTable.jsx`, and `InvoiceLineTableCustom.jsx` — flagged as unreachable above and again by the ETP-4529 generator-support resolution — have now been deleted outright, along with their own test files. A live-browser check during ETP-5133 found that a fix (the new `noTruncate` column flag) had been mistakenly applied to this dead `InvoiceLinesTable.jsx` file instead of the actually-rendered generated `LinesTable.jsx`, which is what finally prompted removing the files rather than continuing to carry them as documented dead weight. Nothing outside their own tests ever imported them (confirmed via a repo-wide reference search before deletion); `sales-invoice`/`purchase-invoice`'s lines grid has rendered exclusively through the pipeline-generated `LinesTable.jsx` (via `InlineLinesPanel`/`DataTable`'s shared `inlineEditable` rendering) since before this fix, so the deletion changes no runtime behavior. A future reader hitting this entry or the ETP-4529 one above should treat the "not currently reachable" language as historical — the files themselves no longer exist. See `docs/generated-custom-windows/purchase-invoice.md` and `sales-invoice.md` for the corrected doc sections, and `docs/ui-customization.md` §14b for the `noTruncate`/`dimensionsPanel` mechanics on the surviving generated component.
 ---
 
 ## `lineHiddenColumns` Hid Unrelated Grid Columns (product/listPrice/grossAmount) — ETP-4530
@@ -2737,14 +2739,13 @@ the burst, not the largest window that still "feels safe."
 ---
 
 **Known non-blocking follow-ups (QA, not yet separately ticketed):**
-- **Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.** The
-  shrunk 3s TTL still caches the FAILURE case too (the `MENU_ACCESS_UNREACHABLE` sentinel), not
-  just successful resolutions — confirmed by a QA regression test (`267ee06ff`). That correctly
-  bounds the worst case, but it raises the failure-retry ceiling from roughly once/minute (old 60s
-  TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage lasts. Still
-  bounded and still fails open correctly — just a real behavior change a future engineer
-  investigating "why did listmenu call volume spike during an outage" should be able to find
-  documented somewhere.
+- ~~**Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.**~~
+  **Resolved by ETP-5403.** The shrunk 3s TTL used to also govern the FAILURE case (the
+  `MENU_ACCESS_UNREACHABLE` sentinel), raising the failure-retry ceiling from roughly once/minute
+  (old 60s TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage
+  lasted. ETP-5403 decoupled the two: failure outcomes are now cached under their own
+  `MENU_ACCESS_FAILURE_TTL_MS` (60s, back near the pre-ETP-5395 baseline) in `App.jsx`'s
+  `fetchMenuAccess()`, while the success-path TTL stays at 3s.
 - **A different, pre-existing route to role loss is not covered by either Point 1 fix.** When an
   admin revokes a role and the affected user's session detects it via the existing periodic-refresh
   machinery (ETP-5195/ETP-5189) rather than via the invite-acceptance race this ticket fixes, the

@@ -242,15 +242,16 @@ no-id/no-data cases.
 
 - **F1 — no Unpost on row hover.** The first delivery spread the Post-only
   `buildPostMenuActions` into `rowQuickActions`, so a posted row got an empty menu-action list and
-  `RowQuickActions` dropped the ⋮ button entirely. `buildDocumentRowQuickActions.js` gained
-  `buildPostUnpostMenuActions` (Post while processed and unposted, Unpost once posted — the same
-  gates as the form kebab and the bulk pair) and an opt-in `includeUnpost` flag on
-  `buildDocumentRowQuickActionsPostMenu`. Only this window opts in; `goods-shipment` and
-  `goods-receipt` keep the Post-only default and have the same gap (reported, not changed here).
+  `RowQuickActions` dropped the ⋮ button entirely. The window now passes `includeUnpost: true` to
+  `buildDocumentRowQuickActionsPostMenu`, whose `buildPostMenuActions({ row, includeUnpost })` gate
+  (shared with the return windows since ETP-5378, which added the same knob on `develop`) offers
+  Post while processed and unposted and Unpost once posted, the same gates as the form kebab and the
+  bulk pair. `goods-shipment` and `goods-receipt` keep the Post-only default.
 - **F2 — raw `@PeriodClosedForUnPosting@` toast.** Core `ResetAccounting` throws
   `new OBException("@PeriodClosedForUnPosting@")`, and `DocumentPostingService.unpost`
-  (com.etendoerp.go) returns `e.getMessage()` without `parseTranslation`. The backend fix is
-  pending in com.etendoerp.go. On this side, `translateBackendError`
+  (com.etendoerp.go) returned `e.getMessage()` without `parseTranslation`. Fixed there too
+  (com.etendoerp.go `e70e07e2`: translated message plus `messageKeys`), and the row-hover error
+  toast forwards `result.messageKeys`. On this side, as defense in depth, `translateBackendError`
   (`tools/app-shell/src/lib/backendErrors.js`) now treats `@Key@` tokens in the message text as
   message keys when the backend sent no `messageKeys`, and `PeriodClosedForUnPosting` maps to the
   new `backendError.periodClosedForUnposting` key. This is generic: any window whose unpost hits a

@@ -5,7 +5,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildDocumentRowQuickActionsPostMenu,
-  buildPostUnpostMenuActions,
+  buildPostMenuActions,
 } from '../../shared/buildDocumentRowQuickActions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -115,7 +115,8 @@ describe('PhysicalInventoryWindow custom wrapper', () => {
     it('menuActions resolved with those options yields unpost for a posted row', () => {
       const includeUnpost = /includeUnpost:\s*true/.test(callMatch?.[1] ?? '');
       const { menuActions } = buildDocumentRowQuickActionsPostMenu({ ui: (k) => k, onRefresh: () => {}, includeUnpost });
-      assert.equal(menuActions, buildPostUnpostMenuActions);
+      // includeUnpost wraps the gate (ETP-5378 API), so it is no longer the bare Post-only builder.
+      assert.notEqual(menuActions, buildPostMenuActions);
       const actions = menuActions({ row: { id: 'inv-1', processed: true, posted: true } });
       assert.equal(actions.length, 1);
       assert.equal(actions[0].neoAction, 'unpost');
