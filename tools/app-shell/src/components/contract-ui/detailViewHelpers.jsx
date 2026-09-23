@@ -1066,8 +1066,8 @@ export function getSecondaryTabEntityKey(secondaryTabs, index) {
   return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
 }
 
-export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui) {
-  return notesFocused ? (
+export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, isDocumentReadOnly) {
+  return notesFocused && !isDocumentReadOnly ? (
       <textarea
           value={data[notesField] || ''}
           onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
@@ -1084,8 +1084,8 @@ export function renderNotesField(notesFocused, data, notesField, handleChangeWit
       <div
           tabIndex={0}
           role="textbox"
-          onClick={() => setNotesFocused(true)}
-          onFocus={() => setNotesFocused(true)}
+          onClick={() => !isDocumentReadOnly && setNotesFocused(true)}
+          onFocus={() => !isDocumentReadOnly && setNotesFocused(true)}
           className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
       >
         {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}
