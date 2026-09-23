@@ -39,13 +39,46 @@ import { useAuth } from '@/auth/AuthContext.jsx';
  * that point (updated on every diffed render, not only the very first one), so a
  * SUBSEQUENT genuine change after a dismiss is still compared against the right prior
  * state and correctly re-flags — dismissing does not suppress a later real change.
+ *
+ * ETP-5423 — `isAuthenticated` is checked FIRST, ahead of `isSessionReady`/
+ * `accessLoaded`, because a logout is not one clean transition but two renders in a
+ * row that both look like legitimate access settles. `sessionController.js`'s
+ * `replace({}, { clear: true })` first publishes `accessLoaded:false` for the
+ * now-cleared session; almost immediately after, `AuthContext.jsx`'s own
+ * access-bootstrap effect re-fires for that same anonymous session and republishes a
+ * SECOND, freshly-allocated set of empty `windowAccess`/`capabilities`/`menuAccess`
+ * objects with `accessLoaded:true` — a brand-new object reference settling in, which
+ * is exactly the shape this hook is built to treat as a real change. Gating on
+ * `isAuthenticated` first means both of logout's own republishes are absorbed as a
+ * no-op (baseline and `changed` are simply cleared) rather than diffed against
+ * whatever the previous session's baseline happened to be. It also means the
+ * following login's first settle starts from `baseline.current === null` again, so
+ * it is captured as a fresh baseline (branch above) instead of being compared
+ * against a stale triple left over from the session that just ended.
  */
 export function useRoleChangeNotice() {
-  const { isSessionReady, accessLoaded, windowAccess, capabilities, menuAccess } = useAuth();
+  const { isAuthenticated, isSessionReady, accessLoaded, windowAccess, capabilities, menuAccess } = useAuth();
   const baseline = useRef(null);
   const [changed, setChanged] = useState(false);
 
   useEffect(() => {
+    // ETP-5423 — a logout (isAuthenticated flipping true -> false) is a session
+    // boundary, not a permission change to diff. Without this reset, the baseline
+    // captured for the just-closed session survives: the render right after
+    // logout has accessLoaded:false, so the guard below bails out before it can
+    // ever update baseline.current, and the NEXT accessLoaded settle — for the
+    // unauthenticated session's own brand-new empty {} access maps — gets diffed
+    // against that stale baseline and misreads a plain logout as a real
+    // permission change. Mirrors useRoleMenu.js's own isAuthenticated-gated reset
+    // (same ETP-5189 ticket). `changed` is reset too: the banner component never
+    // unmounts across logout (see App.jsx, mounted as a sibling of AppLayout), so
+    // if it was already visible when the user logged out it would otherwise stay
+    // visible on the login screen.
+    if (!isAuthenticated) {
+      baseline.current = null;
+      setChanged(false);
+      return;
+    }
     if (!isSessionReady || !accessLoaded) return;
     const current = { windowAccess, capabilities, menuAccess };
     if (baseline.current === null) {
@@ -57,7 +90,7 @@ export function useRoleChangeNotice() {
       || baseline.current.menuAccess !== menuAccess;
     baseline.current = current;
     if (isDifferent) setChanged(true);
-  }, [isSessionReady, accessLoaded, windowAccess, capabilities, menuAccess]);
+  }, [isAuthenticated, isSessionReady, accessLoaded, windowAccess, capabilities, menuAccess]);
 
   const dismiss = useCallback(() => setChanged(false), []);
 
