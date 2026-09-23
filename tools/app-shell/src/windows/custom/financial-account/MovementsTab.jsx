@@ -292,17 +292,20 @@ export const MovementsTab = forwardRef(function MovementsTab(
           viewport-fixed pill via SelectionToolbar; it no longer occupies a
           slot in this flow (the wrapping div here used to reserve space for
           the old in-flow bar). */}
-      <BulkDeleteSelectionBar
-        count={selectedIds.size}
-        deleting={bulkDeleting}
-        onCancel={clearSelection}
-        onDelete={requestDelete}
-        data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
+      {!windowReadOnly && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={requestDelete}
+          data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
+      )}
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
         advancedFilter={advancedFilter}
         onAdvancedFilterChange={setAdvancedFilter}
+        windowReadOnly={windowReadOnly}
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         onRefresh={onReload}
@@ -348,7 +351,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
       </div>
       {batchDeleteDialog}
       <NewTransactionModal
-        open={newMovementOpen || !!editMovement}
+        open={(newMovementOpen || !!editMovement) && !windowReadOnly}
         accountId={account?.id}
         accountName={account?.name ?? ''}
         accountCurrency={account?.currencyIso
@@ -359,7 +362,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onClose={() => { setNewMovementOpen(false); setEditMovement(null); }}
         onSuccess={() => onReload?.()}
         data-testid="NewTransactionModal__c1f76a" />
-      {transferOpen ? (
+      {transferOpen && !windowReadOnly ? (
         <FundsTransferModal
           sourceAccountId={account?.id}
           onClose={() => setTransferOpen(false)}

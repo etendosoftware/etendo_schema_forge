@@ -513,6 +513,7 @@ export function FinancialAccountDetail({ recordId }) {
               highlightTxnId={highlightTxnId}
               txnUnbounded={txnUnbounded}
               autoOpenNewMovement={autoOpenNewMovement}
+              windowReadOnly={windowReadOnly}
               data-testid="MovementsTab__f7dbb3" />
           )}
           {/* ETP-4795: a cash drawer is closed, not reconciled against a bank statement, so
