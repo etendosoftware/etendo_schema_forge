@@ -815,15 +815,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // the rest of the session. Display-only: no persistence. `compute349Operators` already
   // resolves `null` on a failed backend call (no mock fallback when `apiBaseUrl` is set), and a
   // `null` result is never cached, so a failure leaves the tabs empty instead of freezing garbage.
-  async function computeSubmittedOnce() {
+  // `isCancelled` comes from the mount effect's cleanup: a response that resolves after unmount
+  // or after `decl.id` changed still freezes the cache under the id it was computed for, but
+  // must not paint that declaration's operators into whatever this page shows now.
+  async function computeSubmittedOnce(isCancelled = () => false) {
+    const declId = decl.id;
     setComputing(true);
     try {
       const res = await compute349Operators(decl, { token, apiBaseUrl });
       if (!res?.operators) return;
-      setCachedFiscalCompute(decl.id, res);
+      setCachedFiscalCompute(declId, res);
+      if (isCancelled()) return;
       applyOperatorsResult(res);
     } finally {
-      setComputing(false);
+      if (!isCancelled()) setComputing(false);
     }
   }
 
@@ -900,8 +905,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         applyOperatorsResult(cached);
         return;
       }
-      computeSubmittedOnce();
-      return;
+      let cancelled = false;
+      computeSubmittedOnce(() => cancelled);
+      return () => { cancelled = true; };
     }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -109,6 +109,20 @@ describe('FmModel349Page — mount-time auto-compute runs at most once per sessi
     },
   );
 
+  it('cold cache + submitted: a response resolving after unmount still freezes the cache', async () => {
+    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+    let resolveLate;
+    compute349Operators.mockImplementationOnce(() => new Promise((r) => { resolveLate = r; }));
+    const decl = makeDecl({ status: 'submitted' });
+    const { unmount } = render(<FmModel349Page decl={decl} {...defaultProps} />);
+    await waitFor(() => expect(compute349Operators).toHaveBeenCalledTimes(1));
+
+    unmount();
+    resolveLate(serverPayload);
+    await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(decl.id))).not.toBeNull());
+    expect(JSON.parse(sessionStorage.getItem(cacheKeyFor(decl.id))).result).toEqual(serverPayload);
+  });
+
   it('cold cache + submitted: a failed compute caches nothing and is not retried', async () => {
     const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
     compute349Operators.mockResolvedValueOnce(null);

@@ -447,6 +447,30 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
   }
 
+  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
+  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
+  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same figures
+  // for the rest of the session. Read-only: it only feeds the display state `handleCompute`
+  // already feeds (no persistence, no `manualOverrides` mutation — those were hydrated from the
+  // saved declaration and are merged in by `applyComputeResult` exactly like the cached path).
+  // `noMockFallback` so a failed call leaves the tabs empty instead of freezing demo figures.
+  // `isCancelled` comes from the mount effect's cleanup: a response that resolves after unmount
+  // or after `decl.id` changed still freezes the cache under the id it was computed for, but
+  // must not paint that declaration's figures into whatever this page shows now.
+  async function computeSubmittedOnce(isCancelled = () => false) {
+    const declId = decl.id;
+    setComputing(true);
+    try {
+      const res = await computeBoxes303(decl, { token, apiBaseUrl, noMockFallback: true });
+      if (res?.boxes == null) return;
+      setCachedFiscalCompute(declId, res);
+      if (isCancelled()) return;
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    } finally {
+      if (!isCancelled()) setComputing(false);
+    }
+  }
+
   // ETP-5338 (design decision) — "Calcular" is an explicit user click too, so — unlike the
   // automatic mount-time recompute above, and unlike `FmListPage`'s own `useFiscalAutoCompute`
   // polling hook (a wholly separate mechanism in a different component that recomputes LIST
@@ -461,25 +485,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // problem). The save's only feedback here is a toast on failure — no success toast, so a
   // "Calcular" click that also happens to persist doesn't stack a second, confusing "guardado"
   // message on top of the compute's own visual feedback (the refreshed KPI/box values).
-  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
-  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
-  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same figures
-  // for the rest of the session. Read-only: it only feeds the display state `handleCompute`
-  // already feeds (no persistence, no `manualOverrides` mutation — those were hydrated from the
-  // saved declaration and are merged in by `applyComputeResult` exactly like the cached path).
-  // `noMockFallback` so a failed call leaves the tabs empty instead of freezing demo figures.
-  async function computeSubmittedOnce() {
-    setComputing(true);
-    try {
-      const res = await computeBoxes303(decl, { token, apiBaseUrl, noMockFallback: true });
-      if (res?.boxes == null) return;
-      setCachedFiscalCompute(decl.id, res);
-      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
-    } finally {
-      setComputing(false);
-    }
-  }
-
   function handleComputeClick() {
     persistEditableFields().then(({ ok }) => {
       if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
@@ -525,8 +530,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
         return;
       }
-      computeSubmittedOnce();
-      return;
+      let cancelled = false;
+      computeSubmittedOnce(() => cancelled);
+      return () => { cancelled = true; };
     }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps

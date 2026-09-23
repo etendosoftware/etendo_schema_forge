@@ -138,6 +138,31 @@ describe('FmModel303Page — mount-time auto-compute runs at most once per sessi
     expect(computeBoxes303).toHaveBeenCalledTimes(1);
   });
 
+  it('cold cache + submitted: a late response for a previous decl.id is cached under its own id but never painted', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    let resolveFirst;
+    computeBoxes303
+      .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }))
+      .mockResolvedValueOnce({
+        boxes: { 27: 222.22 }, summary: { accrued: 222.22, deductible: 0, result: 0 }, sources: [],
+      });
+    const first = makeDecl({ id: 'decl-303-first', status: 'submitted' });
+    const second = makeDecl({ id: 'decl-303-second', status: 'submitted' });
+    const { container, rerender } = render(<FmModel303Page decl={first} {...defaultProps} />);
+    await waitFor(() => expect(computeBoxes303).toHaveBeenCalledTimes(1));
+
+    rerender(<FmModel303Page decl={second} {...defaultProps} />);
+    await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(second.id))).not.toBeNull());
+    resolveFirst(serverPayload);
+    await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(first.id))).not.toBeNull());
+    await new Promise(r => setTimeout(r, 0));
+
+    const values = [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+    expect(values).toContain('222.22');
+    expect(values).not.toContain('1309.98');
+    expect(JSON.parse(sessionStorage.getItem(cacheKeyFor(first.id))).result).toEqual(serverPayload);
+  });
+
   it('warm cache + submitted: applies the cached payload with ZERO compute calls', async () => {
     const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
     const decl = makeDecl({ status: 'submitted' });
