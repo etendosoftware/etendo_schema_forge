@@ -66,8 +66,12 @@ FmListPage
   submitted-family instances all call the exact same real endpoints, which recompute from invoice
   data regardless of declaration status — which is exactly why the submitted-family bucket needs
   its own, separate freeze (see below).
-- `submittedDecls303`/`submittedDecls349` (ETP-5438) = every declaration whose `status` is in the
-  submitted family (`submitted`/`submitted_ext`/`submitted_ack`) — carved out of the `other*`
+- `snapshotMap` (ETP-5438) = every submitted-family declaration that carries a persisted
+  `submittedSnapshot` — the snapshot itself is its computed result, spread into the non-draft map;
+  no hook ever receives it, so it is never computed.
+- `submittedDecls303`/`submittedDecls349` (ETP-5438) = every **legacy** declaration whose `status`
+  is in the submitted family (`submitted`/`submitted_ext`/`submitted_ack`) but that has **no**
+  snapshot (presented before snapshots existed) — carved out of the `other*`
   buckets above so a presented declaration gets its one bootstrap compute and is then **frozen**:
   see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" below for the full
   rationale (`neverModifiedFn`, `getCachedFiscalCompute`, and the backend defense-in-depth).
@@ -88,11 +92,14 @@ current invoice data, regenerate its file, or re-present it. Root cause: `comput
 from **whatever invoices exist right now**, regardless of who calls them or when — there was no
 concept of "this declaration is done" anywhere in the compute path, so an invoice added or removed
 after presentation silently changed what "Resultado" showed for an already-filed declaration
-("sigue tomando facturas aun presentada"). Fixed on the frontend (compute once per browser session,
-then freeze from the session cache) and the backend (reject every write — file generation,
-re-presentation, telematic resubmission — while keeping the boxes/operators **reads** open), for
-**both** models — "en todos los modelos tiene que funcionar de la
-misma manera" (explicit product decision).
+("sigue tomando facturas aun presentada"). Fixed by **persisting a snapshot at submission**: the
+moment a declaration enters the submitted family, the backend stores the exact boxes/operators
+payload on the declaration record, and from then on every reader (backend reads, list, detail)
+serves that snapshot instead of recomputing. The backend also rejects every write — file
+generation, re-presentation, telematic resubmission — for **both** models — "en todos los modelos
+tiene que funcionar de la misma manera" (explicit product decision). Declarations presented before
+the snapshot existed (legacy) have none and keep an earlier, weaker once-per-browser-session freeze
+(see "Legacy fallback" below); by product decision there is no data-fix for them.
 
 **Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
 language/file rather than shared (same tradeoff as `statusLabelKey` above — see "Duplicated,
@@ -100,9 +107,56 @@ deliberately, in 4 places"): `{'submitted', 'submitted_ext', 'submitted_ack'}`. 
 included even though it can no longer be newly selected from `PresentModal` — a legacy declaration
 that already carries it is just as frozen as one presented through either currently-selectable path.
 
+### Submission snapshot — the source of truth (`ETGO_Fiscal_Decl.Submitted_Snapshot`)
+
+- **Column.** `Submitted_Snapshot` (TEXT/CLOB, nullable, module `com.etendoerp.go`, dynamic
+  property `submittedSnapshot` — `FiscalDeclCrudHandler.PROPERTY_SUBMITTED_SNAPSHOT`). It holds the
+  exact JSON `GET /fiscal303/boxes` (303) or `GET /fiscal349/operators` (349) returns for the
+  declaration's `(org, year, period)`. `MANUAL_DATA` was not reused: it holds the user's manual
+  inputs, which are merged on top of the computed figures, not the figures themselves.
+- **Taken when a declaration enters the submitted family from a non-submitted status**, computed
+  server-side through the same code path the read endpoint uses
+  (`AbstractFiscalHandler#computeSnapshotPayload`, with the org resolved by `resolveEffectiveOrg`
+  exactly as the read resolves it), in the same request and transaction as the status change:
+  - manual Registrar/Presentar, both models — `FiscalDeclCrudHandler#applySubmittedSnapshotTransition`
+    on `PUT /fiscal303/declarations` (also on a `POST` that creates a declaration straight into
+    a submitted status). Every declaration PUT goes through `/fiscal303/declarations` whatever its
+    model, so `AbstractFiscalHandler.linkSubmittedSnapshotProviders` (called by
+    `NeoBuiltInEndpointHandler`) routes the compute to the handler owning the declaration's model.
+    The PUT response echoes the snapshot (`{"ok":true,"submittedSnapshot":{…}}`), and
+    `FiscalModelsPage` carries it into the detail view and the list patch, so a just-presented
+    declaration freezes without a refetch.
+  - AEAT telematic filing (303) — `Fiscal303SubmissionSupport#handleSubmit` computes it after
+    generating the `.303` file and **before** calling the AEAT; `persistSuccessfulSubmission`
+    stores it with the `submitted_ack` status in the single commit. Test mode takes none.
+- **Fails closed.** If the snapshot cannot be computed, the submission fails and nothing is written:
+  the PUT answers `500` with a message ("its figures could not be computed"); the telematic path
+  answers `500` `SNAPSHOT_FAILED` without contacting the AEAT. The detail pages roll their
+  optimistic "Presentado" back and toast `fm.action.present_error`. A declaration is never
+  presented without its snapshot (a model with no snapshot support — neither 303 nor 349 — simply
+  presents without one).
+- **Reactivation clears it.** "Reactivar declaración" (submitted → `draft`) sets it to `null`; a
+  later re-presentation takes a fresh one. A submitted → submitted transition never reaches this
+  point (`rejectRepresentation` answers `409` first), and `generate` stays blocked for submitted
+  declarations, so it never needs the snapshot.
+- **Reads.** `declToJson` exposes it as `submittedSnapshot` (parsed object, or `null` when absent
+  or unparseable — never `{}`, which would freeze a declaration on no figures).
+  `GET /fiscal303/boxes` / `GET /fiscal349/operators` (`AbstractFiscalHandler#snapshotOrCompute`)
+  return the snapshot, byte for byte, when the **latest** declaration for the natural key
+  (highest `DECL_SEQ`, same rule as `findLatestDeclarationStatus`) is submitted and has one — the
+  compute is never reached. Submitted without a snapshot (legacy), draft and ready declarations
+  compute live, exactly as before.
+
 ### Frontend
 
-- **List page (`FmListPage.jsx`).** `submittedDecls303`/`submittedDecls349` are carved out of the
+- **List page (`FmListPage.jsx`).** A submitted declaration with a `submittedSnapshot` is served from
+  it: `snapshotMap` feeds the snapshot straight into `computedMapOther303Merged`/`349Merged`
+  (spread last, so it always wins), so "Resultado" goes through the exact same derivation as a
+  live compute (303: box 71 re-derived with the row's `manualOverrides`; 349: E/S/A/I totals) and
+  the row is opened with the snapshot as `_precomputed`. Such a declaration is handed to no
+  `useFiscalAutoCompute` instance and never touches `sessionStorage`. Reactivating a row clears its
+  `submittedSnapshot` locally, so the draft computes live again. **Legacy fallback** (no snapshot):
+  `submittedDecls303`/`submittedDecls349` are carved out of the
   pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
   their own two `useFiscalAutoCompute` instances, passed `checkModifiedFn: neverModifiedFn` — a
   function that always resolves `false`. This is the deliberate mechanism, not an oversight:
@@ -125,7 +179,7 @@ that already carries it is just as frozen as one presented through either curren
   `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
   `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
   non-draft compute for this decl.id", it does not care which of the two hooks produced it.
-- **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` reads back the
+- **Session cache (`useFiscalAutoCompute.js`, legacy fallback only).** `getCachedFiscalCompute(declId)` reads back the
   last payload this hook cached for one declaration, keyed `fiscal_ac_v3_<declId>` in
   `sessionStorage`, without issuing a network call — `null` when nothing was ever cached this
   session. `setCachedFiscalCompute(declId, result)` is its write-side counterpart (same key, same
@@ -135,9 +189,14 @@ that already carries it is just as frozen as one presented through either curren
 - **Detail pages (`FmModel303Page.jsx` / `FmModel349Page.jsx`).** Both pages compute
   `isSubmitted = SUBMITTED_STATUSES.includes(status)` and use it as the single gate for two
   independent things:
-  - The mount-time auto-compute effect (the ETP-4755 "auto-compute on mount when the list didn't
-    hand us `_precomputed`" fix) now branches on `isSubmitted` **before** ever calling
-    `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` first and applies
+  - The mount-time auto-compute effect first checks `isSubmitted && decl.submittedSnapshot`: when
+    present it applies the snapshot through the same helper a live compute uses
+    (`applyComputeResult` on 303 — saved `manualOverrides` merged and box 71 re-derived exactly as
+    before; `applyOperatorsResult` on 349) and returns — no compute call, no session cache, and
+    it wins over any stale cache entry.
+  - **Legacy fallback** (submitted, no snapshot): the effect (the ETP-4755 "auto-compute on mount
+    when the list didn't hand us `_precomputed`" fix) branches on `isSubmitted` **before** ever
+    calling `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` first and applies
     the cached snapshot if one exists (via the same `applyComputeResult` helper "Calcular" uses on
     303; `applyOperatorsResult` on 349) — zero network calls. Only when nothing is cached (cold
     session: new tab, reload, another browser/user, no `_precomputed` handed down) does it run
@@ -156,10 +215,12 @@ that already carries it is just as frozen as one presented through either curren
     is still written to the session cache under the id it was **computed for** (captured before
     the request), but is never painted into the page and does not reset the `computing` spinner
     of whatever declaration is now shown.
-  - **Known trade-off.** The freeze lives in the browser session, not on the declaration record
-    (`declToJson` never persists a computed result). A cold session therefore recomputes from the
+  - **Legacy trade-off (only for declarations presented before the snapshot existed).** Their
+    freeze lives in the browser session, not on the record, so a cold session recomputes from the
     invoice data **as it is at that moment** — if an invoice of a presented period was changed
-    after presentation, a fresh tab shows the new figures (and then freezes them for that session).
+    after presentation, a fresh tab shows the new figures (and then freezes them for that
+    session). Accepted by product decision (no data-fix); every declaration presented after this
+    change is frozen on its persisted snapshot instead and cannot drift.
   - Every action that could mutate or regenerate a submitted declaration is wrapped in
     `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
     303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
@@ -176,8 +237,9 @@ already-presented declaration has its own, independent, server-side guard:
 
 - **Generate — `AbstractFiscalHandler#guardNotAlreadySubmitted(orgId, year, period,
   model)`**, shared by both models. Applied to the `generate` (file generation) entity **only**:
-  the pure-read `boxes` (303) and `operators` (349) entities are deliberately **not** gated, so the
-  frontend's once-per-session compute above works on a cold cache (an earlier ETP-5438 iteration
+  the pure-read `boxes` (303) and `operators` (349) entities are deliberately **not** gated — they
+  serve the persisted snapshot (see above), and for legacy declarations the frontend's
+  once-per-session compute needs them on a cold cache (an earlier ETP-5438 iteration
   also gated the reads and broke "Resultado" and the detail KPIs/tabs for every submitted
   declaration opened in a new session). Looks up
   `FiscalDeclCrudHandler#findLatestDeclarationStatus(clientId, orgId, model, year, period)` — the
@@ -225,9 +287,17 @@ already-presented declaration has its own, independent, server-side guard:
   open, like 303's `boxes`), which is model-agnostic and needed no 349-specific work.
 
 Regression tests: `Fiscal303BoxesHandlerTest`/`Fiscal349BoxesHandlerTest` (the `AlreadySubmittedException`
-→ `409` path for `generate`, and `testDispatchBoxesProceedsWhenAlreadySubmitted` /
-`testDispatchOperatorsProceedsWhenAlreadySubmitted` asserting the reads still serve a submitted
-declaration), the frontend `FmModel303Page.submittedFreeze` / `FmModel349Page.submittedFreeze`
+→ `409` path for `generate`; `testDispatch{Boxes,Operators}ServesSnapshotWithoutComputingWhenSubmitted`
+— snapshot returned, compute never called; `testDispatch{Boxes,Operators}ComputesLiveWhenSubmittedWithoutSnapshot`
+— legacy live compute; `testDispatchBoxesComputesLiveWhenLatestIsDraft`), `FiscalDeclCrudHandlerTest`
+"submission snapshot" group (taken on 303 and 349 manual presentation and echoed, failure → `500`
+with nothing written, cleared on reactivation, untouched without a status change, `declToJson`
+exposure, `findLatestSubmittedSnapshot`), `AbstractFiscalHandlerTest` (provider routed by model,
+unknown model → no snapshot, compute failure propagates), `Fiscal303SubmitHandlerTest`
+(telematic snapshot persisted; `SNAPSHOT_FAILED` never calls the AEAT; test mode takes none), the
+frontend `FmListPageAutoCompute` snapshot group, the `FmModel303Page`/`FmModel349Page`
+`submittedFreeze` snapshot groups and `presentRollback` suites, `persistDeclarationStatus` and
+`FiscalModelsPage.statusChange` (snapshot echoed into the list patch), plus the legacy-path suites: the frontend `FmModel303Page.submittedFreeze` / `FmModel349Page.submittedFreeze`
 Vitest suites (cache hit → zero compute calls; cold cache → exactly one compute, shown and written
 to the session cache; a failed cold compute caches nothing and is not retried; a late response for
 a previous `decl.id` is cached under its own id but never painted (303); a response resolving
