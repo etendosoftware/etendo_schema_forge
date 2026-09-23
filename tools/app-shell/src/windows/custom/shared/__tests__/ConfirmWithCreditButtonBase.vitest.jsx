@@ -747,3 +747,26 @@ describe('ConfirmWithCreditButtonBase — blocked DR confirm still explains itse
     expect(container.querySelector('span[title]')).toBeNull();
   });
 });
+
+describe('ConfirmWithCreditButtonBase — respects isDocumentReadOnly (ETP-5205)', () => {
+  it('disables the Confirm button when isDocumentReadOnly is true, with no other block active', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+        isDocumentReadOnly
+      />
+    );
+    expect(screen.getByTestId('action-confirm-with-credit')).toBeDisabled();
+  });
+
+  it('regression: the Confirm button stays enabled when isDocumentReadOnly is false/absent', () => {
+    render(
+      <ConfirmWithCreditButtonBase
+        {...BASE_PROPS}
+        data={{ documentStatus: 'DR', linesCount: 2 }}
+      />
+    );
+    expect(screen.getByTestId('action-confirm-with-credit')).not.toBeDisabled();
+  });
+});

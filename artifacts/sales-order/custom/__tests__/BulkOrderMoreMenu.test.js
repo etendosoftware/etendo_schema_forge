@@ -156,4 +156,15 @@ describe('BulkOrderMoreMenu source', () => {
     assert.match(src, /documentNo:\s*row\.documentNo/);
     assert.match(src, /message:\s*o\.reason\?\.message/);
   });
+
+  it('accepts windowReadOnly in its props', () => {
+    assert.match(src, /export default function BulkOrderMoreMenu\(\{[^}]*\bwindowReadOnly\b[^}]*\}\)/);
+  });
+
+  it('the early-return guard checks windowReadOnly (ETP-5205)', () => {
+    assert.match(src, /\bwindowReadOnly\b/);
+    const guardLine = src.split('\n').find((line) => line.includes('selectedRows.length === 0'));
+    assert.ok(guardLine, 'expected to locate the early-return guard line');
+    assert.match(guardLine, /windowReadOnly/);
+  });
 });

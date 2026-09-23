@@ -1772,17 +1772,17 @@ describe('DetailView exported helpers', () => {
 
   describe('renderNotesField', () => {
     it('returns textarea when notesFocused is true', () => {
-      const result = helpers.renderNotesField(true, { notes: 'Hello' }, 'notes', vi.fn(), vi.fn(), vi.fn(), (k) => k);
+      const result = helpers.renderNotesField({ notesFocused: true, data: { notes: 'Hello' }, notesField: 'notes', handleChangeWithCallout: vi.fn(), handleNotesSave: vi.fn(), setNotesFocused: vi.fn(), ui: (k) => k });
       expect(result.type).toBe('textarea');
     });
 
     it('returns div when notesFocused is false', () => {
-      const result = helpers.renderNotesField(false, { notes: 'Hello' }, 'notes', vi.fn(), vi.fn(), vi.fn(), (k) => k);
+      const result = helpers.renderNotesField({ notesFocused: false, data: { notes: 'Hello' }, notesField: 'notes', handleChangeWithCallout: vi.fn(), handleNotesSave: vi.fn(), setNotesFocused: vi.fn(), ui: (k) => k });
       expect(result.type).toBe('div');
     });
 
     it('shows placeholder when notes field is empty and not focused', () => {
-      const result = helpers.renderNotesField(false, { notes: '' }, 'notes', vi.fn(), vi.fn(), vi.fn(), (k) => k);
+      const result = helpers.renderNotesField({ notesFocused: false, data: { notes: '' }, notesField: 'notes', handleChangeWithCallout: vi.fn(), handleNotesSave: vi.fn(), setNotesFocused: vi.fn(), ui: (k) => k });
       // The div contains a span with description text
       expect(result.props.children).toBeTruthy();
     });

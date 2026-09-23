@@ -31,6 +31,7 @@ export default function ConfirmWithCreditButtonBase({
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   specName, entityName,
   onSave, isDirty, saveGate, onRefresh,
+  isDocumentReadOnly,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
@@ -59,7 +60,7 @@ export default function ConfirmWithCreditButtonBase({
   // document. It inherits ONLY the required-field verdict, deliberately not the rest
   // of Save's disabled condition: `!isDirty` must NOT block here, because confirming
   // an already-saved, unmodified document is the normal path.
-  const confirmBlocked = confirmDisabled || Boolean(saveGate?.blocked);
+  const confirmBlocked = confirmDisabled || Boolean(saveGate?.blocked) || isDocumentReadOnly;
 
   const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
 

@@ -297,6 +297,11 @@ const BACKEND_ERROR_MAP = {
   // this one reaches the toast untranslated regardless of session locale.
   'This user is the tenant owner — only the owner can modify this account':
     'backendError.cannotModifyOwnerAccount',
+  // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
+  // 403 for a spec/window/report the current role cannot access, regardless of session locale
+  // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled
+  // client-side is clicked anyway and the backend's own gate is what actually stops them.
+  'Access denied to spec for current role': 'backendError.accessDeniedToSpec',
 };
 
 // ETP-5316 — MATCHING BY AD_MESSAGE KEY, the third mechanism (the other two are the exact-match
