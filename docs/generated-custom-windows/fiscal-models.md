@@ -119,16 +119,24 @@ that already carries it is just as frozen as one presented through either curren
   the new Java against a database without the column breaks the declarations list.
   `MANUAL_DATA` was not reused: it holds the user's manual inputs, which are merged on top of the
   computed figures, not the figures themselves.
+- **Code layout.** The snapshot logic lives in dedicated `*Support` classes of
+  `com.etendoerp.go` (kept out of the handlers for SonarQube `java:S1448`):
+  `FiscalSubmittedSnapshotSupport` (transition on PUT/POST, validation, parsing, latest-snapshot
+  lookup — reached through `FiscalDeclCrudHandler.snapshots`) and the `FiscalSnapshotSupport`
+  implementations `Fiscal303SnapshotSupport` / `Fiscal349SnapshotSupport` (live payload, what is
+  kept, the 349 origin-count folding — installed by each handler as `snapshotSupport`).
 - **Contents — figures only, size-bounded.** The snapshot is the `GET /fiscal303/boxes` (303) or
   `GET /fiscal349/operators` (349) payload for the declaration's `(org, year, period)` with every
-  per-invoice array replaced by its row count (`AbstractFiscalHandler#computeSubmittedSnapshot`,
-  the single place it is built; per model via `snapshotExcludedLists`):
+  per-invoice array replaced by its row count (`AbstractFiscalHandler#computeSubmittedSnapshot` →
+  `FiscalSnapshotSupport#toSnapshot`, the single place it is built; per model via the
+  `FiscalSnapshotSupport` implementations `Fiscal303SnapshotSupport` / `Fiscal349SnapshotSupport`
+  and their `excludedLists`):
   - 303 keeps `boxes` + `summary`; `sources` (the per-invoice drilldown) becomes `sourceCount`.
   - 349 keeps `operators` (one row per intra-community partner), `summary`,
     `rectificativeSummary` (fixed E/S/A/I totals), `orgNif`/`orgName`; `invoices` and
     `rectifications` become `invoiceCount` / `rectificationCount`. Before they are dropped, the
     operators' "Origen" counts are folded into each operator row as `originPurchases` /
-    `originSales` (`Fiscal349BoxesHandler#foldPerInvoiceAggregates`, same `nif|key` grouping as
+    `originSales` (`Fiscal349SnapshotSupport#foldPerInvoiceAggregates`, same `nif|key` grouping as
     the frontend's `originByNif` / `originByRectification`) — one pair per partner, still bounded.
 
   **Known, accepted limit (349).** The 349 snapshot still grows with the number of OPERATOR rows
@@ -145,7 +153,7 @@ that already carries it is just as frozen as one presented through either curren
   server-side through the same code path the read endpoint uses
   (`computeSubmittedSnapshot` over `AbstractFiscalHandler#computeLivePayload`, with the org resolved by `resolveEffectiveOrg`
   exactly as the read resolves it), in the same request and transaction as the status change:
-  - manual Registrar/Presentar, both models — `FiscalDeclCrudHandler#applySubmittedSnapshotTransition`
+  - manual Registrar/Presentar, both models — `FiscalSubmittedSnapshotSupport#applyTransition`
     on `PUT /fiscal303/declarations` (also on a `POST` that creates a declaration straight into
     a submitted status). Every declaration PUT goes through `/fiscal303/declarations` whatever its
     model, so `AbstractFiscalHandler.linkSubmittedSnapshotProviders` (called by
@@ -158,7 +166,7 @@ that already carries it is just as frozen as one presented through either curren
   - AEAT telematic filing (303) — `Fiscal303SubmissionSupport#handleSubmit` computes it after
     generating the `.303` file and **before** calling the AEAT; `persistSuccessfulSubmission`
     stores it with the `submitted_ack` status in the single commit. The snapshot is validated
-    against the entity's own property (`FiscalDeclCrudHandler#validateSubmittedSnapshot`) before
+    against the entity's own property (`FiscalSubmittedSnapshotSupport#validateSubmittedSnapshot`) before
     the AEAT is contacted, so one the column would reject fails as `SNAPSHOT_FAILED` with nothing
     filed; should storing it still fail after the filing, the declaration keeps
     `submitted_ack`/`aeat_telematic` without a snapshot (served live, like a legacy one) rather
