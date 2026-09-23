@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login } from '../helpers/auth.js';
+import { login, declareCookieSession } from '../helpers/auth.js';
 
 /**
  * Subscription lifecycle — Account settings (mocked). ETP-5443.
@@ -205,5 +205,58 @@ test.describe('Subscription lifecycle — /account', () => {
     await expect(section).toBeVisible();
     await expect(section.getByTestId('SubscriptionSection__accessPaused')).toBeVisible();
     await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
+  });
+});
+
+/**
+ * Cookie session scheme (ETP-5443 follow-up). The suite above runs in `login()`'s shipped
+ * default (bearer — see `declareCookieSession`'s own doc comment in auth.js). `createPortalSession`
+ * goes through the same `apiFetch` as the billing/upgrade module, so under `mode: 'cookie'` its
+ * write proof travels in `X-Go-CSRF`, never in `Authorization`, and no legacy `sf_platform_token`
+ * is read or written anywhere in the flow.
+ */
+test.describe('Subscription lifecycle — /account, cookie session scheme', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await declareCookieSession(page);
+    await installAccountMock(page);
+  });
+
+  test('runs with no legacy platform token, and Manage sends the portal request with X-Go-CSRF and no Authorization', async ({ page }) => {
+    await installSubscriptionMock(page, ACTIVE_SUBSCRIPTION);
+    const requests = [];
+    await page.route('**/sws/go/billing/subscription/portal', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      requests.push(route.request().headers());
+      const portalUrl = new URL('/__mock-stripe-portal__', route.request().url()).toString();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: portalUrl }),
+      });
+    });
+    await page.route('**/__mock-stripe-portal__**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<!doctype html><html><body>Mock Stripe Customer Portal</body></html>',
+      });
+    });
+    await gotoAccount(page);
+
+    const legacyBefore = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
+    expect(legacyBefore).toBeNull();
+
+    const section = page.getByTestId('SubscriptionSection__account');
+    await expect(section).toBeVisible();
+    await section.getByTestId('SubscriptionSection__manage').click();
+    await expect(page).toHaveURL(/__mock-stripe-portal__/, { timeout: 10_000 });
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]['x-go-csrf']).toBe('e2e-cookie-csrf-token');
+    expect(requests[0].authorization).toBeUndefined();
+
+    const legacyAfter = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
+    expect(legacyAfter).toBeNull();
   });
 });
