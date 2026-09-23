@@ -31,6 +31,9 @@
  *   - `alwaysDone` see below.
  *   - `productiveOnly` the step is hidden while the tenant is on the free/trial plan. See
  *                  "Plan-dependent steps" below.
+ *   - `gateQuestionKey` `genericLabels` key for a yes/no question that REPLACES the row's
+ *                  description and action until it is answered. `null` on a step that just
+ *                  does its thing. See "Gated steps" below.
  *
  * `action` is the extension point for what a step actually DOES:
  *   - `'navigate'`  nothing but the "Configure" button that routes to `to`;
@@ -64,6 +67,18 @@
  * productive — it shows everything. That direction is deliberate: hiding invoice numbering from
  * a tenant that paid for it is a worse failure than showing two extra rows to a trial, and it
  * is also the behaviour every tenant had before the gate existed.
+ *
+ * ## Gated steps
+ *
+ * A step with a `gateQuestionKey` does not offer its action straight away: it asks a yes/no
+ * question first, and only "yes" reveals the description and the Configure button. "No" marks
+ * the step completed, because the answer itself is the outcome — a tenant that reports to no
+ * SIF has nothing to configure.
+ *
+ * The answer is NOT persisted, on purpose. The only durable state is the step's own completed
+ * flag, which already round-trips through `POST /sws/go/onboarding/first-steps`. Un-ticking the
+ * step therefore brings the question back, which is exactly the escape hatch a user who
+ * answered wrongly needs, and it costs no new backend field.
  */
 
 /** The plan value that unlocks `productiveOnly` steps. Mirrors TenantPlanService.PLAN_PRODUCTIVE. */
@@ -80,6 +95,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: true,
   },
   {
@@ -93,6 +109,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: true,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -106,6 +123,23 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: true,
+    gateQuestionKey: 'firstStepsFiscalConfigQuestion',
+    alwaysDone: false,
+  },
+  {
+    // This job is created by the server after a paid productive tenant is ready. It is not a
+    // checkbox because completion is a durable migration result, not a user assertion.
+    id: 'demo-data-transfer',
+    iconName: 'ArrowsClockwise',
+    titleKey: 'firstStepsDemoDataTransfer',
+    descKey: 'firstStepsDemoDataTransferDesc',
+    minutes: null,
+    action: 'dataTransfer',
+    to: null,
+    importSpec: null,
+    keepActionWhenDone: true,
+    productiveOnly: true,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -119,6 +153,7 @@ export const FIRST_STEPS = [
     importSpec: 'product',
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -132,6 +167,7 @@ export const FIRST_STEPS = [
     importSpec: 'contacts',
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -145,6 +181,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: true,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -154,10 +191,14 @@ export const FIRST_STEPS = [
     descKey: 'firstStepsTeamDesc',
     minutes: 2,
     action: 'navigate',
-    to: '/roles',
+    // ETP-5364: Usuarios, not Roles. Inviting someone is creating a USER; the role window is
+    // where permissions are shaped afterwards, and landing there first made the step read as
+    // "define a permission scheme" — a different, later job.
+    to: '/user',
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
 ];
@@ -195,12 +236,13 @@ export function firstStepsTotal(plan) {
  */
 export function toggleableStepIds(plan) {
   return visibleFirstSteps(plan)
-    .filter((step) => !step.alwaysDone)
+    .filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
     .map((step) => step.id);
 }
 
 /** True when the step renders as completed — always-done, or user-completed. */
-export function isStepDone(step, completed) {
+export function isStepDone(step, completed, dataTransferDone = false) {
+  if (step.action === 'dataTransfer') return dataTransferDone;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
@@ -211,13 +253,14 @@ export function isStepDone(step, completed) {
  * then had its plan read back as free would otherwise count a row that is not on screen, and
  * the badge would claim 6/5.
  */
-export function countCompletedSteps(completed, plan) {
-  return visibleFirstSteps(plan).filter((step) => isStepDone(step, completed)).length;
+export function countCompletedSteps(completed, plan, dataTransferDone = false) {
+  return visibleFirstSteps(plan)
+    .filter((step) => isStepDone(step, completed, dataTransferDone)).length;
 }
 
 /** True once every visible step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed, plan) {
-  return countCompletedSteps(completed, plan) === firstStepsTotal(plan);
+export function areAllStepsDone(completed, plan, dataTransferDone = false) {
+  return countCompletedSteps(completed, plan, dataTransferDone) === firstStepsTotal(plan);
 }
 
 /**
@@ -227,13 +270,25 @@ export function areAllStepsDone(completed, plan) {
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed, plan) {
+export function findExpandedStepId(completed, plan, dataTransferDone = false) {
   const next = visibleFirstSteps(plan)
-    .find((step) => !step.alwaysDone && !isStepDone(step, completed));
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed, dataTransferDone));
   return next ? next.id : null;
 }
 
 /** True when the row has something to open — an always-done row is inert. */
 export function isStepExpandable(step) {
   return !step.alwaysDone && Boolean(step.descKey || step.action);
+}
+
+/**
+ * True while the step's yes/no question must REPLACE its description and action.
+ *
+ * A completed step is never gated: the question has already been answered, one way or another,
+ * and the tick is the record of it. `answered` is the page's in-memory "the user said yes"
+ * flag — nothing persists it, so un-ticking the step gates it again. See "Gated steps" in the
+ * header.
+ */
+export function isStepGated(step, done, answered) {
+  return Boolean(step.gateQuestionKey) && !done && !answered;
 }
