@@ -1304,8 +1304,8 @@ export function isInitialChildrenLoading(hook) {
   return hook.childrenLoading && hook.children.length === 0;
 }
 
-export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) {
-  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true);
+export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) {
+  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly;
 }
 
 /**

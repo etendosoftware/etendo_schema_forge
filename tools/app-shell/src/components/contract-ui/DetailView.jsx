@@ -3647,7 +3647,7 @@ export function DetailView({
                                     )}
                                     {/* Selection toolbar — portaled to document.body, TRUE
                               viewport-fixed (ETP-4972), not anchored to this wrapper. */}
-                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
+                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) && (
                                       <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}

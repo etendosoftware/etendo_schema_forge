@@ -1230,6 +1230,16 @@ describe('shouldShowInlineDeleteSelectionBar', () => {
     const api = { crud: { lines: { delete: false } } };
     expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines')).toBeFalsy();
   });
+
+  it('is falsy when the window is read-only, even for inlineEditable with delete allowed (ETP-5205)', () => {
+    const api = { crud: { lines: { delete: true } } };
+    expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines', true)).toBeFalsy();
+  });
+
+  it('is truthy when isDocumentReadOnly is false/absent, matching prior behavior (ETP-5205 regression)', () => {
+    const api = { crud: { lines: { delete: true } } };
+    expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines', false)).toBeTruthy();
+  });
 });
 
 // ---------------------------------------------------------------------------
