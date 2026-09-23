@@ -159,20 +159,31 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" title={ui('more')} disabled={running}>
-          <MoreVertical className="h-4 w-4" />
+    <DropdownMenu data-testid="DropdownMenu__c24331">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__c24331">
+        <Button
+          variant="ghost"
+          size="icon"
+          title={ui('more')}
+          disabled={running}
+          data-testid="Button__c24331">
+          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c24331" />
           <span className="sr-only">{ui('more')}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={handleSelect('createPurchaseInvoice')} disabled={running}>
-          <Receipt className="h-4 w-4" />
+      <DropdownMenuContent align="start" data-testid="DropdownMenuContent__c24331">
+        <DropdownMenuItem
+          onSelect={handleSelect('createPurchaseInvoice')}
+          disabled={running}
+          data-testid="DropdownMenuItem__c24331">
+          <Receipt className="h-4 w-4" data-testid="Receipt__c24331" />
           {ui('poBulkCreateInvoices')} ({selectedRows.length})
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleSelect('createGoodsReceipt')} disabled={running}>
-          <Truck className="h-4 w-4" />
+        <DropdownMenuItem
+          onSelect={handleSelect('createGoodsReceipt')}
+          disabled={running}
+          data-testid="DropdownMenuItem__c24331">
+          <Truck className="h-4 w-4" data-testid="Truck__c24331" />
           {ui('poBulkCreateReceipts')} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>

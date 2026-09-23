@@ -157,20 +157,31 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" title={ui('more')} disabled={running}>
-          <MoreVertical className="h-4 w-4" />
+    <DropdownMenu data-testid="DropdownMenu__3f1293">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__3f1293">
+        <Button
+          variant="ghost"
+          size="icon"
+          title={ui('more')}
+          disabled={running}
+          data-testid="Button__3f1293">
+          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__3f1293" />
           <span className="sr-only">{ui('more')}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={handleSelect('createDraftInvoice')} disabled={running}>
-          <Receipt className="h-4 w-4" />
+      <DropdownMenuContent align="start" data-testid="DropdownMenuContent__3f1293">
+        <DropdownMenuItem
+          onSelect={handleSelect('createDraftInvoice')}
+          disabled={running}
+          data-testid="DropdownMenuItem__3f1293">
+          <Receipt className="h-4 w-4" data-testid="Receipt__3f1293" />
           {ui('soBulkCreateInvoices')} ({selectedRows.length})
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleSelect('createShipment')} disabled={running}>
-          <Truck className="h-4 w-4" />
+        <DropdownMenuItem
+          onSelect={handleSelect('createShipment')}
+          disabled={running}
+          data-testid="DropdownMenuItem__3f1293">
+          <Truck className="h-4 w-4" data-testid="Truck__3f1293" />
           {ui('soBulkCreateShipments')} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>
