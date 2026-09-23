@@ -116,6 +116,45 @@ export async function apiAuthHeaders(page) {
   return headers;
 }
 
+/**
+ * ETP-5443 — flips an already-`login()`-ed mocked page from the shipped bearer
+ * default into the cookie scheme, so a spec can assert the `X-Go-CSRF` / no-`Authorization`
+ * contract `sessionCredentials.js` resolves for `mode: 'auto'` (see its own doc comment:
+ * "a held CSRF token means the backend issued one, which only a cookie session does").
+ *
+ * `login()`'s own `GET /sws/go/session` stub deliberately omits `csrfToken` to stay on the
+ * bearer path (see the comment on that route above) — every other mocked spec relies on that.
+ * This registers a MORE SPECIFIC route for the same URL, which Playwright tries first because
+ * it is registered later, and includes a `csrfToken`. `AuthProvider` only reads
+ * `GET /sws/go/session` once, on mount (`hasRestoredRef`), so the override has no effect on the
+ * session already restored during `login()` — this reloads the page so the restore effect runs
+ * again against the new response, resolving `sessionCredentials`'s `mode` to `cookie`.
+ *
+ * Must be called AFTER `login(page)`.
+ */
+export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-token' } = {}) {
+  await page.route('**/sws/go/session', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        account: { name: 'admin', email: 'admin@e2e.test' },
+        environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role', orgId: MOCK_ORG_ID },
+        roleList: [{
+          id: 'e2e-mock-role',
+          name: 'Administrator',
+          orgList: [{ id: MOCK_ORG_ID, name: 'E2E Org' }],
+        }],
+        csrfToken,
+      }),
+    });
+  });
+  await page.reload();
+  await page.waitForURL('**/dashboard', { timeout: 10_000 });
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+}
+
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
