@@ -29,10 +29,13 @@ vi.mock('@/auth/useLogout.js', () => ({
 // WalkthroughProvider (which navigates on the user's behalf between the steps
 // of a guided flow). A module-level fn keeps its identity stable across
 // renders, matching what a real router hands out.
+// ETP-5443 follow-up: useLocation is ALSO a vi.fn() now (it used to be a plain arrow) —
+// the environment-access-gate exempt-path tests need to override the current pathname
+// per render, the same way useSearchParams already does for embedded mode.
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
-  useLocation: () => ({ pathname: '/sales-order/123' }),
+  useLocation: vi.fn(() => ({ pathname: '/sales-order/123' })),
   useNavigate: () => navigateMock,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
 }));
@@ -91,6 +94,17 @@ vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
 vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
   useCapabilitiesSafe: vi.fn(() => ({})),
   useWindowAccessSafe: vi.fn(() => ({})),
+}));
+
+// ETP-5443 follow-up — AppLayout now also calls useEnvironmentAccessGate(), the React
+// binding over the module-level store lib/environmentAccessGate.js keeps (see that
+// module's own suite for the detection story: a NEO 402 on windowaccessmap parsed into
+// 'DEMO_TRIAL_EXPIRED' | 'SUBSCRIPTION_REQUIRED' | null). What AppLayout owes the feature
+// is the CONDITIONAL RENDER off whatever this hook returns, not the detection itself —
+// hence a bare vi.fn(), same pattern as useRoleMenu/useCapabilitiesSafe above. Default
+// `null` ("access not blocked") leaves every pre-existing test in this file unchanged.
+vi.mock('@/hooks/useEnvironmentAccessGate.js', () => ({
+  useEnvironmentAccessGate: vi.fn(() => null),
 }));
 
 // ETP-5364 — AppLayout now MOUNTS FirstStepsProvider itself (above the allowedIds gate, so the
@@ -216,9 +230,10 @@ vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
 import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
 describe('AppLayout — normal mode', () => {
@@ -954,5 +969,191 @@ describe('AppLayout — no-access explanation (ETP-5202, ETP-4576)', () => {
     const message = screen.getByTestId('no-access-message');
     expect(message).toHaveTextContent(LABELS.yourCompany);
     expect(message.textContent).not.toContain('{companyName}');
+  });
+});
+
+/**
+ * ETP-5443 follow-up — the dedicated blocked-access screen for a commercial cut-off (demo
+ * trial expired / subscription payment grace elapsed), replacing NoAccessScreen's generic
+ * "your role has no access" copy for this specific, actionable cause. See
+ * lib/environmentAccessGate.js for how the decision is detected (a NEO 402 on
+ * `/sws/neo/windowaccessmap`, parsed into `DEMO_TRIAL_EXPIRED` | `SUBSCRIPTION_REQUIRED` |
+ * `null`) — this file only mocks the React binding (`useEnvironmentAccessGate`), same as it
+ * already does for useRoleMenu/useCapabilitiesSafe.
+ *
+ * `/account` and `/upgrade` are the two routes this screen's own CTA sends the user to, and
+ * both resolve through the account's platform token rather than the blocked tenant session —
+ * so they must stay reachable while blocked. That is also why the 402 folding
+ * `useRoleMenu()`'s allowedIds into a confirmed empty Set (same shape ETP-4514's
+ * NoAccessScreen reacts to) must NOT show up as "your role has no access" on those two paths.
+ */
+describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  const CURRENT = { clientId: 'CLIENT-CURRENT', clientName: 'Current Corp', orgName: 'Main Org' };
+  const OTHER = { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Main Org' };
+
+  function withEnvironments(environments, overrides = {}) {
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments,
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+      ...overrides,
+    });
+  }
+
+  function withPathname(pathname) {
+    vi.mocked(useLocation).mockReturnValue({ pathname });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Access not blocked, on an ordinary (non-exempt) route, nowhere else to go — each test
+    // below opts into the specific state it is about.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    withPathname('/sales-order/123');
+    withEnvironments([]);
+  });
+
+  it('renders the demo-expired blocked screen (and not NoAccessScreen/sidebar/Outlet) when the decision is DEMO_TRIAL_EXPIRED', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    // The 402 that produces this decision also fails windowaccessmap, which useRoleMenu
+    // folds into the same confirmed-empty-Set shape as a genuinely zero-access role.
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('blocked-access-title')).toHaveTextContent(LABELS.blockedAccessDemoExpiredTitle);
+    expect(screen.getByTestId('blocked-access-message')).toHaveTextContent(LABELS.blockedAccessDemoExpiredMessage);
+    expect(screen.getByTestId('blocked-access-cta')).toHaveTextContent(LABELS.blockedAccessUpgradeCta);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+  });
+
+  it('navigates to /upgrade when the demo-expired CTA is clicked', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('blocked-access-cta'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/upgrade');
+  });
+
+  it('renders the subscription-required blocked screen (and not NoAccessScreen) when the decision is SUBSCRIPTION_REQUIRED', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('blocked-access-title')).toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredTitle);
+    expect(screen.getByTestId('blocked-access-message')).toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredMessage);
+    expect(screen.getByTestId('blocked-access-cta')).toHaveTextContent(LABELS.blockedAccessManageSubscriptionCta);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  });
+
+  it('navigates to /account when the subscription-required CTA is clicked', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('blocked-access-cta'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/account');
+  });
+
+  // Regression: an ALLOWED environment whose role simply grants no windows is a DIFFERENT
+  // problem (ETP-4514) from a commercial cut-off, and must keep getting the ORIGINAL screen —
+  // this feature must not swallow that case just because both render off a confirmed-empty Set.
+  it('renders the ORIGINAL NoAccessScreen, unchanged, when access is not blocked but the role grants no windows', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+  });
+
+  it('keeps the environment switcher and logout available on the blocked screen', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withEnvironments([CURRENT, OTHER]);
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+
+    const block = screen.getByTestId('blocked-access-company-switch');
+    expect(block).toHaveTextContent(LABELS.switchCompany);
+    expect(screen.getByTestId('blocked-access-company-trigger')).toHaveTextContent('Current Corp');
+    expect(screen.getByTestId('blocked-access-company-CLIENT-OTHER')).toHaveTextContent('Other Corp');
+    expect(screen.getByTestId('blocked-access-company-CLIENT-CURRENT')).toBeDisabled();
+
+    await user.click(screen.getByTestId('blocked-access-company-CLIENT-OTHER'));
+    expect(switchToMock).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'CLIENT-OTHER' }));
+
+    const logoutButton = screen.getByTestId('BlockedAccessScreenLogout__488148');
+    expect(logoutButton).toBeInTheDocument();
+    await user.click(logoutButton);
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the company switch on the blocked screen when the account owns nowhere else to go', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withEnvironments([CURRENT]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('blocked-access-company-switch')).not.toBeInTheDocument();
+    // The escape hatch stays even with nowhere else to go.
+    expect(screen.getByTestId('BlockedAccessScreenLogout__488148')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/upgrade', 'the exact /upgrade path'],
+    ['/upgrade/checkout', 'an /upgrade sub-route'],
+    ['/account', 'the exact /account path'],
+    ['/account/subscription', 'an /account sub-route'],
+  ])('renders the normal Outlet/SideMenu tree instead of any blocking screen on %s (%s)', (pathname) => {
+    // Both guards must be skipped, not just the blocked screen: the 402 that sets
+    // environmentAccessDecision also folds useRoleMenu()'s allowedIds into a confirmed empty
+    // Set, so the exempt check has to beat NoAccessScreen's size-check too (see the comment in
+    // AppLayoutAccessGate above the exempt-path check).
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withPathname(pathname);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+
+  it('does NOT exempt an unrelated path that merely shares the same prefix (e.g. /accountingXYZ)', () => {
+    // Guards the `startsWith` check in isEnvironmentGateExemptPath: it must require an exact
+    // path segment boundary ('/account' or '/account/...'), not any pathname sharing the
+    // literal prefix.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withPathname('/accountingXYZ');
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@ import { detectBaseUrl } from '@/components/copilot/copilotApi.js';
 import { Button } from '@/components/ui/button';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog.jsx';
 import { SecuritySection } from '@/components/account/SecuritySection.jsx';
+import { SubscriptionSection } from '@/components/account/SubscriptionSection.jsx';
 import { useLogout } from '@/auth/useLogout.js';
 
 /**
@@ -83,10 +84,18 @@ export default function AccountSettingsPage() {
     logout();
   };
 
-  // The loaded half of the body, named so the JSX below carries one ternary instead of two nested.
-  // A failed load must not fall through to the section: with no authMethods it would render its
-  // `{ enabled: false }` default and tell the user their account has no password.
-  const loadedBody = loadFailed ? (
+  // The loaded half of the SECURITY body only, named so the JSX below carries one ternary
+  // instead of two nested. A failed load must not fall through to the section: with no
+  // authMethods it would render its `{ enabled: false }` default and tell the user their
+  // account has no password.
+  //
+  // Deliberately scoped to SecuritySection alone (ETP-5443 REVIEW N5): SubscriptionSection reads
+  // its own data over its own independent request and must not be gated behind this page's
+  // authMethods load — the two blocks share nothing, and a Stripe/account outage having nothing
+  // to do with authMethods should never also hide the security section, nor should an
+  // authMethods failure hide subscription. See the render below for how it stays positioned
+  // right after SecuritySection regardless of which of the three states this ternary is in.
+  const securityBody = loadFailed ? (
     <div className="space-y-3" data-testid="account-settings-load-error">
       <p className="text-sm text-muted-foreground">{ui('accountMethodsLoadFailed')}</p>
       <Button variant="outline" size="sm" onClick={load} data-testid="account-settings-retry">
@@ -109,7 +118,11 @@ export default function AccountSettingsPage() {
       <div className="mt-6 space-y-6">
         {loading
           ? <p className="text-sm text-muted-foreground">{ui('loading')}</p>
-          : loadedBody}
+          : securityBody}
+
+        <SubscriptionSection
+          apiBaseUrl={detectBaseUrl()}
+          data-testid="SubscriptionSection__account" />
       </div>
 
       <ChangePasswordDialog

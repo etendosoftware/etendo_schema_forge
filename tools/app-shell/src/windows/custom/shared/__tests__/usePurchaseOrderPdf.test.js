@@ -156,6 +156,14 @@ describe('usePurchaseOrderPdf', () => {
     assert.match(src, /orderPdfColQty/);
   });
 
+  it('ETP-5300: uses purchaseOrderPdfCustomerSection i18n key for the customerSection override (not invoicePdfCustomerSection)', () => {
+    assert.match(src, /customerSection:\s+ui\('purchaseOrderPdfCustomerSection'\)/);
+  });
+
+  it('ETP-5300: uses purchaseOrderPdfCustomer i18n key for the customer override (not invoicePdfCustomer)', () => {
+    assert.match(src, /customer:\s+ui\('purchaseOrderPdfCustomer'\)/);
+  });
+
   it('includes subtotalWithoutDiscount label key', () => {
     assert.match(src, /buildDocumentPdfLabels/, 'hook delegates base labels to buildDocumentPdfLabels');
     assert.match(sharedSrc, /subtotalWithoutDiscount/);

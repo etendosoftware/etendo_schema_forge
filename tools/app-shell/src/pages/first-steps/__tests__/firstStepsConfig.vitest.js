@@ -16,6 +16,7 @@ import {
   firstStepsTotal,
   isProductivePlan,
   isStepDone,
+  isStepGated,
   toggleableStepIds,
   visibleFirstSteps,
 } from '../firstStepsConfig.js';
@@ -334,6 +335,46 @@ describe('findExpandedStepId', () => {
     for (const completed of [[], ['company-data'], ['company-data', 'products'],
       ['company-data', 'products', 'contacts'], ALL_TOGGLEABLE]) {
       expect(alwaysDoneIds).not.toContain(findExpandedStepId(completed));
+    }
+  });
+});
+
+
+describe('firstStepsConfig — step routes (ETP-5364)', () => {
+  it('sends the team step to Usuarios, not Roles', () => {
+    // Inviting someone creates a USER. Roles is where permissions are shaped afterwards, and
+    // landing there first made the step read as a different, later job.
+    const team = FIRST_STEPS.find((step) => step.id === 'team');
+    expect(team.to).toBe('/user');
+  });
+});
+
+describe('firstStepsConfig — isStepGated (ETP-5364)', () => {
+  const fiscal = () => FIRST_STEPS.find((step) => step.id === 'fiscal-config');
+
+  it('declares the yes/no question on fiscal-config and nowhere else', () => {
+    expect(fiscal().gateQuestionKey).toBe('firstStepsFiscalConfigQuestion');
+    for (const step of FIRST_STEPS.filter((s) => s.id !== 'fiscal-config')) {
+      expect(step.gateQuestionKey).toBeNull();
+    }
+  });
+
+  it('gates an unanswered, incomplete step', () => {
+    expect(isStepGated(fiscal(), false, false)).toBe(true);
+  });
+
+  it('stops gating once the user answers yes', () => {
+    expect(isStepGated(fiscal(), false, true)).toBe(false);
+  });
+
+  it('never gates a completed step — the tick IS the answer', () => {
+    expect(isStepGated(fiscal(), true, false)).toBe(false);
+    expect(isStepGated(fiscal(), true, true)).toBe(false);
+  });
+
+  it('never gates a step that asks nothing', () => {
+    for (const step of FIRST_STEPS.filter((s) => !s.gateQuestionKey)) {
+      expect(isStepGated(step, false, false)).toBe(false);
     }
   });
 });

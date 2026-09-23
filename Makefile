@@ -122,6 +122,10 @@ test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Ch
 
 stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe account needed)
 	tools/stripe-webhook-simulate.sh --status $(ARGS)
+
+CMD ?= fail
+stripe-past-due: ## Drive a real Stripe test-mode subscription past due and back (ID=<checkout-request-or-billing-event-id> [CMD=fail|recover|status])
+	tools/stripe-subscription-past-due.sh $(CMD) $(ID) $(ARGS)
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10

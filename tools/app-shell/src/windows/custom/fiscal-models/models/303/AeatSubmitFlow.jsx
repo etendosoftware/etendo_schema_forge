@@ -5,7 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
-import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
@@ -216,7 +216,7 @@ function Banner({ tone, icon, title, body, children }) {
 //             attempt (test mode included), so the "Incidencias" tab must re-fetch after every
 //             attempt, not just on success — see ETP-4456, `Fiscal303BoxesHandler#handleSubmit`.
 // onClose:    called to dismiss the flow (any step)
-export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
+export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes, manualOverrides, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
@@ -300,6 +300,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
       }
       const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo, id: decl.id });
       if (identChecks) applyIdentParams(params, identChecks);
+      // ETP-5431 — mirrors generate303File (fiscalModelsUtils.js): without this, any
+      // manually-overridden box (111, 70, 108, 109, ...) reached "Generar fichero 303" but
+      // never the actual AEAT telematic submission, so the file the user reviewed and the
+      // file AEAT actually received could silently diverge.
+      if (manualOverrides) applyBoxParams(params, manualOverrides);
       const res = await apiFetch(`/fiscal303/submit?${params}`, {
         method: 'POST',
         body: JSON.stringify(buildAeatSubmitBody({ testMode, nrc, presenterNif, presenterName })),
