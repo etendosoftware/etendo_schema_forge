@@ -26,6 +26,13 @@ export const UPGRADE_ERROR_CODES = {
   checkoutCreationFailed: 'upgradeCheckoutCreationFailed',
   purchaseAlreadyExists: 'upgradePurchaseAlreadyExists',
   sessionExpired: 'upgradeSessionExpired',
+  // ETP-5443 REVIEW N3: a failed READ of the subscription, or a failed portal-session
+  // creation, is neither a checkout nor a creation of anything — reusing
+  // `checkoutCreationFailed` for them said the wrong thing about what broke. Each gets
+  // its own code so a caller (and a log line) can tell "can't read the subscription"
+  // apart from "can't open the portal" apart from "checkout failed".
+  subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
+  portalUnavailable: 'upgradePortalUnavailable',
   failed: 'upgradeGenericError',
 };
 
@@ -122,6 +129,32 @@ export async function getBillingOverview(baseUrl) {
       : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message, response.status);
   }
   return data || { purchases: [] };
+}
+
+/** Reads the authenticated account-level subscription projection. */
+export async function getSubscription(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/subscription', { baseUrl, on401: 'ignore' });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.subscriptionUnavailable, data?.error?.message, response.status);
+  }
+  return data;
+}
+
+/** Creates an authenticated customer portal session for the account subscription. */
+export async function createPortalSession(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/subscription/portal', {
+    method: 'POST',
+    baseUrl,
+    on401: 'ignore',
+  });
+  const data = await readJsonSafely(response);
+  if (!response.ok) {
+    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+      : UPGRADE_ERROR_CODES.portalUnavailable, data?.error?.message, response.status);
+  }
+  return data;
 }
 
 /** Reads the server-owned productive offer used to render purchase terms. */

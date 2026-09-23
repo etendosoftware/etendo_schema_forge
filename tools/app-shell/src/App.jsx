@@ -26,6 +26,7 @@ import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
+import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
@@ -170,6 +171,23 @@ export function __resetMenuAccessCacheForTest() {
   menuAccessInFlight = null;
 }
 
+// ETP-5443 follow-up — `NeoResponse.error()` (com.etendoerp.go) nests the human-readable
+// text under `error.message` on this path (the server-side `ensureTopLevelMessage`
+// normalization is not applied here); mirrors menuTree.js's own defensive `data?.error ||
+// data?.message` handling for a string `error`, and falls back to a top-level `message`
+// for forward compatibility. Used only to recover the `EnvironmentAccessPolicy.Decision`
+// name from a 402 — see lib/environmentAccessGate.js.
+async function readNeoErrorMessage(res) {
+  try {
+    const data = await res.json();
+    if (typeof data?.error === 'string') return data.error;
+    if (data?.error && typeof data.error === 'object') return data.error.message || '';
+    return data?.message || '';
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchWindowAccess(session) {
   // ETP-5189 — kicked off in PARALLEL with the windowaccessmap fetch below, not
   // sequentially after it. `AuthContext.jsx` calls this on every silent refresh
@@ -193,7 +211,26 @@ export async function fetchWindowAccess(session) {
       token: session?.token ?? null,
       on401: 'ignore',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // ETP-5443 follow-up — a 402 here means the WHOLE environment's commercial access
+      // was cut off (demo trial expired / subscription grace elapsed — see
+      // lib/environmentAccessGate.js), not "this role has no access". Record the decision
+      // so AppLayout can show the real reason instead of the generic empty-access screen
+      // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
+      // recognized decision text, record it; for any other resolved non-ok response (401,
+      // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
+      // the only place a demo/subscription block can be detected, so a resolved response that
+      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
+      // in the outer catch below, which deliberately leaves the decision untouched so a
+      // transient network failure does not replace the last server-confirmed block with a
+      // misleading "your role has no access" screen.
+      setEnvironmentAccessDecision(
+        res.status === 402 ? parseEnvironmentAccessDecision(await readNeoErrorMessage(res)) : null
+      );
+      return null;
+    }
+    setEnvironmentAccessDecision(null);
     const data = await res.json();
     // Webhook responses in this app are inconsistent about wrapping the
     // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
@@ -230,6 +267,7 @@ export async function fetchWindowAccess(session) {
     const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
     return { ...payload, menuAccess };
   } catch {
+    // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
   }
 }
