@@ -7,7 +7,11 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
-export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
+// `noMockFallback` (ETP-5438 follow-up): when set, a failed backend call resolves `null` instead
+// of falling through to the demo mock below. Used by the submitted-declaration cold-cache path in
+// FmModel303Page.jsx, which freezes the result in the session cache — mock figures must never be
+// frozen as a presented declaration's real numbers.
+export async function computeBoxes303(decl, { token, apiBaseUrl, noMockFallback = false } = {}) {
   if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -18,6 +22,7 @@ export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
     } catch (_) {
       // fall through to mock
     }
+    if (noMockFallback) return null;
   }
 
   // ── Mock fallback (demo / no backend) ─────────────────────────────

@@ -1,13 +1,14 @@
 // ETP-5438 — "block re-presentation once already submitted... sigue tomando facturas aun
 // presentada (ocultar boton de generar fichero y que no se recalcule)".
 //
-// These tests pin the mount-time auto-compute effect's new isSubmitted guard: once a
-// declaration is in a submitted-family status, opening its detail page must NEVER issue a
-// live `compute349Operators()` call (= `GET /fiscal349/operators`, which always recomputes
-// from whatever invoices exist RIGHT NOW) — it must fall back to whatever `FmListPage.jsx`'s
-// own submitted-family bucket already cached this session (`getCachedFiscalCompute`), or show
-// nothing at all if there is truly no cache yet. A non-submitted declaration's existing
-// auto-compute-on-mount behavior (ETP-4755) must be completely unaffected.
+// These tests pin the mount-time auto-compute effect's isSubmitted guard: once a declaration is
+// in a submitted-family status, opening its detail page computes AT MOST ONCE per browser
+// session. It first reuses whatever `FmListPage.jsx`'s own submitted-family bucket already
+// cached this session (`getCachedFiscalCompute`) with zero `compute349Operators()` calls; only on
+// a cold cache (new tab, reload, another browser) does it issue exactly one
+// `GET /fiscal349/operators` (allowed server-side for submitted declarations since the ETP-5438
+// follow-up), show the result and write it back to the same cache entry. A non-submitted
+// declaration's existing auto-compute-on-mount behavior (ETP-4755) must be completely unaffected.
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -84,30 +85,40 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-describe('FmModel349Page — mount-time auto-compute is frozen once submitted (ETP-5438)', () => {
-  it('does NOT call compute349Operators on mount for a submitted declaration with no precomputed data', async () => {
+describe('FmModel349Page — mount-time auto-compute runs at most once per session once submitted (ETP-5438)', () => {
+  const serverPayload = {
+    operators: [
+      { bpId: '7', nif: 'DE123456789', name: 'Server GmbH', key: 'E', base: '500.00', vies: 'valid' },
+    ],
+    invoices: [],
+  };
+
+  it.each(['submitted', 'submitted_ack', 'submitted_ext'])(
+    'cold cache + %s: computes exactly once, shows it and writes the session cache',
+    async (status) => {
+      const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
+      compute349Operators.mockResolvedValueOnce(serverPayload);
+      const decl = makeDecl({ status });
+      render(<FmModel349Page decl={decl} {...defaultProps} />);
+
+      await waitFor(() => expect(document.body.textContent).toContain('Server GmbH'));
+      expect(compute349Operators).toHaveBeenCalledTimes(1);
+      const cached = JSON.parse(sessionStorage.getItem(cacheKeyFor(decl.id)));
+      expect(cached.result).toEqual(serverPayload);
+      expect(typeof cached.computedAt).toBe('number');
+    },
+  );
+
+  it('cold cache + submitted: a failed compute caches nothing and is not retried', async () => {
     const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
+    compute349Operators.mockResolvedValueOnce(null);
+    const decl = makeDecl({ status: 'submitted' });
+    render(<FmModel349Page decl={decl} {...defaultProps} />);
 
-    // Give any (incorrect) async mount effect a tick to fire before asserting it didn't.
+    await waitFor(() => expect(compute349Operators).toHaveBeenCalledTimes(1));
     await new Promise(r => setTimeout(r, 0));
-    expect(compute349Operators).not.toHaveBeenCalled();
-  });
-
-  it('does NOT call compute349Operators on mount for a submitted_ack declaration with no precomputed data', async () => {
-    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel349Page decl={makeDecl({ status: 'submitted_ack' })} {...defaultProps} />);
-
-    await new Promise(r => setTimeout(r, 0));
-    expect(compute349Operators).not.toHaveBeenCalled();
-  });
-
-  it('does NOT call compute349Operators on mount for a submitted_ext declaration with no precomputed data', async () => {
-    const { compute349Operators } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel349Page decl={makeDecl({ status: 'submitted_ext' })} {...defaultProps} />);
-
-    await new Promise(r => setTimeout(r, 0));
-    expect(compute349Operators).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(cacheKeyFor(decl.id))).toBeNull();
+    expect(compute349Operators).toHaveBeenCalledTimes(1);
   });
 
   it('still calls compute349Operators on mount for a non-submitted (draft) declaration — baseline unchanged (ETP-4755)', async () => {

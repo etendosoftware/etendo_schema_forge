@@ -12,7 +12,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
-import { invalidateFiscalComputeCache, getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
+import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
 
@@ -792,14 +792,36 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     handleStatusChange(newStatus, submissionMethodForPath);
   }
 
+  function applyOperatorsResult(res) {
+    if (res?.operators) setLiveOperators(res.operators);
+    if (res?.invoices)  setLiveInvoices(res.invoices);
+    if (res?.rectifications) setLiveRectifications(res.rectifications);
+    if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
+  }
+
   async function handleCompute() {
     setComputing(true);
     try {
       const res = await compute349Operators(decl, { token, apiBaseUrl });
-      if (res?.operators) setLiveOperators(res.operators);
-      if (res?.invoices)  setLiveInvoices(res.invoices);
-      if (res?.rectifications) setLiveRectifications(res.rectifications);
-      if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
+      applyOperatorsResult(res);
+    } finally {
+      setComputing(false);
+    }
+  }
+
+  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
+  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
+  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same data for
+  // the rest of the session. Display-only: no persistence. `compute349Operators` already
+  // resolves `null` on a failed backend call (no mock fallback when `apiBaseUrl` is set), and a
+  // `null` result is never cached, so a failure leaves the tabs empty instead of freezing garbage.
+  async function computeSubmittedOnce() {
+    setComputing(true);
+    try {
+      const res = await compute349Operators(decl, { token, apiBaseUrl });
+      if (!res?.operators) return;
+      setCachedFiscalCompute(decl.id, res);
+      applyOperatorsResult(res);
     } finally {
       setComputing(false);
     }
@@ -853,18 +875,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // `liveOperators`/`decl._precomputed`) so it fires exactly once per opened
   // declaration instead of looping once `handleCompute` populates state.
   //
-  // ETP-5438 — once `isSubmitted`, this effect must NEVER call `handleCompute()`
-  // (= a live `GET /fiscal349/operators`, which always recomputes from whatever
-  // invoices exist RIGHT NOW, regardless of who calls it or when — that live
-  // recompute silently picking up invoices added/removed after presentation was
-  // the actual "sigue tomando facturas aun presentada" bug). Instead it falls back
-  // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s
-  // own submitted-family bucket already populated once this session (see its
-  // `neverModifiedFn` comment) — network-free, so it can never observe a later
-  // invoice change. If nothing was ever cached (declaration opened cold, with no
-  // `_precomputed` AND no prior FmListPage compute this session), the tabs simply
-  // show no data — "Calcular" is itself hidden once submitted, so there is no
-  // in-page affordance to populate it, matching the frozen-once-presented intent.
+  // ETP-5438 — once `isSubmitted`, this effect computes at most ONCE per browser
+  // session (a live `GET /fiscal349/operators` always recomputes from whatever
+  // invoices exist RIGHT NOW, regardless of who calls it or when — recomputing on
+  // every mount silently picked up invoices added/removed after presentation, the
+  // "sigue tomando facturas aun presentada" bug). It first reuses
+  // `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+  // submitted-family bucket populates (see its `neverModifiedFn` comment) —
+  // network-free. Only on a cold cache (new tab, reload, another browser, with no
+  // `_precomputed` handed down) does it compute once (`computeSubmittedOnce`) and
+  // write the result back to that same cache entry, so later mounts and the list
+  // stay frozen on it. "Calcular" stays hidden once submitted. Known trade-off: a
+  // cold session recomputes from the invoice data as it is at that moment.
   useEffect(() => {
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
@@ -874,10 +896,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     // gate is permanently false and the request would simply never fire.
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
-      if (cached?.operators) setLiveOperators(cached.operators);
-      if (cached?.invoices) setLiveInvoices(cached.invoices);
-      if (cached?.rectifications) setLiveRectifications(cached.rectifications);
-      if (cached?.rectificativeSummary) setLiveRectifSummary(cached.rectificativeSummary);
+      if (cached?.operators) {
+        applyOperatorsResult(cached);
+        return;
+      }
+      computeSubmittedOnce();
       return;
     }
     handleCompute();

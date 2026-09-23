@@ -82,14 +82,16 @@ FmListPage
 
 This is the primary deliverable of ETP-5438: once a Modelo 303 or Modelo 349 declaration reaches a
 **submitted-family** status (`submitted`, `submitted_ext`, `submitted_ack`), it must behave as a
-closed, immutable record — nothing in this window may silently recompute its boxes/operators from
+closed, immutable record — nothing in this window may keep recomputing its boxes/operators from
 current invoice data, regenerate its file, or re-present it. Root cause: `computeBoxes303`
 (`GET /fiscal303/boxes`) and `compute349Operators` (`GET /fiscal349/operators`) always recompute
 from **whatever invoices exist right now**, regardless of who calls them or when — there was no
 concept of "this declaration is done" anywhere in the compute path, so an invoice added or removed
 after presentation silently changed what "Resultado" showed for an already-filed declaration
-("sigue tomando facturas aun presentada"). Fixed on both the frontend (freeze the UI) and the
-backend (reject the call), for **both** models — "en todos los modelos tiene que funcionar de la
+("sigue tomando facturas aun presentada"). Fixed on the frontend (compute once per browser session,
+then freeze from the session cache) and the backend (reject every write — file generation,
+re-presentation, telematic resubmission — while keeping the boxes/operators **reads** open), for
+**both** models — "en todos los modelos tiene que funcionar de la
 misma manera" (explicit product decision).
 
 **Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
@@ -113,28 +115,41 @@ that already carries it is just as frozen as one presented through either curren
   instead makes the hook trust its own `sessionStorage` cache: a never-before-computed submitted
   declaration still gets exactly one bootstrap compute (so "Resultado" is never stuck on "—",
   ETP-4755), and every mount after that first one reuses the cached result — network-free, so
-  nothing here can ever pick up an invoice added/removed after submission. The resulting
+  nothing here can pick up an invoice added/removed after submission for the rest of the browser
+  session. The bootstrap depends on `GET /fiscal303/boxes` and `GET /fiscal349/operators` staying
+  available for submitted declarations (see "Backend" below): an earlier ETP-5438 iteration
+  returned `409` there too, which made every cold cache (new tab, reload, another browser/user)
+  render "Error de cálculo" in "Resultado" (or "…" while in flight). The resulting
   `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
   `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
   non-draft compute for this decl.id", it does not care which of the two hooks produced it.
-- **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` is a new export
-  that reads back the last payload this hook cached for one declaration, keyed
-  `fiscal_ac_v3_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
-  was ever cached this session. It exists so a detail page that opens with no `decl._precomputed`
-  handed down (a cold/direct navigation straight into a submitted declaration) can still show
-  something by reading whatever `FmListPage`'s own submitted-family bucket already computed and
-  cached, instead of falling back to a live `computeFn` call.
+- **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` reads back the
+  last payload this hook cached for one declaration, keyed `fiscal_ac_v3_<declId>` in
+  `sessionStorage`, without issuing a network call — `null` when nothing was ever cached this
+  session. `setCachedFiscalCompute(declId, result)` is its write-side counterpart (same key, same
+  `{ result, computedAt }` shape; a `null` result is ignored so a failed compute is never frozen).
+  Together they let a detail page reuse whatever `FmListPage`'s submitted-family bucket already
+  computed, and — on a cold cache — store its own one-time compute where the list will find it.
 - **Detail pages (`FmModel303Page.jsx` / `FmModel349Page.jsx`).** Both pages compute
   `isSubmitted = SUBMITTED_STATUSES.includes(status)` and use it as the single gate for two
   independent things:
   - The mount-time auto-compute effect (the ETP-4755 "auto-compute on mount when the list didn't
     hand us `_precomputed`" fix) now branches on `isSubmitted` **before** ever calling
-    `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` instead and applies
+    `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` first and applies
     the cached snapshot if one exists (via the same `applyComputeResult` helper "Calcular" uses on
-    303; `setLiveOperators`/`setLiveInvoices`/`setLiveRectifications`/`setLiveRectifSummary` on
-    349); if nothing was ever cached, the tabs simply show no data — there is no in-page way to
-    populate it, since "Calcular" is itself hidden once submitted (see below), matching the
-    frozen-once-presented intent.
+    303; `applyOperatorsResult` on 349) — zero network calls. Only when nothing is cached (cold
+    session: new tab, reload, another browser/user, no `_precomputed` handed down) does it run
+    `computeSubmittedOnce()`: ONE call to the same compute function the page already uses
+    (`computeBoxes303` with `noMockFallback: true`, so a failed call never freezes the demo mock
+    figures; `compute349Operators`, which already resolves `null` on failure), then
+    `setCachedFiscalCompute(decl.id, result)` so later mounts and the list's "Resultado" column
+    freeze on the same payload. It is display-only: nothing is persisted and `manualOverrides`
+    (hydrated from the saved declaration) are only merged in, never rewritten. A failed compute
+    leaves the tabs empty and caches nothing.
+  - **Known trade-off.** The freeze lives in the browser session, not on the declaration record
+    (`declToJson` never persists a computed result). A cold session therefore recomputes from the
+    invoice data **as it is at that moment** — if an invoice of a presented period was changed
+    after presentation, a fresh tab shows the new figures (and then freezes them for that session).
   - Every action that could mutate or regenerate a submitted declaration is wrapped in
     `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
     303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
@@ -149,20 +164,23 @@ The frontend gates above are UI-only; a raw/direct call to NEO Headless (or a fu
 regression) is not stopped by any of them. Every entry point that could recompute or re-file an
 already-presented declaration has its own, independent, server-side guard:
 
-- **Compute/generate — `AbstractFiscalHandler#guardNotAlreadySubmitted(orgId, year, period,
-  model)`**, shared by both models. Looks up
+- **Generate — `AbstractFiscalHandler#guardNotAlreadySubmitted(orgId, year, period,
+  model)`**, shared by both models. Applied to the `generate` (file generation) entity **only**:
+  the pure-read `boxes` (303) and `operators` (349) entities are deliberately **not** gated, so the
+  frontend's once-per-session compute above works on a cold cache (an earlier ETP-5438 iteration
+  also gated the reads and broke "Resultado" and the detail KPIs/tabs for every submitted
+  declaration opened in a new session). Looks up
   `FiscalDeclCrudHandler#findLatestDeclarationStatus(clientId, orgId, model, year, period)` — the
   status of the **most recent** declaration (highest `DECL_SEQ`) for that natural key, not just any
   match, because a period can legitimately have more than one declaration (the rectificativa flow):
   an older, already-submitted declaration for the same period must not block a fresh rectificativa
-  draft's own compute. If that latest declaration's status is in
+  draft's own file generation. If that latest declaration's status is in
   `FiscalDeclCrudHandler.SUBMITTED_STATUSES`, it throws `AlreadySubmittedException`; no-op
   (returns normally) when no declaration exists yet for the natural key. Both
-  `Fiscal303BoxesHandler#dispatch` (the `boxes` and `generate` entities) and
-  `Fiscal349BoxesHandler#dispatch` (the `operators` and `generate` entities) call it as the first
-  thing inside their `try`, and both catch `AlreadySubmittedException` specifically — before their
-  own generic `catch (Exception e)` — turning it into a clean `409 Conflict` instead of letting it
-  bubble up as a generic `500`.
+  `Fiscal303BoxesHandler#dispatch` and `Fiscal349BoxesHandler#dispatch` call it as the first thing
+  in their `generate` branch, and `AbstractFiscalHandler#runDispatch` catches
+  `AlreadySubmittedException` specifically — before the generic `catch (Exception e)` — turning it
+  into a clean `409 Conflict` instead of letting it bubble up as a generic `500`.
 - **Re-presentation (PUT) — `FiscalDeclCrudHandler#rejectRepresentation`.** Blocks a
   `PUT /fiscal{303,349}/declarations?id=` whose body sets `status` to a value in
   `SUBMITTED_STATUSES` when the declaration's **current** status is already in
@@ -192,12 +210,16 @@ already-presented declaration has its own, independent, server-side guard:
   PUT path above) — there is no `AeatSubmitFlow`/`AEAT349SubmissionService` equivalent, no real AEAT
   telematic filing call to guard, and so no `rejectResubmissionOrMissingPresenter` counterpart to
   widen. `Fiscal349BoxesHandler#dispatch` has no `submit` entity at all (only `operators`,
-  `generate`, `validate-vies`, and the modified-check fallback) — 349's `operators`/`generate` are
-  already fully covered by the shared `guardNotAlreadySubmitted` above, which is model-agnostic and
-  needed no 349-specific work.
+  `generate`, `validate-vies`, and the modified-check fallback) — 349's `generate` is already fully
+  covered by the shared `guardNotAlreadySubmitted` above (its `operators` read is intentionally
+  open, like 303's `boxes`), which is model-agnostic and needed no 349-specific work.
 
 Regression tests: `Fiscal303BoxesHandlerTest`/`Fiscal349BoxesHandlerTest` (the `AlreadySubmittedException`
-→ `409` path for `boxes`/`operators`/`generate`), `FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
+→ `409` path for `generate`, and `testDispatchBoxesProceedsWhenAlreadySubmitted` /
+`testDispatchOperatorsProceedsWhenAlreadySubmitted` asserting the reads still serve a submitted
+declaration), the frontend `FmModel303Page.submittedFreeze` / `FmModel349Page.submittedFreeze`
+Vitest suites (cache hit → zero compute calls; cold cache → exactly one compute, shown and written
+to the session cache), `FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
 `findLatestDeclarationStatus`'s "latest wins" semantics across a rectificativa's multiple
 declarations), and `Fiscal303SubmitHandlerTest` (the widened `SUBMITTED_STATUSES` resubmission
 guard, and the assertion that `AEAT303SubmissionService` is never constructed once it trips).

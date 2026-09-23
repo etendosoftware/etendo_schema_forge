@@ -21,7 +21,7 @@ import {
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
 } from '../../fiscalModelsUtils.js';
-import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
+import { getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -461,6 +461,25 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // problem). The save's only feedback here is a toast on failure — no success toast, so a
   // "Calcular" click that also happens to persist doesn't stack a second, confusing "guardado"
   // message on top of the compute's own visual feedback (the refreshed KPI/box values).
+  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
+  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
+  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same figures
+  // for the rest of the session. Read-only: it only feeds the display state `handleCompute`
+  // already feeds (no persistence, no `manualOverrides` mutation — those were hydrated from the
+  // saved declaration and are merged in by `applyComputeResult` exactly like the cached path).
+  // `noMockFallback` so a failed call leaves the tabs empty instead of freezing demo figures.
+  async function computeSubmittedOnce() {
+    setComputing(true);
+    try {
+      const res = await computeBoxes303(decl, { token, apiBaseUrl, noMockFallback: true });
+      if (res?.boxes == null) return;
+      setCachedFiscalCompute(decl.id, res);
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    } finally {
+      setComputing(false);
+    }
+  }
+
   function handleComputeClick() {
     persistEditableFields().then(({ ok }) => {
       if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
@@ -491,19 +510,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
     if (liveBoxes != null) return;
     if (!apiBaseUrl) return;
-    // ETP-5438 — once `isSubmitted`, never issue a live recompute here: `computeBoxes303`
+    // ETP-5438 — once `isSubmitted`, compute at most ONCE per browser session: `computeBoxes303`
     // (= `GET /fiscal303/boxes`) always recomputes from whatever invoices exist RIGHT NOW,
     // regardless of who calls it or when — see FmModel349Page.jsx's identical fix and
     // comment for the full rationale (same bug class, "en todos los modelos tiene que
-    // funcionar de la misma manera" — every model must freeze once presented). Falls back
-    // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
-    // submitted-family bucket already populated this session, instead of a live compute.
+    // funcionar de la misma manera" — every model must freeze once presented). Reuses
+    // `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+    // submitted-family bucket populates; on a cold cache it computes once
+    // (`computeSubmittedOnce`) and writes that result back to the same cache entry.
     // (`!token` is deliberately NOT part of this gate — see the ETP-4576 comment above.)
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
       if (cached?.boxes != null) {
         applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+        return;
       }
+      computeSubmittedOnce();
       return;
     }
     handleCompute();

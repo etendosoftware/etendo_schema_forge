@@ -62,7 +62,12 @@ const SUBMITTED_STATUSES = new Set(['submitted', 'submitted_ext', 'submitted_ack
 // never-before-computed submitted declaration still gets exactly one bootstrap compute (so
 // "Resultado" never gets stuck on "—", ETP-4755), and every mount after that first one reuses
 // the cached result — network-free, so nothing here can pick up an invoice added/removed after
-// submission.
+// submission for the rest of the browser session. The bootstrap relies on the backend keeping
+// the `boxes`/`operators` READS open for submitted declarations (only `generate` returns 409 —
+// ETP-5438 follow-up): a 409 there made every cold cache (new tab, reload, another browser)
+// render "Error de cálculo". The detail pages write their own cold-cache compute into this same
+// cache (`setCachedFiscalCompute`), so list and detail stay on one frozen payload. Known
+// trade-off: a cold session recomputes from the invoice data as it is at that moment.
 async function neverModifiedFn() {
   return false;
 }
