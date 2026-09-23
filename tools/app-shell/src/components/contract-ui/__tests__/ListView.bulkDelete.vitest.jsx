@@ -8,10 +8,15 @@
  *   - renders the "Delete selected" button when rows are selected, and wires
  *     its onClick to requestBulkDelete(selectedRows);
  *   - the two opt-outs (windowReadOnly, listViewOptions.hideBulkDelete) hide the
- *     button; merely supplying selectionBarRightActions does NOT (a host that
- *     wants to suppress the generic action must opt out explicitly — see the
- *     ETP-4656 review fix, inferring it from that prop's mere presence was
- *     fragile since selectionBarRightActions can be used for unrelated things);
+ *     button; windowReadOnly also hides a host's own selectionBarRightActions
+ *     (ETP-5205), but listViewOptions.hideBulkDelete does not (it only opts
+ *     the GENERIC action out — a host's own selectionBarRightActions is
+ *     unrelated and keeps rendering, see the contacts-style opt-out test
+ *     below); merely supplying selectionBarRightActions does NOT infer an
+ *     opt-out on its own (a host that wants to suppress the generic action
+ *     must opt out explicitly — see the ETP-4656 review fix, inferring it
+ *     from that prop's mere presence was fragile since selectionBarRightActions
+ *     can be used for unrelated things);
  *   - the onSuccess callback passed to the hook correctly drives
  *     clearSelection / setSelectedRows / deselectTrigger+deselectRowIds and
  *     triggers hook.refresh() for all three outcomes.
@@ -182,6 +187,20 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
     render(<ListView {...defaultProps} api={{ window: { readOnly: true }, crud: {} }} />);
     selectRows();
     expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
+  });
+
+  it('opt-out: also hides selectionBarRightActions when the window is read-only (ETP-5205)', () => {
+    const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
+    render(
+      <ListView
+        {...defaultProps}
+        selectionBarRightActions={selectionBarRightActions}
+        api={{ window: { readOnly: true }, crud: {} }}
+      />
+    );
+    selectRows();
+    expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('host-own-action')).not.toBeInTheDocument();
   });
 
   it('does NOT infer an opt-out from the host supplying selectionBarRightActions alone (must opt out explicitly)', () => {

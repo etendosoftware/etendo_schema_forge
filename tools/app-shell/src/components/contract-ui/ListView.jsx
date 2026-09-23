@@ -1156,7 +1156,7 @@ export function ListView({
                   </Button>
                 )}
                 {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList, windowReadOnly })}
-                {selectionBarRightActions && selectionBarRightActions({
+                {!windowReadOnly && selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
                   token,
