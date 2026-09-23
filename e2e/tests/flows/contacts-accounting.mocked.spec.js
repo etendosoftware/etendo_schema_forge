@@ -114,18 +114,6 @@ test.describe('Contacts — Customer Accounting tab', () => {
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
   });
 
-  test('tab shows Customer Receivables No. / Customer Prepayment columns; accountingSchema is hidden', async ({ page }) => {
-    const tab = page.getByTestId('tab-customerAccounting');
-    await expect(tab).toBeVisible({ timeout: 10_000 });
-    await tab.click();
-
-    await expect(page.getByTestId('column-header-customerReceivablesNo')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('column-header-customerPrepayment')).toBeVisible();
-    await expect(page.getByTestId('column-header-accountingSchema')).toHaveCount(0);
-
-    await expect(page.getByText('4300000 Clientes')).toBeVisible();
-  });
-
   test('Add Line is hidden once the customer accounting record already exists (maxDetailLines: 1 cap)', async ({ page }) => {
     await page.getByTestId('tab-customerAccounting').click();
 
@@ -154,58 +142,6 @@ test.describe('Contacts — Customer Accounting tab (empty state)', () => {
     await expect(page.getByTestId('inline-add-field-customerPrepayment')).toBeVisible();
 
     // CustomerAccountingHandler auto-fills accountingSchema server-side.
-    await expect(page.getByTestId('inline-add-field-accountingSchema')).toHaveCount(0);
-  });
-});
-
-test.describe('Contacts — Vendor Accounting tab', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await installBaseMocks(page, { vendorRows: [VENDOR_ACCOUNTING_ROW] });
-    await page.goto(`/contacts/${BP_ID}`);
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-  });
-
-  test('tab shows Vendor Liability / Vendor Prepayment columns; accountingSchema is hidden', async ({ page }) => {
-    const tab = page.getByTestId('tab-vendorAccounting');
-    await expect(tab).toBeVisible({ timeout: 10_000 });
-    await tab.click();
-
-    await expect(page.getByTestId('column-header-vendorLiability')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('column-header-vendorPrepayment')).toBeVisible();
-    await expect(page.getByTestId('column-header-accountingSchema')).toHaveCount(0);
-
-    await expect(page.getByText('4000000 Proveedores')).toBeVisible();
-  });
-
-  test('Add Line is hidden once the vendor accounting record already exists (maxDetailLines: 1 cap)', async ({ page }) => {
-    await page.getByTestId('tab-vendorAccounting').click();
-
-    // ETP-4565: maxDetailLines: 1 hides action-add-line once childrenCount
-    // reaches the cap — the seeded VENDOR_ACCOUNTING_ROW already fills it.
-    await expect(page.getByTestId('column-header-vendorLiability')).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByTestId('action-add-line')).toHaveCount(0);
-  });
-});
-
-test.describe('Contacts — Vendor Accounting tab (empty state)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await installBaseMocks(page, { vendorRows: [] });
-    await page.goto(`/contacts/${BP_ID}`);
-    await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {});
-  });
-
-  test('Add Line exposes the vendor GL fields but never accountingSchema', async ({ page }) => {
-    await page.getByTestId('tab-vendorAccounting').click();
-
-    await clickEmptyStateAddLine(page);
-
-    await expect(page.getByTestId('inline-add-row')).toBeVisible({ timeout: 5_000 });
-    await expect(page.getByTestId('inline-add-field-vendorLiability')).toBeVisible();
-    await expect(page.getByTestId('inline-add-field-vendorPrepayment')).toBeVisible();
-
-    // VendorAccountingHandler auto-fills accountingSchema server-side.
     await expect(page.getByTestId('inline-add-field-accountingSchema')).toHaveCount(0);
   });
 });

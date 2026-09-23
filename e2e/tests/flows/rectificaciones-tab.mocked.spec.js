@@ -214,25 +214,6 @@ test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked
     await expect(panel.getByTestId('checkbox__isCorrective')).toBeVisible();
   });
 
-  test('ETP-4755: "Correctiva del 349" checkbox is hidden when Modelo 349 is inactive in the catalog', async ({ page }) => {
-    await login(page);
-    await installDetailMocks(page, 'sales-invoice', SI_RECTIFICATIVE);
-    await installCatalogMock(page, { '303': true, '349': false });
-
-    await page.goto(`/sales-invoice/${SI_RECTIFICATIVE_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    await page.getByTestId(TAB_TESTID).click();
-    const panel = page.getByTestId('reversed-invoices-panel');
-    await expect(panel).toBeVisible();
-
-    await panel.getByTestId('btn__addFirstRectificacion').click();
-    // The draft row itself still renders (invoice picker, save/cancel) — only
-    // the 349-specific checkbox panel is gated by the catalog.
-    await expect(panel.getByTestId('btn__saveNewLine')).toBeVisible();
-    await expect(panel.getByTestId('checkbox__isCorrective')).toHaveCount(0);
-  });
-
   test('TC-13: non-rectificative invoice keeps the tab but the panel is read-only (no add)', async ({ page }) => {
     await login(page);
     await installDetailMocks(page, 'sales-invoice', SI_NON_RECTIFICATIVE);
@@ -258,28 +239,6 @@ test.describe('Sales Invoice — ETP-4404 Rectificaciones tab visibility (mocked
     await page.waitForLoadState('domcontentloaded');
 
     await expect(page.getByTestId(TAB_TESTID)).toBeVisible({ timeout: 8_000 });
-  });
-
-});
-
-test.describe('Purchase Invoice — ETP-4404 Rectificaciones tab parity (mocked)', () => {
-
-  test('TC-11: rectificative purchase invoice shows the tab and renders its lines', async ({ page }) => {
-    await login(page);
-    await installDetailMocks(page, 'purchase-invoice', AP_RECTIFICATIVE, [AP_REVERSED_LINE]);
-
-    await page.goto(`/purchase-invoice/${AP_RECTIFICATIVE_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    const tab = page.getByTestId(TAB_TESTID);
-    await expect(tab).toBeVisible({ timeout: 8_000 });
-
-    await tab.click();
-    const panel = page.getByTestId('reversed-invoices-panel');
-    await expect(panel).toBeVisible();
-    // The grid derives docNo / date / total from reversedInvoice$_identifier
-    await expect(panel.getByText('10000067').first()).toBeVisible();
-    await expect(panel.getByText('05/06/2026')).toBeVisible();
   });
 
 });

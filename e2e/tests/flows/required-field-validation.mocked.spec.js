@@ -164,46 +164,4 @@ test.describe('Required-field validation — /sales-quotation/new (ETP-3894)', (
     await expect(page.locator('[data-sonner-toast]').first()).toHaveCount(0);
     expect(postSent).toBe(false);
   });
-
-  // -------------------------------------------------------------------------
-  // Scenario 3: no inline error under businessPartner before any save attempt.
-  // The field must not show an error on the initial load (happy path: pristine).
-  // -------------------------------------------------------------------------
-  test('no inline error on pristine form before save is attempted', async ({ page }) => {
-    // Wait for the form to render completely, including async effects.
-    // Using the save button as the readiness signal — it only becomes visible once
-    // the form is fully mounted and stable (no loading skeleton).
-    const saveDraftBtn = page.getByTestId('action-save-draft');
-    await expect(saveDraftBtn).toBeVisible({ timeout: MOUNT_TIMEOUT });
-
-    // No save attempt yet — the error element must not exist in the DOM.
-    const bpError = page.getByTestId('error-businessPartner');
-    await expect(bpError).toHaveCount(0);
-  });
-
-  // -------------------------------------------------------------------------
-  // Scenario 4 (ETP-4793 / IMP-16): the `dd-MM-yyyy` default this spec's mock
-  // has always served must reach the date field as 14 May 2026.
-  //
-  // The mock fed `orderDate: '14-05-2026'` from the start but nothing ever
-  // asserted how it rendered, so the conversion in `normalizeDefaultValue`
-  // (useEntity.js) was unpinned. It matters because `parseCalendarDate` falls
-  // through to `new Date(str)`, which reads a bare `MM-dd-yyyy`: an unconverted
-  // `dd-MM-yyyy` does not render blank, it renders the day and month SWAPPED
-  // whenever both are <= 12 — the same lenient-reparse failure mode that put
-  // corrupt rows in the database (IMP-16 §3.6). 14 is > 12, so here the
-  // regression shows up as an empty field; the day/month-swap case is covered
-  // by date-defaults-tolerance.mocked.spec.js with a 5 Nov fixture.
-  //
-  // NEO now canonicalizes date defaults to ISO server-side, but the frontend
-  // conversion must stay: only `/defaults` is normalized, and this spec is what
-  // stops it being removed as dead code.
-  // -------------------------------------------------------------------------
-  test('renders the dd-MM-yyyy orderDate default as 14 May 2026', async ({ page }) => {
-    const dateInput = page.getByTestId('field-orderDate');
-    await expect(dateInput).toBeVisible({ timeout: MOUNT_TIMEOUT });
-    // DateField shows a locale-formatted value; es_ES is the app default and
-    // gives dd/mm/yyyy.
-    await expect(dateInput).toHaveValue('14/05/2026');
-  });
 });

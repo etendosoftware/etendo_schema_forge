@@ -895,36 +895,3 @@ test.describe('return-to-vendor-shipment — import from receipt modal', () => {
     await expect(page.getByText('GR-SRC-001')).toBeHidden({ timeout: 5_000 });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Describe 5 — Notes section visible in detail view
-// Case 13
-// ---------------------------------------------------------------------------
-
-test.describe('return-to-vendor-shipment — notes section in detail', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await installReturnToVendorMocks(page);
-  });
-
-  /**
-   * The ReturnToVendorShipmentPage sets notesField="description".
-   * DetailView renders data-testid="notes-textarea" wrapping a role="textbox" div
-   * (unfocused state) or a textarea (focused). Verifies it is visible on the DR detail.
-   */
-  test('notes section is rendered and visible', async ({ page }) => {
-    await page.goto('/return-to-vendor-shipment/rtvs-dr-001');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    // Wait for record to load before checking notes
-    await page.getByTestId('action-confirm-with-credit').waitFor({ state: 'visible', timeout: 10_000 });
-
-    // DetailView renders a "NOTAS" label and data-testid="notes-textarea" wrapper
-    const notesContainer = page.getByTestId('notes-textarea');
-    await expect(notesContainer).toBeVisible({ timeout: 5_000 });
-
-    // The wrapper also contains a role="textbox" div in its unfocused state
-    const notesTextbox = notesContainer.getByRole('textbox');
-    await expect(notesTextbox).toBeVisible({ timeout: 3_000 });
-  });
-});

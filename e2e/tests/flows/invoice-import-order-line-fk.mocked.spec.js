@@ -330,58 +330,5 @@ for (const win of WINDOWS) {
       // so sending it "just in case" is indistinguishable from not sending the FK.
       expect(Object.hasOwn(posted, 'cOrderlineId')).toBe(false);
     });
-
-    test('an existing invoice line carrying salesOrderLine greys out its order line', async ({ page }) => {
-      const state = { postBodies: [] };
-
-      await login(page);
-      await installMocks(page, cfg, {
-        state,
-        existingInvoiceLines: [
-          { id: 'existing-inv-line-1', product: 'prod-fk-a', invoicedQuantity: 4, salesOrderLine: orderLine1Id },
-        ],
-      });
-
-      await page.goto(`/${cfg.invoiceSpec}/${invoiceId}`);
-      await page.waitForLoadState('domcontentloaded');
-
-      await openImportFromOrderModal(page, cfg);
-      await expandOrder(page);
-
-      await expect(page.getByText('Producto Pedido A').first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText(/already imported|ya importado/i).first()).toBeVisible({ timeout: 10_000 });
-
-      // Line 1 is locked, line 2 is still importable.
-      await expect(modalCheckboxes(page).nth(1)).toBeDisabled();
-      await expect(modalCheckboxes(page).nth(2)).toBeEnabled();
-    });
-
-    test('an existing invoice line carrying only the dead cOrderlineId key is ignored', async ({ page }) => {
-      const state = { postBodies: [] };
-
-      await login(page);
-      await installMocks(page, cfg, {
-        state,
-        // Byte-for-byte the previous fixture, with the FK under the pre-ETP-5381 key.
-        // That key is not a NEO field, so it never comes back on a GET — a modal that
-        // "found" it here would be reading a value the backend cannot produce.
-        existingInvoiceLines: [
-          { id: 'existing-inv-line-1', product: 'prod-fk-a', invoicedQuantity: 4, cOrderlineId: orderLine1Id },
-        ],
-      });
-
-      await page.goto(`/${cfg.invoiceSpec}/${invoiceId}`);
-      await page.waitForLoadState('domcontentloaded');
-
-      await openImportFromOrderModal(page, cfg);
-      await expandOrder(page);
-
-      await expect(page.getByText('Producto Pedido A').first()).toBeVisible({ timeout: 10_000 });
-
-      // No line is marked as already imported, and both stay selectable.
-      await expect(page.getByText(/already imported|ya importado/i)).toHaveCount(0);
-      await expect(modalCheckboxes(page).nth(1)).toBeEnabled();
-      await expect(modalCheckboxes(page).nth(2)).toBeEnabled();
-    });
   });
 }

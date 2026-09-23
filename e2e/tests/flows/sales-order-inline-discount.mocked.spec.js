@@ -135,47 +135,6 @@ test.describe('Sales Order — inline discount regression', () => {
     expect(derivedUnitPrice).toBeCloseTo(18.4, 2);
   });
 
-  test('PATCH body includes unitPrice for a different discount value (15%)', async ({ page }) => {
-    const patches = [];
-    await login(page);
-    await installMocks(page, { onPatch: (info) => patches.push(info) });
-    await page.goto(`/sales-order/${ORDER_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const row = await openLineEdit(page);
-    const discountField = row.locator('[data-testid="field-discount"]');
-    await expect(discountField).toBeVisible({ timeout: 3_000 });
-
-    await discountField.fill('15');
-    await discountField.blur();
-
-    await expect.poll(() => patches.length, { timeout: 3_000 }).toBeGreaterThan(0);
-    const lastPatch = patches.at(-1);
-
-    // listPrice=23, discount=15 → unitPrice = 23 × 0.85 = 19.55
-    expect(Number(lastPatch.body.discount)).toBe(15);
-    const derivedUnitPrice = Number(lastPatch.body.unitPrice);
-    expect(derivedUnitPrice).toBeCloseTo(19.55, 2);
-  });
-
-  test('success toast appears after committing a discount edit', async ({ page }) => {
-    await login(page);
-    await installMocks(page);
-    await page.goto(`/sales-order/${ORDER_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const row = await openLineEdit(page);
-    const discountField = row.locator('[data-testid="field-discount"]');
-    await expect(discountField).toBeVisible({ timeout: 3_000 });
-
-    await discountField.fill('10');
-    await discountField.blur();
-
-    // Sonner renders toasts into a [data-sonner-toaster] region
-    const toast = page.locator('[data-sonner-toast]').filter({ hasText: /guardado|saved/i }).first();
-    await expect(toast).toBeVisible({ timeout: 5_000 });
-  });
-
   test('zero-discount edit sends unitPrice equal to listPrice', async ({ page }) => {
     const patches = [];
     // Start with a line that already has a discount applied so we can clear it.

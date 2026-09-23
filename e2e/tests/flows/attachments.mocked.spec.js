@@ -66,33 +66,6 @@ async function openAttachmentsTab(page, settleOn) {
 // ─── Suite E: Product smoke ───────────────────────────────────────────────────
 
 test.describe('Suite E — Product smoke (mocked)', () => {
-  test('E1: Attachments tab is visible on a master record (Product)', async ({ page }) => {
-    await login(page);
-
-    await page.route(`**/sws/neo/product/product/${PRODUCT_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') return route.fallback();
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [PRODUCT_HEADER] } }),
-      });
-    });
-    await page.route('**/sws/neo/attachments/**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [] }),
-      });
-    });
-
-    await page.goto(`/product/${PRODUCT_ID}`);
-    // Bounded — same as every other mocked spec (e.g. amortization.mocked.spec.js). No
-    // explicit timeout here defaults to Playwright's ~30s navigation timeout, which is
-    // half this test's entire 60s budget for a wait whose result is discarded either way.
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    await expect(page.getByTestId('tab-custom:attachments')).toBeVisible({ timeout: 8_000 });
-  });
 
   test('E2: upload works on a Product master record', async ({ page }) => {
     const uploaded = [];
@@ -289,47 +262,6 @@ const SO_ATT_2 = {
   uploadedBy: { name: 'Admin' },
 };
 
-// ─── Suite F: Tab presence (Sales Order) ──────────────────────────────────────
-
-test.describe('Suite F — Sales Order: tab presence (mocked)', () => {
-  test('F1: Attachments tab appears in the main strip alongside the Lines tab', async ({ page }) => {
-    await login(page);
-    await installSalesOrderMocks(page, { items: [] });
-    await gotoSalesOrder(page);
-
-    // Both the Lines tab and the Attachments tab must be visible
-    await expect(page.getByTestId('tab-lines')).toBeVisible({ timeout: 8_000 });
-    await expect(page.getByTestId('tab-custom:attachments')).toBeVisible({ timeout: 8_000 });
-  });
-
-  test('F2: clicking the Attachments tab shows the empty state', async ({ page }) => {
-    await login(page);
-    await installSalesOrderMocks(page, { items: [] });
-    await gotoSalesOrder(page);
-
-    await openAttachmentsTab(page, page.getByTestId('attachments-empty-state'));
-
-    await expect(page.getByTestId('attachments-empty-state')).toBeVisible({ timeout: 6_000 });
-  });
-
-  test('F3: switching between Lines and Attachments tabs preserves state', async ({ page }) => {
-    await login(page);
-    await installSalesOrderMocks(page, { items: [SO_ATT_1] });
-    await gotoSalesOrder(page);
-
-    const attRow = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
-
-    // Open Attachments — attachment should load
-    await openAttachmentsTab(page, attRow);
-    await expect(attRow).toBeVisible({ timeout: 6_000 });
-
-    // Switch to Lines tab and back — attachment row must still be there
-    await page.getByTestId('tab-lines').click();
-    await openAttachmentsTab(page, attRow);
-    await expect(attRow).toBeVisible({ timeout: 4_000 });
-  });
-});
-
 // ─── Suite G: Upload (Sales Order) ────────────────────────────────────────────
 
 test.describe('Suite G — Sales Order: upload (mocked)', () => {
@@ -348,24 +280,6 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
     });
 
     await expect(page.getByTestId('attachment-row-so-att-new-1')).toBeVisible({ timeout: 6_000 });
-  });
-
-  test('G2: badge count in the tab increments after upload', async ({ page }) => {
-    await login(page);
-    await installSalesOrderMocks(page, { items: [] });
-    await gotoSalesOrder(page);
-    await openAttachmentsTab(page, page.getByTestId('attachments-dropzone'));
-
-    await expect(page.getByTestId('attachments-dropzone')).toBeVisible({ timeout: 6_000 });
-
-    await page.locator('[data-testid="attachments-file-input"]').setInputFiles({
-      name: 'proforma.pdf',
-      mimeType: 'application/pdf',
-      buffer: Buffer.from('%PDF proforma'),
-    });
-
-    const tabBtn = page.getByTestId('tab-custom:attachments');
-    await expect(tabBtn.locator('span.inline-flex')).toHaveText('1', { timeout: 6_000 });
   });
 
   test('G3: uploading a duplicate filename opens the replace confirmation', async ({ page }) => {

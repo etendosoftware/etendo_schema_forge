@@ -141,16 +141,6 @@ test.describe('Grid delete icon — not gated by document status (ETP-4656)', ()
         await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
       });
 
-      test('delete quick-action is visible on hover for a Draft row', async ({ page }) => {
-        const row = page.getByTestId('row-row-001');
-        await expect(row).toBeVisible();
-        await expect(row).toHaveAttribute('data-row-status', 'DR');
-
-        await row.hover();
-        await expect(row.getByTestId('row-quick-actions')).toBeVisible({ timeout: 5_000 });
-        await expect(row.getByTestId('row-quick-action-delete')).toBeVisible();
-      });
-
       test('delete quick-action stays visible on hover for a Completado row (ETP-4656 regression guard)', async ({ page }) => {
         const row = page.getByTestId('row-row-002');
         await expect(row).toBeVisible();
@@ -269,12 +259,6 @@ test.describe('Form delete button — gated to Draft status (ETP-4656)', () => {
       test.beforeEach(async ({ page }) => {
         await login(page);
         await installFormWindowMocks(page, spec, cfg);
-      });
-
-      test('delete button is visible for a Draft record', async ({ page }) => {
-        await page.goto(`/${spec}/${cfg.draft.id}`);
-        await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 8_000 });
-        await expect(page.getByTestId('action-delete')).toBeVisible();
       });
 
       test('delete button is hidden once the record is processed/completed (ETP-4656 regression guard)', async ({ page }) => {

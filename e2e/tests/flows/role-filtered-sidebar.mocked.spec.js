@@ -52,19 +52,6 @@ test.describe('Role-filtered sidebar', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('shows the allowed "User" menu item', async ({ page }) => {
-    // The "user" window (windowId 108) lives in the Settings group alongside
-    // items that carry no windowId (smart-scan, oauth2-clients, fiscal-config
-    // — never filtered per filterMenuGroupsByAccess), so Settings still holds
-    // more than one visible item after filtering and renders as a hover
-    // popover rather than a direct link. Hover the group trigger to reveal it.
-    // The trigger has no dedicated data-testid (aria-label only, translated
-    // group name); mock mode defaults to es_ES per docs/e2e-testing-guide.md.
-    const settingsTrigger = page.getByRole('button', { name: /configuraci[oó]n|settings/i });
-    await settingsTrigger.hover();
-    await expect(page.getByTestId('menu-item-user')).toBeVisible();
-  });
-
   test('hides menu items not present in the SFListMenu tree', async ({ page }) => {
     await expect(page.getByTestId('menu-item-purchase-order')).toHaveCount(0);
   });

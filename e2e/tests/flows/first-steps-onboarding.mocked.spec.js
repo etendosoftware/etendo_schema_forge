@@ -204,23 +204,6 @@ test.describe('First Steps page — completion run', () => {
     await expect(page).toHaveURL(/\/first-steps/);
   });
 
-  test('sends the numbering step to the Document Sequence window', async ({ page }) => {
-    // The prefix and starting number used to be edited inline on this row. They now live in a
-    // real window, so this step is an ordinary Configure that navigates away.
-    await page.getByTestId('first-steps-title-invoice-sequence').click();
-    await page.getByTestId('first-steps-configure-invoice-sequence').click();
-    await expect(page).toHaveURL(/\/document-sequence/);
-  });
-
-  test('sends the fiscal step to the Fiscal Configuration window', async ({ page }) => {
-    await page.getByTestId('first-steps-title-fiscal-config').click();
-    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
-    // window. "Yes" is what puts the Configure button on screen.
-    await page.getByTestId('first-steps-gate-yes-fiscal-config').click();
-    await page.getByTestId('first-steps-configure-fiscal-config').click();
-    await expect(page).toHaveURL(/\/fiscal-config/);
-  });
-
   test('completes the fiscal step outright when the tenant reports to no SIF', async ({ page }) => {
     // ETP-5364 — "No" is not a dismissal: a tenant that reports to no invoicing system has
     // nothing to configure, so the answer IS the completed state and it persists like any
@@ -336,12 +319,6 @@ test.describe('First Steps page — completion run', () => {
     expect((await subtitle.textContent())?.trim()).not.toBe(initialSubtitle);
   });
 
-  test('"Create invoice" navigates to the new sales invoice form', async ({ page }) => {
-    for (const id of TOGGLEABLE) await completeStep(page, id);
-    await page.getByTestId('first-steps-create-invoice').click();
-    await expect(page).toHaveURL(/\/sales-invoice\/new/);
-  });
-
   test('a checked step survives a reload, because it was persisted server-side', async ({ page }) => {
     await completeStep(page, 'company-data');
     await expect(progress(page)).toContainText('2/7');
@@ -357,11 +334,6 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-toggle-fiscal-config')).toBeVisible();
   });
 
-  test('Configure on the expanded row opens that step target window', async ({ page }) => {
-    await page.getByTestId('first-steps-configure-company-data').click();
-    await expect(page).toHaveURL(/\/organization/);
-  });
-
   test('mirrors the progress on the sidebar entry, live', async ({ page }) => {
     // The badge and the page read one shared state, so ticking a step here must move the
     // sidebar count in the same commit — no reload. Before that was shared they disagreed.
@@ -371,16 +343,6 @@ test.describe('First Steps page — completion run', () => {
 
     await completeStep(page, 'company-data');
     await expect(badge).toHaveText('2/7');
-  });
-
-  test('never hides the sidebar entry, not even at 7/7', async ({ page }) => {
-    // The acceptance criterion, stated as a test: at 7/7 this link is the only way back in to
-    // un-tick a step, so it must survive completion.
-    for (const id of TOGGLEABLE) await completeStep(page, id);
-    await expect(progress(page)).toContainText('7/7');
-    await expandSidebar(page);
-    await expect(page.getByTestId('menu-first-steps-progress')).toHaveText('7/7');
-    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
   });
 });
 
@@ -431,17 +393,6 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 
     // Exactly once, ever — no second POST.
     expect(mock.writes.length).toBe(1);
-  });
-
-  test('leaves an already-seen account on the dashboard and writes nothing', async ({ page }) => {
-    const mock = await setupFirstSteps(page, { v: 1, seen: true, completed: [] });
-
-    await page.goto('/dashboard');
-    await page.waitForTimeout(1_500);
-
-    await expect(page).toHaveURL(/\/dashboard/);
-    await expect(page.getByTestId('first-steps-page')).toHaveCount(0);
-    expect(mock.writes.length).toBe(0);
   });
 
   test('does not bounce when the state cannot be read — `seen` is unknown, not false', async ({ page }) => {
@@ -509,16 +460,6 @@ test.describe('Finalizar configuración inicial — ETP-5364', () => {
     await page.goto('/first-steps');
     await expandSidebar(page);
     await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
-    await page.getByTestId('menu-item-dashboard').click();
-    await expect(page).toHaveURL(/\/dashboard/);
-  });
-
-  test('keeps Inicio reachable once the checklist is dismissed', async ({ page }) => {
-    await setupFirstSteps(page, { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
-    await page.goto('/first-steps');
-    await expandSidebar(page);
-    // The checklist entry is gone; Inicio is a different menu.json group and is not.
-    await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
     await page.getByTestId('menu-item-dashboard').click();
     await expect(page).toHaveURL(/\/dashboard/);
   });

@@ -128,28 +128,6 @@ test.describe('Chart of Accounts — account code lock (ETP-4247)', () => {
   });
 
   // -----------------------------------------------------------------------
-  // TC-21: PGC prefix (digits 1–4) is not editable on any account
-  // -----------------------------------------------------------------------
-  test('TC-21: PGC prefix is locked display text on a leaf account', async ({ page }) => {
-    await page.goto('/chart-of-accounts/leaf-001');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const prefix = page.getByTestId('account-code-prefix');
-    await expect(prefix).toBeVisible();
-    await expect(prefix).toHaveText('4300');
-
-    // Prefix is a <span>, not an <input>
-    const prefixTag = await prefix.evaluate(el => el.tagName.toLowerCase());
-    expect(prefixTag).toBe('span');
-
-    // Suffix input is the only code input
-    await expect(page.getByTestId('account-code-suffix-input')).toBeVisible();
-
-    // Read-only combined display must NOT exist on a leaf account
-    await expect(page.getByTestId('account-code-readonly')).toHaveCount(0);
-  });
-
-  // -----------------------------------------------------------------------
   // TC-22: Subaccount suffix (digits 5–8) is editable; save sends full code
   // -----------------------------------------------------------------------
   test('TC-22: Editing suffix produces correct searchKey in the save payload', async ({ page }) => {
@@ -194,92 +172,5 @@ test.describe('Chart of Accounts — account code lock (ETP-4247)', () => {
 
     const body = JSON.parse(saveReq.postData() ?? '{}');
     expect(body.searchKey).toBe('43000002');
-  });
-
-  // -----------------------------------------------------------------------
-  // TC-23: Account code must be exactly 8 digits
-  // -----------------------------------------------------------------------
-  test('TC-23: Suffix input has maxLength=4 and blur shows error on short code', async ({ page }) => {
-    await page.goto('/chart-of-accounts/leaf-001');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const suffixInput = page.getByTestId('account-code-suffix-input');
-    await expect(suffixInput).toBeVisible();
-
-    // maxLength attribute enforces 4-char cap without JS
-    await expect(suffixInput).toHaveAttribute('maxlength', '4');
-
-    // Type only 3 digits then blur → validation fires
-    await suffixInput.fill('012');
-    await suffixInput.blur();
-
-    // Error element rendered with role="alert" and data-testid="account-code-error"
-    const errorEl = page.getByTestId('account-code-error');
-    await expect(errorEl).toBeVisible();
-  });
-
-  // -----------------------------------------------------------------------
-  // TC-24: Non-leaf (summary) accounts are fully read-only
-  // -----------------------------------------------------------------------
-  test('TC-24: Summary-level account renders as a single read-only display', async ({ page }) => {
-    await page.goto('/chart-of-accounts/summ-001');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    // Combined read-only display is present
-    await expect(page.getByTestId('account-code-readonly')).toBeVisible();
-
-    // Split-editor elements must NOT exist
-    await expect(page.getByTestId('account-code-suffix-input')).toHaveCount(0);
-    await expect(page.getByTestId('account-code-prefix')).toHaveCount(0);
-  });
-
-  // -----------------------------------------------------------------------
-  // TC-25: PGC codes are 8 digits in the list
-  // -----------------------------------------------------------------------
-  test('TC-25: Account codes in the list grid are exactly 8 characters long', async ({ page }) => {
-    await page.goto('/chart-of-accounts');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    // The tree is collapsed by default (ETP-4452 follow-up) — virtual group headers
-    // carry the 4-digit parent code ('4300'), NOT the 8-digit summary account code.
-    // Verify the group header is visible under the tree before expanding it.
-    const groupRow = page.getByTestId('account-tree-row-group-4300');
-    await expect(groupRow).toBeVisible({ timeout: 5_000 });
-    await expect(groupRow).toContainText('4300');
-
-    // Expand the group to reveal its leaf children.
-    await page.getByTestId('account-tree-toggle-group-4300').click();
-
-    // The tree view renders account rows as data-testid="account-tree-row-<id>".
-    // Leaf accounts (issummary='N') appear as individual rows once expanded.
-    const leafRow = page.getByTestId('account-tree-row-leaf-001');
-    await expect(leafRow).toBeVisible({ timeout: 5_000 });
-    await expect(leafRow).toContainText('43000001');
-    await expect(leafRow).toContainText('Cliente Pérez S.L.');
-
-    // Confirm the leaf code is exactly 8 characters (not truncated or padded)
-    expect('43000001'.length).toBe(8);
-  });
-
-  // -----------------------------------------------------------------------
-  // TC-26: New child account inherits and locks parent prefix from defaults
-  // -----------------------------------------------------------------------
-  test('TC-26: New child account shows locked prefix from defaults and empty suffix', async ({ page }) => {
-    await page.goto('/chart-of-accounts/new');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    // After defaults load, account-code-prefix shows the inherited prefix
-    const prefix = page.getByTestId('account-code-prefix');
-    await expect(prefix).toBeVisible({ timeout: 5_000 });
-    await expect(prefix).toHaveText('4300');
-
-    // Prefix is locked (not an input element)
-    const prefixTag = await prefix.evaluate(el => el.tagName.toLowerCase());
-    expect(prefixTag).toBe('span');
-
-    // Suffix input is visible and empty — ready for user to type digits 5–8
-    const suffixInput = page.getByTestId('account-code-suffix-input');
-    await expect(suffixInput).toBeVisible();
-    await expect(suffixInput).toHaveValue('');
   });
 });

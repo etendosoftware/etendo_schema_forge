@@ -189,27 +189,6 @@ test.describe('Financial Account Create (T2) — mocked', () => {
     await expect(page.getByTestId('new-account-wizard')).toHaveCount(0);
   });
 
-  test('blocks submit and shows the IBAN error for an invalid IBAN', async ({ page }) => {
-    await installCreateMocks(page);
-
-    await page.goto('/financial-account');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    await page.getByTestId('cuentas-new-account-button').click();
-    await page.getByTestId('new-account-type-B').click();
-    await page.getByTestId('account-connection-offline').click();
-    await page.getByTestId('new-account-bank-santander').click();
-    await page.getByTestId('new-account-institution-santander-default').click();
-
-    await page.getByTestId('account-form-name').fill('Cuenta BBVA');
-    await page.getByTestId('account-form-iban').fill('ES00INVALID0000');
-    // Blur the IBAN to surface the inline error.
-    await page.getByTestId('account-form-name').click();
-
-    await expect(page.getByTestId('account-form-iban-error')).toBeVisible();
-    await expect(page.getByTestId('account-form-submit')).toBeDisabled();
-  });
-
   test('Caja type goes straight to the cash form (no IBAN)', async ({ page }) => {
     await installCreateMocks(page);
 

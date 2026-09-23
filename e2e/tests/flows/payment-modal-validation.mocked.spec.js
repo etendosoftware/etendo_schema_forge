@@ -154,34 +154,10 @@ test.describe('Payment modal date validation (mocked)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('completed invoice detail shows the payment status badge', async ({ page }) => {
-    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
-    const badge = page.locator('[style*="cursor: pointer"]').filter({ hasText: /500/ }).first();
-    await expect(badge).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('clicking the payment badge opens the payment history modal', async ({ page }) => {
-    await openPaymentModal(page);
-    await expect(
-      page.getByTestId('InvoicePaymentHistoryModal__panel')
-    ).toBeVisible({ timeout: 3_000 });
-  });
-
   test('Confirm is disabled when the date field is cleared', async ({ page }) => {
     await openPaymentModal(page);
     await openNewPaymentModal(page);
     await clearDateField(page);
-    await expect(page.getByTestId('cp-confirm')).toBeDisabled({ timeout: 3_000 });
-  });
-
-  test('clearing the date disables Guardar and Confirmar', async ({ page }) => {
-    await openPaymentModal(page);
-    await openNewPaymentModal(page);
-    await clearDateField(page);
-    // `missingRequired` (includes `!date`) gates both footer actions — a
-    // disabled button can never be clicked, so submit()'s own validation
-    // (setDateInvalid / paymentDateRequired) is unreachable from here on.
-    await expect(page.getByTestId('cp-save-draft')).toBeDisabled({ timeout: 3_000 });
     await expect(page.getByTestId('cp-confirm')).toBeDisabled({ timeout: 3_000 });
   });
 

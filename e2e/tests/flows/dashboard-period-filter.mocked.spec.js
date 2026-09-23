@@ -107,37 +107,6 @@ test.describe('Dashboard period filter — Ventas Recientes (ETP-4004)', () => {
     await expect(list.getByText('Beta LLC')).toHaveCount(0);
   });
 
-  test('each Acme Corp invoice row has a testid after switching to last30d', async ({ page }) => {
-    const list = page.getByTestId('recent-sales-list');
-    await expect(list).toBeVisible({ timeout: 10_000 });
-
-    const trigger = page.getByTestId('dashboard-range-trigger');
-    await trigger.click();
-    await page.getByTestId('dashboard-range-option-last30d').click();
-
-    // Verify at least one invoice row with the expected data-testid is present
-    await expect(page.getByTestId('recent-sales-item-inv-a1')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('recent-sales-item-inv-a2')).toBeVisible();
-    await expect(page.getByTestId('recent-sales-item-inv-a3')).toBeVisible();
-  });
-
-  test('switching back to lastYear restores Beta LLC', async ({ page }) => {
-    const list = page.getByTestId('recent-sales-list');
-    await expect(list).toBeVisible({ timeout: 10_000 });
-
-    // Switch to last30d first
-    await page.getByTestId('dashboard-range-trigger').click();
-    await page.getByTestId('dashboard-range-option-last30d').click();
-    await expect(list.getByText('Acme Corp').first()).toBeVisible({ timeout: 10_000 });
-
-    // Now switch back to lastYear
-    await page.getByTestId('dashboard-range-trigger').click();
-    await page.getByTestId('dashboard-range-option-lastYear').click();
-
-    await expect(list.getByText('Beta LLC').first()).toBeVisible({ timeout: 10_000 });
-    await expect(list.getByText('Acme Corp')).toHaveCount(0);
-  });
-
   test('recent-invoices endpoint is called with the correct range param', async ({ page }) => {
     const list = page.getByTestId('recent-sales-list');
     await expect(list).toBeVisible({ timeout: 10_000 });

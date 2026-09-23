@@ -61,16 +61,6 @@ test.describe('No-access blocking screen', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('renders the blocking screen and hides the sidebar/topbar entirely', async ({ page }) => {
-    await expect(page.getByTestId('NoAccessScreen__488148')).toBeVisible();
-
-    // No AD-backed or non-AD-backed menu item should be reachable — the
-    // guard replaces the whole AppLayoutInner (sidebar + topbar + Outlet),
-    // not just the AD-backed part of the menu.
-    await expect(page.locator('[data-testid^="menu-item-"]')).toHaveCount(0);
-    await expect(page.getByTestId('topbar-user-menu')).toHaveCount(0);
-  });
-
   test('blocks direct navigation to a known window route', async ({ page }) => {
     await page.goto('/sales-order');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

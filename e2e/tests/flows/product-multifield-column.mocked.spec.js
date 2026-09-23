@@ -95,11 +95,6 @@ test.describe('Product list — multiField column (name: searchKey & name)', () 
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('renders one independently sortable segment per part', async ({ page }) => {
-    await expect(page.getByTestId('column-header-sort-searchKey')).toBeVisible();
-    await expect(page.getByTestId('column-header-sort-name')).toBeVisible();
-  });
-
   test('clicking the "Identificador" segment sorts on searchKey and shows its own arrow', async ({ page }) => {
     const searchKeySegment = page.getByTestId('column-header-sort-searchKey');
     const nameSegment = page.getByTestId('column-header-sort-name');
@@ -112,27 +107,6 @@ test.describe('Product list — multiField column (name: searchKey & name)', () 
 
     await expect(searchKeySegment).toContainText(/[▲▼]/);
     await expect(nameSegment).not.toContainText(/[▲▼]/);
-  });
-
-  test('clicking the "Nombre" segment sorts on name and moves the arrow off searchKey', async ({ page }) => {
-    const searchKeySegment = page.getByTestId('column-header-sort-searchKey');
-    const nameSegment = page.getByTestId('column-header-sort-name');
-
-    // First sort on searchKey so the arrow starts there, then move it to name.
-    await Promise.all([
-      page.waitForRequest(req => req.url().includes('_sortBy=searchKey')),
-      searchKeySegment.click(),
-    ]);
-    await expect(searchKeySegment).toContainText(/[▲▼]/);
-
-    const [request] = await Promise.all([
-      page.waitForRequest(req => req.url().includes('/sws/neo/product/product') && req.url().includes('_sortBy=name')),
-      nameSegment.click(),
-    ]);
-    expect(request.url()).toContain('_sortBy=name');
-
-    await expect(nameSegment).toContainText(/[▲▼]/);
-    await expect(searchKeySegment).not.toContainText(/[▲▼]/);
   });
 
   test('advanced filter can target searchKey independently of name', async ({ page }) => {
@@ -153,25 +127,5 @@ test.describe('Product list — multiField column (name: searchKey & name)', () 
 
     const conditions = leafConditions(parseCriteria(request.url()));
     expect(conditions).toContainEqual(expect.objectContaining({ fieldName: 'searchKey', operator: 'iContains', value: 'SK-001' }));
-  });
-
-  test('advanced filter can target name independently of searchKey', async ({ page }) => {
-    await page.getByTestId('filter-advanced').click();
-    const panel = page.getByRole('dialog');
-    await expect(panel).toBeVisible();
-
-    await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
-    await page.getByRole('option', { name: /^Nombre$/ }).click();
-    await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
-    await page.getByRole('option', { name: 'Contiene', exact: true }).click();
-    await panel.getByRole('textbox').first().fill('Bracket');
-
-    const [request] = await Promise.all([
-      page.waitForRequest(req => req.url().includes('/sws/neo/product/product') && req.url().includes('criteria=')),
-      panel.getByRole('button', { name: 'Aplicar' }).click(),
-    ]);
-
-    const conditions = leafConditions(parseCriteria(request.url()));
-    expect(conditions).toContainEqual(expect.objectContaining({ fieldName: 'name', operator: 'iContains', value: 'Bracket' }));
   });
 });

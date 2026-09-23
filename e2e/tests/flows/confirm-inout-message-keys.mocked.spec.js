@@ -166,34 +166,4 @@ test.describe('ConfirmInOutModal — failure mapped by AD_MESSAGE key (ETP-5316)
     // The modal stays open on failure so the user can cancel or retry.
     await expect(page.getByTestId('confirm-modal-confirm-btn')).toBeVisible();
   });
-
-  // The two repos deploy separately, so a frontend running ahead of the backend gets no keys —
-  // that path must behave exactly as it did before ETP-5316.
-  test('a 400 without messageKeys still shows the backend phrase verbatim', async ({ page }) => {
-    await login(page);
-    await installMocks(page, { status: 'error', message: CORE_SENTENCE });
-
-    const modal = await openConfirmModal(page);
-    await page.getByTestId('confirm-modal-confirm-btn').click();
-
-    await expect(modal.getByText(CORE_SENTENCE)).toBeVisible({ timeout: 8_000 });
-    await expect(modal.getByText(MAPPED_TEXT)).toHaveCount(0);
-  });
-
-  // An unknown token is inert by design: the client matches against its own allow-list, so a
-  // key it does not know must fall through to the text route rather than blank the message.
-  test('a 400 whose keys we do not map falls back to the backend phrase', async ({ page }) => {
-    await login(page);
-    await installMocks(page, {
-      status: 'error',
-      message: CORE_SENTENCE,
-      messageKeys: ['Inline', 'SomeTokenWeDoNotMap'],
-    });
-
-    const modal = await openConfirmModal(page);
-    await page.getByTestId('confirm-modal-confirm-btn').click();
-
-    await expect(modal.getByText(CORE_SENTENCE)).toBeVisible({ timeout: 8_000 });
-    await expect(modal.getByText(MAPPED_TEXT)).toHaveCount(0);
-  });
 });

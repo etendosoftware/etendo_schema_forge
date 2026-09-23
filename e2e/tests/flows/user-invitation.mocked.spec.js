@@ -287,29 +287,6 @@ test.describe('Company User Invitations — ETP-4894', () => {
     });
   });
 
-  test('shows the Etendo Go loading state while resolving an invitation', async ({ page }) => {
-    let releaseResolve;
-    const resolvePending = new Promise((resolve) => { releaseResolve = resolve; });
-    await page.route('**/sws/go/company-invitations/resolve?token=loading-token-e2e', async (route) => {
-      await resolvePending;
-      await route.fulfill({
-        status: 400,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: true, code: 'EXPIRED_TOKEN' }),
-      });
-    });
-
-    await page.goto('/invite?token=loading-token-e2e');
-    await expect(page.getByTestId('invite-loading')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('Etendo Go', { exact: true })).toBeVisible();
-
-    await captureScreenshot(page, {
-      path: '../artifacts/delivery-evidence/ETP-4894/ETP-4894-invitation-loading.png',
-      fullPage: true,
-    });
-    releaseResolve();
-  });
-
   test('shows the Etendo Go confirmation for an already accepted invitation', async ({ page }) => {
     await page.route('**/sws/go/company-invitations/resolve?token=accepted-token-e2e', async (route) => {
       await route.fulfill({

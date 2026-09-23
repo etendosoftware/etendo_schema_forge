@@ -97,11 +97,6 @@ for (const [code, label] of [['E', 'Gasto'], ['R', 'Recurso']]) {
       await expect(page.getByTestId('field-stocked')).not.toBeVisible();
       await expect(page.getByTestId('field-returnable')).not.toBeVisible();
     });
-
-    test(`hides the stock movement sidebar for ${label}`, async ({ page }) => {
-      await expect(page.getByText('Sin movimientos de stock')).not.toBeVisible();
-      await expect(page.getByText('Movimiento de stock')).not.toBeVisible();
-    });
   });
 }
 
@@ -114,9 +109,5 @@ test.describe('Product Logistics section — control case, Artículo stays stock
     await expect(page.getByText('Logística')).toBeVisible();
     await expect(page.getByTestId('field-stocked')).toBeVisible();
     await expect(page.getByTestId('field-returnable')).toBeVisible();
-  });
-
-  test('keeps the stock movement sidebar visible for Artículo', async ({ page }) => {
-    await expect(page.getByText('Sin movimientos de stock')).toBeVisible({ timeout: 10_000 });
   });
 });

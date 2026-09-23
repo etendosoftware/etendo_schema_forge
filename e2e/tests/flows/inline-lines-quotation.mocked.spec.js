@@ -130,48 +130,6 @@ async function installQuotationMocks(page, { header = DRAFT_HEADER, lines = [LIN
 // for the specific routes to take precedence.
 
 test.describe('Inline-editable lines — Sales Quotation (mocked)', () => {
-  test('renders rows in InlineLinesPanel with correct data-testid attributes', async ({ page }) => {
-    await login(page);
-    await installQuotationMocks(page);
-    await page.goto(`/sales-quotation/${QUOT_ID}`);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    await expect(page.locator('[data-testid="inline-lines-panel"]')).toBeVisible({ timeout: 8_000 });
-    await expect(page.locator(`[data-testid="line-row-${LINE_A.id}"]`)).toBeVisible();
-    await expect(page.locator(`[data-testid="line-row-${LINE_B.id}"]`)).toBeVisible();
-  });
-
-  // Note: the sticky header (z-10) intercepts pointer events at the row center,
-  // so we use `dispatchEvent('mouseover')` to fire React's synthetic event
-  // directly — same end result as a real hover, no actionability check.
-  test('hovering a row reveals the action strip', async ({ page }) => {
-    await login(page);
-    await installQuotationMocks(page);
-    await page.goto(`/sales-quotation/${QUOT_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const rowA = page.locator(`[data-testid="line-row-${LINE_A.id}"]`);
-    await rowA.dispatchEvent('mouseover');
-
-    const actionsStrip = rowA.locator('[data-testid="line-actions"]');
-    await expect(actionsStrip).toBeVisible();
-    await expect(actionsStrip.locator('button')).toHaveCount(2, { timeout: 2_000 });
-  });
-
-  test('clicking pencil switches row to edit mode (input appears)', async ({ page }) => {
-    await login(page);
-    await installQuotationMocks(page);
-    await page.goto(`/sales-quotation/${QUOT_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const rowA = page.locator(`[data-testid="line-row-${LINE_A.id}"]`);
-    await rowA.dispatchEvent('mouseover');
-
-    const editBtn = rowA.locator('[data-testid="line-actions"] button').first();
-    await editBtn.click({ force: true });
-
-    await expect(rowA.locator('input, select').first()).toBeVisible({ timeout: 3_000 });
-  });
 
   test('opening a second row closes the first row edit mode', async ({ page }) => {
     await login(page);

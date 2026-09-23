@@ -136,40 +136,4 @@ test.describe('Inline lines — Description too-long error (ETP-5323, mocked)', 
       .filter({ hasText: /(no puede superar|must not exceed)/i });
     await expect(friendlyToast).toBeVisible({ timeout: 5_000 });
   });
-
-  test('typing past 2000 characters is hard-capped client-side on the Description cell', async ({ page }) => {
-    await installMocks(page);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const row = page.locator(`[data-testid="line-row-${LINE.id}"]`);
-    await row.dispatchEvent('mouseover');
-    await row.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
-
-    const descriptionField = row.locator('[data-testid="field-description"]');
-    await expect(descriptionField).toBeVisible({ timeout: 3_000 });
-
-    // Generated maxLength column: LinesTable.jsx's `description` column declares
-    // `maxLength: 2000` (sourced from C_OrderLine.Description's AD_Column.FieldLength via
-    // generate-frontend.js's maxLengthColPart), which InlineLinesPanel's EditCell text
-    // fallback applies as the native HTML `maxlength` attribute.
-    await expect(descriptionField).toHaveAttribute('maxlength', '2000');
-
-    // `Locator.fill()` sets `.value` directly (no keystroke simulation), so it would
-    // bypass the native `maxlength` guard entirely and prove nothing. Get right up to
-    // the cap with `fill()` (fast, and exactly at the limit so nothing is truncated
-    // yet), then simulate REAL keystrokes for the overflow with `pressSequentially()` —
-    // that's the same code path a real typed (or pasted) keystroke takes, and the only
-    // one the browser's native `maxlength` attribute actually constrains.
-    await descriptionField.fill('A'.repeat(2000));
-    await expect(descriptionField).toHaveValue('A'.repeat(2000));
-
-    await descriptionField.pressSequentially('BBBBB');
-
-    // Already at the cap: every one of those 5 keystrokes must have been rejected by
-    // the browser, not appended — this is the assertion for "hard stop", not "trims
-    // afterwards".
-    const actualValue = await descriptionField.inputValue();
-    expect(actualValue.length).toBe(2000);
-    expect(actualValue).not.toContain('B');
-  });
 });

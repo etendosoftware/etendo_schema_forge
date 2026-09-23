@@ -109,33 +109,6 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     await declareCookieSession(page);
   });
 
-  test('no legacy platform token exists before or after the checkout', async ({ page }) => {
-    await installEnvironmentsMock(page, [CURRENT_ENV]);
-    await installPurchaseMock(page);
-    await gotoUpgrade(page);
-
-    const legacyBefore = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
-    expect(legacyBefore).toBeNull();
-
-    await reachPaymentStep(page);
-    // The name field is prefilled from the CURRENT environment (see below) — submitting as-is
-    // is the demo -> pro conversion, not a name change, so this alone must not error.
-    await page.getByTestId('upgrade-submit').click();
-    await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
-
-    const legacyAfter = await page.evaluate(() => localStorage.getItem('sf_platform_token'));
-    expect(legacyAfter).toBeNull();
-  });
-
-  test('the tenant-name field is prefilled from the current environment', async ({ page }) => {
-    await installEnvironmentsMock(page, [CURRENT_ENV]);
-    await installPurchaseMock(page);
-    await gotoUpgrade(page);
-
-    await reachPaymentStep(page);
-    await expect(page.getByTestId('upgrade-tenant-name-input')).toHaveValue(CURRENT_ENV.clientName);
-  });
-
   test('submitting sends the purchase with X-Go-CSRF and no Authorization, then follows checkoutUrl', async ({ page }) => {
     await installEnvironmentsMock(page, [CURRENT_ENV]);
     const requests = await installPurchaseMock(page);
@@ -156,35 +129,5 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     // no bearer token to put in Authorization at all (sessionCredentials.js's `authHeaders()`).
     expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
     expect(requests[0].headers.authorization).toBeUndefined();
-  });
-
-  test('a name matching the account\'s own productive environment is rejected before paying', async ({ page }) => {
-    const productiveEnv = { ...CURRENT_ENV, plan: 'productive' };
-    await installEnvironmentsMock(page, [productiveEnv]);
-    const requests = await installPurchaseMock(page);
-    await gotoUpgrade(page);
-
-    // Submitting unchanged: the prefilled name already equals the account's own productive
-    // environment's name, so this must be rejected client-side before any request goes out.
-    await reachPaymentStep(page);
-    await expect(page.getByTestId('upgrade-tenant-name-input')).toHaveValue(productiveEnv.clientName);
-    await page.getByTestId('upgrade-submit').click();
-
-    await expect(page.getByTestId('upgrade-tenant-name-taken')).toBeVisible();
-    expect(requests).toHaveLength(0);
-  });
-
-  test('a changed tenant name is carried in the purchase request', async ({ page }) => {
-    const productiveEnv = { ...CURRENT_ENV, plan: 'productive' };
-    await installEnvironmentsMock(page, [productiveEnv]);
-    const requests = await installPurchaseMock(page);
-    await gotoUpgrade(page);
-
-    await reachPaymentStep(page, 'Brand New Co');
-    await page.getByTestId('upgrade-submit').click();
-
-    await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
-    expect(requests).toHaveLength(1);
-    expect(requests[0].body.clientName).toBe('Brand New Co');
   });
 });

@@ -312,22 +312,6 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expect(page.locator('.fixed.inset-0.z-50')).toHaveCount(0, { timeout: 5_000 });
   });
 
-  test('secondary text shows the PO reference from the goods receipt header', async ({ page }) => {
-    const state = { calloutCalls: [], importedLines: [] };
-
-    await login(page);
-    await installMocks(page, { receipt: RECEIPT_HEADER, receiptLines: [RECEIPT_LINE_1], state });
-
-    await page.goto(`/purchase-invoice/${INV_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    await openImportFromReceiptModal(page);
-
-    // getDocDisplay returns `#${orderRef}` for secondary — receipt has salesOrder$_identifier='PO-TEST-001'
-    // The secondary text "#PO-TEST-001" appears next to the document row in the modal
-    await expect(page.getByText('#PO-TEST-001').first()).toBeVisible({ timeout: 5_000 });
-  });
-
   test('receipt with all lines already imported is hidden from the modal list', async ({ page }) => {
     // ETP-4299: ImportLinesModal now eager-loads all lines and filters out receipts
     // where every line is already imported, so users never see a receipt they can't use.

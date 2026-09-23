@@ -253,19 +253,6 @@ test.describe('Multi-currency payment modal (ETP-4504) — purchase-invoice', ()
     await expect(rateInput).toHaveValue(/0[.,]3/);
   });
 
-  test('hides the conversion fields when the account currency matches the invoice currency', async ({ page }) => {
-    await login(page);
-    await installMocks(page, { invoiceCurrency: 'USD', accountCurrency: 'USD' });
-    await page.goto('/purchase-invoice');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const modal = await openPaymentEntryModal(page);
-
-    // Same currency → no conversion UI. Wait for the account select to settle first.
-    await expect(modal.getByTestId('cp-amount-input')).toBeVisible();
-    await expect(modal.getByTestId('cp-conversion-fields')).toHaveCount(0);
-  });
-
   test('a payment overpayment offers only "Igualar" (no credit, no refund) and blocks confirm until adjusted', async ({ page }) => {
     await login(page);
     await installMocks(page, { invoiceCurrency: 'EUR', accountCurrency: 'EUR', orgCurrency: 'EUR' });

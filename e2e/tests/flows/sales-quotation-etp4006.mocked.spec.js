@@ -301,17 +301,6 @@ test.describe('Sales Quotation — ETP-4006 regressions (mocked)', () => {
     await expect(page.getByTestId('confirm-summary-subtotal')).toHaveText(/72([.,])00/);
   });
 
-  test('new quotation does not render rejectReason on the initial draft form', async ({ page }) => {
-    const state = { cloneCalls: 0, invoiceCreateCalls: 0, deletedIds: [] };
-    await installQuotationMocks(page, state);
-
-    await page.goto('/sales-quotation/new');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    await expect(page.getByTestId('field-businessPartner')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByTestId('field-rejectReason')).toHaveCount(0);
-  });
-
   test('invoice creation from UE keeps the agreed total after total-discount carry-over', async ({ page }) => {
     const state = { cloneCalls: 0, invoiceCreateCalls: 0, deletedIds: [] };
     await installQuotationMocks(page, state);

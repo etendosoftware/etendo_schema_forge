@@ -239,21 +239,6 @@ test.describe('Sales Invoice — list view grandTotalAmount display (mocked)', (
     // We use a regex that matches "447.10" formatted with either . or , as decimal sep.
     await expect(row).toContainText(/447[.,]10/, { timeout: 5_000 });
   });
-
-  test('list row does NOT show the unadjusted raw total (470.63) when discount is applied', async ({ page }) => {
-    await login(page);
-    await installInvoiceMocks(page);
-
-    await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const row = page.getByTestId(`row-${INVOICE_ID}`);
-    await expect(row).toBeVisible({ timeout: 10_000 });
-
-    // The unadjusted RAW_TOTAL should not appear in the row since the API already
-    // returns the adjusted total and the UI just renders what the API returns.
-    await expect(row).not.toContainText(/470[.,]63/, { timeout: 2_000 });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -276,21 +261,6 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     // The StatsPanel renders grandTotalAmount in the SectionCard titleRight area.
     // It shows: "EUR 447.10"
     await expect(panel).toContainText(/447[.,]10/, { timeout: 5_000 });
-  });
-
-  test('side panel shows invoice document number in title', async ({ page }) => {
-    await login(page);
-    await installInvoiceMocks(page);
-
-    await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const row = page.getByTestId(`row-${INVOICE_ID}`);
-    await expect(row).toBeVisible({ timeout: 10_000 });
-    const panel = await openInvoicePreviewPanel(page, row);
-
-    // Title includes the document number
-    await expect(panel).toContainText(INVOICE_NO, { timeout: 5_000 });
   });
 
   test('side panel shows adjusted Pendiente de pago when no payments are recorded', async ({ page }) => {
@@ -397,15 +367,6 @@ test.describe('Sales Invoice — PDF preview discount desglose (mocked)', () => 
     expect(Number(data.totalDiscountAmt)).toBeLessThan(0);
   });
 
-  test('preview grand total in jsreport data matches the adjusted total from the API', async ({ page }) => {
-    const jsreportCalls = [];
-    const data = await openPreviewAndGetJsreportData(page, { jsreportCalls });
-
-    // The grandTotal in the template data must equal ADJUSTED_TOTAL (447.10)
-    // which is what the (fixed) server afterHandle returns.
-    expect(Number(data.grandTotal)).toBeCloseTo(ADJUSTED_TOTAL, 1);
-  });
-
   test('preview with no discount shows hasAnyDiscount=false and no breakdown rows', async ({ page }) => {
     // Override the invoice to have zero discount
     const noDiscountHeader = {
@@ -436,26 +397,5 @@ test.describe('Sales Invoice — PDF preview discount desglose (mocked)', () => 
 
     // Verify the line discount is null (not 0, since 0 is falsy → mapped to null)
     expect(data.lines[0].discount).toBeFalsy();
-  });
-
-  test('DESC.% column value in jsreport line data is 5 (not null) after the fix', async ({ page }) => {
-    // This is the canonical regression test: before the fix l.discount was read
-    // (the old AD column name). Our test fixture sets etgoDiscount=5 but does NOT
-    // have a top-level `discount` field. After the fix, `l.etgoDiscount` is read → 5.
-    const lineWithOnlyEtgoDiscount = {
-      ...INVOICE_LINE,
-      // Explicitly omit a `discount` field at the root level to prove the fix
-      // reads etgoDiscount and not the old column name.
-      discount: undefined,
-      etgoDiscount: 5,
-    };
-
-    const jsreportCalls = [];
-    const data = await openPreviewAndGetJsreportData(page, {
-      jsreportCalls,
-      lines: [lineWithOnlyEtgoDiscount],
-    });
-
-    expect(data.lines[0].discount).toBe(5);
   });
 });

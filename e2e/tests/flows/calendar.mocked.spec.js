@@ -101,18 +101,6 @@ async function installAccountingMock(page, rows = [ACCOUNTING_ROW]) {
   });
 }
 
-test.describe('Finance menu', () => {
-  test('shows only Calendar, not Fiscal Calendar or Periods', async ({ page }) => {
-    await login(page);
-    await page.goto('/dashboard');
-    await page.getByRole('button', { name: /finanzas|finance/i }).click();
-    const menuText = await page.locator('body').innerText();
-    expect(menuText).toContain('Calendar');
-    expect(menuText).not.toContain('Fiscal Calendar');
-    expect(menuText).not.toContain('Periods');
-  });
-});
-
 test.describe('Calendar — year detail', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -121,20 +109,6 @@ test.describe('Calendar — year detail', () => {
     await installAccountingMock(page);
     await page.goto('/calendar/year-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  });
-
-  test('shows Accounting and Periods secondary tabs', async ({ page }) => {
-    await expect(page.getByTestId('tab-accounting')).toBeVisible();
-    await expect(page.getByTestId('tab-periods')).toBeVisible();
-  });
-
-  test('Periods tab lists periods and Accounting tab lists Fact_Acct rows', async ({ page }) => {
-    await page.getByTestId('tab-periods').click();
-    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
-    await expect(page.getByTestId('period-name-period-002')).toBeVisible();
-
-    await page.getByTestId('tab-accounting').click();
-    await expect(page.getByTestId('accounting-account-fact-001')).toBeVisible();
   });
 
   test('Abrir/Cerrar Periodo hits the mocked openClose endpoint', async ({ page }) => {

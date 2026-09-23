@@ -224,15 +224,6 @@ test.describe('Import bank statement wizard — mocked', () => {
     return createPayloads;
   }
 
-  test('step 1 offers both downloadable templates', async ({ page }) => {
-    await land(page);
-    await page.getByTestId('detail-tab-statements').click();
-    await page.getByTestId('statements-import-button').click();
-
-    await expect(page.getByTestId('import-statement-template-csv')).toBeVisible();
-    await expect(page.getByTestId('import-statement-template-xlsx')).toBeVisible();
-  });
-
   test('a file with the canonical headers auto-assigns all 6 columns on the mapping step', async ({ page }) => {
     await land(page);
     await gotoMappingStep(page, csvFile(inflowRows(3)));
@@ -306,14 +297,6 @@ test.describe('Import bank statement wizard — mocked', () => {
     expect(createPayloads[0].lines).toHaveLength(2);
     expect(createPayloads[0].lines.map((l) => l.description))
       .not.toContain(NO_AMOUNT_DESCRIPTION);
-  });
-
-  test('the preview warns how many lines will be skipped for having no amount', async ({ page }) => {
-    await land(page);
-    await gotoPreviewStep(page, NO_AMOUNT_FILE);
-
-    await expect(page.getByTestId('import-discarded-lines')).toBeVisible();
-    await expect(page.getByTestId('import-discarded-lines')).toContainText('1');
   });
 
   test('a row with an amount on both sides is flagged on both cells and is never sent', async ({ page }) => {

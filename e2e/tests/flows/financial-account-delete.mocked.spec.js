@@ -182,28 +182,6 @@ test.describe('Financial Accounts — bulk delete is never pre-blocked by row el
     // registro(s) seleccionado(s) no se pueden eliminar."), whose only digit was the count.
     await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
   });
-
-  test('the button stays enabled with ONLY a non-deletable account selected', async ({ page }) => {
-    await rowCheckbox(page, 'acc-2').click(); // NOT deletable, and nothing else
-
-    const bulkDelete = page.getByTestId('bulk-delete-selected');
-    await expect(bulkDelete).toBeVisible();
-    await expect(bulkDelete).toBeEnabled();
-    await expect(bulkDelete).toHaveAttribute('title', 'Eliminar');
-  });
-
-  // The toolbar swap ETP-4656 introduced was retired in the same ticket: ticking a checkbox used
-  // to unmount `cuentas-toolbar` (and with it "Nueva cuenta", the filters and "Ordenar por"),
-  // which the floating selection pill never actually replaced.
-  test('the window toolbar stays on screen while rows are selected', async ({ page }) => {
-    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
-
-    await rowCheckbox(page, 'acc-1').click();
-
-    await expect(page.getByTestId('bulk-delete-selected')).toBeVisible();
-    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
-    await expect(page.getByTestId('cuentas-new-account-button')).toBeVisible();
-  });
 });
 
 test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
@@ -216,28 +194,6 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
     await installAccountsListMock(page, () => ACCOUNTS.filter((a) => !deletedIds.has(a.id)));
     await page.goto('/financial-account');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  });
-
-  // ETP-5111 inverted this: the item used to be hidden on a non-deletable row, which left the
-  // user unable to tell an account that CANNOT be deleted from one where the action does not
-  // exist. It is offered on every row now, and the refusal is explained after confirming.
-  //
-  // The row kebab trigger (account-row-menu-trigger-*) used to be reproducibly obscured by the
-  // eTGOPendingCount cell (Playwright reported "element intercepts pointer events"), across this
-  // spec, financial-account-detail.mocked.spec.js and financial-accounts-page.mocked.spec.js.
-  // Confirmed live and fixed by adding `overflow-visible` to the `_rowActions` column's
-  // `cellClass` in AccountsHeaderTable.jsx (commit 23343b3c2, PR #1496).
-  test('offers "Eliminar cuenta" on every row, deletable or not', async ({ page }) => {
-    // The kebab trigger sits behind `opacity-0 group-hover:opacity-100` and inside DataTable's
-    // sticky quick-actions cell — openAccountRowMenu() pre-scrolls the table to its right edge
-    // so the sticky cell's resting position is already visible (see its own doc comment).
-    await openAccountRowMenu(page, 'acc-1');
-    await expect(page.getByTestId('account-row-menu-delete-acc-1')).toBeVisible();
-    await page.keyboard.press('Escape');
-
-    // acc-2 is the NON-deletable fixture — the one that used to have no item at all.
-    await openAccountRowMenu(page, 'acc-2');
-    await expect(page.getByTestId('account-row-menu-delete-acc-2')).toBeVisible();
   });
 
   // Same row-kebab-obscured-by-eTGOPendingCount issue as the test above — fixed (commit

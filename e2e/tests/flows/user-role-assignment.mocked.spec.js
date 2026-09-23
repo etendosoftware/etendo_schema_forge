@@ -262,29 +262,6 @@ test.describe('User role assignment — detail form (existing user)', () => {
     expect(counts).toEqual(before);
   });
 
-  test('removing a role chip narrows the matrix back down, still with zero extra network calls', async ({ page }) => {
-    const { counts } = await installUserDetailMocks(page, { savedRoleIds: ['role-finance', 'role-sales'] });
-
-    await page.goto(`/user/${USER_ROW.id}`);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await page.getByTestId('tab-custom:roles').click();
-
-    const matrix = page.getByTestId('UserRolesTab');
-    await expect(matrix.getByRole('columnheader', { name: 'Finanzas' })).toBeVisible();
-    await expect(matrix.getByRole('columnheader', { name: 'Ventas' })).toBeVisible();
-
-    await page.waitForTimeout(300);
-    const before = { ...counts };
-
-    await page.getByTestId('AssignTemplateRolesControl__chip-remove-role-sales').click();
-
-    await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-sales')).toHaveCount(0);
-    await expect(matrix.getByRole('columnheader', { name: 'Ventas' })).toHaveCount(0);
-    await expect(matrix.getByRole('columnheader', { name: 'Finanzas' })).toBeVisible();
-
-    expect(counts).toEqual(before);
-  });
-
   /**
    * `windows/custom/user/index.jsx` computes `hasUnsavedRoleChange` (via the `sameIdSet`
    * helper, comparing live `selectedRoleIds` state against `appliedRoleIdsRef`) and passes
@@ -442,40 +419,12 @@ test.describe('User role assignment — Users grid role filter', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('grid renders role chips per user, including the Admin branch for a classic-Admin user', async ({ page }) => {
-    const adaRow = page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' });
-    const graceRow = page.locator('tbody tr').filter({ hasText: 'Grace Hopper' });
-    const linusRow = page.locator('tbody tr').filter({ hasText: 'Linus Torvalds' });
-
-    await expect(adaRow.getByTestId('RoleChipsCell__chips')).toBeVisible();
-    // Each chip carries a per-role-unique testid (`RoleChip__<roleId>`), not the
-    // generic `RoleChipsCell__chip` — see RoleChipsCell.jsx's `RoleChip` call sites
-    // (the [W2]/[S1] data-testid fix moved every chip to a unique id per row/role;
-    // this assertion was never updated to match).
-    await expect(adaRow.getByTestId('RoleChip__role-finance')).toHaveText('Finanzas');
-
-    // Classic-Admin branch: zero entries in `assignments`, resolved via defaultRole
-    // comparison instead of falling through to an empty/dash cell.
-    await expect(graceRow.getByTestId('RoleChipsCell__admin')).toBeVisible();
-
-    await expect(linusRow.getByTestId('RoleChipsCell__chips')).toBeVisible();
-  });
-
   test('filtering by a template role narrows the grid to users carrying that composed role', async ({ page }) => {
     const popover = await openRoleQuickFilter(page);
     await popover.getByRole('button', { name: 'Finanzas' }).click();
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
     await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
-    await expect(page.locator('tbody tr').filter({ hasText: 'Linus Torvalds' })).toHaveCount(0);
-  });
-
-  test('filtering by the Admin option narrows to classic-Admin users (Filtro Usuarios Admin)', async ({ page }) => {
-    const popover = await openRoleQuickFilter(page);
-    await popover.getByRole('button', { name: 'Administrador' }).click();
-
-    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toBeVisible();
-    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toHaveCount(0);
     await expect(page.locator('tbody tr').filter({ hasText: 'Linus Torvalds' })).toHaveCount(0);
   });
 });

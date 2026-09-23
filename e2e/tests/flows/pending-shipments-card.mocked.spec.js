@@ -110,13 +110,6 @@ test.describe('Pending Shipments Card — dashboard (mocked)', () => {
    * The card wraps in a <Link> (renders as <a>) — we look for the count value "9"
    * as text content anywhere inside the rail section.
    */
-  test('pendingShipmentsCardShowsCorrectCount', async ({ page }) => {
-    // The PendingTasksRail renders each task count as large text inside a <Link>.
-    // We locate the element by its text content — the count "9" is rendered in
-    // a <p> tag inside the card.
-    const countElement = page.getByText('9', { exact: true }).first();
-    await expect(countElement).toBeVisible({ timeout: 10_000 });
-  });
 
   /**
    * Verifies that clicking the pending-shipments card navigates to

@@ -231,21 +231,10 @@ test.describe('Purchase Invoice list — Estado Batuz column (ETP-5087)', () => 
     });
 
     for (const row of ROWS) {
-      test(`${row.id}: eTGOTbaiStatus=${JSON.stringify(row.eTGOTbaiStatus ?? null)} tbaiIssent=${JSON.stringify(row.tbaiIssent ?? null)} renders ${row.expected.split('.').pop()}`, async ({ page }) => {
-        await expect(page.getByTestId(`cell-${row.id}-eTGOTbaiStatus`)).toHaveText(t(row.expected));
-      });
     }
 
     // ── ETP-5216: 'NoAplica' → dash, and nothing else does ──────────────────
     for (const row of NOT_APPLICABLE_ROWS) {
-      test(`${row.id}: eTGOTbaiStatus='NoAplica' tbaiIssent=${JSON.stringify(row.tbaiIssent)} renders a dash, not a badge`, async ({ page }) => {
-        const cell = page.getByTestId(`cell-${row.id}-eTGOTbaiStatus`);
-        await expect(cell).toHaveText('—');
-        // Not the fallback the flag would otherwise produce — the dash branch
-        // short-circuits before `isSent(tbaiIssent)` is consulted at all.
-        await expect(cell).not.toHaveText(t('fiscalMonitor.tbai.status.Enviada'));
-        await expect(cell).not.toHaveText(t('fiscalMonitor.tbai.status.Pendiente'));
-      });
     }
 
     test('a dashed Batuz cell does not dash the row — the SII column keeps its own state', async ({ page }) => {

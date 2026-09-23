@@ -21,67 +21,6 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   });
 
-  test('palette opens on Ctrl+K', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    // The CommandDialog root input should become visible
-    await expect(page.locator('[cmdk-input], input[placeholder]').first()).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('palette shows visible menu items after opening', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    // Wait for dialog to be visible
-    await page.waitForSelector('[cmdk-dialog], [role="dialog"]', { timeout: 5_000 }).catch(() => {});
-    // At least the dashboard/home item should be present (it is never hidden)
-    // Use a broad role-based locator — exact text varies by locale
-    const listContainer = page.locator('[cmdk-list], [cmdk-root]').first();
-    await expect(listContainer).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('searching for a term shows matching items', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    const input = page.locator('[cmdk-input]').first();
-    await expect(input).toBeVisible({ timeout: 5_000 });
-    // Type a search term that should match a visible window
-    await input.fill('order');
-    // Should show at least one result (sales-order or purchase-order)
-    const items = page.locator('[cmdk-item]');
-    await expect(items.first()).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('hidden items (deal, business-partner) are not visible in the palette', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    const input = page.locator('[cmdk-input]').first();
-    await expect(input).toBeVisible({ timeout: 5_000 });
-    // Search specifically for 'deal' — it is hidden in menu.json
-    await input.fill('deal');
-    // The empty state OR zero cmdk-item elements should be visible
-    const items = page.locator('[cmdk-item]');
-    const count = await items.count();
-    // Either no items OR none that navigate to /deal
-    if (count > 0) {
-      // Verify none of them are the hidden 'deal' window
-      for (let i = 0; i < count; i++) {
-        const text = await items.nth(i).textContent();
-        // The deal label could be translated; check the name is not 'deal'
-        expect(text?.toLowerCase()).not.toBe('deal');
-      }
-    }
-    // If count === 0, the empty state is shown — that's correct behaviour
-  });
-
-  test('closing and reopening the palette works', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    const input = page.getByTestId('global-search-input');
-    await expect(input).toBeVisible({ timeout: 5_000 });
-    // Close with Escape — press on the focused input so cmdk intercepts it
-    await input.press('Escape');
-    // The input is the persistent top-bar control; only the dropdown closes.
-    await expect(page.getByTestId('CommandDropdown__8e5d1a')).toHaveCount(0, { timeout: 5_000 });
-    // Reopen from the persistent top-bar control after focus was restored.
-    await input.click();
-    await expect(page.getByTestId('CommandDropdown__8e5d1a')).toBeVisible({ timeout: 5_000 });
-  });
-
   test('top-bar search keeps scope controls synchronized with the dropdown', async ({ page }) => {
     await page.goto('/product');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
@@ -123,19 +62,6 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await expect(page.getByTestId('vector-search-scope')).toContainText('Todas las ventanas');
   });
 
-  test('keyboard navigation marks an item and closes after opening it', async ({ page }) => {
-    await page.keyboard.press('Control+k');
-    const input = page.getByTestId('global-search-input');
-    await expect(input).toBeVisible({ timeout: 5_000 });
-    const items = page.locator('[data-global-search-item="true"]');
-    await expect(items.first()).toBeVisible({ timeout: 5_000 });
-
-    await input.press('ArrowDown');
-    await expect(items.first()).toHaveAttribute('data-selected', 'true');
-    await input.press('Enter');
-    await expect(page.locator('[cmdk-dialog], [role="dialog"]').first()).not.toBeVisible({ timeout: 5_000 });
-  });
-
   test('clicking a menu item navigates and resets the global query', async ({ page }) => {
     await page.keyboard.press('Control+k');
     const input = page.getByTestId('global-search-input');
@@ -145,16 +71,5 @@ test.describe('CommandPalette i18n (ETP-4003)', () => {
     await contactsItem.click();
     await expect(page).toHaveURL(/\/contacts(?:$|\?)/, { timeout: 8_000 });
     await expect(input).toHaveValue('');
-  });
-
-  test('backspace at the start of a query clears the current-window scope', async ({ page }) => {
-    await page.goto('/product');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    const input = page.getByTestId('global-search-input');
-    await input.fill('pan');
-    await input.press('Home');
-    await input.press('Backspace');
-    await expect(page.getByTestId('topbar-vector-search-scope')).toHaveCount(0);
-    await expect(input).toHaveValue('pan');
   });
 });

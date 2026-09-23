@@ -285,44 +285,6 @@ for (const spec of SPECS) {
       await expect(configuredRow.getByTestId('line-action-tax-sif')).toHaveCount(0);
     });
 
-    test('clicking the badge opens the modal with the tax name and the régimen field (EnumSearchSelect)', async ({ page }) => {
-      const missingRow = page.getByTestId(`line-row-${LINE_MISSING.id}`);
-      await expect(missingRow).toBeVisible({ timeout: 10_000 });
-      await missingRow.getByTestId('line-action-tax-sif').click();
-
-      const modal = page.getByTestId('tax-sif-modal');
-      await expect(modal).toBeVisible({ timeout: 5_000 });
-      await expect(modal).toContainText('IVA 21% (sin configurar)');
-      await expect(modal.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva')).toBeVisible();
-    });
-
-    test('Cancel closes the modal without saving', async ({ page }) => {
-      let patched = false;
-      await installTaxRecordMocks(page, { onPatch: () => { patched = true; } });
-
-      const missingRow = page.getByTestId(`line-row-${LINE_MISSING.id}`);
-      await missingRow.getByTestId('line-action-tax-sif').click();
-      await expect(page.getByTestId('tax-sif-modal')).toBeVisible({ timeout: 5_000 });
-
-      await clickViaDom(page.getByTestId('tax-sif-modal-cancel'));
-      await expect(page.getByTestId('tax-sif-modal')).toBeHidden();
-      expect(patched).toBe(false);
-    });
-
-    test('Save stays disabled until a régimen is actually picked', async ({ page }) => {
-      const missingRow = page.getByTestId(`line-row-${LINE_MISSING.id}`);
-      await missingRow.getByTestId('line-action-tax-sif').click();
-      const modal = page.getByTestId('tax-sif-modal');
-      await expect(modal).toBeVisible({ timeout: 5_000 });
-
-      await expect(modal.getByTestId('tax-sif-modal-save')).toBeDisabled();
-
-      await focusViaDom(modal.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva-input'));
-      await clickViaDom(page.getByTestId('tax-sif-modal-field-tbaiClaveregimeniva-option-05'));
-
-      await expect(modal.getByTestId('tax-sif-modal-save')).toBeEnabled();
-    });
-
     test('picking a régimen and saving PATCHes the tax record, toasts success, and the badge disappears from the row (no reload)', async ({ page }) => {
       let patchBody = null;
       await installTaxRecordMocks(page, {

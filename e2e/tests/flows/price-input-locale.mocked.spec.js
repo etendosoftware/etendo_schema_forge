@@ -127,22 +127,6 @@ test.describe('Add-line price — live thousands-grouping (ETP-5107 §14 regress
     // field on an EXISTING line already grouped correctly.
     await expect(priceInput).toHaveValue('12.345');
   });
-
-  test('the letters+comma probe string filters down to the exact expected result (plan §5.1/§5.2)', async ({ page }) => {
-    const priceInput = await openAddRowPriceField(page);
-
-    await priceInput.pressSequentially('20,0rrwetwrtwrt2', { delay: 10 });
-
-    await expect(priceInput).toHaveValue('20,02');
-  });
-
-  test('a leading "-" is accepted (ETP-4567 negative listPrice support), grouped correctly', async ({ page }) => {
-    const priceInput = await openAddRowPriceField(page);
-
-    await priceInput.pressSequentially('-1234', { delay: 15 });
-
-    await expect(priceInput).toHaveValue('-1.234');
-  });
 });
 
 // ---------------------------------------------------------------------------

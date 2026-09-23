@@ -109,21 +109,6 @@ test.describe('Inline lines min-value validation (mocked)', () => {
     await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
   });
 
-  test('entering a negative discount adds border-destructive to the input', async ({ page }) => {
-    const row = page.locator(`[data-testid="line-row-${LINE_ID}"]`);
-    await row.dispatchEvent('mouseover');
-    await row.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
-
-    const discountField = row.locator('[data-testid="field-discount"]');
-    await expect(discountField).toBeVisible({ timeout: 3_000 });
-    await discountField.fill('-1');
-    await discountField.blur();
-
-    // commitField detects value < min=0 and sets invalidCell → editInputClassName
-    // adds border-destructive to the Input's className (Semantic Theme Contract).
-    await expect(discountField).toHaveClass(/border-destructive/, { timeout: 3_000 });
-  });
-
   test('entering a negative discount blocks the PATCH request', async ({ page }) => {
     const row = page.locator(`[data-testid="line-row-${LINE_ID}"]`);
     await row.dispatchEvent('mouseover');

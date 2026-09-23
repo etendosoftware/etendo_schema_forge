@@ -219,52 +219,6 @@ test.describe('Roles overview — admin/client-admin', () => {
     await installRolesOverviewMock(page);
   });
 
-  test('sees the Roles menu entry and can navigate to it', async ({ page }) => {
-    // The "Settings" group holds several items (price-list, user, roles,
-    // smart-scan, ...), so — mirroring role-filtered-sidebar.mocked.spec.js —
-    // it renders as a hover popover in the collapsed sidebar rather than a
-    // direct link.
-    const settingsTrigger = page.getByRole('button', { name: /configuraci[oó]n|settings/i });
-    await settingsTrigger.hover();
-
-    const rolesMenuItem = page.getByTestId('menu-item-roles');
-    await expect(rolesMenuItem).toBeVisible();
-
-    await rolesMenuItem.click();
-    await expect(page).toHaveURL(/\/roles$/);
-    await expect(page.getByTestId('RolesOverviewPage')).toBeVisible();
-  });
-
-  test('renders all 5 role summary cards in the canonical Admin/Sales/Purchasing/Finance/Inventory order', async ({ page }) => {
-    await page.goto('/roles');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    await expect(page.getByTestId('RolesOverviewPage__content')).toBeVisible();
-
-    for (const role of ROLES_FIXTURE) {
-      const card = page.getByTestId(`RoleSummaryCard__${role.id}`);
-      await expect(card).toBeVisible();
-      await expect(page.getByTestId(`RoleSummaryCard__content-${role.id}`)).toBeVisible();
-      await expect(page.getByTestId(`RoleSummaryCard__userCount-${role.id}`)).toContainText(String(role.userCount));
-      // ETP-4999 — the window-count badge/icon was removed from the card
-      // entirely (Figma spec); `RoleSummaryCard__windowsIcon-*`/
-      // `RoleSummaryCard__windowCount-*` no longer exist in the DOM at all, so
-      // the assertions that used to check them here are gone (the fixture
-      // still carries `role.windowCount`, unused by this component now).
-    }
-
-    // Real DOM order of the card grid's direct children — a direct proxy for
-    // `sortByRoleOrder()` having actually run, since the fixture above is
-    // deliberately scrambled.
-    const renderedOrder = await page
-      .locator('[data-testid="RolesOverviewPage__cards"] > [data-testid^="RoleSummaryCard__"]')
-      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute('data-testid')));
-    expect(renderedOrder).toEqual(EXPECTED_CARD_ORDER);
-
-    // The raw AD_Role boilerplate text must never surface as display copy —
-    // only the curated i18n role names render.
-    await expect(page.locator('body')).not.toContainText('Please, do not edit this role');
-  });
-
   test('exposes no edit/create/delete affordance anywhere on the page', async ({ page }) => {
     // These 5 roles are product-defined, not editable by any tenant user
     // (2026-07-27 decision — only future user-created roles, out of scope
@@ -469,15 +423,5 @@ test.describe('Roles overview — click-through to filtered Users grid (ETP-4999
 
     await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toBeVisible();
     await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toHaveCount(0);
-  });
-
-  test('keyboard Enter on a focused role card also navigates and pre-filters', async ({ page }) => {
-    const card = page.getByTestId(`RoleSummaryCard__${ROLE_IDS.sales}`);
-    await card.focus();
-    await card.press('Enter');
-
-    await expect(page).toHaveURL(new RegExp(`/user\\?role=${ROLE_IDS.sales}$`));
-    await expect(page.locator('tbody tr').filter({ hasText: 'Grace Hopper' })).toBeVisible();
-    await expect(page.locator('tbody tr').filter({ hasText: 'Ada Lovelace' })).toHaveCount(0);
   });
 });

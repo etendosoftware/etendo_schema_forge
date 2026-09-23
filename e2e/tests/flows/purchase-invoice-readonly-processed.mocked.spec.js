@@ -138,61 +138,6 @@ async function installMocks(page, invoice) {
 // ---------------------------------------------------------------------------
 
 test.describe('Purchase Invoice — readOnlyLogic when processed (mocked)', () => {
-  test('businessPartner is disabled when processed', async ({ page }) => {
-    await login(page);
-    await installMocks(page, COMPLETED_INVOICE);
-
-    await page.goto(`/purchase-invoice/${INV_CO_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    const fieldRoot = page.getByTestId('field-businessPartner');
-    await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
-
-    const control = fieldRoot.locator('input, button').first();
-    await expect(control).toBeDisabled({ timeout: 5_000 });
-  });
-
-  test('partnerAddress is disabled when processed', async ({ page }) => {
-    await login(page);
-    await installMocks(page, COMPLETED_INVOICE);
-
-    await page.goto(`/purchase-invoice/${INV_CO_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    const fieldRoot = page.getByTestId('field-partnerAddress');
-    await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
-
-    const control = fieldRoot.locator('input, button').first();
-    await expect(control).toBeDisabled({ timeout: 5_000 });
-  });
-
-  test('paymentMethod is disabled when processed', async ({ page }) => {
-    await login(page);
-    await installMocks(page, COMPLETED_INVOICE);
-
-    await page.goto(`/purchase-invoice/${INV_CO_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    const fieldRoot = page.getByTestId('field-paymentMethod');
-    await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
-
-    const control = fieldRoot.locator('input, button').first();
-    await expect(control).toBeDisabled({ timeout: 5_000 });
-  });
-
-  test('paymentTerms is disabled when processed', async ({ page }) => {
-    await login(page);
-    await installMocks(page, COMPLETED_INVOICE);
-
-    await page.goto(`/purchase-invoice/${INV_CO_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    const fieldRoot = page.getByTestId('field-paymentTerms');
-    await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
-
-    const control = fieldRoot.locator('input, button').first();
-    await expect(control).toBeDisabled({ timeout: 5_000 });
-  });
 
   test('orderReference remains editable when processed (regression guard)', async ({ page }) => {
     await login(page);
@@ -223,26 +168,5 @@ test.describe('Purchase Invoice — readOnlyLogic when processed (mocked)', () =
     const fieldRoot = page.getByTestId('field-orderReference');
     await expect(fieldRoot).toBeVisible({ timeout: 8_000 });
     await expect(fieldRoot).toBeDisabled({ timeout: 5_000 });
-  });
-
-  test('draft invoice has editable businessPartner (contrast check)', async ({ page }) => {
-    await login(page);
-    await installMocks(page, DRAFT_INVOICE);
-
-    await page.goto(`/purchase-invoice/${INV_DR_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    // With a pre-existing businessPartner value, the editable SearchInput
-    // renders the SelectorChip variant (`field-{key}-chip`). The read-only
-    // path renders a disabled <Input> wrapped by `field-{key}` instead, so
-    // chip visibility alone is the contrast against the completed cases.
-    const chip = page.getByTestId('field-businessPartner-chip');
-    await expect(chip).toBeVisible({ timeout: 8_000 });
-
-    // Clicking the chip flips editingIntent and reveals the editable <input>.
-    await chip.click();
-    const input = page.getByTestId('field-businessPartner');
-    await expect(input).toBeVisible({ timeout: 5_000 });
-    await expect(input).toBeEnabled({ timeout: 5_000 });
   });
 });

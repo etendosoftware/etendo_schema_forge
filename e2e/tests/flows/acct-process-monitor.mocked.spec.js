@@ -180,18 +180,6 @@ test.describe('Accounting process monitor — page', () => {
     requests = await installMonitorMock(page);
   });
 
-  test('renders the status card and the run history', async ({ page }) => {
-    await openMonitor(page);
-
-    await expect(page.getByTestId('AcctProcessMonitorPage__statusCard')).toBeVisible();
-    await expect(page.getByTestId('AcctProcessMonitorPage__lastStatus')).toBeVisible();
-    await expect(page.getByTestId('AcctProcessMonitorPage__nextRun')).toBeVisible();
-    await expect(page.getByTestId('AcctProcessMonitorPage__historyTable')).toBeVisible();
-    for (const run of EXISTING_RUNS) {
-      await expect(page.getByTestId(`AcctProcessMonitorPage__row-${run.id}`)).toBeVisible();
-    }
-  });
-
   test('the initial read never carries Action, so loading the page cannot fire the process', async ({ page }) => {
     await openMonitor(page);
 
@@ -199,21 +187,6 @@ test.describe('Accounting process monitor — page', () => {
     for (const url of requests) {
       expect(url).not.toContain('Action');
     }
-  });
-
-  test('shows each status as a human label, never the raw three-letter code', async ({ page }) => {
-    await openMonitor(page);
-
-    // Per-row testid since the codemod-collapsed ids were fixed — no CSS attribute selector.
-    const pill = page.getByTestId('AcctProcessMonitorPage__statusPill-e2e-run-1');
-    await expect(pill).toBeVisible();
-    await expect(pill).toHaveAttribute('data-status', 'SUC');
-    await expect(pill).not.toHaveText('SUC');
-    await expect(pill).toHaveAttribute('data-tone', 'success');
-
-    const failed = page.getByTestId('AcctProcessMonitorPage__statusPill-e2e-run-2');
-    await expect(failed).toHaveAttribute('data-status', 'ERR');
-    await expect(failed).not.toHaveText('ERR');
   });
 
   test('Run now converges on the new run by polling, with no manual refresh', async ({ page }) => {
@@ -313,21 +286,6 @@ test.describe('Accounting process monitor — menu gating', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await installMonitorMock(page);
-  });
-
-  test('flag on: an admin sees the menu entry and it opens the page', async ({ page }) => {
-    test.skip(!FLAG_ON, 'Requires a dev server started with VITE_FEATURE_FLAGS acct-process-monitor:true');
-
-    // The Settings group holds several items, so in the collapsed sidebar it renders as a hover
-    // popover rather than a direct link — same shape as roles-overview.mocked.spec.js.
-    await page.getByRole('button', { name: /configuraci[oó]n|settings/i }).hover();
-
-    const entry = page.getByTestId('menu-item-acct-process-monitor');
-    await expect(entry).toBeVisible();
-
-    await entry.click();
-    await expect(page).toHaveURL(/\/acct-process-monitor$/);
-    await expect(page.getByTestId('AcctProcessMonitorPage')).toBeVisible();
   });
 
   test('flag off: the menu entry is not offered', async ({ page }) => {

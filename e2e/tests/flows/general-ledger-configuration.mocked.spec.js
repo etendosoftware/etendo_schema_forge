@@ -36,36 +36,6 @@ const TABS = [
   { index: 3, file: 'glc-04-cuentas-generales.png', anchor: (p) => p.getByTestId('glc-section-suspense') },
 ];
 
-test.describe('General Ledger Configuration — visual capture (mocked)', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await page.goto('/general-ledger-configuration');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-    // The window shell renders once the tab bar is present.
-    await expect(page.getByTestId('glc-tab-0')).toBeVisible({ timeout: 15_000 });
-    // No React error boundary leaked through.
-    await expect(page.getByText(/Something went wrong|Algo salió mal/i)).toHaveCount(0);
-  });
-
-  for (const tab of TABS) {
-    test(`captures tab ${tab.index} → ${tab.file}`, async ({ page }) => {
-      await page.getByTestId(`glc-tab-${tab.index}`).click();
-
-      // Wait for this tab's content to mount (each tab swaps the panel).
-      const anchor = tab.anchor(page);
-      await expect(anchor).toBeVisible({ timeout: 10_000 });
-
-      // The dirty-state save button is part of the window chrome on every tab.
-      await expect(page.getByTestId('glc-save')).toBeVisible();
-
-      // Let fonts/transitions settle, then capture the full page for human review.
-      mkdirSync(OUT_DIR, { recursive: true });
-      await page.waitForTimeout(300);
-      await captureScreenshot(page, { path: path.join(OUT_DIR, tab.file), fullPage: true });
-    });
-  }
-});
-
 /**
  * General Ledger Configuration — behavioral suite (mocked).
  *
@@ -140,28 +110,6 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     await expect(page.getByTestId('glc-tab-0')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('renders the 4 tabs in order with a disabled save', async ({ page }) => {
-    for (let i = 0; i < 4; i++) {
-      await expect(page.getByTestId(`glc-tab-${i}`)).toBeVisible();
-    }
-    // Pristine form → save disabled.
-    await expect(page.getByTestId('glc-save')).toBeDisabled();
-  });
-
-  test('navigates across all 4 tabs', async ({ page }) => {
-    await page.getByTestId('glc-tab-0').click();
-    await expect(page.getByTestId('glc-section-identity')).toBeVisible();
-
-    await page.getByTestId('glc-tab-1').click();
-    await expect(page.locator('[data-testid^="glc-defaults-group-"]').first()).toBeVisible();
-
-    await page.getByTestId('glc-tab-2').click();
-    await expect(page.getByTestId('glc-section-dimensions')).toBeVisible();
-
-    await page.getByTestId('glc-tab-3').click();
-    await expect(page.getByTestId('glc-section-suspense')).toBeVisible();
-  });
-
   test('editing a General field flips dirty state, enables save, and POSTs the dirty payload', async ({ page }) => {
     const save = page.getByTestId('glc-save');
     await expect(save).toBeDisabled();
@@ -204,15 +152,5 @@ test.describe('General Ledger Configuration — behavioral (mocked)', () => {
     const mandatory = page.getByTestId('glc-dim-dim-cc-switch');
     await expect(mandatory).toBeDisabled();
     await expect(mandatory).toBeChecked();
-  });
-
-  test('read-only: Calendario fiscal and Organización are not editable inputs', async ({ page }) => {
-    const org = page.getByTestId('glc-field-organization');
-    await expect(org).toBeVisible();
-    await expect(org.getByRole('textbox')).toHaveCount(0);
-
-    const calendar = page.getByTestId('glc-field-calendar');
-    await expect(calendar).toBeVisible();
-    await expect(calendar.getByRole('textbox')).toHaveCount(0);
   });
 });

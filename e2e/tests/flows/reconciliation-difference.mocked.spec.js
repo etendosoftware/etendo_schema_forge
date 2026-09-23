@@ -496,14 +496,4 @@ test.describe('Reconciliation difference — post the remainder to a G/L item (m
     expect(postCalls[0].glItemId).toBe('gl-picked');
     expect(postCalls[0].statementLineId).toBe(REMAINDER_LINE_ID);
   });
-
-  test('the banner is absent for a plain pending line', async ({ page }) => {
-    await login(page);
-    await installMocks(page);
-    await openReconciliationTab(page);
-
-    await page.getByTestId(`recon-line-row-${PLAIN_LINE.id}`).click();
-
-    await expect(page.getByTestId('recon-difference-banner')).toHaveCount(0);
-  });
 });

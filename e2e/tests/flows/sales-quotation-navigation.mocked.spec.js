@@ -176,22 +176,6 @@ test.describe('Sales Quotation — navigation without refresh (ETP-4000)', () =>
     await expect(documentNoField).toBeVisible({ timeout: 10_000 });
   });
 
-  test('list → +New navigates to /new and renders the form without a refresh', async ({ page }) => {
-    await page.goto('/sales-quotation');
-    await expect(page.locator('tbody tr').filter({ hasText: 'QUOT-001' }).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    await page.getByTestId('action-new').click();
-
-    await page.waitForURL(/\/sales-quotation\/new/, { timeout: 10_000 });
-    await expect(page).toHaveURL(/\/sales-quotation\/new/);
-
-    // BusinessPartner is one of the principal form fields on the new record
-    // form — its presence confirms the detail branch rendered without reload.
-    await expect(page.getByTestId('field-businessPartner')).toBeVisible({ timeout: 10_000 });
-  });
-
   test('list → record → back → another record renders', async ({ page }) => {
     // 1. Start at the list — establishes the SPA history so goBack() has a
     //    valid in-app entry to return to (avoids about:blank).

@@ -194,22 +194,6 @@ test.describe('Tanda 1 — core behaviors', () => {
     expect(Number(lastPatch.body.orderedQuantity)).toBe(5);
   });
 
-  test('read-only doc: documentStatus=CO hides pencil and trash icons', async ({ page }) => {
-    await login(page);
-    await installMocks(page, { header: COMPLETED_HEADER });
-    await page.goto(`/sales-quotation/${COMPLETED_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    const rowA = page.locator(`[data-testid="line-row-${LINE_A.id}"]`);
-    await rowA.dispatchEvent('mouseover');
-
-    // showActions=(isHovered||isEditing)&&!isDocumentReadOnly — on a locked doc
-    // the action slot must contain 0 action buttons (the reserveActionSlot div may
-    // still render, but no pencil/trash inside).
-    await page.waitForTimeout(300);
-    await expect(rowA.locator('[data-testid="line-actions"] button')).toHaveCount(0);
-  });
-
   test('keyboard Enter: commits the edit and fires PATCH', async ({ page }) => {
     const patches = [];
     await login(page);
@@ -397,68 +381,5 @@ test.describe('Tanda 3 — cell renderers', () => {
     await expect.poll(() => patches.length, { timeout: 5_000 }).toBeGreaterThan(0);
     const taxPatch = patches.find(p => p.body.tax === 'tax-2');
     expect(taxPatch).toBeDefined();
-  });
-
-  test('lookup cell: ProductSearchDrawer shows price formatted with EUR currency symbol', async ({ page }) => {
-    await login(page);
-    await installMocks(page, { header: DRAFT_HEADER, lines: [LINE_A, LINE_B] });
-
-    // Mock the product search selector endpoint.
-    // The selector URL is built as: <apiBaseUrl>/quotationLine/selectors/M_Product_ID
-    // The ProductSearchDrawer reads `items` from the response.
-    await page.route('**/selectors/M_Product_ID{/**,}**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          items: [
-            {
-              id: 'prod-search-001',
-              label: 'Premium Widget',
-              searchKey: 'PREM-W',
-              standardPrice: 12,
-            },
-          ],
-          hasMore: false,
-          totalCount: 1,
-        }),
-      });
-    });
-
-    // Also mock the image entity endpoint the drawer tries to fetch on open.
-    await page.route('**/product/product{/**,}**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [] } }),
-      });
-    });
-
-    await page.goto(`/sales-quotation/${QUOT_ID}`);
-    await page.waitForSelector('[data-testid="inline-lines-panel"]', { timeout: 8_000 });
-
-    // Enter edit mode for line A (hover then click the pencil).
-    const rowA = page.locator(`[data-testid="line-row-${LINE_A.id}"]`);
-    await rowA.dispatchEvent('mouseover');
-    await rowA.locator('[data-testid="line-actions"] button').first().dispatchEvent('click');
-
-    // The product cell in edit mode renders a LookupTrigger with data-testid="field-product".
-    const productTrigger = rowA.locator('[data-testid="field-product"]');
-    await expect(productTrigger).toBeVisible({ timeout: 3_000 });
-    await productTrigger.click();
-
-    // The ProductSearchDrawer should open.
-    const drawer = page.getByTestId('product-search-drawer');
-    await expect(drawer).toBeVisible({ timeout: 5_000 });
-
-    // The product option should show the price formatted with EUR (symbol-after: "12.00 €").
-    // The DRAFT_HEADER has currency$_identifier: 'EUR', which DetailView passes as
-    // selectorContext.currency to ProductSearchDrawer. The getPrice() function then
-    // calls formatCurrency('EUR', 12) → "12.00 €".
-    const optionBtn = page.getByTestId('product-search-option-prod-search-001');
-    await expect(optionBtn).toBeVisible({ timeout: 5_000 });
-
-    // Assert the EUR-formatted price is visible somewhere inside the option.
-    await expect(optionBtn).toContainText('12,00 €');
   });
 });

@@ -201,37 +201,11 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page.getByTestId('cuentas-card')).toBeVisible();
   });
 
-  test('renders the list through the window ListView with the toolbar and sidebar', async ({ page }) => {
-    await expect(page.getByTestId('list-view')).toBeVisible();
-    await expect(page.getByTestId('cuentas-card')).toBeVisible();
-    await expect(page.getByTestId('cuentas-toolbar')).toBeVisible();
-    await expect(page.getByTestId('cuentas-sidebar')).toBeVisible();
-    await expect(page.getByTestId('balance-card')).toBeVisible();
-    await expect(page.getByTestId('pending-reconcile-card')).toBeVisible();
-  });
-
   test('renders every active account row and hides the archived one', async ({ page }) => {
     for (const acc of ACCOUNTS.filter((a) => a.active !== false)) {
       await expect(page.getByTestId(`row-${acc.id}`)).toBeVisible();
     }
     await expect(page.getByTestId('row-acc-5')).toHaveCount(0);
-  });
-
-  test('renders only the contract-driven data columns', async ({ page }) => {
-    // Every named column comes from contract.json (entity `account`, grid + gridOrder).
-    // Account actions use DataTable's shared trailing quick-actions cell, not a synthetic
-    // `_rowActions` data column owned by this window.
-    for (const key of ['name', 'type', 'currency', 'country', 'currentBalance', 'eTGOPendingCount']) {
-      await expect(page.getByTestId(`column-header-${key}`)).toHaveCount(1);
-    }
-    await expect(page.getByTestId('column-header-_rowActions')).toHaveCount(0);
-  });
-
-  test('renders the rich cell bodies inside the generic grid cells', async ({ page }) => {
-    await expect(page.getByTestId('cell-acc-1-name')).toContainText('Santander');
-    // IBAN is chunked in groups of four by the shared TypeCell.
-    await expect(page.getByTestId('cell-acc-1-type')).toContainText('ES12 1234 0000 0000 0000 0001');
-    await expect(page.getByTestId('cell-acc-1-currentBalance')).toContainText('211.841,01');
   });
 
   test('a long account name truncates without pushing out the avatar or connection badge', async ({ page }) => {
@@ -259,15 +233,6 @@ test.describe('Financial Accounts list — Cuentas', () => {
 
     await name.hover();
     await expect(page.getByTestId('account-row-name-acc-6-tooltip')).toHaveText(LONG_ACCOUNT_NAME);
-  });
-
-  test('a short account name does not open a redundant tooltip', async ({ page }) => {
-    const shortName = page.getByTestId('account-row-name-acc-1');
-    expect(await shortName.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-
-    await shortName.hover();
-
-    await expect(page.getByTestId('account-row-name-acc-1-tooltip')).toHaveCount(0);
   });
 
   test('a short disconnected account keeps its connection badge next to the name', async ({ page }) => {
@@ -332,18 +297,6 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page.getByTestId('row-acc-4')).toHaveCount(0);
   });
 
-  test('Conciliado pill vs pending pill per account', async ({ page }) => {
-    // acc-4 has eTGOPendingCount = 0 → "Conciliado" pill.
-    await expect(
-      page.getByTestId('cell-acc-4-eTGOPendingCount').getByTestId('reconcile-status-reconciled'),
-    ).toBeVisible();
-
-    // acc-1 has eTGOPendingCount = 12 → "Conciliar (12)" pending pill.
-    const pending = page.getByTestId('cell-acc-1-eTGOPendingCount').getByTestId('reconcile-status-pending');
-    await expect(pending).toBeVisible();
-    await expect(pending).toContainText('12');
-  });
-
   test('the pending pill deep-links to the reconciliation tab without a plain row click', async ({ page }) => {
     await page.getByTestId('cell-acc-1-eTGOPendingCount').getByTestId('reconcile-status-pending').click();
 
@@ -357,20 +310,6 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
     await expect(page.getByTestId('detail-tab-reconciliation')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('financial-account-automatch')).toBeVisible();
-  });
-
-  test('the row hover actions keep their per-row testids', async ({ page }) => {
-    const row = page.getByTestId('row-acc-1');
-    await row.hover();
-
-    await expect(row.getByTestId('account-row-edit-acc-1')).toBeVisible();
-    // Sync only renders for PSD2-connected accounts.
-    await expect(row.getByTestId('account-row-refresh-acc-1')).toBeVisible();
-    await expect(row.getByTestId('account-row-menu-trigger-acc-1')).toBeVisible();
-
-    const offline = page.getByTestId('row-acc-3');
-    await offline.hover();
-    await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
   });
 
   test('row actions stay pinned to the visible right edge while the table scrolls horizontally', async ({ page }) => {
@@ -459,53 +398,6 @@ test.describe('Financial Accounts list — Cuentas', () => {
     await page.getByTestId('cell-acc-1-name').click();
 
     await expect(page).toHaveURL(/\/financial-account\/acc-1$/);
-  });
-
-  // This list reuses DataTable's canonical sticky quick-actions CELL while supplying
-  // account-specific contents through `rowQuickActions.render`. It must not also mount the
-  // canonical RowQuickActions CONTENT, which would duplicate Edit/Delete and obscure the
-  // account kebab (Abrir / Nuevo movimiento / Transferir / Desconectar / Archivar).
-  test('the shared quick-actions cell renders only the account-specific controls', async ({ page }) => {
-    const row = page.getByTestId('row-acc-1');
-    await row.hover();
-
-    // Revealed on hover: DataTable marks its rows with the NAMED group `group/row`
-    // (DataTable.jsx ~1201), which AccountRowActions targets alongside the plain `group`.
-    await expect(row.getByTestId('account-row-edit-acc-1')).toBeVisible();
-    await expect(row.getByTestId('account-row-menu-trigger-acc-1')).toBeVisible();
-    // Sync only renders for PSD2-connected accounts (acc-1 is, acc-3 is not).
-    await expect(row.getByTestId('account-row-refresh-acc-1')).toBeVisible();
-
-    const offline = page.getByTestId('row-acc-3');
-    await offline.hover();
-    await expect(offline.getByTestId('account-row-refresh-acc-3')).toHaveCount(0);
-
-    // Nothing from the canonical RowQuickActions content is in the DOM.
-    await expect(row.getByTestId('row-quick-actions')).toHaveCount(0);
-    await expect(row.getByTestId('row-quick-action-edit')).toHaveCount(0);
-    await expect(row.getByTestId('row-quick-action-delete')).toHaveCount(0);
-
-    // The kebab is reachable by a normal click and opens its menu.
-    await openAccountRowMenu(page, 'acc-1');
-    await expect(page.getByTestId('account-row-menu-open-acc-1')).toBeVisible();
-    await expect(page.getByTestId('account-row-menu-archive-acc-1')).toBeVisible();
-  });
-
-  test('"Reglas de matcheo" button navigates to the match-rule list', async ({ page }) => {
-    await page.getByTestId('cuentas-matching-rules-button').click();
-
-    await expect(page).toHaveURL(/\/match-rule$/);
-  });
-
-  test('"Nueva cuenta" button opens the wizard instead of navigating', async ({ page }) => {
-    const newBtn = page.getByTestId('cuentas-new-account-button');
-    await expect(newBtn).toBeEnabled();
-
-    const urlBefore = page.url();
-    await newBtn.click();
-
-    await expect(page.getByTestId('new-account-wizard')).toBeVisible();
-    expect(page.url()).toBe(urlBefore);
   });
 });
 

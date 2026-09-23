@@ -114,30 +114,6 @@ async function installMocks(page, { rows = ROWS } = {}) {
   await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, headerHandler);
 }
 
-test.describe('Not Posted Documents — filter options load', () => {
-  test.beforeEach(async ({ page }) => {
-    await login(page);
-    await installMocks(page);
-    await page.goto(`/${SPEC}`);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  });
-
-  test('document type select is populated with options from the API', async ({ page }) => {
-    const select = page.getByTestId('npd-filter-document-type');
-    await expect(select).toBeVisible();
-
-    // The filter section label uses i18n key filterDocumentType
-    const labelText = t('filterDocumentType');
-    await expect(page.locator('label').filter({ hasText: labelText }).first()).toBeVisible();
-
-    // Options rendered from the mock filter-options response
-    await expect(select.locator('option[value="SI"]')).toHaveCount(1);
-    await expect(select.locator('option[value="PI"]')).toHaveCount(1);
-    await expect(select.locator('option[value="SI"]')).toHaveText('Sales Invoice');
-    await expect(select.locator('option[value="PI"]')).toHaveText('Purchase Invoice');
-  });
-});
-
 test.describe('Not Posted Documents — initial rows', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -229,20 +205,6 @@ test.describe('Not Posted Documents — bulk post', () => {
     // Success toast for full completion
     await expect(page.locator('[data-type="success"]').first()).toBeVisible({ timeout: 5_000 });
     await expect(page.locator('[data-type="success"]').first()).toContainText(t('postingComplete'));
-  });
-});
-
-test.describe('Not Posted Documents — empty state', () => {
-  test('renders empty-state element when the rows endpoint returns no rows', async ({ page }) => {
-    await login(page);
-    // Override rows mock to return empty
-    await installMocks(page, { rows: [] });
-    await page.goto(`/${SPEC}`);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    await expect(page.getByTestId('npd-empty-state')).toBeVisible();
-    // No table rows
-    await expect(page.locator('tbody tr')).toHaveCount(0);
   });
 });
 

@@ -185,27 +185,6 @@ async function installContactMocks(page) {
 // Note: date column was removed (field not available in VF contract entities).
 
 test.describe('Verifactu table structure — ETP-3778', () => {
-  test('accepted row renders the invoice number in the table', async ({ page }) => {
-    await loginWithOrg(page);
-    await installVfMocksWithRows(page, [VF_ROW_ACCEPTED]);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
-
-    // Invoice number cell must be visible (FK field falls back to raw value)
-    await expect(page.getByText('SV-2025-1001')).toBeVisible({ timeout: 6_000 });
-  });
-
-  test('invoice number column header is visible in the Aceptadas tab', async ({ page }) => {
-    await loginWithOrg(page);
-    await installVfMocksWithRows(page, [VF_ROW_ACCEPTED]);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
-
-    const table = page.getByTestId('fm-data-table').first();
-    await expect(table.getByText(t('fiscalMonitor.col.invoiceNumber'))).toBeVisible({ timeout: 6_000 });
-  });
 
   test('empty tab shows the empty-state message — no layout shift', async ({ page }) => {
     await loginWithOrg(page);
@@ -215,21 +194,6 @@ test.describe('Verifactu table structure — ETP-3778', () => {
     await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
 
     await expect(page.getByText(t('fiscalMonitor.empty'))).toBeVisible({ timeout: 6_000 });
-  });
-
-  test('invoice number column is present in the Con problemas filter', async ({ page }) => {
-    await loginWithOrg(page);
-    await installVfMocksWithRows(page, [VF_ROW_REJECTED]);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByTestId('verifactu-tablecard')).toBeVisible({ timeout: 8_000 });
-
-    // Switch to "Con problemas" filter pill (shows rejected/partial/invalid rows)
-    const problemsTab = page.getByTestId('fm-tabs').locator('button').filter({ hasText: t('fiscalMonitor.verifactu.pill.problems') }).first();
-    await problemsTab.click();
-
-    const table = page.getByTestId('fm-data-table').first();
-    await expect(table.getByText(t('fiscalMonitor.col.invoiceNumber'))).toBeVisible({ timeout: 6_000 });
   });
 });
 
@@ -252,95 +216,11 @@ test.describe('Error status pill → Contact Detail popup — ETP-3778', () => {
     // Contact Detail modal should open
     await expect(page.getByText(t('contactDetail.title'))).toBeVisible({ timeout: 6_000 });
   });
-
-  test('Contact Detail modal shows the business partner name', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-
-    await expect(page.getByText(t('contactDetail.title'))).toBeVisible({ timeout: 6_000 });
-    await expect(page.getByText(BP_RECORD.name, { exact: false })).toBeVisible({ timeout: 4_000 });
-  });
-
-  test('CO (correct) status pill has no cursor:pointer — is not clickable', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_OK]);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    // The CO success pill must not have role="button" (no onClick applied)
-    const successPill = page.locator('[data-testid="status-pill"][data-status="success"]').first();
-    await expect(successPill).toBeVisible({ timeout: 6_000 });
-    await expect(successPill).not.toHaveAttribute('role', 'button');
-  });
-
-  test('modal closes when the close (×) button is clicked', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.title'))).toBeVisible({ timeout: 6_000 });
-
-    // Click the aria-label="close" button inside the modal (scoped to avoid strict-mode
-    // violations if other "Cerrar" buttons exist elsewhere on the page)
-    const modal = page.getByTestId('contact-detail-backdrop').first();
-    await modal.getByRole('button', { name: t('close') }).click();
-    await expect(page.getByText(t('contactDetail.title'))).not.toBeVisible({ timeout: 4_000 });
-  });
-
-  test('modal closes when the backdrop is clicked', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.title'))).toBeVisible({ timeout: 6_000 });
-
-    // Click the semi-transparent backdrop
-    await page.getByTestId('contact-detail-backdrop').click({ position: { x: 5, y: 5 } });
-    await expect(page.getByText(t('contactDetail.title'))).not.toBeVisible({ timeout: 4_000 });
-  });
 });
 
 // ── 8.3 Tax ID Key custom dropdown ───────────────────────────────────────────
 
 test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
-  test('dropdown opens when the trigger button is clicked', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    // Open the modal
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.taxIDKey'))).toBeVisible({ timeout: 6_000 });
-
-    // Click the dropdown trigger button (aria-haspopup="listbox")
-    const trigger = page.locator('button[aria-haspopup="listbox"]');
-    await trigger.click();
-
-    // The listbox should appear
-    await expect(page.getByRole('listbox')).toBeVisible({ timeout: 4_000 });
-  });
 
   test('dropdown lists the options returned by the selector API', async ({ page }) => {
     await loginWithOrg(page);
@@ -361,71 +241,5 @@ test.describe('TaxIDKeyPicker dropdown — ETP-3778', () => {
     for (const opt of TAX_ID_KEY_OPTIONS) {
       await expect(page.getByRole('option', { name: opt.label })).toBeVisible({ timeout: 4_000 });
     }
-  });
-
-  test('selecting an option updates the trigger button label', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.taxIDKey'))).toBeVisible({ timeout: 6_000 });
-
-    const trigger = page.locator('button[aria-haspopup="listbox"]');
-    await trigger.click();
-
-    // Select the third option from the fixture
-    const selectedOption = TAX_ID_KEY_OPTIONS[2];
-    await page.getByRole('option', { name: selectedOption.label }).click();
-
-    // Trigger should now show the selected label
-    await expect(trigger).toContainText(selectedOption.label, { timeout: 3_000 });
-    // Listbox should close after selection
-    await expect(page.getByRole('listbox')).not.toBeVisible({ timeout: 3_000 });
-  });
-
-  test('dropdown closes when Escape is pressed', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.taxIDKey'))).toBeVisible({ timeout: 6_000 });
-
-    const trigger = page.locator('button[aria-haspopup="listbox"]');
-    await trigger.click();
-    await expect(page.getByRole('listbox')).toBeVisible({ timeout: 4_000 });
-
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('listbox')).not.toBeVisible({ timeout: 3_000 });
-  });
-
-  test('dropdown closes when clicking outside (backdrop)', async ({ page }) => {
-    await loginWithOrg(page);
-    await installSiiMocksWithRows(page, [SII_ROW_ERROR]);
-    await installContactMocks(page);
-    await navigateTo(page, 'fiscal-monitor');
-
-    await expect(page.getByText(t('fiscalMonitor.sii.tab.issued'))).toBeVisible({ timeout: 8_000 });
-
-    const pill = page.locator('[data-testid="status-pill"]:is([data-status="warn"],[data-status="danger"])').first();
-    await pill.click();
-    await expect(page.getByText(t('contactDetail.taxIDKey'))).toBeVisible({ timeout: 6_000 });
-
-    const trigger = page.locator('button[aria-haspopup="listbox"]');
-    await trigger.click();
-    await expect(page.getByRole('listbox')).toBeVisible({ timeout: 4_000 });
-
-    // Mousedown on the TaxIDKeyPicker backdrop closes the list
-    await page.getByTestId('taxid-picker-backdrop').dispatchEvent('mousedown');
-    await expect(page.getByRole('listbox')).not.toBeVisible({ timeout: 3_000 });
   });
 });

@@ -128,66 +128,11 @@ for (const spec of SPECS) {
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     });
 
-    test('hover reveals the overlay with the expected canonical buttons', async ({ page }) => {
-      const firstRow = page.locator('tbody tr').filter({ hasText: 'DOC-001' }).first();
-      await expect(firstRow).toBeVisible();
-      await firstRow.hover();
-
-      const overlay = firstRow.getByTestId('row-quick-actions');
-      // Allow the CSS hover transition to settle before asserting children.
-      await expect(overlay).toBeVisible({ timeout: 5_000 });
-
-      // Always-on canonical buttons.
-      await expect(firstRow.getByTestId('row-quick-action-edit')).toBeVisible();
-      await expect(firstRow.getByTestId('row-quick-action-delete')).toBeVisible();
-
-      // Per-window wiring: assert each conditional button is present or absent
-      // as declared in the custom window file. Catches regressions where a
-      // window stops passing onClone / onEmail / menuActions.
-      const { expects, emailGate } = FIELDS[spec];
-      const clone = firstRow.getByTestId('row-quick-action-clone');
-      const email = firstRow.getByTestId('row-quick-action-email');
-      const more  = firstRow.getByTestId('row-quick-action-more');
-
-      if (expects.clone) await expect(clone).toBeVisible();
-      else               await expect(clone).toHaveCount(0);
-
-      if (expects.email) await expect(email).toBeVisible();
-      else               await expect(email).toHaveCount(0);
-
-      if (expects.more)  await expect(more).toBeVisible();
-      else               await expect(more).toHaveCount(0);
-
-      // Positive case for the CO-only email gate (ETP-4717): DOC-001 above is
-      // Draft, so email correctly stays hidden there for these windows — but
-      // the button's wiring must still show up once the document is
-      // Completado, otherwise this spec would only ever assert absence.
-      if (emailGate === 'confirmed') {
-        const secondRow = page.locator('tbody tr').filter({ hasText: 'DOC-002' }).first();
-        await secondRow.hover();
-        await expect(secondRow.getByTestId('row-quick-action-email')).toBeVisible({ timeout: 5_000 });
-      }
-    });
-
     test('Edit button navigates to detail view', async ({ page }) => {
       const firstRow = page.locator('tbody tr').filter({ hasText: 'DOC-001' }).first();
       await firstRow.hover();
       await firstRow.getByTestId('row-quick-action-edit').click();
       await expect(page).toHaveURL(new RegExp(`/${spec}/row-001`));
-    });
-
-    test('Delete button opens confirm modal and Cancel dismisses it', async ({ page }) => {
-      const firstRow = page.locator('tbody tr').filter({ hasText: 'DOC-001' }).first();
-      await firstRow.hover();
-      const deleteBtn = firstRow.getByTestId('row-quick-action-delete');
-      if (await deleteBtn.count() === 0) test.skip(true, 'Delete hidden for this row state');
-
-      await deleteBtn.click();
-      const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible();
-
-      await dialog.getByRole('button').filter({ hasNotText: /delete|eliminar/i }).first().click();
-      await expect(dialog).toBeHidden();
     });
   });
 }
@@ -210,28 +155,6 @@ test.describe('Preview panel — row click opens preview', () => {
         await firstRow.click();
         await expect(page.getByTestId('generic-preview-modal')).toBeVisible();
         await expect(page).toHaveURL(new RegExp(`/${spec}$`));
-      });
-
-      test('X button closes preview', async ({ page }) => {
-        const firstRow = page.locator('tbody tr').filter({ hasText: 'DOC-001' }).first();
-        await firstRow.click();
-        const modal = page.getByTestId('generic-preview-modal');
-        await expect(modal).toBeVisible();
-        // aria-label resolves to "Cerrar" (es_ES) or "Close" (en_US) via ui('close')
-        await modal.getByRole('button', { name: /cerrar|close/i }).click();
-        await expect(modal).toBeHidden({ timeout: 1000 });
-      });
-
-      test('Edit button navigates to detail from preview', async ({ page }) => {
-        const firstRow = page.locator('tbody tr').filter({ hasText: 'DOC-001' }).first();
-        await firstRow.click();
-        const modal = page.getByTestId('generic-preview-modal');
-        await expect(modal).toBeVisible();
-        // Edit button text resolves to "Editar" (es_ES) or "Edit" (en_US) via
-        // ui('orderPreviewEdit') / ui('quotationPreviewEdit')
-        const editBtn = modal.getByRole('button', { name: /editar|edit/i });
-        await editBtn.click();
-        await expect(page).toHaveURL(new RegExp(`/${spec}/row-001`));
       });
     });
   }

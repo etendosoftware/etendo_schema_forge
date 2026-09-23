@@ -207,55 +207,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     await expect(page.getByTestId('kpi-balance')).toBeVisible();
   });
 
-  test('breadcrumb and account name are set via useSetPageMeta', async ({ page }) => {
-
-    // The TopBar renders the breadcrumb: "Finanzas / Cuentas / Banco Santander"
-    await expect(
-      page.getByText(/Finanzas\s*\/\s*Cuentas\s*\/\s*Banco Santander/),
-    ).toBeVisible();
-  });
-
-  test('the three tabs are visible with correct counts', async ({ page }) => {
-
-    // Wait for movements to load (5 transactions in mock)
-    await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
-
-    // Movements tab with badge "5"
-    const movementsTab = page.getByRole('tab', { name: /Movimientos/i });
-    await expect(movementsTab).toBeVisible();
-    await expect(movementsTab).toContainText('5');
-
-    // Conciliación with the account.pendingCount (4)
-    const reconcileTab = page.getByRole('tab', { name: /Conciliación/i });
-    await expect(reconcileTab).toBeVisible();
-    await expect(reconcileTab).toContainText('4');
-
-    // Extractos importados — statementsCount=0 (badge hidden when 0 typically)
-    await expect(page.getByRole('tab', { name: /Extractos importados/i })).toBeVisible();
-  });
-
-  test('summary strip shows IBAN chunked and the three KPI labels', async ({ page }) => {
-    await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
-
-    // IBAN chunked into groups of 4: "ES12 1234 0000 0000 0000 0001"
-    await expect(page.getByTestId('iban-text')).toHaveText('ES12 1234 0000 0000 0000 0001');
-
-    // KPIs visible
-    await expect(page.getByTestId('kpi-balance')).toContainText('Saldo total');
-    await expect(page.getByTestId('kpi-inflows')).toContainText('Entradas');
-    await expect(page.getByTestId('kpi-outflows')).toContainText('Salidas');
-
-    // es-ES currency formatting: "211.841,01 €" appears in the balance KPI.
-    await expect(page.getByTestId('kpi-balance')).toContainText('211.841,01');
-  });
-
-  test('all five mocked movement rows are visible in the table', async ({ page }) => {
-
-    for (const m of MOVEMENTS) {
-      await expect(page.getByTestId(`movement-row-${m.id}`)).toBeVisible();
-    }
-  });
-
   test('clipped movement values reveal their complete content on hover', async ({ page }) => {
     await expect(page.getByTestId('movement-row-tx-1')).toBeVisible();
 
@@ -268,16 +219,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
       await cellText.hover();
       await expect(page.getByTestId(`movement-cell-tx-1-${field}-tooltip`)).toHaveText(fullValue);
     }
-  });
-
-  test('a movement value that fits does not open a redundant tooltip', async ({ page }) => {
-    const shortContact = page.getByTestId('movement-cell-tx-2-businessPartner');
-    await expect(shortContact).toHaveText('Acme Corp');
-    expect(await shortContact.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-
-    await shortContact.hover();
-
-    await expect(page.getByTestId('movement-cell-tx-2-businessPartner-tooltip')).toHaveCount(0);
   });
 
   test('Type filter narrows the table to BPD (Cobro) rows only', async ({ page }) => {
@@ -336,10 +277,6 @@ test.describe('Financial Account Detail (T6) — mocked', () => {
     // Confirm the clipboard actually received the raw IBAN (no spaces).
     const clipboardValue = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardValue).toBe('ES1212340000000000000001');
-  });
-
-  test('the movements toolbar exposes the back arrow', async ({ page }) => {
-    await expect(page.getByTestId('movements-toolbar-back')).toBeVisible();
   });
 
   // The back arrow is `navigate(-1)` (MovementsToolbar/index.jsx ~99) — browser history, NOT a

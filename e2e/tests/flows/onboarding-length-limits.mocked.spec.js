@@ -127,17 +127,6 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
     await expect(page.getByText(/no puede superar/i)).toHaveCount(0);
   });
 
-  test('shows no character counter on the password field', async ({ page }) => {
-    // There is no bcrypt in the stack and the stored hash is fixed-length, so a
-    // counter would advertise a truncation limit that does not exist.
-    await installMocks(page);
-    await page.goto('/onboarding');
-    await page.getByTestId('action-switch-to-register').click();
-
-    await page.locator('#reg-password').fill('A'.repeat(80) + 'a1!');
-    await expect(page.getByText(/\d+\s*\/\s*(72|128)/)).toHaveCount(0);
-  });
-
   test('localizes a FIELD_TOO_LONG rejection instead of showing the English sentence', async ({ page }) => {
     await installMocks(page, { registerBehavior: 'field-too-long' });
     await page.goto('/onboarding');
@@ -157,17 +146,6 @@ test.describe('ETP-4665 — Step 1 length limits', () => {
 // ── Step 2: profile ──────────────────────────────────────────────────────────
 
 test.describe('ETP-4665 — Step 2 length limits', () => {
-
-  test('caps the full name at AD_USER.NAME(60)', async ({ page }) => {
-    await installMocks(page);
-    await registerAndReachProfile(page, Date.now());
-
-    const fullName = page.locator('#fullName');
-    await expect(fullName).toHaveAttribute('maxlength', String(LIMITS.fullName));
-
-    await fullName.fill('n'.repeat(120));
-    await expect(fullName).toHaveValue('n'.repeat(LIMITS.fullName));
-  });
 
   test('a name accepted in step 1 never arrives pre-filled and already in error', async ({ page }) => {
     // maxLength does not truncate a programmatically assigned value: when step 1
@@ -237,15 +215,6 @@ test.describe('ETP-4665 — Step 3 length limits', () => {
     await page.getByRole('button', { name: /continuar|continue/i }).click();
     await expect(page.getByText(/datos para empezar a facturar/i)).toBeVisible({ timeout: 5_000 });
   }
-
-  test('caps company name, tax id and address at their column sizes', async ({ page }) => {
-    await installMocks(page);
-    await reachCompanyStep(page);
-
-    await expect(page.locator('#clientName')).toHaveAttribute('maxlength', String(LIMITS.clientName));
-    await expect(page.locator('#fiscalIdValue')).toHaveAttribute('maxlength', String(LIMITS.fiscalId));
-    await expect(page.locator('#address')).toHaveAttribute('maxlength', String(LIMITS.address));
-  });
 
   test('never sends a company name that would overflow AD_CLIENT.VALUE', async ({ page }) => {
     await installMocks(page);

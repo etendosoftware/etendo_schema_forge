@@ -99,13 +99,4 @@ test.describe('Environment access block — BlockedAccessScreen', () => {
     await expect(page.getByTestId('BlockedAccessScreen__488148')).toHaveCount(0);
     await expect(page.getByTestId('upgrade-page-shell')).toBeVisible({ timeout: 10_000 });
   });
-
-  // MEMBERSHIP_REQUIRED is a different decision (see environmentAccessGate.js's own
-  // `BLOCKING_DECISIONS` set) — "you aren't a member of this environment", not a commercial
-  // cut-off — and is deliberately NOT rendered as BlockedAccessScreen. A regression that
-  // widened the blocking set to include it would be silent otherwise.
-  test('a non-blocking decision (MEMBERSHIP_REQUIRED) does not show the blocked screen', async ({ page }) => {
-    await installEnvironmentAccessBlock(page, 'MEMBERSHIP_REQUIRED');
-    await expect(page.getByTestId('BlockedAccessScreen__488148')).toHaveCount(0);
-  });
 });

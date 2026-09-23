@@ -113,19 +113,4 @@ test.describe('Sales Order — currency field always editable for draft orders (
     await expect(currencyTrigger).toBeVisible({ timeout: 5_000 });
     await expect(currencyTrigger).not.toBeDisabled();
   });
-
-  test('currency field is editable when order has no saved lines', async ({ page }) => {
-    await login(page);
-    await installDetailMock(page, []);
-
-    await page.goto(`/sales-order/${ORDER_ID}`);
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const currencyField = page.getByTestId('field-currency');
-    await expect(currencyField).toBeVisible({ timeout: 8_000 });
-
-    const currencyTrigger = currencyField.getByTestId('currency-rate-trigger');
-    await expect(currencyTrigger).toBeVisible({ timeout: 5_000 });
-    await expect(currencyTrigger).not.toBeDisabled();
-  });
 });

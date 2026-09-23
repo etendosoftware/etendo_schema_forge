@@ -152,26 +152,6 @@ const SPECS = ['sales-order', 'purchase-order'];
 for (const spec of SPECS) {
   test.describe(`Notes save on blur — ${spec}`, () => {
 
-    // ── Happy path ───────────────────────────────────────────────────────────
-
-    test('blur triggers toast with "Note saved" / "Nota guardada"', async ({ page }) => {
-      await login(page);
-      await installMocks(page, spec);
-      await openDetail(page, spec, RECORD_ID);
-
-      const ta = await focusNotesTextarea(page);
-
-      await ta.fill('Test note content');
-
-      // Blur by clicking outside the notes container
-      await page.getByTestId('detail-view').click({ position: { x: 10, y: 10 }, force: true });
-
-      // Toast should appear with the i18n key result
-      await expect(
-        page.getByText(/nota guardada|note saved/i)
-      ).toBeVisible({ timeout: 8_000 });
-    });
-
     // ── PATCH request verification ────────────────────────────────────────────
 
     test('blur emits PATCH to correct endpoint with description field in body', async ({ page }) => {

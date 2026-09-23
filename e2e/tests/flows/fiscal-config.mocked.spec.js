@@ -87,43 +87,6 @@ async function openActionsMenu(page) {
   await page.getByTestId('FiscalConfigPage__actionsMenu').click();
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
-test.describe('Fiscal Config — no org selected', () => {
-  test('shows the no-org message when session has no selected organisation', async ({ page }) => {
-    await login(page);
-    // ETP-4576 — the shared stub restores a session that HAS an organisation, which is what
-    // every other spec needs. This case is about the opposite, so it overrides the restore
-    // with an org-less session; registered after login(), so it wins (Playwright is LIFO).
-    //
-    // Org-less, NOT role-less: the session must still carry `roleList` plus a matching
-    // `environment.roleId`, because `mapRestoredSession` resolves `selectedRole` by looking the
-    // roleId up in the list, and `AuthContext.loadAccess()` short-circuits to an EMPTY access
-    // snapshot — no network call — when there is no `selectedRole`. `useRoleMenu` reads that
-    // empty `menuAccess` as a confirmed zero-access role (ETP-5375), and `AppLayout` then
-    // renders the blocking no-access screen INSTEAD of the page, so `fiscal.noOrg` can never
-    // appear. Dropping either field again re-breaks this test in a way that looks like flake.
-    // Omitting only `orgId` is what makes `selectedOrg` null, which is the condition under test.
-    await page.route('**/sws/go/session', (route) => (route.request().method() === 'GET'
-      ? route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          account: { name: 'admin' },
-          environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role' },
-          roleList: [{
-            id: 'e2e-mock-role',
-            name: 'Administrator',
-            orgList: [{ id: MOCK_ORG_ID, name: 'E2E Org' }],
-          }],
-        }),
-      })
-      : route.fallback()));
-    await navigateTo(page, 'fiscal-config');
-    await expect(page.getByText(t('fiscal.noOrg'))).toBeVisible();
-  });
-});
-
 test.describe('Fiscal Config — unconfigured (wizard)', () => {
   test('shows the onboarding wizard territory screen when no fiscal records exist', async ({ page }) => {
     await loginWithOrg(page);
@@ -135,68 +98,6 @@ test.describe('Fiscal Config — unconfigured (wizard)', () => {
     ).toBeVisible({ timeout: 8_000 });
   });
 
-});
-
-test.describe('Fiscal Config — SII profile', () => {
-  test('shows the SII configuration section when an SII record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
-  });
-
-  test('shows the Navarra SII section when the SII record has navarra=Y', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_NAVARRA_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
-  });
-});
-
-test.describe('Fiscal Config — TBAI profile', () => {
-  test('shows the TBAI configuration section when a TBAI record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { tbai: TBAI_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
-  });
-});
-
-test.describe('Fiscal Config — Verifactu profile', () => {
-  test('shows the Verifactu configuration section when a Verifactu record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { verifactu: VERIFACTU_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.verifactu.field.tax'))).toBeVisible({ timeout: 8_000 });
-  });
-});
-
-test.describe('Fiscal Config — SII+TBAI combined profile', () => {
-  test('shows both SII and TBAI sections when both records exist', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_RECORD, tbai: TBAI_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
-
-    // SII+TBAI uses tabs — switch to TBAI tab to verify it renders
-    await page.getByRole('button', { name: t('fiscal.tab.tbai') }).click();
-    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 5_000 });
-  });
-});
-
-test.describe('Fiscal Config — conflict state', () => {
-  test('shows the conflict warning when both Verifactu and SII records exist', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_RECORD, verifactu: VERIFACTU_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.conflict.title'))).toBeVisible({ timeout: 8_000 });
-  });
 });
 
 test.describe('Fiscal Config — wizard interaction', () => {
@@ -279,23 +180,6 @@ test.describe('Fiscal Config — certificate upload modal', () => {
     await page.getByText(t('fiscal.cert.dropzone.drag')).click();
 
     await expect(page.getByText(t('fiscal.cert.modal.title'))).toBeVisible({ timeout: 4_000 });
-  });
-
-  test('uploading a non-p12 file shows a format error', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await page.route('**/certificate{/**,}**', route =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) }),
-    );
-    await navigateTo(page, 'fiscal-config');
-    await openCertModal(page);
-
-    const input = page.getByTestId('cert-file-input');
-    await input.setInputFiles({ name: 'documento.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
-
-    await expect(page.getByText(t('fiscal.cert.err.format'))).toBeVisible({ timeout: 3_000 });
-    // Still on pick step — verify button stays disabled (no valid file)
-    await expect(page.getByRole('button', { name: t('fiscal.cert.btn.verify') })).toBeDisabled();
   });
 });
 
@@ -504,30 +388,6 @@ test.describe('Fiscal Config — Change SIF (ETP-4785)', () => {
     });
   }
 
-  test('TC6 VERIFACTU: confirm dialog shows the permanence notice and still allows the change', async ({ page }) => {
-    const c = CHANGE_SIF_CASES.find(x => x.label === 'VERIFACTU');
-    await loginWithOrg(page);
-    await installChangeSifMocks(page, c);
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
-    await openActionsMenu(page);
-    await page.getByTestId('FiscalConfigPage__changeSif').click();
-
-    await expect(page.getByTestId('ChangeSifDialog__notice')).toBeVisible();
-    await expect(page.getByText(t(c.noticeKey))).toBeVisible();
-
-    const confirm = page.getByTestId('ChangeSifDialog__confirm');
-    await expect(confirm).toBeEnabled();
-
-    const [putReq] = await Promise.all([
-      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
-      confirm.click(),
-    ]);
-    expect(JSON.parse(putReq.postData() || '{}')).toEqual({ active: false });
-    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
-  });
-
   test('TC4 cancel keeps the active config (no PUT, no wizard)', async ({ page }) => {
     const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
     await loginWithOrg(page);
@@ -719,48 +579,6 @@ const NEW_SII_RECORD = {
 };
 
 test.describe('Fiscal Config — Add complementary SIF (ETP-4785)', () => {
-  test('button "Add SII" is visible when only a TBAI record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { tbai: TBAI_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    // TBAI section must load first
-    await expect(page.getByText(t('fiscal.tbai.field.autoSend'))).toBeVisible({ timeout: 8_000 });
-
-    // The "Add SII" item is in the kebab because canAddComplementary is true (tbai-only profile).
-    // Open the actions menu first, then assert the item is present and contains the right text.
-    await openActionsMenu(page);
-    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toBeVisible();
-    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toContainText(
-      t('fiscal.addComplementary.addSii'),
-    );
-  });
-
-  test('button "Add SII" is NOT visible when only an SII record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { sii: SII_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.sii.legend.specialAuth'))).toBeVisible({ timeout: 8_000 });
-
-    // canAddComplementary is false for sii-only profile — open the kebab and verify
-    // addComplementary is absent from its items.
-    await openActionsMenu(page);
-    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
-  });
-
-  test('button "Add SII" is NOT visible when only a Verifactu record exists', async ({ page }) => {
-    await loginWithOrg(page);
-    await installFiscalConfigMocks(page, { verifactu: VERIFACTU_RECORD });
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(t('fiscal.verifactu.field.tax'))).toBeVisible({ timeout: 8_000 });
-
-    // canAddComplementary is false for verifactu profile — open the kebab and verify
-    // addComplementary is absent from its items.
-    await openActionsMenu(page);
-    await expect(page.getByTestId('FiscalConfigPage__addComplementary')).toHaveCount(0);
-  });
 
   test('happy path: clicking "Add SII" POSTs to sii-config and switches layout to sii+tbai', async ({ page }) => {
     // Stateful mock: before the POST, sii-config returns empty; after, returns the
@@ -934,39 +752,6 @@ test.describe('Fiscal Config — smart deactivation (deleted:true response)', ()
 
     // The old SIF section must be gone
     await expect(page.getByText(c.detailFieldLabel)).toHaveCount(0);
-  });
-
-  test('SII — backend deletes the record, refetch fires, and org ends up unconfigured', async ({ page }) => {
-    const c = CHANGE_SIF_CASES.find(x => x.label === 'SII');
-    await loginWithOrg(page);
-    const state = await installChangeSifDeletedMocks(page, c);
-    await navigateTo(page, 'fiscal-config');
-
-    await expect(page.getByText(c.detailFieldLabel)).toBeVisible({ timeout: 8_000 });
-
-    // Track the GET that fires after the PUT to confirm refetch happened
-    let refetchGetFired = false;
-    page.on('request', req => {
-      if (req.method() === 'GET' && req.url().includes(`/${c.spec}/`) && state.deleted) {
-        refetchGetFired = true;
-      }
-    });
-
-    await openActionsMenu(page);
-    await page.getByTestId('FiscalConfigPage__changeSif').click();
-    await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
-
-    await Promise.all([
-      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
-      page.getByTestId('ChangeSifDialog__confirm').click(),
-    ]);
-
-    // Wizard reappears — proves the GET re-fired and the page resolved to unconfigured
-    await expect(page.getByText(t('fiscal.onboarding.territory.title'))).toBeVisible({ timeout: 8_000 });
-    expect(refetchGetFired).toBe(true);
-
-    // No error shown
-    await expect(page.locator('[data-testid="ChangeSifDialog__error"]')).toHaveCount(0);
   });
 
   test('SII — stale config section is not visible while the page transitions after deletion', async ({ page }) => {

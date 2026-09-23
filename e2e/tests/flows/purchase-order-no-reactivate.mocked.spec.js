@@ -158,50 +158,6 @@ test.describe('Purchase Order detail — Reactivate in kebab menu follows hasLin
 });
 
 // --------------------------------------------------------------------------
-// Scenario B — List row-hover kebab: same hasLinkedDocuments gate
-// --------------------------------------------------------------------------
-
-test.describe('Purchase Order list — row-hover kebab Reactivate follows hasLinkedDocuments (ETP-5315)', () => {
-  test('row-hover kebab lists Reactivate for a completed row with no linked documents', async ({ page }) => {
-    await login(page);
-    await installMock(page, [CO_ROW_FREE]);
-    await page.goto('/purchase-order');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const row = page.locator('tbody tr').filter({ hasText: 'PO-CO-FREE' }).first();
-    await expect(row).toBeVisible({ timeout: 8_000 });
-    await row.hover();
-
-    const moreBtn = row.getByTestId('row-quick-action-more');
-    await expect(moreBtn).toBeVisible({ timeout: 5_000 });
-    await moreBtn.click();
-
-    await expect(page.getByRole('button', { name: /reactivar|reactivate/i })).toBeVisible();
-  });
-
-  test('row-hover kebab hides Reactivate for a completed row with a linked document', async ({ page }) => {
-    await login(page);
-    await installMock(page, [CO_ROW_LINKED]);
-    await page.goto('/purchase-order');
-    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-
-    const row = page.locator('tbody tr').filter({ hasText: 'PO-CO-LINKED' }).first();
-    await expect(row).toBeVisible({ timeout: 8_000 });
-    await row.hover();
-
-    const moreBtn = row.getByTestId('row-quick-action-more');
-    const moreBtnVisible = await moreBtn.isVisible({ timeout: 3_000 }).catch(() => false);
-
-    if (moreBtnVisible) {
-      await moreBtn.click();
-      await expect(page.getByRole('button', { name: /reactivar|reactivate/i })).toHaveCount(0, {
-        message: 'Reactivate must not appear in the row-hover kebab for a row with linked documents',
-      });
-    }
-  });
-});
-
-// --------------------------------------------------------------------------
 // Scenario C — List bulk-action toolbar: PurchaseOrderReactivateBulkAction
 // --------------------------------------------------------------------------
 

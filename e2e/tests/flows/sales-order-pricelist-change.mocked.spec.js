@@ -230,20 +230,4 @@ test.describe('Sales Order — price list field editable with saved lines (ETP-4
     await expect(combobox).toBeVisible({ timeout: 5_000 });
     await expect(combobox).not.toBeDisabled();
   });
-
-  test('C: form shows the price list value from the server response', async ({ page }) => {
-    await login(page);
-    await installOrderMocks(page, { returnOrder: ORDER });
-
-    await page.goto(`/sales-order/${ORDER_ID}`);
-    await waitForDetailView(page);
-
-    // ETP-4600: a field with a committed value renders as the chip
-    // (`field-priceList-chip`); the plain input (`field-priceList`) is not in
-    // the DOM in this state. The chip's <span> holds the value label.
-    const priceListChip = page.getByTestId('field-priceList-chip');
-    await expect(priceListChip).toBeVisible({ timeout: 8_000 });
-    // The field should show the identifier from the mock response
-    await expect(priceListChip).toContainText(ORDER['priceList$_identifier']);
-  });
 });

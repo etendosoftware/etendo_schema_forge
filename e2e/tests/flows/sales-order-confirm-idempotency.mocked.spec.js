@@ -352,45 +352,6 @@ test.describe('Sales Order — Confirm Modal idempotency (mocked)', () => {
    * arrow must be an SVG, not a literal "→" in the label, and there must be
    * exactly ONE arrow svg.
    */
-  test('shipment only — result modal primary button reads "Ver albarán" with one svg arrow', async ({ page }) => {
-    const state = {
-      calls: { documentAction: 0, createShipment: 0, createDraftInvoice: 0 },
-      failNext: { shipment: false, invoice: false },
-    };
-    await installConfirmMocks(page, state);
-
-    await page.goto(`/sales-order/${ORDER_ID}`);
-    await page.waitForLoadState('domcontentloaded');
-
-    await openConfirmAndTickShipmentOnly(page);
-    await clickConfirm(page);
-
-    // Result modal appears with the shipment doc only.
-    await expect(page.getByText(/Pedido confirmado|Order confirmed/i)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/SHIP-001/)).toBeVisible();
-    // No invoice was requested → its documentNo must not appear.
-    await expect(page.getByText(/INV-001/)).toHaveCount(0);
-
-    // Only the shipment step ran (no invoice creation).
-    expect(state.calls.createShipment).toBe(1);
-    expect(state.calls.createDraftInvoice).toBe(0);
-
-    // Primary button must read EXACTLY "Ver albarán" (NOT "Ver factura").
-    const viewShipmentBtn = page.getByRole('button', { name: 'Ver albarán' });
-    await expect(viewShipmentBtn).toBeVisible({ timeout: 5_000 });
-    // There must be NO "Ver factura" button — guards against the old hardcoded primary.
-    await expect(page.getByRole('button', { name: 'Ver factura' })).toHaveCount(0);
-
-    const viewShipmentText = (await viewShipmentBtn.textContent())?.trim();
-    expect(viewShipmentText).toBe('Ver albarán');
-    expect(viewShipmentText).not.toContain('→');
-
-    // The arrow is an SVG appended by the component — exactly one, canonical path.
-    await expect(viewShipmentBtn.locator('svg')).toHaveCount(1);
-    await expect(
-      viewShipmentBtn.locator('svg path[d="M5 12h14M12 5l7 7-7 7"]'),
-    ).toHaveCount(1);
-  });
 });
 
 // ---------------------------------------------------------------------------

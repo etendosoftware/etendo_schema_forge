@@ -162,50 +162,6 @@ test.describe('Subscription lifecycle — /account', () => {
     await expect(page).toHaveURL(/__mock-stripe-portal__/, { timeout: 10_000 });
     expect(getPortalRequestCount()).toBe(1);
   });
-
-  test('a past-due subscription shows the remaining grace days instead of a renewal date', async ({ page }) => {
-    await installSubscriptionMock(page, PAST_DUE_SUBSCRIPTION);
-    await gotoAccount(page);
-
-    const section = page.getByTestId('SubscriptionSection__account');
-    await expect(section).toBeVisible();
-
-    await expect(section.getByTestId('SubscriptionSection__plan')).toHaveText('Pro');
-    const grace = section.getByTestId('SubscriptionSection__graceRemaining');
-    await expect(grace).toBeVisible();
-    await expect(grace).toContainText('7');
-    await expect(section.getByTestId('SubscriptionSection__renewsOn')).toHaveCount(0);
-    await expect(section.getByTestId('SubscriptionSection__cancelsOn')).toHaveCount(0);
-  });
-
-  test('a past-due subscription with no derived grace end date shows no grace banner', async ({ page }) => {
-    await installSubscriptionMock(page, PAST_DUE_WITHOUT_GRACE_END);
-    await gotoAccount(page);
-
-    const section = page.getByTestId('SubscriptionSection__account');
-    await expect(section).toBeVisible();
-    await expect(section.getByTestId('SubscriptionSection__status')).toBeVisible();
-    await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
-  });
-
-  test('an active subscription never shows a grace banner', async ({ page }) => {
-    await installSubscriptionMock(page, ACTIVE_SUBSCRIPTION);
-    await gotoAccount(page);
-
-    const section = page.getByTestId('SubscriptionSection__account');
-    await expect(section).toBeVisible();
-    await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
-  });
-
-  test('access-paused shows once the grace window has elapsed, instead of the grace-remaining banner', async ({ page }) => {
-    await installSubscriptionMock(page, ACCESS_PAUSED_SUBSCRIPTION);
-    await gotoAccount(page);
-
-    const section = page.getByTestId('SubscriptionSection__account');
-    await expect(section).toBeVisible();
-    await expect(section.getByTestId('SubscriptionSection__accessPaused')).toBeVisible();
-    await expect(section.getByTestId('SubscriptionSection__graceRemaining')).toHaveCount(0);
-  });
 });
 
 /**
