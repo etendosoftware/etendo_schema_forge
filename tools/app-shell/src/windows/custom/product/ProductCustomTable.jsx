@@ -36,12 +36,21 @@ const columns = [
   // of `parts` into its own filterable pseudo-column, so re-adding them here
   // duplicates every entry in the field picker (and in the grid header).
   { key: 'productCategory', column: 'M_Product_Category_ID', type: 'selector', label: 'Product Category', required: true },
-  { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true },
+  // ETP-5446 — `name` above is the `grow` column: under DataTable's table-layout: fixed it
+  // has NO width of its own and only receives what the other, explicitly sized columns
+  // leave over, with no floor. Adding the Cost column (+120px) pushed the fixed total past
+  // the list's width at a 1280px viewport (1218px of fixed columns in a 1194px container),
+  // so `name` collapsed to 0px: the product name disappeared and its header segments sat
+  // under the Category header. `uOM` and `productType` give back that space — their
+  // content (a unit name, a one-word type badge) never needs the 192px selector / 224px
+  // enum defaults — so `name` keeps at least the width it had before this column existed.
+  { key: 'uOM',             column: 'C_UOM_ID',              type: 'selector', label: 'UOM',              required: true, minWidth: 144 },
   {
     key: 'productType',
     column: 'ProductType',
     type: 'enum',
     label: 'Product Type',
+    minWidth: 152,
     // ETP-4685 — i18n keys (resolved via ui()/genericLabels), not raw English
     // literals, so this custom table's filter/grid enum labels stay in sync
     // with the pipeline's own fix in generate-frontend.js (buildEnumLabelKey).

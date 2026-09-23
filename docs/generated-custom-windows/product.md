@@ -479,6 +479,15 @@ list itself is `ProductCustomTable.jsx`, whose `productCost` column maps
 is `productCost`, not `cost`, because `cost` is the real field of the `costing` entity of
 this same window.
 
+**List layout.** In `ProductCustomTable.jsx`, `name` is the `grow` column: under DataTable's
+`table-layout: fixed` it gets only the width the sized columns leave, with no minimum. Cost
+(+120px) took them to 1218px in a 1194px list at a 1280px viewport, collapsing `name` to 0px
+(hidden, its sort segments under the Category header). Fix, scoped to this list (DataTable
+untouched): `uOM` `minWidth: 144` (selector default 192), `productType` `minWidth: 152` (enum
+default 224), so `name` keeps 96px at 1280px, as before. A new fixed-width column here must give
+back its width likewise or `name` collapses again on 1280px screens; the generic DataTable fix
+(grow-column minimum + horizontal scroll) is deliberately out of scope.
+
 ### Why not reuse core's cost functions
 
 - **`M_GET_PRODUCT_COST`** only matches legacy cost types (`costtype NOT IN ('AVA','STA')`),
