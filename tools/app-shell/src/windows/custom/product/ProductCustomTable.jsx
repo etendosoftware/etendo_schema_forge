@@ -1,6 +1,6 @@
 import { forwardRef } from 'react';
 import { DataTable } from '@/components/contract-ui';
-import { ProductSalePriceCell, ProductPurchasePriceCell, ProductStockCell } from './ProductListCells';
+import { ProductSalePriceCell, ProductPurchasePriceCell, ProductCostCell, ProductStockCell } from './ProductListCells';
 
 /* eslint-disable react/prop-types */
 
@@ -95,6 +95,24 @@ const columns = [
     backendFilterKey: 'eTGOPurchasePrice',
     render: (row) => (
       <ProductPurchasePriceCell row={row} data-testid="ProductPurchasePriceCell__f45e24" />
+    ),
+  },
+  // ETP-5446 — Cost: stored computed column EM_ETGO_Cost (ETGO_PRODUCT_COST, the
+  // STA/AVA M_Costing row currently in force), synchronous refresh like the prices, so it carries no
+  // `computed` freshness metadata. Same server-side sort + numeric filter wiring.
+  // Key is 'productCost', NOT 'cost': 'cost' is the real field of this window's
+  // `costing` entity (and an import target), and reusing a contract field name here
+  // is exactly the collision ETP-4685 hit with 'sale'/'purchase' (F19).
+  {
+    key: 'productCost',
+    labels: { en_US: 'Cost', es_ES: 'Costo' },
+    type: 'custom',
+    sortable: true,
+    filterMode: 'numeric',
+    backendSortKey: 'eTGOCost',
+    backendFilterKey: 'eTGOCost',
+    render: (row) => (
+      <ProductCostCell row={row} data-testid="ProductCostCell__f45e24" />
     ),
   },
   {

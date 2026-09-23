@@ -21,6 +21,7 @@ identity of separate data series and is not a UI status or theme role.
 - Click a product image to open a lightbox for full-size inspection. Upload, replace, and remove the image from within the same field in the form grid.
 - Inspect stock availability and stock movement context from the custom sidebar.
 - Record the product's **standard cost** over time from the generated **Cost** tab (`Costing` in `decisions.json`, "Costo" in Spanish), the first tab in the unified secondary tab strip (Cost, Accounting, Price, Attachments). Engine-generated cost rows are shown but cannot be edited or deleted; only hand-entered ones can. See the ETP-5245 section below.
+- See each product's current **Cost** ("Costo") in the list, next to the Sale / Purchase price columns, and sort and filter the list by it like any other numeric column (ETP-5446, see the section below).
 - Be warned when a product has no cost defined at all: a full-width warning banner appears above the form until a cost line exists (ETP-5245). Advisory — the save-block it originally carried was removed by product decision.
 - Maintain the product's GL accounting accounts (Fixed Asset, Product Expense, Product Revenue, Product COGS, Invoice Price Variance) per accounting schema from the generated **Accounting** tab, the first tab in the unified secondary tab strip (Accounting, Price, Attachments).
 - Use the contract-backed product children and actions when the generated page exposes them, while treating the exact visible tab set beyond the custom surfaces as partially evidenced.
@@ -396,6 +397,115 @@ They also stop appearing in the `Others` form (`ProductForm.jsx`). No generator 
 Regenerated with `make regen ONLY=product FROM_CACHE=1` (contract `0.26.0 → 0.26.1`;
 `FROM_CACHE=1` is required in this environment or the local DB's missing `es_ES` ref-list
 translations strip enum labels repo-wide). `sf-validate-pipeline --scope=product`: OK.
+
+## Cost list column — ETP-5446
+
+The product list carries a **Cost** column (`Costo` in Spanish), placed right after
+**Purchase**, visible by default, read-only, and sortable and filterable exactly like the
+price columns (numeric operators in the advanced filter, server-side sort).
+
+**It is a real column, not a client-side value.** `EM_ETGO_Cost` on `M_Product`
+(DAL property `eTGOCost`) is a stored computed column (EPL-1807, `Computation_Mode = 'S'`,
+`Refresh_Mode = 'S'`) computed by `ETGO_PRODUCT_COST` in `com.etendoerp.go`. It is
+recomputed in the same transaction as any insert, update or delete on `M_Costing` that
+touches `Cost`, `DateFrom`, `DateTo`, `Costtype` or `M_Warehouse_ID` (dependency on
+`M_Costing.M_Product_ID`), so a cost saved from the **Cost** tab, or written by a costing
+run, is visible in the list on the next fetch.
+
+**Definition — the cost currently in force, as the costing engine recorded it:**
+
+- `M_Costing` rows of the product with cost type `STA` (standard) or `AVA` (average) —
+  the two types the current costing engine writes; legacy `ST`/`AV` rows are ignored;
+- non-null `Cost`, `DateFrom` and `DateTo`;
+- rows that have already started (`DateFrom <= now()`) come before future-dated ones;
+  among them the most recent `DateFrom` wins, then the latest `DateTo`; an
+  organization-wide row (no warehouse) is preferred over a warehouse-specific one;
+  `Created` and the row id break any remaining tie, so the pick is deterministic;
+- a future-dated row is only picked when no row of the product has started yet (a
+  scheduled cost is better than an empty cell).
+
+This is the same rule the Purchase / Sale price columns use
+(`ETGO_PRODUCT_PURCHASE_PRICE` orders by `validfrom <= now()` first). Example: a product
+with `STA` rows 21 (from 2026-09-16), 23 (from 2026-09-23 = today) and 25 (from
+2026-09-24) shows 23, not 25.
+
+It follows the cost types and the date ordering core uses for "the latest available
+calculated cost" (`M_GET_NO_TRX_PRD_COST_LATEST`, core Issue #641), without its date
+parameter (it uses `now()` only to rank started rows first), but it breaks ties
+differently (see below).
+
+**Known, accepted divergences:**
+
+- **A future-dated cost is picked up late.** The only clock read is `now()`, and a
+  stored value is recomputed only when an `M_Costing` row of the product changes. If a
+  future-dated cost reaches its start date and nothing touches that product's costing,
+  the column keeps the previous cost until the next `M_Costing` change (or an
+  `ad_scd_rebuild`). This is the same accepted behavior as the Purchase / Sale price
+  columns. The engine's own rows always start at the transaction date, so it only
+  affects manual costs dated in the future.
+- **Expiry is not checked.** Unlike core's "cost at a date" (`DateFrom <= date < DateTo`),
+  the `DateTo` is only a tie-break: a row given an expiry date with no successor is still
+  shown after it expires.
+- **Org-wide row wins a tie; core picks the warehouse row.** When two rows share the
+  same `DateFrom` and `DateTo`, core's function puts the warehouse-specific row first;
+  `ETGO_PRODUCT_COST` puts the organization-wide row (`M_Warehouse_ID IS NULL`) first.
+  This is deliberate: a product-level column has no warehouse context to pick one
+  warehouse's cost over another.
+- **One value per product.** `M_Costing` is scoped by organization (and optionally
+  warehouse); the list shows a single figure, the current one across them.
+- **Legacy cost types are ignored.** Only `STA` and `AVA` rows are read; the legacy `ST`
+  (standard) and `AV` (average) rows written by the old costing engine are not. A tenant
+  migrated from old costing whose products only carry `ST`/`AV` rows shows an empty Cost
+  until the current engine (or a manual entry on the **Cost** tab) writes an `STA`/`AVA` row.
+- **Raw amount, shown as EUR.** No currency conversion (it would depend on a rate date):
+  the stored value is `M_Costing.Cost` in the row's own currency, and the cell formats it
+  as EUR regardless. A cost recorded in another currency is therefore mislabelled. This
+  is the same known limitation as the Sale / Purchase price columns (same tracked issue).
+- **Moving a cost row to another product recomputes only the new one.** The dependency
+  links through `M_Costing.M_Product_ID` and resolves the target as
+  `COALESCE(NEW.M_Product_ID, OLD.M_Product_ID)`, so an update that changes a row's
+  `M_Product_ID` recomputes the new product and leaves the old one with a stale value.
+  Accepted: the UI cannot reparent a cost row (the **Cost** tab is a child of the product
+  and `M_Product_ID` comes from the parent), so this only happens through direct SQL;
+  `ad_scd_check` counts the stale row.
+- **No cost → empty.** A product with no qualifying cost row stores `NULL` and the cell
+  renders a dash, not `0`. The function is total: it never raises, so it can never block
+  a cost save or a costing run.
+
+Wiring: `decisions.json` declares `eTGOCost` with `visibility: "readOnly"`, `grid: true`,
+`form: false` (kept out of the detail form and the summary strip, like the prices), and the
+list itself is `ProductCustomTable.jsx`, whose `productCost` column maps
+`backendSortKey`/`backendFilterKey` to `eTGOCost` and renders `ProductCostCell`. The key
+is `productCost`, not `cost`, because `cost` is the real field of the `costing` entity of
+this same window.
+
+### Why not reuse core's cost functions
+
+- **`M_GET_PRODUCT_COST`** only matches legacy cost types (`costtype NOT IN ('AVA','STA')`),
+  so with the current costing engine it always returns `0`.
+- **`M_GET_NO_TRX_PRD_COST_LATEST(product, date, org, warehouse, currency, isLegalEntity)`**
+  was evaluated as a wrapper called with `(p, '9999-12-30', p.ad_org_id, NULL, NULL, 'N')`.
+  A fixed far date avoids `now()`: every product's most recent `STA`/`AVA` row is open-ended
+  (`DateTo = 9999-12-31`), so it returns the latest row — which is the current cost except
+  when a future-dated cost exists (then it returns the future one, which
+  `ETGO_PRODUCT_COST` no longer does). `NULL` warehouse
+  matches any warehouse; `NULL` currency skips conversion (`c_currency_id <> NULL` is never true).
+- **Rejected** because core scopes the cost by the legal entity of the org it is given
+  (`ad_org_id IN (legal entity, '0')`). A product in org `0` (shared) has no legal entity
+  (`AD_GET_ORG_LE_BU('0','LE')` is `NULL`), so only org-`0` costing rows are found, while
+  costs are normally stored at the legal entity. Measured on the dev DB (2026-09-23):
+
+  | Product organization | Same value as `EM_ETGO_Cost` | Empty under core despite having costs |
+  |---|---|---|
+  | A specific org | 38 / 38 | 0 |
+  | Org `0` (shared) | 9 / 18 | 9 / 18 |
+
+  Real tenants have many org-`0` products (QA Testing 32 of 40, GOClient 3 of 5), and an
+  empty cell reads as "no cost", which defeats the purpose of the column.
+- **Decision:** keep `ETGO_PRODUCT_COST` (the `STA`/`AVA` row currently in force, across
+  organizations). Its
+  trade-off is the "One value per product" divergence above: a product with costs in several
+  legal entities (22 on the dev DB) shows only one of them.
 
 ## ETP-4967 — Hide the internal discount product
 

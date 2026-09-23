@@ -1,8 +1,8 @@
 {
-  "version": "0.12.0",
+  "version": "0.13.0",
   "generatedAt": "2026-09-11T00:36:11.322Z",
-  "updatedAt": "2026-09-20T21:04:03.898Z",
-  "checksum": "0304819bc3c591e7",
+  "updatedAt": "2026-09-23T13:43:00.032Z",
+  "checksum": "f80b4a3ee84113cf",
   "frontendContract": {
     "window": {
       "id": "140",
@@ -846,6 +846,26 @@
               "name": "stock",
               "type": "passthrough",
               "handlerId": null
+            }
+          },
+          {
+            "name": "eTGOCost",
+            "apiKey": "eTGOCost",
+            "column": "EM_ETGO_Cost",
+            "label": "EM_ETGO_Cost",
+            "type": "amount",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "section": "other",
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 22
             }
           }
         ],
@@ -3756,6 +3776,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "eTGOCost",
+            "apiKey": "eTGOCost",
+            "column": "EM_ETGO_Cost",
+            "type": "amount",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "productDefaultsHandler"
@@ -7066,6 +7094,14 @@
         "description": "Field 'description' should be present in product"
       },
       {
+        "id": "t-field-presence-product-eTGOCost",
+        "category": "field-presence",
+        "entity": "product",
+        "field": "eTGOCost",
+        "runner": "node",
+        "description": "Field 'eTGOCost' should be present in product"
+      },
+      {
         "id": "t-field-presence-product-eTGOPurchasePrice",
         "category": "field-presence",
         "entity": "product",
@@ -7696,6 +7732,14 @@
         "field": "description",
         "runner": "node",
         "description": "Field 'description' should have type 'string' in product"
+      },
+      {
+        "id": "t-field-type-product-eTGOCost",
+        "category": "field-type",
+        "entity": "product",
+        "field": "eTGOCost",
+        "runner": "node",
+        "description": "Field 'eTGOCost' should have type 'number' in product"
       },
       {
         "id": "t-field-type-product-eTGOPurchasePrice",
@@ -11513,15 +11557,15 @@
       }
     ],
     "summary": {
-      "total": 665,
+      "total": 667,
       "byCategory": {
         "action-endpoint": 9,
         "crud-flags": 12,
         "default-value-type": 26,
         "displaylogic-evaluable": 5,
         "displaylogic-valid": 5,
-        "field-presence": 79,
-        "field-type": 79,
+        "field-presence": 80,
+        "field-type": 80,
         "readonlylogic-evaluable": 5,
         "readonlylogic-valid": 5,
         "rule-declared": 142,
@@ -11531,7 +11575,7 @@
         "visibility": 12
       },
       "byRunner": {
-        "node": 665,
+        "node": 667,
         "junit": 0
       }
     }
