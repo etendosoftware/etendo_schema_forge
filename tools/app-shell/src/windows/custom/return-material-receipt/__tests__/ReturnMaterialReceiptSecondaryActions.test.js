@@ -10,12 +10,7 @@ const src = readFileSync(join(__dirname, '..', 'ReturnMaterialReceiptSecondaryAc
 // ETP-5260 defect fix — CopyRecordLinkButton used to render inside
 // ConfirmWithCreditButton.jsx (topbarRight, ETP-4721), to the RIGHT of
 // Save/Confirm against the DF. It moved here (topbarSecondary, LEFT of
-// Save/Confirm). ETP-5408: the Borrador "Confirmar" is the generic draftMode
-// Confirm DetailView renders next to Save (the window's index.jsx DRAFT_MODE) — it
-// is neither here nor in topbarRight. ConfirmWithCreditButton.jsx (topbarRight)
-// only hosts the confirm flow that button triggers plus the completed-state invoice
-// action. See ConfirmWithCreditButton.spec.jsx's "renders nothing and ignores the
-// confirm event when status is not DR or CO" guard for the sibling coverage.
+// Save/Confirm). ETP-5408: return-material-receipt's Borrador Confirmar is the generic draftMode Confirm.
 describe('ReturnMaterialReceiptSecondaryActions', () => {
   it('exports a default function component named ReturnMaterialReceiptSecondaryActions', () => {
     assert.match(src, /export default function ReturnMaterialReceiptSecondaryActions/);

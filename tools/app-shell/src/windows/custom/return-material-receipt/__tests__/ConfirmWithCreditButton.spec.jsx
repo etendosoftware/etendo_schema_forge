@@ -13,18 +13,8 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-// Exposes the props this wrapper is responsible for forwarding (spec/entity names,
-// the confirm label) so the event-driven flow can assert the wiring.
-vi.mock('@/components/contract-ui/ConfirmInOutModal', () => ({
-  default: ({ specName, entityName, confirmLabel }) => (
-    <div
-      data-testid="confirm-inout-modal"
-      data-spec-name={specName}
-      data-entity-name={entityName}
-      data-confirm-label={confirmLabel}
-    />
-  ),
-}));
+// Probe exposing the forwarded spec/entity names and confirm label (shared helper).
+vi.mock('@/components/contract-ui/ConfirmInOutModal', () => import('../../shared/__tests__/confirmInOutModalProbe.jsx'));
 
 vi.mock('@/components/contract-ui/ConfirmResultModal', () => ({
   ConfirmResultModal: () => <div data-testid="confirm-result-modal" />,
@@ -59,7 +49,7 @@ describe('ConfirmWithCreditButton', () => {
   itRendersNothingOutsideDrOrCo(ConfirmWithCreditButton, BASE_PROPS, CONFIRM_EVENT);
 
   // ETP-5408 — the Borrador "Confirmar" is the GENERIC draftMode Confirm (DetailView,
-  // `action-save`), whose onConfirm (index.jsx DRAFT_MODE) dispatches CONFIRM_EVENT.
+  // `action-save`), whose onConfirm (buildReturnDraftMode, shared/returnDraftMode.js) dispatches CONFIRM_EVENT.
   // This wrapper renders no Borrador button: it only hosts the flow the event opens.
   const fireConfirm = () => act(() => { window.dispatchEvent(new CustomEvent(CONFIRM_EVENT)); });
 

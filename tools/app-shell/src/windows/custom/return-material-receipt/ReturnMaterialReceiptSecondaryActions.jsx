@@ -14,7 +14,7 @@ import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryA
  * the defaults to know that's deliberate.
  *
  * ETP-5408 — the Borrador "Confirmar" is the generic draftMode Confirm that
- * DetailView renders next to Save (see the window's index.jsx `DRAFT_MODE`); it is
+ * DetailView renders next to Save (index.jsx `draftMode`, shared/returnDraftMode.js); it is
  * neither here nor in topbarRight. `ConfirmWithCreditButton.jsx` (topbarRight) only
  * hosts the confirm flow it triggers plus the completed-state invoice action — a
  * PRIMARY-zone concern, so do not move it into this secondary group either.

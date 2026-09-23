@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
@@ -5,27 +6,12 @@ import ReturnMaterialReceiptRowConfirmModal from './ReturnMaterialReceiptRowConf
 import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
 import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
-import { useMenuLabel } from '@/i18n';
+import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
+import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
-
-// ETP-5408 — "Confirmar" is the generic draftMode Confirm (saveActions.jsx), the same
-// button Facturas / Pedidos / Albaranes render. These values mirror decisions.json →
-// window.draftMode (emitted into the generated Page); this override only adds `onConfirm`,
-// which a JSON declaration cannot carry. runDraftModeConfirm saves a dirty header first,
-// then calls it; ConfirmWithCreditButton (topbarRight) listens for CONFIRM_EVENT and opens
-// ConfirmInOutModal. `label: 'confirm'` is the i18n key every other window uses.
-// `disableWhenEmpty` replaces the old `linesCount === 0` gate of the hand-rolled button.
-const DRAFT_MODE = {
-  enabled: true,
-  processField: 'documentAction',
-  processValue: 'CO',
-  label: 'confirm',
-  disableWhenEmpty: true,
-  onConfirm: () => window.dispatchEvent(new CustomEvent(CONFIRM_EVENT)),
-};
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -59,6 +45,8 @@ function ReturnMaterialReceiptBulkActions(props) {
 
 export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const draftMode = useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui]);
   const { createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
   return (
@@ -86,9 +74,8 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
         // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
         // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
         topbarSecondary={ReturnMaterialReceiptSecondaryActions}
-        // ETP-5408 — reaches DetailView the same way (the generated Page spreads `{...props}`
-        // AFTER its own `draftMode`, so this one wins). See DRAFT_MODE above.
-        draftMode={DRAFT_MODE}
+        // ETP-5408 — wins over the generated Page's own `draftMode` (it spreads `{...props}` after).
+        draftMode={draftMode}
         // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
         // (grid row action was showing it for CO rows). Mirrors sibling
         // return-to-vendor-shipment (duplicateAction={{ show: false }}), which

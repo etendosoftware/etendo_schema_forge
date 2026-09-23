@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildReturnDraftMode } from '../../shared/returnDraftMode.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
@@ -161,7 +162,9 @@ describe('ReturnMaterialReceiptWindow custom wrapper', () => {
     const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const code = strip(src);
     const confirmCode = strip(confirmBtnSrc);
-    const draftModeDecl = (code.match(/const DRAFT_MODE = \{[\s\S]*?\n\};/) || [''])[0];
+    const componentAt = code.indexOf('export default function');
+    // The builder's real output, with an identity translator (returns the key).
+    const built = buildReturnDraftMode((key) => key, '__EVENT__');
 
     it('imports CONFIRM_EVENT from its own ConfirmWithCreditButton', () => {
       assert.match(code, /import \{ CONFIRM_EVENT \} from '\.\/ConfirmWithCreditButton\.jsx';/);
@@ -172,30 +175,24 @@ describe('ReturnMaterialReceiptWindow custom wrapper', () => {
       assert.match(confirmCode, /confirmEventName=\{CONFIRM_EVENT\}/);
     });
 
-    it('declares a module-level DRAFT_MODE (stable identity across renders)', () => {
-      assert.ok(draftModeDecl, 'expected a top-level `const DRAFT_MODE = { ... };`');
-      const declAt = code.indexOf('const DRAFT_MODE');
-      const componentAt = code.indexOf('export default function');
-      assert.ok(declAt < componentAt, 'DRAFT_MODE must live outside the component');
+    it('imports buildReturnDraftMode from the shared module (no module-level DRAFT_MODE)', () => {
+      assert.match(code, /import \{ buildReturnDraftMode \} from '\.\.\/shared\/returnDraftMode\.js';/);
+      assert.doesNotMatch(code, /DRAFT_MODE/);
     });
 
-    it('onConfirm dispatches CONFIRM_EVENT on window (and does nothing else)', () => {
-      assert.match(
-        draftModeDecl,
-        /onConfirm: \(\) => window\.dispatchEvent\(new CustomEvent\(CONFIRM_EVENT\)\),/,
+    it('builds draftMode inside the component with useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui])', () => {
+      assert.match(code, /import \{ useMemo \} from 'react';/);
+      const uiAt = code.search(/const ui = useUI\(\);/);
+      const memoAt = code.search(
+        /const draftMode = useMemo\(\(\) => buildReturnDraftMode\(ui, CONFIRM_EVENT\), \[ui\]\);/,
       );
+      assert.ok(uiAt > componentAt, 'useUI() must be called inside the component');
+      assert.ok(memoAt > uiAt, 'draftMode must be memoized after ui is resolved');
     });
 
-    it('passes draftMode={DRAFT_MODE} to ReturnWindowShell', () => {
-      assert.match(code, /<ReturnWindowShell[\s\S]*draftMode=\{DRAFT_MODE\}/);
-    });
-
-    it('passes draftMode BEFORE {...rest} so a caller can still override it', () => {
-      assert.ok(code.indexOf('draftMode={DRAFT_MODE}') < code.indexOf('{...rest}'));
-    });
-
-    it('uses the shared "confirm" i18n key for the button label', () => {
-      assert.match(draftModeDecl, /label: 'confirm',/);
+    it('passes draftMode={draftMode} to ReturnWindowShell, BEFORE {...rest} so a caller can override it', () => {
+      assert.match(code, /<ReturnWindowShell[\s\S]*draftMode=\{draftMode\}/);
+      assert.ok(code.indexOf('draftMode={draftMode}') < code.indexOf('{...rest}'));
     });
 
     it('no longer uses the bespoke-button escape hatch hasExternalPrimaryAction', () => {
@@ -204,18 +201,18 @@ describe('ReturnMaterialReceiptWindow custom wrapper', () => {
 
     // decisions.json is what the generated Page (and the contract) are built from; the
     // override must not contradict it, or the pipeline output and the runtime diverge.
-    it('matches decisions.json → window.draftMode on every behavioural key', () => {
+    it('the shared builder matches decisions.json → window.draftMode on every behavioural key', () => {
       const dm = decisions.window?.draftMode;
       assert.ok(dm, 'decisions.json must declare window.draftMode');
       assert.equal(dm.enabled, true);
-      assert.match(draftModeDecl, /enabled: true,/);
+      assert.equal(built.enabled, dm.enabled);
       assert.equal(dm.processField, 'documentAction');
-      assert.match(draftModeDecl, /processField: 'documentAction',/);
+      assert.equal(built.processField, dm.processField);
       assert.equal(dm.processValue, 'CO');
-      assert.match(draftModeDecl, /processValue: 'CO',/);
+      assert.equal(built.processValue, dm.processValue);
       // The replacement for the old `linesCount === 0` gate of the hand-rolled button.
       assert.equal(dm.disableWhenEmpty, true);
-      assert.match(draftModeDecl, /disableWhenEmpty: true,/);
+      assert.equal(built.disableWhenEmpty, dm.disableWhenEmpty);
     });
 
     // Completed documents: nothing on the header is saveable, so the whole Save/Confirm
@@ -223,7 +220,7 @@ describe('ReturnMaterialReceiptWindow custom wrapper', () => {
     // would bring Save back on CO.
     it('declares no keepSaveWhenCompletedFields (Save/Confirm row hidden on CO)', () => {
       assert.equal(decisions.window.draftMode.keepSaveWhenCompletedFields, undefined);
-      assert.doesNotMatch(draftModeDecl, /keepSaveWhenCompletedFields/);
+      assert.equal(built.keepSaveWhenCompletedFields, undefined);
     });
 
     // The regenerated Page must carry the same declaration and let the wrapper's
