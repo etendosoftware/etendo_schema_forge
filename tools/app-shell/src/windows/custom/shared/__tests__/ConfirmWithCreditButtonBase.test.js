@@ -151,13 +151,13 @@ describe('ConfirmWithCreditButtonBase', () => {
     assert.match(effectBlock, /if \(!confirmEventName\) return undefined;/);
   });
 
-  it('the handler ignores the event outside Borrador and while blocked, else opens the modal', () => {
-    assert.match(effectBlock, /if \(status !== 'DR' \|\| saveBlocked\) return;/);
+  it('the handler ignores the event outside Borrador, while blocked, or when read-only', () => {
+    assert.match(effectBlock, /if \(status !== 'DR' \|\| saveBlocked \|\| isDocumentReadOnly\) return;/);
     assert.match(effectBlock, /setShowModal\(true\)/);
   });
 
-  it('re-subscribes when status / gate state change (no stale closure)', () => {
-    assert.match(src, /\}, \[confirmEventName, status, saveBlocked, setShowModal\]\)/);
+  it('re-subscribes when status / gate / read-only state change (no stale closure)', () => {
+    assert.match(src, /\}, \[confirmEventName, status, saveBlocked, isDocumentReadOnly, setShowModal\]\)/);
   });
 
   // Rules of Hooks: the effect must run on every render, so it has to sit ABOVE the

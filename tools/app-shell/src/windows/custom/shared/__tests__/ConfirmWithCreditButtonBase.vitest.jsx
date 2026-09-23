@@ -769,7 +769,7 @@ describe('ConfirmWithCreditButtonBase — confirm event listener (ETP-5408)', ()
 });
 
 describe('ConfirmWithCreditButtonBase — respects isDocumentReadOnly (ETP-5205)', () => {
-  it('disables the Confirm button when isDocumentReadOnly is true, with no other block active', () => {
+  it('does not open the confirmation modal from the event when the document is read-only', () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -777,16 +777,18 @@ describe('ConfirmWithCreditButtonBase — respects isDocumentReadOnly (ETP-5205)
         isDocumentReadOnly
       />
     );
-    expect(screen.getByTestId('action-confirm-with-credit')).toBeDisabled();
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
   });
 
-  it('regression: the Confirm button stays enabled when isDocumentReadOnly is false/absent', () => {
+  it('opens the confirmation modal from the event when the document is writable', () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    expect(screen.getByTestId('action-confirm-with-credit')).not.toBeDisabled();
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
   });
 });

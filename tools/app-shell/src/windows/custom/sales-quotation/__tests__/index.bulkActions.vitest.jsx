@@ -69,6 +69,7 @@ vi.mock('@generated/sales-quotation/custom/QuotationConfirmModal', () => ({ defa
 vi.mock('@generated/sales-quotation/custom/RejectQuotationModal', () => ({ default: () => null }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => vi.fn() }));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useWindowAccess: () => 'full' }));
 
 vi.mock('sonner', () => ({
   toast: { loading: vi.fn(), dismiss: vi.fn(), error: vi.fn(), success: vi.fn() },
