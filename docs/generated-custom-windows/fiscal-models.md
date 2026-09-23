@@ -119,7 +119,9 @@ that already carries it is just as frozen as one presented through either curren
   session. The bootstrap depends on `GET /fiscal303/boxes` and `GET /fiscal349/operators` staying
   available for submitted declarations (see "Backend" below): an earlier ETP-5438 iteration
   returned `409` there too, which made every cold cache (new tab, reload, another browser/user)
-  render "Error de cálculo" in "Resultado" (or "…" while in flight). The resulting
+  render "Error de cálculo" in "Resultado" (or "…" while in flight).
+  A failed bootstrap is never cached (the hook only writes a non-`null` result), so the list
+  retries it on the next declarations refetch rather than freezing an error. The resulting
   `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
   `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
   non-draft compute for this decl.id", it does not care which of the two hooks produced it.
@@ -140,12 +142,20 @@ that already carries it is just as frozen as one presented through either curren
     303; `applyOperatorsResult` on 349) — zero network calls. Only when nothing is cached (cold
     session: new tab, reload, another browser/user, no `_precomputed` handed down) does it run
     `computeSubmittedOnce()`: ONE call to the same compute function the page already uses
-    (`computeBoxes303` with `noMockFallback: true`, so a failed call never freezes the demo mock
-    figures; `compute349Operators`, which already resolves `null` on failure), then
+    (`computeBoxes303` with `noMockFallback: true`, so a failed call resolves `null` instead of
+    freezing the demo mock figures — the option only has an effect when `apiBaseUrl` is set; with
+    no backend configured the demo mock is still returned; `compute349Operators`, which already
+    resolves `null` on failure), then
     `setCachedFiscalCompute(decl.id, result)` so later mounts and the list's "Resultado" column
     freeze on the same payload. It is display-only: nothing is persisted and `manualOverrides`
     (hydrated from the saved declaration) are only merged in, never rewritten. A failed compute
     leaves the tabs empty and caches nothing.
+  - **Stale-response cancellation.** The mount effect's cleanup flips a `cancelled` flag that
+    `computeSubmittedOnce(isCancelled)` checks after its request resolves. A response that lands
+    after unmount, or after `decl.id` changed (the page re-rendered for another declaration),
+    is still written to the session cache under the id it was **computed for** (captured before
+    the request), but is never painted into the page and does not reset the `computing` spinner
+    of whatever declaration is now shown.
   - **Known trade-off.** The freeze lives in the browser session, not on the declaration record
     (`declToJson` never persists a computed result). A cold session therefore recomputes from the
     invoice data **as it is at that moment** — if an invoice of a presented period was changed
@@ -219,7 +229,14 @@ Regression tests: `Fiscal303BoxesHandlerTest`/`Fiscal349BoxesHandlerTest` (the `
 `testDispatchOperatorsProceedsWhenAlreadySubmitted` asserting the reads still serve a submitted
 declaration), the frontend `FmModel303Page.submittedFreeze` / `FmModel349Page.submittedFreeze`
 Vitest suites (cache hit → zero compute calls; cold cache → exactly one compute, shown and written
-to the session cache), `FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
+to the session cache; a failed cold compute caches nothing and is not retried; a late response for
+a previous `decl.id` is cached under its own id but never painted (303); a response resolving
+after unmount still freezes the cache (349)), `useFiscalAutoCompute.invalidate.vitest.js`
+(`setCachedFiscalCompute` writes the key the hook reads, the hook restores it without calling
+`computeFn` when `checkModifiedFn` answers `false`, and a `null` result or id is ignored),
+`fiscalModelsUtils.additional.test.js` ("computeBoxes303 — noMockFallback": `null` on a
+non-ok response or a thrown fetch, mock figures still returned when the option is omitted),
+`FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
 `findLatestDeclarationStatus`'s "latest wins" semantics across a rectificativa's multiple
 declarations), and `Fiscal303SubmitHandlerTest` (the widened `SUBMITTED_STATUSES` resubmission
 guard, and the assertion that `AEAT303SubmissionService` is never constructed once it trips).
