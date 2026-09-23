@@ -466,10 +466,10 @@ const btnPrimaryDisabled = {
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
   // ETP-5378 QA follow-up — the disabled fill is `border-control`, NOT `card`.
   // ETP-4554 (commit 1538c6d1a) migrated this file off hex literals by replacing every
-  // `#D1D4DB` with `hsl(var(--card))`, but #D1D4DB was a light GREY and `--card` is the pure
-  // white of the surface this button sits on. Since the label is `--card` too, background and
-  // text became the same colour and the button vanished — the user saw an empty gap next to
-  // "Cancelar". `--border-control` is the structural role closest to that grey and, unlike the
-  // hex it replaces, it also resolves correctly in dark mode (#E1E7EF light / #8391A5 dark).
+  // the Figma grey with `hsl(var(--card))` — but that grey is a light neutral and `--card` is
+  // the pure white of the surface this button sits on. Since the label is `--card` too,
+  // background and text became the same colour and the button vanished — the user saw an empty
+  // gap next to "Cancelar". `--border-control` is the structural role closest to that grey
+  // and, unlike the literal it replaces, it also resolves per theme (light neutral / mid grey).
   border: 'none', background: 'hsl(var(--border-control))', color: 'hsl(var(--card))',
 };

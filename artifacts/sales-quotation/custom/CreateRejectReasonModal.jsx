@@ -204,7 +204,7 @@ const btnPrimaryDisabled = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
   // ETP-5378 QA follow-up — same ETP-4554 mis-mapping as RejectQuotationModal, which this
-  // modal is opened from: #D1D4DB (light grey) became `--card` (the surface white), matching
+  // modal is opened from: the Figma light grey became `--card` (the surface white), matching
   // the label colour and making the button invisible. See the note there for the full history.
   border: 'none', background: 'hsl(var(--border-control))', color: 'hsl(var(--card))',
 };
