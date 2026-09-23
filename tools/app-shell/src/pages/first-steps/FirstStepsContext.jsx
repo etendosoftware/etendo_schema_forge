@@ -14,15 +14,15 @@ import { useTenantPlan } from '@/hooks/useTenantPlan.js';
  *
  * Three consumers read it (the page, the sidebar badge, the dashboard gate) and each running
  * its own `useFirstSteps` made the badge lag the page by a request. It also owns the tenant
- * plan, for the same reason: the visible step list, the badge denominator and the "all set"
- * state must be one answer, not three that agree by luck.
+ * plan and server-owned demo transfer state, for the same reason: the visible step list, the
+ * badge denominator and the "all set" state must agree across consumers.
  */
 const INERT_STATE = Object.freeze({
   completed: Object.freeze([]),
   seen: false,
   dismissed: false,
   // Inert means "no provider above me", which is indistinguishable from "not answered yet" —
-  // so it reports loading and the badge renders nothing rather than a wrong 0/7.
+  // so it reports loading and the badge renders nothing rather than a wrong 0/8.
   loading: true,
   error: null,
   toggleStep: async () => false,
@@ -41,7 +41,7 @@ export function FirstStepsProvider({ children }) {
   // The write allowlist is plan-scoped, so a step the current plan does not show cannot be
   // persisted even if something asked. The SERVER allowlist stays the full toggleable set —
   // it knows nothing about plans, and a tenant that goes productive must be able to save the
-  // two steps that just appeared.
+  // two toggleable steps that just appeared. Demo transfer uses its own server state.
   const firstSteps = useFirstSteps({ allowedIds: toggleableStepIds(plan) });
   const dataTransfer = useDemoDataTransfer();
   const { completed, seen, dismissed, loading, error, toggleStep, markSeen, setDismissed } =
@@ -55,11 +55,11 @@ export function FirstStepsProvider({ children }) {
     // the same act as choosing to put it away. TRI-STATE — `undefined` until the GET answers,
     // and the menu filter reveals the entry only on an exact `false`. See useFirstSteps.js.
     dismissed,
-    // Either half missing makes the whole thing unanswerable: the completed ids without the
-    // plan cannot produce a denominator, and the plan without the ids cannot produce a count.
+    // Missing completed ids, plan, or transfer status makes progress unanswerable. The plan
+    // controls the denominator, while completed ids and transfer status control the count.
     // This also holds back the dashboard's one-time redirect (`useFirstStepsRedirect` gates on
     // `!loading`) until the plan is in — deliberately, since the page it redirects to would
-    // otherwise render the productive list and drop two rows a moment later.
+    // otherwise render the productive list and drop three rows a moment later.
     loading: loading || planLoading || dataTransfer.loading,
     error,
     toggleStep,

@@ -214,7 +214,20 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Why it has its own section:** the checklist is a declarative catalogue. Anything a row does
   that is not "show a description and a button" is a FIELD in
   `tools/app-shell/src/pages/first-steps/firstStepsConfig.js`, never an `if` in
-  `FirstStepsPage`. That file's header is the contract; this is the functional summary.
+  `FirstStepsPage`. The catalogue declares each row and its action type; the page implements
+  each action type. The catalogue's header is the contract; this is the functional summary.
+- **Plan and progress.** A trial tenant sees five steps and starts at 1/5 because account
+  creation is always complete. A productive tenant sees eight steps, including three
+  productive-only rows: fiscal configuration, demo data transfer, and invoice numbering.
+  Progress includes the transfer row only when its server-owned status is `COMPLETED`,
+  `SKIPPED`, or `NOT_REQUESTED`. A `RUNNING` or `FAILED` transfer keeps that row incomplete;
+  the number of completed steps depends on the returned status. The provider waits for the
+  initial transfer response before exposing progress to the page and sidebar.
+- **Demo data transfer (`action: 'dataTransfer'`).** This productive-only row reports the
+  persisted transfer job for products and contacts. It is not a checkbox, and its id is not
+  written to `ETGO_ACCOUNT.FIRST_STEPS.completed`. The row shows progress while the job runs,
+  result counts when it completes, and a retry button if it fails. Closing the page does not
+  cancel the job; reopening the page reads its latest server status.
 - **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
   and its action until it is answered. The only one today is **Configuración fiscal** (a
   `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
@@ -234,8 +247,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   afterwards, and landing there first made the step read as a different, later job.
 - **Automated evidence:**
   - `tools/app-shell/src/pages/first-steps/__tests__/firstStepsConfig.vitest.js` —
-    `isStepGated` across answered/completed, that only `fiscal-config` declares a gate, and that
-    the team row points at `/user`.
+    plan-dependent totals, transfer completion, `isStepGated` across answered/completed, that
+    only `fiscal-config` declares a gate, and that the team row points at `/user`.
   - `tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx` — the gate's yes / no /
     failed-write / re-ask-after-untick paths.
   - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
@@ -246,6 +259,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Answer **Sí** and confirm the Configurar button appears and reaches `/fiscal-config`.
   3. Answer **No** instead and confirm the step ticks; reload and confirm it is still ticked.
   4. Un-tick it and confirm the question comes back rather than the Configurar button.
+  5. On a productive tenant, inspect demo data transfer while it runs, after completion, and
+     after a failed job; confirm the row shows progress, result counts, and retry respectively.
+     Reload after completion and confirm the completed row and progress count remain in place.
 
 ### 4. Entity list/detail data flow
 

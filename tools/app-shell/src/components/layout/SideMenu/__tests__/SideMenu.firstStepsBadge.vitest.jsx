@@ -1,5 +1,5 @@
 /**
- * ETP-5190 — the `x/7` progress badge on the sidebar's First Steps entry.
+ * ETP-5190 — the plan-sized progress badge on the sidebar's First Steps entry.
  *
  * ETP-5364's `dismissed` flag — the one thing that removes that entry — is NOT decided here. It
  * is an item-level predicate in `filterMenuGroupsByAccess`, asserted in registry.vitest.jsx; the
@@ -128,6 +128,10 @@ const tenantPlan = vi.hoisted(() => ({ plan: 'productive', loading: false }));
 vi.mock('@/hooks/useTenantPlan.js', () => ({
   useTenantPlan: () => tenantPlan,
 }));
+const transfer = vi.hoisted(() => ({ status: 'RUNNING', loading: false }));
+vi.mock('@/pages/first-steps/useDemoDataTransfer.js', () => ({
+  useDemoDataTransfer: () => transfer,
+}));
 
 import SideMenu from '../SideMenu.jsx';
 import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
@@ -160,12 +164,14 @@ beforeEach(() => {
   setState();
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
+  transfer.status = 'RUNNING';
+  transfer.loading = false;
 });
 
 describe('First Steps sidebar badge — the denominator follows the plan', () => {
-  it('reads x/5 on a trial, not x/7', () => {
+  it('reads x/5 on a trial, not x/8', () => {
     // The badge must agree with the page. It renders `progress.total`, which the provider
-    // sizes from the plan — a hardcoded 7 here would read as two steps permanently missing.
+    // sizes from the plan — a hardcoded 8 here would show steps a trial cannot reach.
     tenantPlan.plan = 'free';
     setState({ completed: ['company-data'] });
     renderMenu();
@@ -181,7 +187,7 @@ describe('First Steps sidebar badge — the denominator follows the plan', () =>
   });
 
   it('renders no badge while the plan is still being resolved', () => {
-    // Same reason the loading state hides it: a badge that flashed 1/7 and then became 1/5
+    // Same reason the loading state hides it: a badge that flashed 1/8 and then became 1/5
     // reads as progress lost.
     tenantPlan.plan = null;
     tenantPlan.loading = true;
@@ -192,7 +198,7 @@ describe('First Steps sidebar badge — the denominator follows the plan', () =>
 });
 
 describe('First Steps sidebar badge — expanded', () => {
-  it('shows 1/7 on a fresh account, next to a link that still works', () => {
+  it('shows 1/8 on a fresh productive account, next to a link that still works', () => {
     renderMenu();
     expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`1/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toHaveAttribute('href', '/first-steps');
@@ -205,17 +211,26 @@ describe('First Steps sidebar badge — expanded', () => {
   });
 
   it('keeps the entry — and the badge — once everything is done', () => {
-    // The whole point of the acceptance criterion: at 7/7 the entry must NOT disappear, because
+    // The whole point of the acceptance criterion: at 8/8 the entry must stay, because
     // that is the only way back in to un-tick a step.
     setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    transfer.status = 'COMPLETED';
     renderMenu();
-    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${PRODUCTIVE_TOTAL}`);
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`8/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 
   it('renders no badge while the state is loading', () => {
-    // A badge that flashed 1/7 before the real count arrived would read as progress lost.
+    // A badge that flashed 1/8 before the real count arrived would read as progress lost.
     setState({ loading: true });
+    renderMenu();
+    expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
+  });
+
+  it('renders no badge while the server-owned transfer status is loading', () => {
+    transfer.status = 'LOADING';
+    transfer.loading = true;
     renderMenu();
     expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
@@ -241,13 +256,14 @@ describe('First Steps sidebar badge — expanded', () => {
 });
 
 describe('First Steps sidebar badge — collapsed', () => {
-  it('shows the OUTSTANDING count, because x/7 does not fit a 40px tile', () => {
+  it('shows the OUTSTANDING count, because x/8 does not fit a 40px tile', () => {
     renderMenu({ expanded: false });
-    expect(screen.getByTestId('menu-first-steps-progress-collapsed')).toHaveTextContent('6');
+    expect(screen.getByTestId('menu-first-steps-progress-collapsed')).toHaveTextContent('7');
   });
 
   it('drops to nothing once there is nothing left to do', () => {
     setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    transfer.status = 'COMPLETED';
     renderMenu({ expanded: false });
     expect(screen.queryByTestId('menu-first-steps-progress-collapsed')).not.toBeInTheDocument();
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
@@ -286,8 +302,9 @@ describe('First Steps sidebar entry — what this component does NOT decide (ETP
     // Finishing the list and choosing to put it away are two different acts. Deriving one from
     // the other would take the entry from a user who never asked, with no way to un-tick a step.
     setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    transfer.status = 'COMPLETED';
     renderMenu();
-    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${PRODUCTIVE_TOTAL}`);
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`8/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 });

@@ -37,6 +37,11 @@ vi.mock('@/hooks/useTenantPlan.js', () => ({
   useTenantPlan: () => tenantPlan,
 }));
 
+const transfer = vi.hoisted(() => ({ status: 'RUNNING', loading: false }));
+vi.mock('../useDemoDataTransfer.js', () => ({
+  useDemoDataTransfer: () => transfer,
+}));
+
 import { FirstStepsProvider, useFirstStepsState, useFirstStepsProgressOptional } from '../FirstStepsContext.jsx';
 import { PLAN_PRODUCTIVE, firstStepsTotal, toggleableStepIds } from '../firstStepsConfig.js';
 
@@ -67,6 +72,8 @@ beforeEach(() => {
   hook.setDismissed = vi.fn(async () => true);
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
+  transfer.status = 'RUNNING';
+  transfer.loading = false;
 });
 
 describe('FirstStepsProvider', () => {
@@ -85,6 +92,24 @@ describe('FirstStepsProvider', () => {
   it('counts only the alwaysDone step on a fresh account', () => {
     render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
     expect(screen.getByTestId('badge')).toHaveTextContent(`1/${PRODUCTIVE_TOTAL}`);
+  });
+
+  it.each(['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'])(
+    'counts the server-owned transfer when its status is %s', (status) => {
+      transfer.status = status;
+      render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
+      expect(screen.getByTestId('badge')).toHaveTextContent(`2/${PRODUCTIVE_TOTAL}`);
+    },
+  );
+
+  it('holds the provider in loading while transfer status is unresolved', () => {
+    transfer.status = 'LOADING';
+    transfer.loading = true;
+    function Loading() {
+      return <span data-testid="loading">{String(useFirstStepsState().loading)}</span>;
+    }
+    render(<FirstStepsProvider><Loading /></FirstStepsProvider>);
+    expect(screen.getByTestId('loading')).toHaveTextContent('true');
   });
 
   it('serves both consumers from ONE hook instance', () => {
@@ -126,18 +151,20 @@ describe('the plan the provider hands down', () => {
 
   it('gives a productive tenant every step', () => {
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
-    expect(screen.getByTestId('steps')).toHaveTextContent('false|productive|7|');
+    expect(screen.getByTestId('steps')).toHaveTextContent('false|productive|8|');
+    expect(screen.getByTestId('steps')).toHaveTextContent('demo-data-transfer');
     expect(screen.getByTestId('steps')).toHaveTextContent('invoice-sequence');
     expect(screen.getByTestId('steps')).toHaveTextContent('fiscal-config');
   });
 
-  it('gives a trial tenant five steps, without the two gated ones', () => {
+  it('gives a trial tenant five steps, without the three productive-only ones', () => {
     tenantPlan.plan = 'free';
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     const rendered = screen.getByTestId('steps').textContent;
     expect(rendered).toContain('false|free|5|');
     expect(rendered).not.toContain('invoice-sequence');
     expect(rendered).not.toContain('fiscal-config');
+    expect(rendered).not.toContain('demo-data-transfer');
   });
 
   it('narrows the write allowlist to what a trial can tick', () => {
@@ -156,7 +183,7 @@ describe('the plan the provider hands down', () => {
 
   it('does not count a completed step the plan hides', () => {
     // A tenant that finished everything while productive and is then reported free must not
-    // render 7/5. The count follows the visible list, not the stored ids.
+    // render more than 5/5. The count follows the visible list, not the stored ids.
     tenantPlan.plan = 'free';
     hook.completed = ['company-data', 'fiscal-config', 'products', 'contacts',
       'invoice-sequence', 'team'];
@@ -170,7 +197,7 @@ describe('the plan the provider hands down', () => {
     tenantPlan.plan = null;
     tenantPlan.loading = true;
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
-    expect(screen.getByTestId('steps')).toHaveTextContent('true|null|7|');
+    expect(screen.getByTestId('steps')).toHaveTextContent('true|null|8|');
   });
 
   it('falls back to the full list when the plan cannot be resolved at all', () => {
@@ -180,7 +207,7 @@ describe('the plan the provider hands down', () => {
     tenantPlan.loading = false;
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     const rendered = screen.getByTestId('steps').textContent;
-    expect(rendered).toContain('false|null|7|');
+    expect(rendered).toContain('false|null|8|');
     expect(rendered).toContain('invoice-sequence');
   });
 });

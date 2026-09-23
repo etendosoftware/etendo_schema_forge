@@ -5,11 +5,11 @@ import { login } from '../helpers/auth.js';
  * ETP-5190 — post-signup First Steps onboarding window (mocked).
  *
  * Covers the browser half of the feature end to end:
- *   1. the page itself — landing at 1/7, one row open at a time (but any row openable, in any
- *      order), checking off the five writable steps, and the all-set state at 7/7;
+ *   1. the page itself — landing at 2/8 when transfer is not requested, one row open at a time
+ *      (but any row openable, in any order), checking off the six writable steps, and 8/8;
  *   2. the dashboard gate — a never-seen account is bounced to /first-steps exactly once,
  *      and an already-seen (or unreadable) state is not bounced at all;
- *   3. ETP-5364 — "Finalizar configuración inicial" at 7/7 removes the sidebar entry, the
+ *   3. ETP-5364 — "Finalizar configuración inicial" at 8/8 removes the sidebar entry, the
  *      removal survives a reload (it is persisted, not local), Inicio stays reachable
  *      throughout, and the page still offers the way back.
  *
@@ -24,8 +24,8 @@ import { login } from '../helpers/auth.js';
  * here), and this spec is the one that needs to override it with a real, mutable store.
  */
 
-const STEP_IDS = ['create-account', 'company-data', 'fiscal-config', 'products',
-  'contacts', 'invoice-sequence', 'team'];
+const STEP_IDS = ['create-account', 'company-data', 'fiscal-config', 'demo-data-transfer',
+  'products', 'contacts', 'invoice-sequence', 'team'];
 const TOGGLEABLE = ['company-data', 'fiscal-config', 'products', 'contacts',
   'invoice-sequence', 'team'];
 const ALWAYS_DONE = ['create-account'];
@@ -36,8 +36,9 @@ const ALWAYS_DONE = ['create-account'];
  * @param {import('@playwright/test').Page} page
  * @param {object|null} [initial] the stored `firstSteps` object, or `null` for a never-saved account
  */
-async function installFirstStepsMock(page, initial = null) {
+async function installFirstStepsMock(page, initial = null, transferStatus = 'NOT_REQUESTED') {
   const state = { value: initial };
+  const transfer = { status: transferStatus, products: {}, contacts: {} };
   /** every POSTed `firstSteps` body, in order */
   const writes = [];
 
@@ -61,7 +62,11 @@ async function installFirstStepsMock(page, initial = null) {
     await route.fallback();
   });
 
-  return { writes, state };
+  await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify(transfer),
+  }));
+
+  return { writes, state, transfer };
 }
 
 const progress = (page) => page.getByTestId('first-steps-progress');
@@ -70,8 +75,8 @@ const progress = (page) => page.getByTestId('first-steps-progress');
  * Opens the sidebar, which starts COLLAPSED.
  *
  * Collapsed, `SideMenu` renders group icons only: the `menu-item-*` links live in a Radix
- * popover that mounts on hover, and the `x/7` badge is replaced by a different element
- * (`menu-first-steps-progress-collapsed`, just the outstanding count — `3/7` does not fit in a
+ * popover that mounts on hover, and the `x/8` badge is replaced by a different element
+ * (`menu-first-steps-progress-collapsed`, just the outstanding count — `3/8` does not fit in a
  * 40px tile). So neither `menu-first-steps-progress` nor `menu-item-first-steps` is in the DOM
  * until this runs. Same helper as `window-visibility-etp4249.mocked.spec.js`, kept local for
  * the same reason it is there: it is two lines and anchoring it on the translated aria-label
@@ -103,9 +108,9 @@ async function waitForCopyTranslated(page) {
  * dashboard), and Playwright matches routes in reverse registration order. This is the
  * documented override hook — a spec that needs an unseen account provides its own route.
  */
-async function setupFirstSteps(page, initial = null) {
+async function setupFirstSteps(page, initial = null, transferStatus = 'NOT_REQUESTED') {
   await login(page);
-  const mock = await installFirstStepsMock(page, initial);
+  const mock = await installFirstStepsMock(page, initial, transferStatus);
   return mock;
 }
 
@@ -134,8 +139,8 @@ test.describe('First Steps page — completion run', () => {
     await waitForCopyTranslated(page);
   });
 
-  test('lands at 1/7 with the always-done step already ticked', async ({ page }) => {
-    await expect(progress(page)).toContainText('1/7');
+  test('lands at 2/8 with account creation and unrequested transfer resolved', async ({ page }) => {
+    await expect(progress(page)).toContainText('2/8');
 
     for (const id of STEP_IDS) {
       await expect(page.getByTestId(`first-steps-step-${id}`)).toBeVisible();
@@ -143,12 +148,21 @@ test.describe('First Steps page — completion run', () => {
     for (const id of ALWAYS_DONE) {
       await expect(page.getByTestId(`first-steps-done-${id}`)).toBeVisible();
     }
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toBeVisible();
+    await expect(page.getByTestId('first-steps-toggle-demo-data-transfer')).toHaveCount(0);
     for (const id of TOGGLEABLE) {
       await expect(page.getByTestId(`first-steps-done-${id}`)).toHaveCount(0);
     }
     // The empty status circle is the expanded row's alone; the collapsed pending rows below
     // it show only their time estimate (see the design).
     await expect(page.getByTestId(`first-steps-pending-${TOGGLEABLE[0]}`)).toBeVisible();
+  });
+
+  test('never offers a checkbox for the server-owned transfer', async ({ page }) => {
+    await page.getByTestId('first-steps-title-demo-data-transfer').click();
+    await expect(page.getByTestId('first-steps-toggle-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toBeVisible();
+    expect(mock.writes).toHaveLength(0);
   });
 
   test('offers no way to change an always-done step', async ({ page }) => {
@@ -173,7 +187,7 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-toggle-company-data')).toHaveCount(0);
     await completeStep(page, 'team');
 
-    await expect(progress(page)).toContainText('2/7');
+    await expect(progress(page)).toContainText('3/8');
     await expect(page.getByTestId('first-steps-done-company-data')).toHaveCount(0);
   });
 
@@ -215,7 +229,7 @@ test.describe('First Steps page — completion run', () => {
     await page.getByTestId('first-steps-gate-no-fiscal-config').click();
 
     await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
-    await expect(progress(page)).toContainText('2/7');
+    await expect(progress(page)).toContainText('3/8');
     await expect(page.getByTestId('first-steps-gate-fiscal-config')).toHaveCount(0);
     expect(mock.writes.at(-1).completed).toContain('fiscal-config');
   });
@@ -256,14 +270,14 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-configure-company-data')).toBeEnabled();
   });
 
-  test('walks 1/7 -> 7/7 as the writable steps are checked off, one row open at a time', async ({ page }) => {
+  test('walks 2/8 -> 8/8 as writable steps are checked off, one row open at a time', async ({ page }) => {
     const expected = [
-      { done: 'company-data', progress: '2/7', next: 'fiscal-config' },
-      { done: 'fiscal-config', progress: '3/7', next: 'products' },
-      { done: 'products', progress: '4/7', next: 'contacts' },
-      { done: 'contacts', progress: '5/7', next: 'invoice-sequence' },
-      { done: 'invoice-sequence', progress: '6/7', next: 'team' },
-      { done: 'team', progress: '7/7', next: null },
+      { done: 'company-data', progress: '3/8', next: 'fiscal-config' },
+      { done: 'fiscal-config', progress: '4/8', next: 'products' },
+      { done: 'products', progress: '5/8', next: 'contacts' },
+      { done: 'contacts', progress: '6/8', next: 'invoice-sequence' },
+      { done: 'invoice-sequence', progress: '7/8', next: 'team' },
+      { done: 'team', progress: '8/8', next: null },
     ];
 
     for (const step of expected) {
@@ -283,20 +297,21 @@ test.describe('First Steps page — completion run', () => {
     }
   });
 
-  test('persists only the five writable ids, and the final state is the full set', async ({ page }) => {
+  test('persists only the six writable ids, and the final state is the full set', async ({ page }) => {
     for (const id of TOGGLEABLE) await completeStep(page, id);
-    await expect(progress(page)).toContainText('7/7');
+    await expect(progress(page)).toContainText('8/8');
 
     expect(mock.writes.length).toBe(TOGGLEABLE.length);
     for (const body of mock.writes) {
       for (const id of ALWAYS_DONE) {
         expect(body.completed, JSON.stringify(body)).not.toContain(id);
       }
+      expect(body.completed, JSON.stringify(body)).not.toContain('demo-data-transfer');
     }
     expect(mock.writes.at(-1).completed.slice().sort()).toEqual(TOGGLEABLE.slice().sort());
   });
 
-  test('reaches the all-set state: copy swaps and "Create invoice" appears only at 7/7', async ({ page }) => {
+  test('reaches the all-set state: copy swaps and "Create invoice" appears only at 8/8', async ({ page }) => {
     const heading = page.getByTestId('first-steps-heading');
     const subtitle = page.getByTestId('first-steps-subtitle');
 
@@ -305,13 +320,13 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-create-invoice')).toHaveCount(0);
 
     for (const id of TOGGLEABLE.slice(0, -1)) await completeStep(page, id);
-    // Still not all set at 6/7 — the button must not appear early and the copy must not swap.
-    await expect(progress(page)).toContainText('6/7');
+    // Still not all set at 7/8 — the button must not appear early and the copy must not swap.
+    await expect(progress(page)).toContainText('7/8');
     await expect(page.getByTestId('first-steps-create-invoice')).toHaveCount(0);
     expect((await heading.textContent())?.trim()).toBe(initialHeading);
 
     await completeStep(page, 'team');
-    await expect(progress(page)).toContainText('7/7');
+    await expect(progress(page)).toContainText('8/8');
 
     // Locale-agnostic: assert the copy CHANGED rather than pinning a translated string.
     await expect(page.getByTestId('first-steps-create-invoice')).toBeVisible();
@@ -327,11 +342,11 @@ test.describe('First Steps page — completion run', () => {
 
   test('a checked step survives a reload, because it was persisted server-side', async ({ page }) => {
     await completeStep(page, 'company-data');
-    await expect(progress(page)).toContainText('2/7');
+    await expect(progress(page)).toContainText('3/8');
 
     await page.reload();
     await expect(page.getByTestId('first-steps-page')).toBeVisible();
-    await expect(progress(page)).toContainText('2/7');
+    await expect(progress(page)).toContainText('3/8');
     await expect(page.getByTestId('first-steps-done-company-data')).toBeVisible();
     // The default expansion follows the persisted state, not the page load order: with
     // company-data ticked, findExpandedStepId() opens the next incomplete row, which is
@@ -350,34 +365,74 @@ test.describe('First Steps page — completion run', () => {
     // sidebar count in the same commit — no reload. Before that was shared they disagreed.
     await expandSidebar(page);
     const badge = page.getByTestId('menu-first-steps-progress');
-    await expect(badge).toHaveText('1/7');
+    await expect(badge).toHaveText('2/8');
 
     await completeStep(page, 'company-data');
-    await expect(badge).toHaveText('2/7');
+    await expect(badge).toHaveText('3/8');
   });
 
-  test('never hides the sidebar entry, not even at 7/7', async ({ page }) => {
-    // The acceptance criterion, stated as a test: at 7/7 this link is the only way back in to
+  test('never hides the sidebar entry, not even at 8/8', async ({ page }) => {
+    // The acceptance criterion, stated as a test: at 8/8 this link is the only way back in to
     // un-tick a step, so it must survive completion.
     for (const id of TOGGLEABLE) await completeStep(page, id);
-    await expect(progress(page)).toContainText('7/7');
+    await expect(progress(page)).toContainText('8/8');
     await expandSidebar(page);
-    await expect(page.getByTestId('menu-first-steps-progress')).toHaveText('7/7');
+    await expect(page.getByTestId('menu-first-steps-progress')).toHaveText('8/8');
     await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
+  });
+});
+
+test.describe('First Steps transfer and plan gates', () => {
+  test('the server controls transfer completion and the final action', async ({ page }) => {
+    const mock = await setupFirstSteps(page,
+      { v: 1, seen: true, dismissed: false, completed: TOGGLEABLE }, 'RUNNING');
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('7/8');
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-data-transfer-progress')).toBeVisible();
+    await expect(page.getByTestId('first-steps-toggle-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
+    expect(mock.writes).toHaveLength(0);
+
+    mock.transfer.status = 'COMPLETED';
+    await page.reload();
+    await expect(progress(page)).toContainText('8/8');
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toBeVisible();
+    await expect(page.getByTestId('first-steps-finish-setup')).toBeVisible();
+    expect(mock.writes).toHaveLength(0);
+  });
+
+  test('a trial sees five steps and no transfer row', async ({ page }) => {
+    await setupFirstSteps(page);
+    await page.route('**/sws/go/environments', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ environments: [{
+        clientId: 'e2e-mock-client', clientName: 'Trial', plan: 'free',
+      }] }),
+    }));
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('1/5');
+    await expect(page.getByTestId('first-steps-step-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-step-fiscal-config')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-step-invoice-sequence')).toHaveCount(0);
   });
 });
 
 test.describe('First Steps page — degraded backend', () => {
   test('still renders the list when the state cannot be read', async ({ page }) => {
     await login(page);
+    await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ status: 'NOT_REQUESTED', products: {}, contacts: {} }),
+    }));
     await page.route('**/sws/go/onboarding/first-steps**', (route) => route.fulfill({
       status: 500, contentType: 'application/json', body: JSON.stringify({ status: 'error' }),
     }));
     await page.goto('/first-steps');
 
-    // Degrades to "nothing completed" rather than a blank page or a permanent spinner.
+    // Degrades to no user-completed steps; account creation and the unrequested transfer count.
     await expect(page.getByTestId('first-steps-page')).toBeVisible();
-    await expect(progress(page)).toContainText('1/7');
+    await expect(progress(page)).toContainText('2/8');
     for (const id of STEP_IDS) {
       await expect(page.getByTestId(`first-steps-step-${id}`)).toBeVisible();
     }
@@ -447,19 +502,19 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 });
 
 test.describe('Finalizar configuración inicial — ETP-5364', () => {
-  test('is offered only at 7/7, and removes the sidebar entry when pressed', async ({ page }) => {
+  test('is offered only at 8/8, and removes the sidebar entry when pressed', async ({ page }) => {
     const mock = await setupFirstSteps(page, null);
     await page.goto('/first-steps');
     await waitForCopyTranslated(page);
 
-    // Below 7/7 the button does not exist: closing the checklist is the end of the run, not
+    // Below 8/8 the button does not exist: closing the checklist is the end of the run, not
     // an escape hatch from it.
     await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
 
     for (const id of TOGGLEABLE) await completeStep(page, id);
-    await expect(progress(page)).toContainText('7/7');
+    await expect(progress(page)).toContainText('8/8');
 
-    // Still there at 7/7 — completing the list does NOT dismiss on its own.
+    // Still there at 8/8 — completing the list does NOT dismiss on its own.
     await expandSidebar(page);
     await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
 
