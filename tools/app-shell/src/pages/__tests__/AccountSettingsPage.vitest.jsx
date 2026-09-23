@@ -27,10 +27,12 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/api', async (importOriginal) 
 const removeAuthMethod = vi.fn();
 // The code-to-key table is the real one: the page's job is to consult it before falling back, and
 // stubbing it would hide whether it does. Its own contract is covered in authMethodsApi.vitest.js.
+// ETP-4576 — no token accessor is mocked in any more, because the module no longer has one:
+// `removeAuthMethod` resolves the credential from the active scheme inside `apiFetch`. What the
+// page owes the endpoint is the method, the typed password and the base URL, and nothing else.
 vi.mock('@/lib/authMethodsApi.js', async (importOriginal) => ({
   ...(await importOriginal()),
   removeAuthMethod: (...a) => removeAuthMethod(...a),
-  readPlatformToken: () => 'platform-token',
 }));
 
 vi.mock('@/components/copilot/copilotApi.js', () => ({
@@ -121,11 +123,17 @@ describe('AccountSettingsPage', () => {
       expect(screen.queryByText('loading')).not.toBeInTheDocument();
     });
 
-    it('asks the platform endpoint for the account with the stored platform token', async () => {
+    // ETP-4576 — the third argument is gone. It used to be a bearer read out of
+    // `sf_platform_token`, a key `purgeLegacyAuthStorage` deletes, so it was always null; the read
+    // kept working anyway because `fetchAccount` sends `credentials: 'include'` and the browser
+    // attaches the `__Host-` session itself. Passing it again would be reintroducing a credential
+    // the page must not hold, so its ABSENCE is what this pins.
+    it('asks the platform endpoint for the account without naming a credential', async () => {
       render(<AccountSettingsPage />);
 
       await waitFor(() => expect(fetchAccount).toHaveBeenCalledTimes(1));
-      expect(fetchAccount).toHaveBeenCalledWith(fetch, 'https://base', 'platform-token');
+      expect(fetchAccount).toHaveBeenCalledWith(fetch, 'https://base');
+      expect(fetchAccount.mock.calls[0]).toHaveLength(2);
     });
 
     it('draws the security section from the methods the server actually reported', async () => {
@@ -224,16 +232,22 @@ describe('AccountSettingsPage', () => {
       await user.click(screen.getByTestId('auth-method-remove-confirm-yes'));
     }
 
-    it('sends the confirmed method to the server with the platform token', async () => {
+    // ETP-4576 — `(method, currentPassword, baseUrl)`. The old shape led with a fetch
+    // implementation and a token, and the token was the bug: `buildAuthHeaders` put it into
+    // `X-Go-CSRF`, and it was always null under the cookie session, so the POST carried no proof
+    // and the removal was refused while the list beside it kept loading. The page names no
+    // credential now; `apiFetch` resolves it from the active scheme.
+    it('sends the confirmed method to the server, naming no credential', async () => {
       const user = userEvent.setup();
       removeAuthMethod.mockResolvedValue({ authMethods: BOTH_METHODS });
 
       render(<AccountSettingsPage />);
       await confirmRemoval(user, 'google');
 
-      await waitFor(() => expect(removeAuthMethod).toHaveBeenCalledWith(
-        fetch, 'https://base', 'platform-token', 'google', '',
-      ));
+      await waitFor(() => expect(removeAuthMethod).toHaveBeenCalledWith('google', '', 'https://base'));
+      // A fourth argument would mean a token crept back into the call.
+      expect(removeAuthMethod.mock.calls[0]).toHaveLength(3);
+      expect(JSON.stringify(removeAuthMethod.mock.calls[0])).not.toMatch(/token/i);
     });
 
     it('carries the typed current password through to the removal call', async () => {
@@ -243,9 +257,8 @@ describe('AccountSettingsPage', () => {
       render(<AccountSettingsPage />);
       await confirmRemoval(user, 'password', 'hunter2');
 
-      await waitFor(() => expect(removeAuthMethod).toHaveBeenCalledWith(
-        fetch, 'https://base', 'platform-token', 'password', 'hunter2',
-      ));
+      await waitFor(() =>
+        expect(removeAuthMethod).toHaveBeenCalledWith('password', 'hunter2', 'https://base'));
     });
 
     it('translates the missing-credentials refusal in the words of a removal', async () => {
@@ -266,45 +279,54 @@ describe('AccountSettingsPage', () => {
       );
     });
 
-    // BUG A. The servlet rotates the session on EVERY removal — generateToken() +
-    // updateSessionToken() — and returns the new one as `token`. Keeping only `authMethods` left
-    // the browser holding a dead token: the screen redrew perfectly and the next request answered
-    // 401, with nothing at the moment of the act to say so.
-    it('stores the rotated token the removal returned, so the session survives', async () => {
+    /**
+     * BUG A, inverted by ETP-4576.
+     *
+     * The servlet rotates the session on EVERY removal — generateToken() + updateSessionToken() —
+     * and the legacy backend still echoes the new token in the body. The page used to persist it
+     * into `sf_platform_token`, which was the right instinct against the wrong storage: that key
+     * is in LEGACY_AUTH_KEYS and `purgeLegacyAuthStorage` deletes it on mount, so the write was
+     * racing the purge for a credential the app no longer authenticates with. Under the cookie
+     * scheme the rotated session arrives as a `Set-Cookie` the browser installs by itself, so the
+     * correct handling of that field is to drop it — and dropping it is invisible unless asserted,
+     * which is why it has a case of its own rather than only being exercised through the flow.
+     */
+    it('persists nothing when the removal echoes a rotated token', async () => {
       const user = userEvent.setup();
-      localStorage.setItem('sf_platform_token', 'old-token');
       removeAuthMethod.mockResolvedValue({ token: 'rotated-token', authMethods: BOTH_METHODS });
 
       render(<AccountSettingsPage />);
       await confirmRemoval(user, 'google');
 
-      await waitFor(() =>
-        expect(localStorage.getItem('sf_platform_token')).toBe('rotated-token'));
+      await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+      expect(localStorage.getItem('sf_platform_token')).toBeNull();
+      // Nothing else either: the two onboarding keys below are written by the password flow, and
+      // a removal must not touch storage at all.
+      expect(localStorage.length).toBe(0);
     });
 
-    it('keeps the stored token when the removal response carries none', async () => {
+    it('leaves a legacy entry already in storage untouched rather than refreshing it', async () => {
       const user = userEvent.setup();
-      localStorage.setItem('sf_platform_token', 'old-token');
-      removeAuthMethod.mockResolvedValue({ authMethods: BOTH_METHODS });
+      // The purge owns that key. A page that "kept it in sync" would keep resurrecting it.
+      localStorage.setItem('sf_platform_token', 'stale-token');
+      removeAuthMethod.mockResolvedValue({ token: 'rotated-token', authMethods: BOTH_METHODS });
 
       render(<AccountSettingsPage />);
       await confirmRemoval(user, 'google');
 
       await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
-      // Clobbering it with the absent value would log the user out just as silently.
-      expect(localStorage.getItem('sf_platform_token')).toBe('old-token');
+      expect(localStorage.getItem('sf_platform_token')).toBe('stale-token');
     });
 
-    it('leaves the stored token alone when the removal fails', async () => {
+    it('writes nothing to storage when the removal fails either', async () => {
       const user = userEvent.setup();
-      localStorage.setItem('sf_platform_token', 'old-token');
       removeAuthMethod.mockRejectedValue(new Error('boom'));
 
       render(<AccountSettingsPage />);
       await confirmRemoval(user, 'google');
 
       await waitFor(() => expect(toastError).toHaveBeenCalled());
-      expect(localStorage.getItem('sf_platform_token')).toBe('old-token');
+      expect(localStorage.length).toBe(0);
     });
 
     it('locks the last remaining method again after the one before it was removed', async () => {

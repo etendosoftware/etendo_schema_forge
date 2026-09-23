@@ -16,7 +16,6 @@ import {
   getBillingOverview,
   getBillingOffer,
   getBillingPurchase,
-  getCheckoutToken,
   getCheckoutStatus,
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
@@ -42,34 +41,18 @@ const STEP_LABELS = {
 };
 
 /**
- * The client name of the environment this browser's ERP session is currently inside —
- * persisted by `persistEnvironmentSession` (`etendo-go-core` onboarding/state.js) as
- * `sf_auth_client_name` whenever an environment is entered. Same source `AppLayout`'s
- * `companyName` and `InviteAcceptancePage`'s `currentClientName` already read, kept as a plain
- * localStorage lookup here (rather than routed through `useEnvironmentSwitch`) so it resolves
- * synchronously and does not depend on the account-scoped `/sws/go/environments` request this
- * page issues separately succeeding first.
- *
- * Empty when the browser never entered a tenant this session (e.g. this page opened straight
- * after account signup, before onboarding) — there is then no current environment to prefill
- * from (ETP-5443).
- */
-function readCurrentEnvironmentName(storage = globalThis.localStorage) {
-  try {
-    return storage?.getItem('sf_auth_client_name') || '';
-  } catch {
-    return '';
-  }
-}
-
-/**
  * Prefill priority: the environment the user is currently logged into, else the account's demo
- * environment (resolved once the environments lookup below settles — today's behavior), else
- * empty. The field is always rendered and always editable; this only decides its starting value.
+ * environment, else empty — both resolved once the environments lookup below settles
+ * (ETP-5443). The field is always rendered and always editable; this only decides its starting
+ * value.
+ *
+ * The current environment is matched by the SESSION's `clientId` (`useEnvironmentSwitch`'s
+ * `currentClientId`) against that environment list, the same way `AppLayout` resolves its
+ * `companyName`. Never from `sf_auth_client_name`: that is a legacy auth key
+ * `purgeLegacyAuthStorage` deletes under the cookie session (ETP-4576), so reading it answered ''
+ * for every user.
  */
-function createInitialForm() {
-  return { tenantName: readCurrentEnvironmentName(), upgradeAction: 'create-productive' };
-}
+const EMPTY_FORM = { tenantName: '', upgradeAction: 'create-productive' };
 
 const PENDING_CHECKOUT_NAME = 'sf_pending_checkout_tenant_name';
 const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
@@ -108,25 +91,23 @@ function readPendingDataTransfer(storage) {
   }
 }
 
-async function resolveCheckoutTenantName({ fetcher, baseUrl, token, requestId, storedTenantName }) {
+async function resolveCheckoutTenantName({ baseUrl, requestId, storedTenantName }) {
   if (storedTenantName) return storedTenantName;
-  const purchase = await getBillingPurchase(fetcher, baseUrl, token, requestId);
+  const purchase = await getBillingPurchase(baseUrl, requestId);
   return purchase?.clientName || '';
 }
 
-async function waitForCheckoutPayment({ fetcher, baseUrl, token, requestId }) {
+async function waitForCheckoutPayment({ baseUrl, requestId }) {
   let status = { status: 'pending' };
   for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
-    status = await getCheckoutStatus(fetcher, baseUrl, token, requestId);
+    status = await getCheckoutStatus(baseUrl, requestId);
     if (status.status === 'pending') await new Promise(resolve => setTimeout(resolve, 1000));
   }
   return status;
 }
 
 async function handleExistingPurchaseError(error, {
-  fetcher,
   baseUrl,
-  token,
   setFormError,
   resumePaidPurchase,
   waitForExistingProvisioning,
@@ -147,7 +128,7 @@ async function handleExistingPurchaseError(error, {
     return true;
   }
   try {
-    const overview = await getBillingOverview(fetcher, baseUrl, token);
+    const overview = await getBillingOverview(baseUrl);
     setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
   } catch {
     // The billing projection is recoverable; the purchase remains durable on the backend.
@@ -158,9 +139,7 @@ async function handleExistingPurchaseError(error, {
 }
 
 async function resumeCheckoutProvisioning({
-  fetcher,
   baseUrl,
-  token,
   requestId,
   storedTenantName,
   upgradeAction,
@@ -173,12 +152,12 @@ async function resumeCheckoutProvisioning({
   onReady,
 }) {
   const tenantName = await resolveCheckoutTenantName({
-    fetcher, baseUrl, token, requestId, storedTenantName,
+    baseUrl, requestId, storedTenantName,
   });
   if (!tenantName) throw new Error('Purchase has no environment name');
   onTenantName(tenantName);
 
-  const status = await waitForCheckoutPayment({ fetcher, baseUrl, token, requestId });
+  const status = await waitForCheckoutPayment({ baseUrl, requestId });
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
 
   const selectedTransfer = readPendingDataTransfer(storage);
@@ -497,7 +476,7 @@ export default function UpgradePage() {
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
   const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
-  const [form, setForm] = useState(createInitialForm);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
   const [steps, setSteps] = useState(() => initialSetupSteps());
@@ -512,7 +491,11 @@ export default function UpgradePage() {
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
-  const { enterByClientName } = useEnvironmentSwitch({ enabled: false });
+  const { enterByClientName, currentClientId } = useEnvironmentSwitch({ enabled: false });
+  // Read inside the one-shot environments effect below, which must see the session's value at
+  // the time the lookup settles rather than the one its mount-time closure captured.
+  const currentClientIdRef = useRef(currentClientId);
+  currentClientIdRef.current = currentClientId;
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
   const [pendingProvisioning, setPendingProvisioning] = useState(null);
@@ -520,15 +503,13 @@ export default function UpgradePage() {
 
   const startProvisioning = async () => {
     if (!pendingProvisioning) return;
-    const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      return;
-    }
+    // ETP-4576 — no `!token` gate: under the cookie session there is no client-held token, so the
+    // gate would be permanently true and this would report an expired session to every user.
+    // An actually-expired session answers 401, which `apiFetch` routes to the logout choke point.
     setEntering(true);
     try {
       const { startedAt, ...onboardingInput } = pendingProvisioning;
-      await runPaidOnboarding(fetch, getUpgradeBaseUrl(), token, onboardingInput, message => {
+      await runPaidOnboarding(getUpgradeBaseUrl(), onboardingInput, message => {
         setSteps(previous => applyProgressMessage(previous, message));
       });
       setPendingProvisioning(null);
@@ -560,8 +541,7 @@ export default function UpgradePage() {
   }, [phase, pendingProvisioning, entering]);
 
   const resumePaidPurchase = async purchase => {
-    const token = getCheckoutToken();
-    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+    if (!purchase?.purchaseId || !purchase?.clientName) {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
@@ -581,8 +561,7 @@ export default function UpgradePage() {
   };
 
   const waitForExistingProvisioning = async purchase => {
-    const token = getCheckoutToken();
-    if (!token || !purchase?.purchaseId || !purchase?.clientName) {
+    if (!purchase?.purchaseId || !purchase?.clientName) {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
@@ -590,7 +569,7 @@ export default function UpgradePage() {
     setPhase('running');
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
-        const current = await getBillingPurchase(fetch, getUpgradeBaseUrl(), token, purchase.purchaseId);
+        const current = await getBillingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
         if (current?.status === 'PROVISIONED') {
           setPhase('success');
           return;
@@ -618,24 +597,22 @@ export default function UpgradePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const token = getCheckoutToken();
-    if (!token) {
-      setAccountState('unavailable');
-      return undefined;
-    }
-
-    fetchEnvironments(fetch, getUpgradeBaseUrl(), token)
+    fetchEnvironments(fetch, getUpgradeBaseUrl())
       .then(list => {
         if (cancelled) return;
         const nextEnvironments = Array.isArray(list) ? list : [];
         setEnvironments(nextEnvironments);
         const demo = nextEnvironments.find(environment => environment.plan !== 'productive');
-        // Only a fallback: `previous.tenantName` already holds the current environment's name
-        // when `createInitialForm` found one, and that takes priority over the demo (ETP-5443).
-        if (demo?.clientName) {
+        const current = currentClientIdRef.current
+          ? nextEnvironments.find(environment => environment.clientId === currentClientIdRef.current)
+          : undefined;
+        // The current environment first, the demo only as a fallback (ETP-5443). Never over a
+        // name the user already typed.
+        const prefillName = current?.clientName || demo?.clientName;
+        if (prefillName) {
           setForm(previous => previous.tenantName
             ? previous
-            : { ...previous, tenantName: demo.clientName });
+            : { ...previous, tenantName: prefillName });
         }
         setAccountState('ready');
       })
@@ -643,7 +620,7 @@ export default function UpgradePage() {
         if (!cancelled) setAccountState('unavailable');
       });
 
-    getBillingOverview(fetch, getUpgradeBaseUrl(), token)
+    getBillingOverview(getUpgradeBaseUrl())
       .then(overview => {
         if (!cancelled) setBillingPurchases(Array.isArray(overview?.purchases) ? overview.purchases : []);
       })
@@ -651,7 +628,7 @@ export default function UpgradePage() {
         // Environment lookup remains the primary page state; billing is a recoverable projection.
       });
 
-    getBillingOffer(fetch, getUpgradeBaseUrl(), token)
+    getBillingOffer(getUpgradeBaseUrl())
       .then(offer => {
         if (!cancelled) setBillingOffer(offer);
       })
@@ -683,23 +660,20 @@ export default function UpgradePage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('checkout') !== 'success') return undefined;
     const requestId = params.get('requestId');
-    const token = getCheckoutToken();
     const storedTenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
     // Persisted alongside the pending tenant name in runUpgrade, since a local
     // closure variable does not survive the full-page redirect to Stripe.
     const startedAtRaw = sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT);
     const startedAt = startedAtRaw ? Number(startedAtRaw) : null;
-    if (!requestId || !token) {
+    if (!requestId) {
       setFormError('upgradeCheckoutCreationFailed');
       return undefined;
     }
     let cancelled = false;
     setPhase('running');
     resumeCheckoutProvisioning({
-      fetcher: fetch,
       baseUrl: getUpgradeBaseUrl(),
-      token,
       requestId,
       storedTenantName,
       upgradeAction,
@@ -731,13 +705,6 @@ export default function UpgradePage() {
   // `form` — reading `form.tenantName` here would silently send the STALE value,
   // including an empty string when the field was never populated (ETP-5443).
   const runUpgrade = async tenantName => {
-    const token = getCheckoutToken();
-    if (!token) {
-      setFormError('upgradeSessionExpired');
-      emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_SESSION_EXPIRED);
-      return;
-    }
-
     setPhase('running');
     // Duration is measured from here to the terminal event in the resume
     // effect above, so it covers the full round trip through Stripe's hosted
@@ -747,9 +714,7 @@ export default function UpgradePage() {
 
     try {
       const session = await createBillingPurchase(
-        fetch,
         getUpgradeBaseUrl(),
-        token,
         {
           action: 'productive-tenant',
           clientName: tenantName,
@@ -766,9 +731,7 @@ export default function UpgradePage() {
       window.location.assign(session.checkoutUrl);
     } catch (error) {
       const existingPurchaseHandled = await handleExistingPurchaseError(error, {
-        fetcher: fetch,
         baseUrl: getUpgradeBaseUrl(),
-        token,
         setFormError,
         resumePaidPurchase,
         waitForExistingProvisioning,
@@ -804,36 +767,30 @@ export default function UpgradePage() {
 
     const tenantName = form.tenantName.trim();
 
-    // Both name checks below are gated on having a session to submit with. A missing token
-    // must still reach runUpgrade's own check first, so upgradeSessionExpired (the actionable
-    // diagnosis) is never masked by a "name required"/"name taken" message about a field the
-    // user cannot fix their way out of a dead session with.
-    if (getCheckoutToken()) {
-      // The field is always rendered and always editable (ETP-5443) — a blank submit is always
-      // "the field is visible and empty", never "no field to type into". Sending clientName: ''
-      // would 400 with INVALID_REQUEST "clientName is required"; surface a translated error
-      // instead.
-      if (!tenantName) {
-        setErrors({ tenantName: 'upgradeTenantNameRequired' });
-        return;
-      }
+    // The field is always rendered and always editable (ETP-5443) — a blank submit is always
+    // "the field is visible and empty", never "no field to type into". Sending clientName: ''
+    // would 400 with INVALID_REQUEST "clientName is required"; surface a translated error
+    // instead.
+    if (!tenantName) {
+      setErrors({ tenantName: 'upgradeTenantNameRequired' });
+      return;
+    }
 
-      // AD_Client.name is globally unique, and the backend treats a name matching a tenant this
-      // account already owns as "resume that tenant" (EtendoGoJwtServlet.isResumingOwnedTenant),
-      // not "create a new one" — the user would pay and land back in the SAME environment. A
-      // match against the account's DEMO environment is allowed: that is the demo-to-pro
-      // conversion path, not a collision.
-      // TODO: this guard exists only because AD_Client.name is globally unique today. If that
-      // constraint is ever lifted, revisit whether a name match should still block the request.
-      const normalizedName = tenantName.toLowerCase();
-      const takenByOwnedProductiveEnvironment = environments.some(environment => (
-        isProductiveEnvironment(environment)
-        && String(environment.clientName || '').trim().toLowerCase() === normalizedName
-      ));
-      if (takenByOwnedProductiveEnvironment) {
-        setErrors({ tenantName: 'upgradeTenantNameTaken' });
-        return;
-      }
+    // AD_Client.name is globally unique, and the backend treats a name matching a tenant this
+    // account already owns as "resume that tenant" (EtendoGoJwtServlet.isResumingOwnedTenant),
+    // not "create a new one" — the user would pay and land back in the SAME environment. A
+    // match against the account's DEMO environment is allowed: that is the demo-to-pro
+    // conversion path, not a collision.
+    // TODO: this guard exists only because AD_Client.name is globally unique today. If that
+    // constraint is ever lifted, revisit whether a name match should still block the request.
+    const normalizedName = tenantName.toLowerCase();
+    const takenByOwnedProductiveEnvironment = environments.some(environment => (
+      isProductiveEnvironment(environment)
+      && String(environment.clientName || '').trim().toLowerCase() === normalizedName
+    ));
+    if (takenByOwnedProductiveEnvironment) {
+      setErrors({ tenantName: 'upgradeTenantNameTaken' });
+      return;
     }
 
     if (tenantName !== form.tenantName) {
@@ -975,7 +932,7 @@ export default function UpgradePage() {
                 whether `clientName` already resolves to a client this account owns
                 (isResumingOwnedTenant), not by a distinct `upgradeAction` — 'create-productive'
                 (the only supported value besides the rejected legacy 'convert-demo') covers
-                both. Prefilled by `createInitialForm`/the demo-fallback effect above; the taken-
+                both. Prefilled by the environments effect above (current, else demo); the taken-
                 name guard in handleSubmit is what actually keeps a productive-name collision
                 from resuming an owned tenant instead of creating a new one.
               */}

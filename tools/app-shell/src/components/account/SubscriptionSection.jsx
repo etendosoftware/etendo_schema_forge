@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CreditCard, Loader2 } from 'lucide-react';
-import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { useUI, useLocaleSwitch } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { getSubscription, createPortalSession, getCheckoutToken, toCheckoutFetch } from '@/lib/upgrade/api.js';
+import { getSubscription, createPortalSession } from '@/lib/upgrade/api.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 
 /** Statuses whose subscription is genuinely healthy enough to promise a future renewal. */
@@ -46,13 +45,11 @@ const STRIPE_STATUS_LABEL_KEYS = {
  * `docs/plans/2026-09-22-etp-5443-subscription-lifecycle-design.md` §3.3.
  *
  * Reachable while the ERP is paywalled by construction, not by a special case here: both
- * `getSubscription` and `createPortalSession` hang off the platform/account token
- * (`getCheckoutToken`), never the environment session `useApiFetch` would send — the same rule
- * `AccountSettingsPage.load()` and `UpgradePage.jsx` already follow for every billing call. Both
- * calls still go through the shared, policy-compliant `apiFetch` (ETP-5443 REVIEW W7) — wrapped
- * by `toCheckoutFetch` into the plain `fetchImpl` these clients take, with an explicit `token`
- * override so a missing account session can never fall back to the ambient ERP one; see
- * `toCheckoutFetch`'s own doc comment in `lib/upgrade/api.js`.
+ * `getSubscription` and `createPortalSession` are account-level billing calls routed through the
+ * shared `apiFetch` exactly like every other call in `lib/upgrade/api.js` (ETP-4576) — the
+ * credential comes from the active session scheme (the `__Host-go_session` cookie, or the legacy
+ * bearer), never from a token this component reads, and the portal POST carries the `X-Go-CSRF`
+ * write proof `apiFetch` adds on unsafe methods.
  *
  * `SubscriptionSection__root` is the stable inner anchor and is always present, even when the
  * caller also sets its own outer `data-testid` (AccountSettingsPage sets
@@ -72,8 +69,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
     setStatus('loading');
     setManageError(false);
     try {
-      const token = getCheckoutToken();
-      const result = await getSubscription(toCheckoutFetch(apiFetch, token), apiBaseUrl, token);
+      const result = await getSubscription(apiBaseUrl);
       setSubscription(result || null);
       setStatus('loaded');
     } catch {
@@ -88,8 +84,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
     setManageError(false);
     setManaging(true);
     try {
-      const token = getCheckoutToken();
-      const session = await createPortalSession(toCheckoutFetch(apiFetch, token), apiBaseUrl, token);
+      const session = await createPortalSession(apiBaseUrl);
       if (!session?.url) throw new Error('Portal session carried no url');
       window.location.assign(session.url);
     } catch {

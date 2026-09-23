@@ -656,6 +656,11 @@ Follow `SecuritySection.jsx` for structure and props. Use `useUI()` for labels,
 `formatCurrency(currency, amountMinor / 100)` for the amount and `formatCalendarDate` for the
 dates. Put a `data-testid` on every element the tests query.
 
+**Superseded by the develop merge (backend-managed session, ETP-4576):** `toCheckoutFetch` and
+`getCheckoutToken` no longer exist. `getSubscription(baseUrl)` / `createPortalSession(baseUrl)`
+call `apiFetch` with `{ baseUrl, on401: 'ignore' }` like the rest of `lib/upgrade/api.js`, and
+take their credential from the active session scheme. The note below is kept as history.
+
 **Frontend request policy (ETP-5443 REVIEW W7 — supersedes the note this step originally
 shipped with):** `SubscriptionSection` calls `getSubscription`/`createPortalSession` through the
 shared, policy-compliant `apiFetch` (`@etendosoftware/app-shell-core/auth/api`), wrapped by

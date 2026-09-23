@@ -271,14 +271,14 @@ A new Subscription section in `AccountSettingsPage`, with its two API clients ad
 Repo rules that apply, all of them enforced by existing guardrails:
 
 - Requests go through the shared, policy-compliant `apiFetch` — never a bare `fetch`
-  (`docs/request-policy.md`). `SubscriptionSection` cannot use the `useApiFetch` hook
-  directly: that hook sends the ERP/environment session token, while billing must
-  authenticate with the account/platform token from `getCheckoutToken()`, which is what
-  keeps it reachable while the ERP is paywalled (§3.2). It calls `apiFetch`
-  (`@etendosoftware/app-shell-core/auth/api`) through `toCheckoutFetch(apiFetch, token)`
-  (`tools/app-shell/src/lib/upgrade/api.js`), which forces
-  `{ token, baseUrl: '', on401: 'ignore' }` so a missing account session degrades to an
-  honest 401 instead of silently falling back to the ambient ERP session token.
+  (`docs/request-policy.md`). `getSubscription(baseUrl)` and `createPortalSession(baseUrl)`
+  (`tools/app-shell/src/lib/upgrade/api.js`) call `apiFetch` with `{ baseUrl, on401: 'ignore' }`,
+  exactly like every other billing call in that module since the backend-managed session
+  (ETP-4576, `docs/adr/0001-backend-managed-session.md`): the credential comes from the active
+  session scheme — the `__Host-go_session` cookie, or the legacy bearer while it is still
+  enabled — and `apiFetch` adds the `X-Go-CSRF` write proof to the portal POST. No component
+  reads or passes a token. `on401: 'ignore'` keeps a 401 mapped onto `sessionExpired` rather
+  than logging the user out from the Account page.
 - Every user-visible string gets a key in **both** `en_US.json` and `es_ES.json`.
 - Amounts render through `formatCurrency`; dates through `formatCalendarDate`.
 - Every element a test queries carries a `data-testid`.

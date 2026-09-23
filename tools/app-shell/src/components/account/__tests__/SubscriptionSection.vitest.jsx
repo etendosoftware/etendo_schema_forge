@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event';
  * status, renewal/cancellation date, grace remaining) and is the only way the account owner
  * reaches the Stripe Customer Portal to manage it.
  *
- * All three billing calls (`getSubscription`, `createPortalSession`, `getCheckoutToken`) are
+ * Both billing calls (`getSubscription`, `createPortalSession`) are
  * mocked at the `@/lib/upgrade/api.js` boundary, so this suite proves the section's OWN
  * behavior — what it renders for a given payload, what it shows when a call fails, where it
  * sends the user on Manage — without depending on how it wires fetch/auth underneath. That
@@ -41,18 +41,10 @@ vi.mock('@/i18n', () => ({
 
 const getSubscription = vi.fn();
 const createPortalSession = vi.fn();
-const getCheckoutToken = vi.fn(() => 'checkout-token');
 
 vi.mock('@/lib/upgrade/api.js', () => ({
   getSubscription: (...args) => getSubscription(...args),
   createPortalSession: (...args) => createPortalSession(...args),
-  getCheckoutToken: (...args) => getCheckoutToken(...args),
-  // Passthrough: `toCheckoutFetch`'s own contract (forcing `baseUrl`/`on401`/`token`) is covered
-  // directly by `upgrade-api.test.js`. Here `getSubscription`/`createPortalSession` are
-  // themselves fully mocked and never call the `fetchImpl` they receive, so this only has to
-  // hand it through unchanged — the real `apiFetch` import from
-  // `@etendosoftware/app-shell-core/auth/api` never needs mocking either, for the same reason.
-  toCheckoutFetch: (impl) => impl,
 }));
 
 import { SubscriptionSection } from '../SubscriptionSection.jsx';

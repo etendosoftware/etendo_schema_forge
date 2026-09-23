@@ -1,4 +1,24 @@
-import { buildAuthHeaders } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
+
+/*
+ * ETP-4576 — every call in this module went out through an injected `fetchImpl` with
+ * `headers: buildAuthHeaders(token)`. `buildAuthHeaders` puts its argument into `X-Go-CSRF`, and
+ * the argument here was a BEARER read from `sf_auth_token`/`sf_platform_token` — keys the cookie
+ * migration purges. So every POST travelled with no proof of intent and was refused, while the
+ * GETs beside them kept working: the browser attaches the session cookie by itself and reads need
+ * no proof. Paying for a tenant was the user-visible casualty. The billing family arrived later,
+ * from develop, in that same shape — which is why the whole module is routed through `apiFetch`
+ * rather than fixed call by call.
+ *
+ * `apiFetch` reads the credential from the active scheme and adds the write proof on unsafe
+ * methods, so neither the caller nor this module names a credential any more. `on401: 'ignore'` is
+ * deliberate and pre-existing policy (docs/request-policy.md): this module maps a 401 onto its own
+ * `sessionExpired` code, which the page renders — routing it to the logout choke point instead
+ * would drop the user out of the app mid-checkout.
+ *
+ * The core subpath, never the `@/auth/api.js` barrel: the barrel re-exports `.jsx`, which plain
+ * `node --test` cannot load.
+ */
 
 /** Error codes this module raises, mapped to i18n keys by the page. */
 export const UPGRADE_ERROR_CODES = {
@@ -17,53 +37,17 @@ export const UPGRADE_ERROR_CODES = {
 };
 
 /**
- * Adapts the shared, policy-compliant request helper (`apiFetch` from
- * `@etendosoftware/app-shell-core/auth/api`, or `useApiFetch`'s returned function) to the plain
- * `fetchImpl(url, init)` shape every exported client in this module already takes — so a caller
- * can stop handing them the raw global `fetch` (ETP-5443 REVIEW W7) without this module's own
- * exported functions changing shape, which would break `UpgradePage.jsx` (still on raw `fetch`,
- * out of this ticket's scope) and `upgrade-api.test.js` (which calls these exports directly with
- * a hand-rolled mock `fetchImpl`).
- *
- * Two things every call site in this module needs from the shared helper, forced here so nobody
- * has to remember them at the call site:
- *
- * - `baseUrl: ''` — every URL these clients build already carries `baseUrl` baked in (see the
- *   callers below), so the shared helper's own base-prefixing must be a no-op here; otherwise a
- *   real base (e.g. `/etendo`) would be prepended twice.
- * - `on401: 'ignore'` — a 401 must reach this module's own `response.status === 401` branch
- *   (which maps it to `UPGRADE_ERROR_CODES.sessionExpired`) instead of being turned into a
- *   generic thrown `Error('Unauthorized')` by the shared helper before this module ever sees the
- *   response. This is unrelated to (and does not require) `token` matching any locally-registered
- *   session: the shared helper only routes a 401 to its own logout handler when the bearer that
- *   earned it is still the CURRENT one for whatever session it is bound to, and the explicit
- *   `token` override below means it never is — see `createApiFetch`'s `finish()`.
- * - `token` is passed through as an explicit override, even when `getCheckoutToken()` returned
- *   `null` (no account/platform session). Passing it unconditionally — rather than only when
- *   truthy — matters: an explicit `undefined`/absent `token` option makes the shared helper fall
- *   back to whatever session is ambiently registered, which in this app is the ERP session
- *   token. Forcing the override to `null` keeps that fallback from ever firing, so a missing
- *   account session degrades to "no Authorization header" (an honest 401) rather than to
- *   silently authenticating an account-level request with the wrong (ERP) bearer.
- *
- * @param {(url: string, init?: object) => Promise<Response>} apiFetchImpl
- * @param {string|null} token
- */
-export function toCheckoutFetch(apiFetchImpl, token) {
-  return (url, init) => apiFetchImpl(url, { ...init, token: token ?? null, baseUrl: '', on401: 'ignore' });
-}
-
-/**
  * Creates a provider-hosted checkout session for a known paid action.
  *
  * The browser sends product intent only. Pricing, currency, Stripe Price IDs,
  * and payment confirmation are server-owned. The returned URL is safe to use
  * as a redirect target because it is issued by the authenticated backend.
  */
-export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {}) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/checkout/sessions`, {
+export async function createCheckoutSession(baseUrl, input = {}) {
+  const response = await apiFetch('/sws/go/checkout/sessions', {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    baseUrl,
+    on401: 'ignore',
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
@@ -84,11 +68,20 @@ export async function createCheckoutSession(fetchImpl, baseUrl, token, input = {
   return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
 }
 
-/** Starts a new account-level purchase through the provider-neutral billing boundary. */
-export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {}) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/billing/purchases`, {
+/**
+ * Starts a new account-level purchase through the provider-neutral billing boundary.
+ *
+ * ETP-4576 — arrived from develop built on `fetchImpl` + `buildAuthHeaders(token)`, the same shape
+ * its two siblings had before they were migrated. That shape is a silent failure here:
+ * `buildAuthHeaders` puts its argument into `X-Go-CSRF`, the argument was a bearer read from keys
+ * `purgeLegacyAuthStorage` deletes, so under the cookie session this POST would travel with no
+ * proof of intent and be refused. Routed through `apiFetch` like the rest of the module.
+ */
+export async function createBillingPurchase(baseUrl, input = {}) {
+  const response = await apiFetch('/sws/go/billing/purchases', {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    baseUrl,
+    on401: 'ignore',
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
@@ -114,10 +107,10 @@ export async function createBillingPurchase(fetchImpl, baseUrl, token, input = {
   return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
 }
 
-export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
-  const response = await fetchImpl(
-    `${baseUrl}/sws/go/checkout/sessions/${encodeURIComponent(requestId)}`,
-    { headers: buildAuthHeaders(token) }
+export async function getCheckoutStatus(baseUrl, requestId) {
+  const response = await apiFetch(
+    `/sws/go/checkout/sessions/${encodeURIComponent(requestId)}`,
+    { baseUrl, on401: 'ignore' }
   );
   const data = await readJsonSafely(response);
   if (!response.ok) {
@@ -128,10 +121,8 @@ export async function getCheckoutStatus(fetchImpl, baseUrl, token, requestId) {
 }
 
 /** Reads the authenticated account-level billing projection. */
-export async function getBillingOverview(fetchImpl, baseUrl, token) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/billing/overview`, {
-    headers: buildAuthHeaders(token),
-  });
+export async function getBillingOverview(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/overview', { baseUrl, on401: 'ignore' });
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
@@ -141,10 +132,8 @@ export async function getBillingOverview(fetchImpl, baseUrl, token) {
 }
 
 /** Reads the authenticated account-level subscription projection. */
-export async function getSubscription(fetchImpl, baseUrl, token) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/billing/subscription`, {
-    headers: buildAuthHeaders(token),
-  });
+export async function getSubscription(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/subscription', { baseUrl, on401: 'ignore' });
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
@@ -154,10 +143,11 @@ export async function getSubscription(fetchImpl, baseUrl, token) {
 }
 
 /** Creates an authenticated customer portal session for the account subscription. */
-export async function createPortalSession(fetchImpl, baseUrl, token) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/billing/subscription/portal`, {
+export async function createPortalSession(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/subscription/portal', {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    baseUrl,
+    on401: 'ignore',
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
@@ -168,10 +158,8 @@ export async function createPortalSession(fetchImpl, baseUrl, token) {
 }
 
 /** Reads the server-owned productive offer used to render purchase terms. */
-export async function getBillingOffer(fetchImpl, baseUrl, token) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/billing/offers`, {
-    headers: buildAuthHeaders(token),
-  });
+export async function getBillingOffer(baseUrl) {
+  const response = await apiFetch('/sws/go/billing/offers', { baseUrl, on401: 'ignore' });
   const data = await readJsonSafely(response);
   if (!response.ok) {
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
@@ -181,10 +169,10 @@ export async function getBillingOffer(fetchImpl, baseUrl, token) {
 }
 
 /** Reads one account-scoped purchase without exposing provider identifiers. */
-export async function getBillingPurchase(fetchImpl, baseUrl, token, purchaseId) {
-  const response = await fetchImpl(
-    `${baseUrl}/sws/go/billing/purchases/${encodeURIComponent(purchaseId)}`,
-    { headers: buildAuthHeaders(token) }
+export async function getBillingPurchase(baseUrl, purchaseId) {
+  const response = await apiFetch(
+    `/sws/go/billing/purchases/${encodeURIComponent(purchaseId)}`,
+    { baseUrl, on401: 'ignore' }
   );
   const data = await readJsonSafely(response);
   if (!response.ok) {
@@ -195,10 +183,11 @@ export async function getBillingPurchase(fetchImpl, baseUrl, token, purchaseId) 
 }
 
 /** Starts the existing idempotent onboarding chain after the webhook authorizes the request. */
-export async function runPaidOnboarding(fetchImpl, baseUrl, token, input, onMessage) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/onboarding`, {
+export async function runPaidOnboarding(baseUrl, input, onMessage) {
+  const response = await apiFetch('/sws/go/onboarding', {
     method: 'POST',
-    headers: buildAuthHeaders(token),
+    baseUrl,
+    on401: 'ignore',
     body: JSON.stringify({
       clientName: input.clientName,
       currency: input.currency || 'EUR',
@@ -246,35 +235,6 @@ function consumeOnboardingLines(lines, onMessage, result) {
   return result;
 }
 
-/** localStorage key holding the account-level token that owns tenants. */
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
-
-/**
- * Tenant creation is an account-level operation, so it authenticates with the
- * platform token — the same credential onboarding uses — not the ERP session
- * token tied to the tenant the user is currently inside.
- */
-export function getPlatformToken(storage = globalThis.localStorage) {
-  try {
-    return storage?.getItem(PLATFORM_TOKEN_KEY) || null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Returns the active browser credential for account-level upgrade operations. The backend accepts
- * both the account session and the selected environment JWT and resolves them to one account.
- */
-export function getCheckoutToken(storage = globalThis.localStorage) {
-  try {
-    // Billing mutations require the account session. An environment JWT is never a fallback:
-    // it authenticates a tenant operation and can remain valid after an account switch.
-    return storage?.getItem(PLATFORM_TOKEN_KEY) || null;
-  } catch {
-    return null;
-  }
-}
 
 function buildError(code, message, status) {
   const error = new Error(message || code);

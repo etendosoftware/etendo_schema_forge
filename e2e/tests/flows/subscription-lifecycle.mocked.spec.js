@@ -70,19 +70,6 @@ const ACCESS_PAUSED_SUBSCRIPTION = {
 };
 
 /**
- * Seeds the account-level token both `AccountSettingsPage` (`readPlatformToken`) and
- * `SubscriptionSection` (`getCheckoutToken`) read from — the same `sf_platform_token` key
- * `tenant-upgrade.mocked.spec.js` seeds for the same reason: `login()` only seeds the ERP session
- * token, and every billing call authenticates with the platform one instead (see
- * `SubscriptionSection.jsx`'s own doc comment on this).
- */
-async function seedPlatformToken(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('sf_platform_token', 'e2e-platform-token');
-  });
-}
-
-/**
  * Mocks `GET /sws/go/me` — `AccountSettingsPage`'s own load. Required for `SubscriptionSection`
  * to render at all: a failed account load replaces BOTH sections with an error panel instead of
  * `loadedBody`, so without this mock the subscription section would never mount.
@@ -147,7 +134,6 @@ async function gotoAccount(page) {
 
 test.describe('Subscription lifecycle — /account', () => {
   test.beforeEach(async ({ page }) => {
-    await seedPlatformToken(page);
     await login(page);
     await installAccountMock(page);
   });

@@ -1,11 +1,12 @@
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
+import ReturnToVendorShipmentRowConfirmModal from './ReturnToVendorShipmentRowConfirmModal.jsx';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
@@ -21,6 +22,16 @@ function ReturnToVendorShipmentBulkActions(props) {
         buildActions={buildInOutActions}
         labelKey="process"
         data-testid="BulkDocumentAction__a5f79c" />
+      {/* ETP-5378 — bulk Contabilizar, at parity with Goods Shipment: gated on
+          processed & not-yet-posted rows. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnToVendorShipment"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__a5f79c" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -72,6 +83,17 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
           usePdf: useReturnToVendorPdf,
           documentType: tMenu('Return to Vendor Shipment'),
           visibleWhen: "@documentStatus@='CO'",
+        }}
+        // ETP-5378 — row-hover Confirmar, opening the same popup
+        // ConfirmWithCreditButton shows in the form.
+        confirmAction={{
+          ConfirmModal: ReturnToVendorShipmentRowConfirmModal,
+          specName: 'return-to-vendor-shipment',
+          entityName: 'returnToVendorShipment',
+          confirmedTitleKey: 'documentConfirmed',
+          invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle',
+          invoiceDocType: 'facturaCompra',
+          invoiceRoute: '/purchase-invoice',
         }}
         {...rest}
         data-testid="ReturnWindowShell__a5f79c" />

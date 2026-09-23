@@ -80,7 +80,7 @@ export function ImageField({ imageId, onChange, token, apiBaseUrl, readOnly = fa
 
   // Load image blob when imageId changes
   useEffect(() => {
-    if (!imageId || !token) {
+    if (!imageId) {
       setBlobUrl(null);
       return;
     }

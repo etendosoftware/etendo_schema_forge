@@ -94,6 +94,18 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MovementRowKebab } from '../MovementRowKebab.jsx';
 
+// ETP-5330 — Post/Unpost's callTransactionAction() response is a plain fetch mock, unlike the
+// hook-driven actions above (Procesar/Reactivar/Eliminar), so it needs apiFetch (and, through it,
+// getApiBase()/useApiFetch) wired at module scope for this describe block only.
+const apiFetchMock = vi.fn();
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => apiFetchMock,
+}));
+
+function mockTransactionResponse(body) {
+  apiFetchMock.mockResolvedValueOnce({ ok: true, json: async () => body });
+}
+
 // GL draft: no paymentId, not processed → Confirmar + Eliminar.
 const GL_DRAFT = { id: 'gl-draft', posted: 'N', processed: false };
 // GL processed: no paymentId, processed → Reactivar + Eliminar.
@@ -151,6 +163,7 @@ beforeEach(() => {
   deleteMovement.mockReset().mockResolvedValue({});
   toastSuccess.mockClear();
   toastError.mockClear();
+  apiFetchMock.mockReset();
 });
 
 describe('MovementRowKebab — lifecycle visibility matrix', () => {
@@ -664,5 +677,69 @@ describe('MovementRowKebab — lifecycle actions', () => {
     await user.click(screen.getByTestId('batch-delete-confirm'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountTxRowDeleteError'));
+  });
+});
+
+/**
+ * ETP-5330 — Contabilizar/Descontabilizar (Post/Unpost) used to show the backend's raw `message`
+ * verbatim on a business-rejection (`success: false`) response, unlike every other lifecycle action
+ * in this file, which already routes its error through `translateBackendError`. The fix makes
+ * `handlePost`/`handleUnpost` do the same. `callTransactionAction` (the shared POST helper both
+ * actions use) is exercised through `apiFetch`, not through the `useCreateMovement` hooks, so these
+ * tests mock `useApiFetch` instead of reusing the hook spies above.
+ *
+ * The `useUI` mock at the top of this file already prefixes any `backendError.*` key with
+ * `translated:` (and leaves every other key untouched), which is exactly the same "make a
+ * translated value observably different from the raw key" trick the sibling
+ * NotPostedDocumentsPage.vitest.jsx regression test needed a one-off `useUI.mockImplementation`
+ * override for — here it comes for free, so no mock change beyond the new `useApiFetch` wiring
+ * above was needed.
+ */
+describe('MovementRowKebab — Post/Unpost translate a mapped backend error (ETP-5330)', () => {
+  // processed, not yet posted → the Post (Contabilizar) item is offered.
+  const PROCESSED_NOT_POSTED = { id: 'post-me', posted: 'N', processed: true };
+  // already posted → the Unpost (Descontabilizar) item is offered.
+  const POSTED = { id: 'unpost-me', posted: 'Y', processed: true };
+
+  const COST_NOT_CALCULATED_RAW = 'The cost of the product @product@ has not been calculated.';
+
+  it('Post: translates a mapped backend rejection instead of showing the raw @product@ string', async () => {
+    mockTransactionResponse({ success: false, message: COST_NOT_CALCULATED_RAW });
+
+    const user = userEvent.setup();
+    renderKebab(PROCESSED_NOT_POSTED);
+    await user.click(screen.getByTestId('movement-row-post'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    const toasted = toastError.mock.calls[0][0];
+    expect(toasted).toBe('translated:backendError.costNotCalculated');
+    expect(toasted).not.toMatch(/@product@/);
+  });
+
+  it('Unpost: translates a mapped backend rejection instead of showing the raw @product@ string', async () => {
+    mockTransactionResponse({ success: false, message: COST_NOT_CALCULATED_RAW });
+
+    const user = userEvent.setup();
+    renderKebab(POSTED);
+    await user.click(screen.getByTestId('movement-row-unpost'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    const toasted = toastError.mock.calls[0][0];
+    expect(toasted).toBe('translated:backendError.costNotCalculated');
+    expect(toasted).not.toMatch(/@product@/);
+  });
+
+  // Confirms the existing generic-failure behavior is unchanged: an unmapped message has no
+  // BACKEND_ERROR_MAP entry, so translateBackendError() returns undefined/falsy and the toast
+  // falls back to showing the raw message verbatim (translateBackendError's documented fallback),
+  // same as before this fix.
+  it('Post: an unmapped backend message is still shown verbatim (no regression)', async () => {
+    mockTransactionResponse({ success: false, message: 'Some unmapped business error' });
+
+    const user = userEvent.setup();
+    renderKebab(PROCESSED_NOT_POSTED);
+    await user.click(screen.getByTestId('movement-row-post'));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith('Some unmapped business error'));
   });
 });
