@@ -173,18 +173,39 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
   const section = CASILLAS_SECTIONS.find(s => s.id === activeSection) ?? CASILLAS_SECTIONS[0];
 
   return (
-    <div style={{ background: 'hsl(var(--card))', flex: 1, overflow: 'auto', padding: '0' }}>
+    // ETP-5456 (layout follow-up) — no `overflow: auto` on this wrapper or the flex row below:
+    // the REAL scrolling pane for the whole detail page is `.fm-page` (`fiscal-models.css`,
+    // `overflow-y: auto`, reinforced by `.fm-page--freeflow`) — the same ancestor
+    // `.fm-tabs-sticky` (the tab bar right above this component) already sticks against. Giving
+    // this wrapper its OWN `overflow: auto` used to create a nested scroll box that never
+    // actually scrolled (nothing bounds its height, so it just grows with its content) but STILL
+    // became the nearest "scrolling ancestor" CSS looks at to resolve `position: sticky` — so the
+    // sidebar nav below stuck to the top of that inert box instead of the real `.fm-page`
+    // viewport, and visually just scrolled away with everything else. Removing the redundant
+    // `overflow: auto` here lets `.fm-page` be the one and only scrolling ancestor for both the
+    // tabs bar and this sidebar, exactly like two `position: sticky` siblings are supposed to work.
+    <div style={{ background: 'hsl(var(--card))', flex: 1, padding: '0' }}>
       <div style={{
         display: 'flex',
         background: 'hsl(var(--card))',
-        overflow: 'auto',
         minWidth: 'fit-content',
+        // `alignItems: 'flex-start'` — without it, flex's default `stretch` makes the sidebar as
+        // tall as its tallest sibling (the casillas content, which can be very tall), leaving the
+        // sidebar's own box with nothing to "stick" within: it would already span the entire
+        // scrollable height. Keeping it at its own natural height (just the 4 nav buttons) is
+        // what gives `position: sticky` below room to visibly float as the page scrolls.
+        alignItems: 'flex-start',
       }}>
-        {/* Left sidebar nav — no separator, same white card */}
+        {/* Left sidebar nav — sticky while the casillas content scrolls (ETP-5456). `top` matches
+            `.fm-tabs-sticky`'s own height (`.fm-tabs__tab { height: 48px }` + 1px border, see
+            fiscal-models.css) so the sidebar docks directly under the sticky tabs bar instead of
+            overlapping it. */}
         <div style={{
           width: 200, flexShrink: 0,
           padding: '6px 8px',
           display: 'flex', flexDirection: 'column', gap: 2,
+          position: 'sticky',
+          top: 49,
         }}>
           {CASILLAS_SECTIONS.map(s => (
             <button
@@ -205,7 +226,7 @@ function CasillasTab({ decl, orgIdent, identChecks, onIdentChange, liveBoxes, on
           ))}
         </div>
         {/* Content area — no border, flows directly after sidebar */}
-        <div style={{ flex: 1, padding: '6px 24px', overflow: 'auto' }}>
+        <div style={{ flex: 1, padding: '6px 24px' }}>
           <FmBoxes303
             boxes={liveBoxes ?? decl.boxes ?? null}
             year={decl.year}

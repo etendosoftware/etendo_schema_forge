@@ -1181,7 +1181,26 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
         {activeTab === 'operators' && (
           <div>
             {/* Filter + search + new operator row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, marginTop: 8, flexWrap: 'wrap' }}>
+            {/* ETP-5456 (layout follow-up) — sticky, stacked directly below `.fm-tabs-sticky`
+                (top: 49, see that class's own comment for the 48px-tab-height + 1px-border
+                derivation). Before this it scrolled with the content and ended up peeking out
+                half-hidden under the (already-sticky) tabs bar — this docks it cleanly instead.
+                `marginTop`/`marginBottom` became `paddingTop`/`paddingBottom` on purpose: for a
+                sticky element the offset in `top` is measured from the MARGIN edge, so a margin
+                here would have shifted the actual stick point away from 49px; padding keeps the
+                same visual spacing while keeping the box's own height (and therefore the stick
+                point) predictable. `background` is required — without an opaque background the
+                table rows scrolling underneath would show through this bar once it is pinned.
+                `zIndex: 15` is intentionally below the tabs bar's 20 (they never overlap — this
+                bar docks strictly below the tabs — but keeps the ordering explicit) and above the
+                unset/auto z-index of the scrolling table content below.
+                `.fm-349-totals`'s `top` was bumped from 49 to 97 to dock below BOTH sticky bars —
+                97 = 49 (tabs) + 48 (this bar's own rendered height: 8px paddingTop + 36px content
+                row [`.fm-toolbar__pill` / the search box, both padding 7px 12px + ~20px line
+                content + 1px+1px border = 36px border-box] + 4px paddingBottom). See
+                `.fm-349-totals`'s own comment in fiscal-models.css for the full sticky-stack
+                writeup. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 4, paddingTop: 8, flexWrap: 'wrap', position: 'sticky', top: 49, zIndex: 15, background: 'hsl(var(--card))' }}>
               <KeyFilterDropdown
                 value={keyFilter}
                 onChange={setKeyFilter}
@@ -1210,7 +1229,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
             <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
 
             {/* Layout: totals panel + table */}
-            <div style={{ display: 'flex', gap: 0 }}>
+            {/* ETP-5456 (bug follow-up) — `alignItems: 'flex-start'` so TotalsCard (now
+                `position: sticky`, see `.fm-349-totals` in fiscal-models.css) keeps its own short,
+                natural height instead of the default `stretch` matching it to the operators
+                table's height. A stretched sticky panel already spans the whole scrollable range,
+                leaving nothing for `position: sticky` to visibly reposition — same fix 303's
+                CasillasTab sidebar needed. See `.fm-349-totals`'s own comment for the full
+                root-cause writeup (this used to be papered over by a padding/margin trick that
+                does not actually work on a flex item, and caused a separate phantom-scroll bug). */}
+            <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
               <TotalsCard
                 operators={operators}
                 rectifSummary={rectifSummary}
