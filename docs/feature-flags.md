@@ -515,6 +515,25 @@ fields (so it would silently drop `paymentToken`) and starts reading the
 response body without checking the status (so a 402 would surface as a generic
 "no result" failure instead of a payment error).
 
+## Demo data transfer (`demo-data-transfer`, backend-only)
+
+The ETP-5364 demo-to-productive data transfer is gated OFF by a flag evaluated **only** in
+`com.etendoerp.go` (`DemoDataTransferFlag`, see that repo's
+`docs/feature-flags-and-tenant-upgrade.md`). Like `bp-portal-link`, it has **no key in
+`flag-keys.js`, and none must be added** — a browser key would be a second evaluator on a different
+control plane and targeting key (ETP-4966).
+
+The browser follows the backend instead: `useDemoDataTransfer` reports `available: true` only when
+`GET /sws/go/demo-data-transfer` answers 2xx. With the flag off that endpoint is a 404, so
+`available` stays false and `demoDataTransferStep.js` never splices the row into the First Steps
+catalogue — same rows and same `x/TOTAL` as before ETP-5364. Any other failure before a first
+successful read is treated the same way: an unknown answer hides the row.
+
+`UpgradePage` keeps sending the `dataTransfer` selection it has sent since ETP-5421. With the flag
+off the copy on the checkout-session request is ignored, and the copy on `POST /sws/go/onboarding`
+still drives ETP-5421's synchronous `OnboardingDataTransferService`, exactly as before ETP-5364. Owned paths, specs and the preconditions for switching it on
+are in [`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
+
 ## Proof of Concept menu (`proof-of-concept-menu`)
 
 This is a frontend-only, temporary reveal for the internal **Proof of Concept**
