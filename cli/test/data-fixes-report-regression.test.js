@@ -135,6 +135,15 @@ const FIXES_WITH_REPORT = new Set([
   // (blocked by a sibling 'P' row vs. blocked by the future-period guard) — same
   // "flag, don't guess" pattern as R19.
   '20260921T120000Z__R39-mixed-period-open',
+  // R39 (ETP-5364, gap N7) creates the AP Invoice "FC" sequence and points the AP Invoice doctype
+  // at it. Its @report is a post-condition check, not a decline list: it lists the doctype only if
+  // it is STILL not numbered by an on-target FC sequence after @apply, so it is empty on every
+  // clean run — a non-empty `detail` means something raced the update.
+  '20260922T120000Z__R39-ap-invoice-fc-series',
+  // R39 (ETP-5364) clears the ticket-tagged descriptions of three document sequences. Same
+  // post-condition shape: the @report lists a sequence whose description is STILL set after @apply
+  // and is empty whenever nothing was written between the update and the read.
+  '20260922T130000Z__R39-document-sequence-clear-descriptions',
 ]);
 
 async function loadCatalogFiles() {
