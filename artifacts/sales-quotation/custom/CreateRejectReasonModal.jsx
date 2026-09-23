@@ -86,7 +86,7 @@ export default function CreateRejectReasonModal({
 
         <div style={{ padding: '0 16px 14px' }}>
           <label htmlFor="reject-reason-name"
-            style={{ display: 'block', fontSize: 11, color: 'var(--status-info-fg)', fontWeight: 500, marginBottom: 6 }}>
+            style={{ display: 'block', fontSize: 11, color: 'hsl(var(--foreground))', fontWeight: 500, marginBottom: 6 }}>
             {ui('rejectReasonNameLabel')}
           </label>
           <input
@@ -111,7 +111,7 @@ export default function CreateRejectReasonModal({
         {error && (
           <div style={{
             padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))',
-            background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))',
+            background: 'var(--status-destructive-bg)', borderTop: '0.5px solid hsl(var(--destructive) / 0.35)',
           }}>
             {error}
           </div>
@@ -119,7 +119,7 @@ export default function CreateRejectReasonModal({
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-          padding: '12px 16px', borderTop: '0.5px solid hsl(var(--card))',
+          padding: '12px 16px', borderTop: '0.5px solid hsl(var(--border-subtle))',
         }}>
           <button
             type="button"
@@ -167,7 +167,7 @@ const overlayStyle = {
 const cardStyle = {
   width: 400, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))',
+  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
 };
 
 const closeBtnStyle = {
@@ -178,7 +178,7 @@ const closeBtnStyle = {
 
 const inputStyle = {
   width: '100%', fontSize: 13, color: 'hsl(var(--foreground))',
-  border: '1px solid hsl(var(--card))', borderRadius: 6, padding: '7px 10px',
+  border: '1px solid hsl(var(--border-control))', borderRadius: 6, padding: '7px 10px',
   background: 'hsl(var(--card))',
   outline: 'none',
 };
@@ -190,7 +190,7 @@ const inputStyle = {
 const btnSecondary = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+  border: '1px solid hsl(var(--border-control))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
   boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
@@ -203,5 +203,8 @@ const btnPrimary = {
 const btnPrimaryDisabled = {
   fontSize: 14, fontWeight: 500, padding: '8px 18px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: 'hsl(var(--card))', color: 'hsl(var(--card))',
+  // ETP-5378 QA follow-up — same ETP-4554 mis-mapping as RejectQuotationModal, which this
+  // modal is opened from: #D1D4DB (light grey) became `--card` (the surface white), matching
+  // the label colour and making the button invisible. See the note there for the full history.
+  border: 'none', background: 'hsl(var(--border-control))', color: 'hsl(var(--card))',
 };

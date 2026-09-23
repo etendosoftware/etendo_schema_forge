@@ -16833,6 +16833,7 @@
     "bulkRowAlreadyPosted": "Already posted",
     "bulkRowNotPosted": "Not posted",
     "bulkRowNotCompleted": "Not completed",
+    "bulkRowNotDraft": "Not in draft status",
     "docTypeMatchedInvoices": "Receipt-Invoice Link",
     "bulkCompletion": "Bulk Completion",
     "documentAction": "Document Action",

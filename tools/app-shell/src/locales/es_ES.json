@@ -17063,6 +17063,7 @@
     "bulkRowAlreadyPosted": "Ya está contabilizado",
     "bulkRowNotPosted": "No está contabilizado",
     "bulkRowNotCompleted": "No está completado",
+    "bulkRowNotDraft": "No está en borrador",
     "docTypeMatchedInvoices": "Relación albarán-factura",
     "bulkCompletion": "Procesado masivo",
     "documentAction": "Acción de documento",

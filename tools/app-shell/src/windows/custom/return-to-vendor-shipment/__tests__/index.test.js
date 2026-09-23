@@ -169,9 +169,48 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
 
     // The confirm button's own label is ETP-5302's "process" (it was "confirmBulk"
     // before that rename); what this pins is that Contabilizar was ADDED beside it.
+    // The count went 2 → 3 with the ETP-5378 QA follow-up below (bulk Descontabilizar);
+    // it stays asserted exactly so that a fourth instance appearing by copy-paste has to
+    // be a deliberate edit here too.
     it('keeps the confirm button — Contabilizar is added, not a replacement', () => {
       assert.match(src, /labelKey="process"/);
-      assert.equal((src.match(/<BulkDocumentAction/g) || []).length, 2);
+      assert.equal((src.match(/<BulkDocumentAction/g) || []).length, 3);
+    });
+  });
+
+  // ETP-5378 QA follow-up (SEL-05 / SEL-06) — a Completed + "Contabilizado" row offered
+  // "Descontabilizar" in the row-hover kebab but produced a selection bar with no document
+  // action at all: the only two bulk instances were buildInOutActions and buildPostActions,
+  // and the latter only fires for a `processed && !posted` row.
+  //
+  // These are STRUCTURAL assertions only. The wiring's semantics — that the shared helper
+  // references are passed through rather than local copies, and that the union of the
+  // mounted builders is non-empty for a posted row — are asserted by reference in
+  // `index.vitest.jsx`, which a regex cannot do.
+  describe('ETP-5378 QA follow-up — bulk "Descontabilizar" action', () => {
+    it('also imports buildUnpostActions and unpostRowFilter from BulkDocumentAction', () => {
+      assert.match(src, /import BulkDocumentAction,\s*\{[^}]*\bbuildUnpostActions\b[^}]*\}/);
+      assert.match(src, /import BulkDocumentAction,\s*\{[^}]*\bunpostRowFilter\b[^}]*\}/);
+    });
+
+    it('renders a third BulkDocumentAction wired to the unpost pair on the neoAction path', () => {
+      assert.match(
+        src,
+        /<BulkDocumentAction[\s\S]{0,400}actionMode="neoAction"[\s\S]{0,400}buildActions=\{buildUnpostActions\}[\s\S]{0,400}rowFilter=\{unpostRowFilter\}[\s\S]{0,400}labelKey="unpost"/,
+      );
+    });
+
+    it('targets the returnToVendorShipment entity, like the two instances before it', () => {
+      assert.match(
+        src,
+        /entity="returnToVendorShipment"[\s\S]{0,400}buildActions=\{buildUnpostActions\}/,
+      );
+    });
+
+    // PRODUCT RULE: on this window the accounting reversal is a standalone action, so it is
+    // never chained as a pre-step of another one (that opt-in belongs to the invoice windows).
+    it('does not opt into preUnpostActions', () => {
+      assert.doesNotMatch(src, /preUnpostActions/);
     });
   });
   // ETP-5378 — row-hover "Confirmar", opening the same popup the form's

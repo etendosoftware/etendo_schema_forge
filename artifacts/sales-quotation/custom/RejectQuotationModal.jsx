@@ -152,7 +152,7 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="var(--status-info-bg)" strokeWidth="2"
+          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 5l10 10M15 5l-10 10" />
           </svg>
@@ -198,7 +198,7 @@ export default function RejectQuotationModal({
                 autoComplete="off"
               />
               <svg style={chevronIconStyle} viewBox="0 0 24 24" width="24" height="24"
-                   fill="none" stroke="var(--status-info-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                   fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
               {selected && !loading && (
@@ -281,7 +281,7 @@ export default function RejectQuotationModal({
           </button>
           <style>{`
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            #reject-reason-search::placeholder { color: var(--status-info-fg); opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
+            #reject-reason-search::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
           `}</style>
         </div>
       </div>
@@ -381,7 +381,7 @@ const asteriskStyle = {
 const inputStyle = {
   width: '100%', boxSizing: 'border-box', height: 40,
   fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: '24px', color: 'hsl(var(--foreground))',
-  border: '1px solid hsl(var(--foreground))', borderRadius: 8,
+  border: '1px solid hsl(var(--border-control))', borderRadius: 8,
   padding: '8px 44px 8px 16px',
   background: 'hsl(var(--card))',
   boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
@@ -397,13 +397,13 @@ const chevronIconStyle = {
 const clearBtnStyle = {
   position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)',
   width: 20, height: 20, borderRadius: '50%',
-  border: 'none', background: 'transparent', color: 'var(--status-info-bg)',
+  border: 'none', background: 'transparent', color: 'hsl(var(--icon-secondary))',
   cursor: 'pointer', fontSize: 16, lineHeight: 1,
 };
 
 const dropdownStyle = {
   position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 51,
-  background: 'hsl(var(--card))', border: '1px solid hsl(var(--card))', borderRadius: 8,
+  background: 'hsl(var(--card))', border: '1px solid hsl(var(--border-control))', borderRadius: 8,
   boxShadow: '0 4px 12px hsl(var(--foreground) / 0.08)',
   maxHeight: 220, overflowY: 'auto',
 };
@@ -413,7 +413,7 @@ const createOptionStyle = {
   padding: '8px 12px',
   fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, lineHeight: '24px',
   color: 'hsl(var(--foreground))', background: 'transparent',
-  border: 'none', borderBottom: '1px solid hsl(var(--card))',
+  border: 'none', borderBottom: '1px solid hsl(var(--border-subtle))',
   cursor: 'pointer',
 };
 
@@ -426,7 +426,7 @@ const optionStyle = {
 
 const noResultsStyle = {
   padding: '8px 12px',
-  fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'var(--status-info-bg)',
+  fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'hsl(var(--muted-foreground))',
 };
 
 const errorStyle = {
@@ -449,7 +449,7 @@ const btnSecondary = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+  border: '1px solid hsl(var(--border-control))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
   boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
@@ -464,5 +464,12 @@ const btnPrimaryDisabled = {
   width: 191, height: 40,
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: 'hsl(var(--card))', color: 'hsl(var(--card))',
+  // ETP-5378 QA follow-up — the disabled fill is `border-control`, NOT `card`.
+  // ETP-4554 (commit 1538c6d1a) migrated this file off hex literals by replacing every
+  // `#D1D4DB` with `hsl(var(--card))`, but #D1D4DB was a light GREY and `--card` is the pure
+  // white of the surface this button sits on. Since the label is `--card` too, background and
+  // text became the same colour and the button vanished — the user saw an empty gap next to
+  // "Cancelar". `--border-control` is the structural role closest to that grey and, unlike the
+  // hex it replaces, it also resolves correctly in dark mode (#E1E7EF light / #8391A5 dark).
+  border: 'none', background: 'hsl(var(--border-control))', color: 'hsl(var(--card))',
 };
