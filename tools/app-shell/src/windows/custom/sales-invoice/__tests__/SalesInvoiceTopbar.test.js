@@ -26,6 +26,14 @@ describe('SalesInvoiceTopbar', () => {
       'expected InvoiceTopbarExtra to be imported and used for delegation',
     );
   });
+
+  it('forwards isDocumentReadOnly to InvoiceTopbarExtra (ETP-5205)', () => {
+    assert.match(
+      src,
+      /isDocumentReadOnly/,
+      'expected isDocumentReadOnly to be accepted and forwarded',
+    );
+  });
 });
 
 // ETP-4404: the reversedInvoices entity must stay declared in the generated
