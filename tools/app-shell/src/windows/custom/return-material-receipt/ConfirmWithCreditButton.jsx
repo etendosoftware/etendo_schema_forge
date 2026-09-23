@@ -1,12 +1,15 @@
 import { useUI } from '@/i18n';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
 
-// ETP-5260 defect fix — Copy link used to render here as a topbarRight sibling
-// (ETP-4721), which landed it to the RIGHT of Save/Confirm against the DF. It
-// now lives in ReturnMaterialReceiptSecondaryActions (topbarSecondary, left of
-// Save/Confirm). ConfirmWithCreditButtonBase is a PRIMARY action available in
-// Borrador (ETP-4933) and stays here in topbarRight — do not move it.
-export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate, onRefresh }) {
+// ETP-5408 — the Borrador "Confirmar" button is NOT rendered here: it is the generic
+// draftMode Confirm (saveActions.jsx), declared in decisions.json → window.draftMode and
+// overridden in index.jsx with an `onConfirm` that dispatches CONFIRM_EVENT. This topbarRight
+// component only hosts the confirm flow (ConfirmWithCreditButtonBase listens for the event
+// and opens ConfirmInOutModal) plus the completed-state "create invoice" action.
+// ETP-5260 — Copy link lives in ReturnMaterialReceiptSecondaryActions (topbarSecondary), not here.
+export const CONFIRM_EVENT = 'return-material-receipt:open-confirm-modal';
+
+export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, saveGate, onRefresh }) {
   const ui = useUI();
   return (
     <>
@@ -15,8 +18,7 @@ export default function ConfirmWithCreditButton({ data, recordId, token, apiBase
         recordId={recordId}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        onSave={onSave}
-        isDirty={isDirty}
+        confirmEventName={CONFIRM_EVENT}
         saveGate={saveGate}
         onRefresh={onRefresh}
         entitySegment="returnMaterialReceipt"

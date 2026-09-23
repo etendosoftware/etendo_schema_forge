@@ -3,12 +3,29 @@ import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import ReturnToVendorShipmentRowConfirmModal from './ReturnToVendorShipmentRowConfirmModal.jsx';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
+import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
 import { useMenuLabel } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
+
+// ETP-5408 — "Confirmar" is the generic draftMode Confirm (saveActions.jsx), the same
+// button Facturas / Pedidos / Albaranes render. These values mirror decisions.json →
+// window.draftMode (emitted into the generated Page); this override only adds `onConfirm`,
+// which a JSON declaration cannot carry. runDraftModeConfirm saves a dirty header first,
+// then calls it; ConfirmWithCreditButton (topbarRight) listens for CONFIRM_EVENT and opens
+// ConfirmInOutModal. `label: 'confirm'` is the i18n key every other window uses.
+// `disableWhenEmpty` replaces the old `linesCount === 0` gate of the hand-rolled button.
+const DRAFT_MODE = {
+  enabled: true,
+  processField: 'documentAction',
+  processValue: 'CO',
+  label: 'confirm',
+  disableWhenEmpty: true,
+  onConfirm: () => window.dispatchEvent(new CustomEvent(CONFIRM_EVENT)),
+};
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -68,9 +85,10 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
         // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
         // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
         // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-        // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
         topbarSecondary={ReturnToVendorShipmentSecondaryActions}
+        // ETP-5408 — reaches DetailView the same way (the generated Page spreads `{...props}`
+        // AFTER its own `draftMode`, so this one wins). See DRAFT_MODE above.
+        draftMode={DRAFT_MODE}
         duplicateAction={{ show: false }}
         hideLink
         bulkActions={ReturnToVendorShipmentBulkActions}

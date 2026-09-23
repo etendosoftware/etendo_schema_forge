@@ -5,7 +5,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ConfirmWithCreditButtonBase.jsx'), 'utf8');
+// Comments are stripped before matching: the component's own JSDoc/history notes name the
+// removed pieces (maybeSaveBeforeConfirm, isDirty, GateTooltip...) on purpose, and a
+// source-reading contract is about CODE, not prose.
+const src = readFileSync(join(__dirname, '..', 'ConfirmWithCreditButtonBase.jsx'), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/.*$/gm, '');
 
 describe('ConfirmWithCreditButtonBase', () => {
 
@@ -63,10 +68,6 @@ describe('ConfirmWithCreditButtonBase', () => {
 
   // ── data-testid attributes ─────────────────────────────────────────────────
 
-  it('renders DR confirm button with data-testid="action-confirm-with-credit"', () => {
-    assert.match(src, /data-testid="action-confirm-with-credit"/);
-  });
-
   it('renders CO invoice button with data-testid="action-create-return-invoice"', () => {
     assert.match(src, /data-testid="action-create-return-invoice"/);
   });
@@ -97,112 +98,105 @@ describe('ConfirmWithCreditButtonBase', () => {
     assert.match(src, /ui\('createReturnInvoice'\)/);
   });
 
-  // ── ETP-4940 follow-up: save pending edits before confirm ─────────────────
+  // ── ETP-4933: the required-field gate still blocks the confirm flow ────────
 
-  // The assertion deliberately does NOT pin the full named-import list: this module
-  // legitimately pulls more helpers from detailViewHelpers.jsx over time (ETP-5408 added
-  // getButtonClass/getSaveBtnCls), and a test that breaks every time a sibling import is
-  // added tests the import statement, not the contract. What matters is the origin.
-  it('imports maybeSaveBeforeConfirm from detailViewHelpers', () => {
-    assert.match(
-      src,
-      /import \{[^}]*\bmaybeSaveBeforeConfirm\b[^}]*\} from '@\/components\/contract-ui\/detailViewHelpers\.jsx'/,
-    );
+  // ETP-5408: the generic draftMode Confirm (saveActions.jsx) already honours
+  // saveGate before calling onConfirm; this second check is the backstop for an
+  // event dispatched from anywhere else.
+  it('derives the listener backstop from the required-field gate ONLY', () => {
+    assert.match(src, /const saveBlocked = Boolean\(saveGate\?\.blocked\);/);
+    const decl = src.match(/const saveBlocked = .*/)[0];
+    assert.ok(!/isDirty/.test(decl), 'saveBlocked must not consult isDirty');
+    assert.ok(!/linesCount/.test(decl), 'saveBlocked must not consult linesCount');
   });
 
-  it('accepts onSave, isDirty and saveGate props', () => {
-    assert.match(src, /onSave, isDirty, saveGate/);
+  // The lines gate belongs to the generic button (draftMode.disableWhenEmpty reads the
+  // live lines); re-checking the header's lagging linesCount here would turn an enabled
+  // Confirm into a silent no-op right after the first line is added.
+  it('no longer re-checks the lines count (confirmDisabled / confirmBlocked are gone)', () => {
+    assert.doesNotMatch(src, /\bconfirmDisabled\b/);
+    assert.doesNotMatch(src, /\bconfirmBlocked\b/);
+    assert.doesNotMatch(src, /\blinesCount\b/);
   });
 
-  it('guards the DR confirm click with maybeSaveBeforeConfirm before opening the modal', () => {
-    const drButton = src.match(/action-confirm-with-credit[\s\S]*?disabled=\{confirmBlocked\}/);
-    assert.ok(drButton, 'expected the DR confirm button block');
-    assert.match(drButton[0], /maybeSaveBeforeConfirm\(\{ isDirty, handleSave: onSave \}\)/);
-    assert.match(drButton[0], /setShowModal\(true\)/);
-  });
-
-  // ETP-4933: this button saves before it confirms, so leaving it outside the
-  // required-field gate turns the gate into a no-op — Save blocked, Confirm persists
-  // the incomplete record anyway.
-  it('folds the required-field gate into the DR confirm blocked condition', () => {
-    assert.match(src, /const confirmBlocked = confirmDisabled \|\| Boolean\(saveGate\?\.blocked\)/);
-  });
-
-  it('inherits ONLY the gate verdict, never isDirty (confirming an unmodified saved doc is normal)', () => {
-    const decl = src.match(/const confirmBlocked = .*/)[0];
-    assert.ok(!/isDirty/.test(decl), 'confirmBlocked must not consult isDirty');
-  });
-
-  it('explains the block on hover instead of showing a silently dead button', () => {
-    const drButton = src.match(/action-confirm-with-credit[\s\S]*?\{confirmDrLabel\}/)[0];
-    assert.match(drButton, /title=\{saveGate\?\.blocked \? saveGate\.title : undefined\}/);
-  });
-
-  it('gates the click handler too, not just the disabled attribute', () => {
-    const drButton = src.match(/action-confirm-with-credit[\s\S]*?\{confirmDrLabel\}/)[0];
-    assert.match(drButton, /if \(confirmBlocked\) return;/);
-  });
-
-  // ── ETP-5408: the DR Confirm renders the shared positive process button ────
+  // ── ETP-5408: Borrador "Confirmar" is the GENERIC draftMode Confirm ────────
   //
-  // The bug was a hand-rolled `<button>` with an inline `style={{...}}` object and no
-  // icon — the only Confirmar in the product without the checkmark. These assertions
-  // are the structural half of the guard (the behavioural half lives in
-  // ConfirmWithCreditButtonBase.vitest.jsx): they exist so a revert to a bespoke
-  // element, or a hand-copied class string, cannot land silently.
+  // The bug was a hand-rolled DR button — the only Confirmar in the product without
+  // the checkmark that Facturas / Pedidos / Albaranes show. The fix removes the button
+  // from this component entirely: the window's index.jsx passes a `draftMode` whose
+  // `onConfirm` dispatches `confirmEventName`, and this component only LISTENS and
+  // opens the confirm modal. These assertions exist so a revert to a bespoke DR
+  // button cannot land silently.
 
-  // The whole DR branch, from its guard to the start of the CO branch. Slicing here
-  // rather than from the testid because `<Button` / `<GateTooltip` precede it.
-  const drBlock = src.slice(
-    src.indexOf("{status === 'DR' && ("),
-    src.indexOf("{status === 'CO' &&"),
-  );
+  const effectBlock = (() => {
+    const i = src.indexOf('useEffect(() => {');
+    return i < 0 ? '' : src.slice(i, src.indexOf('}, [', i));
+  })();
 
-  it('imports the shared Button from @/components/ui/button.jsx', () => {
-    assert.match(src, /import \{[^}]*\bButton\b[^}]*\} from '@\/components\/ui\/button\.jsx'/);
+  it('accepts a confirmEventName prop', () => {
+    assert.match(src, /^\s*confirmEventName,\s*$/m);
   });
 
-  it('imports the Check icon from lucide-react', () => {
-    assert.match(src, /import \{[^}]*\bCheck\b[^}]*\} from 'lucide-react'/);
+  it('registers a window listener for confirmEventName inside a useEffect', () => {
+    assert.match(src, /import \{[^}]*\buseEffect\b[^}]*\} from 'react'/);
+    assert.ok(effectBlock.length > 0, 'expected a useEffect block');
+    assert.match(effectBlock, /window\.addEventListener\(confirmEventName, handler\)/);
   });
 
-  it('renders the DR confirm action through the shared Button, never a raw <button>', () => {
-    assert.ok(drBlock.length > 0, 'expected to isolate the DR branch');
-    assert.match(drBlock, /<Button\b/);
-    assert.doesNotMatch(drBlock, /<button\b/);
+  it('removes the listener in the effect cleanup (no leak across unmount / event-name change)', () => {
+    assert.match(effectBlock, /return \(\) => window\.removeEventListener\(confirmEventName, handler\)/);
   });
 
-  it('renders a Check icon inside the DR confirm button', () => {
-    assert.match(drBlock, /<Check\b[^>]*size=\{16\}/);
+  it('skips registration when no confirmEventName is supplied', () => {
+    assert.match(effectBlock, /if \(!confirmEventName\) return undefined;/);
   });
 
-  it('carries no inline style object on the DR confirm button', () => {
-    assert.doesNotMatch(drBlock, /style=\{\{/);
+  it('the handler ignores the event outside Borrador and while blocked, else opens the modal', () => {
+    assert.match(effectBlock, /if \(status !== 'DR' \|\| saveBlocked\) return;/);
+    assert.match(effectBlock, /setShowModal\(true\)/);
   });
 
-  it('derives the DR button classes from the shared helpers instead of restating them', () => {
-    assert.match(
-      src,
-      /const CONFIRM_BTN_CLS = [\s\S]*?getButtonClass\([\s\S]*?getSaveBtnCls\(/,
-    );
-    assert.match(drBlock, /className=\{CONFIRM_BTN_CLS\}/);
+  it('re-subscribes when status / gate state change (no stale closure)', () => {
+    assert.match(src, /\}, \[confirmEventName, status, saveBlocked, setShowModal\]\)/);
   });
 
-  // The shared Button carries `disabled:pointer-events-none`, so a native `title` on the
-  // blocked button never fires — the exact failure mode ETP-4933 fixed for Save. The
-  // wrapper must come from saveActions.jsx: a local copy would be a second place for the
-  // gate explanation to rot.
-  it('reuses GateTooltip from saveActions.jsx rather than declaring a local copy', () => {
-    assert.match(
-      src,
-      /import \{[^}]*\bGateTooltip\b[^}]*\} from '@\/components\/contract-ui\/saveActions\.jsx'/,
-    );
-    assert.doesNotMatch(src, /function GateTooltip/);
+  // Rules of Hooks: the effect must run on every render, so it has to sit ABOVE the
+  // `status !== 'DR' && status !== 'CO'` early return.
+  it('declares the listener effect before the early return', () => {
+    const effectAt = src.indexOf('useEffect(() => {');
+    const earlyReturnAt = src.indexOf("if (status !== 'DR' && status !== 'CO') return null");
+    assert.ok(effectAt > 0 && earlyReturnAt > 0);
+    assert.ok(effectAt < earlyReturnAt, 'useEffect must precede the early return');
   });
 
-  it('wraps the DR confirm button in GateTooltip fed by the gate title', () => {
-    assert.match(drBlock, /<GateTooltip\b[\s\S]*?<Button\b/);
-    assert.match(drBlock, /<GateTooltip title=\{saveGate\?\.blocked \? saveGate\.title : undefined\}/);
+  // runDraftModeConfirm (saveActions.jsx) already saved a dirty header through
+  // maybeSaveBeforeConfirm before calling onConfirm — saving again here would be a
+  // second PATCH racing the first.
+  it('never saves: no onSave / isDirty / maybeSaveBeforeConfirm wiring left', () => {
+    assert.doesNotMatch(src, /maybeSaveBeforeConfirm/);
+    assert.doesNotMatch(src, /\bonSave\b/);
+    assert.doesNotMatch(src, /\bisDirty\b/);
+    assert.doesNotMatch(effectBlock, /handleSave|save\(/i);
+  });
+
+  it('renders no Borrador confirm button of its own', () => {
+    assert.doesNotMatch(src, /action-confirm-with-credit/);
+    assert.doesNotMatch(src, /\{status === 'DR' && \(/);
+    // The only raw <button> left is the completed-state create-invoice action.
+    assert.equal((src.match(/<button\b/g) || []).length, 1);
+    assert.match(src, /\{status === 'CO' && !hasReturnInvoice && \(\s*<button[^>]*data-testid="action-create-return-invoice"/);
+  });
+
+  it('carries none of the bespoke DR-button styling / imports', () => {
+    assert.doesNotMatch(src, /CONFIRM_BTN_CLS/);
+    assert.doesNotMatch(src, /from '@\/components\/ui\/button\.jsx'/);
+    assert.doesNotMatch(src, /GateTooltip/);
+    assert.doesNotMatch(src, /getButtonClass|getSaveBtnCls/);
+    assert.doesNotMatch(src, /from 'lucide-react'/);
+  });
+
+  it('still forwards confirmDrLabel to ConfirmInOutModal as its confirm label', () => {
+    assert.match(src, /<ConfirmInOutModal[\s\S]*?confirmLabel=\{confirmDrLabel\}/);
   });
 
 });

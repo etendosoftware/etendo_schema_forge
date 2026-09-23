@@ -154,13 +154,8 @@ const SECONDARY_SAVE_CLS = 'bg-card border-[hsl(var(--border-control))] text-[hs
  * The wrapper is not disabled, so it does get the hover. It is only inserted when
  * there IS a reason to explain, so the DOM is unchanged on the normal path and no
  * existing selector or layout is affected.
- *
- * ETP-5408 exported it: any primary button that honours `saveGate` needs the same
- * wrapper the moment it renders through the shared `Button`. The return windows'
- * `ConfirmWithCreditButtonBase` is the second consumer. Reuse this one — a second
- * copy would be a second place for the gate explanation to rot.
  */
-export function GateTooltip({ title, children }) {
+function GateTooltip({ title, children }) {
   if (!title) return children;
   return <span title={title} className="inline-flex">{children}</span>;
 }

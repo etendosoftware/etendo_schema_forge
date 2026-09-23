@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
+const confirmBtnSrc = readFileSync(join(__dirname, '..', 'ConfirmWithCreditButton.jsx'), 'utf8');
+// tools/app-shell/src/windows/custom/<window>/__tests__ → repo root is 6 levels up.
+const decisions = JSON.parse(readFileSync(
+  join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'return-to-vendor-shipment', 'decisions.json'),
+  'utf8',
+));
 
 describe('ReturnToVendorShipmentWindow custom wrapper', () => {
   it('exports a default function component', () => {
@@ -191,6 +197,99 @@ describe('ReturnToVendorShipmentWindow custom wrapper', () => {
       assert.match(src, /invoiceResultTitleKey: 'returnToVendor.invoiceCreatedTitle'/);
       assert.match(src, /invoiceDocType: 'facturaCompra'/);
       assert.match(src, /invoiceRoute: '\/purchase-invoice'/);
+    });
+  });
+  // ETP-5408 — Borrador "Confirmar" renders through the GENERIC draftMode Save/Confirm
+  // block (saveActions.jsx: `action-save-draft` + `action-save` with the Check icon),
+  // exactly like goods-receipt / invoices / orders. This wrapper passes a `draftMode`
+  // override whose only addition over decisions.json is `onConfirm`, which dispatches
+  // the window's CONFIRM_EVENT; ConfirmWithCreditButton (topbarRight) listens for it.
+  describe('ETP-5408 — generic draftMode Confirm wired to CONFIRM_EVENT', () => {
+    // Comments stripped: these assertions are about code; the wrappers' explanatory notes
+    // legitimately name removed pieces (e.g. the old `linesCount === 0` gate).
+    const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const code = strip(src);
+    const confirmCode = strip(confirmBtnSrc);
+    const draftModeDecl = (code.match(/const DRAFT_MODE = \{[\s\S]*?\n\};/) || [''])[0];
+
+    it('imports CONFIRM_EVENT from its own ConfirmWithCreditButton', () => {
+      assert.match(code, /import \{ CONFIRM_EVENT \} from '\.\/ConfirmWithCreditButton\.jsx';/);
+    });
+
+    it('ConfirmWithCreditButton exports a window-scoped CONFIRM_EVENT and hands it to the base', () => {
+      assert.match(confirmCode, /export const CONFIRM_EVENT = 'return-to-vendor-shipment:open-confirm-modal';/);
+      assert.match(confirmCode, /confirmEventName=\{CONFIRM_EVENT\}/);
+    });
+
+    it('declares a module-level DRAFT_MODE (stable identity across renders)', () => {
+      assert.ok(draftModeDecl, 'expected a top-level `const DRAFT_MODE = { ... };`');
+      const declAt = code.indexOf('const DRAFT_MODE');
+      const componentAt = code.indexOf('export default function');
+      assert.ok(declAt < componentAt, 'DRAFT_MODE must live outside the component');
+    });
+
+    it('onConfirm dispatches CONFIRM_EVENT on window (and does nothing else)', () => {
+      assert.match(
+        draftModeDecl,
+        /onConfirm: \(\) => window\.dispatchEvent\(new CustomEvent\(CONFIRM_EVENT\)\),/,
+      );
+    });
+
+    it('passes draftMode={DRAFT_MODE} to ReturnWindowShell', () => {
+      assert.match(code, /<ReturnWindowShell[\s\S]*draftMode=\{DRAFT_MODE\}/);
+    });
+
+    it('passes draftMode BEFORE {...rest} so a caller can still override it', () => {
+      assert.ok(code.indexOf('draftMode={DRAFT_MODE}') < code.indexOf('{...rest}'));
+    });
+
+    it('uses the shared "confirm" i18n key for the button label', () => {
+      assert.match(draftModeDecl, /label: 'confirm',/);
+    });
+
+    it('no longer uses the bespoke-button escape hatch hasExternalPrimaryAction', () => {
+      assert.doesNotMatch(code, /hasExternalPrimaryAction/);
+    });
+
+    // decisions.json is what the generated Page (and the contract) are built from; the
+    // override must not contradict it, or the pipeline output and the runtime diverge.
+    it('matches decisions.json → window.draftMode on every behavioural key', () => {
+      const dm = decisions.window?.draftMode;
+      assert.ok(dm, 'decisions.json must declare window.draftMode');
+      assert.equal(dm.enabled, true);
+      assert.match(draftModeDecl, /enabled: true,/);
+      assert.equal(dm.processField, 'documentAction');
+      assert.match(draftModeDecl, /processField: 'documentAction',/);
+      assert.equal(dm.processValue, 'CO');
+      assert.match(draftModeDecl, /processValue: 'CO',/);
+      // The replacement for the old `linesCount === 0` gate of the hand-rolled button.
+      assert.equal(dm.disableWhenEmpty, true);
+      assert.match(draftModeDecl, /disableWhenEmpty: true,/);
+    });
+
+    // Completed documents: nothing on the header is saveable, so the whole Save/Confirm
+    // row must disappear (the same as goods-shipment) — keepSaveWhenCompletedFields
+    // would bring Save back on CO.
+    it('declares no keepSaveWhenCompletedFields (Save/Confirm row hidden on CO)', () => {
+      assert.equal(decisions.window.draftMode.keepSaveWhenCompletedFields, undefined);
+      assert.doesNotMatch(draftModeDecl, /keepSaveWhenCompletedFields/);
+    });
+
+    // The regenerated Page must carry the same declaration and let the wrapper's
+    // override win: it spreads `{...props}` AFTER its own `draftMode={draftMode}`.
+    it('the generated Page emits the draftMode from decisions and lets {...props} override it', () => {
+      const pageSrc = readFileSync(join(
+        __dirname, '..', '..', '..', '..', '..', '..', '..',
+        'artifacts', 'return-to-vendor-shipment', 'generated', 'web', 'return-to-vendor-shipment', 'ReturnToVendorShipmentPage.jsx',
+      ), 'utf8');
+      assert.match(pageSrc, /const draftMode = \{[\s\S]*?"enabled": true[\s\S]*?"disableWhenEmpty": true[\s\S]*?\};/);
+      const passedAt = pageSrc.indexOf('draftMode={draftMode}');
+      assert.ok(passedAt > 0, 'generated Page must pass draftMode={draftMode}');
+      assert.ok(passedAt < pageSrc.indexOf('{...props}', passedAt), '{...props} must follow draftMode');
+    });
+
+    it('keeps ConfirmWithCreditButton in topbarRight (it hosts the confirm flow)', () => {
+      assert.equal(decisions.window.customComponents?.topbarRight, 'ConfirmWithCreditButton');
     });
   });
 });

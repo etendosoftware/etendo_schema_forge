@@ -589,10 +589,13 @@ describe('DetailView render integration', () => {
       expect(isBefore(saveBtn, right)).toBe(true);
     });
 
-    // ETP-4933 regression guard — return-material-receipt / return-to-vendor-shipment
-    // wire ConfirmWithCreditButton as topbarRight (no topbarSecondary). Before
-    // ETP-4933, that Confirm button sat LEFT of Save; ETP-5260 must not
-    // reintroduce that regression by moving topbarRight alongside topbarSecondary.
+    // ETP-4933 regression guard — generic topbarRight ordering. Before ETP-4933,
+    // the return windows' topbarRight Confirm button sat LEFT of Save; ETP-5260
+    // must not reintroduce that by moving topbarRight alongside topbarSecondary.
+    // Since ETP-5408 the return windows (return-material-receipt /
+    // return-to-vendor-shipment) render their Borrador Confirm through the
+    // generic draftMode block; their topbarRight (ConfirmWithCreditButton) only
+    // hosts the confirm-modal listener and the CO-status invoice action.
     it('keeps topbarRight AFTER Save when no topbarSecondary is passed (ETP-4933 regression guard)', () => {
       const TopRight = () => <div data-testid="topbar-right">ConfirmWithCredit</div>;
       mockHook.isDirtyHeader = true;

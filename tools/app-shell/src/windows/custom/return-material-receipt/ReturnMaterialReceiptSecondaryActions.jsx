@@ -13,9 +13,11 @@ import DocumentSecondaryActions from '@/windows/custom/shared/DocumentSecondaryA
  * defaults) are passed explicitly so a future reader does not have to check
  * the defaults to know that's deliberate.
  *
- * ETP-4933 ZONE — `ConfirmWithCreditButtonBase` (a PRIMARY action available in
- * Borrador) stays in `topbarRight` via `ConfirmWithCreditButton.jsx`, to the
- * RIGHT of Save/Confirm. Do NOT move it into this component.
+ * ETP-5408 — the Borrador "Confirmar" is the generic draftMode Confirm that
+ * DetailView renders next to Save (see the window's index.jsx `DRAFT_MODE`); it is
+ * neither here nor in topbarRight. `ConfirmWithCreditButton.jsx` (topbarRight) only
+ * hosts the confirm flow it triggers plus the completed-state invoice action — a
+ * PRIMARY-zone concern, so do not move it into this secondary group either.
  */
 export default function ReturnMaterialReceiptSecondaryActions(props) {
   return (
