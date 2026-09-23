@@ -72,13 +72,11 @@ export default function PhysicalInventoryWindow(props) {
   const ui = useUI();
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // ETP-5360 — row-hover kebab Post only (not Unpost), same precedent as
-  // goods-shipment/goods-receipt: Unpost stays reachable from the detail
-  // kebab (decisions.json menuActions) and the bulk toolbar above.
+  // ETP-5360 — row-hover kebab offers Post while the inventory is processed and
+  // not yet posted, and Unpost once it is posted (includeUnpost: true), matching
+  // the detail kebab (decisions.json menuActions) and the bulk toolbar above.
   const rowQuickActions = useMemo(() => ({
     enabled: true,
-    // ETP-5360 — includeUnpost: a posted inventory keeps its row-hover kebab with
-    // Descontabilizar, matching the form kebab and the bulk Unpost button.
     ...buildDocumentRowQuickActionsPostMenu({ ui, onRefresh: () => setRefreshKey(k => k + 1), includeUnpost: true }),
   }), [ui]);
 
