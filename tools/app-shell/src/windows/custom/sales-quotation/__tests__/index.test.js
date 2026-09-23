@@ -172,7 +172,10 @@ describe('SalesQuotationWindow custom wrapper', () => {
     });
 
     it('composes with customMenuActions instead of replacing it, so Reject keeps rendering too', () => {
-      assert.match(src, /rowMenuActions = useCallback\(\(\{ row, status \}\) => \[/);
+      // ETP-5205: the callback body now opens with a windowAccessTier ternary before
+      // the array literal (see the dedicated describe block below), so this no longer
+      // matches `=> [` immediately.
+      assert.match(src, /rowMenuActions = useCallback\(\(\{ row, status \}\) =>/);
       assert.match(src, /\.\.\.customMenuActions\(\{ status \}\)/);
     });
 
@@ -188,6 +191,31 @@ describe('SalesQuotationWindow custom wrapper', () => {
 
     it('refreshes the LIST after QuotationConfirmModal creates an order/invoice, not the form', () => {
       assert.match(src, /onRefresh=\{\(\) => setRefreshKey\(k => k \+ 1\)\}/);
+    });
+  });
+
+  // ETP-5205 — this window's row-kebab Confirmar/Rechazar (rowMenuActions above) is a
+  // fully separate implementation from useOrderWindow's shared menuActions (fixed
+  // separately for Purchase Order/Sales Order) — it never used that hook. Two loose
+  // assertions instead of one exact-whitespace regex: first confirm the guard exists
+  // at all, then confirm it's specifically inside the rowMenuActions block (not some
+  // unrelated windowAccessTier check elsewhere in this large file).
+  describe('rowMenuActions respects windowAccessTier (ETP-5205)', () => {
+    it('calls useWindowAccess with the Sales Quotation AD window id', () => {
+      assert.match(src, /useWindowAccess\(['"]6CB5B67ED33F47DFA334079D3EA2340E['"]\)/);
+    });
+
+    it('the file contains a read-only-tier guard returning an empty array', () => {
+      assert.match(src, /windowAccessTier\s*===\s*'read-only'\s*\?\s*\[\]/);
+    });
+
+    it('the guard is wired inside the rowMenuActions callback specifically', () => {
+      const rowMenuActionsBlock = src.slice(
+        src.indexOf('const rowMenuActions = useCallback('),
+        src.indexOf('], [ui, openQuotationConfirm'),
+      );
+      assert.notEqual(rowMenuActionsBlock, '', 'expected to locate the rowMenuActions useCallback block');
+      assert.match(rowMenuActionsBlock, /windowAccessTier\s*===\s*'read-only'/);
     });
   });
 });

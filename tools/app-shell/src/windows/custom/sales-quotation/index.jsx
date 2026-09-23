@@ -6,6 +6,7 @@ import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { useQuotationPdf } from '../shared/useQuotationPdf.js';
 import GeneratedApp from '@generated/sales-quotation/generated/web/sales-quotation/index.jsx';
@@ -116,6 +117,13 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const tMenu = useMenuLabel();
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
 
+  // ETP-5205 — this wrapper's own rowMenuActions (row-kebab Confirmar/Rechazar,
+  // ETP-5378 below) is a custom override GeneratedApp merely forwards; GeneratedApp's
+  // own generic read-only handling doesn't reach into an externally-supplied
+  // callback like this one, so the tier is fetched independently here, same
+  // pattern as purchase-order/sales-order's own hardcoded-window-id calls.
+  const windowAccessTier = useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E');
+
   // ETP-5378 — row-hover "Confirmar". `apiBaseUrl` is already spec-scoped
   // (matches SendToEvaluationModal/QuotationConfirmModal's own `${apiBaseUrl}/quotation`
   // convention — no `.replace()` stripping needed here, unlike useRowConfirmAction's
@@ -172,14 +180,16 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   // untouched and only swaps the row kebab's onClick to open RejectQuotationModal
   // directly against THIS row — no event indirection needed once there's a
   // real row to open it against.
-  const rowMenuActions = useCallback(({ row, status }) => [
-    ...(row?.documentStatus === 'DR' || row?.documentStatus === 'CO' || row?.documentStatus === 'UE'
-      ? [{ key: 'confirm', label: ui('confirm'), onClick: openQuotationConfirm }]
-      : []),
-    ...customMenuActions({ status }).map((action) => (
-      action.key === 'reject' ? { ...action, onClick: () => setRejectRow(row) } : action
-    )),
-  ], [ui, openQuotationConfirm]);
+  const rowMenuActions = useCallback(({ row, status }) => (
+    windowAccessTier === 'read-only' ? [] : [
+      ...(row?.documentStatus === 'DR' || row?.documentStatus === 'CO' || row?.documentStatus === 'UE'
+        ? [{ key: 'confirm', label: ui('confirm'), onClick: openQuotationConfirm }]
+        : []),
+      ...customMenuActions({ status }).map((action) => (
+        action.key === 'reject' ? { ...action, onClick: () => setRejectRow(row) } : action
+      )),
+    ]
+  ), [ui, openQuotationConfirm, windowAccessTier]);
 
   const closeQuotationConfirm = useCallback(() => setConfirmRow(null), []);
   const closeReject = useCallback(() => setRejectRow(null), []);
