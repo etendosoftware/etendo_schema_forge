@@ -1926,4 +1926,4 @@ own `isDocumentReadOnly` prop), the secondary-actions bar's Clone/Send (shared
 and the notes field / total-discount input (shared `DetailView`/`LinesBottomSection` fix). Not
 live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
 `lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
-either way; relies on unit-test coverage. See `santo_ETP-5205-review-v1-v6.md` in the repo root.
+either way; relies on unit-test coverage.

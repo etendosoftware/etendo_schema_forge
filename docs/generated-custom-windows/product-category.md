@@ -167,4 +167,4 @@ fields, via `ProductCategoryCustomForm.jsx`, become non-editable under `windowRe
 consumer (`product-category/index.jsx` passes `Form={ProductCategoryCustomForm}` straight to
 `DetailView`, no intermediate wrapper) — no other mount path to gate. Not live-testable in this
 session — the available read-only-tier test role has zero grant at all on this window; relies on
-unit-test coverage. See `santo_ETP-5205-review-v1-v6.md` in the repo root.
+unit-test coverage.

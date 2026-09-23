@@ -4172,4 +4172,4 @@ Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documente
 `useWindowAccess` call in `index.jsx`, deliberately out of scope. Live verification against a real
 read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
 read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
-coverage. See `santo_ETP-5205-v6-ledger.md` and `santo_ETP-5205-review-v1-v6.md` in the repo root.
+coverage.

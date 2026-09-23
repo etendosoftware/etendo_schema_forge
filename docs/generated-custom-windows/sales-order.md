@@ -569,5 +569,4 @@ window: the row-kebab Confirmar/Gestionar/Reactivar entries (shared `useOrderWin
 entirely under `windowReadOnly`), the bulk-selection toolbar's Confirmar/Reactivar/Post/Unpost
 actions, and the "More" bulk kebab (Crear Factura / Crear Envío). This window has no standalone
 reject flow outside `useOrderWindow` (confirmed empty during the ticket's own review — nothing
-else to gate). See `santo_ETP-5205-review-v1-v6.md` in the repo root for the full cross-window
-investigation.
+else to gate).

@@ -531,5 +531,5 @@ buttons and Confirmar/Reactivar/Post/Unpost actions, the "More" bulk kebab (Crea
 compra / Crear Recepción), and the secondary-actions bar's Clone/Send (shared
 `DocumentSecondaryActions`, via `topbarSecondary`). **Known gap, not fixed by this ticket:**
 `PurchaseOrderReactivateBulkAction.jsx`, in the same bulk-selection toolbar, does not consume
-`windowReadOnly` yet — flagged during the ticket's own review, deliberately deferred (see
-`santo_ETP-5205-solo-lectura-plan-v5.md` and `santo_ETP-5205-review-v1-v6.md` in the repo root).
+`windowReadOnly` yet — flagged during the ticket's own review, deliberately deferred as a
+follow-up.

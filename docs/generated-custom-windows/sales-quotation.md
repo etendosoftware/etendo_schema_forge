@@ -492,5 +492,4 @@ can see. For this window: the row-kebab Confirmar/Rechazar entries. Window-level
 independent of the shared `useOrderWindow` hook other windows on this page use — `QuotationPage.jsx`
 calls `useWindowAccess` itself, forces `effectiveWindow.readOnly`, and renders `WindowAccessGuard`
 directly. Not live-testable in this session — the quotation list was empty for the available
-read-only-tier test role; relies on unit-test coverage. See `santo_ETP-5205-review-v1-v6.md` in the
-repo root.
+read-only-tier test role; relies on unit-test coverage.

@@ -1281,5 +1281,5 @@ found: Contacts' own bespoke bulk-delete affordance (`selectionBarRightActions`,
 bulk-delete path — the generic one is opted out via `listViewOptions.hideBulkDelete: true`)
 rendered unconditionally in the shared `ListView.jsx`, regardless of `windowReadOnly`. Fixed at the
 shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
-future `selectionBarRightActions` consumer gets the gate for free. See
-`santo_ETP-5205-solo-lectura-plan-v8.md` and `santo_ETP-5205-v8-ledger.md` in the repo root.
+future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
+ETP-5205 commit history for the fix and its test).
