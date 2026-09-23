@@ -64,6 +64,22 @@ async function installFirstStepsMock(page, initial = null) {
   return { writes, state };
 }
 
+/**
+ * Keep this checklist suite on the pre-transfer contract. `login()` installs a broad
+ * successful `/sws/**` fallback; without this explicit 404, the newly added
+ * `/sws/go/demo-data-transfer` endpoint appears enabled and inserts the productive-only
+ * transfer row. The real backend uses 404 to mean the `demo-data-transfer` flag is off.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function installDemoDataTransferDisabledMock(page) {
+  await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+    status: 404,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'error' }),
+  }));
+}
+
 const progress = (page) => page.getByTestId('first-steps-progress');
 
 /**
@@ -105,6 +121,7 @@ async function waitForCopyTranslated(page) {
  */
 async function setupFirstSteps(page, initial = null) {
   await login(page);
+  await installDemoDataTransferDisabledMock(page);
   const mock = await installFirstStepsMock(page, initial);
   return mock;
 }
@@ -370,6 +387,7 @@ test.describe('First Steps page — completion run', () => {
 test.describe('First Steps page — degraded backend', () => {
   test('still renders the list when the state cannot be read', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     await page.route('**/sws/go/onboarding/first-steps**', (route) => route.fulfill({
       status: 500, contentType: 'application/json', body: JSON.stringify({ status: 'error' }),
     }));
@@ -428,6 +446,7 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 
   test('does not bounce when the state cannot be read — `seen` is unknown, not false', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     const counter = { posts: 0 };
     await page.route('**/sws/go/onboarding/first-steps**', (route) => {
       if (route.request().method() === 'POST') counter.posts += 1;
