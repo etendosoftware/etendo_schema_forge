@@ -1915,3 +1915,15 @@ selecting several means CREATING SEVERAL ROWS — meaningful while adding, not w
 row, which is still single-select. The fan-out POSTs sequentially and stops at the first refusal: the
 `C_Invoice_Reverse` trigger and the AEAT349 corrective rule run per insert, and firing them
 concurrently would report whichever failed first while the others had already landed.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('167')` → `'none' | 'read-only' |
+'full'`) must hide every mutating control in a window the Solo Lectura role can see. For this
+window: "Enviar a SII/TBAI" (`SendToSifButton`, rendered inside `InvoiceTopbarExtra`, gated on its
+own `isDocumentReadOnly` prop), the secondary-actions bar's Clone/Send (shared
+`DocumentSecondaryActions` via `topbarSecondary`), the bulk-selection toolbar's document actions,
+and the notes field / total-discount input (shared `DetailView`/`LinesBottomSection` fix). Not
+live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
+`lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
+either way; relies on unit-test coverage. See `santo_ETP-5205-review-v1-v6.md` in the repo root.

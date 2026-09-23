@@ -158,3 +158,13 @@ non-null default for it (see `com.etendoerp.go/docs/onboarding-flow.md` and this
 `docs/etendo-ad/onboarding-gaps.md` → §A8/§A8b for the onboarding-wiring side of this ticket — no
 change to that wiring lives in this repo). Regenerated via `make regen ONLY=product-category`; no
 changes to the header form, default-uniqueness rule, or system-category filtering documented above.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier must hide every mutating control in a window the Solo
+Lectura role can see. For this window, closing the ticket's own point 9 directly: the header form
+fields, via `ProductCategoryCustomForm.jsx`, become non-editable under `windowReadOnly`. Single
+consumer (`product-category/index.jsx` passes `Form={ProductCategoryCustomForm}` straight to
+`DetailView`, no intermediate wrapper) — no other mount path to gate. Not live-testable in this
+session — the available read-only-tier test role has zero grant at all on this window; relies on
+unit-test coverage. See `santo_ETP-5205-review-v1-v6.md` in the repo root.

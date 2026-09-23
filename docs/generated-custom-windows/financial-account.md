@@ -4154,3 +4154,22 @@ One thing specific to this window, unreported and fixed in passing: `ImportState
 `buildErrorsCsv(entries, headers, mapping)` with no captions, so the reason column of the
 downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
 translated. It now passes both the column caption and the skipped-by-user reason.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Financial Account is not one of ETP-5205's originally-named windows — brought into scope
+separately after v5's audit flagged it as completely unwired. Unlike the generated-page windows,
+this window never delegates to `DetailView.jsx`/`GeneratedApp`, so `windowReadOnly` (computed from
+`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded from scratch
+through 5 files: `index.jsx` → `DetailToolbarActions`/`MovementsTab` → `MovementsTable`/
+`MovementsToolbar` → `MovementRowKebab`. Gated: the Editar/AutoMatch buttons AND their modals' own
+`open` conditions (defense-in-depth — a deep link or an auto-open effect can otherwise still mount
+a modal independently of its trigger button), the movement row kebab's 6 mutating actions, the
+"Nuevo movimiento"/"Transferir fondos" split button and its two modals, and the bulk-delete
+selection bar (its own trigger is unreachable once unmounted, no separate open-gate needed).
+**Known gap, not fixed by this ticket:** the Reconciliation tab, Imported Statements tab, and Cash
+Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documented in-code near the
+`useWindowAccess` call in `index.jsx`, deliberately out of scope. Live verification against a real
+read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
+read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
+coverage. See `santo_ETP-5205-v6-ledger.md` and `santo_ETP-5205-review-v1-v6.md` in the repo root.
