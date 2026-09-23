@@ -2810,7 +2810,7 @@ export function DetailView({
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          api={api}
+          api={api} isDocumentReadOnly={isDocumentReadOnly}
           isActive={isActive}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
