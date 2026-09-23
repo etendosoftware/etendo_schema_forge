@@ -3,9 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildReturnDraftMode } from '../../shared/returnDraftMode.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
+const confirmBtnSrc = readFileSync(join(__dirname, '..', 'ConfirmWithCreditButton.jsx'), 'utf8');
+// tools/app-shell/src/windows/custom/<window>/__tests__ → repo root is 6 levels up.
+const decisions = JSON.parse(readFileSync(
+  join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'return-material-receipt', 'decisions.json'),
+  'utf8',
+));
 
 describe('ReturnMaterialReceiptWindow custom wrapper', () => {
   it('exports a default function component', () => {
@@ -142,6 +149,95 @@ describe('ReturnMaterialReceiptWindow custom wrapper', () => {
       assert.match(src, /invoiceResultTitleKey: 'rmrInvoiceCreatedTitle'/);
       assert.match(src, /invoiceDocType: 'facturaVenta'/);
       assert.match(src, /invoiceRoute: '\/sales-invoice'/);
+    });
+  });
+  // ETP-5408 — Borrador "Confirmar" renders through the GENERIC draftMode Save/Confirm
+  // block (saveActions.jsx: `action-save-draft` + `action-save` with the Check icon),
+  // exactly like goods-receipt / invoices / orders. This wrapper passes a `draftMode`
+  // override whose only addition over decisions.json is `onConfirm`, which dispatches
+  // the window's CONFIRM_EVENT; ConfirmWithCreditButton (topbarRight) listens for it.
+  describe('ETP-5408 — generic draftMode Confirm wired to CONFIRM_EVENT', () => {
+    // Comments stripped: these assertions are about code; the wrappers' explanatory notes
+    // legitimately name removed pieces (e.g. the old `linesCount === 0` gate).
+    const strip = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    const code = strip(src);
+    const confirmCode = strip(confirmBtnSrc);
+    const componentAt = code.indexOf('export default function');
+    // The builder's real output, with an identity translator (returns the key).
+    const built = buildReturnDraftMode((key) => key, '__EVENT__');
+
+    it('imports CONFIRM_EVENT from its own ConfirmWithCreditButton', () => {
+      assert.match(code, /import \{ CONFIRM_EVENT \} from '\.\/ConfirmWithCreditButton\.jsx';/);
+    });
+
+    it('ConfirmWithCreditButton exports a window-scoped CONFIRM_EVENT and hands it to the base', () => {
+      assert.match(confirmCode, /export const CONFIRM_EVENT = 'return-material-receipt:open-confirm-modal';/);
+      assert.match(confirmCode, /confirmEventName=\{CONFIRM_EVENT\}/);
+    });
+
+    it('imports buildReturnDraftMode from the shared module (no module-level DRAFT_MODE)', () => {
+      assert.match(code, /import \{ buildReturnDraftMode \} from '\.\.\/shared\/returnDraftMode\.js';/);
+      assert.doesNotMatch(code, /DRAFT_MODE/);
+    });
+
+    it('builds draftMode inside the component with useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui])', () => {
+      assert.match(code, /import \{ useMemo \} from 'react';/);
+      const uiAt = code.search(/const ui = useUI\(\);/);
+      const memoAt = code.search(
+        /const draftMode = useMemo\(\(\) => buildReturnDraftMode\(ui, CONFIRM_EVENT\), \[ui\]\);/,
+      );
+      assert.ok(uiAt > componentAt, 'useUI() must be called inside the component');
+      assert.ok(memoAt > uiAt, 'draftMode must be memoized after ui is resolved');
+    });
+
+    it('passes draftMode={draftMode} to ReturnWindowShell, BEFORE {...rest} so a caller can override it', () => {
+      assert.match(code, /<ReturnWindowShell[\s\S]*draftMode=\{draftMode\}/);
+      assert.ok(code.indexOf('draftMode={draftMode}') < code.indexOf('{...rest}'));
+    });
+
+    it('no longer uses the bespoke-button escape hatch hasExternalPrimaryAction', () => {
+      assert.doesNotMatch(code, /hasExternalPrimaryAction/);
+    });
+
+    // decisions.json is what the generated Page (and the contract) are built from; the
+    // override must not contradict it, or the pipeline output and the runtime diverge.
+    it('the shared builder matches decisions.json → window.draftMode on every behavioural key', () => {
+      const dm = decisions.window?.draftMode;
+      assert.ok(dm, 'decisions.json must declare window.draftMode');
+      assert.equal(dm.enabled, true);
+      assert.equal(built.enabled, dm.enabled);
+      assert.equal(dm.processField, 'documentAction');
+      assert.equal(built.processField, dm.processField);
+      assert.equal(dm.processValue, 'CO');
+      assert.equal(built.processValue, dm.processValue);
+      // The replacement for the old `linesCount === 0` gate of the hand-rolled button.
+      assert.equal(dm.disableWhenEmpty, true);
+      assert.equal(built.disableWhenEmpty, dm.disableWhenEmpty);
+    });
+
+    // Completed documents: nothing on the header is saveable, so the whole Save/Confirm
+    // row must disappear (the same as goods-shipment) — keepSaveWhenCompletedFields
+    // would bring Save back on CO.
+    it('declares no keepSaveWhenCompletedFields (Save/Confirm row hidden on CO)', () => {
+      assert.equal(decisions.window.draftMode.keepSaveWhenCompletedFields, undefined);
+      assert.equal(built.keepSaveWhenCompletedFields, undefined);
+    });
+
+    // The regenerated Page must carry the same declaration and let the wrapper's
+    // override win: it spreads `{...props}` AFTER its own `draftMode={draftMode}`.
+    it('the generated Page emits the draftMode from decisions and lets {...props} override it', () => {
+      const pageSrc = readFileSync(join(
+        __dirname, '..', '..', '..', '..', '..', '..', '..',
+        'artifacts', 'return-material-receipt', 'generated', 'web', 'return-material-receipt', 'ReturnMaterialReceiptPage.jsx',
+      ), 'utf8');
+      assert.match(pageSrc, /const draftMode = \{[\s\S]*?"enabled": true[\s\S]*?"disableWhenEmpty": true[\s\S]*?\};/);
+      const passedAt = pageSrc.indexOf('draftMode={draftMode}');
+      assert.ok(passedAt > 0, 'generated Page must pass draftMode={draftMode}');
+      assert.ok(passedAt < pageSrc.indexOf('{...props}', passedAt), '{...props} must follow draftMode');
+    });
+
+    it('keeps ConfirmWithCreditButton in topbarRight (it hosts the confirm flow)', () => {
+      assert.equal(decisions.window.customComponents?.topbarRight, 'ConfirmWithCreditButton');
     });
   });
 });

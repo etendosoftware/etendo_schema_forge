@@ -1,10 +1,13 @@
+import { useMemo } from 'react';
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import ReturnToVendorShipmentRowConfirmModal from './ReturnToVendorShipmentRowConfirmModal.jsx';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
+import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
-import { useMenuLabel } from '@/i18n';
+import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
+import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
@@ -42,6 +45,8 @@ function ReturnToVendorShipmentBulkActions(props) {
 
 export default function ReturnToVendorShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const draftMode = useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui]);
   const { createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   return (
@@ -68,9 +73,9 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
         // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
         // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
         // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-        // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
         topbarSecondary={ReturnToVendorShipmentSecondaryActions}
+        // ETP-5408 — wins over the generated Page's own `draftMode` (it spreads `{...props}` after).
+        draftMode={draftMode}
         duplicateAction={{ show: false }}
         hideLink
         bulkActions={ReturnToVendorShipmentBulkActions}

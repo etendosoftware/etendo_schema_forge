@@ -71,6 +71,8 @@ vi.mock('@/components/contract-ui/CreateInvoiceConfirmModal', () => ({
 
 import ConfirmWithCreditButtonBase from '../ConfirmWithCreditButtonBase.jsx';
 
+const CONFIRM_EVENT = 'some-window:open-confirm-modal';
+
 const BASE_PROPS = {
   recordId: 'REC-001',
   token: 'test-token',
@@ -84,7 +86,16 @@ const BASE_PROPS = {
   specName: 'some-window',
   entityName: 'someWindow',
   onRefresh: mockOnRefresh,
+  confirmEventName: CONFIRM_EVENT,
 };
+
+// ETP-5408 — the Borrador "Confirmar" is the GENERIC draftMode Confirm rendered by
+// DetailView (saveActions.jsx); the window's draftMode.onConfirm dispatches this event
+// and ConfirmWithCreditButtonBase only listens for it. Tests drive the confirm flow
+// exactly the way production does: by dispatching the event on `window`.
+function fireConfirm(eventName = CONFIRM_EVENT) {
+  act(() => { window.dispatchEvent(new CustomEvent(eventName)); });
+}
 
 describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', () => {
   it('falls back to ui("createReturnInvoice") when postConfirmButtonLabel is not provided', () => {
@@ -131,8 +142,9 @@ describe('ConfirmWithCreditButtonBase — postConfirmButtonLabel (ETP-4737)', ()
       />
     );
     expect(screen.queryByTestId('action-create-return-invoice')).not.toBeInTheDocument();
-    // DR renders its own distinct confirm button instead.
-    expect(screen.getByTestId('action-confirm-with-credit')).toBeInTheDocument();
+    // ETP-5408: and no Borrador confirm button of its own either — that is the generic
+    // draftMode Confirm (`action-save`) rendered by DetailView, not by this component.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
 
@@ -264,7 +276,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
     window.location = originalLocation;
   });
 
-  it('opens ConfirmInOutModal when the DR confirm button is clicked', async () => {
+  it('opens ConfirmInOutModal when the confirm event is dispatched in Borrador', async () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
@@ -272,23 +284,23 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
       />
     );
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
-    // ETP-4940 follow-up: the click now awaits maybeSaveBeforeConfirm (a no-op
-    // async tick here since isDirty is not passed) before opening the modal.
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
   });
 
-  it('does not open any modal when the DR confirm button is disabled (confirmDisabled via linesCount 0)', () => {
+  // ETP-5408: the empty-document gate belongs to the generic Confirm button
+  // (draftMode.disableWhenEmpty, which reads the LIVE lines). The listener must not
+  // re-check the header's linesCount — it can lag right after the first line is added,
+  // and an enabled Confirm that silently does nothing is worse than no gate here.
+  it('opens ConfirmInOutModal even when the header linesCount is 0 (lines gate lives in the button)', () => {
     render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
         data={{ documentStatus: 'DR', linesCount: 0 }}
       />
     );
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    expect(btn).toBeDisabled();
-    fireEvent.click(btn);
-    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
   });
 
   it('opens CreateInvoiceConfirmModal when the CO post-confirm button is clicked', () => {
@@ -310,7 +322,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId('confirm-inout-close'));
@@ -325,7 +337,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
 
@@ -341,7 +353,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-no-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-no-id'));
 
@@ -392,7 +404,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
@@ -415,7 +427,7 @@ describe('ConfirmWithCreditButtonBase — modal open/close/confirm wiring', () =
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-confirm-with-id')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('confirm-inout-confirm-with-id'));
     expect(screen.getByTestId('confirm-result-modal')).toBeInTheDocument();
@@ -551,7 +563,7 @@ describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by inv
         data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 40 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
     expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
     expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
@@ -564,7 +576,7 @@ describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by inv
         data={{ documentStatus: 'DR', linesCount: 2 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
     expect(modal).toHaveAttribute('data-invoice-action', 'createReturnInvoice');
     expect(modal).toHaveAttribute('data-default-create-invoice', 'true');
@@ -577,7 +589,7 @@ describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by inv
         data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: 100 }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
     expect(modal).toHaveAttribute('data-invoice-action', '');
     expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
@@ -590,20 +602,26 @@ describe('ConfirmWithCreditButtonBase — DR confirm modal invoice gating by inv
         data={{ documentStatus: 'DR', linesCount: 2, invoiceStatus: '100' }}
       />
     );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     const modal = await waitFor(() => screen.getByTestId('confirm-inout-modal'));
     expect(modal).toHaveAttribute('data-invoice-action', '');
     expect(modal).toHaveAttribute('data-default-create-invoice', 'false');
   });
 });
 
-// ETP-4940 follow-up — reported live in return-material-receipt/return-to-vendor-
-// shipment: this component fires its own documentAction POST (inside
-// ConfirmInOutModal) that never went through DetailView's draftMode/kebab
-// save-before-confirm guards. A header edit made without clicking Save first was
-// silently discarded — the record confirmed with the last-persisted value.
-describe('ConfirmWithCreditButtonBase — save pending edits before confirm (ETP-4940 follow-up)', () => {
-  it('saves via onSave before opening the confirm modal when isDirty is true', async () => {
+// ETP-4940 follow-up, re-homed by ETP-5408. A header edit made without clicking Save
+// used to be silently discarded because this component fired its own documentAction
+// POST. The save-before-confirm now lives in ONE place: the generic runDraftModeConfirm
+// (saveActions.jsx) calls maybeSaveBeforeConfirm BEFORE draftMode.onConfirm dispatches
+// the event. The listener here must therefore never save again — a second save would be
+// a second PATCH racing the first. Stray save props are passed on purpose to prove they
+// are ignored.
+describe('ConfirmWithCreditButtonBase — the confirm listener never saves (ETP-5408 / ETP-4940)', () => {
+  beforeEach(() => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+  });
+
+  it('opens the modal without calling onSave, even when isDirty is true', async () => {
     const onSave = vi.fn().mockResolvedValue({ id: 'REC-001' });
     render(
       <ConfirmWithCreditButtonBase
@@ -613,138 +631,140 @@ describe('ConfirmWithCreditButtonBase — save pending edits before confirm (ETP
         onSave={onSave}
       />
     );
-    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
-  });
-
-  it('does not open the confirm modal when the pending save fails', async () => {
-    const onSave = vi.fn().mockResolvedValue(null);
-    render(
-      <ConfirmWithCreditButtonBase
-        {...BASE_PROPS}
-        data={{ documentStatus: 'DR', linesCount: 2 }}
-        isDirty
-        onSave={onSave}
-      />
-    );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
-    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
-    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
-  });
-
-  it('does not call onSave when there is nothing pending (isDirty false) and still opens the modal', async () => {
-    const onSave = vi.fn().mockResolvedValue({ id: 'REC-001' });
-    render(
-      <ConfirmWithCreditButtonBase
-        {...BASE_PROPS}
-        data={{ documentStatus: 'DR', linesCount: 2 }}
-        isDirty={false}
-        onSave={onSave}
-      />
-    );
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+    fireConfirm();
     await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  it('issues no network request when the event opens the modal (no PATCH, no documentAction POST)', async () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={{ documentStatus: 'DR', linesCount: 2 }} />);
+    fireConfirm();
+    await waitFor(() => expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument());
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
 });
 
-// ETP-5408 — the DR "Confirmar" button was a hand-rolled <button> with an inline
-// style object and NO icon: the only Confirmar in the product without the checkmark
-// that Facturas / Pedidos / Albaranes show. It now renders the shared Button
-// (@/components/ui/button.jsx) with a <Check> icon and classes derived from the same
-// getButtonClass/getSaveBtnCls helpers DetailView uses for a positive process button.
-//
-// These tests deliberately exercise the REAL Button and the REAL class helpers — the
-// mocks at the top of this file cover i18n, the router, sonner and the three modals,
-// and must keep leaving button.jsx / detailViewHelpers.jsx unmocked, otherwise the
-// assertions below stop proving anything about the shared component.
+// ETP-5408 — the Borrador "Confirmar" was a hand-rolled button in this component: the
+// only Confirmar in the product without the checkmark Facturas / Pedidos / Albaranes
+// show. It now renders through the GENERIC draftMode Confirm (saveActions.jsx,
+// `action-save`, with its Check icon); this component renders NO Borrador button and
+// only reacts to the window's confirm event. The generic button covers its own
+// rendering/icon/gate tooltip (DetailView.saveActions / saveButtons vitest suites);
+// what is locked here is the listener contract.
 const DR_DATA = { documentStatus: 'DR', linesCount: 2 };
 
-describe('ConfirmWithCreditButtonBase — DR confirm renders the shared positive button (ETP-5408)', () => {
-  it('renders a check icon inside the DR confirm button', () => {
-    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    const icon = btn.querySelector('svg');
-    // The pre-fix hand-rolled button had no icon at all.
-    expect(icon).not.toBeNull();
-    expect(icon.getAttribute('class')).toContain('lucide-check');
-    expect(icon).toHaveClass('mr-1');
-  });
-
-  it('carries no inline style attribute (the hand-rolled styling is gone)', () => {
-    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
-    expect(screen.getByTestId('action-confirm-with-credit')).not.toHaveAttribute('style');
-  });
-
-  it('renders through the shared Button, carrying its variant classes and the helper-derived gap', () => {
-    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    // Only the shared Button's cva recipe emits these; a bespoke <button> would not.
-    expect(btn).toHaveClass('disabled:pointer-events-none');
-    expect(btn).toHaveClass('bg-primary');
-    // getSaveBtnCls('sm') — proves the class string came from the shared helper and
-    // was merged in, not hardcoded next to a hand-rolled element.
-    expect(btn).toHaveClass('gap-1.5');
-  });
-
-  it('still renders the caller-provided label next to the icon', () => {
-    render(
-      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} confirmDrLabel="Confirmar" />
-    );
-    expect(screen.getByTestId('action-confirm-with-credit')).toHaveTextContent('Confirmar');
-  });
-});
-
-// ETP-4933 guard, re-armed by ETP-5408. A `title` on a DISABLED element never fires,
-// and the shared Button carries `disabled:pointer-events-none` — so migrating this
-// button to it would have silently killed the "why is Confirm blocked" explanation.
-// GateTooltip (imported from saveActions.jsx, not re-implemented) restores it: a
-// non-disabled <span title=...> wrapper that does receive the hover.
-describe('ConfirmWithCreditButtonBase — blocked DR confirm still explains itself (ETP-5408 / ETP-4933)', () => {
-  const GATE = { blocked: true, title: 'saveMissingRequired: Business Partner' };
-
-  it('wraps the disabled button in a non-disabled span carrying the gate title', () => {
-    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    expect(btn).toBeDisabled();
-
-    const wrapper = btn.parentElement;
-    expect(wrapper.tagName).toBe('SPAN');
-    expect(wrapper).toHaveAttribute('title', GATE.title);
-    // The wrapper is what the pointer can still reach; it must never be disabled itself.
-    expect(wrapper).not.toBeDisabled();
-  });
-
-  it('does not open the confirm modal while the gate blocks it', () => {
-    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
-    fireEvent.click(screen.getByTestId('action-confirm-with-credit'));
+describe('ConfirmWithCreditButtonBase — no bespoke Borrador confirm button (ETP-5408)', () => {
+  it('renders no button at all in Borrador (the Confirm is the generic draftMode one)', () => {
+    const { container } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    expect(container.querySelector('button')).toBeNull();
+    expect(screen.queryByTestId('action-confirm-with-credit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
   });
 
-  // The invariant the five existing saveActions.jsx call sites rely on: when there is
-  // nothing to explain, GateTooltip adds NO element — the DOM is a bare Button, so no
-  // existing selector or layout is affected.
-  it('adds no wrapper element when the gate is not blocking', () => {
-    const { container } = render(
+  it('still renders extraActions in Borrador (the slot is independent of the removed button)', () => {
+    render(
       <ConfirmWithCreditButtonBase
         {...BASE_PROPS}
         data={DR_DATA}
-        saveGate={{ blocked: false, title: 'saveMissingRequired: Business Partner' }}
+        extraActions={<span data-testid="extra-action" />}
       />
     );
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    expect(btn).not.toBeDisabled();
-    expect(btn.parentElement).toBe(container);
-    expect(container.querySelector('span[title]')).toBeNull();
+    expect(screen.getByTestId('extra-action')).toBeInTheDocument();
+  });
+});
+
+describe('ConfirmWithCreditButtonBase — confirm event listener (ETP-5408)', () => {
+  const GATE = { blocked: true, title: 'saveMissingRequired: Business Partner' };
+
+  it('opens ConfirmInOutModal on the configured event', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
   });
 
-  it('adds no wrapper element when no saveGate is supplied at all', () => {
-    const { container } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
-    const btn = screen.getByTestId('action-confirm-with-credit');
-    expect(btn.parentElement).toBe(container);
-    expect(container.querySelector('span[title]')).toBeNull();
+  it('ignores an event with a different name (each window listens to its own)', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    fireConfirm('other-window:open-confirm-modal');
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  it('does nothing when no confirmEventName is supplied', () => {
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} confirmEventName={undefined} data={DR_DATA} />);
+    expect(addSpy.mock.calls.some(([name]) => name === CONFIRM_EVENT)).toBe(false);
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+    addSpy.mockRestore();
+  });
+
+  // ETP-4933 guard: the generic Confirm already honours saveGate, but the listener
+  // re-checks it so an event from anywhere else cannot confirm an incomplete record.
+  it('does not open the modal while the required-field gate blocks it', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  it('opens the modal when saveGate is present but not blocking', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={{ blocked: false }} />);
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
+  });
+
+  it('opens nothing on a completed document (neither the confirm nor the create-invoice modal)', () => {
+    render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={{ documentStatus: 'CO', hasReturnInvoice: false }} />);
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('create-invoice-confirm-modal')).not.toBeInTheDocument();
+  });
+
+  it('opens nothing on a status outside DR/CO (listener registered, handler bails out)', () => {
+    const { container } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={{ documentStatus: 'VO' }} />);
+    fireConfirm();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // The effect depends on status / saveBlocked: a stale closure would keep acting on
+  // the values of the first render.
+  it('follows status changes: after the record becomes CO the event no longer opens the modal', () => {
+    const { rerender } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    rerender(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={{ documentStatus: 'CO', hasReturnInvoice: true }} />);
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  it('follows the gate state: once saveGate unblocks, the event opens the modal', () => {
+    const { rerender } = render(
+      <ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />
+    );
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+    rerender(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={{ blocked: false }} />);
+    fireConfirm();
+    expect(screen.getByTestId('confirm-inout-modal')).toBeInTheDocument();
+  });
+
+  it('follows the gate state the other way: a gate that closes after mount blocks the event', () => {
+    const { rerender } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    rerender(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} saveGate={GATE} />);
+    fireConfirm();
+    expect(screen.queryByTestId('confirm-inout-modal')).not.toBeInTheDocument();
+  });
+
+  it('removes its listener on unmount (the same handler it registered)', () => {
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+    const { unmount } = render(<ConfirmWithCreditButtonBase {...BASE_PROPS} data={DR_DATA} />);
+    const added = addSpy.mock.calls.filter(([name]) => name === CONFIRM_EVENT).map(([, fn]) => fn);
+    expect(added.length).toBeGreaterThan(0);
+    const current = added[added.length - 1];
+
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith(CONFIRM_EVENT, current);
+    // And a late event after unmount is a harmless no-op.
+    expect(() => fireConfirm()).not.toThrow();
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });
 

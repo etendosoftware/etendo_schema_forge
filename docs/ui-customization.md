@@ -198,13 +198,15 @@ inside their `topbarRight` component instead of duplicating it, and bridge the S
 and why the modal did not move.
 
 **Do not move `topbarRight` to the left of Save.** `DetailView.jsx` carries an explicit ETP-4933
-comment on this: two windows (`return-material-receipt`, `return-to-vendor-shipment`) render a
-PRIMARY `ConfirmWithCreditButtonBase` inside `topbarRight`, visible while the document is still
-in Draft. Moving `topbarRight` — or reintroducing its old pre-`topbarSecondary` behavior — puts
-that Confirm action to the left of Save again, which is the regression ETP-4933 fixed. The
-`topbarSecondary` slot exists specifically so this never has to be revisited: it is additive,
-`topbarRight` is untouched, and the two return windows migrated only their Copy-link button (no
-Clone/Send) into `topbarSecondary`, leaving `ConfirmWithCreditButtonBase` exactly where it was.
+comment on this: a `topbarRight` component may host PRIMARY actions, and moving the slot — or
+reintroducing its old pre-`topbarSecondary` behavior — puts them to the left of Save, which is the
+regression ETP-4933 fixed. The `topbarSecondary` slot exists specifically so this never has to be
+revisited: it is additive and `topbarRight` is untouched. (The two return windows,
+`return-material-receipt` and `return-to-vendor-shipment`, used to be the example: they rendered a
+PRIMARY Borrador Confirm inside `topbarRight`. Since ETP-5408 that Confirm is the generic draftMode
+button like every other document window — `draftMode.onConfirm` dispatches
+`'<window>:open-confirm-modal'` and their `topbarRight` `ConfirmWithCreditButtonBase` only runs the
+confirm flow and renders the Completado-state invoice action.)
 
 **Windows migrated to `topbarSecondary` (ETP-5260):** `purchase-order`, `sales-order`,
 `sales-quotation`, `goods-receipt`, `goods-shipment`, `purchase-invoice`, `sales-invoice`,
@@ -262,7 +264,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 
 **Every `InfoBanner` is dismissible by default (ETP-5245).** The X is rendered unless the caller passes `dismissible={false}`, and with no `onDismiss` the banner hides itself — supplying `onDismiss` switches it to controlled mode, where the caller owns visibility (that is what `ListModalWindow` does). A banner that explains a **block** must not stay closed while the user keeps hitting that block: pass `reopenSignal={useSaveBlockSignal('<stable-toast-id>')}` (`@/hooks/useSaveBlockSignal.js`) and it re-opens itself every time `useEntity`'s save gate actually refuses a save for that reason. The id is the same stable toast id the gate already passes to `reportInvalidFormatField`, so the banner and the toast can never describe different refusals; a new blocking rule gets the behaviour just by passing a `toastId`. See `ProductCostBanner.jsx` for the reference wiring.
 
-**Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component (e.g. `return-material-receipt`/`return-to-vendor-shipment`'s `ConfirmWithCreditButtonBase`) or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
+**Save-before-confirm contract for `topbarRight` and `CustomLines` (ETP-4940 follow-up).** If a `topbarRight` component or a `CustomLines` component (e.g. `payment-in`'s `ApplyToInvoices.jsx`, whose "apply + process" flow fires its own `documentAction` request) triggers its own documentAction request, it MUST call `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` (`@/components/contract-ui/detailViewHelpers.jsx`) before that request fires — otherwise a header edit made without clicking Save first is silently discarded, and the action runs against the last-persisted value. This mirrors the guard `DetailView.jsx`'s own draftMode Confirm button and `DetailMoreActionsMenu.jsx`'s kebab documentAction already apply; `topbarRight` and `CustomLines` were the two choke points that bypassed it until this fix. A `topbarRight` component that only reacts to the generic Confirm's `draftMode.onConfirm` event (the return windows' `ConfirmWithCreditButtonBase` since ETP-5408, like `GoodsReceiptActions`) must NOT save again: `runDraftModeConfirm` in `saveActions.jsx` has already saved before calling `onConfirm`, and the listener's `isDirty` may still hold the pre-save value. `onSave` and `isDirty` are always passed to every `topbarRight` component, and both are also passed into `CustomLines` alongside its existing `onSave` — a component that never fires its own documentAction (e.g. a payment-status badge) can ignore both.
 
 ---
 

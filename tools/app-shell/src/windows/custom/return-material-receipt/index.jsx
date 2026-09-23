@@ -1,10 +1,13 @@
+import { useMemo } from 'react';
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import ReturnMaterialReceiptRowConfirmModal from './ReturnMaterialReceiptRowConfirmModal.jsx';
 import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
+import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
-import { useMenuLabel } from '@/i18n';
+import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
+import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
@@ -42,6 +45,8 @@ function ReturnMaterialReceiptBulkActions(props) {
 
 export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const draftMode = useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui]);
   const { createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
   return (
@@ -68,9 +73,9 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
         // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
         // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
         // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-        // is untouched — see ReturnMaterialReceiptSecondaryActions' doc comment.
         topbarSecondary={ReturnMaterialReceiptSecondaryActions}
+        // ETP-5408 — wins over the generated Page's own `draftMode` (it spreads `{...props}` after).
+        draftMode={draftMode}
         // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
         // (grid row action was showing it for CO rows). Mirrors sibling
         // return-to-vendor-shipment (duplicateAction={{ show: false }}), which
