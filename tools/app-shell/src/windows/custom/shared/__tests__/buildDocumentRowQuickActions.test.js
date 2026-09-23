@@ -1,10 +1,15 @@
-import { describe, it } from 'node:test';
+import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { toast } from 'sonner';
 import {
   buildPostMenuActions,
+  buildPostUnpostMenuActions,
   buildMenuActionExecutedHandler,
   buildDocumentRowQuickActionsPostMenu,
 } from '../buildDocumentRowQuickActions.js';
+
+const UNPOST_ACTION = { key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true };
+const POST_ACTION = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
 
 const fakeUi = (key) => `__${key}__`;
 
@@ -73,6 +78,72 @@ describe('buildDocumentRowQuickActions', () => {
     });
   });
 
+  describe('buildPostUnpostMenuActions (ETP-5360 — row-hover Post OR Unpost)', () => {
+    it('offers only a destructive unpost when the row is posted (Y)', () => {
+      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'Y', posted: 'Y' } }), [UNPOST_ACTION]);
+    });
+
+    it('offers only a destructive unpost when the row is posted (boolean true)', () => {
+      const actions = buildPostUnpostMenuActions({ row: { processed: true, posted: true } });
+      assert.deepEqual(actions, [UNPOST_ACTION]);
+      assert.equal(actions[0].destructive, true);
+      assert.equal(actions[0].successKey, 'documentUnposted');
+    });
+
+    it('offers only post when the row is processed and not posted', () => {
+      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'Y', posted: 'N' } }), [POST_ACTION]);
+      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: true, posted: false } }), [POST_ACTION]);
+    });
+
+    it('returns no actions for a draft (unprocessed, unposted) row', () => {
+      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: 'N', posted: 'N' } }), []);
+      assert.deepEqual(buildPostUnpostMenuActions({ row: { processed: false, posted: false } }), []);
+    });
+
+    it('returns no actions for an empty row, a missing row, or no arguments', () => {
+      assert.deepEqual(buildPostUnpostMenuActions({ row: {} }), []);
+      assert.deepEqual(buildPostUnpostMenuActions({}), []);
+      assert.deepEqual(buildPostUnpostMenuActions(), []);
+    });
+  });
+
+  describe('buildMenuActionExecutedHandler — error toast forwards messageKeys (ETP-5360)', () => {
+    afterEach(() => mock.restoreAll());
+
+    it('translates a failure through result.messageKeys (PeriodClosedForUnPosting)', () => {
+      const errorSpy = mock.method(toast, 'error', () => {});
+      const ui = (k) => (k === 'backendError.periodClosedForUnposting' ? 'PERIOD CLOSED' : k);
+      const handler = buildMenuActionExecutedHandler(ui, () => {});
+      handler(
+        { neoAction: 'unpost', successKey: 'documentUnposted' },
+        { success: false, message: 'Some already-resolved prose nobody maps', messageKeys: ['PeriodClosedForUnPosting'] },
+      );
+      assert.equal(errorSpy.mock.callCount(), 1);
+      assert.equal(errorSpy.mock.calls[0].arguments[0], 'PERIOD CLOSED');
+    });
+
+    it('falls back to the raw message when messageKeys are unknown', () => {
+      const errorSpy = mock.method(toast, 'error', () => {});
+      const handler = buildMenuActionExecutedHandler((k) => k, () => {});
+      handler({ neoAction: 'unpost' }, { success: false, message: 'boom', messageKeys: ['SomethingUnmapped'] });
+      assert.equal(errorSpy.mock.calls[0].arguments[0], 'boom');
+    });
+
+    it('falls back to actionFailed when there is neither message nor a mapped key', () => {
+      const errorSpy = mock.method(toast, 'error', () => {});
+      const handler = buildMenuActionExecutedHandler(fakeUi, () => {});
+      handler({ neoAction: 'unpost' }, { success: false });
+      assert.equal(errorSpy.mock.calls[0].arguments[0], '__actionFailed__');
+    });
+
+    it('shows the unpost success key on success', () => {
+      const successSpy = mock.method(toast, 'success', () => {});
+      const handler = buildMenuActionExecutedHandler(fakeUi, () => {});
+      handler(UNPOST_ACTION, { success: true });
+      assert.equal(successSpy.mock.calls[0].arguments[0], '__documentUnposted__');
+    });
+  });
+
   describe('buildDocumentRowQuickActionsPostMenu (composite, spreadable slice)', () => {
     it('returns a menuActions/onMenuActionExecuted pair', () => {
       const slice = buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, onRefresh: () => {} });
@@ -94,6 +165,21 @@ describe('buildDocumentRowQuickActions', () => {
 
     it('is usable with no arguments (defaults to an empty options object)', () => {
       assert.doesNotThrow(() => buildDocumentRowQuickActionsPostMenu());
+    });
+
+    it('defaults to the Post-only builder when includeUnpost is omitted or false (ETP-5360)', () => {
+      assert.equal(buildDocumentRowQuickActionsPostMenu().menuActions, buildPostMenuActions);
+      assert.equal(
+        buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, onRefresh: () => {}, includeUnpost: false }).menuActions,
+        buildPostMenuActions,
+      );
+    });
+
+    it('uses buildPostUnpostMenuActions when includeUnpost is true (ETP-5360)', () => {
+      const slice = buildDocumentRowQuickActionsPostMenu({ ui: fakeUi, onRefresh: () => {}, includeUnpost: true });
+      assert.equal(slice.menuActions, buildPostUnpostMenuActions);
+      assert.deepEqual(slice.menuActions({ row: { processed: 'Y', posted: 'Y' } }), [UNPOST_ACTION]);
+      assert.equal(typeof slice.onMenuActionExecuted, 'function');
     });
   });
 });

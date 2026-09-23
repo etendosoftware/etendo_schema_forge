@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  buildDocumentRowQuickActionsPostMenu,
+  buildPostUnpostMenuActions,
+} from '../../shared/buildDocumentRowQuickActions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
@@ -92,6 +96,35 @@ describe('PhysicalInventoryWindow custom wrapper', () => {
 
     it('hides the kebab when data is undefined', () => {
       assert.equal(hideMenuActions({ data: undefined }), true);
+    });
+  });
+
+  describe('rowQuickActions includeUnpost wiring (ETP-5360)', () => {
+    const callMatch = src.match(/\.\.\.buildDocumentRowQuickActionsPostMenu\(\{([^}]*)\}\)/);
+
+    it('spreads buildDocumentRowQuickActionsPostMenu into rowQuickActions', () => {
+      assert.match(src, /rowQuickActions = useMemo\(\(\) => \(\{[\s\S]*?\.\.\.buildDocumentRowQuickActionsPostMenu\(/);
+      assert.match(src, /rowQuickActions=\{rowQuickActions\}/);
+    });
+
+    it('opts in with includeUnpost: true', () => {
+      assert.ok(callMatch, 'buildDocumentRowQuickActionsPostMenu call not found');
+      assert.match(callMatch[1], /includeUnpost:\s*true/);
+    });
+
+    it('menuActions resolved with those options yields unpost for a posted row', () => {
+      const includeUnpost = /includeUnpost:\s*true/.test(callMatch?.[1] ?? '');
+      const { menuActions } = buildDocumentRowQuickActionsPostMenu({ ui: (k) => k, onRefresh: () => {}, includeUnpost });
+      assert.equal(menuActions, buildPostUnpostMenuActions);
+      const actions = menuActions({ row: { id: 'inv-1', processed: true, posted: true } });
+      assert.equal(actions.length, 1);
+      assert.equal(actions[0].neoAction, 'unpost');
+      assert.equal(actions[0].destructive, true);
+    });
+
+    it('menuActions still yields post for a processed, unposted row', () => {
+      const { menuActions } = buildDocumentRowQuickActionsPostMenu({ includeUnpost: true });
+      assert.deepEqual(menuActions({ row: { processed: 'Y', posted: 'N' } }).map((a) => a.key), ['post']);
     });
   });
 });

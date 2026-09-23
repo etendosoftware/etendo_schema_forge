@@ -2298,3 +2298,76 @@ describe('"tenant owner — only the owner can modify" exact match (UserRoleAssi
     );
   });
 });
+
+describe('translateBackendError — raw @Key@ token route (ETP-5360)', () => {
+  const t = (k) => ({
+    'backendError.periodClosedForUnposting': 'PERIOD_CLOSED_UNPOST',
+    'backendError.costNotCalculated': 'COST_NOT_CALCULATED',
+  }[k] ?? k);
+
+  it('maps a bare @PeriodClosedForUnPosting@ token with no options', () => {
+    assert.equal(translateBackendError('@PeriodClosedForUnPosting@', t), 'PERIOD_CLOSED_UNPOST');
+  });
+
+  it('maps the token when surrounded by whitespace or other text', () => {
+    assert.equal(translateBackendError('  @PeriodClosedForUnPosting@  ', t), 'PERIOD_CLOSED_UNPOST');
+    assert.equal(translateBackendError('Error: @PeriodClosedForUnPosting@', t), 'PERIOD_CLOSED_UNPOST');
+  });
+
+  it('explicit messageKeys win over tokens found in the message', () => {
+    assert.equal(
+      translateBackendError('@PeriodClosedForUnPosting@', t, { messageKeys: ['NotCalculatedCost'] }),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('leaves unknown tokens untouched', () => {
+    const msg = 'Missing value for @product@ here';
+    assert.equal(translateBackendError(msg, t), msg);
+  });
+
+  it('does not treat an email address as a token', () => {
+    const msg = 'Contact a@b.com for help';
+    assert.equal(translateBackendError(msg, t), msg);
+  });
+
+  it('keeps the existing @Product@ on @Date@ exact-match mapping', () => {
+    assert.equal(
+      translateBackendError('There is no cost defined for the product: @Product@ on @Date@', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('returns the original token when the translation is missing (t returns the key)', () => {
+    assert.equal(translateBackendError('@PeriodClosedForUnPosting@', (k) => k), '@PeriodClosedForUnPosting@');
+  });
+});
+
+describe('translateBackendError — NotCalculatedCost (ETP-5360)', () => {
+  const t = (k) => (k === 'backendError.costNotCalculated' ? 'COST_NOT_CALCULATED' : k);
+
+  it('maps the resolved English NotCalculatedCost text', () => {
+    assert.equal(
+      translateBackendError('Cost has not yet been calculated for all products in the document.', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps the resolved Spanish NotCalculatedCost text', () => {
+    assert.equal(
+      translateBackendError('El coste aún no ha sido calculado para todos los productos en el documento.', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps messageKeys: [NotCalculatedCost] regardless of the prose', () => {
+    assert.equal(
+      translateBackendError('Unrelated prose', t, { messageKeys: ['NotCalculatedCost'] }),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps a bare @NotCalculatedCost@ token', () => {
+    assert.equal(translateBackendError('@NotCalculatedCost@', t), 'COST_NOT_CALCULATED');
+  });
+});
