@@ -20512,6 +20512,7 @@
     "backendError.cannotDeleteOwner": "This user is the tenant owner and cannot be deleted.",
     "backendError.cannotDeleteLastAdmin": "Cannot delete the last active administrator for this client.",
     "backendError.cannotModifyOwnerAccount": "This user is the tenant owner — only the owner can modify this account.",
+    "backendError.accessDeniedToSpec": "You do not have access to perform this action.",
     "backendError.fieldTooLong": "This value is too long. It must not exceed {maxLength} characters.",
     "backendError.cannotChangeBpWithLines": "You cannot change the Contact once the document has lines.",
     "backendError.cannotChangeBpOrPriceListWithLines": "You cannot change the Contact or the price list once the document has lines.",
