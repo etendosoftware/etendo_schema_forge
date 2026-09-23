@@ -109,14 +109,28 @@ that already carries it is just as frozen as one presented through either curren
 
 ### Submission snapshot — the source of truth (`ETGO_Fiscal_Decl.Submitted_Snapshot`)
 
-- **Column.** `Submitted_Snapshot` (TEXT/CLOB, nullable, module `com.etendoerp.go`, dynamic
-  property `submittedSnapshot` — `FiscalDeclCrudHandler.PROPERTY_SUBMITTED_SNAPSHOT`). It holds the
-  exact JSON `GET /fiscal303/boxes` (303) or `GET /fiscal349/operators` (349) returns for the
-  declaration's `(org, year, period)`. `MANUAL_DATA` was not reused: it holds the user's manual
-  inputs, which are merged on top of the computed figures, not the figures themselves.
+- **Column.** `Submitted_Snapshot` (TEXT/CLOB, nullable, AD `FIELDLENGTH` 1,000,000, module
+  `com.etendoerp.go`, property `submittedSnapshot` — `FiscalDeclCrudHandler.PROPERTY_SUBMITTED_SNAPSHOT`,
+  `FiscalDecl#setSubmittedSnapshot`). The column first shipped with `FIELDLENGTH` 2000, which the
+  entity validator enforces on `set` — real snapshots failed (ETP-5438 QA BUG-1).
+  `MANUAL_DATA` was not reused: it holds the user's manual inputs, which are merged on top of the
+  computed figures, not the figures themselves.
+- **Contents — figures only, size-bounded.** The snapshot is the `GET /fiscal303/boxes` (303) or
+  `GET /fiscal349/operators` (349) payload for the declaration's `(org, year, period)` with every
+  per-invoice array replaced by its row count (`AbstractFiscalHandler#computeSubmittedSnapshot`,
+  the single place it is built; per model via `snapshotExcludedLists`):
+  - 303 keeps `boxes` + `summary`; `sources` (the per-invoice drilldown) becomes `sourceCount`.
+  - 349 keeps `operators` (one row per intra-community partner), `summary`,
+    `rectificativeSummary` (fixed E/S/A/I totals), `orgNif`/`orgName`; `invoices` and
+    `rectifications` become `invoiceCount` / `rectificationCount`.
+
+  Why: a period can hold tens of thousands of invoices, and the snapshot is also returned by every
+  `GET /fiscal303/declarations` (the list), so keeping per-invoice rows would grow without bound.
+  Product decision: once presented nothing is recalculated — what was there at submission stays —
+  and invoice-level detail is simply not kept for those declarations.
 - **Taken when a declaration enters the submitted family from a non-submitted status**, computed
   server-side through the same code path the read endpoint uses
-  (`AbstractFiscalHandler#computeSnapshotPayload`, with the org resolved by `resolveEffectiveOrg`
+  (`computeSubmittedSnapshot` over `AbstractFiscalHandler#computeLivePayload`, with the org resolved by `resolveEffectiveOrg`
   exactly as the read resolves it), in the same request and transaction as the status change:
   - manual Registrar/Presentar, both models — `FiscalDeclCrudHandler#applySubmittedSnapshotTransition`
     on `PUT /fiscal303/declarations` (also on a `POST` that creates a declaration straight into
@@ -130,9 +144,16 @@ that already carries it is just as frozen as one presented through either curren
     are exactly the frozen ones.
   - AEAT telematic filing (303) — `Fiscal303SubmissionSupport#handleSubmit` computes it after
     generating the `.303` file and **before** calling the AEAT; `persistSuccessfulSubmission`
-    stores it with the `submitted_ack` status in the single commit. Test mode takes none. The
+    stores it with the `submitted_ack` status in the single commit. The snapshot is validated
+    against the entity's own property (`FiscalDeclCrudHandler#validateSubmittedSnapshot`) before
+    the AEAT is contacted, so one the column would reject fails as `SNAPSHOT_FAILED` with nothing
+    filed; should storing it still fail after the filing, the declaration keeps
+    `submitted_ack`/`aeat_telematic` without a snapshot (served live, like a legacy one) rather
+    than a half-written record. Test mode takes none. The
     frontend sends no status PUT afterwards (it would be a `409`): `FiscalModelsPage` re-reads the
-    declaration to pick the snapshot up — see "AEAT electronic submission" below.
+    declaration to pick the snapshot up — see "AEAT electronic submission" below. The 303 detail
+    page applies a snapshot that arrives after mount this way through a dedicated effect keyed on
+    `decl.submittedSnapshot` (display only, no compute — QA BUG-2).
 - **Fails closed.** If the snapshot cannot be computed, the submission fails and nothing is written:
   the PUT answers `500` with a message ("its figures could not be computed"); the telematic path
   answers `500` `SNAPSHOT_FAILED` without contacting the AEAT. The detail pages roll their
@@ -146,7 +167,8 @@ that already carries it is just as frozen as one presented through either curren
 - **Reads.** `declToJson` exposes it as `submittedSnapshot` (parsed object, or `null` when absent
   or unparseable — never `{}`, which would freeze a declaration on no figures).
   `GET /fiscal303/boxes` / `GET /fiscal349/operators` (`AbstractFiscalHandler#snapshotOrCompute`)
-  return the snapshot — the same payload, re-serialized through `JSONObject` — when the **latest** declaration for the natural key
+  return the snapshot as-is (no `sources`/`invoices`/`rectifications`, re-serialized through
+  `JSONObject`) when the **latest** declaration for the natural key
   (highest `DECL_SEQ`, same rule as `findLatestDeclarationStatus`) is submitted and has one — the
   compute is never reached. Submitted without a snapshot (legacy), draft and ready declarations
   compute live, exactly as before.
@@ -159,7 +181,14 @@ that already carries it is just as frozen as one presented through either curren
   live compute (303: box 71 re-derived with the row's `manualOverrides`; 349: E/S/A/I totals) and
   the row is opened with the snapshot as `_precomputed`. Such a declaration is handed to no
   `useFiscalAutoCompute` instance and never touches `sessionStorage`. Reactivating a row clears its
-  `submittedSnapshot` locally, so the draft computes live again. **Legacy fallback** (no snapshot):
+  `submittedSnapshot` locally, so the draft computes live again. The "resultado cero" vs "sin
+  resultado" distinction of a 0.00 result reads `sourceCount` when the snapshot has no `sources`.
+  **Hidden for snapshot-served declarations:** the 303 detail's "Facturas" tab and the 349 detail's
+  "Facturas origen"/"Rectificaciones" tabs show `fm.snapshot.invoice_detail_not_kept` ("El detalle
+  por factura no se conserva en las declaraciones presentadas.") instead of a list, with the kept
+  counts as tab badges; nothing recomputes to fill them. The 349 operators' "Origen" counts are
+  derived from the invoice rows, so they read "—" there. Legacy submitted, draft and ready
+  declarations are unchanged. **Legacy fallback** (no snapshot):
   `submittedDecls303`/`submittedDecls349` are carved out of the
   pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
   their own two `useFiscalAutoCompute` instances, passed `checkModifiedFn: neverModifiedFn` — a
