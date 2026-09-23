@@ -112,4 +112,12 @@ describe('LinesBottomSection', () => {
     assert.doesNotMatch(inlineStyle, /(^|[^a-zA-Z])height:\s*241/, 'rigid `height: 241` must not return on the live style');
     assert.doesNotMatch(inlineStyle, /maxHeight:\s*241/, 'rigid `maxHeight: 241` must not return on the live style');
   });
+
+  it('accepts an isDocumentReadOnly prop', () => {
+    assert.match(src, /\bisDocumentReadOnly\b/);
+  });
+
+  it('derives isReadOnly from documentStatus OR isDocumentReadOnly (ETP-5205)', () => {
+    assert.match(src, /documentStatus\s*!==\s*'DR'\s*\|\|\s*isDocumentReadOnly/);
+  });
 });

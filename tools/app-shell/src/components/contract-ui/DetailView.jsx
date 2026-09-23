@@ -4042,7 +4042,7 @@ export function DetailView({
                           data={data}
                           token={token}
                           apiBaseUrl={apiBaseUrl}
-                          api={api}
+                          api={api} isDocumentReadOnly={isDocumentReadOnly}
                           summary={summary}
                           notesField={notesField}
                           onFieldChange={handleChangeWithCallout}

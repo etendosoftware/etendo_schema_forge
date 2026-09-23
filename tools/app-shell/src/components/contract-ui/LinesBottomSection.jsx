@@ -34,6 +34,7 @@ export default function LinesBottomSection({
   token,
   apiBaseUrl,
   api,
+  isDocumentReadOnly,
   notesField,
   onFieldChange,
   notesFocused,
@@ -61,7 +62,7 @@ export default function LinesBottomSection({
 }) {
   const ui = useUI();
   const currency = data?.['currency$_identifier'] || '';
-  const isReadOnly = data?.documentStatus !== 'DR';
+  const isReadOnly = data?.documentStatus !== 'DR' || isDocumentReadOnly;
 
   // ETP-4777 — the backend-persisted header total (maintained by the
   // C_ORDERLINE_TRG2/C_INVOICELINE_TRG2 triggers, same value the Grid's
