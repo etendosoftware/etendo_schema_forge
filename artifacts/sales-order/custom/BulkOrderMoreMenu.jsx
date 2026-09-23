@@ -127,11 +127,11 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
   return { ok, failed };
 }
 
-export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
+export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
-  if (!selectedRows || selectedRows.length === 0) return null;
+  if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
 
   const handleSelect = (action) => async () => {
     if (running) return;
