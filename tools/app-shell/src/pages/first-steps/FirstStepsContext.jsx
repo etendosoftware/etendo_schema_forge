@@ -7,6 +7,7 @@ import {
 } from './firstStepsConfig.js';
 import { useFirstSteps } from './useFirstSteps.js';
 import { useDemoDataTransfer } from './useDemoDataTransfer.js';
+import { NO_DEMO_DATA_TRANSFER, demoDataTransferStepState } from './demoDataTransferStep.js';
 import { useTenantPlan } from '@/hooks/useTenantPlan.js';
 
 /**
@@ -32,7 +33,8 @@ const INERT_STATE = Object.freeze({
   plan: null,
   steps: Object.freeze(visibleFirstSteps(null)),
   total: firstStepsTotal(null),
-  dataTransfer: { status: 'LOADING', products: {}, contacts: {}, loading: true },
+  dataTransfer: { status: 'LOADING', products: {}, contacts: {}, loading: true, available: false },
+  demoDataTransfer: NO_DEMO_DATA_TRANSFER,
 });
 const FirstStepsContext = createContext(null);
 
@@ -43,7 +45,10 @@ export function FirstStepsProvider({ children }) {
   // it knows nothing about plans, and a tenant that goes productive must be able to save the
   // two toggleable steps that just appeared. Demo transfer uses its own server state.
   const firstSteps = useFirstSteps({ allowedIds: toggleableStepIds(plan) });
+  // Flag `demo-data-transfer` (ETP-5443) is evaluated by the backend only; `available` is its
+  // answer, and `demoDataTransfer` is the one value every catalogue helper below is handed.
   const dataTransfer = useDemoDataTransfer();
+  const demoDataTransfer = demoDataTransferStepState(dataTransfer);
   const { completed, seen, dismissed, loading, error, toggleStep, markSeen, setDismissed } =
     firstSteps;
   const value = useMemo(() => ({
@@ -66,13 +71,13 @@ export function FirstStepsProvider({ children }) {
     markSeen,
     setDismissed,
     plan,
-    steps: visibleFirstSteps(plan),
+    steps: visibleFirstSteps(plan, demoDataTransfer),
     dataTransfer,
-    completedCount: countCompletedSteps(completed, plan,
-      ['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'].includes(dataTransfer.status)),
-    total: firstStepsTotal(plan),
+    demoDataTransfer,
+    completedCount: countCompletedSteps(completed, plan, demoDataTransfer),
+    total: firstStepsTotal(plan, demoDataTransfer),
   }), [completed, seen, dismissed, loading, planLoading, error, toggleStep, markSeen,
-    setDismissed, plan, dataTransfer]);
+    setDismissed, plan, dataTransfer, demoDataTransfer]);
   return <FirstStepsContext.Provider value={value}>{children}</FirstStepsContext.Provider>;
 }
 

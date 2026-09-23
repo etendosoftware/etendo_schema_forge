@@ -133,6 +133,16 @@ vi.mock('@/pages/first-steps/useDemoDataTransfer.js', () => ({
   useDemoDataTransfer: () => transfer,
 }));
 
+// The provider also reads the demo data transfer status (flag `demo-data-transfer`, ETP-5443),
+// which holds the checklist loading until it answers. Mocked to the flag-OFF answer (a 404: not
+// loading, not available) so the badge is sized by the pre-ETP-5364 catalogue; the transfer row's
+// effect on the denominator is covered in FirstStepsContext.vitest.jsx.
+vi.mock('@/pages/first-steps/useDemoDataTransfer.js', () => ({
+  useDemoDataTransfer: () => ({
+    status: 'NOT_REQUESTED', products: {}, contacts: {}, loading: false, available: false, error: false,
+  }),
+}));
+
 import SideMenu from '../SideMenu.jsx';
 import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
 import { PLAN_PRODUCTIVE, firstStepsTotal } from '@/pages/first-steps/firstStepsConfig.js';

@@ -32,14 +32,23 @@ vi.mock('../useFirstSteps.js', () => ({
   },
 }));
 
+/**
+ * The transfer status read (flag `demo-data-transfer`, ETP-5443) is mocked for the same reason
+ * `useTenantPlan` is: it is a request with its own suite. The default is what the backend answers
+ * with the flag OFF — a 404, so not loading and not available — which keeps every test that is
+ * not about the transfer on the pre-ETP-5364 catalogue.
+ */
+const FLAG_OFF_TRANSFER = Object.freeze({
+  status: 'NOT_REQUESTED', products: {}, contacts: {}, loading: false, available: false, error: false,
+});
+const transferHook = vi.hoisted(() => ({ value: null }));
+vi.mock('../useDemoDataTransfer.js', () => ({
+  useDemoDataTransfer: () => transferHook.value,
+}));
+
 const tenantPlan = vi.hoisted(() => ({ plan: 'productive', loading: false }));
 vi.mock('@/hooks/useTenantPlan.js', () => ({
   useTenantPlan: () => tenantPlan,
-}));
-
-const transfer = vi.hoisted(() => ({ status: 'RUNNING', loading: false }));
-vi.mock('../useDemoDataTransfer.js', () => ({
-  useDemoDataTransfer: () => transfer,
 }));
 
 import { FirstStepsProvider, useFirstStepsState, useFirstStepsProgressOptional } from '../FirstStepsContext.jsx';
@@ -72,8 +81,7 @@ beforeEach(() => {
   hook.setDismissed = vi.fn(async () => true);
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
-  transfer.status = 'RUNNING';
-  transfer.loading = false;
+  transferHook.value = FLAG_OFF_TRANSFER;
 });
 
 describe('FirstStepsProvider', () => {
@@ -96,15 +104,14 @@ describe('FirstStepsProvider', () => {
 
   it.each(['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'])(
     'counts the server-owned transfer when its status is %s', (status) => {
-      transfer.status = status;
+      transferHook.value = { ...FLAG_OFF_TRANSFER, available: true, status };
       render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
-      expect(screen.getByTestId('badge')).toHaveTextContent(`2/${PRODUCTIVE_TOTAL}`);
+      expect(screen.getByTestId('badge')).toHaveTextContent('2/8');
     },
   );
 
   it('holds the provider in loading while transfer status is unresolved', () => {
-    transfer.status = 'LOADING';
-    transfer.loading = true;
+    transferHook.value = { ...FLAG_OFF_TRANSFER, status: 'LOADING', loading: true };
     function Loading() {
       return <span data-testid="loading">{String(useFirstStepsState().loading)}</span>;
     }
@@ -151,13 +158,13 @@ describe('the plan the provider hands down', () => {
 
   it('gives a productive tenant every step', () => {
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
-    expect(screen.getByTestId('steps')).toHaveTextContent('false|productive|8|');
-    expect(screen.getByTestId('steps')).toHaveTextContent('demo-data-transfer');
+    expect(screen.getByTestId('steps')).toHaveTextContent('false|productive|7|');
+    expect(screen.getByTestId('steps')).not.toHaveTextContent('demo-data-transfer');
     expect(screen.getByTestId('steps')).toHaveTextContent('invoice-sequence');
     expect(screen.getByTestId('steps')).toHaveTextContent('fiscal-config');
   });
 
-  it('gives a trial tenant five steps, without the three productive-only ones', () => {
+  it('gives a trial tenant five steps, without the productive-only ones', () => {
     tenantPlan.plan = 'free';
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     const rendered = screen.getByTestId('steps').textContent;
@@ -197,7 +204,7 @@ describe('the plan the provider hands down', () => {
     tenantPlan.plan = null;
     tenantPlan.loading = true;
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
-    expect(screen.getByTestId('steps')).toHaveTextContent('true|null|8|');
+    expect(screen.getByTestId('steps')).toHaveTextContent('true|null|7|');
   });
 
   it('falls back to the full list when the plan cannot be resolved at all', () => {
@@ -207,8 +214,48 @@ describe('the plan the provider hands down', () => {
     tenantPlan.loading = false;
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     const rendered = screen.getByTestId('steps').textContent;
-    expect(rendered).toContain('false|null|8|');
+    expect(rendered).toContain('false|null|7|');
     expect(rendered).toContain('invoice-sequence');
+  });
+});
+
+describe('the demo data transfer row (flag demo-data-transfer, ETP-5443)', () => {
+  function Steps() {
+    const { steps, total, loading } = useFirstStepsState();
+    return <span data-testid="steps">{`${loading}|${total}|${steps.map((s) => s.id).join(',')}`}</span>;
+  }
+
+  it('is absent while the backend hides the transfer (flag off)', () => {
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    const rendered = screen.getByTestId('steps').textContent;
+    expect(rendered).toContain('false|7|');
+    expect(rendered).not.toContain('demo-data-transfer');
+  });
+
+  it('is spliced in after the fiscal step once the backend exposes it (flag on)', () => {
+    transferHook.value = { ...FLAG_OFF_TRANSFER, available: true, status: 'RUNNING' };
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    expect(screen.getByTestId('steps')).toHaveTextContent('fiscal-config,demo-data-transfer,products');
+    expect(screen.getByTestId('steps')).toHaveTextContent('false|8|');
+  });
+
+  it('counts a terminal transfer as done in the badge', () => {
+    transferHook.value = { ...FLAG_OFF_TRANSFER, available: true, status: 'COMPLETED' };
+    render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
+    expect(screen.getByTestId('badge')).toHaveTextContent('2/8');
+  });
+
+  it('stays off a trial tenant even when the backend exposes it', () => {
+    tenantPlan.plan = 'free';
+    transferHook.value = { ...FLAG_OFF_TRANSFER, available: true };
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    expect(screen.getByTestId('steps')).not.toHaveTextContent('demo-data-transfer');
+  });
+
+  it('holds the checklist loading until the transfer status read answers', () => {
+    transferHook.value = { ...FLAG_OFF_TRANSFER, status: 'LOADING', loading: true };
+    render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
+    expect(screen.getByTestId('steps')).toHaveTextContent('true|7|');
   });
 });
 

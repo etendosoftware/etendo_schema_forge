@@ -34,8 +34,9 @@
 -- BOTH HALVES ARE REQUIRED
 -- ---------------------------------------------------------------------------------------------
 -- A sequence nothing points at shows a configurable prefix that governs no numbering; a doctype
--- flipped to 'Y' with no sequence to read keeps using the fallback. Either one alone is a silent
--- no-op — which is why steps 1 and 3 below are not independently useful and must not be split.
+-- flipped to 'Y' with no sequence to read keeps using the fallback. Either one alone is a
+-- silent no-op — which is why steps 1 and 3 below are not independently useful and must not be
+-- split.
 --
 -- THE FISCAL PREMISE -- READ BEFORE REUSING
 -- ---------------------------------------------------------------------------------------------
@@ -56,8 +57,8 @@
 -- THE DAY (1) STOPS BEING TRUE, DO NOT RUN THIS FIX ON THE AFFECTED TENANT. There is no guard to
 -- restore that would make it safe — unlike R38, which merely rewrites an existing series, this one
 -- starts a numbering series over a population of documents numbered by something else. The correct
--- treatment for a tenant with issued purchase invoices is a manual decision about the starting
--- number, not this file.
+-- treatment for a tenant with issued purchase invoices is a
+-- manual decision about the starting number, not this file.
 --
 -- SCOPE BOUNDARY -- DO NOT WIDEN THIS FIX
 -- ---------------------------------------------------------------------------------------------

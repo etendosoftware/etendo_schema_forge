@@ -14,8 +14,11 @@ import {
   getBillingOverview,
   getBillingPurchase,
   getCheckoutStatus,
+  getSubscription,
+  createPortalSession,
   runPaidOnboarding,
 } from '../upgrade/api.js';
+import { minorUnitsToAmount } from '../upgrade/currency.js';
 
 /**
  * ETP-4576 — the checkout client's REQUEST contract, not just its parsing.
@@ -144,10 +147,12 @@ describe('the module surface', () => {
       'UPGRADE_ERROR_CODES',
       'createBillingPurchase',
       'createCheckoutSession',
+      'createPortalSession',
       'getBillingOffer',
       'getBillingOverview',
       'getBillingPurchase',
       'getCheckoutStatus',
+      'getSubscription',
       'runPaidOnboarding',
     ]);
   });
@@ -569,6 +574,7 @@ describe('the account billing reads', () => {
     ['getBillingOverview', () => getBillingOverview('https://api.test')],
     ['getBillingOffer', () => getBillingOffer('https://api.test')],
     ['getBillingPurchase', () => getBillingPurchase('https://api.test', 'purchase-1')],
+    ['getSubscription', () => getSubscription('https://api.test')],
   ]) {
     it(`${name} sends neither credential header, and still lets the cookie travel`, async () => {
       declareCookieSession();
@@ -611,4 +617,114 @@ describe('the account billing reads', () => {
       );
     });
   }
+});
+
+// ETP-5443 — the account Subscription section's two calls, in the same shape as their siblings.
+describe('the account subscription', () => {
+  it('reads the subscription projection', async () => {
+    declareCookieSession();
+    const subscription = { hasSubscription: true, plan: 'Productive', status: 'active' };
+    installFetch(jsonResponse(subscription));
+
+    const result = await getSubscription('https://api.test');
+
+    assert.deepEqual(result, subscription);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription');
+  });
+
+  // ETP-5443 REVIEW N3: a failed read of the subscription is its own error code, not the
+  // generic checkout-creation one — see the doc comment on UPGRADE_ERROR_CODES.
+  it('raises a stable error when the subscription is unavailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({}, { ok: false, status: 503 }));
+
+    await assert.rejects(
+      () => getSubscription(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.subscriptionUnavailable && error.status === 503,
+    );
+  });
+
+  it('opens a portal session with a POST to the portal endpoint', async () => {
+    declareCookieSession();
+    const portal = { url: 'https://billing.stripe.test/session-1' };
+    installFetch(jsonResponse(portal));
+
+    const result = await createPortalSession('https://api.test');
+
+    assert.deepEqual(result, portal);
+    assert.equal(calls[0][0], 'https://api.test/sws/go/billing/subscription/portal');
+    assert.equal(calls[0][1].method, 'POST');
+  });
+
+  it('carries the write proof and no bearer token on the portal POST under the cookie scheme', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
+
+    await createPortalSession('https://api.test');
+
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+    assert.equal(headersOf().authorization, undefined);
+    assert.equal(calls[0][1].credentials, 'include');
+  });
+
+  it('carries the bearer token, and the proof too, on the portal POST under the bearer scheme', async () => {
+    declareBearerSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
+
+    await createPortalSession('https://api.test');
+
+    assert.equal(headersOf().authorization, `Bearer ${BEARER}`);
+    assert.equal(headersOf()['x-go-csrf'], CSRF);
+  });
+
+  it('writes no credential into storage when opening the portal', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ url: 'https://billing.stripe.test/session-1' }));
+
+    await createPortalSession('https://api.test');
+
+    assert.deepEqual(storageWrites, []);
+  });
+
+  it('maps a portal 401 onto sessionExpired', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ error: { message: 'expired' } }, { ok: false, status: 401 }));
+
+    await assert.rejects(
+      () => createPortalSession(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.sessionExpired && error.status === 401,
+    );
+  });
+
+  // ETP-5443 REVIEW N3: a failed portal-session creation is its own error code too, distinct
+  // from both `subscriptionUnavailable` and `checkoutCreationFailed`.
+  it('raises a stable error when the portal session cannot be created', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({}, { ok: false, status: 502 }));
+
+    await assert.rejects(
+      () => createPortalSession(''),
+      (error) => error.code === UPGRADE_ERROR_CODES.portalUnavailable && error.status === 502,
+    );
+  });
+});
+
+// ETP-5443 REVIEW N6: Stripe's zero-decimal currencies (JPY et al.) already carry the display
+// amount in `amountMinor` — dividing by 100 would understate them 100x.
+describe('minorUnitsToAmount', () => {
+  it('divides by 100 for an ordinary (non-zero-decimal) currency', () => {
+    assert.equal(minorUnitsToAmount('eur', 2900), 29);
+    assert.equal(minorUnitsToAmount('EUR', 100), 1);
+  });
+
+  it('does not divide for a zero-decimal currency, case-insensitively', () => {
+    assert.equal(minorUnitsToAmount('jpy', 100), 100);
+    assert.equal(minorUnitsToAmount('JPY', 100), 100);
+  });
+
+  it('returns null for a missing or non-finite amount', () => {
+    assert.equal(minorUnitsToAmount('eur', null), null);
+    assert.equal(minorUnitsToAmount('eur', undefined), null);
+    assert.equal(minorUnitsToAmount('eur', NaN), null);
+  });
 });
