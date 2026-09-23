@@ -56,7 +56,12 @@ const decl = {
   type: 'ord', status: 'submitted', nif: 'B12345678',
   incidents: { blocking: 0 }, _precomputed: null,
   submittedSnapshot: {
-    operators: [{ bpId: '9', nif: 'FR40123456789', name: 'Snapshot SARL', key: 'E', base: '321.00', vies: 'valid' }],
+    operators: [
+      { bpId: '9', nif: 'FR40123456789', name: 'Snapshot SARL', key: 'E', base: '321.00', vies: 'valid',
+        originPurchases: 0, originSales: 3 },
+      { bpId: '8', nif: 'IT01234567890', name: 'Mixed Srl', key: 'A', base: '10.00', vies: 'valid',
+        originPurchases: 1, originSales: 2 },
+    ],
     summary: { totalE: '321.00', totalS: '0.00', totalA: '0.00', totalI: '0.00' },
     rectificativeSummary: { totalE: '0.00', totalS: '0.00', totalA: '0.00', totalI: '0.00' },
     invoiceCount: 42,
@@ -85,5 +90,13 @@ describe('FmModel349Page — figures-only submission snapshot (ETP-5438)', () =>
     expect(screen.getByTestId('fm-snapshot-no-invoice-detail').textContent)
       .toBe('fm.snapshot.invoice_detail_not_kept');
     expect(compute349Operators).not.toHaveBeenCalled();
+  });
+
+  it('shows the per-operator Origen counts folded into the snapshot (no invoice rows needed)', async () => {
+    render(<FmModel349Page decl={decl} onBack={vi.fn()} onStatusChange={vi.fn()} token="tok" apiBaseUrl="/api" />);
+
+    await waitFor(() => expect(document.body.textContent).toContain('Snapshot SARL'));
+    expect(document.body.textContent).toContain('3 facturas venta');
+    expect(document.body.textContent).toContain('1 compra, 2 venta');
   });
 });

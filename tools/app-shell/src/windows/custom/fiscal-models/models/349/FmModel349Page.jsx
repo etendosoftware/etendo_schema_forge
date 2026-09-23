@@ -124,6 +124,13 @@ const RECTIF_KEY_BY_TYPE = {
 // mixed goods+services correction counts under both. A rectification whose two
 // bases are zero is a no-op correction and is attributed to no key (mirrors the
 // zero-base skip in `appendOperators`).
+// ETP-5438 — the Compra/Venta counts a submission snapshot folded into an operator row, or
+// `undefined` when the row carries none (live payloads, or no backing invoice).
+function snapshotOriginCounts(op) {
+  if (op?.originPurchases == null && op?.originSales == null) return undefined;
+  return { Compra: Number(op.originPurchases) || 0, Venta: Number(op.originSales) || 0 };
+}
+
 function rectificationKeys(r) {
   const byType = RECTIF_KEY_BY_TYPE[r?.type];
   if (!byType) return [];
@@ -696,8 +703,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     ? decl.submittedSnapshot : null;
   // ETP-5438 — the snapshot keeps operators and the key totals, plus the invoice/rectification
   // COUNTS (`invoiceCount`, `rectificationCount`); the per-invoice `invoices`/`rectifications`
-  // rows are not kept. While served from a snapshot those two tabs show a note instead of a list
-  // (and the operators' "Origen" counts, derived from those rows, read "—").
+  // rows are not kept. While served from a snapshot those two tabs show a note instead of a list;
+  // the operators' "Origen" counts come from `originPurchases`/`originSales` on each row.
   const snapshotServed = isSubmitted && Array.isArray(submittedSnapshot?.operators);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
@@ -1041,7 +1048,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     // A rectificative row resolves ONLY against the rectifications lookup: no match
     // means "—", never a fallback to the regular-invoice count.
     const source = isRectificativeOp(op) ? originByRectification : originByNif;
-    const counts = source[`${op.nif}|${op.key ?? ''}`];
+    // ETP-5438 — a submission snapshot drops the invoice/rectification rows but folds the same
+    // per-operator counts into each operator row (`originPurchases`/`originSales`, computed
+    // server-side with the same nif|key grouping); use them when the rows are absent.
+    const counts = source[`${op.nif}|${op.key ?? ''}`] ?? snapshotOriginCounts(op);
     if (!counts) return null;
     const c = counts['Compra'] ?? 0;
     const v = counts['Venta']  ?? 0;

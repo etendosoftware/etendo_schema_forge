@@ -562,7 +562,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // ETP-5438 QA BUG-2 — a snapshot can arrive AFTER mount: a telematic filing's snapshot is
   // delivered by FiscalModelsPage's re-read of the declaration (`handleSubmittedRemotely`), which
   // updates `decl.submittedSnapshot` without changing `decl.id`, so the mount effect above never
-  // sees it. Apply it whenever it changes — display only, no compute call.
+  // sees it. Apply it whenever it changes — display only, no compute call. It also fires on
+  // mount, alongside the mount effect's own snapshot branch; re-applying is idempotent (same
+  // payload through the same `applyComputeResult`), so the double application is harmless.
   useEffect(() => {
     if (isSubmitted && submittedSnapshot?.boxes != null) {
       applyComputeResult(submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);

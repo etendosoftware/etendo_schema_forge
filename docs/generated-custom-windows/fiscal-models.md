@@ -122,7 +122,10 @@ that already carries it is just as frozen as one presented through either curren
   - 303 keeps `boxes` + `summary`; `sources` (the per-invoice drilldown) becomes `sourceCount`.
   - 349 keeps `operators` (one row per intra-community partner), `summary`,
     `rectificativeSummary` (fixed E/S/A/I totals), `orgNif`/`orgName`; `invoices` and
-    `rectifications` become `invoiceCount` / `rectificationCount`.
+    `rectifications` become `invoiceCount` / `rectificationCount`. Before they are dropped, the
+    operators' "Origen" counts are folded into each operator row as `originPurchases` /
+    `originSales` (`Fiscal349BoxesHandler#foldPerInvoiceAggregates`, same `nif|key` grouping as
+    the frontend's `originByNif` / `originByRectification`) — one pair per partner, still bounded.
 
   Why: a period can hold tens of thousands of invoices, and the snapshot is also returned by every
   `GET /fiscal303/declarations` (the list), so keeping per-invoice rows would grow without bound.
@@ -186,8 +189,9 @@ that already carries it is just as frozen as one presented through either curren
   **Hidden for snapshot-served declarations:** the 303 detail's "Facturas" tab and the 349 detail's
   "Facturas origen"/"Rectificaciones" tabs show `fm.snapshot.invoice_detail_not_kept` ("El detalle
   por factura no se conserva en las declaraciones presentadas.") instead of a list, with the kept
-  counts as tab badges; nothing recomputes to fill them. The 349 operators' "Origen" counts are
-  derived from the invoice rows, so they read "—" there. Legacy submitted, draft and ready
+  counts as tab badges; nothing recomputes to fill them. The 349 operators' "Origen" column reads
+  the folded `originPurchases`/`originSales` (`formatOrigin` falls back to them when the invoice
+  rows are absent). Legacy submitted, draft and ready
   declarations are unchanged. **Legacy fallback** (no snapshot):
   `submittedDecls303`/`submittedDecls349` are carved out of the
   pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
