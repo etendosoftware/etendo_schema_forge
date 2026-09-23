@@ -18,7 +18,7 @@ debug contracts.
 ## What this window should allow
 
 - Fetch all declarations from `GET /fiscal303/declarations` and keep status changes in sync via `PUT /fiscal303/declarations?id=`.
-- Auto-compute fiscal boxes for **draft** declarations (303 and 349) in the background every 3 minutes, updating the "Resultado" column in the list without user interaction. **Non-draft** declarations (ready/submitted/submitted_ext/submitted_ack/skipped) get a **one-time** compute on mount instead (no polling) — `FiscalDeclCrudHandler#declToJson` never persists a computed result on the declaration record, so without this the column would be permanently stuck on "—" for every declaration that already left draft, the same class of bug the "Incidencias" column had before it fetched real data (ETP-4755). Both draft and non-draft computations call the same real endpoints (`/fiscal303/boxes`, `/fiscal349/operators`), which recompute from invoice data regardless of declaration status.
+- Auto-compute fiscal boxes for **draft** declarations (303 and 349) in the background every 3 minutes, updating the "Resultado" column in the list without user interaction. **Non-draft** declarations (ready/submitted/submitted_ext/submitted_ack/skipped) get a **one-time** compute on mount instead (no polling) — `FiscalDeclCrudHandler#declToJson` never persists a computed result on the declaration record, so without this the column would be permanently stuck on "—" for every declaration that already left draft, the same class of bug the "Incidencias" column had before it fetched real data (ETP-4755). Both draft and non-draft computations call the same real endpoints (`/fiscal303/boxes`, `/fiscal349/operators`), which recompute from invoice data — except for a submitted declaration that carries a submission snapshot, which the list serves straight from `submittedSnapshot` with no compute call, and which those endpoints also return as-is instead of recomputing (ETP-5438, see "Freeze once presented" below).
 - Display an upcoming deadlines panel for unsubmitted declarations.
 - Filter declarations by model type (303, 349) and status.
 - Navigate into a per-model detail page when a declaration row is clicked, passing precomputed box data so the detail page renders immediately without a duplicate fetch.
@@ -63,9 +63,10 @@ FmListPage
   the backend never persists a computed result on the declaration record
   (`FiscalDeclCrudHandler#declToJson` has no `result` field) — the same class of bug the
   "Incidencias" column had before it started fetching real data. Draft, non-submitted, and
-  submitted-family instances all call the exact same real endpoints, which recompute from invoice
-  data regardless of declaration status — which is exactly why the submitted-family bucket needs
-  its own, separate freeze (see below).
+  legacy submitted-family instances all call the exact same real endpoints, which recompute from
+  invoice data unless the latest declaration of the period is submitted with a snapshot — which is
+  exactly why the legacy (snapshot-less) submitted-family bucket needs its own, separate freeze
+  (see below).
 - `snapshotMap` (ETP-5438) = every submitted-family declaration that carries a persisted
   `submittedSnapshot` — the snapshot itself is its computed result, spread into the non-draft map;
   no hook ever receives it, so it is never computed.
@@ -93,8 +94,8 @@ from **whatever invoices exist right now**, regardless of who calls them or when
 concept of "this declaration is done" anywhere in the compute path, so an invoice added or removed
 after presentation silently changed what "Resultado" showed for an already-filed declaration
 ("sigue tomando facturas aun presentada"). Fixed by **persisting a snapshot at submission**: the
-moment a declaration enters the submitted family, the backend stores the exact boxes/operators
-payload on the declaration record, and from then on every reader (backend reads, list, detail)
+moment a declaration enters the submitted family, the backend stores a figures-only snapshot of
+its boxes/operators on the declaration record, and from then on every reader (backend reads, list, detail)
 serves that snapshot instead of recomputing. The backend also rejects every write — file
 generation, re-presentation, telematic resubmission — for **both** models — "en todos los modelos
 tiene que funcionar de la misma manera" (explicit product decision). Declarations presented before
@@ -113,6 +114,9 @@ that already carries it is just as frozen as one presented through either curren
   `com.etendoerp.go`, property `submittedSnapshot` — `FiscalDeclCrudHandler.PROPERTY_SUBMITTED_SNAPSHOT`,
   `FiscalDecl#setSubmittedSnapshot`). The column first shipped with `FIELDLENGTH` 2000, which the
   entity validator enforces on `set` — real snapshots failed (ETP-5438 QA BUG-1).
+  **Deploy order:** `update.database` (the new column) must ship together with the Java — every
+  `declToJson` read of a declaration touches the `submittedSnapshot` property, so a build running
+  the new Java against a database without the column breaks the declarations list.
   `MANUAL_DATA` was not reused: it holds the user's manual inputs, which are merged on top of the
   computed figures, not the figures themselves.
 - **Contents — figures only, size-bounded.** The snapshot is the `GET /fiscal303/boxes` (303) or
@@ -158,7 +162,8 @@ that already carries it is just as frozen as one presented through either curren
     the AEAT is contacted, so one the column would reject fails as `SNAPSHOT_FAILED` with nothing
     filed; should storing it still fail after the filing, the declaration keeps
     `submitted_ack`/`aeat_telematic` without a snapshot (served live, like a legacy one) rather
-    than a half-written record. Test mode takes none. The
+    than a half-written record, logging the greppable marker `ETGO_FISCAL_SNAPSHOT_MISSING`.
+    Test mode takes none. The
     frontend sends no status PUT afterwards (it would be a `409`): `FiscalModelsPage` re-reads the
     declaration to pick the snapshot up — see "AEAT electronic submission" below. The 303 detail
     page applies a snapshot that arrives after mount this way through a dedicated effect keyed on
