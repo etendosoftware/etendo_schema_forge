@@ -1931,5 +1931,5 @@ was initially missed** — its sibling on sales-invoice (`InvoiceTopbarExtra`) f
 `isDocumentReadOnly` to `SendToSifButton`, but this window's own wrapper destructured only
 `{ data, recordId, apiBaseUrl, onSave, isDirty }` from its props and silently dropped the prop, so
 the button stayed visible/clickable for a completed invoice with pending SII/TBAI targets even
-under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `bcef4de`) —
+under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `d134ecb82`) —
 see `santo_ETP-5205-review-v1-v6.md` in the repo root.
