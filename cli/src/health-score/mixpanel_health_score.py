@@ -4,7 +4,13 @@ Mixpanel Health Score Calculator — ETP-4210
 
 Calcula health_score y health_band por account_id usando eventos de los últimos 30 días
 y escribe los resultados en los Group Profiles de Mixpanel.
-También enriquece cada cuenta con el email/nombre de sus usuarios activos.
+
+NOTE: no enriquece cuentas con email/nombre de usuario. Esa función existió
+(ver historial de este archivo) pero dependía de `$email`/`$name` en los perfiles
+de Engage/People y de un campo `username` en los eventos, ambos removidos por la
+remediación GDPR de ETP-4352 — desde entonces esos datos nunca llegan a Mixpanel,
+así que la función siempre devolvía cuentas vacías. No la reintroduzcas sin antes
+revertir esa remediación.
 
 Credentials: ALL secrets (Service Account credentials and per-project Mixpanel
 tokens) are read exclusively from environment variables / a local `.env` file.
@@ -62,17 +68,11 @@ SA_SECRET     = os.getenv("MIXPANEL_SA_SECRET")
 # ─── ACCOUNT NAMES ─────────────────────────────────────────────────────────────
 ACCOUNT_NAMES: dict = {}  # populated at startup from selected project config
 
-def account_display_name(account_id: str, primary_user: str = "") -> str:
-    if account_id in ACCOUNT_NAMES:
-        return ACCOUNT_NAMES[account_id]
-    # Fallback: username del usuario principal (email o no), único por cuenta en cuentas de un solo usuario
-    if primary_user:
-        return primary_user
-    return account_id
+def account_display_name(account_id: str) -> str:
+    return ACCOUNT_NAMES.get(account_id, account_id)
 
 # ─── ENDPOINTS (EU) ────────────────────────────────────────────────────────────
 EXPORT_URL  = "https://data-eu.mixpanel.com/api/2.0/export"
-ENGAGE_URL  = "https://eu.mixpanel.com/api/2.0/engage"
 GROUPS_URL  = "https://api-eu.mixpanel.com/groups#set"
 GROUP_KEY   = "account_id"
 LOOKBACK_DAYS = 30
@@ -140,55 +140,8 @@ def fetch_events(from_date: str, to_date: str) -> list:
             rows.append(json.loads(line))
     return rows
 
-# ─── FETCH USER PROFILES ───────────────────────────────────────────────────────
-def fetch_user_profiles(distinct_ids: list, debug: bool = False) -> dict:
-    """
-    Consulta la Engage API para obtener $email y $name de una lista de distinct_ids.
-    Devuelve dict: { distinct_id -> {"email": ..., "name": ...} }
-    """
-    if not distinct_ids:
-        return {}
-
-    profiles = {}
-    batch_size = 50  # evitar URLs demasiado largas
-
-    for i in range(0, len(distinct_ids), batch_size):
-        batch = distinct_ids[i : i + batch_size]
-
-        # Construir filtro JQL
-        conditions = " or ".join(
-            f'user["$distinct_id"] == "{did}"' for did in batch
-        )
-
-        try:
-            resp = requests.get(
-                ENGAGE_URL,
-                params={"project_id": PROJECT_ID, "where": conditions},
-                auth=(SA_USERNAME, SA_SECRET),
-                timeout=60,
-            )
-            if debug:
-                print(f"\n  [debug] Engage API status: {resp.status_code}")
-                print(f"  [debug] Engage API response: {resp.text[:500]}")
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            print(f"  [warn] No se pudieron obtener perfiles de usuario: {e}")
-            continue
-
-        for profile in data.get("results", []):
-            did   = profile.get("$distinct_id", "")
-            props = profile.get("$properties", {})
-            email = props.get("$email", "")
-            name  = props.get("$name", "") or props.get("$first_name", "")
-            if email or name:
-                profiles[did] = {"email": email, "name": name}
-
-    return profiles
-
 # ─── COMPUTE ───────────────────────────────────────────────────────────────────
-def compute_scores(events: list, today: datetime) -> tuple:
-    """Returns (scores dict, distinct_ids_by_account dict)"""
+def compute_scores(events: list, today: datetime) -> dict:
     cutoff = today - timedelta(days=LOOKBACK_DAYS)
 
     tx_counts             = defaultdict(int)
@@ -196,8 +149,6 @@ def compute_scores(events: list, today: datetime) -> tuple:
     last_session          = {}
     first_session         = {}
     support_counts        = defaultdict(int)
-    distinct_ids_by_acct  = defaultdict(set)
-    usernames_by_acct     = defaultdict(set)
 
     for event in events:
         props      = event.get("properties", {})
@@ -209,14 +160,6 @@ def compute_scores(events: list, today: datetime) -> tuple:
             if not account_id:
                 continue
         account_id = str(account_id)
-
-        # Recolectar distinct_id y username del usuario que disparó el evento
-        distinct_id = props.get("distinct_id") or props.get("$distinct_id")
-        if distinct_id:
-            distinct_ids_by_acct[account_id].add(str(distinct_id))
-        username = props.get("username")
-        if username and isinstance(username, str):
-            usernames_by_acct[account_id].add(username)
 
         event_time = datetime.fromtimestamp(props.get("time", 0), tz=timezone.utc)
         event_name = event.get("event")
@@ -271,7 +214,6 @@ def compute_scores(events: list, today: datetime) -> tuple:
         scores[account_id] = {
             "health_score": total,
             "health_band":  health_band(total),
-            "users":        [],
             "_debug": {
                 "activity_pts":            act,
                 "tx_count_30d":            tx,
@@ -285,46 +227,7 @@ def compute_scores(events: list, today: datetime) -> tuple:
             },
         }
 
-    # Inyectar usernames directamente desde los eventos (campo "username" = email)
-    for account_id, data in scores.items():
-        data["users"] = sorted(usernames_by_acct.get(account_id, set()))
-
-    return scores, distinct_ids_by_acct
-
-# ─── ENRICH WITH USER INFO ─────────────────────────────────────────────────────
-def enrich_with_users(scores: dict, distinct_ids_by_acct: dict, debug: bool = False) -> None:
-    """Añade lista de usuarios (email/name) a cada cuenta en scores (in-place)."""
-    all_dids = list({did for dids in distinct_ids_by_acct.values() for did in dids})
-    if not all_dids:
-        print("      [warn] No se encontraron distinct_ids en los eventos.")
-        return
-
-    if debug:
-        print(f"\n  [debug] distinct_ids recolectados ({len(all_dids)}):")
-        for acct, dids in distinct_ids_by_acct.items():
-            print(f"    {acct}: {sorted(dids)}")
-
-    print(f"      Consultando perfiles de {len(all_dids)} usuario(s)...")
-    profiles = fetch_user_profiles(all_dids, debug=debug)
-
-    if debug:
-        print(f"\n  [debug] Perfiles encontrados en Engage API: {len(profiles)}")
-        for did, info in profiles.items():
-            print(f"    {did}: {info}")
-
-    for account_id, data in scores.items():
-        users = []
-        for did in distinct_ids_by_acct.get(account_id, []):
-            info = profiles.get(did)
-            if info:
-                label = info["email"] or info["name"] or did
-                users.append(label)
-            elif debug:
-                print(f"  [debug] Sin perfil para distinct_id={did} (cuenta {account_id})")
-        # Merge: añadir lo de Engage API a lo ya recolectado desde eventos
-        existing = set(data.get("users", []))
-        existing.update(users)
-        data["users"] = sorted(existing)
+    return scores
 
 # ─── WRITE GROUP PROFILES ──────────────────────────────────────────────────────
 def update_group_profiles(scores: dict) -> None:
@@ -346,12 +249,9 @@ def update_group_profiles(scores: dict) -> None:
                 "hs_support_pts":          d["support_pts"],
                 "hs_activation_gated":     d["activation_gated"],
             }
-            primary = data["users"][0] if data["users"] else ""
-            display = account_display_name(account_id, primary)
+            display = account_display_name(account_id)
             set_props["$name"]               = display
             set_props["account_name"]        = display
-            if primary:
-                set_props["account_primary_user"] = primary
             payload.append({
                 "$token":     PROJECT_TOKEN,
                 "$group_key": GROUP_KEY,
@@ -407,8 +307,7 @@ def track_health_score_events(scores: dict, today: datetime) -> None:
                 "ticket_count_30d":        d["ticket_count_30d"],
                 "days_since_last_session": d["days_since_last_session"],
                 "period_days":             LOOKBACK_DAYS,
-                "primary_user":            data["users"][0] if data["users"] else None,
-                "account_name":            account_display_name(account_id, data["users"][0] if data["users"] else ""),
+                "account_name":            account_display_name(account_id),
             },
         })
 
@@ -430,13 +329,11 @@ def print_table(scores: dict) -> None:
         f"  {'account_id':<38} {'score':>5}  {'band':<8}  {'gate':<5}"
         f"  {'act':>4}  {'dep':>4}  {'log':>4}  {'sup':>4}"
         f"  {'tx':>4}  {'areas':>5}  {'tkts':>4}  {'days':>4}"
-        f"  usuarios"
     )
     print(header)
     print("  " + "─" * (len(header) - 2))
     for account_id, data in sorted(scores.items(), key=lambda x: -x[1]["health_score"]):
         d      = data["_debug"]
-        users  = ", ".join(data["users"]) if data["users"] else "—"
         gate   = "⚠️" if d["activation_gated"] else "—"
         print(
             f"  {account_id:<38}"
@@ -451,14 +348,12 @@ def print_table(scores: dict) -> None:
             f"  {d['distinct_areas_30d']:>5}"
             f"  {d['ticket_count_30d']:>4}"
             f"  {str(d['days_since_last_session']):>4}"
-            f"  {users}"
         )
 
 # ─── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Calcula y publica health scores en Mixpanel.")
     parser.add_argument("--dry-run",  action="store_true", help="Solo muestra scores, no escribe en Mixpanel.")
-    parser.add_argument("--debug",    action="store_true", help="Muestra info de diagnóstico.")
     parser.add_argument(
         "--project",
         choices=list(PROJECTS.keys()),
@@ -505,9 +400,8 @@ def main():
     print(f"      {len(events)} eventos descargados\n")
 
     print(f"[2/3] Calculando scores...")
-    scores, distinct_ids_by_acct = compute_scores(events, today)
+    scores = compute_scores(events, today)
     print(f"      {len(scores)} cuentas encontradas")
-    enrich_with_users(scores, distinct_ids_by_acct, debug=args.debug)
     print()
 
     print_table(scores)
