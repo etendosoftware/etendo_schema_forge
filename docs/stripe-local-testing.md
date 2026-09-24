@@ -24,8 +24,12 @@ All of it is implemented on this branch:
 - `POST <base>/sws/go/billing/purchases` creates the purchase boundary and reopens the existing
   hosted session correlation when an unpaid `CREATING` or `CREATED` purchase is retried.
   It takes a `planKey` naming a row in the Subscription Plan Catalog (ETP-5046). A key that names
-  no active plan — or a body with no key at all — is rejected `400 PLAN_NOT_AVAILABLE` without
-  revealing which keys exist.
+  no active plan is rejected `400 PLAN_NOT_AVAILABLE` without revealing which keys exist.
+  **Legacy price fallback:** while no active plan carries a provider price and
+  `etendo.go.checkout.price.id` is set, `GET /sws/go/plans` lists only `legacy-productive`
+  (quoted from that Stripe price) and a request naming `legacy-productive` — or no plan — is sold
+  at that price. Creating the first priced plan retires the fallback immediately; the same request
+  then answers `400 PLAN_NOT_AVAILABLE` and the page asks the buyer to reload.
 - `GET  <base>/sws/go/checkout/sessions/{requestId}` reports `pending` or `paid`.
 - `POST <base>/sws/go/checkout/webhook` verifies the Stripe signature, de-duplicates by event id
   durably (`ETGO_BILLING_EVENT`, see below), and records the payment **and** the subscription
@@ -328,7 +332,7 @@ Configuration resolves in this order (`ConfigPropertyReader`):
 | --- | --- | --- |
 | `etendo.go.checkout.webhook.secret` | `ETGO_CHECKOUT_WEBHOOK_SECRET` | webhook (offline **and** Stripe) |
 | `etendo.go.checkout.secret.key` | `ETGO_CHECKOUT_SECRET_KEY` | creating sessions |
-| `etendo.go.checkout.price.id` | `ETGO_CHECKOUT_PRICE_ID` | creating sessions |
+| `etendo.go.checkout.price.id` | `ETGO_CHECKOUT_PRICE_ID` | legacy price fallback only — used while no `ETGO_PLAN` row carries a provider price (ETP-5046) |
 | `etendo.go.checkout.mode` | `ETGO_CHECKOUT_MODE` | optional, default `subscription` |
 | `etendo.go.checkout.api.base.url` | `ETGO_CHECKOUT_API_BASE_URL` | optional, default `https://api.stripe.com` |
 

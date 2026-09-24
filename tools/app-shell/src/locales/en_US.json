@@ -22554,6 +22554,7 @@
     "upgradePlansLoading": "Loading available plans...",
     "upgradePlansUnavailable": "We could not load the available plans, so checkout is not available right now.",
     "upgradePlansEmpty": "There are no plans available for purchase right now.",
+    "upgradePlanNotAvailable": "The selected plan is no longer available. Reload the page to see the current plans.",
     "upgradePlansRetry": "Retry",
     "upgradePlanChoiceLabel": "Choose a plan",
     "upgradePlanRequired": "Choose a plan to continue",

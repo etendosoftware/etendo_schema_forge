@@ -22792,6 +22792,7 @@
     "upgradePlansLoading": "Cargando los planes disponibles...",
     "upgradePlansUnavailable": "No pudimos cargar los planes disponibles, así que el pago no está disponible en este momento.",
     "upgradePlansEmpty": "En este momento no hay planes disponibles para comprar.",
+    "upgradePlanNotAvailable": "El plan seleccionado ya no está disponible. Recarga la página para ver los planes actuales.",
     "upgradePlansRetry": "Reintentar",
     "upgradePlanChoiceLabel": "Elige un plan",
     "upgradePlanRequired": "Elige un plan para continuar",
