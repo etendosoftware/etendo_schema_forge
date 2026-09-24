@@ -34,7 +34,7 @@ product telemetry).
 
 | Property | How |
 |---|---|
-| Never breaks the caller | `record()` catches `Throwable`; no code path from a failure back to the caller |
+| Never breaks the caller | `submit()` catches `Throwable`; no code path from a failure back to the caller |
 | Never slows the caller | Caller only does a queue `offer`; the INSERT runs on a single daemon writer thread |
 | Never touches the business transaction | Own connection from `ExternalConnectionPool`, own commit — never `OBDal` / `SessionHandler` |
 | Bounded memory | `ThreadPoolExecutor(1,1)` + `ArrayBlockingQueue(capacity)`; full queue → drop |
@@ -97,14 +97,14 @@ Package `com.etendoerp.go.usageevents`:
 |---|---|
 | `UsageEvent` (record + `Builder`) | Immutable row. `Builder.fromContext()` captures client/org/user/role from `OBContext` **on the calling thread** |
 | `UsageEventTypes` | Constants for known event types + `isValid(String)` |
-| `UsageEventRecorder` | Public facade: `static void record(UsageEvent e)` — enqueue, never throws. Opt-out property `usage.events.enabled` (default true). Test seam to inject a writer |
+| `UsageEventRecorder` | Public facade: `static void submit(UsageEvent e)` — enqueue, never throws. Opt-out property `usage.events.enabled` (default true). Test seam to inject a writer |
 | `UsageEventWriter` | Writer thread: drains batch, JDBC `addBatch` on `ExternalConnectionPool`, commit, rollback/close quietly, drop accounting |
 | `UsageEventLifecycle` | Shuts down the writer on undeploy (listener or hook in an existing servlet `destroy()`), draining with a grace period |
 
 Usage from any backend code:
 
 ```java
-UsageEventRecorder.record(UsageEvent.builder()
+UsageEventRecorder.submit(UsageEvent.builder()
     .fromContext()
     .eventType(UsageEventTypes.REPORT_PRINT)
     .source(UsageEvent.SOURCE_BACKEND)
@@ -238,7 +238,7 @@ number can be forged.
 | Event | Source | Hook point | Properties |
 |---|---|---|---|
 | `ai.agent.message` | `ai-bff` | BFF `onFinish` → read `totalUsage` + model → `POST /sws/neo/usage` with the caller's NEO token | `model`, `inputTokens`, `outputTokens`, `cachedInputTokens`, `steps`, `toolCalls`, `finishReason`; `SESSION_KEY` = `x-opencode-session` |
-| `ai.support.message` | `backend` | `SupportIntegrationClient.parseAdkResponse` → sum `usageMetadata` of the model events → `UsageEventRecorder.record(...)` | `model`, `inputTokens` (`promptTokenCount`), `outputTokens` (`candidatesTokenCount`), `cachedInputTokens`; `SESSION_KEY` = support conversation id |
+| `ai.support.message` | `backend` | `SupportIntegrationClient.parseAdkResponse` → sum `usageMetadata` of the model events → `UsageEventRecorder.submit(...)` | `model`, `inputTokens` (`promptTokenCount`), `outputTokens` (`candidatesTokenCount`), `cachedInputTokens`; `SESSION_KEY` = support conversation id |
 
 Notes:
 - The BFF is Node, so it cannot use the Java recorder — it goes through the NEO endpoint. The call
