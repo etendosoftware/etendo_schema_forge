@@ -165,10 +165,20 @@ describe('RejectQuotationModal', () => {
       assert.match(code, /createOptionStyle\s*=\s*\{[^}]*borderBottom:\s*'1px solid hsl\(var\(--border-subtle\)\)'/);
     });
 
-    it('strokes the close and chevron icons with the secondary-icon role', () => {
-      // Both inline SVGs, plus the clear ("x") button that sits inside the input.
-      assert.equal((code.match(/stroke="hsl\(var\(--icon-secondary\)\)"/g) || []).length, 2);
+    it('strokes the decorative icons with the secondary-icon role', () => {
+      // ETP-5398 dropped this count from 2 to 1: the close ("x") SVG moved to
+      // `--muted-foreground` (see the test below). What stays on the secondary-icon
+      // role is the input's chevron SVG, plus the clear ("x") button inside the input.
+      assert.equal((code.match(/stroke="hsl\(var\(--icon-secondary\)\)"/g) || []).length, 1);
+      assert.match(code, /chevronIconStyle[\s\S]{0,160}stroke="hsl\(var\(--icon-secondary\)\)"/);
       assert.match(code, /clearBtnStyle\s*=\s*\{[^}]*color:\s*'hsl\(var\(--icon-secondary\)\)'/);
+    });
+
+    it('strokes the close button with the muted-foreground role (ETP-5398)', () => {
+      // The ticket's item 3: `--icon-secondary` made the X read as too faint.
+      // `--muted-foreground` is the role explicitly tuned for WCAG AA.
+      assert.match(code, /stroke="hsl\(var\(--muted-foreground\)\)"/);
+      assert.doesNotMatch(code, /closeBtnStyle\s*=\s*\{[^}]*color:\s*'hsl\(var\(--icon-secondary\)\)'/);
     });
 
     it('renders a chevron-down indicator inside the input (replaces magnifying glass)', () => {
