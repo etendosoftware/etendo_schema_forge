@@ -89,7 +89,24 @@ async function saveTwoRefs(ref1, ref2) {
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
 
-export default function FiscalConfigPage({ token, apiBaseUrl }) {
+const FISCAL_CONFIG_WINDOW_ID = 'C1D3A2A017AC4B82B9FEE6F4D2A0C55A';
+
+// ETP-5395 Fix 3 — this custom window never delegated to a generated Page.jsx (registry.js
+// loads FiscalConfigPage.jsx directly for "fiscal-config"), so it never picked up the ETP-4520
+// access-tier guard despite menu.json carrying a real windowId — same gap ETP-4658 already found
+// and fixed for financial-account/sales-invoice/etc. Without it, a role with no grant on this
+// window got a correct backend 403 ("Access denied to spec for current role") on the
+// sii/tbai/verifactu-config fetches, rendered raw with a Retry button that can never succeed.
+// Gating in a wrapper means the page's hooks (and those fetches) never run without access.
+export default function FiscalConfigPage(props) {
+  const windowAccessTier = useWindowAccess(FISCAL_CONFIG_WINDOW_ID);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId={FISCAL_CONFIG_WINDOW_ID} data-testid="WindowAccessGuard__fiscal-config" />;
+  }
+  return <FiscalConfigPageContent {...props} data-testid="FiscalConfigPageContent__310303" />;
+}
+
+function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
@@ -145,20 +162,6 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
-
-  // ETP-5395 Fix 3 — this custom window never delegated to a generated Page.jsx (registry.js
-  // loads FiscalConfigPage.jsx directly for "fiscal-config"), so it never picked up the
-  // ETP-4520 access-tier guard despite menu.json carrying a real windowId — same gap ETP-4658
-  // already found and fixed for financial-account/sales-invoice/etc. Without this, a role
-  // with no grant on this window still fired the sii/tbai/verifactu-config fetches, got a
-  // correct backend 403 ("Access denied to spec for current role"), and useFiscalConfig's
-  // HTTP-status-only error message rendered raw in the destructive error box below with a
-  // Retry button that can never succeed. Checked after every other hook so hook order stays
-  // stable regardless of the tier (mirrors financial-account/index.jsx's own placement).
-  const windowAccessTier = useWindowAccess('C1D3A2A017AC4B82B9FEE6F4D2A0C55A');
-  if (windowAccessTier === 'none') {
-    return <WindowAccessGuard windowId="C1D3A2A017AC4B82B9FEE6F4D2A0C55A" data-testid="WindowAccessGuard__fiscal-config" />;
-  }
 
   // "Add complementary SIF" — only when real API data (not mock), org selected,
   // and profile is singly sii or tbai (not already combined or verifactu).
