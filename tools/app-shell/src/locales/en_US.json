@@ -20507,6 +20507,7 @@
     "backendError.transactionsObtainedForAccount": "Transactions obtained for the account: {account}.",
     "backendError.noNewTransactionsForAccount": "No new transactions found for the account: {account}.",
     "backendError.syncFetchFailed": "The bank reported an error while synchronizing: {detail}.",
+    "backendError.foreignDraftReconciliation": "Reconciliation {documentNo} is an unconfirmed draft that already holds matched movements. Review it before undoing a reconciliation on this account.",
     "backendError.psd2ConnectionWentInactive": "The connection for account {account} was found inactive during synchronization. Please reconnect the account.",
     "backendError.psd2ConsentExpired": "The bank consent for account {account} has expired. Please reconnect the account.",
     "backendError.psd2ImportDateBeyondMaxInterval": "The requested start date exceeds the maximum fetch interval of {days} days supported by this provider. Only transactions from that period will be synchronized.",
