@@ -6,6 +6,13 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'RejectQuotationModal.jsx'), 'utf8');
+// Comment-stripped view, used by the visual-spec assertions below. Those assert on
+// declared style values, and the file documents its Figma mapping in prose right
+// above the style objects — prose that quotes token names. Reading the raw source
+// there would let a comment satisfy (or defeat) an assertion about real code.
+const code = src
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 
 describe('RejectQuotationModal', () => {
   it('exports a default function component', () => {
@@ -103,46 +110,95 @@ describe('RejectQuotationModal', () => {
 
   describe('Figma redesign — visual spec', () => {
     it('renders the document subtitle via quotationDocumentLabel + documentNo (regression: was "#" separator)', () => {
-      assert.match(src, /\{ui\(\s*['"]quotationDocumentLabel['"]\s*\)\}\s*:\s*\{documentNo\}/);
+      assert.match(code, /\{ui\(\s*['"]quotationDocumentLabel['"]\s*\)\}\s*:\s*\{documentNo\}/);
     });
 
     it('uses the Inter font family in the card', () => {
-      assert.match(src, /fontFamily:\s*['"]Inter,\s*sans-serif['"]/);
+      assert.match(code, /fontFamily:\s*['"]Inter,\s*sans-serif['"]/);
     });
 
     it('pins the card width to the Figma frame (375px)', () => {
-      assert.match(src, /width:\s*375\b/);
+      assert.match(code, /cardStyle\s*=\s*\{[^}]*width:\s*375\b/);
     });
 
     it('renders a required-field asterisk with the semantic destructive role', () => {
-      assert.match(src, /asteriskStyle/);
-      assert.match(src, /color:\s*'hsl\(var\(--destructive\)\)'/);
+      assert.match(code, /asteriskStyle/);
+      assert.match(code, /color:\s*'hsl\(var\(--destructive\)\)'/);
     });
 
-    it('borders the typeahead input with a semantic foreground role at 8px radius', () => {
-      assert.match(src, /border:\s*['"]1px solid hsl\(var\(--foreground\)\)['"]/);
-      assert.match(src, /borderRadius:\s*8\b/);
+    // ---------------------------------------------------------------------
+    // Neutral-grey token mapping (ETP-5378).
+    //
+    // WARNING to anyone "restoring" an older expectation here: the previous
+    // version of this block asserted the input border was
+    // `1px solid hsl(var(--foreground))`. That was pinning a BUG, not a spec.
+    // ETP-4554 migrated this file off raw colour literals and mapped every
+    // neutral grey in the Figma frame onto the wrong semantic role — the input
+    // border's light grey became `--foreground`, which is near-black, so the
+    // field rendered with a heavy black outline the design never had. The spec
+    // was written against that broken output and then froze it in place.
+    //
+    // ETP-5378 corrected the mapping against the Figma frame. The roles below
+    // are the corrected ones; do not widen them back toward `--foreground`.
+    // ---------------------------------------------------------------------
+
+    it('borders the typeahead input with the control-border role at 8px radius (regression: ETP-4554 mapped this grey to --foreground)', () => {
+      assert.match(code, /inputStyle\s*=\s*\{[^}]*border:\s*'1px solid hsl\(var\(--border-control\)\)'/);
+      assert.match(code, /inputStyle\s*=\s*\{[^}]*borderRadius:\s*8\b/);
+    });
+
+    it('borders the dropdown with the same control-border role', () => {
+      assert.match(code, /dropdownStyle\s*=\s*\{[^}]*border:\s*'1px solid hsl\(var\(--border-control\)\)'/);
+    });
+
+    it('never uses the near-black foreground role as a structural border', () => {
+      // The single assertion that would have caught the ETP-4554 mis-mapping.
+      assert.doesNotMatch(code, /border(Top|Bottom|Left|Right)?:\s*'[\d.]+px solid hsl\(var\(--foreground\)\)'/);
+    });
+
+    it('uses the muted-foreground role for the placeholder and the 12px helper text', () => {
+      assert.match(code, /::placeholder\s*\{\s*color:\s*hsl\(var\(--muted-foreground\)\)/);
+      assert.match(code, /noResultsStyle\s*=\s*\{[^}]*color:\s*'hsl\(var\(--muted-foreground\)\)'/);
+    });
+
+    it('uses the subtle-border role for list dividers', () => {
+      assert.match(code, /createOptionStyle\s*=\s*\{[^}]*borderBottom:\s*'1px solid hsl\(var\(--border-subtle\)\)'/);
+    });
+
+    it('strokes the close and chevron icons with the secondary-icon role', () => {
+      // Both inline SVGs, plus the clear ("x") button that sits inside the input.
+      assert.equal((code.match(/stroke="hsl\(var\(--icon-secondary\)\)"/g) || []).length, 2);
+      assert.match(code, /clearBtnStyle\s*=\s*\{[^}]*color:\s*'hsl\(var\(--icon-secondary\)\)'/);
     });
 
     it('renders a chevron-down indicator inside the input (replaces magnifying glass)', () => {
-      assert.match(src, /chevronIconStyle/);
-      assert.doesNotMatch(src, /searchIconStyle/);
+      assert.match(code, /chevronIconStyle/);
+      assert.doesNotMatch(code, /searchIconStyle/);
     });
 
-    it('uses semantic foreground/card button roles with a 360 radius', () => {
-      assert.match(src, /background:\s*['"]hsl\(var\(--foreground\)\)['"]/);
-      assert.match(src, /background:\s*['"]hsl\(var\(--card\)\)['"]/);
-      assert.match(src, /borderRadius:\s*360\b/);
+    it('uses semantic button roles with a 360 radius', () => {
+      // Primary = foreground fill with card-coloured label; secondary = card fill
+      // with a control-border outline.
+      assert.match(code, /btnPrimary\s*=\s*\{[^}]*background:\s*'hsl\(var\(--foreground\)\)'[^}]*color:\s*'hsl\(var\(--card\)\)'/);
+      assert.match(code, /btnSecondary\s*=\s*\{[^}]*border:\s*'1px solid hsl\(var\(--border-control\)\)'[^}]*background:\s*'hsl\(var\(--card\)\)'/);
+      assert.match(code, /borderRadius:\s*360\b/);
+    });
+
+    it('fills the disabled primary button with the control-border role, not the card surface (ETP-5378)', () => {
+      // ETP-4554 gave the disabled fill `--card`, the same role as its own label,
+      // so the button rendered as an empty gap next to "Cancelar".
+      assert.match(code, /btnPrimaryDisabled\s*=\s*\{[^}]*background:\s*'hsl\(var\(--border-control\)\)'/);
+      assert.doesNotMatch(code, /btnPrimaryDisabled\s*=\s*\{[^}]*background:\s*'hsl\(var\(--card\)\)'/);
     });
 
     it('locks button dimensions to the Figma spec (Cancelar 132×40, Rechazar 191×40)', () => {
-      assert.match(src, /btnSecondary\s*=\s*\{[^}]*width:\s*132[^}]*height:\s*40/s);
-      assert.match(src, /btnPrimary\s*=\s*\{[^}]*width:\s*191[^}]*height:\s*40/s);
-      assert.match(src, /btnPrimaryDisabled\s*=\s*\{[^}]*width:\s*191[^}]*height:\s*40/s);
+      assert.match(code, /btnSecondary\s*=\s*\{[^}]*width:\s*132[^}]*height:\s*40/s);
+      assert.match(code, /btnPrimary\s*=\s*\{[^}]*width:\s*191[^}]*height:\s*40/s);
+      assert.match(code, /btnPrimaryDisabled\s*=\s*\{[^}]*width:\s*191[^}]*height:\s*40/s);
     });
 
     it('positions the close button at top:6 right:6 (Figma frame)', () => {
-      assert.match(src, /top:\s*6\b[\s\S]*right:\s*6\b/);
+      assert.match(code, /closeBtnStyle\s*=\s*\{[^}]*top:\s*6\b[^}]*right:\s*6\b/s);
     });
   });
 });

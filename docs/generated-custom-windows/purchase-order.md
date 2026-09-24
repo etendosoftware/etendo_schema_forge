@@ -520,3 +520,16 @@ action would have fired and done nothing.
 genuinely optional and the button says "Confirmar", which is the distinction commit `a84798d2a`
 established when it removed the redundant checkbox from `CreateInvoiceConfirmModal`. Applying
 `implied` there would create documents the user never asked for.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('181')` → `'none' | 'read-only' |
+'full'`) must hide every mutating control in a window the Solo Lectura role can see. For this
+window: the row-kebab Confirmar/Gestionar/Reactivar entries (shared `useOrderWindow` hook, hidden
+entirely under `windowReadOnly`, not just disabled), the bulk-selection toolbar's Clonar/Imprimir
+buttons and Confirmar/Reactivar/Post/Unpost actions, the "More" bulk kebab (Crear Factura de
+compra / Crear Recepción), and the secondary-actions bar's Clone/Send (shared
+`DocumentSecondaryActions`, via `topbarSecondary`). **Known gap, not fixed by this ticket:**
+`PurchaseOrderReactivateBulkAction.jsx`, in the same bulk-selection toolbar, does not consume
+`windowReadOnly` yet — flagged during the ticket's own review, deliberately deferred as a
+follow-up.

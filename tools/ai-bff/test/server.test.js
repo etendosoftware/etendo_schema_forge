@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { browserTools, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId } from '../src/server.js';
+import { browserTools, createServer, handleChat, hasConfiguredSecret, mcpClientOptions, opencodeProviderOptions, opencodeSessionId, sessionCredentials } from '../src/server.js';
 
 function request(headers = {}) {
   const req = new EventEmitter();
@@ -34,10 +34,56 @@ test('rejects missing and literal null model credentials', () => {
 });
 
 test('uses the legacy MCP handshake supported by Etendo Go', () => {
-  const options = mcpClientOptions('Bearer test-session-token');
+  const options = mcpClientOptions({ authorization: 'Bearer test-session-token' });
   assert.equal(options.protocolVersionDiscovery, false);
   assert.equal(options.transport.type, 'http');
   assert.equal(options.transport.headers.Authorization, 'Bearer test-session-token');
+});
+
+/**
+ * ETP-4576 — under the cookie scheme the browser holds no token, so a gate on
+ * `Authorization: Bearer` rejected every in-app conversation with a 401 that read
+ * like an expired login. Both schemes must be accepted while the migration lands.
+ */
+test('accepts either credential scheme and rejects only a request carrying neither', () => {
+  assert.deepEqual(
+    sessionCredentials({ authorization: 'Bearer t' }),
+    { authorization: 'Bearer t' });
+
+  const cookie = sessionCredentials({
+    cookie: 'other=1; __Host-go_session=abc; analytics=xyz',
+    'x-go-csrf': 'csrf-1',
+    origin: 'http://localhost:3100',
+  });
+  // Only the credential travels: ETENDO_MCP_URL is configuration, and forwarding the whole
+  // jar would hand unrelated cookies to whatever it points at.
+  assert.equal(cookie.cookie, '__Host-go_session=abc');
+  assert.equal(cookie.csrfToken, 'csrf-1');
+
+  assert.equal(sessionCredentials({}), null);
+  assert.equal(sessionCredentials({ authorization: 'Basic nope' }), null);
+  // A cookie jar without the session cookie is not a credential.
+  assert.equal(sessionCredentials({ cookie: 'locale=es_ES' }), null);
+});
+
+/**
+ * `Origin` is the one that is easy to drop: GoSessionSecurity.isOriginAllowed() fails
+ * closed on unsafe methods, so losing it turns the 401 this fixes into a 403 that reads
+ * like an unrelated bug.
+ */
+test('forwards every header the cookie session needs to reach the MCP endpoint', () => {
+  const headers = mcpClientOptions(sessionCredentials({
+    cookie: '__Host-go_session=abc',
+    'x-go-csrf': 'csrf-1',
+    origin: 'http://localhost:3100',
+    referer: 'http://localhost:3100/sales-order',
+  })).transport.headers;
+
+  assert.equal(headers.Cookie, '__Host-go_session=abc');
+  assert.equal(headers['X-Go-CSRF'], 'csrf-1');
+  assert.equal(headers.Origin, 'http://localhost:3100');
+  assert.equal(headers.Referer, 'http://localhost:3100/sales-order');
+  assert.equal(headers.Authorization, undefined);
 });
 
 test('preserves a valid OpenCode session and creates a fallback when absent', () => {

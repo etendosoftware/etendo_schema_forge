@@ -10,6 +10,7 @@ const columns = [
   { key: 'eTGOPurchasePrice', column: 'EM_ETGO_Purchase_Price', type: 'amount', label: 'EM_ETGO_Purchase_Price', computed: {"mode":"stored","refresh":"synchronous"} },
   { key: 'eTGOSalePrice', column: 'EM_ETGO_Sale_Price', type: 'amount', label: 'EM_ETGO_Sale_Price', computed: {"mode":"stored","refresh":"synchronous"} },
   { key: 'eTGOStock', column: 'EM_ETGO_Stock', type: 'number', label: 'EM_ETGO_Stock', computed: {"mode":"stored","refresh":"queued"} },
+  { key: 'eTGOCost', column: 'EM_ETGO_Cost', type: 'amount', label: 'EM_ETGO_Cost', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:product
 

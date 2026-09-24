@@ -26,7 +26,7 @@ const CAPABILITIES = [
   ['public-api:process', 'apiKeysCapabilityProcess'],
 ];
 
-const SCALAR_DOCS_URL = import.meta.env.VITE_PUBLIC_API_DOCS_URL || 'https://app.etendo.software/api';
+const SCALAR_DOCS_URL = import.meta.env.VITE_PUBLIC_API_DOCS_URL || 'https://app.etendo.ai/api';
 
 function detectBaseUrl() {
   const path = window.location.pathname;

@@ -25,7 +25,7 @@ const statusField = 'processed';
 
 // @sf-generated-start extraBadges:movement
 const extraBadges = [
-  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus', hintKeys: {"D":"goodsMovementsPostedDisabledHint"} },
 ];
 // @sf-generated-end extraBadges:movement
 
@@ -169,12 +169,6 @@ export const api = {
       "url": "/sws/neo/goods-movements/movement/{id}/action/processNow",
       "processId": "122",
       "processType": "classic"
-    },
-    {
-      "entity": "movement",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/goods-movements/movement/{id}/action/posted"
     },
     {
       "entity": "movement",
