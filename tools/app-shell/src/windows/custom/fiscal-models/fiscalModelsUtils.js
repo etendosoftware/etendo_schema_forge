@@ -1,13 +1,19 @@
 import { createElement } from 'react';
 import { formatCurrency } from '../../../lib/formatCurrency.js';
+import { parseCalendarDate } from '../../../lib/dateOnly.js';
 import { toast } from 'sonner';
+// ETP-5431 pt.2 — box 111's autocompletion formula lives next to its field definition in
+// fm303Layouts.js (like every other `derivedValue`); `recomputeDerivedBoxes` below is its single
+// authoritative consumer. One-directional dependency only (fm303Layouts.js imports nothing from
+// this file), so no import cycle.
+import { computeBox111 } from './models/303/fm303Layouts.js';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ── Box computation ──────────────────────────────────────────────────
 // Returns { boxes, summary } from GET /neo/fiscal303/boxes?year=&period=.
 // Falls back to hardcoded GOOrg mock data when token/apiBaseUrl are absent or the request fails.
 export async function computeBoxes303(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -52,8 +58,23 @@ const IDENT_PARAM_MAP = [
   ['bank_ciudad',        'BankCity'],
   ['bank_pais',          'CountryIso'],
   ['bank_sepa',          'SEPA'],
-  ['baja_domiciliacion', 'Cancel_Modify_Debit'],
+  // NOTE: `baja_domiciliacion` is deliberately NOT here — see `isCancelModifyDebitRequested`
+  // and `applyIdentParams` below. It is a checkbox, and this map stringifies its value as-is.
 ];
+
+// ETP-5431 — `baja_domiciliacion` ("dar de baja/modificar la domiciliación efectuada") used to
+// travel through IDENT_PARAM_MAP, which forwards a value verbatim. The checkbox holds a boolean,
+// so a checked box reached the backend as `Cancel_Modify_Debit=true` — and every reader on the
+// Java side tests `StringUtils.equals("Y", ...)` (`AEAT303Report2024#generatePage3`, which writes
+// position 440 of page 3, and `#isCancelOrModifyDebitRequested`, which applies Nota 3's
+// exception). So from the Go frontend the flag never took effect at all: the mark was never
+// written to the file and the Nota 3 exception could never fire. It now goes through the same
+// explicit Y-flag convention every other checkbox here already uses (`sin_actividad`,
+// `redeme`, `concurso`). The `'Y'` string is accepted alongside the boolean so any value already
+// persisted in `manualData.identification` in that shape keeps working.
+export function isCancelModifyDebitRequested(identChecks) {
+  return identChecks?.baja_domiciliacion === true || identChecks?.baja_domiciliacion === 'Y';
+}
 
 // Declaration types (tipo_declaracion) for which AEAT actually allows/requires an
 // IBAN: Domiciliación (U), Devolución (D), and Devolución transferencia extranjero
@@ -61,6 +82,31 @@ const IDENT_PARAM_MAP = [
 // is present. Shared by generate303File and AeatSubmitFlow — both must guard the
 // same set before hitting the network.
 export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
+
+// ETP-5393 [B1 re-review] — imperative mirror of fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN`
+// (condition A: tipo U/D/X — OR — condition B: rectificativa checked AND box 111 non-zero).
+// `generate303File` below and `AeatSubmitFlow.jsx`'s pre-flight guard used to test only
+// `identChecks?.rectificativa === true` for condition B, ignoring box 111 entirely — so a
+// rectificativa filed under tipo 'I' with box 111 = 0 (bank block correctly HIDDEN per the
+// narrowed Bug E visibility) still hit `iban_required` from a field the user can't even see.
+// `identChecksWithBox111Flag` must already carry the synthetic `_box111NonZero` key — pass it
+// through `withBox111NonZeroFlag` first (same as `fm303Layouts.js`'s callers). Keep this in sync
+// with `_BANK_IBAN_REQUIRED_WHEN` by hand; it is intentionally not re-derived from it (the
+// declarative matcher lives in fm303Layouts.js, which has no imports and must stay dependency-free).
+// ETP-5431 — condition B no longer applies when the declaration marks `baja_domiciliacion`
+// ("dar de baja/modificar la domiciliación efectuada", sent as `Cancel_Modify_Debit`): that is
+// the single exception Nota 3 states to the box-111 bank-data obligation, and both
+// `_BANK_RECTIFICATIVA_BRANCH` in fm303Layouts.js and `isCancelOrModifyDebitRequested` in
+// AEAT303Report2024.java now honour it. Condition A (tipo U/D/X) is untouched: those types need
+// an account by virtue of the type itself, which is outside Nota 3's scope.
+export function isBankIbanRequired(tipo, identChecksWithBox111Flag) {
+  return (
+    IBAN_REQUIRED_TIPOS.includes(tipo) ||
+    (identChecksWithBox111Flag?.rectificativa === true
+      && identChecksWithBox111Flag?._box111NonZero === true
+      && !isCancelModifyDebitRequested(identChecksWithBox111Flag))
+  );
+}
 
 // Declaration type (tipo_declaracion) for which AEAT's NRC (Número de Referencia Completo)
 // field actually applies: Ingreso (I) only, per AEAT's own bundled Modelo 303 spec. The backend
@@ -73,19 +119,112 @@ export const IBAN_REQUIRED_TIPOS = ['U', 'D', 'X'];
 // never be paired with a required/blocking validation.
 export const DECLARATION_TYPE_INGRESO = 'I';
 
+// ETP-5393 Bug C [W1 re-review] — boxes 111 (Rectificación – Importe) and 77 (IVA a la
+// importación liquidado por la Aduana pendiente de ingreso) are editable boxes the
+// classic AEAT303Report engine hard-rejects when negative (AEAT303Report2024.java:276-278 for
+// 111, AEAT303Report2015.java:149-162 for 77). Single source of truth, consolidated out of a
+// literal `new Set([111, 77])` duplicated in both `FmBoxes303.jsx` (the `min="0"` UX hint) and
+// `FmModel303Page.jsx` (`handleBoxChange`'s actual clamp + i18n error enforcement).
+// ETP-5431 pt.2 — 109 (devoluciones en tramitación) and 70 (a deducir) added to the set: same
+// AEAT-can-never-be-negative rule as 111/77 above, no new mechanism needed (toast, `min="0"`,
+// clamp are all driven off this Set already). 70 additionally feeds `computeBox111` below — see
+// the ordering note on `recomputeDerivedBoxes` for why this clamp must run before that formula.
+//
+// ETP-5431 [B1 fix, review round 2] — this Set now backs TWO independent enforcement points,
+// not one: `clampNegativeBoxes` (silent, structural — folded into `recomputeDerivedBoxes` itself
+// so every boxArr path is covered by construction) and `clampNegativeOverrides` (same clamp,
+// applied to the separate `manualOverrides` map at hydration — see both functions below for why
+// neither one alone is sufficient). `FmModel303Page.jsx`'s `handleBoxChange` still clamps too,
+// but only as the interactive-input layer (it also owns the user-facing toast); it is redundant
+// with, not a substitute for, the two functions below.
+//
+// ETP-5438 (AEAT spec audit) — boxes 70 (Resultados a ingresar de anteriores autoliquidaciones),
+// 78 (Cuotas a compensar de periodos anteriores aplicadas), 109 (Devoluciones acordadas por la
+// AT de anteriores autoliquidaciones) and 110 (Cuotas a compensar pendientes de periodos
+// anteriores) are declared "Num" (numérico sin signo / unsigned) in the official Modelo 303
+// "Diseño de registro" (DR303e26v101 v1.01), exactly like 111 and 77 — the spec's own "Nota"
+// footer on every page: "1. Los campos deben ser A (Alfabético) An (Alfanumérico), Num
+// (Numérico sin signo) o N (Numérico con signo)." These were editable in the UI with no negative
+// guard until this audit found the gap; widened into the SAME set/mechanism rather than a
+// parallel one. Note box78 also carries its own, unrelated relative clamp (≤ box110) in
+// `FmModel303Page.jsx`'s `handleBoxChange` — that clamp runs on the value AFTER this set's
+// floor-at-0 has already applied, so a negative box110 commit floors to 0 first and box78 can
+// never inherit a negative ceiling from it.
+export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110]);
+
+// Silently zeroes any NEGATIVE_NOT_ALLOWED_BOXES entry in a box array. "Silent" is deliberate:
+// this runs on every boxArr regardless of how it got here (a fresh backend response, a value
+// hydrated from a declaration saved months before this rule existed, or a live typed edit
+// already routed through it), and most of those paths are not a direct reaction to something
+// the user just did — surfacing a toast here would either fire on page load for old data or
+// double-fire for a typed edit that `handleBoxChange` already toasted about. The toast, where one
+// belongs, stays the responsibility of the interactive-input layer (`handleBoxChange`); this
+// function only owns the numeric invariant.
+function clampNegativeBoxes(boxArr) {
+  return boxArr.map(b => (
+    NEGATIVE_NOT_ALLOWED_BOXES.has(b.num) && typeof b.value === 'number' && b.value < 0
+      ? { ...b, value: 0 }
+      : b
+  ));
+}
+
+// Same clamp as `clampNegativeBoxes` above, but for the separate `manualOverrides` map
+// (`{ [boxNum]: value }`, e.g. `decl.manualData.manualOverrides` as hydrated on mount).
+// `clampNegativeBoxes`/`recomputeDerivedBoxes` alone are NOT enough to make a negative
+// override safe: `applyBoxParams` (below) reads box 70/109/77's AEAT param straight off
+// `manualOverrides[boxNum]`, bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely, so a
+// negative value sitting in a hydrated `manualOverrides` would still reach AEAT as e.g. a
+// negative `ComplementaryAmt` even though `computeBox111`/box111 are already protected.
+// Called once at hydration (`FmModel303Page.jsx`'s `manualOverrides` initial state) — every
+// write to `manualOverrides` after that already goes through a clamped value (`handleBoxChange`
+// clamps before storing; `syncBox111Override` only ever writes an already-clamped box111).
+export function clampNegativeOverrides(overrides) {
+  const ov = overrides ?? {};
+  let changed = false;
+  const next = { ...ov };
+  for (const key of Object.keys(next)) {
+    if (NEGATIVE_NOT_ALLOWED_BOXES.has(Number(key)) && next[key] < 0) {
+      next[key] = 0;
+      changed = true;
+    }
+  }
+  return changed ? next : ov;
+}
+
 // Maps editable box numbers (from manualOverrides / liveBoxes) to AEAT HTTP param names.
 // Only boxes that the AEAT module reads from inputParams (not computed from DB) are listed.
 const BOX_PARAM_MAP = {
   42:  'Special_Compensations',      // compensaciones régimen especial / agrario
   43:  'Investment_Adjustment',      // regularización bienes de inversión
   44:  'Adjustment_Final_Percentage',// prorrata definitiva
+  65:  'ToPublicTreasury',           // atribuible al Estado % (resultado_final/atribuible_estado).
+                                     // SAME AEAT param casilla 107 (territorio_comun) mirrors in the
+                                     // UI — see fm303Layouts.js's territorio_comun `derivedValue`.
+                                     // AEAT303Report2014.java:818 and AEAT303Report2018LastPeriod's
+                                     // commonTerritory() both read this one key off box 65, so 107 no
+                                     // longer needs its own BOX_PARAM_MAP entry (ETP-5391).
   68:  'AnnualRegularAmt',           // regularización anual prorrata (T4/12 only)
+  70:  'ComplementaryAmt',           // a_deducir — importe complementaria/rectificativa a deducir
+                                     // (AEAT303Report2014.java:946-958, gated by IsComplementary=Y)
+  76:  'REG_CUOTAS_ART80',           // regularización cuotas art. 80.cinco.5ª LIVA (last period only,
+                                     // AEAT303Report2014LastPeriod.java)
+  77:  'IVA_IMPORT_ADUANA',          // IVA importación liquidado por la Aduana pendiente de ingreso
+                                     // (last period only, AEAT303Report2014LastPeriod.java)
   78:  'PreviousPeriodAmtApplied',   // cuotas a compensar aplicadas en este período
+  89:  'ALAVA',                      // territorio Araba/Álava % (last period only, ETP-5391)
+  90:  'GUIPUZCOA',                  // territorio Gipuzkoa % (last period only, ETP-5391)
+  91:  'VIZCAYA',                    // territorio Bizkaia % (last period only, ETP-5391)
+  92:  'NAVARRA',                    // territorio Navarra % (last period only, ETP-5391)
+  95:  '303REAGYP',                  // régimen especial agricultura/ganadería/pesca (last period only, ETP-5391)
+  97:  '303USED_GOODS',              // bienes usados/objetos de arte/antigüedades (last period only, ETP-5391)
+  98:  '303TRAVEL_AGENCY',           // régimen especial agencias de viajes (last period only, ETP-5391)
   108: 'AdministrativeCriteriaDiscrepancy', // discrepancia criterio administrativo (2024+)
   109: 'ReturnsPendingSettlement',   // devoluciones en tramitación (2023+)
   110: 'PreviousPeriodAmt',          // cuotas a compensar pendientes de períodos anteriores
   111: 'RectifyingAmount',           // rectificación. importe (2024+ rectificativa)
   124: 'OSS_SujetaYAcogida',         // operaciones OSS sujetas y acogidas (2021+)
+  127: 'OPSUJETASCONOSS',            // operaciones sujetas y acogidas a la OSS (last period only, ETP-5391)
+  128: 'OPINTRAGRUPO',               // operaciones intragrupo, arts. 78/79 LIVA (last period only, ETP-5391)
 };
 
 /**
@@ -97,6 +236,22 @@ const BOX_PARAM_MAP = {
  *   manualOverrides — editable box values keyed by box number
  *   filename      — optional download filename (defaults to 303_<period>_<year>.txt)
  */
+// Formats a date-only value (as read from the `fecha_concurso` `<input type="date">`, always a
+// plain `yyyy-MM-dd` string — see fm303Layouts.js) into AEAT's strict `ddMMyyyy` digit format
+// (no separators), which is what ConcursoDate must carry (AEAT303Report2014.java:350-372,
+// unchanged through AEAT303Report2025; strict format validated by AEAT303Report2023+, ETP-5272).
+// Reuses the canonical `parseCalendarDate` (per this project's date-only parsing policy) rather
+// than a hand-rolled `new Date(string)` parse. Returns null when there's nothing to format
+// (blank/undefined/unparsable) — callers must not send a garbage ConcursoDate in that case.
+function formatAeatConcursoDate(raw) {
+  const date = parseCalendarDate(raw);
+  if (!date) return null;
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = String(date.getFullYear());
+  return `${dd}${mm}${yyyy}`;
+}
+
 function applyRectificativaParams(params, identChecks) {
   params.set('IsComplementary', 'Y');
   if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
@@ -105,29 +260,67 @@ function applyRectificativaParams(params, identChecks) {
     params.set('AdministrativeDiscrepancyRectifyingReason', 'Y');
 }
 
-export function applyIdentParams(params, identChecks) {
+// 1:1 string forwarding of IDENT_PARAM_MAP — value is set only when truthy. Split out of
+// applyIdentParams (SonarQube S3776) so the loop's own nested if/ternary doesn't stack on
+// top of every other ident-check branch below.
+function applyMappedIdentParams(params, identChecks) {
   for (const [field, paramName] of IDENT_PARAM_MAP) {
     const v = identChecks[field];
     if (v) params.set(paramName, paramName === 'IBAN' ? v.replace(/\s/g, '') : v);
   }
+}
+
+// Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
+// read unchanged through the override chain up to AEAT303Report2025 (ETP-5027). ConcursoDate
+// (the bankruptcy statement date) must go alongside them — AEAT303Report2023+ throws
+// @AEAT303_Bad_Bankruptcy_Statement_Date_Format@ when it's missing/blank, and 2021/2022 ship
+// 8 blank spaces into that AEAT field slot otherwise (ETP-5272 pt.7). Only sent when there's
+// an actual date to format — fm303Layouts.js's `fecha_concurso` required-field gate is what
+// stops a blank date from reaching this point in the first place.
+function applyConcursoParams(params, identChecks) {
+  if (identChecks.concurso === true) {
+    params.set('IsConcurso', 'Y');
+    const concursoDate = formatAeatConcursoDate(identChecks.fecha_concurso);
+    if (concursoDate) params.set('ConcursoDate', concursoDate);
+  }
+  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
+}
+
+function applyComplementariaParams(params, identChecks) {
+  if (identChecks.complementaria === true) {
+    params.set('IsComplementary', 'Y');
+    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
+  }
+}
+
+export function applyIdentParams(params, identChecks) {
+  applyMappedIdentParams(params, identChecks);
   if (identChecks.sin_actividad === true) params.set('Declaration_NoActivity', 'Y');
   // Sujeto pasivo inscrito en el Registro de devolución mensual (art. 30 RIVA) — read by
   // AEAT303Report.java's MONTHLY_REGISTER constant; box 65 defaults to "not registered"
   // (2) unless this is explicitly "Y" (ETP-5027).
   if (identChecks.redeme === true) params.set('MonthlyRegister', 'Y');
-  // Concurso de acreedores — AEAT303Report2014's "IsConcurso"/"ConcursoType" constants, still
-  // read unchanged through the override chain up to AEAT303Report2025 (ETP-5027).
-  if (identChecks.concurso === true) params.set('IsConcurso', 'Y');
-  if (identChecks.postconcursal === true) params.set('ConcursoType', 'Y');
-  if (identChecks.complementaria === true) {
-    params.set('IsComplementary', 'Y');
-    if (identChecks.nro_justificante) params.set('ComplementaryNo', identChecks.nro_justificante);
-  }
+  // ETP-5431 — see isCancelModifyDebitRequested: this must reach AEAT303Report2024 as "Y".
+  if (isCancelModifyDebitRequested(identChecks)) params.set('Cancel_Modify_Debit', 'Y');
+  applyConcursoParams(params, identChecks);
+  applyComplementariaParams(params, identChecks);
   // Rectificativa (2024+): IsComplementary=Y activates rectAssessment in the AEAT module.
   if (identChecks.rectificativa) applyRectificativaParams(params, identChecks);
+  // Modelo 347 exemption checkbox (last period only, ETP-5391). NOT forwarded via
+  // IDENT_PARAM_MAP: AEAT303Report2019.java checks inputParams.get('347TAX_FORM').equals('Y')
+  // literally (unlike Cancel_Modify_Debit's mere-presence check above), so this must send the
+  // exact string 'Y' rather than IDENT_PARAM_MAP's raw boolean forwarding (which would send the
+  // string 'true' and never match).
+  if (identChecks.declaracion_terceros === true) params.set('347TAX_FORM', 'Y');
 }
 
-function applyBoxParams(params, manualOverrides) {
+// ETP-5431 — exported so AeatSubmitFlow.jsx's handleSubmit can apply the exact same
+// manualOverrides -> AEAT param mapping generate303File already uses below. Before this
+// export, AeatSubmitFlow had no way to forward box overrides (box 111, box 70, etc.) to
+// POST /fiscal303/submit at all, so any manually-overridden box value reached "Generar
+// fichero 303" (which calls applyBoxParams) but never the AEAT telematic submission
+// itself — the two endpoints silently diverged. See AeatSubmitFlow.jsx's own import site.
+export function applyBoxParams(params, manualOverrides) {
   for (const [boxNum, paramName] of Object.entries(BOX_PARAM_MAP)) {
     const v = manualOverrides[Number(boxNum)];
     if (v != null) params.set(paramName, String(v));
@@ -177,13 +370,15 @@ export function triggerBase64Download(base64, downloadName, mimeType = 'applicat
   triggerDownload(base64ToBlob(base64, mimeType), downloadName);
 }
 
-export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, filename } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+export async function generate303File(decl, { token, apiBaseUrl, identChecks, manualOverrides, liveBoxes, filename } = {}) {
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
 
   const tipo = identChecks?.tipo_declaracion ?? decl.result?.kind ?? 'N';
 
+  // ETP-5393 [B1] — must match the final Bug E visibility (fm303Layouts.js's
+  // `_BANK_IBAN_REQUIRED_WHEN`), not just `rectificativa`. See `isBankIbanRequired`'s docstring.
   if (
-    (IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true) &&
+    isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes)) &&
     !identChecks?.bank_iban?.trim()
   ) {
     return { ok: false, error: 'iban_required' };
@@ -225,7 +420,7 @@ export async function generate303File(decl, { token, apiBaseUrl, identChecks, ma
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
 export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = { status: newStatus };
@@ -253,7 +448,10 @@ export async function persistDeclarationStatus(id, newStatus, { token, apiBaseUr
  * Returns { ok: true } on success, or { ok: false, error: string } on failure.
  */
 export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone, exactly like validate349Vies below. Under the
+  // cookie session the client holds no token, so a `!token` gate is permanently false and
+  // the DELETE is simply never issued - the row's delete action does nothing, silently.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
@@ -282,7 +480,7 @@ export async function deleteDeclaration(id, { token, apiBaseUrl } = {}) {
  * was rejected", so both collapse to the same ok:false contract.
  */
 export async function persistManualData(id, manualData, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal303/declarations?id=${encodeURIComponent(id)}`, {
@@ -327,7 +525,7 @@ const EMPTY_INCIDENTS = { blocking: 0, warning: 0, items: [] };
  * simply come back empty today, since only the 303 telematic submission flow writes rows there.
  */
 export async function fetchDeclarationIncidents(id, { token, apiBaseUrl, model = '303' } = {}) {
-  if (!token || !apiBaseUrl || !id) return EMPTY_INCIDENTS;
+  if (!apiBaseUrl || !id) return EMPTY_INCIDENTS;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const res = await apiFetch(`${base}/fiscal${model}/incidents?id=${encodeURIComponent(id)}`, { baseUrl: '', token });
@@ -369,6 +567,22 @@ export const STATUS_ICON = {
 };
 
 export const STATUS_ORDER = [...STATUSES];
+
+// Resultado sign-coloring (ETP-5236 / M303-01): 'I' (a ingresar — org owes money) is
+// green, 'V'/'C' (a devolver / a compensar — refundable or offsettable) are blue, and
+// 'N'/null/anything else (no result) keeps the neutral styling this always had.
+// Shared by the Modelo 303 detail KPI (FmModel303Page.jsx) and the declarations list's
+// "Resultado" column (FmListPage.jsx) — single source of truth for both call sites.
+export const RESULT_COLOR_MAP = {
+  I: { valueColor: 'var(--status-success-fg)', badgeBg: 'var(--status-success-bg)', badgeColor: 'var(--status-success-fg)' },
+  V: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+  C: { valueColor: 'var(--status-info-fg)', badgeBg: 'var(--status-info-bg)', badgeColor: 'var(--status-info-fg)' },
+};
+export const RESULT_COLOR_NEUTRAL = { valueColor: 'hsl(var(--foreground))', badgeBg: 'hsl(var(--muted))', badgeColor: 'hsl(var(--muted-foreground))' };
+
+export function resolveResultColors(resultKind) {
+  return RESULT_COLOR_MAP[resultKind] ?? RESULT_COLOR_NEUTRAL;
+}
 
 export function formatPeriod(period) {
   if (!period) return '—';
@@ -424,7 +638,131 @@ export function deriveResultKind(summary, { hasInvoices = false } = {}) {
   return hasInvoices ? 'zero' : 'N';
 }
 
-function roundEur(n) {
+// ── Manual-override box merging (ETP-5272 pt.6) ────────────────────
+// Single source of truth for merging a declaration's manual box overrides onto a
+// backend-computed box set and re-deriving the boxes the AEAT 303 formula computes
+// FROM other boxes. Shared by FmModel303Page.jsx (detail view) and FmListPage.jsx
+// (list's own "Resultado" column) — GET /fiscal303/boxes always computes purely
+// from invoice data, with no declaration id and no knowledge of manualOverrides, so
+// every caller that wants the TRUE final result (box 71, "Resultado de la
+// liquidación") rather than the raw backend sub-total (box 46, "Resultado régimen
+// general") must route through these three helpers instead of re-deriving the
+// formula locally — that duplication is exactly how this bug class (ETP-5272)
+// happened in the first place.
+
+// Normalizes the two shapes `boxes` can arrive in — a plain object
+// ({ [boxNum]: value }, e.g. straight off the backend) or an array of
+// { num, value } (e.g. already-merged output from these helpers) — to the array
+// form the other helpers below operate on.
+export function toBoxArray(src) {
+  if (Array.isArray(src)) return src;
+  if (src && typeof src === 'object') {
+    // ETP-5393 Bug B: Fiscal303BoxesHandler serializes every box value as a JSON STRING
+    // (BigDecimal#toString). Without this coercion, `recomputeDerivedBoxes`'s numeric
+    // accumulation (`s + get(n)`) silently does string concatenation the first time any
+    // of these boxes is a non-zero string (e.g. `0 + "-0.63"` -> `"0-0.63"`), which then
+    // becomes NaN and cascades through every derived box (45/46/64/66/69/71).
+    return Object.entries(src).map(([n, v]) => ({ num: Number(n), value: v == null ? v : Number(v) }));
+  }
+  return [];
+}
+
+// Merges manualOverrides (decl.manualData.manualOverrides, keyed by box number)
+// onto the backend-computed boxes — an overridden box replaces the computed value,
+// everything else passes through unchanged.
+export function applyOverrides(boxes, overrides) {
+  const ov = overrides ?? {};
+  if (!Object.keys(ov).length) return toBoxArray(boxes);
+  const arr = toBoxArray(boxes);
+  const result = arr.filter(b => !(b.num in ov));
+  Object.entries(ov).forEach(([num, val]) => {
+    if (val != null) result.push({ num: Number(num), value: val });
+  });
+  return result;
+}
+
+// Re-derives every box the AEAT 303 formula computes from other boxes (45, 46, 64,
+// 66, 69, 71) so a manual override on any of their inputs (e.g. 42/43/44, or the
+// territorial-split box 65) is reflected in the final liquidation result. Always
+// call this AFTER applyOverrides.
+//
+// ETP-5431 pt.2 — also the single authoritative place that (re)derives box 111
+// (rectificacion_importe, formula: `computeBox111` in fm303Layouts.js). This is the ONE choke
+// point both interactive typing (FmModel303Page's `applyBoxChange`) and the "Calcular" flow
+// (`applyComputeResult`) already route through for 45/46/64/66/69/71, so box 111 gets the same
+// guarantee for free.
+//
+// Ordering dependency (box70 clamp -> box111 formula), by construction rather than by careful
+// sequencing between callers: [B1, review round 2] a previous version of this comment claimed
+// "the backend/res.boxes path has no interactive input to clamp in the first place" and relied on
+// each CALLER clamping box 70/109 before invoking this function. That was wrong on two real
+// paths — `manualOverrides` hydrated from a declaration persisted before this rule existed
+// (`FmModel303Page.jsx`'s initial `manualOverrides` state), and `computeBoxes303`'s "Calcular"
+// response itself can carry a negative box 70/109 in `res.boxes`, with nothing upstream of
+// `applyComputeResult` ever clamping it. So the clamp now lives HERE instead, as the first thing
+// this function does to its own input (`clampNegativeBoxes` below) — every caller (typed edits via
+// `applyBoxChange`, the "Calcular" flow via `applyComputeResult`, and initial hydration, which
+// also routes through `applyComputeResult`) shares this one call, so `box70`/`box109` are
+// guaranteed non-negative by the time `computeBox111` reads them, by construction rather than by
+// caller discipline.
+// `identChecks` (optional; defaults to `{}`) is read for its `rectificativa` flag only, forwarded
+// to `computeBox111`'s explicit `isRectificativa` guard — the formula's own spec requires it
+// ("SI es autoliquidación rectificativa Y..."), same convention as `isBankIbanRequired` elsewhere
+// in this file. A caller that omits it gets box 111 forced blank, never a false positive.
+export function recomputeDerivedBoxes(boxArrRaw, identChecks) {
+  const boxArr = clampNegativeBoxes(toBoxArray(boxArrRaw));
+  const r2 = v => Math.round(v * 100) / 100;
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  const box65entry = boxArr.find(b => b.num === 65);
+  const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
+  const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
+  const box46 = r2(get(27) - box45);
+  const box64 = r2(box46 + get(58) + get(76));
+  const box66 = r2(box64 * box65 / 100);
+  const box69 = r2(box66 + get(77) - get(78) + get(68) + get(108));
+  const box71 = r2(box69 - get(70) + get(109) - get(112));
+  const derived = { 45: box45, 46: box46, 64: box64, 66: box66, 69: box69, 71: box71 };
+
+  // box70 read again here (not via `derived`/`get` reuse) on purpose: `computeBox111` tests
+  // "casilla_70 > 0" against the RAW box70 entry, not `get`'s always-numeric 0-for-missing
+  // fallback used by the arithmetic above (a missing entry and an explicit 0 both fail the
+  // `> 0` test either way, but keeping the raw read avoids relying on that coincidence).
+  const box70Entry = boxArr.find(b => b.num === 70);
+  const box111 = computeBox111({
+    isRectificativa: identChecks?.rectificativa === true,
+    box70: box70Entry != null ? box70Entry.value : null,
+    box71,
+  });
+
+  return [
+    ...boxArr.filter(b => !(b.num in derived) && b.num !== 111),
+    ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
+    ...(box111 != null ? [{ num: 111, value: r2(box111) }] : []),
+  ];
+}
+
+// Reads a single box's value out of the array shape (as returned by
+// applyOverrides/recomputeDerivedBoxes) — null when the box isn't present at all
+// (distinct from a present box whose value is 0).
+export function getBoxValue(liveBoxes, num) {
+  const e = toBoxArray(liveBoxes).find(b => b.num === num);
+  return e ? (e.value ?? 0) : null;
+}
+
+// ETP-5393 Bug E — fm303Layouts.js's `bank_iban.requiredWhen` needs to know whether box 111
+// (Rectificación - Importe) currently holds a non-zero value, but `matchesVisibility`/
+// `isFieldRequired` only ever read the `identification` object (checkboxes/selects), never the
+// separate `liveBoxes` array. Callers merge this synthetic `_box111NonZero` flag into
+// `identification` before handing it to `getMissingRequiredFields` or FmBoxes303's
+// `identification` prop, so both the pre-flight gate and the red-asterisk rendering agree.
+export function withBox111NonZeroFlag(identification, liveBoxes) {
+  const box111 = getBoxValue(liveBoxes, 111);
+  return { ...identification, _box111NonZero: box111 != null && Number(box111) !== 0 };
+}
+
+// Exported (ETP-5409) so FmModel303Page.jsx's parseBoxInput can reuse the same 2-decimal
+// rounding used everywhere else in this file for box values, instead of a second copy.
+export function roundEur(n) {
   return Math.round(n * 100) / 100;
 }
 
@@ -655,7 +993,7 @@ function getDeadlineDate(model, year, period) {
  * updated after sinceMs (Unix ms timestamp). Returns false on any error.
  */
 export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });
@@ -672,7 +1010,7 @@ export async function checkModified303(decl, sinceMs, { token, apiBaseUrl } = {}
 // ── Model 349 utilities ───────────────────────────────────────────
 
 export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
-  if (token && apiBaseUrl) {
+  if (apiBaseUrl) {
     try {
       const base = apiBaseUrl.replace(/\/[^/]+$/, '');
       const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -733,7 +1071,10 @@ export async function compute349Operators(decl, { token, apiBaseUrl } = {}) {
  * action is always a meaningful follow-up.
  */
 export async function validate349Vies(decl, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  // ETP-4576: gated on apiBaseUrl alone. Under the cookie session the client holds no
+  // token, so a `!token` gate is permanently false and the request is simply never
+  // issued - no error, no failed response, just a button that does nothing.
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -785,7 +1126,7 @@ export async function generate349File(decl, {
   token, apiBaseUrl, phone, contact,
   fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
 } = {}) {
-  if (!token || !apiBaseUrl) return { ok: false, error: 'no_token' };
+  if (!apiBaseUrl) return { ok: false, error: 'no_token' };
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const body = new URLSearchParams({ year: decl.year, period: decl.period });
@@ -836,7 +1177,7 @@ export async function generate349File(decl, {
 }
 
 export async function checkModified349(decl, sinceMs, { token, apiBaseUrl } = {}) {
-  if (!token || !apiBaseUrl) return false;
+  if (!apiBaseUrl) return false;
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const params = new URLSearchParams({ year: decl.year, period: decl.period, since: sinceMs });

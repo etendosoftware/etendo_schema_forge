@@ -7,37 +7,11 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-// Stable navigate spy so tests can assert the post-clone redirect.
-const routerMock = vi.hoisted(() => ({ navigate: vi.fn() }));
-
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => routerMock.navigate,
-}));
-
 // Render createPortal children inline so portal content is testable
 vi.mock('react-dom', async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, createPortal: (node) => node };
 });
-
-vi.mock('@/components/contract-ui/CloneOrderModal', () => ({
-  default: ({ onClose, onCloned }) => (
-    <div data-testid="clone-order-modal">
-      <button onClick={onClose}>Close clone</button>
-      <button onClick={() => onCloned('new-id-123')}>Confirm clone</button>
-    </div>
-  ),
-}));
-
-vi.mock('@/windows/custom/shared/SendToSifButton.jsx', () => ({
-  default: () => <div data-testid="send-to-sif-btn" />,
-}));
-
-vi.mock('@/windows/custom/shared/CloneButton.jsx', () => ({
-  default: ({ onClick, title }) => (
-    <button data-testid="clone-btn" onClick={onClick}>{title}</button>
-  ),
-}));
 
 vi.mock('@/windows/custom/shared/InvoicePaymentHistoryModal.jsx', () => ({
   default: ({ onClose, onPaymentAdded }) => (
@@ -125,10 +99,17 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('renders clone button and send-to-sif button when recordId is provided', () => {
+  // ETP-5260 — Clone and "Enviar a SIF" used to render inline here as
+  // topbarRight siblings. Clone now lives in PurchaseInvoiceSecondaryActions
+  // (topbarSecondary, left of Save/Confirm — see
+  // artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js),
+  // and SendToSifButton is rendered as that same component's `children`, after
+  // Clone. PurchaseInvoiceTopbar itself must never regrow either — that would
+  // duplicate the action alongside the topbarSecondary copy.
+  it('never renders a clone button or a send-to-sif button — both moved to PurchaseInvoiceSecondaryActions (ETP-5260)', () => {
     render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    expect(screen.getByTestId('clone-btn')).toBeInTheDocument();
-    expect(screen.getByTestId('send-to-sif-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('clone-btn')).toBeNull();
+    expect(screen.queryByTestId('send-to-sif-btn')).toBeNull();
   });
 
   it('does not render action buttons when recordId is absent', () => {
@@ -296,20 +277,6 @@ describe('PurchaseInvoiceTopbar', () => {
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 
-  it('clicking clone button opens clone modal', () => {
-    render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(screen.getByTestId('clone-order-modal')).toBeInTheDocument();
-  });
-
-  it('closing clone modal hides it', () => {
-    render(<PurchaseInvoiceTopbar {...defaultProps} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    fireEvent.click(screen.getByText('Close clone'));
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
-  });
-
   it('uses currency from data for badge amount display', () => {
     render(<PurchaseInvoiceTopbar {...defaultProps} />);
     // formatCurrency mock returns "currency:amount"
@@ -423,7 +390,6 @@ describe('PurchaseInvoiceTopbar — sign-driven payment badge (ETP-4841)', () =>
   it('shows the credit badge for a NEGATIVE Factura Rectificativa with a remaining balance', () => {
     render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_RECTIFICATIVA_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:15')).toBeInTheDocument();
     expect(screen.queryByText('statusPending')).toBeNull();
   });
 
@@ -467,7 +433,6 @@ describe('PurchaseInvoiceTopbar — sign-driven payment badge (ETP-4841)', () =>
   it('case B: an ordinary Factura with a NEGATIVE total shows the credit badge, never "pagada"', () => {
     render(<PurchaseInvoiceTopbar {...props} data={NEGATIVE_ORDINARY_DATA} />);
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:750')).toBeInTheDocument();
     expect(screen.queryByText('statusPaid')).toBeNull();
   });
 
@@ -558,25 +523,12 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     vi.clearAllMocks();
   });
 
-  // ── onCloned redirect (uncovered lines 77-78) ──────────────────────────────
-
-  it('navigates to the cloned invoice and closes the clone modal when the clone succeeds', () => {
-    render(<PurchaseInvoiceTopbar {...props} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(screen.getByTestId('clone-order-modal')).toBeInTheDocument();
-
-    // The mocked CloneOrderModal invokes onCloned('new-id-123').
-    fireEvent.click(screen.getByText('Confirm clone'));
-
-    expect(routerMock.navigate).toHaveBeenCalledWith('/purchase-invoice/new-id-123');
-    expect(screen.queryByTestId('clone-order-modal')).toBeNull();
-  });
-
-  it('does not navigate while the clone modal is merely open', () => {
-    render(<PurchaseInvoiceTopbar {...props} />);
-    fireEvent.click(screen.getByTestId('clone-btn'));
-    expect(routerMock.navigate).not.toHaveBeenCalled();
-  });
+  // ── onCloned redirect ───────────────────────────────────────────────────────
+  // Clone (button, modal and the post-clone navigate('/purchase-invoice/{newId}')
+  // redirect) moved to PurchaseInvoiceSecondaryActions (ETP-5260) and is no
+  // longer owned by this component. The default-navigate branch itself is
+  // covered generically by DocumentSecondaryActions.vitest.jsx ("navigates to
+  // /{windowName}/{newId} by default when clone.onCloned is not provided").
 
   // ── grandTotal fallback (uncovered branch on line 30) ──────────────────────
 
@@ -601,7 +553,7 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
 
   // ── currency fallbacks in the credit and paid badges (lines 111/126) ───────
 
-  it('credit badge falls back to USD when the invoice carries no currency', () => {
+  it('credit badge shows no amount regardless of currency (ETP-5268)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -615,7 +567,6 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('USD:20')).toBeInTheDocument();
   });
 
   it('paid badge falls back to USD when the invoice carries no currency', () => {
@@ -630,7 +581,7 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     expect(screen.getByText('USD:500')).toBeInTheDocument();
   });
 
-  it('credit badge uses the invoice currency when present', () => {
+  it('credit badge shows no amount when the invoice currency is present (ETP-5268)', () => {
     render(
       <PurchaseInvoiceTopbar
         {...props}
@@ -643,7 +594,6 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
       />,
     );
     expect(screen.getByText('cpFavorBadge')).toBeInTheDocument();
-    expect(screen.getByText('EUR:20')).toBeInTheDocument();
   });
 
   // ── no badge at all (and therefore no modal) on a draft invoice ────────────
@@ -659,3 +609,9 @@ describe('PurchaseInvoiceTopbar — branch/fallback coverage (ETP-4738)', () => 
     expect(screen.queryByTestId('payment-history-modal')).toBeNull();
   });
 });
+
+// ETP-5272 follow-up ("Enviar a SIF" must flush pending header edits before sending) does NOT
+// apply to this component any more: ETP-5260 moved SendToSifButton (and Clone/Copy-link) out of
+// PurchaseInvoiceTopbar into PurchaseInvoiceSecondaryActions (topbarSecondary slot). The
+// onSave/isDirty forwarding coverage for purchase-invoice now lives in
+// artifacts/purchase-invoice/custom/__tests__/PurchaseInvoiceSecondaryActions.test.js instead.

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, Fragment } from 'react';
-import { TrendingUp, Package, Landmark, FileText, Info } from 'lucide-react';
+import { TrendingUp, Package, Landmark, FileText, Info, Settings } from 'lucide-react';
 import { useUI, useMenuLabel } from '@/i18n';
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
 import { fetchMenuTree } from '@/lib/menuTree.js';
-import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
+import { buildMenuWindowIndex } from '@/pages/roles/useRolesOverviewData.js';
+import { resolveRoleDisplayName, ADMIN_NAME_I18N_KEY } from '@/lib/roleNameI18n.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -15,7 +16,10 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
  * `ROLE_NAME_I18N_KEYS` map uses, deliberately not a new naming scheme, so a role name
  * that resolves a display-name translation also resolves an icon here. Any role name not
  * in this map (there shouldn't be one among `columns`, since `AssignTemplateRolesControl`
- * only ever offers these 4) renders with no icon rather than guessing one.
+ * only ever offers these 4) renders with no icon rather than guessing one. The admin
+ * column (ETP-5196) is NOT keyed into this map — a tenant's Admin role name varies per
+ * tenant, so it is instead gated on `role.isClientAdmin` at the call site, which always
+ * resolves to the `Settings` icon regardless of the role's actual name.
  */
 const ROLE_ICONS = {
   Sales: TrendingUp,
@@ -68,9 +72,7 @@ function tierRank(tier) {
  * Given one row's per-column `{ tier }` values, decides whether the row's roles
  * disagree on the access level for this window (ETP-4999 item 5 — the ticket's
  * "permission comparison view" ask: a user with multiple roles that grant
- * different access levels for the same window). `GENERAL_ROWS` below always
- * passes every column the same `tier: 'full'`, so `disagree` is always `false`
- * for those rows by construction — they render exactly as before, unaffected.
+ * different access levels for the same window).
  *
  * When several columns tie at the highest rank, only the LEFT-MOST one is the
  * "winner" (`winnerIndex`, via `Array.indexOf`'s first-match semantics) — a
@@ -157,6 +159,16 @@ function MatrixRoleCell({ role, tier, text, isWinner, testIdKey, winnerTooltipTi
  * `fetchTemplateRoles()`'s response has no client-admin row at all, so it can't serve that
  * union on its own.
  */
+
+/**
+ * ETP-5196 fallback data source only (see `resolveCategoryRow` below for the primary
+ * source, `menu.json`'s own index). Walks the role-filtered raw `SFListMenu` AD_Menu
+ * tree and collects one row per leaf window, with the category taken from the raw
+ * classic-AD folder nesting — the SAME mechanism that caused this bug (e.g. "Product"
+ * grouped under "Master Data Management" instead of "Inventory") when it was the
+ * PRIMARY source. Kept only for windows `menu.json` doesn't index at all (e.g.
+ * "Roles"/"Usuario" — see `resolveCategoryRow`'s JSDoc).
+ */
 function flattenWindowRows(nodes, category, out) {
   for (const node of nodes ?? []) {
     if (node.type === 'folder') {
@@ -174,34 +186,129 @@ function flattenWindowRows(nodes, category, out) {
   return out;
 }
 
-function groupRowsByCategory(rows) {
+/**
+ * ETP-5196 — resolves ONE active window id's category/display-name/order, preferring
+ * `menu.json`'s own index (`menuIndex`, built by `buildMenuWindowIndex()` — imported
+ * verbatim from `pages/roles/useRolesOverviewData.js`, the SAME function ETP-5071 built
+ * for the "Configuración > Roles" overview matrix, so both matrices resolve identically
+ * rather than re-implementing the logic here) over the raw AD-menu-tree walk above.
+ * `menu.json` is this app's real source of truth for category/window display — the same
+ * file the sidebar itself renders from.
+ *
+ * Returns `null` when the row must be excluded entirely: a `menuIndex` match whose own
+ * `hidden` flag is `true` means EVERY `menu.json` entry for that window id is hidden
+ * (e.g. Match Rule/Periods under Finance) — a window nobody can navigate to from the
+ * real sidebar shouldn't appear as a row here either, matching the Roles-overview
+ * page's `resolveMatrixRow` behavior exactly. **`excludeHidden = false` (ETP-5402
+ * fix)** turns this exclusion off for a report id — every one of the 9 Informes rows
+ * is `hidden: true` in `menu.json` for an unrelated reason (a report never gets its own
+ * top-level sidebar link at all, by design), so applying the exclusion to them silently
+ * dropped every report row despite real backend access data — same root cause and same
+ * fix as `useRolesOverviewData.js`'s `resolveMatrixRow`/`adaptReportsMatrix`.
+ *
+ * Falls back, in order, to:
+ * 1. `adTreeIndex` (this window's row from the raw `SFListMenu` AD-menu-tree walk,
+ *    keyed by windowId) — for a window `menu.json` doesn't index at all, e.g. "Roles"/
+ *    "Usuario" (`useRolesOverviewData.js`'s own `resolveMatrixRow` JSDoc calls this
+ *    exact case out: the `roles` menu.json entry has no `windowId`/`processId`/
+ *    `obuiappProcessId`, so it can never be matched by id there either).
+ * 2. A generic "uncategorized" bucket, using the window's own name from
+ *    `fallbackNameById` (sourced from `overviewRoles[].windows[].name`, the same data
+ *    `activeWindowIds` itself is built from, so every active window id is guaranteed a
+ *    name here even with zero menu data) — for a window in NEITHER `menu.json` NOR the
+ *    AD tree. Must still render rather than silently vanish from the matrix, matching
+ *    the "must never disappear" principle `useRolesOverviewData.js` documents for its
+ *    own fallback.
+ *
+ * `groupOrder`/`itemOrder` (menu.json's own declaration order, used by
+ * `groupResolvedRows` below) are only ever present for a `menuIndex` match — both
+ * fallback paths return `null` for them, sorting after every menu.json-ordered
+ * category/row while keeping their OWN relative order (see `groupResolvedRows`).
+ */
+function resolveCategoryRow(windowId, menuIndex, adTreeIndex, fallbackNameById, uncategorizedLabel, excludeHidden = true) {
+  const match = menuIndex.get(windowId);
+  if (excludeHidden && match?.hidden) return null;
+  if (match) {
+    return { windowId, name: match.label, category: match.group, groupOrder: match.groupOrder, itemOrder: match.itemOrder };
+  }
+  const treeRow = adTreeIndex.get(windowId);
+  if (treeRow) {
+    return { windowId, name: treeRow.name, category: treeRow.category, groupOrder: null, itemOrder: null };
+  }
+  return {
+    windowId,
+    name: fallbackNameById.get(windowId) ?? windowId,
+    category: uncategorizedLabel,
+    groupOrder: null,
+    itemOrder: null,
+  };
+}
+
+/**
+ * ETP-5196 — group already-resolved rows (see `resolveCategoryRow`) by category and sort
+ * both levels: a category/row carrying a `menu.json` order (`groupOrder`/`itemOrder`)
+ * always sorts before one that doesn't; two ordered entries sort numerically between
+ * themselves; two unordered entries (AD-tree-fallback or uncategorized) keep their
+ * relative INPUT order — `Array.prototype.sort` is stable in every engine this app
+ * targets, so returning `0` for that comparison preserves the caller's construction
+ * order (tree-walk order for the fallback rows, matching this tab's pre-fix behavior
+ * for exactly those windows) rather than reshuffling them.
+ */
+/**
+ * ETP-5402 QA follow-up — `sortedRows` is split into `rows` (real windows) and `reportRows`
+ * (Informes subsection, `row.isReport` true) here, at the very end, rather than earlier in the
+ * pipeline: both kinds share the exact same category/ordering resolution up to this point (see
+ * `resolveCategoryRow`), and splitting only at render time keeps that resolution logic
+ * single-sourced. `itemOrder` already places every report row after its category's real windows
+ * (menu.json declares each category's `report-viewer-*`/report entries at the END of that
+ * group's `items` array), so filtering `sortedRows` in place preserves each sublist's own
+ * relative order with no extra sort — matching `RolesAccessMatrix.jsx`'s own `windowRows`/
+ * `reportRows` split (`RolesAccessMatrix__informesHeader`), so both matrices render the
+ * "Informes" subsection identically instead of one silently flattening reports into the main
+ * row list with no sub-header (the QA-reported gap this fixes).
+ */
+function groupResolvedRows(rows) {
   const categoryOrder = [];
   const rowsByCategory = new Map();
+  const groupOrderByCategory = new Map();
   for (const row of rows) {
     if (!rowsByCategory.has(row.category)) {
       rowsByCategory.set(row.category, []);
       categoryOrder.push(row.category);
     }
     rowsByCategory.get(row.category).push(row);
+    if (row.groupOrder != null) {
+      const currentBest = groupOrderByCategory.get(row.category);
+      if (currentBest == null || row.groupOrder < currentBest) {
+        groupOrderByCategory.set(row.category, row.groupOrder);
+      }
+    }
   }
-  return categoryOrder.map((category) => ({ category, rows: rowsByCategory.get(category) }));
-}
 
-/**
- * The 3 hardcoded General rows (ETP-4906 human decision, session 2026-08-14, made from a
- * static Figma screenshot — flagged for Alex/REVIEW to re-verify against the live Figma file
- * before merge, see the plan's Global Constraints). None of the three has an `AD_Window_ID`
- * at all, so none can ever be derived from `SFListMenu`'s tree — they are always rendered as
- * full access ('✓') for every role column, unconditionally. The other 9 windowless rows
- * documented in com.etendoerp.go's `TemplateRoleWindowAccess` javadoc (Monitor fiscal,
- * Informes financieros, both Informe Antigüedad reports, etc.) are intentionally omitted —
- * they must never appear, not even as a '—' row.
- */
-const GENERAL_ROWS = [
-  { key: 'dashboard', labelKey: 'userRolesTabDashboardRow' },
-  { key: 'favorites', labelKey: 'userRolesTabFavoritesRow' },
-  { key: 'copilot', labelKey: 'userRolesTabCopilotRow' },
-];
+  const sortedCategories = [...categoryOrder].sort((a, b) => {
+    const orderA = groupOrderByCategory.get(a);
+    const orderB = groupOrderByCategory.get(b);
+    if (orderA != null && orderB != null) return orderA - orderB;
+    if (orderA != null) return -1;
+    if (orderB != null) return 1;
+    return 0;
+  });
+
+  return sortedCategories.map((category) => {
+    const rowsForCategory = rowsByCategory.get(category);
+    const sortedRows = [...rowsForCategory].sort((a, b) => {
+      if (a.itemOrder != null && b.itemOrder != null) return a.itemOrder - b.itemOrder;
+      if (a.itemOrder != null) return -1;
+      if (b.itemOrder != null) return 1;
+      return 0;
+    });
+    return {
+      category,
+      rows: sortedRows.filter((row) => !row.isReport),
+      reportRows: sortedRows.filter((row) => row.isReport),
+    };
+  });
+}
 
 export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   const ui = useUI();
@@ -294,31 +401,122 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   // those classic-only rows without a new backend call. Deliberately still sourced from
   // `overviewRoles`, not `allTemplateRoles` — the client-admin row it carries is what makes
   // this union cover windows granted to none of the 4 templates (e.g. "Roles", "Usuario").
+  //
+  // ETP-5402 — also folds in `role.reports[]` ids (the Informes subsection: Tax Report,
+  // both aging reports, the 6 financial-family reports, ...). Unlike a real windowId, a
+  // report id has NO `SFListMenu`/AD-tree counterpart at all — `flattenWindowRows` below
+  // only ever walks classic AD windows — so a report id can ONLY ever resolve through
+  // `menuIndex` (see `resolveCategoryRow` below and this file's own `menu.json` entries,
+  // each carrying a `reportId` key). Below it falls into the same `remainingIds` bucket a
+  // menuIndex-only window id already falls into, so no other code here needed to change.
   const activeWindowIds = useMemo(() => {
     const ids = new Set();
     for (const role of overviewRoles) {
       for (const w of role.windows ?? []) {
         if (w?.id != null) ids.add(String(w.id));
       }
+      for (const r of role.reports ?? []) {
+        if (r?.id != null) ids.add(String(r.id));
+      }
     }
     return ids;
   }, [overviewRoles]);
 
-  const categoryGroups = useMemo(() => {
-    const treeRows = flattenWindowRows(menuTreeData?.tree, null, [])
-      .filter((row) => activeWindowIds.has(row.windowId));
-    // Drop any category left with zero surviving rows — must not render an empty
-    // category header with nothing under it.
-    return groupRowsByCategory(treeRows).filter((group) => group.rows.length > 0);
-  }, [menuTreeData, activeWindowIds]);
+  // ETP-5402 — the subset of `activeWindowIds` that are actually report ids (from
+  // `role.reports`, not `role.windows`) — used below to pass `excludeHidden: false` into
+  // `resolveCategoryRow` only for those ids. See that function's own JSDoc for why a
+  // report id must never be dropped on the `menu.json` hidden-flag check a real window id
+  // legitimately is.
+  const reportIds = useMemo(() => {
+    const ids = new Set();
+    for (const role of overviewRoles) {
+      for (const r of role.reports ?? []) {
+        if (r?.id != null) ids.add(String(r.id));
+      }
+    }
+    return ids;
+  }, [overviewRoles]);
 
+  // ETP-5196 — `menu.json`'s own windowId -> {group, label, groupOrder, itemOrder,
+  // hidden} index (see `resolveCategoryRow`'s JSDoc above), the SAME function
+  // ETP-5071 built for the Roles-overview matrix, imported rather than
+  // re-implemented. Static per mount (`menu.json` is a build-time import), so this
+  // never needs to recompute on re-render.
+  const menuIndex = useMemo(() => buildMenuWindowIndex(), []);
+
+  // ETP-5196 fallback source only — one row per leaf window from the raw
+  // `SFListMenu` AD-menu-tree walk, keyed by windowId (first-seen wins on a
+  // duplicate id, matching `flattenWindowRows`'s own pre-existing traversal order).
+  // Consulted by `resolveCategoryRow` only for a window `menuIndex` doesn't cover.
+  const adTreeIndex = useMemo(() => {
+    const rows = flattenWindowRows(menuTreeData?.tree, null, []);
+    const map = new Map();
+    for (const row of rows) {
+      if (!map.has(row.windowId)) map.set(row.windowId, row);
+    }
+    return map;
+  }, [menuTreeData]);
+
+  // ETP-5196 last-resort name fallback — every active window id is guaranteed a name
+  // here regardless of menu data, since `activeWindowIds` itself is built from this
+  // same `overviewRoles[].windows[]` data (see `activeWindowIds` above). Only reached
+  // by `resolveCategoryRow` for a window absent from BOTH `menuIndex` and the AD tree.
+  const windowNameById = useMemo(() => {
+    const map = new Map();
+    for (const role of overviewRoles) {
+      for (const w of role.windows ?? []) {
+        if (w?.id != null && w?.name != null) {
+          const id = String(w.id);
+          if (!map.has(id)) map.set(id, w.name);
+        }
+      }
+    }
+    return map;
+  }, [overviewRoles]);
+
+  const categoryGroups = useMemo(() => {
+    // Iterate in the AD-tree's OWN traversal order first (filtered to active window
+    // ids) so that any row falling back to the tree (no `menuIndex` match) keeps its
+    // pre-fix relative order via `groupResolvedRows`'s stable-sort tie-break — then
+    // append any active window id absent from the tree entirely (the
+    // fully-uncategorized case), in no particular guaranteed order since none existed
+    // for them before this fix either.
+    const treeOrderedIds = flattenWindowRows(menuTreeData?.tree, null, [])
+      .map((row) => row.windowId)
+      .filter((windowId) => activeWindowIds.has(windowId));
+    const coveredIds = new Set(treeOrderedIds);
+    const remainingIds = [...activeWindowIds].filter((windowId) => !coveredIds.has(windowId));
+
+    const uncategorizedLabel = ui('userRolesTabUncategorizedCategory');
+    const resolvedRows = [...treeOrderedIds, ...remainingIds]
+      .map((windowId) => {
+        const isReport = reportIds.has(windowId);
+        const row = resolveCategoryRow(
+          windowId, menuIndex, adTreeIndex, windowNameById, uncategorizedLabel, !isReport);
+        return row ? { ...row, isReport } : null;
+      })
+      .filter((row) => row !== null);
+
+    // Drop any category left with zero surviving rows (window AND report) — must not
+    // render an empty category header with nothing under it.
+    return groupResolvedRows(resolvedRows)
+      .filter((group) => group.rows.length > 0 || group.reportRows.length > 0);
+  }, [menuTreeData, activeWindowIds, reportIds, menuIndex, adTreeIndex, windowNameById, ui]);
+
+  // ETP-5196 — for a confirmed admin holder, the matrix's sole column is the admin role
+  // itself (`adminRole` already has the exact shape a column needs: `{ id, name,
+  // isClientAdmin: true, windows }`), not the composed template-role selection — that
+  // selection reflects the PRE-promotion state and is not what the admin actually has
+  // access to. See `isAdminRoleHolder` above for why this is `false` (falls through,
+  // unaffected) for the entire loading window and after a failed fetch.
   const columns = useMemo(() => {
+    if (isAdminRoleHolder) return adminRole ? [adminRole] : [];
     const selected = new Set((selectedRoleIds ?? []).map(String));
     // SFSystemRoleTemplates never returns a client-admin row (there is none at system
     // level), so no `!role.isClientAdmin` guard is needed here anymore — every entry in
     // `allTemplateRoles` is already a composable template by construction.
     return allTemplateRoles.filter((role) => selected.has(String(role.id)));
-  }, [allTemplateRoles, selectedRoleIds]);
+  }, [isAdminRoleHolder, adminRole, allTemplateRoles, selectedRoleIds]);
 
   // ETP-4999 — a brand-new, not-yet-saved user can never have any roles selected yet
   // (`AssignTemplateRolesControl` only renders its interactive chip editor once
@@ -339,27 +537,27 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
     );
   }
 
-  // ETP-5071 — checked right after `isNew` and before `loading`/`error` below: unlike
-  // `columns` (derived from `templateRoles`, gated by the fetch), `isAdminRoleHolder`
-  // only ever flips from `false` to `true` as `overviewRoles` fills in — it is `false`
-  // (falls through, unaffected) for the entire in-flight fetch AND on a failed one
-  // (`overviewRoles` stays `[]` forever after a rejected fetch, same as `templateRoles`
-  // staying `null`), so placing it here never masks the loading/error branches the way
-  // checking `columns.length === 0` first would (see that comment below). Once the user
-  // IS a confirmed admin holder, the composed-roles matrix is not just empty or
-  // unavailable — it's actively wrong (stale pre-promotion data) — so this takes
-  // priority over rendering the loading spinner too, matching the product decision to
-  // hide the matrix entirely rather than show it with the wrong roles.
-  if (isAdminRoleHolder) {
-    return (
-      <div
-        className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
-        data-testid="UserRolesTab__admin-full-access"
-      >
-        {ui('userRolesTabAdminFullAccessMessage')}
-      </div>
-    );
-  }
+  // ETP-5071 (revised ETP-5196) — computed right after `isNew` and before `loading`/`error`
+  // below: unlike `columns` (derived from `templateRoles`, gated by the fetch),
+  // `isAdminRoleHolder` only ever flips from `false` to `true` as `overviewRoles` fills in —
+  // it is `false` (falls through, unaffected) for the entire in-flight fetch AND on a failed
+  // one (`overviewRoles` stays `[]` forever after a rejected fetch, same as `templateRoles`
+  // staying `null`), so computing it here never masks the loading/error branches the way
+  // checking `columns.length === 0` first would (see that comment below). ETP-5196: once the
+  // user IS a confirmed admin holder, this no longer short-circuits the render — the matrix
+  // itself now shows a single admin column (via `columns` above) built from `adminRole`
+  // rather than the stale pre-promotion `selectedRoleIds`, so it is safe to show alongside
+  // this informative message rather than hiding it. `adminFullAccessMessage` is rendered as
+  // a sibling above the table further down, after falling through the loading/error/empty
+  // checks below exactly like a standard user's render path.
+  const adminFullAccessMessage = isAdminRoleHolder ? (
+    <div
+      className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground"
+      data-testid="UserRolesTab__admin-full-access"
+    >
+      {ui('userRolesTabAdminFullAccessMessage')}
+    </div>
+  ) : null;
 
   // loading/error MUST be checked before the "no roles selected" empty state below:
   // `columns` is derived from `templateRoles`, which stays `null` for the entire in-flight
@@ -397,10 +595,15 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   // Returns both the display text AND the tier ('full' | 'readonly' | null for no access)
   // so the caller can wrap it in a colored `TierPill` — 'null' means render plain text,
   // no pill (ETP-4906 Manual QA Feedback Round 6, DEV wave 11).
+  //
+  // ETP-5402 — `row.windowId` also carries a report row's own id ("tax-report", ...) for a
+  // row sourced from `role.reports` rather than `role.windows`; the two id-spaces never
+  // overlap, so checking both arrays for a match is safe and needs no row-kind flag.
   const cellValue = (row, role) => {
-    const windowEntry = (role.windows ?? []).find((w) => String(w.id) === row.windowId);
-    if (!windowEntry) return { tier: null, text: '—' };
-    return windowEntry.tier === 'full'
+    const entry = (role.windows ?? []).find((w) => String(w.id) === row.windowId)
+      ?? (role.reports ?? []).find((r) => String(r.id) === row.windowId);
+    if (!entry) return { tier: null, text: '—' };
+    return entry.tier === 'full'
       ? { tier: 'full', text: '✓' }
       : { tier: 'readonly', text: ui('accessTierReadOnly') };
   };
@@ -409,113 +612,135 @@ export default function UserRolesTab({ isNew, onVisibilityChange, data }) {
   const winnerTooltipDescription = ui('userRolesTabWinnerTooltipDescription');
 
   return (
-    // ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
-    // pass added one, on the assumption `sticky` needed a locally-owned scroll context —
-    // live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
-    // column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
-    // a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
-    // local wrapper here instead created a SECOND, artificially short scroll region
-    // inside the (always full-viewport-height) outer panel — the empty space between
-    // where this region's content ended and the panel's own bottom edge is exactly what
-    // a human caught live: comparing against a pre-item-5 build showed no such gap.
-    <div data-testid="UserRolesTab">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 z-10 bg-card">
-          <tr className="border-b border-border/50">
-            <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
-              {ui('userRolesTabWindowColumn')}
-            </th>
-            {columns.map((role) => {
-              const RoleIcon = ROLE_ICONS[role.name];
-              return (
-                <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
-                  <span className="inline-flex items-center justify-center gap-1">
-                    {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid={`RoleIcon__${role.id}`} />}
-                    {resolveRoleDisplayName(ui, role.name)}
-                  </span>
-                </th>
-              );
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border/50">
-          <Fragment key="general">
-            <tr className="bg-muted/30" data-testid="UserRolesTab__category-general">
-              <th
-                colSpan={columns.length + 1}
-                className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
-              >
-                {ui('userRolesTabGeneralCategory')}
+    // ETP-5196 — `adminFullAccessMessage` (non-null only for a confirmed admin holder)
+    // renders as a sibling ABOVE the table, not instead of it: the fragment wrapper
+    // below is the only change from the pre-ETP-5196 single-`<div>` return.
+    <>
+      {adminFullAccessMessage}
+      {/* ETP-4999 item 5 — NO local `overflow-auto`/`max-h-[...]` wrapper here (an earlier
+          pass added one, on the assumption `sticky` needed a locally-owned scroll context —
+          live-verified false: the enclosing `DetailView.jsx` custom-tab panel's own outer
+          column (`overflow-y-auto`, the single scroll context for the whole detail form) IS
+          a valid sticky ancestor, and `sticky top-0` below pins correctly against it). A
+          local wrapper here instead created a SECOND, artificially short scroll region
+          inside the (always full-viewport-height) outer panel — the empty space between
+          where this region's content ended and the panel's own bottom edge is exactly what
+          a human caught live: comparing against a pre-item-5 build showed no such gap. */}
+      <div data-testid="UserRolesTab">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-card">
+            <tr className="border-b border-border/50">
+              <th className="text-left text-sm font-semibold text-foreground py-2.5 pr-4">
+                {ui('userRolesTabWindowColumn')}
               </th>
-            </tr>
-            {GENERAL_ROWS.map((row) => {
-              // Always 'full' for every column by construction — `resolveRowWinner`
-              // always returns `disagree: false` here, so this row renders exactly
-              // as it did before item 5 (no tooltip marker).
-              const cellsForRow = columns.map(() => ({ tier: 'full', text: '✓' }));
-              const { winnerIndex } = resolveRowWinner(cellsForRow);
-              return (
-                <tr key={row.key} data-testid={`UserRolesTab__row-${row.key}`}>
-                  <td className="py-2.5 pr-4 text-foreground">{ui(row.labelKey)}</td>
-                  {columns.map((role, i) => {
-                    const { tier, text } = cellsForRow[i];
-                    const isWinner = i === winnerIndex;
-                    return (
-                      <MatrixRoleCell
-                        key={role.id}
-                        role={role}
-                        tier={tier}
-                        text={text}
-                        isWinner={isWinner}
-                        testIdKey={row.key}
-                        winnerTooltipTitle={winnerTooltipTitle}
-                        winnerTooltipDescription={winnerTooltipDescription}
-                        data-testid="MatrixRoleCell__71bdc9" />
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </Fragment>
-          {categoryGroups.map((group) => (
-            <Fragment key={group.category}>
-              <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
-                <th
-                  colSpan={columns.length + 1}
-                  className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
-                >
-                  {tMenu(group.category)}
-                </th>
-              </tr>
-              {group.rows.map((row) => {
-                const cellsForRow = columns.map((role) => cellValue(row, role));
-                const { winnerIndex } = resolveRowWinner(cellsForRow);
+              {columns.map((role) => {
+                const RoleIcon = role.isClientAdmin ? Settings : ROLE_ICONS[role.name];
                 return (
-                  <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
-                    <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
-                    {columns.map((role, i) => {
-                      const { tier, text } = cellsForRow[i];
-                      const isWinner = i === winnerIndex;
-                      return (
-                        <MatrixRoleCell
-                          key={role.id}
-                          role={role}
-                          tier={tier}
-                          text={text}
-                          isWinner={isWinner}
-                          testIdKey={row.windowId}
-                          winnerTooltipTitle={winnerTooltipTitle}
-                          winnerTooltipDescription={winnerTooltipDescription}
-                          data-testid="MatrixRoleCell__71bdc9" />
-                      );
-                    })}
-                  </tr>
+                  <th key={role.id} className="text-center text-sm font-semibold text-foreground py-2.5 px-3">
+                    <span className="inline-flex items-center justify-center gap-1">
+                      {RoleIcon && <RoleIcon className="h-3.5 w-3.5" aria-hidden="true" data-testid={`RoleIcon__${role.id}`} />}
+                      {role.isClientAdmin ? ui(ADMIN_NAME_I18N_KEY) : resolveRoleDisplayName(ui, role.name)}
+                    </span>
+                  </th>
                 );
               })}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/50">
+            {categoryGroups.map((group) => (
+              <Fragment key={group.category}>
+                <tr className="bg-muted/30" data-testid={`UserRolesTab__category-${group.category}`}>
+                  <th
+                    colSpan={columns.length + 1}
+                    /* scope="row", not the spec-textbook "rowgroup": "rowgroup" only labels
+                       correctly when paired with one <tbody> per group, per the WHATWG HTML
+                       spec's own worked example. Here ALL categories share a single <tbody>
+                       (see the `<Fragment key={group.category}>` wrapping below, not a
+                       per-category <tbody>), so under the spec's rule ("applies to all the
+                       remaining cells in the row group") a "rowgroup" scope would associate
+                       this header with every row of every LATER category too, not just its
+                       own — worse than the ARIA-role bug it would fix. "row" is safe: this
+                       <th> is alone in its own <tr> (colSpan spans the whole row), so it
+                       creates no cell association at all, but it still flips the implicit
+                       ARIA role from columnheader to rowheader (both "row" and "rowgroup" map
+                       to rowheader per HTML-AAM), which is what resolves the Playwright
+                       role-collision this was added for. */
+                    scope="row"
+                    className="text-left text-xs font-medium text-muted-foreground py-1.5 pr-4"
+                  >
+                    {tMenu(group.category)}
+                  </th>
+                </tr>
+                {group.rows.map((row) => {
+                  const cellsForRow = columns.map((role) => cellValue(row, role));
+                  const { winnerIndex } = resolveRowWinner(cellsForRow);
+                  return (
+                    <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
+                      <td className="py-2.5 pr-4 text-foreground">{tMenu(row.name)}</td>
+                      {columns.map((role, i) => {
+                        const { tier, text } = cellsForRow[i];
+                        const isWinner = i === winnerIndex;
+                        return (
+                          <MatrixRoleCell
+                            key={role.id}
+                            role={role}
+                            tier={tier}
+                            text={text}
+                            isWinner={isWinner}
+                            testIdKey={row.windowId}
+                            winnerTooltipTitle={winnerTooltipTitle}
+                            winnerTooltipDescription={winnerTooltipDescription}
+                            data-testid="MatrixRoleCell__71bdc9" />
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+                {/* ETP-5402 QA follow-up — "Informes" subsection, same sub-header pattern as
+                    RolesAccessMatrix.jsx's own `RolesAccessMatrix__informesHeader` row: nested
+                    inside this category block, right after its real window rows, only when
+                    this category actually has report rows. */}
+                {group.reportRows.length > 0 && (
+                  <tr className="bg-muted/10" data-testid={`UserRolesTab__informesHeader-${group.category}`}>
+                    <th
+                      colSpan={columns.length + 1}
+                      scope="row"
+                      className="text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70 py-1 pr-4 pl-3"
+                    >
+                      {ui('rolesMatrixInformesHeader')}
+                    </th>
+                  </tr>
+                )}
+                {group.reportRows.map((row) => {
+                  const cellsForRow = columns.map((role) => cellValue(row, role));
+                  const { winnerIndex } = resolveRowWinner(cellsForRow);
+                  return (
+                    <tr key={row.windowId} data-testid={`UserRolesTab__row-${row.windowId}`}>
+                      <td className="py-2.5 pr-4 pl-3 text-foreground">{tMenu(row.name)}</td>
+                      {columns.map((role, i) => {
+                        const { tier, text } = cellsForRow[i];
+                        const isWinner = i === winnerIndex;
+                        return (
+                          <MatrixRoleCell
+                            key={role.id}
+                            role={role}
+                            tier={tier}
+                            text={text}
+                            isWinner={isWinner}
+                            testIdKey={row.windowId}
+                            winnerTooltipTitle={winnerTooltipTitle}
+                            winnerTooltipDescription={winnerTooltipDescription}
+                            data-testid="MatrixRoleCell__informes-71bdc9" />
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

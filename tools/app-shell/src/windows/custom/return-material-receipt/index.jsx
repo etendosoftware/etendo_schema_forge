@@ -1,10 +1,17 @@
+import { useMemo } from 'react';
 import ReturnMaterialReceiptPage from '@generated/return-material-receipt/generated/web/return-material-receipt/ReturnMaterialReceiptPage';
 import ReturnMaterialReceiptPreview from './ReturnMaterialReceiptPreview';
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
+import ReturnMaterialReceiptRowConfirmModal from './ReturnMaterialReceiptRowConfirmModal.jsx';
+import ReturnMaterialReceiptSecondaryActions from './ReturnMaterialReceiptSecondaryActions.jsx';
+import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
-import { useMenuLabel } from '@/i18n';
+import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
+import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
+import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
 // ETP-4857 — bulk "Confirmar" for Borrador rows, at parity with Goods Shipment.
 // buildInOutActions only offers CO (confirm) when a draft is selected; it never
@@ -16,8 +23,34 @@ function ReturnMaterialReceiptBulkActions(props) {
         {...props}
         entity="returnMaterialReceipt"
         buildActions={buildInOutActions}
-        labelKey="confirmBulk"
+        labelKey="process"
         data-testid="BulkDocumentAction__4e1c28" />
+      {/* ETP-5378 — bulk Contabilizar, at parity with Goods Shipment: gated on
+          processed & not-yet-posted rows. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnMaterialReceipt"
+        actionMode="neoAction"
+        buildActions={buildPostActions}
+        rowFilter={postRowFilter}
+        labelKey="post"
+        data-testid="BulkDocumentActionPost__4e1c28" />
+      {/* ETP-5378 QA follow-up (SEL-05 / SEL-06) — bulk Descontabilizar, the counterpart of
+          the unpost entry this window's row kebab already offers via
+          buildDocumentRowQuickActionsPostMenu({ includeUnpost: true }). Without it a posted
+          row showed "Descontabilizar" on hover but the selection bar offered nothing at all,
+          since buildPostActions only fires on not-yet-posted rows. Its own button rather than
+          a second option inside "Contabilizar" (same reasoning as Goods Shipment: that button
+          would then be named after the opposite of what it does), and a plain `unpost`
+          neoAction with no pre-step, matching what the kebab runs. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnMaterialReceipt"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__4e1c28" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -28,39 +61,69 @@ function ReturnMaterialReceiptBulkActions(props) {
 
 export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const draftMode = useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui]);
+  const { createContactCtxValue, contactPortal } =
+    useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
   return (
-    <ReturnWindowShell
-      windowName={windowName}
-      recordId={recordId}
-      apiBaseUrl={apiBaseUrl}
-      token={token}
-      PageComponent={ReturnMaterialReceiptPage}
-      renderPreview={({ row, onClose, onEdit }) => (
-        <ReturnMaterialReceiptPreview
-          receipt={row}
-          token={token}
-          apiBaseUrl={apiBaseUrl}
-          windowName={windowName}
-          onClose={onClose}
-          onEdit={onEdit}
-          data-testid="ReturnMaterialReceiptPreview__4e1c28" />
-      )}
-      entity="returnMaterialReceipt"
-      headerEntity="returnMaterialReceipt"
-      routePrefix="/return-material-receipt/"
-      duplicateAction={{ show: true, visibleWhen: "@documentStatus@='CO'" }}
-      hideLink
-      bulkActions={ReturnMaterialReceiptBulkActions}
-      // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
-      // modal had no client PDF and sent the print-* artifact instead of the document the
-      // preview shows. return-to-vendor-shipment has NO emailAction (removed under ETP-4717
-      // due to a backend contract-name mismatch) — this window keeps its own on purpose.
-      emailAction={{
-        usePdf: useReturnReceiptPdf,
-        documentType: tMenu('Return Material Receipt'),
-        visibleWhen: "@documentStatus@='CO'",
-      }}
-      {...rest}
-      data-testid="ReturnWindowShell__4e1c28" />
+    <CreateContactContext.Provider value={createContactCtxValue}>
+      <ReturnWindowShell
+        windowName={windowName}
+        recordId={recordId}
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        PageComponent={ReturnMaterialReceiptPage}
+        renderPreview={({ row, onClose, onEdit }) => (
+          <ReturnMaterialReceiptPreview
+            receipt={row}
+            token={token}
+            apiBaseUrl={apiBaseUrl}
+            windowName={windowName}
+            onClose={onClose}
+            onEdit={onEdit}
+            data-testid="ReturnMaterialReceiptPreview__4e1c28" />
+        )}
+        entity="returnMaterialReceipt"
+        headerEntity="returnMaterialReceipt"
+        routePrefix="/return-material-receipt/"
+        // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
+        // and the generated ReturnMaterialReceiptPage's own `{...props}` spread
+        // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
+        topbarSecondary={ReturnMaterialReceiptSecondaryActions}
+        // ETP-5408 — wins over the generated Page's own `draftMode` (it spreads `{...props}` after).
+        draftMode={draftMode}
+        // ETP-5316 — Clone/duplicate is not a supported action for Customer Returns
+        // (grid row action was showing it for CO rows). Mirrors sibling
+        // return-to-vendor-shipment (duplicateAction={{ show: false }}), which
+        // already had this suppressed. Document view has never shown Clone
+        // (ReturnMaterialReceiptSecondaryActions already passes clone={false}).
+        duplicateAction={{ show: false }}
+        hideLink
+        bulkActions={ReturnMaterialReceiptBulkActions}
+        // ETP-4912 — without `usePdf` the row-hover envelope falls back to useNoPdf, so the
+        // modal had no client PDF and sent the print-* artifact instead of the document the
+        // preview shows. return-to-vendor-shipment now has its own `emailAction` too (ETP-5124,
+        // once its backend contract-name mismatch — ETP-4717 — was fixed); each window keeps
+        // its own `usePdf`/`documentType` wiring since the PDF hooks and labels differ.
+        emailAction={{
+          usePdf: useReturnReceiptPdf,
+          documentType: tMenu('Return Material Receipt'),
+          visibleWhen: "@documentStatus@='CO'",
+        }}
+        // ETP-5378 — row-hover Confirmar, opening the same popup
+        // ConfirmWithCreditButton shows in the form.
+        confirmAction={{
+          ConfirmModal: ReturnMaterialReceiptRowConfirmModal,
+          specName: 'return-material-receipt',
+          entityName: 'returnMaterialReceipt',
+          confirmedTitleKey: 'documentConfirmed',
+          invoiceResultTitleKey: 'rmrInvoiceCreatedTitle',
+          invoiceDocType: 'facturaVenta',
+          invoiceRoute: '/sales-invoice',
+        }}
+        {...rest}
+        data-testid="ReturnWindowShell__4e1c28" />
+      {contactPortal}
+    </CreateContactContext.Provider>
   );
 }

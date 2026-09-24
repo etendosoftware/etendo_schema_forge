@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Save, RefreshCw, PlusCircle, MoreVertical } from 'lucide-react';
+import { Save, RefreshCw, PlusCircle, MoreVertical, AlertTriangle } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -8,14 +8,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import OrgDropdown from './FiscalOrgDropdown.jsx';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { InfoBanner } from '@/components/InfoBanner.jsx';
 import { useFiscalConfig } from './useFiscalConfig.js';
 import { detectProfile } from './fiscalConfig.utils.js';
 import { useCertExpiry } from './useCertExpiry.js';
+import { useFiscalTestMode } from './useFiscalTestMode.js';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
 import CertExpiryBanner from './CertExpiryBanner.jsx';
 import OnboardingWizard from './OnboardingWizard.jsx';
@@ -87,7 +89,24 @@ async function saveTwoRefs(ref1, ref2) {
 
 // ── FiscalConfigPage ───────────────────────────────────────────────────────────
 
-export default function FiscalConfigPage({ token, apiBaseUrl }) {
+const FISCAL_CONFIG_WINDOW_ID = 'C1D3A2A017AC4B82B9FEE6F4D2A0C55A';
+
+// ETP-5395 Fix 3 — this custom window never delegated to a generated Page.jsx (registry.js
+// loads FiscalConfigPage.jsx directly for "fiscal-config"), so it never picked up the ETP-4520
+// access-tier guard despite menu.json carrying a real windowId — same gap ETP-4658 already found
+// and fixed for financial-account/sales-invoice/etc. Without it, a role with no grant on this
+// window got a correct backend 403 ("Access denied to spec for current role") on the
+// sii/tbai/verifactu-config fetches, rendered raw with a Retry button that can never succeed.
+// Gating in a wrapper means the page's hooks (and those fetches) never run without access.
+export default function FiscalConfigPage(props) {
+  const windowAccessTier = useWindowAccess(FISCAL_CONFIG_WINDOW_ID);
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId={FISCAL_CONFIG_WINDOW_ID} data-testid="WindowAccessGuard__fiscal-config" />;
+  }
+  return <FiscalConfigPageContent {...props} data-testid="FiscalConfigPageContent__310303" />;
+}
+
+function FiscalConfigPageContent({ token, apiBaseUrl }) {
   const ui = useUI();
   const navigate = useNavigate();
   const { selectedOrg, selectedRole, selectOrg } = useAuth();
@@ -135,13 +154,18 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
 
   const { daysLeft: certDaysLeft } = useCertExpiry(apiBaseUrl, { mockDaysLeft: mockCertDays, orgId });
 
+  // ETP-5272 — AD_Preference "Fuerza SII/TicketBAI/VeriFactu a modo prueba":
+  // when active, the whole window becomes read-only (no new SIF activation is
+  // allowed outside a production environment). Fails open on fetch error.
+  const { forceTestMode } = useFiscalTestMode(apiBaseUrl);
+
   const siiRef       = useRef(null);
   const tbaiRef      = useRef(null);
   const verifactuRef = useRef(null);
 
   // "Add complementary SIF" — only when real API data (not mock), org selected,
   // and profile is singly sii or tbai (not already combined or verifactu).
-  const canAddComplementary = !mockOverride && !!orgId &&
+  const canAddComplementary = !mockOverride && !!orgId && !forceTestMode &&
     effectiveProfile === 'tbai';
 
   async function handleAddComplementary() {
@@ -222,6 +246,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
             apiBaseUrl={apiBaseUrl}
             onComplete={refetch}
             onGoHome={() => navigate('/dashboard')}
+            forceTestMode={forceTestMode}
             data-testid="OnboardingWizard__310303" />
         </div>
       </>
@@ -295,7 +320,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={saving || !orgId}
+            disabled={saving || !orgId || forceTestMode}
             className={resolveSaveClass(savedOk)}
             data-testid="Button__310303">
             <Save size={14} className="mr-1.5" data-testid="Save__310303" />
@@ -333,6 +358,17 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
       )}
       <div className="relative h-full flex flex-col overflow-hidden">
         {orgBar}
+
+        {showContent && forceTestMode && renderProfile !== 'conflict' && (
+          <div className="px-6 pt-4">
+            <InfoBanner
+              tone="warning"
+              icon={AlertTriangle}
+              data-testid="FiscalConfigPage__testModeBanner">
+              {ui('fiscal.testModeLock.warning')}
+            </InfoBanner>
+          </div>
+        )}
 
         {!orgId && !mockOverride && (
           <div className="flex-1 flex items-center justify-center">
@@ -387,6 +423,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 onSave={() => {}}
                 variant={effectiveProfile}
                 hideSave
+                locked={forceTestMode}
                 data-testid="SiiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -416,6 +453,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     variant="sii"
                     hideSave
+                    locked={forceTestMode}
                     data-testid="SiiSection__310303" />
                 )}
                 {activeTab === 1 && (
@@ -428,6 +466,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                     onSave={() => {}}
                     hideSave
                     hideCert
+                    locked={forceTestMode}
                     data-testid="TbaiSection__310303" />
                 )}
                 <CertExpiryBanner
@@ -452,6 +491,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
+                locked={forceTestMode}
                 data-testid="TbaiSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}
@@ -474,6 +514,7 @@ export default function FiscalConfigPage({ token, apiBaseUrl }) {
                 orgId={orgId}
                 onSave={() => {}}
                 hideSave
+                locked={forceTestMode}
                 data-testid="VerifactuSection__310303" />
               <CertExpiryBanner
                 daysLeft={certDaysLeft}

@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
+// `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
+import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -16,9 +19,28 @@ describe('OrderCreateInvoice', () => {
     assert.match(src, /\{\s*data.*recordId.*token.*apiBaseUrl/);
   });
 
-  it('renders confirm flow only for draft orders (status DR)', () => {
+  // ETP-5255 — this test used to also assert
+  // `assert.match(src, /\{isDraft && showConfirm && createPortal\(/)`. That half is gone
+  // rather than re-pointed at the new expression, for two reasons.
+  //
+  // It was a source-text assertion, of the kind forbidden since ETP-4958. And it was pinning
+  // the defect: `isDraft` in that gate unmounted the confirm modal the instant `onRefresh()`
+  // reloaded the just-confirmed order as CO, so a failed shipment/invoice step was reported
+  // nowhere — no error, no toast, no retry path — and the expression could not be corrected
+  // without turning this test red. Re-writing the regex would have re-pinned whatever shape
+  // came next, which is the same mistake in a new form.
+  //
+  // The two real properties (the modal does not OPEN outside draft; once open it SURVIVES the
+  // DR→CO transition with its state intact, on both render paths) are asserted behaviourally
+  // in tools/app-shell/src/windows/custom/sales-order/__tests__/
+  //   OrderCreateInvoice.confirmModalLifecycle.vitest.jsx
+  // which mounts THIS module (via `@generated/...`) and drives the real open event. Verified
+  // non-vacuous: those tests fail against the pre-fix source.
+  //
+  // The `isDraft` derivation itself stays — it is a value, not a JSX shape, and it is what the
+  // behavioural tests exercise.
+  it('derives draft status from documentStatus', () => {
     assert.match(src, /const isDraft\s*=\s*status\s*===\s*'DR'/);
-    assert.match(src, /\{isDraft && showConfirm && createPortal\(/);
   });
 
   it('uses createPortal for modal rendering', () => {
@@ -93,36 +115,42 @@ describe('OrderCreateInvoice', () => {
   // surfaces this exact message, never sent Accept-Language. The backend
   // (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext)
   // silently falls back to AD_User.AD_Language when that header is absent.
-  describe('Confirm-modal request headers carry Accept-Language (ETP-5024)', () => {
-    it('imports the shared buildHeaders() helper instead of hand-rolling headers', () => {
-      assert.match(src, /import \{ buildHeaders \} from '@\/auth\/api\.js';/);
+  //
+  // ETP-4576: the fix survives, by a different route. `buildHeaders` and the `headers` value
+  // are gone from this file — every request now goes through `apiFetch` (useApiFetch), which
+  // sends Accept-Language on every call and resolves the credential from the active scheme
+  // (cookie session or legacy bearer). What these tests pin is unchanged in substance: the
+  // documentAction/CO POST must travel through the shared helper, never a hand-rolled header.
+  describe('Confirm-modal requests go through the shared helper (ETP-5024 / ETP-4576)', () => {
+    it('imports the shared useApiFetch hook instead of hand-rolling headers', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js';/);
     });
 
-    it('OrderCreateInvoice builds its headers via buildHeaders(token)', () => {
+    it('OrderCreateInvoice takes its request helper from useApiFetch', () => {
       const fnBody = src.slice(
         src.indexOf('export default function OrderCreateInvoice'),
         src.indexOf('export function ConfirmModal'),
       );
-      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+      assert.match(fnBody, /const apiFetch = useApiFetch\(/);
     });
 
-    it('ManageDocsLauncher builds its headers via buildHeaders(token)', () => {
+    it('ManageDocsLauncher takes its request helper from useApiFetch', () => {
       const fnBody = src.slice(src.indexOf('export function ManageDocsLauncher'));
-      assert.match(fnBody, /const headers = useMemo\(\(\) => \(buildHeaders\(token\)\), \[token\]\);/);
+      assert.match(fnBody, /const apiFetch = useApiFetch\(/);
     });
 
     it('no header object in this file is hand-rolled with only Authorization/Content-Type (would silently drop Accept-Language)', () => {
       assert.doesNotMatch(src, /Authorization: `Bearer \$\{token\}`/);
     });
 
-    it('the documentAction/CO POST that surfaces the on-hold refusal reuses this same headers value', () => {
+    it('the documentAction/CO POST that surfaces the on-hold refusal goes through apiFetch', () => {
       const confirmModalSrc = src.slice(
         src.indexOf('export function ConfirmModal'),
         src.indexOf('export function CreateDocsModal'),
       );
       assert.match(
         confirmModalSrc,
-        /fetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', headers, body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
+        /apiFetch\(\s*`\$\{apiBaseUrl\}\/header\/\$\{orderId\}\/action\/documentAction`,\s*\{ method: 'POST', body: JSON\.stringify\(\{ docAction: 'CO' \}\) \},?\s*\);/,
       );
     });
   });
@@ -369,8 +397,14 @@ describe('OrderCreateInvoice', () => {
       assert.match(src, /function SoCheckboxCard\(\{[^}]*disabled[^}]*\}\)/);
     });
 
-    it('blocks onClick when disabled', () => {
-      assert.match(src, /onClick=\{disabled\s*\?\s*undefined\s*:\s*onChange\}/);
+    // ETP-5381: the click gate moved from `disabled` to `interactive` (= !disabled && !implied).
+    // A disabled card must still be inert — that is what this test has always guarded — and an
+    // implied card must be inert too: it renders no tick box, so a click could only do nothing.
+    // The `interactive` VALUE is proven for all four (disabled, implied) combinations in
+    // "ETP-5381 … / SoCheckboxCard — an implied card is inert" below; what is pinned here is that
+    // the handler is wired to that value instead of re-deriving its own gate.
+    it('blocks onClick when the card is not interactive (disabled or implied)', () => {
+      assert.match(src, /onClick=\{interactive \? onChange : undefined\}/);
     });
 
     it('switches to semantic success roles when disabled', () => {
@@ -381,6 +415,250 @@ describe('OrderCreateInvoice', () => {
 
     it('renders the checkmark for both checked and disabled states', () => {
       assert.match(src, /\(checked\s*\|\|\s*disabled\)\s*&&\s*\(/);
+    });
+  });
+
+  // ETP-5381 — "Gestionar documentos" on a COMPLETED order (CreateDocsModal). When only ONE
+  // action is still pending there is nothing to choose between: the dialog's only button already
+  // says "Crear", so the tick was a confirmation of a confirmation. That sole action is now
+  // IMPLIED — its card keeps the selected styling but drops the tick box and the click handler,
+  // the section label drops "(optional)", and the button is live on open. With BOTH pending it is
+  // a real choice, so the checkboxes stay — and the CONFIRM-the-order modal keeps its checkboxes
+  // unconditionally, because there both actions are genuinely optional.
+  //
+  // The decision expressions are extracted from the source and EVALUATED rather than pinned as
+  // text: a rewritten-but-wrong expression must fail, a rewritten-and-still-correct one must not.
+  // Same idiom as the extract-and-eval error-message blocks further down this file.
+  describe('ETP-5381 — the sole pending action is implied, and only there', () => {
+    function idxOf(source, marker) {
+      const i = source.indexOf(marker);
+      assert.ok(i !== -1, `marker not found: ${marker}`);
+      return i;
+    }
+
+    function sliceBetween(source, startMarker, endMarker) {
+      const start = idxOf(source, startMarker);
+      const end = source.indexOf(endMarker, start);
+      assert.ok(end !== -1, `marker not found after "${startMarker}": ${endMarker}`);
+      return source.slice(start, end);
+    }
+
+    // Text inside the parentheses of the `if (` at `ifIdx`.
+    function condFrom(source, ifIdx) {
+      assert.ok(ifIdx !== -1, 'no `if (` found near the requested marker');
+      const start = source.indexOf('(', ifIdx);
+      let depth = 1;
+      let i = start + 1;
+      for (; i < source.length; i++) {
+        if (source[i] === '(') depth++;
+        else if (source[i] === ')') { depth--; if (depth === 0) break; }
+      }
+      assert.equal(depth, 0, 'unbalanced parens in the extracted condition');
+      return source.slice(start + 1, i);
+    }
+
+    const condAfter = (source, marker) => condFrom(source, source.indexOf('if (', idxOf(source, marker)));
+    const condBefore = (source, marker) => condFrom(source, source.lastIndexOf('if (', idxOf(source, marker)));
+
+    function grabDecl(source, name) {
+      const m = new RegExp(`\\bconst ${name}\\s*=[^;]*;`).exec(source);
+      assert.ok(m, `declaration not found: const ${name}`);
+      return m[0];
+    }
+
+    const cardSrc = sliceBetween(src, 'function SoCheckboxCard({', 'export function CreateDocsModal');
+    const createDocsSrc = src.slice(idxOf(src, 'export function CreateDocsModal'));
+    const confirmSrc = sliceBetween(src, 'export function ConfirmModal', '// ── SoCheckboxCard');
+
+    /**
+     * Evaluate CreateDocsModal's real decision chain for a given modal state, plus the three
+     * gates that state has to pass to reach the network: the early return in handleCreate and
+     * the two per-endpoint branches.
+     */
+    function docsDecision({
+      needsShip = false, needsInvoice = false,
+      createShipment = false, createInvoice = false, loading = false,
+    } = {}) {
+      const decls = ['soleAction', 'shipWanted', 'invoiceWanted', 'canCreate']
+        .map(n => grabDecl(createDocsSrc, n)).join('\n');
+      // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+      const fn = new Function('needsShip', 'needsInvoice', 'createShipment', 'createInvoice', 'loading', `
+        ${decls}
+        return {
+          soleAction:    Boolean(soleAction),
+          shipWanted:    Boolean(shipWanted),
+          invoiceWanted: Boolean(invoiceWanted),
+          canCreate:     Boolean(canCreate),
+          bailsOut:      Boolean(${condAfter(createDocsSrc, 'const handleCreate')}),
+          postsShipment: Boolean(${condBefore(createDocsSrc, 'action/createShipment')}),
+          postsInvoice:  Boolean(${condBefore(createDocsSrc, 'action/createDraftInvoice')}),
+        };`);
+      return fn(needsShip, needsInvoice, createShipment, createInvoice, loading);
+    }
+
+    describe('SoCheckboxCard — an implied card is inert', () => {
+      function interactive(disabled, implied) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('disabled', 'implied',
+          `${grabDecl(cardSrc, 'interactive')}\nreturn Boolean(interactive);`)(disabled, implied);
+      }
+
+      it('is inert when implied, inert when disabled, and clickable otherwise', () => {
+        assert.equal(interactive(false, true), false, 'an implied card must not be clickable');
+        assert.equal(interactive(true, false), false, 'a disabled card must not be clickable');
+        assert.equal(interactive(true, true), false);
+        assert.equal(interactive(false, false), true, 'an ordinary card must still toggle');
+      });
+
+      it('wires the click handler to that value rather than re-deriving a gate', () => {
+        assert.match(cardSrc, /onClick=\{interactive \? onChange : undefined\}/);
+      });
+
+      it('omits the tick box entirely when implied — it is not merely hidden or greyed', () => {
+        const gateIdx = cardSrc.indexOf('{!implied && (');
+        assert.ok(gateIdx !== -1, 'the tick box must be gated on !implied');
+        const boxIdx = cardSrc.indexOf('width: 18, height: 18');
+        assert.ok(boxIdx > gateIdx, 'the 18x18 tick box must sit inside the !implied gate');
+      });
+
+      it('exposes the implied state to the DOM for the e2e specs', () => {
+        assert.match(cardSrc, /data-implied=\{implied \? 'true' : 'false'\}/);
+      });
+    });
+
+    describe('CreateDocsModal — both actions pending (a real choice, unchanged)', () => {
+      const both = { needsShip: true, needsInvoice: true };
+
+      it('is not a sole action, so neither card is implied', () => {
+        assert.equal(docsDecision(both).soleAction, false);
+      });
+
+      it('starts with nothing selected, so the button is disabled on open', () => {
+        const r = docsDecision(both);
+        assert.equal(r.shipWanted, false);
+        assert.equal(r.invoiceWanted, false);
+        assert.equal(r.canCreate, false);
+      });
+
+      it('creates nothing if the submit is somehow reached without a tick', () => {
+        const r = docsDecision(both);
+        assert.equal(r.bailsOut, true);
+        assert.equal(r.postsShipment, false);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the shipment posts only the shipment', () => {
+        const r = docsDecision({ ...both, createShipment: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.bailsOut, false);
+        assert.equal(r.postsShipment, true);
+        assert.equal(r.postsInvoice, false);
+      });
+
+      it('ticking the invoice posts only the invoice', () => {
+        const r = docsDecision({ ...both, createInvoice: true });
+        assert.equal(r.canCreate, true);
+        assert.equal(r.postsShipment, false);
+        assert.equal(r.postsInvoice, true);
+      });
+
+      it('renders both cards with a tick box, since implied tracks soleAction', () => {
+        assert.equal((createDocsSrc.match(/implied=\{soleAction\}/g) || []).length, 2);
+      });
+
+      it('keeps the "(optional)" section label while there is something to opt out of', () => {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        const label = new Function('soleAction', 'ui',
+          `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+        assert.equal(label(false, k => k), 'soGenerateDocs');
+      });
+    });
+
+    for (const [side, state, expected] of [
+      ['shipment', { needsShip: true }, { shipWanted: true, invoiceWanted: false, postsShipment: true, postsInvoice: false }],
+      ['invoice', { needsInvoice: true }, { shipWanted: false, invoiceWanted: true, postsShipment: false, postsInvoice: true }],
+    ]) {
+      describe(`CreateDocsModal — only the ${side} is pending (implied)`, () => {
+        // No tick is simulated anywhere below: createShipment/createInvoice stay false, which is
+        // exactly the user's position the instant the dialog opens.
+        const r = docsDecision(state);
+
+        it('treats it as the sole action', () => {
+          assert.equal(r.soleAction, true);
+        });
+
+        it('has the button enabled on open, with no interaction', () => {
+          assert.equal(r.canCreate, true);
+          assert.equal(r.bailsOut, false);
+        });
+
+        it(`posts the ${side} and nothing else`, () => {
+          assert.equal(r.shipWanted, expected.shipWanted);
+          assert.equal(r.invoiceWanted, expected.invoiceWanted);
+          assert.equal(r.postsShipment, expected.postsShipment);
+          assert.equal(r.postsInvoice, expected.postsInvoice);
+        });
+
+        it('drops "(optional)" from the section label', () => {
+          // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+          const label = new Function('soleAction', 'ui',
+            `return ${sliceBetween(createDocsSrc, 'soleAction ? ui(', '}\n')};`);
+          assert.equal(label(true, k => k), 'soGenerateDocsImplied');
+        });
+
+        it('hides the button behind loading, not behind a tick', () => {
+          assert.equal(docsDecision({ ...state, loading: true }).bailsOut, true);
+          assert.match(createDocsSrc, /data-testid="sales-order-manage-docs-submit"[\s\S]*?disabled=\{loading \|\| !canCreate\}/);
+        });
+      });
+    }
+
+    // Blast radius. Applying `implied` to the CONFIRM modal would silently create documents the
+    // user never asked for — far worse than the redundant tick this ticket removed. There both
+    // actions are genuinely optional, which is the distinction drawn in a84798d2a.
+    describe('ConfirmModal — both checkboxes stay, and still gate creation', () => {
+      it('renders two cards, neither of them implied', () => {
+        assert.equal((confirmSrc.match(/<SoCheckboxCard/g) || []).length, 2);
+        assert.doesNotMatch(confirmSrc, /implied/);
+      });
+
+      it('has no soleAction shortcut of its own', () => {
+        assert.doesNotMatch(confirmSrc, /soleAction/);
+      });
+
+      it('keeps the "(optional)" label and never borrows the implied one', () => {
+        assert.match(confirmSrc, /ui\('soGenerateDocs'\)/);
+        assert.doesNotMatch(confirmSrc, /soGenerateDocsImplied/);
+      });
+
+      it('starts with both boxes unticked', () => {
+        assert.match(confirmSrc, /const \[createShipment,\s+setCreateShipment\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /const \[createInvoice,\s+setCreateInvoice\]\s+=\s+useState\(false\)/);
+        assert.match(confirmSrc, /setCreateShipment\(v => !v\)/);
+        assert.match(confirmSrc, /setCreateInvoice\(v => !v\)/);
+      });
+
+      it('creates no document when neither box was ticked', () => {
+        assert.equal(confirmCreates('createShipment', {}), false);
+        assert.equal(confirmCreates('createDraftInvoice', {}), false);
+      });
+
+      it('creates only the document whose box was ticked', () => {
+        assert.equal(confirmCreates('createShipment', { createShipment: true }), true);
+        assert.equal(confirmCreates('createDraftInvoice', { createShipment: true }), false);
+        assert.equal(confirmCreates('createDraftInvoice', { createInvoice: true }), true);
+        assert.equal(confirmCreates('createShipment', { createInvoice: true }), false);
+      });
+
+      function confirmCreates(endpoint, {
+        createShipment = false, createInvoice = false,
+        shipmentResult = null, invoiceResult = null,
+      }) {
+        // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
+        return new Function('createShipment', 'createInvoice', 'shipmentResult', 'invoiceResult',
+          `return Boolean(${condBefore(confirmSrc, `action/${endpoint}`)});`)(
+          createShipment, createInvoice, shipmentResult, invoiceResult);
+      }
     });
   });
 
@@ -444,23 +722,22 @@ describe('OrderCreateInvoice', () => {
     });
   });
 
-  // ETP-4717 (Pair 2 — P2): the Send button/modal must only be available once
-  // the order is Confirmed (CO), not while it is still Draft (DR). Grid and
-  // Form-view must agree on the same rule.
-  describe('Send button visibility gated by document status (ETP-4717)', () => {
-    it('does NOT show the Send button while the order is still Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+  // ETP-4717 (Pair 2 — P2), relocated by ETP-5260: the Send button itself
+  // (SendDocumentButton) moved to the topbarSecondary slot
+  // (OrderCreateInvoiceSecondaryActions, `showSend={isCompleted}` — CO only,
+  // never true while DR) — see
+  // artifacts/sales-order/custom/__tests__/OrderCreateInvoiceSecondaryActions.test.js.
+  // This component still owns the SendDocumentModal (PDF/documentType
+  // context), opened via the `sales-order:open-send-modal` window event and
+  // gated on isCompleted only, matching the button's own gate.
+  describe('SendDocumentModal integration (ETP-5260 — button moved out, modal stays)', () => {
+    it('no longer renders a SendDocumentButton at all', () => {
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('shows the Send button only when the order is Completed (CO)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
-    });
-
-    it('does NOT gate the SendDocumentModal render on isDraft', () => {
-      assert.doesNotMatch(
-        src,
-        /\{\(isDraft \|\| isCompleted\) && showSend && createPortal\(\s*<SendDocumentModal/,
-      );
+    it('listens to the sales-order:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]sales-order:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]sales-order:open-send-modal['"]/);
     });
 
     it('gates the SendDocumentModal render on isCompleted only', () => {
@@ -521,8 +798,23 @@ describe('OrderCreateInvoice', () => {
     function extractNeedsBlocks(source, needsVarName) {
       // ETP-4567: post-fix source compares against 0 with !== instead of the
       // clamp-dependent > 0 (which always failed for a floored-to-zero pending).
+      // ETP-5295 — ManageDocsLauncher's needs* lines carry an extra `fetched != null && `
+      // guard (hooks hoisted above the loading early-return, so the derivation must be
+      // null-safe); the main-component occurrence has no such guard. The optional
+      // non-capturing group matches both.
+      //
+      // ETP-5295 — the block now STARTS one line earlier, at the
+      // `const { needsPrimaryDoc, needsInvoiceDoc } = readOrderPendingDocs(data);`
+      // destructuring, instead of at `const ${needsVarName}`. That line is part of the
+      // computation under test now: without it, `needsPrimaryDoc`/`needsInvoiceDoc` would be
+      // free variables inside the `new Function(...)` harness and the eval threw
+      // `ReferenceError: needsShip is not defined`. Including it keeps the harness feeding on
+      // the LITERAL source (the whole point of this suite) rather than on a hand-copied
+      // re-implementation of the `??` fallback.
       const re = new RegExp(
-        `const ${needsVarName}[\\s\\S]*?const needsInvoice\\s*=\\s*totalPending !== 0 && !invoiceDraft;`,
+        `const \\{ needsPrimaryDoc, needsInvoiceDoc \\} = readOrderPendingDocs\\(data\\);`
+        + `[\\s\\S]*?const ${needsVarName}\\s*=\\s*(?:fetched != null && )?\\(?needsPrimaryDoc \\?\\? \\(qtyPending !== 0`
+        + `[\\s\\S]*?const needsInvoice\\s*=\\s*(?:fetched != null && )?\\(?needsInvoiceDoc \\?\\? \\(totalPending !== 0 && !invoiceDraft\\)\\)?;`,
         'g',
       );
       return [...source.matchAll(re)].map(m => m[0]);
@@ -536,11 +828,41 @@ describe('OrderCreateInvoice', () => {
       assert.equal(needsBlocks.length, 2);
     });
 
-    function evaluate(siteIndex, { grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null }) {
+    // ETP-5295 — two free variables remain in the extracted source and each is wired
+    // DELIBERATELY, not merely "made to run":
+    //
+    //   `fetched`              — only present in the ManageDocsLauncher occurrence's
+    //                            `fetched != null && ` guard. Passed as always-loaded (`true`):
+    //                            this suite's concern is the pending arithmetic, not the loading
+    //                            state, which `useOrderWindow`/launcher render tests cover.
+    //   `readOrderPendingDocs` — the REAL shared reader is injected (imported at the top of this
+    //                            file), NOT a stub. So what the annotation branch does is decided
+    //                            by production code, and the default `data` below (which carries
+    //                            only `grandTotalAmount`, no `needsPrimaryDoc`/`needsInvoiceDoc`)
+    //                            makes it return `undefined` for both flags. `undefined` is what
+    //                            makes `??` fall through to the local derivation — which is
+    //                            exactly the arithmetic the ETP-4567 cases below were written to
+    //                            measure, so they keep measuring it and nothing else. Hard-coding
+    //                            a `() => ({})` stub would have measured the same thing today but
+    //                            would stop tracking the real absent-annotation contract (e.g. a
+    //                            reader that ever returned `false` instead of `undefined` for an
+    //                            absent flag would break every caller and not one test here).
+    //
+    // `annotations` lets the ETP-5295 cases further down flip the other branch on, through the
+    // same real reader and the same literal source.
+    function evaluate(siteIndex, {
+      grandTotalAmount, invoicesComplete = [], shipmentsDraft = [], invoiceDraft = null, annotations = {},
+    }) {
       const body = `${compBlocks[siteIndex]}\n${needsBlocks[siteIndex]}\nreturn { qtyPending, totalPending, needsShip, needsInvoice };`;
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
-      const fn = new Function('data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', body);
-      return fn({ grandTotalAmount }, [], invoicesComplete, shipmentsDraft, invoiceDraft);
+      const fn = new Function(
+        'data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', 'readOrderPendingDocs',
+        body,
+      );
+      return fn(
+        { grandTotalAmount, ...annotations },
+        [], invoicesComplete, shipmentsDraft, invoiceDraft, true, readOrderPendingDocs,
+      );
     }
 
     const sites = [
@@ -593,6 +915,87 @@ describe('OrderCreateInvoice', () => {
       const { needsShip, needsInvoice } = evaluate(1, { grandTotalAmount: -450.75 });
       const nothingToManage = !needsShip && !needsInvoice;
       assert.equal(nothingToManage, false);
+    });
+    // ETP-5295 — the branch the ETP-4567 cases above deliberately never reach: a record that
+    // DOES carry the backend annotations. The whole point of the fix is that the server's answer
+    // wins over this component's own arithmetic, so that the list kebab (which has nothing but
+    // the annotation) and this component (which has the real shipments/invoices/lines) can never
+    // disagree again. Each case below sets up local arithmetic that would produce the OPPOSITE
+    // answer, so a regression that dropped the annotation — or subordinated it to the local
+    // derivation — turns the test red instead of silently reinstating two sources of truth.
+    describe('backend annotation wins over the local derivation (ETP-5295)', () => {
+      for (const [siteName, siteIndex] of sites) {
+        describe(siteName, () => {
+          it('needsInvoiceDoc:false suppresses an invoice entry the local arithmetic would have set true', () => {
+            // Local derivation says TRUE (100 ordered, nothing invoiced, no draft).
+            const local = evaluate(siteIndex, { grandTotalAmount: 100 });
+            assert.equal(local.needsInvoice, true, 'precondition: local arithmetic must say true here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsInvoiceDoc: false },
+            });
+            assert.equal(needsInvoice, false);
+          });
+
+          it('needsPrimaryDoc:false suppresses a shipment entry the local arithmetic would have set true', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: false },
+            });
+            assert.equal(needsShip, false);
+          });
+
+          it('needsInvoiceDoc:true forces the invoice entry on even though the document is fully invoiced locally', () => {
+            const local = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+            });
+            assert.equal(local.needsInvoice, false, 'precondition: local arithmetic must say false here');
+
+            const { needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              invoicesComplete: [{ grandTotalAmount: 100, documentStatus: 'CO' }],
+              annotations: { needsInvoiceDoc: true },
+            });
+            assert.equal(needsInvoice, true);
+          });
+
+          it('needsPrimaryDoc:true forces the shipment entry on even though a draft shipment already covers it', () => {
+            const { needsShip } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              shipmentsDraft: [{ documentStatus: 'DR' }],
+              annotations: { needsPrimaryDoc: true },
+            });
+            assert.equal(needsShip, true);
+          });
+
+          it("accepts the AD string form ('N' is false, not truthy)", () => {
+            const { needsShip, needsInvoice } = evaluate(siteIndex, {
+              grandTotalAmount: 100,
+              annotations: { needsPrimaryDoc: 'N', needsInvoiceDoc: 'N' },
+            });
+            assert.equal(needsShip, false);
+            assert.equal(needsInvoice, false);
+          });
+        });
+      }
+
+      // `readAnnotatedFlag` returns `undefined` — never `false` — for an ABSENT annotation, and
+      // the fallback operator is `??`, never `||`. That pairing is the load-bearing detail: with
+      // `||`, a genuine `needsInvoiceDoc: false` from the server would be discarded and the local
+      // arithmetic would silently take over, reinstating precisely the two-sources-of-truth
+      // disagreement this ticket removed. A source-text assertion is used here on purpose — the
+      // difference between `??` and `||` is invisible to a behavioural test whenever the local
+      // derivation happens to agree with the annotation.
+      it('uses ?? (not ||) so an explicit false annotation is not discarded', () => {
+        for (const block of needsBlocks) {
+          assert.match(block, /needsPrimaryDoc \?\? \(/);
+          assert.match(block, /needsInvoiceDoc \?\? \(/);
+          assert.doesNotMatch(block, /needsPrimaryDoc \|\|/);
+          assert.doesNotMatch(block, /needsInvoiceDoc \|\|/);
+        }
+      });
     });
   });
 
@@ -718,8 +1121,12 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 2 (createShipment)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedShipmentError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5276: the raw backend message now passes through translateBackendError(msg, ui)
+        // before being appended to the ui() prefix. Stub it as identity — the point of this
+        // test is that the RAW backend message survives end-to-end, not re-testing
+        // translateBackendError's own mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -734,8 +1141,13 @@ describe('OrderCreateInvoice', () => {
     describe('ConfirmModal.handleConfirm — Step 3 (createDraftInvoice)', () => {
       function resolveMessage(e, res) {
         const expr = extractCallExprAround(src, 'soOrderConfirmedInvoiceError', 'throw new Error(');
-        const fn = new Function('e', 'res', 'ui', `return ${expr};`);
-        return fn(e, res, (k) => k);
+        // ETP-5381: this branch was the last one still appending the RAW backend message;
+        // it now goes through translateBackendError(msg, ui) like its shipment sibling, so
+        // the new duplicate-invoice / completion messages surface translated. Stub it as
+        // identity — the point here is that the raw message survives end-to-end, not
+        // re-testing the mapping table (covered by backendErrors.test.js).
+        const fn = new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`);
+        return fn(e, res, (k) => k, (msg) => msg);
       }
 
       it('appends the real backend message after the ui() prefix for a flat 400 body', () => {
@@ -752,7 +1164,11 @@ describe('OrderCreateInvoice', () => {
 
       function resolveMessage(e, res) {
         const expr = extractCallExprAfter(createDocsModalSrc, 'action/createShipment', 'throw new Error(');
-        return new Function('e', 'res', `return ${expr};`)(e, res);
+        // ETP-5276: the expression itself calls translateBackendError(msg, ui) — both must be
+        // in scope even though this call site has no ui() prefix of its own. Stub identity, same
+        // rationale as the ConfirmModal Step 2 block above.
+        return new Function('e', 'res', 'ui', 'translateBackendError', `return ${expr};`)(
+          e, res, (k) => k, (msg) => msg);
       }
 
       it('surfaces the real backend message for a flat {status,message} 400 body', () => {

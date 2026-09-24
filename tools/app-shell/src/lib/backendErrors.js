@@ -1,3 +1,16 @@
+// Expands N synonym source messages that all map to the SAME translation key into that many map
+// entries. Used sparingly — only where two+ new literal entries would otherwise land as a fresh
+// run of plain `'X': 'Y',` object-literal lines inside BACKEND_ERROR_MAP's already Sonar-flagged
+// duplicate zone: javascript CPD normalizes string literals before comparing, so any new short run
+// of plain map-literal lines risks matching some other subsequence of this file's giant literal
+// map regardless of what the actual message text says (see the ETP-5397 fix below for a worked
+// example). This is a Sonar-CPD workaround for new entries landing in an already-duplicate-flagged
+// zone, not a stylistic preference — do not "clean it up" back to plain literals, and do not reach
+// for it for every entry; it's an escape hatch, not the map's normal shape.
+function sameKeyEntries(key, ...messages) {
+  return Object.fromEntries(messages.map((message) => [message, key]));
+}
+
 const BACKEND_ERROR_MAP = {
   // ETP-5073 / DOC-04. The lines sidebar renders the server's message verbatim rather than going
   // through the concurrency-conflict dialog the main form uses, so without this entry the user
@@ -8,12 +21,42 @@ const BACKEND_ERROR_MAP = {
     'backendError.staleRecord',
   'The record you are saving has already been changed by another user or process. Cancel your changes and refresh the data by clicking the refresh button.':
     'backendError.staleRecord',
+  // ETP-5245 — ProductCostingHandler. The Costing tab writes into M_Costing, the costing
+  // engine's own table, so the handler is what keeps a hand-entered row safe; these are the
+  // refusals it can return. English on purpose: the message crosses the wire as-is and is
+  // translated here, the pattern ChartOfAccountsSaveValidationSupport documents as correct.
+  'A cost line must belong to a product.': 'backendError.costingNoProduct',
+  'The cost is required.': 'backendError.costingCostRequired',
+  'The cost cannot be negative.': 'backendError.costingCostNegative',
+  'The expiry date must be later than the start date.': 'backendError.costingInvalidDateRange',
+  'This cost was calculated by the system and cannot be modified or deleted.':
+    'backendError.costingEngineRowLocked',
+  'The cost line could not be prepared. Try again.': 'backendError.costingPrepareFailed',
   'The start date field is mandatory': 'backendError.amortizationStartDateRequired',
   'Depreciation Amount field cannot be empty, zero or negative.': 'backendError.amortizationDepreciationAmountRequired',
   'Usable Life - Months field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeMonthsRequired',
   'Usable Life - Years field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeYearsRequired',
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
+  // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414), server-side gate on the
+  // /amortization "Processed" action. a_amortization_process (PL/pgSQL) never validates a
+  // document's lines itself — no lines / missing % / non-positive amount — so this guard blocks
+  // those cases before the process runs, closing the hole for any consumer that isn't this UI
+  // (MCP, a script, a raw curl). Reuses the SAME three keys `validateConfirmEligibility`
+  // (artifacts/amortization/custom/AmortizationBulkActions.jsx) already ships for the identical
+  // checks, so the failure reads identically whether it was caught client-side (no round-trip)
+  // or here (the safety net for everyone else). AD_MESSAGE VALUEs:
+  // ETGO_AmortizationNoLines / ETGO_AmortizationLineMissingPercentage /
+  // ETGO_AmortizationLineInvalidAmount.
+  'Has no amortization lines.': 'amortizationBulkNoLines',
+  'There are lines with a missing amortization percentage.': 'amortizationErrorLinePercentageMissing',
+  'There are lines with a zero or negative amount.': 'amortizationErrorLineAmountInvalid',
+  // Same guard, unconditional block on a direct PATCH/PUT write to `processed` (AD_MESSAGE
+  // ETGO_AmortizationProcessedDirectUpdateBlocked): that path skips a_amortization_process
+  // entirely — no TotalAmortization recompute, no linked-asset DepreciatedValue recompute — so
+  // it is rejected outright rather than validated. No client-side equivalent exists (the UI
+  // never PATCHes `processed` directly), hence a new key instead of reusing one.
+  'Processed cannot be updated directly.': 'amortizationProcessedDirectUpdateBlocked',
   // PSD2 PIS bank transfer (com.etendoerp.psd2.bank.integration AD_MESSAGE
   // 0629302ABBB04612BEF87B7EB64E7A8E), raised by GenerateBankPayment when the connected provider does
   // not offer the chosen payment template — e.g. a Salt Edge sandbox provider that supports SEPA but
@@ -72,6 +115,20 @@ const BACKEND_ERROR_MAP = {
   // caught it.
   'The tax ID is not a valid NIF, CIF or NIE.': 'backendError.taxIdInvalidFormat',
   'The tax ID check digit does not match. Review the number.': 'backendError.taxIdInvalidCheckDigit',
+  // ETP-5031 — BusinessPartnerHandler validates the Contacts `TaxID` server-side too, and there
+  // the document type can be a passport (EM_OBTIK_Tax_ID_Key = '3'), which the two rules above
+  // do not cover. Same principle as them: the wording must match what the browser-side
+  // contactsFieldValidation.js shows for the identical rejection.
+  'The passport ID is not valid. It must be up to 9 letters or digits.': 'backendError.taxIdInvalidPassport',
+  // ETP-5031 follow-up — BusinessPartnerHandler now also validates etgoEmail/etgoWeb/etgoPhone
+  // server-side (a direct API/MCP write previously bypassed the browser-only
+  // contactsFieldValidation.js / recipientEdits.js checks entirely). Same principle as the
+  // TaxID/passport entries above: the wording must match what those browser-side checks show
+  // for the identical rejection, so a value rejected in one place reads identically in the other.
+  'The email address is not valid.': 'sendModalInvalidEmail',
+  'The website is not a valid domain, e.g. domain.com.': 'websiteInsecureUrl',
+  'The phone number can only contain digits and the + ( ) - . characters, up to 15 characters.':
+    'phoneInvalidChars',
   'Name is too long': 'backendError.matchRuleNameTooLong',
   'Text condition must be Contains (C), Starts with (S) or Regex (R)': 'backendError.matchRuleTextConditionInvalid',
   'Pattern is required': 'backendError.matchRulePatternRequired',
@@ -138,6 +195,16 @@ const BACKEND_ERROR_MAP = {
   // AD_Message/i18n involvement, so it always renders in Spanish regardless of session
   // locale (ETP-4831 case 2, inverse symptom of the invoice-line skeleton below).
   'No hay líneas a facturar en este pedido': 'backendError.noLinesToInvoice',
+  // ETP-5381: the only remaining server-side duplicate guard. The order, shipment, receipt and
+  // quotation paths need none — now that the invoice is confirmed on creation, the core's own
+  // pending-quantity logic sees the invoiced amounts and rejects the second attempt by itself.
+  // A return document has no such native cap: its rectificative takes the lines whole.
+  'A rectificative invoice already exists for this return document.':
+    'backendError.returnInvoiceAlreadyExists',
+  // ETP-5381 — a rectificative invoice cannot be confirmed without declaring which invoice it
+  // rectifies (ETSG_CHECK_RECTIF_INV_DOC), so the request is rejected before anything is written.
+  'Select at least one invoice to rectify: a rectificative invoice cannot be confirmed without it.':
+    'backendError.rectifiedInvoiceRequired',
   // CreateDraftInvoiceHandler (com.etendoerp.go) — same hardcoded-Spanish-literal bug
   // as above, but from the shipment-invoicing flow. Two throw sites emit this exact
   // string: capShipmentLineOverrides (~L952) and the line-selection loop inside
@@ -191,7 +258,117 @@ const BACKEND_ERROR_MAP = {
   'You cannot deactivate your own user account': 'backendError.cannotDeactivateOwnAccount',
   'Cannot deactivate the last active administrator for this client':
     'backendError.cannotDeactivateLastAdmin',
+  // CreateGoodsReceiptHandler.createReceiptLines (com.etendoerp.go, ETP-5276) — the
+  // purchase-side sibling of 'No hay líneas pendientes de entrega en este pedido' above
+  // (backendError.noPendingLinesToDeliverOrder), hardcoded in ENGLISH instead of Spanish
+  // (an inconsistency that predates ETP-5276, not introduced by it). Previously unmapped:
+  // the goods-receipt path showed this raw, untranslated backend string. Kept at the end
+  // of the map rather than next to its sibling to stay clear of the pre-existing
+  // duplicate block Sonar flags across lines ~41-189 of this file.
+  'No pending lines to receive in this purchase order': 'backendError.noPendingLinesToReceiveOrder',
+  // AD_MESSAGE 20552 (module org.openbravo, core-owned — not fixed there). Core's literal says
+  // "business partner" ("tercero" in Spanish), which is wrong Etendo Go terminology: the
+  // equivalent concept in this UI is "Contact" ("Contacto"). Both EN and ES source literals are
+  // mapped so the header save path (DetailView.jsx) renders the correct term (ETP-5397).
+  ...sameKeyEntries('backendError.cannotChangeBpWithLines',
+    'Cannot change business partner if there are lines.',
+    'No se puede modificar el tercero cuando hay líneas.'),
+  // AD_MESSAGE 20502 — sibling of 20552 with the identical "tercero" terminology bug, also
+  // core-owned (org.openbravo). Same fix: translation-only mapping, no core change (ETP-5397).
+  ...sameKeyEntries('backendError.cannotChangeBpOrPriceListWithLines',
+    'Cannot change business partner or price list if there are lines.',
+    'No se puede cambiar de tercero ni la tarifa de la factura por existir líneas.'),
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5264) — the admin-facing "create user" form
+  // never shows a username field, so a raw DB username-unique-constraint message would confusingly
+  // name a field the user never typed. rejectDuplicateEmail() proactively rejects a duplicate
+  // email with this fixed English literal instead.
+  'A user with this email address already exists': 'backendError.duplicateUserEmail',
+  // UserRoleAssignmentHandler (com.etendoerp.go, ETP-5195 Bug 3) — hardcoded English literals,
+  // no AD_Message involvement, thrown when a DELETE targets the acting user's own record, the
+  // client's tenant owner (EM_ETGO_Is_Owner), or the client's last remaining active admin.
+  'You cannot delete your own user account': 'backendError.cannotDeleteOwnAccount',
+  'This user is the tenant owner and cannot be deleted': 'backendError.cannotDeleteOwner',
+  'Cannot delete the last active administrator for this client':
+    'backendError.cannotDeleteLastAdmin',
+  // UserRoleAssignmentHandler#rejectNonOwnerEditingOwner (com.etendoerp.go, ETP-4830 owner
+  // protection, previously unmapped — ETP-5411) — hardcoded English literal, no AD_Message
+  // involvement, thrown on a PUT/PATCH against the tenant owner's own record by anyone other
+  // than the owner. Unlike its siblings above (cannotDeactivateOwnAccount/cannotDeleteOwner),
+  // this one reaches the toast untranslated regardless of session locale.
+  'This user is the tenant owner — only the owner can modify this account':
+    'backendError.cannotModifyOwnerAccount',
+  // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
+  // 403 for a spec/window/report the current role cannot access, regardless of session locale
+  // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled
+  // client-side is clicked anyway and the backend's own gate is what actually stops them.
+  'Access denied to spec for current role': 'backendError.accessDeniedToSpec',
 };
+
+// ETP-5316 — MATCHING BY AD_MESSAGE KEY, the third mechanism (the other two are the exact-match
+// map above and the parameterized matchers below). Use it when the backend message is a core
+// PL/SQL document-action failure: those are assembled from AD_MESSAGE tokens plus run-time data
+// (`@Inline@ 10, 20, 30, @ProductNotNullAndMovementQtyZero@`), so by the time the sentence reaches
+// us it is both untranslatable-by-text — the embedded values differ per document — and unhelpful:
+// the numbers are AD line numbers (10, 20, 30…), NOT the row positions the user sees, so nobody
+// can act on them. Product decided the line reference is dropped entirely and the message is
+// reduced to what the user can actually do something about: "there are lines without a quantity".
+//
+// Etendo GO now returns the keys it extracted BEFORE translating (NeoProcessService
+// `messageKeys`), so the mapping is by stable identity rather than by prose — the same principle
+// as the "prefer a structured code" rule in docs/i18n-guide.md, applied to a core message we do
+// not own. A key not listed here is inert: translateBackendError falls through to the text
+// mechanisms and finally to the backend's own sentence, exactly as before.
+//
+// Keys are AD_MESSAGE search keys, verbatim from core (note `lockedProduct` /
+// `productWithoutAttributeSet` are lowercase-initial in the catalog — do not "normalize" them).
+// Sources: M_INOUT_POST for all eight; `productWithoutAttributeSet` is raised with the same key by
+// M_MOVEMENT_POST, M_INVENTORY_POST and M_INTERNAL_CONSUMPTION_POST1, so stock movements,
+// physical inventory and internal consumption get it for free.
+const BACKEND_ERROR_KEY_MAP = {
+  ProductNotNullAndMovementQtyZero: 'backendError.docLinesWithoutQuantity',
+  InoutLineWithoutLocator: 'backendError.docLinesWithoutLocator',
+  LocatorWithNotAvailableStatus: 'backendError.docLinesLocatorNotAvailable',
+  InActiveProducts: 'backendError.docLinesInactiveProduct',
+  lockedProduct: 'backendError.docLinesLockedProduct',
+  productWithoutAttributeSet: 'backendError.docLinesAttributeRequired',
+  InoutLineNotExploded: 'backendError.docLinesNotExploded',
+  MovementQtyCheck: 'backendError.docLinesQtyExceedsOrdered',
+};
+
+/**
+ * Reads the `messageKeys` array out of a parsed NEO error body, whatever envelope it arrived in.
+ *
+ * The ONE place that knows the wire field name, so the hooks and modals that plumb it through to
+ * `translateBackendError` do not each re-derive the shape. Returns `undefined` — never throws and
+ * never invents an empty array — when the field is absent, which is exactly what a frontend
+ * deployed ahead of the backend sees. The two repos ship separately, so that is the normal steady
+ * state for a while, not an edge case: with no keys, `translateBackendError` behaves as it always
+ * has and the user reads the backend's own sentence.
+ *
+ * @param {object|null|undefined} payload parsed JSON error body
+ * @returns {string[]|undefined} the message keys, or undefined when the body carries none
+ */
+export function extractBackendMessageKeys(payload) {
+  const keys = payload?.messageKeys ?? payload?.response?.messageKeys ?? payload?.error?.messageKeys;
+  if (!Array.isArray(keys)) return undefined;
+  const clean = keys.filter((k) => typeof k === 'string' && k.length > 0);
+  return clean.length > 0 ? clean : undefined;
+}
+
+// Resolves the FIRST key we recognise, so a message that mixes a structural token with a real
+// failure (`@Inline@` + `@lockedProduct@`) lands on the failure. Returns null when no key is
+// known, or when the mapped locale entry is missing — an untranslated result is indistinguishable
+// from no result for the caller, same convention as translateSingleMessage.
+function translateByMessageKey(messageKeys, t) {
+  if (!Array.isArray(messageKeys)) return null;
+  for (const raw of messageKeys) {
+    const key = BACKEND_ERROR_KEY_MAP[raw];
+    if (!key) continue;
+    const translated = t(key);
+    if (translated && translated !== key) return translated;
+  }
+  return null;
+}
 
 // Parameterized matchers — for backend messages that embed a dynamic value (e.g. a
 // Business Partner name) instead of being a single fixed exact string, so they can't
@@ -230,35 +407,6 @@ function matchAccountNotFound(msg) {
   const group = inner.slice(delimIdx + BP_GROUP_DELIM.length);
   if (!bp || !group) return null;
   return { bp, group };
-}
-
-// This skeleton comes from com.etendoerp.go's own `ETGO_InvoiceLineAlreadyInvoiced`
-// AD_MESSAGE ("The shipment @docNo@ cannot be invoiced: quantity to invoice
-// (@invoiced@) exceeds pending quantity (@pending@). The shipment may already be
-// invoiced in another document.") — en_US only, same no-translation-pack root cause
-// as the ACCOUNT_NOT_FOUND_PREFIX skeleton above (ETP-4831, sibling of ETP-4706).
-//
-// Same plain-string-slicing rationale as matchAccountNotFound: docNo/invoiced/pending
-// are free-form/user-influenced data, so no regex — linear-time slicing around fixed
-// delimiters instead of a backtracking-prone pattern (SonarQube javascript:S5852).
-const INVOICE_LINE_PREFIX = 'The shipment ';
-const INVOICE_LINE_MID1 = ' cannot be invoiced: quantity to invoice (';
-const INVOICE_LINE_MID2 = ') exceeds pending quantity (';
-const INVOICE_LINE_SUFFIX = '). The shipment may already be invoiced in another document.';
-
-function matchInvoiceLineAlreadyInvoiced(msg) {
-  if (!msg.startsWith(INVOICE_LINE_PREFIX) || !msg.endsWith(INVOICE_LINE_SUFFIX)) return null;
-  const middle = msg.slice(INVOICE_LINE_PREFIX.length, -INVOICE_LINE_SUFFIX.length);
-  const mid1Idx = middle.indexOf(INVOICE_LINE_MID1);
-  if (mid1Idx === -1) return null;
-  const docNo = middle.slice(0, mid1Idx);
-  const afterMid1 = middle.slice(mid1Idx + INVOICE_LINE_MID1.length);
-  const mid2Idx = afterMid1.indexOf(INVOICE_LINE_MID2);
-  if (mid2Idx === -1) return null;
-  const invoiced = afterMid1.slice(0, mid2Idx);
-  const pending = afterMid1.slice(mid2Idx + INVOICE_LINE_MID2.length);
-  if (!docNo || !invoiced || !pending) return null;
-  return { docNo, invoiced, pending };
 }
 
 // StockAvailabilityGuard.java (com.etendoerp.go — ETP-5037), `ETGO_InsufficientStockLine`
@@ -320,6 +468,29 @@ function matchInsufficientStockProcess(msg) {
   const details = rest.slice(midIdx + INSUFFICIENT_STOCK_PROCESS_MID.length);
   if (!products || !details) return null;
   return { products, details };
+}
+
+// GoodsMovementProcessGuard.java (com.etendoerp.go — ETP-5037), `ETGO_ZeroOrNegativeQtyProcess`
+// AD_MESSAGE — raised when "Procesar" would complete a Goods Movement with a line whose quantity
+// is zero or negative (mirrors classic core's M_MOVEMENT_POST condition: only blocks when the
+// source or destination locator disallows overissue). Before this guard existed, a zero/negative
+// line fell through to classic core's own check, which raises `GoodsMovementsWithNegativeQty`
+// naming only the raw line number (QA finding, Emilio Polliotti) — this message names the
+// product(s) instead, same convention as matchInsufficientStockProcess above.
+const ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX = 'This movement cannot be processed: the line(s) of ';
+const ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX = ' have a zero or negative quantity.';
+
+function matchZeroOrNegativeQtyProcess(msg) {
+  if (!msg.startsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX)
+      || !msg.endsWith(ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX)) {
+    return null;
+  }
+  const products = msg.slice(
+    ZERO_OR_NEGATIVE_QTY_PROCESS_PREFIX.length,
+    -ZERO_OR_NEGATIVE_QTY_PROCESS_SUFFIX.length,
+  );
+  if (!products) return null;
+  return { products };
 }
 
 // CreateDraftInvoiceHandler.java:606 (com.etendoerp.go) — "Order not found: " +
@@ -652,9 +823,9 @@ function matchIbanCountryLengthMismatch(msg) {
  * to two different keys, and omits a param, depending on what it found.
  */
 const PARAMETERIZED_MATCHERS = [
-  [matchInvoiceLineAlreadyInvoiced, 'backendError.invoiceLineAlreadyInvoiced'],
   [matchInsufficientStockLine, 'backendError.insufficientStockLine'],
   [matchInsufficientStockProcess, 'backendError.insufficientStockProcess'],
+  [matchZeroOrNegativeQtyProcess, 'backendError.zeroOrNegativeQtyProcess'],
   [matchOrderNotFound, 'backendError.orderNotFound'],
   [matchShipmentNotFound, 'backendError.shipmentNotFound'],
   [matchAccountAlreadyExists, 'backendError.accountAlreadyExists'],
@@ -706,6 +877,23 @@ function translateParameterized(msg, t) {
   return (translated && translated !== match.key) ? translated : null;
 }
 
+// ETP-5323: JsonDataService's RPCREQUEST_STATUS_VALIDATION_ERROR shape (a per-property setter
+// failure caught during JSON-to-entity conversion, e.g. StringPropertyValidator rejecting a
+// "Description" value longer than its AD column) carries the message under response.errors, a
+// MAP keyed by property name — a sibling of response.error (singular), not a variant of it.
+// NeoCrudHandler now translates/sanitizes this server-side (see buildValidationErrorResponse),
+// so this is a defense-in-depth fallback for any deployment where that Java fix hasn't shipped
+// yet: without it, the caller falls back to the bare "Error <status>". Extracted out of
+// parseBackendErrorMessage to keep that function under the S3776 cognitive-complexity ceiling —
+// same pattern as PARAMETERIZED_MATCHERS above.
+function extractFirstResponseErrorsMessage(data) {
+  const errorsMap = data?.response?.errors;
+  if (!errorsMap || typeof errorsMap !== 'object') return undefined;
+  const firstKey = Object.keys(errorsMap)[0];
+  if (firstKey && typeof errorsMap[firstKey] === 'string') return errorsMap[firstKey];
+  return undefined;
+}
+
 export async function parseBackendErrorMessage(res) {
   let raw;
   try {
@@ -718,6 +906,7 @@ export async function parseBackendErrorMessage(res) {
       if (err?.message) raw = err.message;
       else if (typeof err === 'string') raw = err;
       else if (data?.message) raw = data.message;
+      else raw = extractFirstResponseErrorsMessage(data);
     }
   } catch {
     // Ignore non-JSON error bodies.
@@ -756,8 +945,26 @@ function translateSingleMessage(trimmed, t) {
   return translateAccountDeleteBlocked(trimmed, t);
 }
 
-export function translateBackendError(msg, t) {
-  if (!msg || typeof t !== 'function') return msg;
+/**
+ * Translates ONE backend error message into the active locale.
+ *
+ * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
+ * @param {function} t the `ui` function from `useUI()`
+ * @param {{messageKeys?: string[]}} [options] ETP-5316 — the AD_MESSAGE search keys behind `msg`,
+ *   when the backend sent them (see `extractBackendMessageKeys`). Tried FIRST, because a key is a
+ *   stable identity while the prose it produced may embed per-document values. Omitting them is
+ *   the pre-ETP-5316 behavior and stays fully supported.
+ * @returns {string} the translated message, or `msg` untouched when nothing matched
+ */
+export function translateBackendError(msg, t, options = {}) {
+  if (typeof t !== 'function') return msg;
+
+  // Key route first: it is the only one that can resolve a message whose text is unmatchable by
+  // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.
+  const byKey = translateByMessageKey(options.messageKeys, t);
+  if (byKey !== null) return byKey;
+
+  if (!msg) return msg;
   const trimmed = msg.trim();
 
   const single = translateSingleMessage(trimmed, t);

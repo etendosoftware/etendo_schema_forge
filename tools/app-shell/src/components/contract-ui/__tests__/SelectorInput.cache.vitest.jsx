@@ -27,9 +27,22 @@ import { SelectorInput } from '../SelectorInput.jsx';
 const URL = '/api/header/selectors/C_BPartner_ID';
 const field = { key: 'bp', label: 'Partner', column: 'C_BPartner_ID', required: false };
 
+/**
+ * `fetchMock` only records/answers requests to the selector endpoint under test
+ * (`URL`). `AuthProvider` also fires its own background session-refresh request
+ * (`/sws/neo/refreshtoken`) on mount whenever `initialSession.token` is truthy
+ * (ETP-5195) — that call is answered with a harmless generic response but is
+ * deliberately NOT recorded on `fetchMock`, so the assertions below keep
+ * measuring only `SelectorInput`'s own option-fetching calls.
+ */
 function makeFetch() {
   const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ items: [{ id: '1', label: 'One' }] }) }));
-  return { fetchMock };
+  const dispatch = vi.fn(async (input, ...rest) => {
+    const url = typeof input === 'string' ? input : input?.url;
+    if (url === URL) return fetchMock(input, ...rest);
+    return { ok: true, json: async () => ({}) };
+  });
+  return { fetchMock, dispatch };
 }
 
 function renderSel(cache, selectorContext) {
@@ -46,33 +59,35 @@ function renderSel(cache, selectorContext) {
   );
 }
 
+import { appFetchCalls } from '@/test/appFetchCalls.js';
+
 describe('SelectorInput — option caching (ETP-4564)', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('reuses cached options for an identical URL + normalized context (dedup)', async () => {
-    const { fetchMock } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { fetchMock, dispatch } = makeFetch();
+    globalThis.fetch = dispatch;
     const cache = createQueryCache();
 
     const a = renderSel(cache, { AD_Org_ID: 'o1' });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(1));
     a.unmount();
 
     renderSel(cache, { AD_Org_ID: 'o1' }); // identical context → reuse
     await act(async () => {});
-    expect(fetchMock).toHaveBeenCalledTimes(1); // no second request
+    expect(appFetchCalls(fetchMock)).toHaveLength(1); // no second request
   });
 
   it('a changed selector dependency uses a distinct key and fetches new options', async () => {
-    const { fetchMock } = makeFetch();
-    globalThis.fetch = fetchMock;
+    const { fetchMock, dispatch } = makeFetch();
+    globalThis.fetch = dispatch;
     const cache = createQueryCache();
 
     const a = renderSel(cache, { AD_Org_ID: 'o1', FIN_ISRECEIPT: 'Y' });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(1));
     a.unmount();
 
     renderSel(cache, { AD_Org_ID: 'o1', FIN_ISRECEIPT: 'N' }); // different dependency
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2)); // distinct key → new fetch
+    await waitFor(() => expect(appFetchCalls(fetchMock)).toHaveLength(2)); // distinct key → new fetch
   });
 });

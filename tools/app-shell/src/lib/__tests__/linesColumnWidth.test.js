@@ -94,24 +94,14 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'custom', grow: true }, 1), '1 0 120px');
     });
 
-    // ETP-5133 review (Alex) — the `col.minWidth` branch is checked FIRST in
-    // columnFlex() and short-circuits every other type/idx rule, but it was
-    // never updated by this fix: it still hardcodes `1 1 ${minWidth}px`
-    // (flex-shrink: 1), the exact shorthand this PR just replaced everywhere
-    // else because it let leading columns collapse toward zero at a narrow
-    // viewport instead of triggering horizontal scroll (see selectorFlex()
-    // and the elastic-type branch above, both now `1 0`).
-    //
-    // No window's column config sets `col.minWidth` today (confirmed via
-    // `grep -rn "minWidth:" artifacts/*/decisions.json` — no line-grid column
-    // declares it), so this is DEAD CODE right now, not a live regression.
-    // This test pins down that latent gap: it will keep passing unchanged
-    // (documenting the bug) until a real fix lands, at which point updating
-    // this assertion to `1 0 ...` is the signal the fix landed. If a future
-    // window ever declares `minWidth` on a leading/growing column, this
-    // branch reintroduces the ETP-5133 collapse bug for that column.
-    it('KNOWN GAP (non-blocking) — col.minWidth branch still returns 1 1 (shrinkable), unlike every other elastic branch fixed by ETP-5133', () => {
-      assert.equal(columnFlex({ type: 'string', minWidth: 300 }, 0), '1 1 300px');
+    // ETP-5332 — closes the gap the ETP-5133 review (Alex) predicted: Contacts'
+    // ContactTable.jsx declared `minWidth: 320` on Email once the create-contact popup
+    // made the row genuinely narrow, and the `col.minWidth` branch's old `1 1` (shrinkable)
+    // let Email alone collapse toward zero while its neighbors (shrink: 0) held their
+    // ground — with no `overflow: hidden` on the cell, that read as Email's text bleeding
+    // into Phone instead of the row scrolling. Now `1 0`, matching every other branch.
+    it('col.minWidth branch is non-shrinkable (1 0), matching every other elastic branch fixed by ETP-5133', () => {
+      assert.equal(columnFlex({ type: 'string', minWidth: 300 }, 0), '1 0 300px');
     });
 
     it('selector at idx=0 grows by default; grow:false overrides it', () => {
@@ -124,6 +114,46 @@ describe('linesColumnWidth', () => {
       assert.equal(columnFlex({ type: 'search' }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search', grow: false }, 1), '0 0 192px');
       assert.equal(columnFlex({ type: 'search', grow: true }, 1), '1 0 192px');
+    });
+
+    // ETP-5210 — decisions.json `columnWidth` is carried through to `col.minWidth`
+    // by the generator; this is the exact override mechanism the Simple G/L
+    // Journal Account-column widening (and the physical-inventory `etgoQtydiff`
+    // precedent) depends on. It must win over the type-based default regardless
+    // of type/idx/grow, since it is checked first and short-circuits.
+    describe('minWidth override (ETP-5210)', () => {
+      it('overrides the selector type-based default (192px)', () => {
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280 }, 0), '1 0 280px');
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280 }, 1), '1 0 280px');
+      });
+
+      it('overrides the string type-based default (224px)', () => {
+        assert.equal(columnFlex({ type: 'string', minWidth: 280 }, 0), '1 0 280px');
+        assert.equal(columnFlex({ type: 'string', minWidth: 280 }, 1), '1 0 280px');
+      });
+
+      it('wins even when grow:false is also set (minWidth check short-circuits first)', () => {
+        assert.equal(columnFlex({ type: 'selector', minWidth: 280, grow: false }, 0), '1 0 280px');
+        assert.equal(columnFlex({ type: 'string', minWidth: 280, grow: false }, 1), '1 0 280px');
+      });
+
+      it('wins even when grow:true is also set', () => {
+        assert.equal(columnFlex({ type: 'amount', minWidth: 300, grow: true }, 1), '1 0 300px');
+      });
+    });
+
+    // A `boolean`+`badge` column normally gets the generic 152px basis, but the
+    // Posted-status column (`postedStatus.js`) needs a wider 240px basis — its
+    // pill can also show one of 15 long reason codes, not just true/false.
+    describe('boolean+badge basis', () => {
+      it('a generic boolean+badge column gets the 152px basis', () => {
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'Active' }, 1), '0 0 152px');
+      });
+
+      it('the Posted-status column gets the wider 240px basis', () => {
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'Posted' }, 1), '0 0 240px');
+        assert.equal(columnFlex({ type: 'boolean', badge: true, column: 'posted' }, 1), '0 0 240px');
+      });
     });
   });
 
@@ -161,6 +191,35 @@ describe('linesColumnWidth', () => {
         const flexBasis = basis(columnFlex(col, idx));
         assert.equal(px, flexBasis, `px and flex-basis must match for type=${col.type} idx=${idx}`);
       }
+    });
+
+    // ETP-5210 — same override guarantee as columnFlex above, for the
+    // HTML-table-layout counterpart used by DataTable's inline-add row.
+    describe('minWidth override (ETP-5210)', () => {
+      it('overrides the selector type-based default (192px)', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }), 280);
+      });
+
+      it('overrides the string type-based default (224px)', () => {
+        assert.equal(columnMinWidthPx({ type: 'string', minWidth: 280 }), 280);
+      });
+
+      it('wins regardless of idx', () => {
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 0), 280);
+        assert.equal(columnMinWidthPx({ type: 'selector', minWidth: 280 }, 1), 280);
+      });
+    });
+
+    describe('boolean+badge basis', () => {
+      it('a generic boolean+badge column gets the 152px basis', () => {
+        assert.equal(columnMinWidthPx({ type: 'boolean', badge: true, column: 'Active' }), 152);
+      });
+
+      it('the Posted-status column gets the wider 240px basis, matching columnFlex', () => {
+        const col = { type: 'boolean', badge: true, column: 'Posted' };
+        assert.equal(columnMinWidthPx(col), 240);
+        assert.equal(columnMinWidthPx(col), basis(columnFlex(col, 1)));
+      });
     });
   });
 });

@@ -9,6 +9,7 @@ import { expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ensureFinancialAccountSetup } from './financial-account-helpers.js';
+import { apiAuthHeaders } from './auth.js';
 
 // ── Credentials ──────────────────────────────────────────────────────────────
 
@@ -164,6 +165,14 @@ export const VENDOR_FIXTURE_NAME = 'E2E Vendor Fixture';
 const VENDOR_FIXTURE_ADDRESS_LINE = 'E2E Vendor Fixture Address';
 const VENDOR_FIXTURE_CITY = 'E2E City';
 
+// ETP-4576: the credential comes from apiAuthHeaders, not from localStorage. Under the cookie
+// session there is no bearer in localStorage at all, so reading the legacy token key here threw
+// on every run. apiAuthHeaders returns whichever credential this run actually uses (the cookie
+// CSRF proof or the legacy bearer) plus the Origin the backend's CSRF gate requires.
+async function getAuthHeaders(page) {
+  return { ...(await apiAuthHeaders(page)), 'Content-Type': 'application/json' };
+}
+
 /**
  * GETs businessPartner candidates for the vendor fixture, sorted oldest-first
  * (`_sortBy=creationDate`, per `queryParams.sorting` in the Contacts window's
@@ -176,7 +185,7 @@ const VENDOR_FIXTURE_CITY = 'E2E City';
  * (bounded) page and matches by name client-side — see findVendorFixture()'s
  * doc comment for why that second mode exists.
  */
-async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
+async function queryVendorFixtureCandidates(page, headers, { useCriteria }) {
   const params = { _sortBy: 'creationDate', _startRow: '0', _endRow: '500' };
   if (useCriteria) {
     params.criteria = JSON.stringify({
@@ -187,7 +196,7 @@ async function queryVendorFixtureCandidates(page, token, { useCriteria }) {
   }
   const res = await page.request.get('/sws/neo/contacts/businessPartner', {
     params,
-    headers: { Authorization: `Bearer ${token}` },
+    headers,
   });
   if (!res.ok()) {
     throw new Error(`ensureVendorSetup: fixture lookup failed (${res.status()}): ${await res.text()}`);
@@ -240,20 +249,14 @@ function pickDeterministicFixture(candidates) {
  * cheap insurance against exactly that class of bug regardless.)
  */
 async function findVendorFixture(page) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureVendorSetup could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureVendorSetup(page, ...).',
-    );
-  }
+  const headers = await getAuthHeaders(page);
 
-  const filtered = await queryVendorFixtureCandidates(page, token, { useCriteria: true });
+  const filtered = await queryVendorFixtureCandidates(page, headers, { useCriteria: true });
   if (filtered.length > 0) {
     return pickDeterministicFixture(filtered);
   }
 
-  const unfiltered = await queryVendorFixtureCandidates(page, token, { useCriteria: false });
+  const unfiltered = await queryVendorFixtureCandidates(page, headers, { useCriteria: false });
   if (unfiltered.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
@@ -476,23 +479,73 @@ async function ensureVendorPaymentFieldsSet(page) {
  * this caused ensureVendorAddress() to create a brand-new duplicate address
  * on almost every run instead of reusing the existing one.
  */
-async function fetchVendorLocationCount(page, bpId) {
-  const token = await page.evaluate(() => localStorage.getItem('sf_auth_token'));
-  if (!token) {
-    throw new Error(
-      'ensureVendorAddress could not find an auth token in localStorage["sf_auth_token"] — '
-      + 'call login(page) before ensureVendorSetup(page, ...).',
-    );
-  }
+export async function fetchBpLocationCount(page, bpId) {
   const res = await page.request.get('/sws/neo/contacts/locationAddress', {
     params: { parentId: bpId },
-    headers: { Authorization: `Bearer ${token}` },
+    headers: await getAuthHeaders(page),
   });
   if (!res.ok()) {
-    throw new Error(`ensureVendorAddress: location lookup failed (${res.status()}): ${await res.text()}`);
+    throw new Error(`fetchBpLocationCount: location lookup failed (${res.status()}): ${await res.text()}`);
   }
   const body = await res.json();
   return Array.isArray(body?.response?.data) ? body.response.data.length : 0;
+}
+
+/**
+ * Clicks a business-partner option that ACTUALLY HAS an address, instead of whichever
+ * one happens to come first in the open dropdown.
+ *
+ * ETP-5283. A document cannot be saved as draft until the BP callout derives
+ * `partnerAddress` — `action-save-draft` renders `disabled` with
+ * `data-missing-required="partnerAddress"`. That callout auto-selects the partner's
+ * `C_BPartner_Location`, so a partner with ZERO locations leaves the field empty forever
+ * and every later step fails on a 15s click timeout that says nothing about the cause.
+ * `ensureVendorAddress` above documents the same failure mode from the write side; this
+ * is the read-only half, for the callers that pick from the list rather than from a
+ * named fixture.
+ *
+ * The tenant reliably ends up holding such partners: `contacts-integration.spec.js`
+ * creates contacts with no address and only removes them in its final bulk-delete step,
+ * so any earlier failure there leaves them behind. Whether the dropdown happens to
+ * surface them first is exactly the ordering assumption this removes — the fix does not
+ * depend on knowing the selector's sort order.
+ *
+ * Each candidate's id comes from the option's own testid (`option-${field.key}-${opt.id}`
+ * — EntityForm.jsx:271) and is checked through the same `parentId` child-entity lookup
+ * `ensureVendorAddress` uses, so no shape is guessed. Read-only: it never creates or
+ * edits data, it only declines to pick an unusable partner.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {{ timeout?: number }} [options]
+ * @returns {Promise<string>} the id of the business partner that was clicked
+ */
+export async function clickBpOptionWithAddress(page, { timeout = 15_000 } = {}) {
+  const candidates = page.locator('[data-testid^="option-businessPartner-"]')
+    .filter({ hasNotText: /crear|create/i });
+  await expect(candidates.first(), 'business-partner dropdown should list at least one partner')
+    .toBeVisible({ timeout });
+
+  const ids = (await candidates.evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('data-testid')),
+  ))
+    .map((testId) => testId?.replace(/^option-businessPartner-/, ''))
+    .filter(Boolean);
+
+  const skipped = [];
+  for (const id of ids) {
+    if (await fetchBpLocationCount(page, id) > 0) {
+      await page.locator(`[data-testid="option-businessPartner-${id}"]`).click();
+      return id;
+    }
+    skipped.push(id);
+  }
+
+  throw new Error(
+    `clickBpOptionWithAddress: none of the ${ids.length} partners offered by the dropdown has a `
+    + 'C_BPartner_Location, so the BP callout can never derive partnerAddress and the draft could '
+    + `never be saved. Business partners checked: ${skipped.join(', ')}. Give one of them an address, `
+    + 'or clean up the address-less contacts a previous contacts-integration run left behind.',
+  );
 }
 
 /**
@@ -510,7 +563,7 @@ async function fetchVendorLocationCount(page, bpId) {
  * contact detail for `bpId` is already the currently-open page.
  */
 async function ensureVendorAddress(page, bpId) {
-  const existingCount = await fetchVendorLocationCount(page, bpId);
+  const existingCount = await fetchBpLocationCount(page, bpId);
   if (existingCount > 0) return;
 
   const addressTab = page.getByTestId('tab-locationAddress')
@@ -778,13 +831,18 @@ export async function selectVendorBP(page, { name } = {}) {
     await page.waitForTimeout(800);
   }
 
-  const bpOption = name
-    ? page.locator('[data-testid^="option-businessPartner-"]').filter({ hasText: name }).first()
-    : page.locator('[data-testid^="option-businessPartner-"]').filter({ hasNotText: /crear|create/i }).first();
-  await expect(bpOption,
-    name ? `Vendor option matching "${name}" should appear` : 'At least one vendor option should appear',
-  ).toBeVisible({ timeout: 15_000 });
-  await bpOption.click();
+  if (name) {
+    const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
+      .filter({ hasText: name }).first();
+    await expect(bpOption, `Vendor option matching "${name}" should appear`)
+      .toBeVisible({ timeout: 15_000 });
+    await bpOption.click();
+  } else {
+    // ETP-5283 — no named fixture to fall back on, so pick by the property that actually
+    // matters instead of by list position: a partner with no address can never settle
+    // `partnerAddress` below, and used to surface as an unexplained 30s timeout there.
+    await clickBpOptionWithAddress(page);
+  }
 
   // BP selection triggers multiple chained callouts/fetches (price list, payment
   // terms, address). paymentTerms/priceList are filled directly by the backend
@@ -1217,6 +1275,118 @@ export async function clickConfirmButton(page, expectedModalText) {
 export async function expectStatusPill(page, pattern, message, timeout = 10_000) {
   const pill = page.getByTestId('document-status-pill').first();
   await expect(pill, message).toContainText(pattern, { timeout });
+}
+
+/**
+ * Verify a document's status pill carries the expected status CODE, read from the
+ * `data-status` attribute `DocumentStatusPill` exposes (`DR` / `CO` / `VO` / `CL`).
+ *
+ * Prefer this over `expectStatusPill` whenever the assertion is about the status
+ * itself: the attribute is language-independent, while the translated text differs
+ * per locale and per window (a completed invoice reads "Completado", a completed
+ * journal reads "Registrado"). See docs/e2e-testing-guide.md § "Document status
+ * attributes". `expectStatusPill` stays as-is for the many call sites that assert
+ * what the USER reads.
+ */
+export async function expectDocumentStatus(page, status, message, timeout = 10_000) {
+  const pill = page.getByTestId('document-status-pill').first();
+  await expect(pill, message).toHaveAttribute('data-status', status, { timeout });
+}
+
+/**
+ * ETP-5381 — assert that a document the backend generated from another document
+ * arrived ALREADY CONFIRMED, i.e. there is no draft stage left for the test to
+ * confirm by hand.
+ *
+ * Two halves, both of which are the product's new contract:
+ *   1. the status pill reads `CO`;
+ *   2. no "Confirmar" action is offered. A completed draftMode document renders no
+ *      save-actions row at all (`shouldRenderSaveActionsRow` in DetailView.jsx), so
+ *      `action-save` is absent from the DOM — which is exactly how the specs that
+ *      still tried to confirm these invoices failed.
+ */
+export async function expectAlreadyConfirmed(page, message) {
+  await expectDocumentStatus(page, 'CO', message);
+  await expect(page.getByTestId('action-save'),
+    `${message} — a document that arrives confirmed must offer no Confirmar action`,
+  ).toBeHidden({ timeout: 10_000 });
+}
+
+/**
+ * ETP-5381 — pick the invoice a rectificative invoice will rectify, inside an open
+ * confirm modal.
+ *
+ * `useRectifiableInvoices` (RectifiableInvoicePicker.jsx) preselects ONLY when the
+ * backend's chain detection reports exactly one candidate. Zero or two-or-more leave
+ * the field deliberately empty, which keeps `rectify.isSatisfied` false and therefore
+ * `confirm-modal-confirm-btn` disabled until the user picks — "no se deben auto
+ * seleccionar las facturas".
+ *
+ * Idempotent: returns immediately when something is already selected, so it is safe to
+ * call on the single-candidate path too.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} modal host modal (`confirm-inout-modal`)
+ * @param {object} [opts]
+ * @param {string} [opts.idPrefix] `confirm-modal-rectify` inside `ConfirmInOutModal`
+ *   (the default), `invoice-confirm-rectify` inside `CreateInvoiceConfirmModal`.
+ */
+export async function pickRectifiableInvoice(page, modal, { idPrefix = 'confirm-modal-rectify' } = {}) {
+  // The field renders a loading placeholder in place of everything else while the first
+  // batch is in flight; decide only once it is gone.
+  await expect(modal.getByTestId(`${idPrefix}-loading`))
+    .toBeHidden({ timeout: 30_000 }).catch(() => {});
+
+  if (await modal.getByTestId(`${idPrefix}-selected-count`).isVisible().catch(() => false)) return;
+
+  // A failed load and a genuinely empty candidate set are DIFFERENT states, and both
+  // make the confirm button unreachable. Name them here instead of letting the picker
+  // click time out with no diagnostic value.
+  if (await modal.getByTestId(`${idPrefix}-error`).isVisible().catch(() => false)) {
+    throw new Error(
+      'pickRectifiableInvoice: the rectifiable-invoice list failed to load — the field is showing '
+      + `its error state (${idPrefix}-error). The confirm button can never enable in this state.`,
+    );
+  }
+  if (await modal.getByTestId(`${idPrefix}-empty`).isVisible().catch(() => false)) {
+    throw new Error(
+      'pickRectifiableInvoice: the backend reports NO confirmed invoice this return document can '
+      + 'rectify. Candidates are filtered by business partner and transaction side '
+      + '(RectifiableInvoiceUtils), so the flow needs at least one confirmed invoice for the same '
+      + 'partner on the same side before a rectificative invoice can be generated.',
+    );
+  }
+
+  await modal.getByTestId(`${idPrefix}-open`).click();
+
+  // The picker is portalled to document.body — scope it to the page, NOT to the host modal.
+  const picker = page.getByTestId(`${idPrefix}-picker-modal`);
+  await expect(picker, 'The rectifiable-invoice picker should open').toBeVisible({ timeout: 10_000 });
+
+  const rows = picker.locator(`[data-testid^="${idPrefix}-option-"]`);
+  await expect(rows.first(),
+    'The picker should list at least one invoice this return document can rectify',
+  ).toBeVisible({ timeout: 20_000 });
+
+  // Prefer a row the backend's chain detection flagged as related to this return (the
+  // `…-suggested-{id}` badge) — that is the invoice a user would pick. Fall back to the
+  // first row when the chain found none, which is the standalone-return case.
+  const suggested = rows.filter({ has: page.locator(`[data-testid^="${idPrefix}-suggested-"]`) }).first();
+  const target = (await suggested.count()) > 0 ? suggested : rows.first();
+
+  await target.click();
+  await expect(target,
+    'Clicking a row in the multi-select picker should tick it',
+  ).toHaveAttribute('data-selected', 'true', { timeout: 5_000 });
+
+  // In multi-select mode a row click only TOGGLES the draft selection; it is the Apply
+  // button that commits it back to the host modal.
+  await picker.getByTestId(`${idPrefix}-apply`).click();
+  await expect(picker, 'Applying the selection should close the picker').toBeHidden({ timeout: 10_000 });
+
+  await expect(modal.getByTestId(`${idPrefix}-selected-count`),
+    'The picked invoice should show as selected in the confirm modal',
+  ).toBeVisible({ timeout: 10_000 });
 }
 
 // ── Price / totals utilities ─────────────────────────────────────────────────

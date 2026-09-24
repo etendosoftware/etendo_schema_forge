@@ -77,12 +77,12 @@ vi.mock('../../../FmOverlays.jsx', () => ({
   ),
 }));
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
@@ -200,7 +200,11 @@ describe('FmModel303Page — action bar', () => {
     expect(computeBtn).toBeTruthy();
   });
 
-  it('hides the Compute (Calcular) button for a submitted status, while Cancelar and Generar fichero 303 remain', () => {
+  // ETP-5438 — "Generar fichero 303" is now ALSO hidden once submitted (it used to stay
+  // visible/functional regardless of status — see the removed "is visible and functional
+  // when the declaration is already submitted" test below, replaced by a "hides..." one in
+  // the "standalone Generar fichero button" describe block). Only Cancelar remains.
+  it('hides the Compute (Calcular) and Generar fichero 303 buttons for a submitted status, while Cancelar remains', () => {
     const submittedDecl = { ...BASE_DECL, status: 'submitted' };
     render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
@@ -209,10 +213,10 @@ describe('FmModel303Page — action bar', () => {
     const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
     expect(computeBtn).toBeUndefined();
     expect(cancelBtn).toBeTruthy();
-    expect(genBtn).toBeTruthy();
+    expect(genBtn).toBeUndefined();
   });
 
-  it('hides the Compute (Calcular) button for a submitted_ack status, while Cancelar and Generar fichero 303 remain', () => {
+  it('hides the Compute (Calcular) and Generar fichero 303 buttons for a submitted_ack status, while Cancelar remains', () => {
     const submittedDecl = { ...BASE_DECL, status: 'submitted_ack' };
     render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
@@ -221,7 +225,77 @@ describe('FmModel303Page — action bar', () => {
     const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
     expect(computeBtn).toBeUndefined();
     expect(cancelBtn).toBeTruthy();
-    expect(genBtn).toBeTruthy();
+    expect(genBtn).toBeUndefined();
+  });
+
+  it('hides the Compute (Calcular) and Generar fichero 303 buttons for a submitted_ext status, while Cancelar remains', () => {
+    const submittedDecl = { ...BASE_DECL, status: 'submitted_ext' };
+    render(<FmModel303Page decl={submittedDecl} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const computeBtn = btns.find(b => b.textContent.includes('fm.action.compute'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
+    expect(computeBtn).toBeUndefined();
+    expect(cancelBtn).toBeTruthy();
+    expect(genBtn).toBeUndefined();
+  });
+});
+
+// ── Guardar button (ETP-5338 PIVOT) ─────────────────────────────────────────
+//
+// "Guardar" replaced the earlier "Volver" (go-back) button, which used to live next to
+// Cancelar on the left. Guardar itself lives in the right-aligned primary-action group
+// instead (leftmost of it, before "Calcular"/"Generar fichero 303"/"Registrar-Presentar"
+// — matching `saveActions.jsx`'s Save-before-Confirm convention), and unlike go-back it
+// does NOT unmount/navigate — it persists the pending manualData edit (via
+// `persistEditableFields`) and stays on the page. See FmModel303Page.jsx's `handleSave`
+// for the full rationale. These tests assert the button renders in the right-aligned
+// group (only while the declaration is not yet submitted — there is nothing left to save
+// once filed) and that clicking Cancelar still goes through `handleCancel` with no flush
+// at all — under the ETP-5338 redesign there is no more background autosave for it to
+// race against, so "no flush" plus unmounting on `onBack` IS the discard (Bug B fix); see
+// the dedicated Cancelar-discard test file for the full PUT-count assertion. The actual
+// Guardar/Calcular flush/feedback behavior (PUT fires with the latest value,
+// success/error toast) is covered end-to-end in FmModel303Page.save.vitest.jsx and
+// FmModel303Page.explicitSaveSingleFlight.vitest.jsx, which control the fetch double
+// needed to observe the PUT ordering.
+
+describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
+  it('renders Guardar in the right-aligned group, before Calcular', () => {
+    render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('FmModel303Page__save')).toBeTruthy();
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    // Order in the DOM matches visual left-to-right order in this flex toolbar: Guardar
+    // must come before Calcular, not after — and Cancelar (unrelated, on the left) must
+    // still precede both.
+    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
+    const saveIdx = btns.findIndex(b => b.getAttribute('data-testid') === 'FmModel303Page__save');
+    const computeIdx = btns.findIndex(b => b.textContent.includes('fm.action.compute'));
+    expect(cancelIdx).toBeGreaterThanOrEqual(0);
+    expect(saveIdx).toBeGreaterThan(cancelIdx);
+    expect(computeIdx).toBeGreaterThan(saveIdx);
+  });
+
+  it('clicking Cancelar calls onBack via handleCancel, with no flush wiring added to it', () => {
+    const onBack = vi.fn();
+    render(<FmModel303Page decl={BASE_DECL} onBack={onBack} onStatusChange={vi.fn()} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    const cancelBtn = btns.find(b => b.textContent.includes('fm.action.cancel'));
+    fireEvent.click(cancelBtn);
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('is present for a draft declaration but not rendered for an already-submitted one', () => {
+    // `status` is component state seeded once from `decl.status` at mount (`useState`), so this
+    // asserts against two separately-mounted instances rather than a `rerender` — a rerender
+    // with a new `decl` prop does not re-seed that state, which would make this assertion pass
+    // for the wrong reason.
+    const { unmount } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(screen.getByTestId('FmModel303Page__save')).toBeTruthy();
+    unmount();
+    render(<FmModel303Page decl={{ ...BASE_DECL, status: 'submitted' }} {...defaultProps} />);
+    expect(screen.queryByTestId('FmModel303Page__save')).toBeNull();
   });
 });
 
@@ -357,14 +431,17 @@ describe('FmModel303Page — standalone Generar fichero button', () => {
     expect(screen.getByTestId('FileGenModal303-mock')).toBeTruthy();
   });
 
-  it('is visible and functional when the declaration is already submitted', () => {
+  // ETP-5438 — previously "is visible and functional when the declaration is already
+  // submitted": a presented declaration must never be re-generated, matching the
+  // "Calcular"/"Registrar-Presentar" `!isSubmitted` gate this button now shares (full
+  // cross-model parity with FmModel349Page.jsx).
+  it('is hidden once the declaration is already submitted', () => {
     const decl = { ...BASE_DECL, status: 'submitted' };
     render(<FmModel303Page decl={decl} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
     const genBtn = btns.find(b => b.textContent.includes('fm.action.gen303'));
-    expect(genBtn).toBeTruthy();
-    fireEvent.click(genBtn);
-    expect(screen.getByTestId('FileGenModal303-mock')).toBeTruthy();
+    expect(genBtn).toBeUndefined();
+    expect(screen.queryByTestId('FileGenModal303-mock')).toBeNull();
   });
 
   it('is visible and functional when the declaration is not submitted (draft)', () => {
@@ -461,10 +538,20 @@ describe('FmModel303Page — result kind rendering', () => {
 // ── Precomputed summary KPI values ────────────────────────────────────────────
 
 describe('FmModel303Page — precomputed summary KPI deductible and result', () => {
+  // ETP-5272 pt.6 — deductible (box45) and result (box71) are now re-derived from
+  // `_precomputed.boxes` via applyOverrides/recomputeDerivedBoxes rather than trusted
+  // straight off `summary.deductible`/`summary.result`, so `boxes` must carry real
+  // inputs that produce the same 200/-100 through that formula (box27=100 minus
+  // box29=200 gives box45=200, box46=box27-box45=-100, which flows unchanged
+  // through 64/66/69/71 with no other offsets set). `summary.accrued` is still
+  // read as-is (untouched by this fix) and is kept consistent at 100.
   it('shows deductible value from precomputed summary', () => {
     const decl = {
       ...BASE_DECL,
-      _precomputed: { boxes: {}, summary: { accrued: 100, deductible: 200, result: -100 } },
+      _precomputed: {
+        boxes: { 27: 100, 29: 200 },
+        summary: { accrued: 100, deductible: 200, result: -100 },
+      },
     };
     const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     const values = container.querySelectorAll('.test-kpi303-value');
@@ -474,7 +561,10 @@ describe('FmModel303Page — precomputed summary KPI deductible and result', () 
   it('shows result value from precomputed summary', () => {
     const decl = {
       ...BASE_DECL,
-      _precomputed: { boxes: {}, summary: { accrued: 100, deductible: 200, result: -100 } },
+      _precomputed: {
+        boxes: { 27: 100, 29: 200 },
+        summary: { accrued: 100, deductible: 200, result: -100 },
+      },
     };
     const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
     const values = container.querySelectorAll('.test-kpi303-value');
@@ -518,8 +608,11 @@ describe('FmModel303Page — handleCompute async', () => {
   it('updates accrued, deductible, and result KPI values after successful compute', async () => {
     // boxes must be an array of {num, value} — applyOverrides returns boxes unchanged
     // when overrides={}, and recomputeDerivedBoxes expects an array.
+    // ETP-5272 pt.6 — deductible/result are re-derived from these boxes (box45/box71),
+    // not trusted off `summary` as-is: box27=500 minus box29=200 gives box45=200,
+    // box46=box27-box45=300, unchanged through 64/66/69/71 (no other offsets set).
     computeBoxes303.mockResolvedValue({
-      boxes: [{ num: 7, value: 100 }, { num: 9, value: 21 }],
+      boxes: [{ num: 7, value: 100 }, { num: 9, value: 21 }, { num: 27, value: 500 }, { num: 29, value: 200 }],
       summary: { accrued: 500, deductible: 200, result: 300 },
       sources: [],
     });

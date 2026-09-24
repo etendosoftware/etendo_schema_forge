@@ -157,6 +157,24 @@ If it becomes a problem, add a second behavior with path pattern `/etendo` (exac
 
 The `/mcp` and `/oauth2/*` behaviors attach a CloudFront Function (viewer-request) that rewrites the URI to the Etendo Tomcat context path before it reaches the ALB. See "Path rewrites (CloudFront Function)" below. `/authorize` is **not** a behavior — it is an SPA route served by the default S3 behavior and handled by React Router client-side (`tools/app-shell/src/pages/AuthorizePage.jsx`).
 
+## Public API gateway (production)
+
+The ETP-5345 NestJS gateway is deployed as an isolated ECS service behind the
+production ALB and is exposed through the existing production
+CloudFront distribution. The public documentation entrypoint does not require
+an app session; data operations under `/api/v1/*` still require an API key.
+
+| Component | Identifier |
+|---|---|
+| ECR repository | `etendo/public-api-gateway` |
+| ECS cluster / service | `etendo-production` / `etendo-public-api-service` |
+| Target group | `etendo-public-api-production-tg` (HTTP :4300) |
+| CloudFront distribution | `EGLVB9A5GHHEQ` (`app.etendo.ai`) |
+| ALB routes | `/api`, `/api/openapi.json`, `/api/v1/*` → public API target group |
+
+The existing `/api/reports` and `/api/report-selectors` rules retain priority
+over the general `/api/*` behavior and continue routing to report-server.
+
 **Function naming convention:** the rewrite function is named per-environment — `etendo-path-rewrite-experimental` on `E2KW4F1IFBTHJY`, and `etendo-path-rewrite-staging` will be the name on `E2XAO6Y99940X9` when staging is replicated. CloudFront Functions don't support resource tags, so the environment is encoded in the name. The JS source is identical (`infra/cloudfront-functions/etendo-path-rewrite.js`) — only the deployed function name and the `Comment` field vary.
 
 ### What goes where at runtime

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatCurrency } from '../../../../tools/app-shell/src/lib/formatCurrency.js';
+import { assertAdjacentStatements } from '../../../_test-support/sourceAdjacency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'GoodsShipmentActions.jsx'), 'utf8');
@@ -94,13 +94,21 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
+  // ETP-5260 — the Send button itself (SendDocumentButton) moved to the
+  // topbarSecondary slot (GoodsShipmentSecondaryActions, which gates it on
+  // `isCompleted` — see that component's own test). This component now only
+  // owns the SendDocumentModal (with its PDF/documentType context), opened via
+  // the `goods-shipment:open-send-modal` window event — see the "listens to
+  // goods-shipment:open-confirm-modal"-style wiring assertions below.
   describe('SendDocumentModal integration', () => {
-    it('imports SendDocumentModal and SendDocumentButton', () => {
-      assert.match(src, /import\s+SendDocumentModal\s*,\s*\{[^}]*SendDocumentButton[^}]*\}\s*from/);
+    it('imports SendDocumentModal (but no longer SendDocumentButton — that moved out)', () => {
+      assert.match(src, /import\s+SendDocumentModal\s+from/);
+      assert.doesNotMatch(src, /SendDocumentButton/);
     });
 
-    it('renders SendDocumentButton when completed', () => {
-      assert.match(src, /SendDocumentButton/);
+    it('listens to the goods-shipment:open-send-modal custom event to open its own SendDocumentModal', () => {
+      assert.match(src, /window\.addEventListener\(['"]goods-shipment:open-send-modal['"]/);
+      assert.match(src, /window\.removeEventListener\(['"]goods-shipment:open-send-modal['"]/);
     });
   });
 
@@ -130,11 +138,13 @@ describe('GoodsShipmentActions', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?apiBaseUrl=\{apiBaseUrl\}[\s\S]*?\/>/);
     });
 
-    it('onConfirm closes the confirm dialog and forwards the chosen priceListId to handleCreateInvoice', () => {
-      assert.match(
-        src,
-        /onConfirm=\{\(priceListId\) => \{ setShowInvoiceConfirm\(false\); handleCreateInvoice\(priceListId\); \}\}/,
-      );
+    // ETP-5333 — onConfirm used to be an inline arrow that closed the modal
+    // SYNCHRONOUSLY on click, before the request even started (no loading
+    // feedback). It is now wired directly to handleCreateInvoice, which closes
+    // the modal itself only once the request succeeds (see the ETP-5333
+    // describe block further down).
+    it('onConfirm is wired directly to handleCreateInvoice (no inline synchronous close)', () => {
+      assert.match(src, /onConfirm=\{handleCreateInvoice\}/);
     });
 
     it('handleCreateInvoice accepts priceListId and threads it into the POST body', () => {
@@ -150,55 +160,209 @@ describe('GoodsShipmentActions', () => {
     });
   });
 
-  describe('ConfirmShipmentInvoicedModal — fmtAmount (real currency formatting)', () => {
-    // fmtAmount is not exported (internal to the modal, reachable only via a hard-to-
-    // stage UI state — a draft shipment that already has a linked invoice). Extract
-    // the real function source and eval it directly rather than skip coverage.
-    function extractFunctionSource(source, fnName) {
-      const startIdx = source.search(new RegExp(`const\\s+${fnName}\\s*=\\s*\\([^)]*\\)\\s*=>\\s*\\{`));
-      if (startIdx === -1) throw new Error(`${fnName} not found`);
-      const braceStart = source.indexOf('{', startIdx);
-      let depth = 0;
-      let i = braceStart;
-      for (; i < source.length; i++) {
-        if (source[i] === '{') depth++;
-        else if (source[i] === '}') {
-          depth--;
-          if (depth === 0) break;
-        }
-      }
-      return source.slice(startIdx, i + 1);
-    }
+  // The single-record modal now shows a real quote too, mirroring BulkInvoiceFromShipment.jsx
+  // exactly — but ONLY when this shipment has no linked sales order. createFromShipments'
+  // single-shipment-with-order short-circuit into createFromOrder bills the WHOLE order's
+  // pending lines (this button sends no line overrides), so a quote computed from just this
+  // shipment's own lines would under-report the real invoice total in that case; the modal's
+  // existing linkedOrder.grandTotalAmount fallback stays in charge instead.
+  describe('single-record quote — gated on hasLinkedOrder', () => {
+    it('derives hasLinkedOrder from data.linkedOrders, the same single-record enrichment already received', () => {
+      assert.match(src, /const hasLinkedOrder = Array\.isArray\(data\?\.linkedOrders\) && data\.linkedOrders\.length > 0;/);
+    });
 
-    function getRealFmtAmount() {
-      const fnSource = extractFunctionSource(src, 'fmtAmount');
-      // fmtAmount now delegates to the real, imported formatCurrency() — inject it
-      // into the eval'd scope so the extracted source can still call it.
-      const fn = new Function('formatCurrency', `${fnSource}; return fmtAmount;`);
-      return fn(formatCurrency);
-    }
+    it('skips the line/pending fetch entirely when a linked order exists', () => {
+      assert.match(
+        src,
+        /if \(!showInvoiceConfirm \|\| hasLinkedOrder \|\| !recordId\) \{/,
+      );
+    });
 
-    it('groups thousands and uses the real currency symbol, never the raw ISO code', () => {
-      const fmtAmount = getRealFmtAmount();
-      assert.equal(fmtAmount(1234.56, 'EUR'), '1.234,56 €');
-      assert.doesNotMatch(fmtAmount(1234.56, 'EUR'), /EUR/);
+    it('gets product + salesOrderLine from pendingInvoiceLines, not a separate lines request, and not a bulk collection', () => {
+      assert.match(src, /goods-shipment\/goodsShipment\/\$\{recordId\}\/action\/pendingInvoiceLines`, \{ baseUrl: '', token \}/);
+      assert.doesNotMatch(src, /goods-shipment\/goodsShipmentLine\?parentId=/);
+      assert.match(src, /details\[item\.lineId\] = \{ product: item\.product, salesOrderLine: item\.salesOrderLine \|\| null \};/);
+    });
+
+    it('prices order-linked LINES from their own order line, unlinked lines from the Tarifa', () => {
+      assert.match(src, /sales-order\/lines\/\$\{id\}/);
+      assert.match(src, /goods-shipment\/goodsShipment\/\$\{recordId\}\/action\/productPrices/);
+      assert.doesNotMatch(src, /selectors\/M_Product_ID/);
+      assert.match(
+        src,
+        /const price = detail\.salesOrderLine\s*\n\s*\?\s*orderLinePrices\[detail\.salesOrderLine\]\s*\n\s*:\s*tariffPrices\[detail\.product\];/,
+      );
+    });
+
+    it('only overrides the modal default (grandTotal/documentNo) once the quote has actually resolved', () => {
+      assert.match(
+        src,
+        /const cardAmountLabel = quoteAmount != null\s*\n\s*\?\s*formatCurrency\([\s\S]*?, quoteAmount\)\s*\n\s*:\s*undefined;/,
+      );
+    });
+
+    it('passes cardAmountLabel and onPriceListChange to the modal', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLabel=\{cardAmountLabel\}[\s\S]*?\/>/);
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?onPriceListChange=\{setSelectedPriceListId\}[\s\S]*?\/>/);
+    });
+
+    // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+    // documentNo fallback while the quote was still resolving — unified onto the same
+    // cardAmountLoading skeleton fix already applied to BulkInvoiceFromShipment.jsx, so the
+    // bulk and single-record "Crear factura" flows never disagree on what "still loading"
+    // looks like.
+    describe('quoteLoading — drives cardAmountLoading (skeleton), gated on hasLinkedOrder like the rest of the quote feature', () => {
+      it('tracks whether the main fetch (lines + pending + order price) is still in flight', () => {
+        assert.match(src, /const \[mainFetchPending, setMainFetchPending\] = useState\(false\);/);
+        assert.match(src, /setMainFetchPending\(true\);/);
+        assert.match(src, /setOrderLinePrices\(prices\);\s*\n\s*setMainFetchPending\(false\);/);
+      });
+
+      it('also waits for the Tarifa-priced tariff fetch when at least one pending line has no linked order', () => {
+        assert.match(src, /const \[tariffFetchPending, setTariffFetchPending\] = useState\(false\);/);
+        assert.match(src, /setTariffFetchPending\(true\);/);
+        assert.match(
+          src,
+          /needsTariffPricing && \(!selectedPriceListId \|\| tariffFetchPending\)/,
+        );
+      });
+
+      it('is false whenever hasLinkedOrder is true — the quote is never computed there, so there is nothing to show a loading state for', () => {
+        assert.match(src, /const quoteLoading = !hasLinkedOrder && \(/);
+      });
+
+      it('passes cardAmountLoading to the shared modal', () => {
+        assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?cardAmountLoading=\{quoteLoading\}[\s\S]*?\/>/);
+      });
+    });
+
+    it('uses the authenticated request helper for the new fetches, not a bare fetch', () => {
+      assert.match(src, /import \{ useApiFetch \} from '@\/auth\/useApiFetch\.js'/);
+      // ETP-4576 — empty base on purpose, several call sites are cross-spec (see the
+      // component's own comment above its apiFetch declaration).
+      assert.match(src, /const apiFetch = useApiFetch\(''\);/);
     });
   });
 
-  // ETP-4717 (Pair 2 — P2) — regression lock-in. Unlike sales-order,
-  // purchase-order, sales-invoice, and sales-quotation, this window already
-  // gates the Send button correctly (Completed/CO only). This test locks that
-  // in so a future shared-logic refactor across the 5 windows cannot silently
-  // regress the one window that already does it right.
-  describe('Send button visibility gated by document status (ETP-4717 — already correct)', () => {
-    it('gates the Send button on isCompleted only (not isDraft || isCompleted)', () => {
-      assert.match(src, /\{isCompleted && <SendDocumentButton/);
+  // ETP-5265 — the intermediate "already fully invoiced" confirmation popup
+  // (ConfirmShipmentInvoicedModal, now deleted entirely) was removed. Confirming
+  // a fully-invoiced shipment now calls the documentAction endpoint directly via
+  // the canonical useDocumentAction hook — no modal, then the same success path the
+  // popup used to trigger (setInvoiceResult({ invoice: null })), or toast.error on
+  // failure.
+  //
+  // ETP-5265 QA follow-up — the in-flight feedback is no longer a floating
+  // toast.loading card: the promise is handed back through the CustomEvent `detail`
+  // so the core's Confirm button shows its own spinner (see runDraftModeConfirm in
+  // tools/app-shell/src/components/contract-ui/saveActions.jsx).
+  describe('fully-invoiced confirm skips the modal and calls documentAction directly (ETP-5265)', () => {
+    it('no longer imports or references the deleted ConfirmShipmentInvoicedModal', () => {
+      assert.doesNotMatch(src, /ConfirmShipmentInvoicedModal/);
     });
 
-    it('does not also show the Send button while in Draft (DR)', () => {
-      assert.doesNotMatch(src, /\{\(isDraft \|\| isCompleted\) && <SendDocumentButton/);
+    it('imports and uses the canonical useDocumentAction hook', () => {
+      assert.match(src, /import\s*\{[^}]*useDocumentAction[^}]*\}\s*from\s*['"]@\/hooks\/useDocumentAction['"]/);
+      assert.match(src, /useDocumentAction\(\{[^}]*apiBaseUrl[^}]*entity:\s*['"]goodsShipment['"][^}]*token[^}]*\}\)/s);
+    });
+
+    it('defines handleConfirmFullyInvoiced calling confirmDocAction.execute(recordId, "CO")', () => {
+      assert.match(src, /const handleConfirmFullyInvoiced\s*=\s*useCallback\(async\s*\(\)\s*=>\s*\{/);
+      assert.match(src, /confirmDocAction\.execute\(recordId,\s*['"]CO['"]\)/);
+    });
+
+    it('the open-confirm-modal handler branches on isFullyInvoiced: direct action vs the not-fully-invoiced modal', () => {
+      assert.match(
+        src,
+        /const handler = \(e\) => \{\s*if\s*\(isFullyInvoiced\)\s*\{\s*if \(e\?\.detail\) e\.detail\.promise = handleConfirmFullyInvoiced\(\);\s*else handleConfirmFullyInvoiced\(\);\s*\}\s*else\s*\{\s*setShowConfirmModal\(true\);\s*\}\s*\};/,
+      );
+    });
+
+    // ETP-5265 QA follow-up — this assignment is the whole mechanism behind the
+    // spinner: without it the core awaits `undefined` and the button never goes busy.
+    // The else-branch fallback keeps a bare CustomEvent (no detail) working.
+    it('hands the in-flight promise back to the core through the event detail', () => {
+      assert.match(src, /e\.detail\.promise = handleConfirmFullyInvoiced\(\);/);
+      assert.match(src, /else handleConfirmFullyInvoiced\(\);/);
+    });
+
+    // The modal branch must NOT set detail.promise — opening a modal is instantaneous,
+    // and a resolved-but-assigned promise would make the button flash a spinner.
+    it('the not-fully-invoiced branch leaves detail.promise unset', () => {
+      const handlerIdx = src.indexOf('const handler = (e) =>');
+      assert.notEqual(handlerIdx, -1);
+      const elseIdx = src.indexOf('setShowConfirmModal(true);', handlerIdx);
+      assert.notEqual(elseIdx, -1);
+      assert.doesNotMatch(src.slice(elseIdx, elseIdx + 120), /detail\.promise/);
+    });
+
+    // ETP-5265 QA follow-up (2) — the fully-invoiced branch no longer routes through
+    // setInvoiceResult: that setter's effect toasts AND refreshes but cannot be awaited,
+    // so it could not hold the Confirm button busy. It toasts inline instead, at the same
+    // point the native draftMode path does (right after the action POST, before the
+    // refetch — see useEntity's handleSaveAndProcess), and then AWAITS onRefresh so the
+    // button spins until the refreshed record is on screen.
+    it('on success, toasts inline and then awaits onRefresh (busy until the record is back)', () => {
+      assert.match(
+        src,
+        /await confirmDocAction\.execute\(recordId, ['"]CO['"]\);[\s\S]*?toast\.success\(ui\('goodsShipment\.confirmModal\.confirmedTitle'\)\);[\s\S]*?await Promise\.resolve\(onRefresh\?\.\(\)\)/,
+      );
+    });
+
+    it('the success toast fires BEFORE the awaited refresh, mirroring the native path', () => {
+      const toastIdx = src.indexOf("toast.success(ui('goodsShipment.confirmModal.confirmedTitle'));");
+      const refreshIdx = src.indexOf('await Promise.resolve(onRefresh?.())');
+      assert.notEqual(toastIdx, -1);
+      assert.notEqual(refreshIdx, -1);
+      assert.ok(toastIdx < refreshIdx, 'toast.success must precede the awaited refresh');
+    });
+
+    // A refetch failure is NOT a failed confirmation — it must never reach toast.error.
+    it('swallows a refresh rejection so it cannot be reported as a failed confirm', () => {
+      assert.match(src, /await Promise\.resolve\(onRefresh\?\.\(\)\)\.catch\(\(\) => \{\}\);/);
+    });
+
+    it('on POST failure, shows toast.error with the error message (or a fallback) and stops', () => {
+      assert.match(
+        src,
+        /catch\s*\(err\)\s*\{[\s\S]{0,160}?toast\.error\(err\.message \|\| ui\(['"]networkError['"]\)\);\s*return;/,
+      );
+    });
+
+    // The ETP-5063 effect still exists and still serves GoodsShipmentConfirmModal's
+    // onConfirmed — only the fully-invoiced branch stopped using it.
+    it('keeps the setInvoiceResult effect alive for the modal path', () => {
+      assert.match(src, /if \(invoiceResult && !invoiceResult\.invoice\?\.id\) \{/);
+    });
+
+    it('depends on onRefresh in the useCallback dependency array', () => {
+      assert.match(src, /\}, \[confirmDocAction\.execute, recordId, ui, onRefresh\]\);/);
+    });
+
+    // ETP-5265 QA follow-up — QA explicitly rejected the floating "processing" card:
+    // "debería estar en el botón de Procesar el spinner (como al procesar una factura)".
+    // The button-side spinner is covered in DetailView.saveButtons.vitest.jsx.
+    it('shows NO loading toast — the in-flight feedback is the Confirm button spinner', () => {
+      assert.doesNotMatch(src, /toast\.loading/);
+      assert.doesNotMatch(src, /toast\.dismiss/);
+    });
+
+    it('guards against re-entrant double-confirm via a ref', () => {
+      assert.match(src, /confirmingFullyInvoicedRef\.current/);
+    });
+
+    it('GoodsShipmentConfirmModal now only renders for the NOT-fully-invoiced flow', () => {
+      assert.match(src, /\{!isCompleted && !isFullyInvoiced && showConfirmModal && \(/);
     });
   });
+
+  // ETP-4717 (Pair 2 — P2) — regression lock-in, relocated by ETP-5260. Unlike
+  // sales-order, purchase-order, sales-invoice, and sales-quotation (fixed
+  // separately), this window already gated the Send button correctly
+  // (Completed/CO only). That gate now lives in GoodsShipmentSecondaryActions
+  // (`showSend={isCompleted}`) — see
+  // artifacts/goods-shipment/custom/__tests__/GoodsShipmentSecondaryActions.test.js,
+  // which is what now locks in "not isDraft || isCompleted" so a future
+  // shared-logic refactor cannot silently regress it.
 
   // ETP-4702 — regression guard. This component used to render its own private
   // kebab popover (menuOpen/menuRef state, previously ~lines 207-237) as a SECOND,
@@ -265,6 +429,58 @@ describe('GoodsShipmentActions', () => {
         src,
         /if\s*\(returnData\?\.id\)\s*\{\s*navigate\(`\/return-material-receipt\/\$\{returnData\.id\}`\);\s*\}\s*else\s*\{\s*[\s\S]*?onRefresh\?\.\(\);\s*\}/,
       );
+    });
+  });
+
+  // ETP-5333 — regression guard. handleCreateInvoice used to be called from an
+  // inline onConfirm that closed the modal (setShowInvoiceConfirm(false))
+  // SYNCHRONOUSLY on click, before the request even started — no loading
+  // feedback, then a second (result) modal popped up once the request
+  // resolved. The fix moves setShowInvoiceConfirm(false) inside
+  // handleCreateInvoice's own SUCCESS branch, right before setInvoiceResult,
+  // and passes `loading={creatingInvoice}` straight through to
+  // CreateInvoiceConfirmModal so it can show its own spinner/label while the
+  // modal stays mounted.
+  describe('handleCreateInvoice — modal closes only on success, right before setInvoiceResult (ETP-5333)', () => {
+    // Adjacency is asserted through assertAdjacentStatements, which strips
+    // comments first: the property under test is "no intervening STATEMENT",
+    // not "no intervening CHARACTERS". The raw `\s*` form of this regex is the
+    // exact mirror of the one ETP-5381 broke in GoodsReceiptActions.test.js by
+    // adding an explanatory comment; here it survived only because the comment
+    // landed two lines further down, inside the object literal. A real
+    // statement between the two calls still fails.
+    it('calls setShowInvoiceConfirm(false) immediately before setInvoiceResult inside the success path', () => {
+      assertAdjacentStatements(
+        src,
+        [/setShowInvoiceConfirm\(false\);/, /setInvoiceResult\(\{/],
+        'expected setShowInvoiceConfirm(false) to run right before setInvoiceResult({...}) on success',
+      );
+    });
+
+    it('does NOT close the modal inside the catch (error) branch — it must stay open on failure so the user can retry', () => {
+      const handlerBlock = src.match(/const handleCreateInvoice = async[\s\S]*?\n  \};/);
+      assert.ok(handlerBlock, 'expected the handleCreateInvoice function body');
+      const catchBlock = handlerBlock[0].match(/\} catch \(err\) \{[\s\S]*?\} finally \{/);
+      assert.ok(catchBlock, 'expected a catch block inside handleCreateInvoice');
+      assert.doesNotMatch(catchBlock[0], /setShowInvoiceConfirm\(false\)/);
+      assert.match(catchBlock[0], /toast\.error\(/);
+    });
+
+    it('guards re-entrant calls with the creatingInvoice flag before doing anything else', () => {
+      assert.match(
+        src,
+        /const handleCreateInvoice = async \(priceListId\) => \{\s*if \(creatingInvoice\) return;\s*setCreatingInvoice\(true\);/,
+      );
+    });
+
+    it('passes loading={creatingInvoice} to CreateInvoiceConfirmModal', () => {
+      assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?loading=\{creatingInvoice\}[\s\S]*?\/>/);
+    });
+
+    it('always resets creatingInvoice in a finally block, regardless of success or failure', () => {
+      const handlerBlock = src.match(/const handleCreateInvoice = async[\s\S]*?\n  \};/);
+      assert.ok(handlerBlock, 'expected the handleCreateInvoice function body');
+      assert.match(handlerBlock[0], /\} finally \{\s*setCreatingInvoice\(false\);\s*\}/);
     });
   });
 });

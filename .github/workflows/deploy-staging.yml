@@ -42,35 +42,47 @@ jobs:
             TARGET="experimental"
           fi
 
-          # configcat_sdk_key is resolved PER TARGET on purpose. The ConfigCat
-          # control plane is a pilot (ETP-4691) running on experimental only, and
-          # one SDK key addresses exactly one ConfigCat environment — a single
-          # shared variable would make production read the environment the pilot
-          # is toggling. An empty value leaves createFlagProvider() on the
-          # declared in-memory defaults, i.e. today's behaviour.
+          # configcat_sdk_key is resolved PER TARGET on purpose. One SDK key
+          # addresses exactly one ConfigCat environment, so production must use
+          # its own key instead of sharing the experimental environment.
           case "$TARGET" in
             production)
               echo "s3_bucket=${{ vars.S3_BUCKET_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "env_label=production" >> $GITHUB_OUTPUT
-              echo "public_origin=https://go.etendo.cloud" >> $GITHUB_OUTPUT
-              echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
+              PUBLIC_ORIGIN="${{ vars.PUBLIC_ORIGIN_PRODUCTION }}"
+              echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_PRODUCTION }}" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_STAGING }}" >> $GITHUB_OUTPUT
               echo "env_label=staging" >> $GITHUB_OUTPUT
-              echo "public_origin=https://go.staging.etendo.cloud" >> $GITHUB_OUTPUT
+              PUBLIC_ORIGIN="${{ vars.PUBLIC_ORIGIN_STAGING }}"
+              echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_STAGING }}" >> $GITHUB_OUTPUT
+              echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_STAGING }}" >> $GITHUB_OUTPUT
               echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
               ;;
             *)
               echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "cf_distribution=${{ vars.CF_DISTRIBUTION_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "env_label=experimental" >> $GITHUB_OUTPUT
-              echo "public_origin=https://go.experimental.etendo.cloud" >> $GITHUB_OUTPUT
+              PUBLIC_ORIGIN="${{ vars.PUBLIC_ORIGIN_EXPERIMENTAL }}"
+              echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               ;;
           esac
+
+          # The public origin is an Actions variable, not code, so a domain change
+          # is a variable edit plus a redeploy. Fail loudly when it is missing:
+          # without it the build silently skips the /.well-known/* discovery docs.
+          if [[ ! "$PUBLIC_ORIGIN" =~ ^https://[^/]+$ ]]; then
+            echo "::error::PUBLIC_ORIGIN_${TARGET^^} must be set to an absolute https origin (got '$PUBLIC_ORIGIN')"
+            exit 1
+          fi
+          echo "public_origin=$PUBLIC_ORIGIN" >> $GITHUB_OUTPUT
 
       - uses: actions/setup-node@v4
         with:
@@ -94,12 +106,11 @@ jobs:
           # always differs between deploys so the service worker updates on every redeploy
           VITE_BUILD_ID: ${{ github.run_id }}
           # CloudWatch RUM — IDs stored as GitHub Actions variables (not in repo)
-          VITE_RUM_APP_MONITOR_ID_STAGING: ${{ vars.RUM_APP_MONITOR_ID_STAGING }}
-          VITE_RUM_IDENTITY_POOL_ID_STAGING: ${{ vars.RUM_IDENTITY_POOL_ID_STAGING }}
-          VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: ${{ vars.RUM_APP_MONITOR_ID_EXPERIMENTAL }}
-          VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: ${{ vars.RUM_IDENTITY_POOL_ID_EXPERIMENTAL }}
-          VITE_RUM_APP_MONITOR_ID_PRODUCTION: ${{ vars.RUM_APP_MONITOR_ID_PRODUCTION }}
-          VITE_RUM_IDENTITY_POOL_ID_PRODUCTION: ${{ vars.RUM_IDENTITY_POOL_ID_PRODUCTION }}
+          # The build knows its target, so the bundle is told its environment
+          # instead of guessing it from location.hostname.
+          VITE_APP_ENV: ${{ steps.target.outputs.env_label }}
+          VITE_RUM_APP_MONITOR_ID: ${{ steps.target.outputs.rum_app_monitor_id }}
+          VITE_RUM_IDENTITY_POOL_ID: ${{ steps.target.outputs.rum_identity_pool_id }}
           # Sentry — DSN as variable (public, baked into JS bundle), token as secret
           VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -109,10 +120,14 @@ jobs:
           VITE_MIXPANEL_DEBUG: "false"
           VITE_MIXPANEL_API_HOST: ${{ vars.VITE_MIXPANEL_API_HOST }}
           VITE_GOOGLE_CLIENT_ID: ${{ vars.VITE_GOOGLE_CLIENT_ID }}
+          # Public API documentation endpoint used by the API keys screen. Only
+          # production runs the public API gateway, so every target links there.
+          VITE_PUBLIC_API_DOCS_URL: ${{ vars.PUBLIC_ORIGIN_PRODUCTION }}/api
           # ConfigCat control plane (ETP-4691) — key as variable, not secret: Vite
           # bakes it into the JS bundle, so it is public by construction and
-          # masking it would only hide it from the build log. Empty on
-          # staging/production while the pilot runs on experimental.
+          # masking it would only hide it from the build log. Production and
+          # experimental use separate per-environment Actions variables; staging
+          # remains empty until its ConfigCat environment is enabled.
           # `.env.development.local` is NOT read here: it is development-mode only,
           # so without this the deployed bundle has no key and every flag resolves
           # to its declared default.

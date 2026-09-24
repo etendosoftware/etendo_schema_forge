@@ -357,13 +357,16 @@ Field editability in the top section:
   `PSD2_NoActiveConnectionForAccount` before the interval check) and is **omitted**, never
   defaulted, when the provider declares no limit or stores 0.
 
-  The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the top of the
-  panel, above the date grid**, mirroring the re-authorization banner's shape (same
-  `--status-warning-bg` / `--status-warning-fg` tokens, same `AlertTriangle`) minus the action
-  button — there is nothing to click, the fix is to edit the date right below. It started life as
-  one line of small print under the grid and was simply not read, sitting next to the far louder
-  reauth banner. Warning tokens rather than `text-destructive`: nothing is wrong with the value
-  and Save stays enabled. It shows whenever
+  The SPA renders `bank-connection-import-fetch-interval-warning` as a **banner at the foot of the
+  panel, stacked immediately above the re-authorization banner**, mirroring that banner's shape
+  (same `--status-warning-bg` / `--status-warning-fg` tokens, same `AlertTriangle`) minus the action
+  button — there is nothing to click, the fix is to edit the date in the grid above. It started life
+  as one line of small print under the grid and was simply not read; a first fix (ETP-5181) promoted
+  it to a banner at the TOP of the panel, and QA then read the two banners sitting at opposite ends
+  as two unrelated things, so they were grouped into one block of "what you should know about this
+  connection" at the bottom. It stays first of the two: it is the notice the date box directly above
+  it can fix, so it stays closest to its cause. Warning tokens rather than `text-destructive`:
+  nothing is wrong with the value and Save stays enabled. It shows whenever
   `importFromDate < today − N`. **Strict `<`, on ISO strings, with the bound from
   `calendarISODaysAgo` in `lib/dateOnly.js`** — the local-time `Date` constructor, so month/year
   roll over and DST cannot shift it, and never `toISOString().slice(0,10)`, which reads yesterday
@@ -384,7 +387,13 @@ Field editability in the top section:
   downgrades `SUCCESS` to `WARNING` and appends `PSD2_ImportDateBeyondMaxInterval`, which
   `lib/backendErrors.js` already translates — ETP-5181 only changed the toast **type** from
   `toast.info` to `toast.warning` in `notifySyncResult` and in `ImportedStatementsTab`, since a
-  WARNING is something the user has to act on. Known gap: the same branch in
+  WARNING is something the user has to act on. QA then rejected the *copy*: "sólo pueden estar
+  disponibles los movimientos de ese período" left it ambiguous whether the sync would still run, so
+  `backendError.psd2ImportDateBeyondMaxInterval` now states the outcome — "**sólo se sincronizarán**
+  los movimientos de ese período" (en_US: "only transactions from that period **will be
+  synchronized**"). Only the locale value moved; the matcher in `lib/backendErrors.js` keys off the
+  **English AD_MESSAGE text**, which is unchanged, and `{days}` must keep appearing exactly once
+  (`useUI` replaces only the first occurrence). Known gap: the same branch in
   `AccountsHeaderTable.jsx` is being rewritten on the ETP-5140 branch and was left untouched here
   to avoid a conflict.
 
@@ -393,6 +402,21 @@ Field editability in the top section:
   offers more. Pre-existing, and shared with `AisConnectionCallback` in the PSD2 module, so both
   connect paths agree — fixing it means making the fallback `null` on both sides, which is a
   separate change.
+- **Re-authorization banner tone** (ETP-5181 QA). `bank-connection-edit-reauth-banner` is
+  **informational blue by default and only turns amber inside the last 7 days** before the consent
+  lapses (`buildReauthTone`, `REAUTH_WARNING_DAYS`; the tone is also published on the banner as
+  `data-tone` so a test can assert it without reading Tailwind classes). A PSD2 consent lasts ~90
+  days and this banner is on screen for every one of them, so the amber treatment it used to carry
+  unconditionally was permanent — which is what makes a warning stop being read, and what left the
+  genuinely time-critical fetch-interval notice stacked next to it competing with a wall of yellow.
+  Same call product already made for the credit-limit notice in `contract-ui/BlockingBpBanner.jsx`
+  (info/blue, not warning/amber), and the icon follows the tone — `Info` on blue, `AlertTriangle` on
+  amber — so a triangle never sits on a blue background. An **expired** consent
+  (`daysUntilExpires <= 0`, the `…ReauthExpired` copy) falls under the same comparison and stays
+  amber: sync is already broken at that point. A non-numeric `daysUntilExpires` (the bridge
+  published no countdown) stays informational rather than guessing at urgency. The two banners share
+  `BANNER_TONE_CLASSES`, whose entries are whole literal class strings — Tailwind's scanner only
+  sees literals, so a `bg-[var(--status-${tone}-bg)]` template would emit no CSS at all.
 - **"Sincronizar ahora" saves first** (ETP-5104). The button persists the whole form — the same
   `persistAccountEdits` call "Guardar cambios" makes, via the shared `persistAll()` — before it
   calls the bridge `sync` action, and does NOT close the modal afterwards. Before the fix it synced
@@ -538,6 +562,20 @@ POST/PUT /sws/neo/financial-account/accountingConfiguration
     values may be forced to `null` in the payload rather than read from state — see the
     Type-switch note right below.)
 ```
+
+**"Clears it" only became true in ETP-5305 — do not remove the `isNull` guard.** The clearing
+half of the contract above was broken from the start: `applyCombination` read each key with
+Jettison's `optString(field, null)`, which for an explicit JSON `null` returns the **literal
+4-character string `"null"`**, not a Java `null` (the parsed value is the `JSONObject.NULL`
+sentinel, and `optString` hands back its `toString()`). That string was then looked up as an
+accounting-combination id, so every save died with `Accounting combination not found: null`.
+Because `EditAccountModal.jsx` always sends all 9 keys — and `clearedPaymentAccount`/
+`clearedPaymentAccountOUT` are `null` **by design** since ETP-5207 — this made the Contabilidad
+tab unsaveable for *every* account, not just accounts with a blank field (QA case OF-24). The fix
+tests `body.isNull(field)` before falling back to `optString`. Note the guard must stay *inside*
+the existing `body.has(field)` check: `isNull` is also `true` for an absent key, so hoisting it
+would turn "leave untouched" into "clear". Same root cause and same fix as
+`FinancialAccountCountrySupport.bodyString` on the General tab of this window.
 
 **Type-switch mid-edit — payload scoped to the type actually being saved (ETP-4872 QA fix,
 BUG-1).** `accounting.values` (the field-value map inside `useFinancialAccountAccounting`) is keyed
@@ -755,6 +793,29 @@ native app-shell UI; only the bank login is an external popup.
 - **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
   that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
+- **Sandbox/fake banks are offered to Demo tenants only (ETP-5344).** Whether the Salt Edge widget
+  lists test banks alongside the real ones is decided by `handleConnect` and passed down as the
+  `includeSandboxes` argument of `SaltEdgeConnectionBuilder.createSaltEdgeConnection`, which is the only
+  thing that puts `include_sandboxes` in the consent body. Two conditions, both required: the PSD2
+  module's own `PSD2_ShowFakeProviders` preference must be `Y` (an operator who turns it off is
+  never overridden), **and** the tenant must not carry `ETGO_TenantPlan = productive`. A tenant that
+  paid for its plan is connecting its real bank and has no use for test providers; a Demo tenant
+  needs them to exercise the flow without real credentials. This is the same demo/productive signal
+  (`TenantPlanService#resolvePlan`) that `OnboardingForceTestModeService` uses to keep Demo tenants'
+  fiscal submissions in test mode, and absence of the plan marker reads back as Demo.
+  - `com.etendoerp.go` ships the System-level `PSD2_ShowFakeProviders='Y'` row (its only
+    `AD_PREFERENCE.xml` entry) so the preference is on everywhere and the plan is what
+    discriminates. That row carries **`SELECTED='Y'` and must keep it**: the PSD2 module ships its
+    own System row at `'N'`, and two System rows with different values and no `Selected` flag make
+    `Preferences.getHighestPriority` report a conflict — `isFakeProvidersEnabled()` swallows the
+    resulting `PropertyConflictException` and returns `false`, which would silently disable fake
+    banks for every tenant, Demo included.
+  - The plan is read **live on every connect**, not cached into a preference, so upgrading a tenant
+    takes effect on its next connection with no data-fix and nothing to re-run.
+  - Unaffected on purpose: the offline bank picker (`BankPicker` → `GET ?action=providers`) never
+    lists sandbox providers in any tenant — its middleware query omits `include_sandboxes`, and Salt
+    Edge keeps sandboxes under `country_code=XF` while the picker only queries `ES`. The PIS
+    (payments) flow and the `SyncBankProviders` catalog job still decide from the preference alone.
 - **Sync statements:** bank-synced accounts run the PSD2 module per-account statement fetch (the
   Classic "Get Bank Statement" equivalent) from the row-hover sync icon, the kebab "Sincronizar
   ahora", the Edit modal "Sincronizar ahora", and — on the Imported Statements tab — a dedicated
@@ -1114,7 +1175,7 @@ financeAccountsMenuArchive           "Archive account"
 - **Real bank logos**: `bankCatalog.js` uses `<Landmark>` as a placeholder icon for all banks.
 - **Card accounts**: the CARD step shows a "Coming soon" placeholder — actual card creation requires a bank connection.
 - **Bank catalog from endpoint**: `bankCatalog.js` is a static list; the component is designed so the data source can be swapped to a live endpoint without changing the layout.
-- **`enablebankstatement` flag** (ETP-4530): `FinancialAccountAccountingHandler` auto-sets it to `true` on every Contabilidad save (whenever any of the 9 accounting fields, ETP-4872, are saved) — broader than what the tab visually presents, since the flag itself is not exposed as an editable field here. If Classic UI surfaces this checkbox elsewhere, a user could find it pre-checked after using this tab; this is a deliberate scope call (the flag must be `Y` for Classic's bank-statement accounting engine to read the accounts at all), not a bug.
+- **`enablebankstatement` flag** (ETP-4530, narrowed by ETP-5305): `FinancialAccountAccountingHandler` used to set it to `true` on *every* Contabilidad save. It now only does so when the stored row already carries **both** `FIN_Asset_Acct` and `FIN_Transitory_Acct`. Forcing it unconditionally had become purely destructive once ETP-4872 retired that pair from this handler: the DB constraint `fin_finacc_acct_bsconfig_check` rejects `EnableBankStatement='Y'` when either account is null, so the save died at flush with an HTTP 500 — and Classic gained nothing from the flag anyway, since `DocFINBankStatement.getDocumentConfirmation` requires the flag *and* both accounts before it will post. Verified against the live DB: all 479 `FIN_Financial_Account_Acct` rows have the pair null and the flag `'N'`, so an A/B on the real table confirmed the old write fails the constraint and the new one succeeds. In practice the flag now stays as-is, which matches reality — bank-statement posting was never actually enabled through this tab. If the pair is ever re-exposed as editable fields, the flag starts being set again on its own, with no further change here.
 - **Remaining `FIN_Financial_Account_Acct` columns** (ETP-4530/ETP-4872): `receivePaymentAccount`, `makePaymentAccount`, `creditAccount`, `debitAccount` stay `discarded` in `decisions.json` — explicitly out of scope per the ETP-4872 ticket, unlike the deposit/withdrawal/bank-fee/revaluation accounts it moved to `editable`.
 - **"No field required" is an inference, not a confirmed product decision** (ETP-4872): the ticket's field tables carry no "required" marker for any of the 9 accounting fields, so the old `fINAssetAcct`-required validation was dropped entirely rather than moved to one of the new fields. This is flagged as pending product/PM confirmation in the implementation plan's Open Questions — do not treat it as permanently settled without checking whether that confirmation has since landed.
 - **New-account "Con conexión" path is NOT country-gated** (ETP-4896): the Spain-only restriction applies to *accounts*, which is what Test Cases 5–7 specify ("una cuenta … tiene como país X"). In the New Account wizard's CONNECTION step no account and no country exist yet — the account is created *from* whichever bank account Salt Edge returns — so there is nothing to gate on. Consequence worth knowing: a user can still reach Salt Edge from that step and pick a non-Spanish provider via the BankPicker's country filter (`BANK_COUNTRIES` offers ES/IT/FR/DE/PT/GB/NL/BE/IE/AT). Whether that filter should also be restricted to ES is a **product decision left open**, deliberately not assumed here.
@@ -1148,9 +1209,10 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 - **Payment column** (`Pago`): when the movement has a related payment, the document number renders as an underlined link (with an `ArrowUpRight` icon) that navigates to `/payment-in/:id` (received payments, `paymentIsReceipt === 'Y'`) or `/payment-out/:id` (made payments). Movements with no payment show plain text.
 - **Expandable "more info" panel**: the leading circular chevron (or a click anywhere on the row) toggles an inline panel showing a **fixed set of three accounting dimensions — Proyecto, Centro de costes, Producto** (`DISPLAYED_DIMENSIONS = ['project', 'costcenter', 'product']` in `MovementsTable.jsx`). This is intentionally independent of the chart-of-accounts `enabledDimensions`: Organización and the other dimensions are never shown, and the business partner is excluded (it already has its own Contacto column). The header row and panel form one elevated card (shadow at the bottom only, no seam line — the header row sits at `z-20` over the panel's `z-10` to hide the shadow bleed).
   - **Editable in place, ETP-5101.** Each of the three fields is a live `ChipSelect` picker (same primitive the Editar modal uses, `useDimensionLookup`-backed) whenever `canEditDimensions(movement)` — `!movement.paymentId && movement.posted !== 'Y'` — mirrors `MovementRowKebab.jsx`'s own `canEdit` exactly: a manual G/L transaction that is Draft or Processed-but-not-yet-posted. Picking a value (or clearing one) auto-saves immediately via `action=update`, reusing `buildDimensionUpdatePayload()` (`hooks/useCreateMovement.js`) to reconstruct the full payload the `update` action requires (that action has no partial-patch support — every call resends the movement's own current amount/type/currency unchanged, only the one edited dimension differs; `process` is always sent `false`, matching what the Editar modal's own "Guardar" already does for a Processed movement — proven safe, never reverts processed/posted state). On save failure the row keeps its prior value and a toast shows the backend's own message (translated) or the generic `financeAccountTxRowDimensionUpdateError` fallback.
-  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist because `FinancialAccountTransactionsHandler#applyEditableDimensions` (the backend) only accepts `projectId`/`costcenterId`/`productId`; organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
+  - **Stays the original read-only label+value display** (empty when the transaction has no value) for: a **posted** movement, a **payment-linked** movement (no `paymentId` exclusion applies — Payments-module-managed rows are never editable here, matching the kebab's own Editar hide rule), and **every dimension key other than the three above** — `EDITABLE_DIMENSION_KEYS` is a hardcoded allowlist scoped to this panel's own three fields (the backend's `applyEditableDimensions` also accepts `businessPartnerId`/`glItemId`/`description`, per the Editar-modal rule above, but this panel deliberately excludes Contacto — it already has its own column — and has no G/L item or description field at all); organization/activity/campaign/salesregion/user1/user2 have no write path at all regardless of document status (moot in practice for this window today — its contract never configures them as panel fields — but the allowlist is explicit rather than relying on that).
 - Locale-aware date format in the Date column (es_ES → `dd/MM/yyyy`, en_US → `M/d/yyyy`).
 - Individual row checkbox + select-all (indeterminate when partial).
+- **Selection clears on any filter change** (ETP-4972 QA fix): changing the type filter, date range, search box or the advanced "by conditions" filter drops the current checkbox selection and hides the floating `SelectionToolbar`, so a bulk "Eliminar" can never fire against movements that scrolled out of the filtered view. A sort-only change (`toggleSort`/`selectSort`) leaves the selection untouched. Same rule applies to the Imported Statements tab's own local filters (search, date range, status, advanced filter).
 - Row hover: subtle shadow elevation + kebab appears. The kebab (`MovementRowKebab.jsx`) offers **Contabilizar** (Post, when Processed & not posted) and **Descontabilizar** (Unpost, when posted) — both via the financial-account document-posting action (`.../transaction/{id}/action/post|unpost`) — and, for **manual accounting-account transactions only** (no `paymentId`): **Editar** (not-posted; reopens the movement modal, partial edit once Processed), **Procesar** (Draft → Processed), **Reactivar** (Processed → Draft, via Payment Removal), and **Eliminar** (offered on *every* row since ETP-5111, and always confirming first — see below; a Draft is then removed directly, a Processed one reactivated+removed via Payment Removal). Payment-linked movements hide **Editar / Procesar / Reactivar** (managed from the Payments module) but still expose Descontabilizar when posted. No role gating.
 
   **Eliminar is the exception since ETP-5111: it is rendered unconditionally** — for a payment-linked movement and for a funds-transfer leg alike, both of which used to hide it (the ETP-5085 `canDelete = isGlTransaction && !isTransferLeg` predicate and its early-return are gone, and so is the "nothing to offer" early return that used to hide the whole kebab on a payment-linked draft — precisely the row whose refusal now needs explaining). Because Eliminar is the only unconditional item, its leading `DropdownMenuSeparator` is gated on `hasActionsAboveDelete`, or it renders as a stray divider on exactly that row.
@@ -1208,7 +1270,7 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 
 **Error surfacing (ETP-5085, applies to every movement action — create / update / process / reactivate / delete / transfer):** `useCreateMovement.postAction` no longer throws `HTTP <status>: <raw response body>`. It reads the backend's own business message with the shared `parseBackendErrorMessage` (`lib/backendErrors.js`) and attaches `error.status`; `MovementRowKebab.runLifecycle` then runs it through `translateBackendError` before the toast, falling back to the per-action i18n key when the response carried no message. Before this, a rejected action showed the user the literal JSON envelope — that is how ETP-5085's 500 reached the screen as `HTTP 500: {"error":{"message":"Could not delete the movement…"}}`. New backend literals therefore need an entry in `BACKEND_ERROR_MAP` plus the `backendError.*` key in all three locale files.
 
-**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`) only **amount and direction are locked** (`NewTransactionModal.jsx`: `lockAmountType = isEdit && Boolean(movement.processed)`, Classic parity) — G/L item, dimensions, description and dates stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts the update. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
+**Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`, tightened by `ETP-4879`) **amount, direction and date are locked** (`NewTransactionModal.jsx`: `lockWhileProcessed = isEdit && Boolean(movement.processed)`, applied to `DirectionToggle`/`AmountInput`/the date `DateInput`, Classic parity for amount/direction) — G/L item, the 4 accounting dimensions and the description stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts exactly those fields (description, businessPartner, glItem, project, costcenter, product) and no longer touches `transactionDate`/`dateAcct` — an earlier version of this method reassigned both dates unconditionally, which silently rolled `DATEACCT` back to the transaction date on every Processed edit; ETP-4879 removed that. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
 **Reactivar (kebab) and the Reconciliación tab's un-reconcile action overlap in scope but are separate code paths.** A movement matched to a bank statement can be un-done from either surface — the Reconciliación split panel's Desconciliar (`ReconciliationHandler`, see above; its sibling Reactivar was removed by ETP-5135, see below), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
 
@@ -3216,6 +3278,29 @@ entirely from `.xlsx`, and the reader behind `parseXlsx` only speaks OOXML. Rath
 reader's opaque failure, an `.xls` upload is caught on the extension before any parse is attempted
 and gets a message naming the one thing that fixes it — re-save as `.xlsx`.
 
+#### Which parse rejection gets which message (ETP-5348)
+
+`useStatementImportReview.loadFile` translates the shared parsers' complaints into this window's
+own copy, and the split is **by `ImportParseError.messageKey`**, not by whether the parse threw:
+
+| Core `messageKey` | Message shown | Why |
+|---|---|---|
+| `importErrorNoDataRows`, `importErrorFileEmpty` | `financeAccountStatementsImportErrorEmptyFile` — "El archivo no tiene ninguna línea de datos." | there is nothing to import |
+| `importErrorDuplicateHeader`, `importErrorEmptyHeader`, `importErrorMultipleSheets`, `importErrorUnreadableXlsx` | `financeAccountStatementsImportErrorUnreadable` — "Comprueba que tenga una fila de encabezados, sin columnas repetidas, y una sola hoja con datos." | the file's shape is wrong, and that sentence names exactly what to look at |
+| anything that is not an `ImportParseError` | the generic format copy | not a parser complaint, so not something the user can act on |
+
+**Why this needed saying.** ETP-5348 made `parseDelimited`/`parseXlsx` refuse a header-only file
+themselves, throwing `importErrorNoDataRows`. This window used to detect that case itself, *after*
+a successful parse (`rows.length === 0`), so the new throw silently took that branch out of reach
+and every rejection collapsed onto the generic unreadable copy — which told the user to check for a
+header row, duplicate columns and extra sheets, none of which was the problem. The `rows.length === 0`
+guard is still there and deliberately returns the same key, so the two paths cannot answer
+differently; that disagreement is what produced the wrong message in the first place.
+
+Covered by `__tests__/ImportStatementModal.vitest.jsx` — one test per row of that table, each
+asserting the OTHER message is absent, so flattening the branches again fails the suite in both
+directions.
+
 #### Unusable-amount lines and empty files (alignment with Classic, except negatives)
 
 `BankStatementLinePruner` ports the sanitising half of Classic's
@@ -3505,8 +3590,10 @@ The list is a generic `DataTable` inside the `AccountsHeaderTable` slot, so it s
 every other window does: `ListView` owns the state, `useEntity` turns it into NEO's `_sortBy`
 (`resolveBackendSort`, `lib/gridQuery.js`), and the whole dataset is ordered — not just the
 loaded page. `DataTable` treats `sortable` as **opt-out** (`col.sortable !== false`), and the
-slot now declares `sortable: true` on every data column; only the trailing `_rowActions` column
-stays `false`.
+slot declares `sortable: true` on every data column. Row actions no longer belong to the column
+array: they render through
+`DataTable`'s shared `rowQuickActions` cell, so every column returned by `buildColumns` is a real,
+sortable data column.
 
 This is why "Por conciliar" had to become the `EM_ETGO_Pending_Count` stored computed column
 first. A value injected in `afterHandle` can only ever be reordered *inside the page the SQL
@@ -3759,14 +3846,49 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 
   Both surfaces read the column, so there is a single source of truth: `AccountRow.pendingCount` comes straight from `ACCOUNTS_SQL` (appended **last** in the SELECT — `loadAccounts()` and the test's `ResultSet` stub both read by position), `buildSummary` counts `account.pendingCount > 0` for the sidebar, and `PENDING_BY_ACCOUNT_SQL` / `loadPendingByAccount` are gone. The R spec `financial-accounts-page` keeps the flat JSON key `pendingCount` (its payload is hand-built, and `useFinancialAccount` / `useFinancialAccounts` read that name); only the W spec's generic CRUD exposes it as `eTGOPendingCount`.
 - Adding/removing a grid column, reordering, relabelling or changing a renderer = a `decisions.json` change, **not** a code change (a genuinely new *kind* of cell still needs a renderer added to the registry). Visibility (`editable`/`readOnly`/`system`/`discarded`) and `readOnlyLogic` also come from the contract.
-- **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[84px]` is not a width but a mirror of `NameCell`'s 44px grip + 32px avatar + 8px padding, so it is coupled to that cell body.
-- **Two pieces of list chrome are props, not decisions**, because both are generic `ListView`/`DataTable` behaviours the retired page had and every other window may want:
+- **Column widths stay in code** (`COLUMN_CHROME` in `AccountsHeaderTable.jsx`) on purpose: `decisions.json` is a semantic contract, not a stylesheet; Tailwind arbitrary values must be static in source, so a runtime `w-[${n}px]` would never compile; and `pl-[40px]` is not a width but a mirror of `NameCell`'s 32px avatar + 8px padding, so it is coupled to that cell body. The former 44px decorative drag-grip slot is gone.
+- **List chrome uses shared `ListView`/`DataTable` props, not decisions**, because these behaviours are generic and every window may reuse them:
   - `tablePaddingX=""` (passed by the wrapper in `windows/custom/financial-account/index.jsx`) cancels `ListView`'s default `px-2` on the table region. That padding would inset the slot's full-bleed rules — the one under the toolbar and the vertical one between the KPI panel and the rows — from both edges. The slot owns its inner spacing instead.
-  - `rowHoverStyle="elevated"` (passed to `DataTable` by `AccountsHeaderTable`) restores the retired `AccountRow`'s hover: an opaque background plus `shadow-lg` and `z-10`, so the row reads as a raised card and its shadow spills over the neighbouring separators. The default `"tint"` is `DataTable`'s pre-existing `hover:bg-muted/50` — no other grid changes. Selection backgrounds always win over the elevated background. In this mode `DataTable` also pads its table wrapper by 24px at the bottom: that wrapper is `overflow-x-auto overflow-y-visible`, which the CSS spec computes as `auto` on **both** axes, so without the padding the last row's downward shadow (`0 10px 15px -3px` ≈ 22px of reach) is clipped away and the last row looks like it has no hover at all.
+  - `rowHoverStyle="elevated"` (passed to `DataTable` by `AccountsHeaderTable`) restores the retired `AccountRow`'s hover: an opaque background plus `shadow-lg` and `z-10`, so the row reads as a raised card and its shadow spills over the neighbouring separators. The default `"tint"` is `DataTable`'s pre-existing `hover:bg-muted/50` — no other grid changes. Selection backgrounds always win over the elevated background.
+  - **Last-row shadow clipping needs padding on TWO nested `overflow` boxes, not one (ETP-5388).** `DataTable`'s own table wrapper is `overflow-x-auto overflow-y-visible`, which the CSS spec computes as `auto` on **both** axes — but that wrapper "never itself overflows" (its height is intrinsic to its content), so padding it alone is a no-op. The box that actually clips is `<Table>`'s own hardcoded child div (schema_forge_core's table.jsx: `<div className="relative w-full overflow-auto">`), sized tight to the `<table>` with zero slack. `DataTable` therefore applies `pb-6 [&>div]:pb-6` together: the `[&>div]` half pads the real clipping box so the shadow (`0 10px 15px -3px` ≈ 22px of reach) has room, and the outer `pb-6` keeps the wrapper's own reported height consistent for whatever sits above it. `AccountsHeaderTable` adds a THIRD `overflow: auto` ancestor on top of `DataTable` (its own custom scroll region — unique to this hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer has one) and carries the same 24px of trailing padding for the same reason.
+- **Account row actions use the same sticky cell as Sales Invoice.** `AccountsHeaderTable` passes a
+  custom `rowQuickActions.render(account)` to `DataTable`; the renderer keeps the financial-account
+  `AccountRowActions` contents (Edit, conditional Sync, and the account kebab), while `DataTable`
+  owns the trailing cell's reserved width, `right: 0` sticky behaviour, hover background, z-index,
+  header alignment and horizontal-scroll interaction. `buttonCount: 3` reserves the maximum row
+  shape (Edit + Sync + kebab); rows without a bank connection render two buttons inside the same
+  stable slot. The account container mirrors the shared `RowQuickActions` absolute positioning, so
+  it does not affect row height and reveals instantly on hover/focus. Do not reintroduce a synthetic
+  `_rowActions` data column: it sits at the table's far scroll edge and bypasses the shared viewport-
+  sticky behaviour.
 - **Reveal-on-hover affordances inside cells need the named group variant.** `DataTable` marks each row as `group/row`, not `group`, and Tailwind's `group-hover:` does not match a named group. Dropping the named variant is what made the copy-IBAN button and the drag grip silently vanish when the list moved onto `DataTable` — the exact same trap the row kebab hit. `accountColumns.jsx` and `AccountRowActions.jsx` therefore carry **both** variants (`group-hover:opacity-100 group-hover/row:opacity-100`): the named one is load-bearing, the unnamed one is cheap insurance for any future host that marks rows as a plain `group`, since jsdom can catch neither (it loads no Tailwind and computes no opacity).
 - **The hand-rolled `AccountsTable` host is deleted** (ETP-4658): `AccountsTable/{index,AccountsTableHeader,AccountRow}.jsx`, their tests, the `ACCOUNT_CELL_RENDERERS`/`ACCOUNT_COLUMNS` registry and the barrel export. Nothing mounted it once the list became the generated `ListView`, and declaring `pendingCount` in the contract had left it rendering that column twice with an off-by-one `colspan`. What survives in `AccountsTable/accountColumns.jsx` is only the three cell bodies (`NameCell`/`TypeCell`/`BalanceCell`), bound to columns by `accountCellTypes.jsx`. The folder name is now a misnomer; moving the file was left out on purpose to avoid churning imports and the tests that pin its path.
 - Nothing validates `gridLabelKey` or `cellType` (no rule in the pipeline validator, no whitelist). A typo'd label key renders **the key itself** on screen, because `useUI` returns the key on a miss; an unknown `cellType` falls back to DataTable's generic type renderer.
 - `readOnlyLogic.js` for these fields is produced by `generate-contract.js → convertLogicToJs` (AD expression → JS). The translator handles `@Col@='v'`, `!=`, empty (`!''`/`=''`), `null` and numeric (`>0`) forms; any expression that still contains a raw `@token@` after translation is marked `evaluable:false` (never emits invalid JS). All `readonlylogic-valid` contract tests must stay green after a regen.
+
+### Overflow-safe account and movement cells (ETP-5388)
+
+The account-name cell has a strict flex-shrink contract. Its avatar is `shrink-0`; every flex
+ancestor between the fixed-width grid cell and the name carries `min-w-0`; and the name/badge row is
+`w-fit max-w-full`. That row uses its intrinsic width when it fits and is capped by the cell when it
+does not. Within it, the name is `w-auto min-w-0 flex-1` and the connection badge is
+`shrink-0 whitespace-nowrap`. A short name therefore keeps the badge immediately beside it with the
+small gap shown in Figma, while a long name shrinks and ellipsises instead of compressing the avatar or
+pushing the badge outside the Cuenta column. `TruncatedText` reveals the complete name on hover only
+when the text is actually clipped (`scrollWidth > clientWidth + 1`), so short account names do not
+produce a redundant tooltip.
+
+The Movimientos table uses the same primitive for every truncatable textual value: payment/document
+number, contact, description, transaction type, accounting account, and the generic contract-cell
+fallback. Dates, status badges, posting indicators and monetary values deliberately keep their own
+renderers and do not gain tooltips. The payment link remains interactive: only its text shrinks,
+while the external-navigation icon reserves its width. The table uses a fixed, minimum-width layout
+so the text spans have a real clipping boundary; narrow viewports scroll horizontally instead of
+collapsing structural controls, badges or amount columns.
+
+This is presentation-only. The field set and renderer bindings remain owned by
+`artifacts/financial-account/decisions.json`; no decision, contract, generated output or NEO
+configuration changes are required.
 
 ### Advanced ("by conditions") filter on the Cuentas list (ETP-5113)
 
@@ -3947,9 +4069,11 @@ the generic contract that replaced the retired §9d.
    divergent branch, and with no textual conflict the tests outlived the feature. The slot
    now leaves `selectable` at DataTable's default and forwards `{...props}` untouched so
    `onSelectionChange` / `clearSelectionTrigger` / `deselectTrigger` / `deselectRowIds`
-   reach the grid. The hover quick-actions overlay stays suppressed **separately** and
-   declaratively (`window.rowQuickActions.enabled: false`), since per-row actions belong to
-   the trailing `AccountRowActions` column — do not conflate the two.
+   reach the grid. The generated generic quick-action set stays disabled declaratively
+   (`window.rowQuickActions.enabled: false`); `AccountsHeaderTable` deliberately overrides that
+   prop only at its inner `DataTable`, supplying `AccountRowActions` through the shared custom
+   renderer. This keeps selection independent from row actions without rebuilding a trailing data
+   column.
    `AccountsHeaderTable` still **destructures `selectedRows` out of the spread** even though
    ETP-5111 removed the toolbar swap that consumed it: `selectedRows` is also the name of
    `DataTable`'s own internal selection state, so forwarding a prop under that name reads as a
@@ -4015,3 +4139,37 @@ mount normally and the fix should be fully effective — unlike the inlineEditab
 window also uses `window.layoutType: "custom"`, so verify against a live/dev environment that
 the generated `AccountPage.jsx`/`DetailView` flow (rather than a custom wrapper bypassing it) is
 actually what renders the transaction detail before relying on the config gating in production.
+
+## ETP-5349 — Download errors omitted the rows skipped by hand
+
+Engine-level work shared with Product and Contacts, reported against Product Import but landing in
+the shared `ImportReviewQueue`, so the statement import gets it too. Full write-up in
+`product.md` → *ETP-5349*.
+
+This window has its own Omitir button, so it carried the defect identically: a hand-skipped row
+appeared under **Errores** and was then missing from the downloaded file, because the CSV builder
+tested only `errors.length` and skipping records no error.
+
+One thing specific to this window, unreported and fixed in passing: `ImportStatementModal` called
+`buildErrorsCsv(entries, headers, mapping)` with no captions, so the reason column of the
+downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
+translated. It now passes both the column caption and the skipped-by-user reason.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Financial Account is not one of ETP-5205's originally-named windows — brought into scope
+separately after v5's audit flagged it as completely unwired. Unlike the generated-page windows,
+this window never delegates to `DetailView.jsx`/`GeneratedApp`, so `windowReadOnly` (computed from
+`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded from scratch
+through 5 files: `index.jsx` → `DetailToolbarActions`/`MovementsTab` → `MovementsTable`/
+`MovementsToolbar` → `MovementRowKebab`. Gated: the Editar/AutoMatch buttons AND their modals' own
+`open` conditions (defense-in-depth — a deep link or an auto-open effect can otherwise still mount
+a modal independently of its trigger button), the movement row kebab's 6 mutating actions, the
+"Nuevo movimiento"/"Transferir fondos" split button and its two modals, and the bulk-delete
+selection bar (its own trigger is unreachable once unmounted, no separate open-gate needed).
+**Known gap, not fixed by this ticket:** the Reconciliation tab, Imported Statements tab, and Cash
+Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documented in-code near the
+`useWindowAccess` call in `index.jsx`, deliberately out of scope. Live verification against a real
+read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
+read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
+coverage.

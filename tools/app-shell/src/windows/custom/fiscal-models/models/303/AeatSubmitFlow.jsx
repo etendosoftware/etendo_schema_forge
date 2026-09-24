@@ -5,8 +5,9 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
-import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, IBAN_REQUIRED_TIPOS, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
 // ── Pure helpers (exported for unit testing — no DOM/React involved) ──────────
 
@@ -215,7 +216,7 @@ function Banner({ tone, icon, title, body, children }) {
 //             attempt (test mode included), so the "Incidencias" tab must re-fetch after every
 //             attempt, not just on success — see ETP-4456, `Fiscal303BoxesHandler#handleSubmit`.
 // onClose:    called to dismiss the flow (any step)
-export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
+export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes, manualOverrides, summary, token, apiBaseUrl, onSuccess, onAttached, onIncidentsChanged, onClose }) {
   const ui = useUI();
   const t = ui;
   const navigate = useNavigate();
@@ -272,14 +273,17 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
         return;
       }
       const tipo = localData.declarationType || decl?.result?.kind || 'N';
-      // Mirrors fm303Layouts.js's datos_bancarios.sectionVisibleWhen anyOf (ETP-4456 follow-up):
-      // the bank section — and its required bank_iban field — is shown whenever tipo_declaracion
-      // is U/D/X OR rectificativa is checked (independent of tipo). This pre-flight guard must
-      // fire under the same condition, otherwise a rectificativa filed under e.g. tipo 'I' shows
-      // the IBAN field as required but lets the user submit with it empty, round-tripping to the
-      // backend for an untranslated AEAT303_section_bank_empty 500 instead of failing fast with
-      // the existing translated fm.aeat.error.ibanRequired message.
-      const ibanRequired = IBAN_REQUIRED_TIPOS.includes(tipo) || identChecks?.rectificativa === true;
+      // Mirrors fm303Layouts.js's `_BANK_IBAN_REQUIRED_WHEN` (ETP-5393 [B1] re-review fix): the
+      // bank section — and its required bank_iban field — is shown whenever tipo_declaracion is
+      // U/D/X, OR rectificativa is checked AND box 111 (Rectificación - Importe) is non-zero.
+      // This pre-flight guard must fire under the exact same condition, otherwise (a) a
+      // rectificativa filed under e.g. tipo 'I' with a non-zero box 111 shows the IBAN field as
+      // required but lets the user submit with it empty, round-tripping to the backend for an
+      // untranslated AEAT303_section_bank_empty 500 instead of failing fast with the existing
+      // translated fm.aeat.error.ibanRequired message; or (b) — the bug this fixes — a
+      // rectificativa with box 111 === 0 blocks submission over a field that isn't even shown,
+      // because the old check ignored box 111 entirely.
+      const ibanRequired = isBankIbanRequired(tipo, withBox111NonZeroFlag(identChecks ?? {}, liveBoxes));
       if (ibanRequired && !identChecks?.bank_iban?.trim()) {
         setConnError(t('fm.aeat.error.ibanRequired') ?? 'IBAN is required to submit this declaration type. Fill in the IBAN field in the Identification section.');
         setSubmitting(false);
@@ -296,6 +300,11 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
       }
       const params = new URLSearchParams({ year: decl.year, period: decl.period, tipo, id: decl.id });
       if (identChecks) applyIdentParams(params, identChecks);
+      // ETP-5431 — mirrors generate303File (fiscalModelsUtils.js): without this, any
+      // manually-overridden box (111, 70, 108, 109, ...) reached "Generar fichero 303" but
+      // never the actual AEAT telematic submission, so the file the user reviewed and the
+      // file AEAT actually received could silently diverge.
+      if (manualOverrides) applyBoxParams(params, manualOverrides);
       const res = await apiFetch(`/fiscal303/submit?${params}`, {
         method: 'POST',
         body: JSON.stringify(buildAeatSubmitBody({ testMode, nrc, presenterNif, presenterName })),
@@ -423,10 +432,9 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, summary, t
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer', marginBottom: testMode ? 12 : 0 }}>
-                <input
-                  type="checkbox"
+                <CheckboxField
                   checked={testMode}
-                  onChange={e => setTestMode(e.target.checked)}
+                  onToggle={val => setTestMode(val)}
                   data-testid="AeatSubmitFlow__testMode" />
                 {t('fm.aeat.test_mode.label') ?? 'Validate without filing'}
               </label>

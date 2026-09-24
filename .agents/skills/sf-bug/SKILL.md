@@ -9,6 +9,8 @@ description: >
 argument-hint: "[brief description of the issue]"
 ---
 
+<!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/skills/sf-bug/SKILL.md - Regenerate: make sync-agents -->
+
 # /sf-bug — Report a Schema Forge Tool Bug
 
 **Arguments:** `$ARGUMENTS` (optional: brief description of the issue)

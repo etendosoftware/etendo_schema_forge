@@ -28,8 +28,8 @@ Three stacked sections, divided by hairline rules.
    - **Nombre del esquema** \* — select/input, e.g. "Contabilidad España — EUR"
    - **Esquema contable** \* — select, e.g. "PGC 2007 · España"
    - **Organización** — select, e.g. "Todas las organizaciones"
-   - **Criterio contable** — select, e.g. "Devengo"
    - **Descripción** — full-width input below, e.g. "Esquema contable PGC 2007 para operaciones nacionales en España."
+   - (Note: **Criterio contable** is hidden and internally fixed to Devengo — see the "Field data-binding treatment" table below. ETP-5372.)
 
 2. **Calendario y moneda**
    - **Calendario fiscal** \* — select, e.g. "Ejercicio 2026 · Ene–Dic" (this is the field showing the red validation error in the mock)
@@ -45,6 +45,12 @@ Three stacked sections, divided by hairline rules.
    > "Mark as non-functional" = a subtle indicator the value isn't persisted (e.g. a small "no guardado"/
    > "sin conexión a datos" helper text or an info icon with tooltip). Decide a clean treatment; it must be
    > obvious to a developer/QA that these two don't save, without shouting at the end user.
+   >
+   > **ETP-4947 update:** this section previously also rendered a fourth toggle, "Permitir
+   > negativos" (`AllowNegative`) — not part of the Figma mock's three toggles above, it was
+   > the only *implemented* one in this section. It has been removed entirely: no longer
+   > rendered, no longer settable by the backend. See the LOCKED field data-binding table
+   > below.
 
 ## Tab 2 — Valores por defecto
 **Account selector** control style (reused across this tab): a pill showing a **grey rounded code badge**
@@ -92,9 +98,10 @@ The General tab mixes backed, read-only-from-elsewhere, and unbacked fields. Bin
 |---|---|
 | Nombre del esquema | **editable** → `name` (required) |
 | Esquema contable | **intentionally hidden** — `gAAP` is set at schema-creation time; not editable from this window. Field present in contract but omitted from the custom form. |
-| Criterio contable | **editable select** → `accrual` (`IsAccrual` bool → Devengo/Caja) |
+| Criterio contable | **hidden, internally fixed to Devengo** — `accrual` (`IsAccrual`) is `system`-visibility; Etendo Go doesn't support Caja (cash-basis) for taxes. Not rendered in the custom form; backend rejects any client-supplied write (ETP-5372). |
 | Descripción | **editable** → `description` |
 | Moneda principal | **editable select** → `currency` (required) |
+| Permitir negativos | **hidden, internally fixed to N** — `allowNegative` (`AllowNegative`) is `system`-visibility; backend rejects any client-supplied write (ETP-4947). The toggle and its "Políticas contables" section were removed from the General tab entirely. |
 | Asientos en periodos cerrados | **editable toggle** → `automaticPeriodControl`, **bound INVERTED** (toggle ON ⇒ `AutoPeriodControl = N`) so the label stays truthful |
 | **Calendario fiscal** | **READ-ONLY**, real value read from `AD_OrgInfo.C_Calendar_ID` (Phase-3 backend supplies it). Not editable here. The red start/end validation in the mock is just a mock state — for read-only, show the value. |
 | **Organización** | **READ-ONLY**, real value from `AD_OrgInfo` (schema→org scope). Not editable here. |

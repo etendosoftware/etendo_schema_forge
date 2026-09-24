@@ -1,7 +1,7 @@
 {
-  "version": "0.5.0",
-  "generatedAt": "2026-08-13T11:56:58.624Z",
-  "contractChecksum": "7431ce23e5ea9294",
+  "version": "0.5.1",
+  "generatedAt": "2026-09-16T11:53:10.457Z",
+  "contractChecksum": "5eb00c16c375ec1f",
   "apiPrediction": {
     "specName": "return-material-receipt",
     "baseUrl": "/sws/neo/return-material-receipt",
@@ -492,7 +492,6 @@
             "readOnlyLogic": "@Processed@='Y'"
           },
           "movementQuantity": {
-            "readOnly": true,
             "required": true,
             "readOnlyLogic": "@Processed@='Y' | @UomManagement@='Y'",
             "defaultValue": "0"
@@ -530,8 +529,12 @@
         "warehouse",
         "partnerAddress"
       ],
+      "lineFields": [
+        "movementQuantity"
+      ],
       "recommendedOrder": [
-        "createHeader"
+        "createHeader",
+        "createLines"
       ]
     },
     "selectorContexts": [
@@ -559,6 +562,7 @@
     ],
     "workflow": [
       "Create draft header with required fields",
+      "Add at least one valid line",
       "Validate form state",
       "Complete the document"
     ],
@@ -586,6 +590,13 @@
         ]
       },
       {
+        "operation": "createLine",
+        "description": "Add a line after the header exists and parent context is available.",
+        "fields": [
+          "movementQuantity"
+        ]
+      },
+      {
         "operation": "completeDocument",
         "description": "Validate form state and run the document lifecycle action when the draft is complete.",
         "action": "receiveMaterials"
@@ -595,5 +606,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "260c8be9d93285c2"
+  "checksum": "bbb6bc21107c24de"
 }

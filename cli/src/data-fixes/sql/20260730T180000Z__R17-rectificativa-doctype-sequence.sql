@@ -6,6 +6,11 @@
 --   document types + their REC- sequences, and retire the old Nota de
 --   Credito/Devolucion types (AR Credit Memo, Return Material Sales Invoice,
 --   AP CreditMemo) + their own sequences (Active=No only, never deleted).
+--   ETP-4799 — before resolving gl_category_id for the two new c_doctype rows,
+--   auto-create the "AR Invoice" / "AP Invoice" GL Category when the tenant has
+--   NEITHER the ES-localized nor the fallback name (13/82 Experimental tenants
+--   had ZERO rows in gl_category at all, so the COALESCE below returned NULL and
+--   the c_doctype NOT NULL constraint exploded; see step 0a/0b).
 
 -- @check
 -- Needed when either new rectificative doc type (AR or AP) is missing, OR any
@@ -37,6 +42,59 @@ WHERE c.ad_client_id = :client_id
   );
 
 -- @apply
+
+-- 0a. ETP-4799 — ensure the "AR Invoice" GL Category exists for this tenant
+-- BEFORE the AR doc type insert (1b) resolves gl_category_id via
+-- COALESCE('ES AR Invoice', 'AR Invoice'). Root cause confirmed against the DB:
+-- 13 Experimental tenants have NO rows AT ALL in gl_category — not a
+-- differently-named category, total absence of the table content for that
+-- tenant — so both COALESCE branches returned NULL and the NOT NULL constraint
+-- on c_doctype.gl_category_id exploded. Shape mirrors the plain
+-- (non-ES-localized) row every other tenant in the fleet carries (confirmed on
+-- GOClient and 20+ other tenants: categorytype='D' i.e. "Document" category,
+-- ad_org_id='0', isdefault='N', docbasetype NULL). Guard mirrors the COALESCE
+-- lookup itself (isactive='Y', either name) — once either name resolves for
+-- real (ES-localized or plain, from onboarding or a prior manual fix), this
+-- step is a no-op. Not expected to collide with the gl_category_name UNIQUE
+-- constraint (ad_client_id, ad_org_id, name): the confirmed gap is zero rows
+-- total, so there is no dormant/inactive "AR Invoice" row at org '0' to clash
+-- with on any of the known affected tenants. Edge case, NOT a regression: if
+-- some other tenant somehow DOES have an INACTIVE 'AR Invoice'/'AP Invoice'
+-- row already at ad_org_id='0', this guarded INSERT would hit that same
+-- UNIQUE constraint instead of skipping it (the guard only checks
+-- isactive='Y', mirroring the COALESCE lookup below) — but that tenant was
+-- already failing before this fix existed, on the c_doctype NOT NULL
+-- constraint the COALESCE itself can't satisfy against an inactive-only row.
+-- Same net outcome either way: rollback, retryable FAILED ledger row, just a
+-- different constraint name in the error.
+INSERT INTO gl_category (
+  gl_category_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,
+  name, description, categorytype, isdefault, docbasetype
+)
+SELECT '@uuid_R17ARGLCAT@', :client_id, '0', 'Y', now(), '0', now(), '0',
+  'AR Invoice', NULL, 'D', 'N', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM gl_category
+  WHERE ad_client_id = :client_id
+    AND name IN ('ES AR Invoice', 'AR Invoice')
+    AND isactive = 'Y'
+);
+
+-- 0b. ETP-4799 — same for "AP Invoice" (the AP doc type insert (2b) resolves
+-- gl_category_id via COALESCE('ES AP Invoice', 'AP Invoice')). See 0a for the
+-- full rationale.
+INSERT INTO gl_category (
+  gl_category_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,
+  name, description, categorytype, isdefault, docbasetype
+)
+SELECT '@uuid_R17APGLCAT@', :client_id, '0', 'Y', now(), '0', now(), '0',
+  'AP Invoice', NULL, 'D', 'N', NULL
+WHERE NOT EXISTS (
+  SELECT 1 FROM gl_category
+  WHERE ad_client_id = :client_id
+    AND name IN ('ES AP Invoice', 'AP Invoice')
+    AND isactive = 'Y'
+);
 
 -- 1a. New AR (Sales) sequence — REC-, Next Assigned Number 1,000,000, Es Rectificativo=Y.
 -- Must be inserted BEFORE the doc type (ETSG_CHECK_RECTIF_DOC_TYPE trigger requires

@@ -21,15 +21,18 @@ import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavig
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
+import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
-import { buildOnboardingReturnTo } from './lib/oauthReturnTo.js';
+import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
+import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
 import { clearStoredDateRange } from '@/components/dashboard/DashboardDateRangeContext.jsx';
 import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
+import { detectBasePath, getNeoBaseUrl } from '@/lib/neoBaseUrl.js';
 // ETP-4300: the full locale dictionaries are no longer bundled eagerly. Only the
 // active locale's sliced "core" (the dict minus the per-window `fields` monolith)
 // is lazy-loaded below; per-window field labels ride each window's lazy chunk (see
@@ -37,31 +40,11 @@ import { clearAccountIdentity } from '@/lib/flags/bootstrap.js';
 // the slicer from @etendosoftware/schema-forge-cli (gitignored build artifacts).
 const coreLoaders = import.meta.glob('./locales/generated/core.*.json');
 
-function detectBasePath() {
-  const envBase = import.meta.env.VITE_API_BASE;
-  const path = window.location.pathname;
-  const webIdx = path.indexOf('/web/');
-
-  if (envBase) {
-    const routerBase = webIdx !== -1
-      ? `${path.substring(0, webIdx)}/${path.substring(webIdx + 1).split('/').slice(0, 2).join('/')}`
-      : '/';
-    return { apiBase: envBase, routerBase };
-  }
-
-  if (webIdx === -1) return { apiBase: '', routerBase: '/' };
-  const contextPath = path.substring(0, webIdx);
-  const moduleSegment = path.substring(webIdx + 1).split('/').slice(0, 2).join('/');
-  return {
-    apiBase: contextPath,
-    routerBase: `${contextPath}/${moduleSegment}`,
-  };
-}
-
+// ETP-5371 — `detectBasePath` and the NEO root moved to `@/lib/neoBaseUrl.js` so that surfaces
+// outside the `:windowName` route (the First Steps checklist) build the same URLs this file
+// hands `WindowLoader`, instead of approximating them from a different helper.
 const { apiBase, routerBase } = detectBasePath();
-const API_BASE_URL = import.meta.env.VITE_MOCK === 'true'
-  ? `${apiBase}/api`
-  : `${apiBase}/sws/neo`;
+const API_BASE_URL = getNeoBaseUrl();
 
 // ETP-4520 — resolves the per-window access tier + named capability flags for
 // the current session via the SFWindowAccessMap webhook. Passed into
@@ -78,7 +61,158 @@ function looksLikeWindowAccessPayload(value) {
     && ('windowAccess' in value || 'capabilities' in value);
 }
 
+// ETP-5189 — the role-filtered menu's allowed window/process/obuiappProcess ids
+// (SFListMenu, same source `useRoleMenu()` reads), flattened into `{id: true}` so
+// AuthContext's generic `sameFlatMap` diff (built for windowAccess/capabilities) can
+// compare it the same way. This is what lets a menu-only or process-only grant/
+// revocation — one that never touches SFWindowAccessMap's tiers — still flip
+// `accessChanged` and bump `authRevision`, instead of silently never refreshing the
+// menu (see AuthContext.jsx's [ETP-5189] comment on `menuAccess`).
+//
+// Cached for a short TTL — `AuthContext.jsx` calls `fetchWindowAccess` (and therefore
+// this) on EVERY silent refresh (bootstrap, tab focus, tab visibility, the 5-min poll),
+// and `refresh()`'s own in-flight dedup only collapses calls that are LITERALLY
+// concurrent, not ones a few hundred ms apart from separate focus/blur events — a burst
+// of UI interaction (e.g. several dialogs/tabs in quick succession) can trigger several
+// full refresh cycles in a short window. Confirmed via a controlled A/B (2026-09-11):
+// under Playwright's 4-worker mocked E2E suite, this extra per-refresh network+parse
+// cost — even though the request is small and often just an aborted mock in tests —
+// compounded across concurrently-running tests badly enough to roughly DOUBLE both the
+// suite's wall-clock time and its (pre-existing, worker-contention-driven) failure rate
+// for interaction-heavy specs. The FAILURE case is cached too (as
+// `{ [MENU_ACCESS_UNREACHABLE]: true }`, matching the fail-open default — see
+// menuTree.js's own comment on that sentinel for why it is NOT just `{}`) — an
+// aborted/unreachable SFListMenu is exactly the repeated, wasted round trip this is meant
+// to collapse.
+//
+// [ETP-5395] TTL sized to the burst it absorbs, NOT to an unrelated cache's default
+// staleness — that "same order of magnitude as the query cache" reasoning is exactly
+// what produced a 60s TTL here, and 60s is long enough to serve a stale menu across an
+// entire real permission change: an admin edits a role's access, the affected user's tab
+// does a routine focus/visibility/poll refresh a few seconds later, `windowAccess`/
+// `capabilities` (uncached) come back fresh so the "Tus permisos fueron actualizados"
+// banner correctly fires, but `menuAccess` — still within its 60s window from an earlier,
+// unrelated refresh — serves the OLD menu underneath it. The burst this cache exists to
+// collapse is refresh cycles a FEW HUNDRED MS apart (rapid focus/blur from several
+// dialogs/tabs opening in quick succession); the next genuinely distinct refresh trigger
+// (a separate focus event, a visibility change, or the 5-min poll) is always
+// seconds-to-minutes away in practice. 3s gives the burst case an order of magnitude of
+// headroom (10x+ over "a few hundred ms") while being far too short to meaningfully
+// outlive a real permission change relative to how far apart real triggers actually fire.
+const MENU_ACCESS_CACHE_TTL_MS = 3_000;
+// ETP-5403 — the 3s success TTL above, sized for a benign refresh burst, is far too
+// short to also govern the FAILURE outcome: every refresh trigger (bootstrap, tab
+// focus/visibility, the 5-min poll) across every open tab would re-attempt the fetch
+// as soon as it lapses, turning a sustained /sws/neo/listmenu outage into a
+// thundering-herd retry storm against an already-degraded backend (~20x/min per
+// session vs. ~1/min before ETP-5395 shrank the shared TTL). The failure outcome gets
+// its own, much longer TTL — back near the pre-ETP-5395 baseline — so retries stay
+// throttled for as long as the outage lasts, independent of the success-path cadence.
+const MENU_ACCESS_FAILURE_TTL_MS = 60_000;
+// SFListMenu is optional for the window-access decision. A hung/aborted menu
+// request must not hold AuthContext bootstrap behind the global 60s test timeout.
+// [ETP-5395] This only guards against a request that never answers, so it must sit far
+// above real latency: a timed-out race fails OPEN (the full, unfiltered sidebar). At 1s,
+// production (app.etendo.ai) answered SFListMenu correctly for a Purchasing role but a bit
+// later than that, and every load showed every menu entry. 10s stays well under the test
+// timeout above and well over any healthy answer.
+const MENU_ACCESS_FETCH_TIMEOUT_MS = 10_000;
+let menuAccessCache = null; // { value, expiresAt } | null
+let menuAccessInFlight = null;
+
+async function fetchMenuAccess() {
+  if (menuAccessCache && Date.now() < menuAccessCache.expiresAt) {
+    return menuAccessCache.value;
+  }
+  if (menuAccessInFlight) {
+    return menuAccessInFlight;
+  }
+  const request = (async () => {
+    let value;
+    let ttl;
+    try {
+      const tree = await fetchMenuTree();
+      const ids = collectAllowedIds(tree?.tree);
+      value = Object.fromEntries([...ids].map((id) => [id, true]));
+      ttl = MENU_ACCESS_CACHE_TTL_MS;
+    } catch {
+      // ETP-5375 — NOT `{}`: an unresolved fetch must stay distinguishable from a
+      // resolved-but-empty allow set (see MENU_ACCESS_UNREACHABLE's own comment).
+      value = { [MENU_ACCESS_UNREACHABLE]: true };
+      ttl = MENU_ACCESS_FAILURE_TTL_MS; // ETP-5403 — see comment above the constant.
+    }
+    menuAccessCache = { value, expiresAt: Date.now() + ttl };
+    return value;
+  })().finally(() => {
+    // Only clear our own slot: a request abandoned by the timeout below may settle after a
+    // newer one took its place.
+    if (menuAccessInFlight === request) menuAccessInFlight = null;
+  });
+  menuAccessInFlight = request;
+  return request;
+}
+
+async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
+  let timeoutId;
+  const timeout = new Promise((resolve) => {
+    timeoutId = setTimeout(() => {
+      // ETP-5375 — same reason as the catch branch above: a timed-out race must not be
+      // reported as a confirmed-empty allow set.
+      const unreachable = { [MENU_ACCESS_UNREACHABLE]: true };
+      // [ETP-5395] Treat the timeout as the failure it is: cache it for the failure TTL and
+      // drop the stuck request, or every later load (focus, the 5-min poll) joins it and waits
+      // the full timeout again. If the stuck request does answer later, its result still
+      // replaces this cache entry.
+      // Callers arriving while a request is pending join it, so the pending one is the stuck one.
+      menuAccessInFlight = null;
+      menuAccessCache = { value: unreachable, expiresAt: Date.now() + MENU_ACCESS_FAILURE_TTL_MS };
+      resolve(unreachable);
+    }, MENU_ACCESS_FETCH_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([menuAccessPromise, timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// Test-only: the module-level cache above is scoped to one real page load (a fresh
+// JS module instance per navigation), which never overlaps across test cases in
+// practice — but a test file runs many `fetchWindowAccess()` calls against the SAME
+// imported module instance, so without an explicit reset the cache leaks between
+// otherwise-independent test cases. Exported ONLY for that; not used by app code.
+export function __resetMenuAccessCacheForTest() {
+  menuAccessCache = null;
+  menuAccessInFlight = null;
+}
+
+// ETP-5443 follow-up — `NeoResponse.error()` (com.etendoerp.go) nests the human-readable
+// text under `error.message` on this path (the server-side `ensureTopLevelMessage`
+// normalization is not applied here); mirrors menuTree.js's own defensive `data?.error ||
+// data?.message` handling for a string `error`, and falls back to a top-level `message`
+// for forward compatibility. Used only to recover the `EnvironmentAccessPolicy.Decision`
+// name from a 402 — see lib/environmentAccessGate.js.
+async function readNeoErrorMessage(res) {
+  try {
+    const data = await res.json();
+    if (typeof data?.error === 'string') return data.error;
+    if (data?.error && typeof data.error === 'object') return data.error.message || '';
+    return data?.message || '';
+  } catch {
+    return '';
+  }
+}
+
 export async function fetchWindowAccess(session) {
+  // ETP-5189 — kicked off in PARALLEL with the windowaccessmap fetch below, not
+  // sequentially after it. `AuthContext.jsx` calls this on every silent refresh
+  // (bootstrap, tab focus/visibility, the 5-min poll), so a sequential extra
+  // round-trip here compounds under high refresh frequency — confirmed live via
+  // an E2E regression: awaiting it AFTER the windowaccessmap fetch measurably
+  // slowed down interaction-heavy specs (attachments upload/delete) enough to
+  // push already-borderline waits past their timeout. Already fails open on its
+  // own (see below), so racing it in parallel is safe.
+  const menuAccessPromise = fetchMenuAccess().catch(() => ({}));
   try {
     // Reached via `/sws/neo/windowaccessmap` (NEO Headless's own JWT auth), not
     // `/webhooks/SFWindowAccessMap` — the Webhooks module additionally requires a
@@ -92,7 +226,26 @@ export async function fetchWindowAccess(session) {
       token: session?.token ?? null,
       on401: 'ignore',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // ETP-5443 follow-up — a 402 here means the WHOLE environment's commercial access
+      // was cut off (demo trial expired / subscription grace elapsed — see
+      // lib/environmentAccessGate.js), not "this role has no access". Record the decision
+      // so AppLayout can show the real reason instead of the generic empty-access screen
+      // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
+      // recognized decision text, record it; for any other resolved non-ok response (401,
+      // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
+      // the only place a demo/subscription block can be detected, so a resolved response that
+      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
+      // in the outer catch below, which deliberately leaves the decision untouched so a
+      // transient network failure does not replace the last server-confirmed block with a
+      // misleading "your role has no access" screen.
+      setEnvironmentAccessDecision(
+        res.status === 402 ? parseEnvironmentAccessDecision(await readNeoErrorMessage(res)) : null
+      );
+      return null;
+    }
+    setEnvironmentAccessDecision(null);
     const data = await res.json();
     // Webhook responses in this app are inconsistent about wrapping the
     // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
@@ -106,17 +259,30 @@ export async function fetchWindowAccess(session) {
     //    right, otherwise fail closed (return `null`) rather than handing
     //    AuthProvider the wrong shape (e.g. the outer `{result: ...}`
     //    wrapper itself, which would silently deny every window/field).
+    let payload;
     if (typeof data?.result === 'string') {
-      try { return JSON.parse(data.result); } catch { return null; }
+      try { payload = JSON.parse(data.result); } catch { return null; }
+    } else if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
+      payload = data.result;
+    } else if (looksLikeWindowAccessPayload(data)) {
+      payload = data;
+    } else {
+      return null;
     }
-    if (data?.result && typeof data.result === 'object' && !Array.isArray(data.result)) {
-      return data.result;
-    }
-    if (looksLikeWindowAccessPayload(data)) {
-      return data;
-    }
-    return null;
+    // Deliberately NOT the same fail-closed contract as the block above — a menu-fetch
+    // failure must NOT take windowAccess/capabilities down with it. Mirrors
+    // `useRoleMenu()`'s own fail-OPEN philosophy for SFListMenu specifically (an
+    // unreachable menu webhook falls back to "don't filter", not "deny everything").
+    // Confirmed live (2026-09-11): the E2E mocked-spec harness (`e2e/tests/helpers/
+    // auth.js`) deliberately `route.abort()`s `/sws/neo/listmenu` to exercise that exact
+    // fallback — lumping this into the outer catch nulled out windowAccess/capabilities
+    // too, breaking every window's WindowAccessGuard across ~40 unrelated mocked specs.
+    // Already in flight (started above, in parallel) — `.catch()` there means this
+    // never rejects, so no separate try/catch is needed here.
+    const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
+    return { ...payload, menuAccess };
   } catch {
+    // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
   }
 }
@@ -185,7 +351,7 @@ function UnauthenticatedRedirect() {
   const location = useLocation();
   return (
     <Navigate
-      to={buildOnboardingReturnTo(location)}
+      to={resolveUnauthenticatedRedirect(location)}
       replace
       data-testid="Navigate__ecaf3f" />
   );

@@ -1,27 +1,27 @@
 import { useUI } from '@/i18n';
 import ConfirmWithCreditButtonBase from '../shared/ConfirmWithCreditButtonBase';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
 
-export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, onSave, isDirty, saveGate }) {
+// ETP-5408 — the Borrador "Confirmar" button is NOT rendered here: it is the generic
+// draftMode Confirm (saveActions.jsx), declared in decisions.json → window.draftMode and
+// overridden in index.jsx with an `onConfirm` that dispatches CONFIRM_EVENT. This topbarRight
+// component only hosts the confirm flow (ConfirmWithCreditButtonBase listens for the event
+// and opens ConfirmInOutModal) plus the completed-state "create invoice" action.
+// ETP-5260 — Copy link lives in ReturnMaterialReceiptSecondaryActions (topbarSecondary), not here.
+export const CONFIRM_EVENT = 'return-material-receipt:open-confirm-modal';
+
+export default function ConfirmWithCreditButton({ data, recordId, token, apiBaseUrl, saveGate, onRefresh, isDocumentReadOnly }) {
   const ui = useUI();
   return (
     <>
-      {/* ETP-4721 — rendered as a sibling, not via ConfirmWithCreditButtonBase's
-          extraActions, because the base component early-returns null for any
-          status other than DR/CO. The copy-link action must stay visible for
-          every persisted record regardless of document status. */}
-      <CopyRecordLinkButton
-        recordId={recordId}
-        windowName="return-material-receipt"
-        data-testid="CopyRecordLinkButton__a61728" />
       <ConfirmWithCreditButtonBase
         data={data}
         recordId={recordId}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        onSave={onSave}
-        isDirty={isDirty}
+        confirmEventName={CONFIRM_EVENT}
         saveGate={saveGate}
+        onRefresh={onRefresh}
+        isDocumentReadOnly={isDocumentReadOnly}
         entitySegment="returnMaterialReceipt"
         invoiceRoute="/sales-invoice/"
         invoiceType="facturaVenta"

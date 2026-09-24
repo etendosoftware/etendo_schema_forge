@@ -20,6 +20,13 @@ export const DEFAULT_SURVEY_NPS_INACTIVITY_DAYS = 14;
 export const DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS = 90;
 export const DEFAULT_SURVEY_CSAT_MIN_DOCS = 5;
 export const DEFAULT_SURVEY_CSAT_DOC_GAP = 30;
+// csat_onboarding's own offline/unreachable-backend default — kept at 1 day (the same 24h gate
+// it used before ETP-4353 Phase 2 made it configurable) so behavior is unchanged for any tenant
+// that never adds a csat_onboarding row to ETGO_Survey_Type.
+export const DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS = 1;
+
+const NPS_MIN_AGE_ENV_VAR = 'VITE_SURVEY_NPS_MIN_AGE_DAYS';
+const ONBOARDING_DELAY_ENV_VAR = 'VITE_SURVEY_ONBOARDING_DELAY_DAYS';
 
 let remoteConfig = null;
 
@@ -63,6 +70,15 @@ export function getSurveyConfig(env = import.meta.env) {
  * DEFAULT_SURVEY_* knobs used before this became per-survey — these stay
  * global fallback defaults, not per-survey, since they're only the
  * offline-degradation path.
+ *
+ * `minAccountAgeMs` is dual-purpose: it reads the same backend field
+ * (`minAccountAgeDays`, i.e. ETGO_Survey_Type.min_account_age_days) for two different
+ * surveys with two different meanings — "days since account creation" for `nps`, "days since
+ * onboarding completed" for `csat_onboarding` (see csatOnboardingIsEligible in surveys.js).
+ * Same shape (a single day-count gate since a triggering timestamp), so no new AD column was
+ * needed; only the env-var name and offline-fallback default differ per surveyKey, so an
+ * unconfigured csat_onboarding keeps its pre-ETP-4353-Phase-2 24h behavior instead of
+ * inheriting NPS's 60-day default.
  */
 export function getSurveyTypeConfig(surveyKey, env = import.meta.env) {
   const resolvedEnv = env ?? {};
@@ -73,9 +89,13 @@ export function getSurveyTypeConfig(surveyKey, env = import.meta.env) {
     return resolvePositiveInt(perSurvey[remoteField], envDefault);
   }
 
+  const [minAccountAgeEnvVar, minAccountAgeDefault] = surveyKey === 'csat_onboarding'
+    ? [ONBOARDING_DELAY_ENV_VAR, DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS]
+    : [NPS_MIN_AGE_ENV_VAR, DEFAULT_SURVEY_NPS_MIN_AGE_DAYS];
+
   return {
     minAccountAgeMs:
-      resolveDays('minAccountAgeDays', 'VITE_SURVEY_NPS_MIN_AGE_DAYS', DEFAULT_SURVEY_NPS_MIN_AGE_DAYS) * MS_DAY,
+      resolveDays('minAccountAgeDays', minAccountAgeEnvVar, minAccountAgeDefault) * MS_DAY,
     inactivityGuardMs:
       resolveDays('inactivityGuardDays', 'VITE_SURVEY_NPS_INACTIVITY_DAYS', DEFAULT_SURVEY_NPS_INACTIVITY_DAYS) * MS_DAY,
     responseCooldownMs:
@@ -123,7 +143,7 @@ export function getRemoteCannedResponses(surveyId, language) {
 export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fetch, logger = console } = {}) {
   // apiBaseUrl is legitimately '' in dev (getApiBase() resolves to the app root) — only bail
   // when it's truly absent (null/undefined), not just falsy, or the fetch never fires locally.
-  if (apiBaseUrl == null || !token) return;
+  if (apiBaseUrl == null) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/`, {
       headers: authHeaders(token),
@@ -148,7 +168,7 @@ export async function loadRemoteSurveyConfig({ apiBaseUrl, token, fetchImpl = fe
 export async function submitSurveyResponse({
   apiBaseUrl, token, surveyKey, score, feedback, tags, fetchImpl = fetch, logger = console,
 } = {}) {
-  if (apiBaseUrl == null || !token || !surveyKey) return;
+  if (apiBaseUrl == null || !surveyKey) return;
   try {
     const response = await fetchImpl(`${apiBaseUrl}/sws/survey-config/response`, {
       method: 'POST',

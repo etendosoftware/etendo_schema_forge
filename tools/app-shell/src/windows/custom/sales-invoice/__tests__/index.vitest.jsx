@@ -118,10 +118,18 @@ vi.mock('@/components/contract-ui/ListView.jsx', () => ({
   },
 }));
 
+// ETP-5302 — props are recorded (not just labelKey rendered) so the `preUnpostActions`
+// opt-in can be asserted on the instance that actually carries it.
+let bulkDocumentActionCalls = [];
 vi.mock('@/components/contract-ui/BulkDocumentAction', () => ({
-  default: ({ labelKey }) => (
-    <div data-testid="bulk-document-action" data-label-key={labelKey} />
-  ),
+  default: (props) => {
+    bulkDocumentActionCalls.push(props);
+    return (
+      <div data-testid={`bulk-document-action-${props.labelKey}`} data-label-key={props.labelKey} />
+    );
+  },
+  buildPostActions: vi.fn(() => []),
+  postRowFilter: vi.fn(),
 }));
 
 vi.mock('@generated/sales-invoice/custom/InvoiceHeaderTable.jsx', () => ({
@@ -185,6 +193,7 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     rowDeleteConfig = null;
     fiscalProfile = null;
     currentWindowAccessTier = 'full';
+    bulkDocumentActionCalls = [];
   });
 
   afterEach(() => {
@@ -432,5 +441,105 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
       lastListViewProps.onExternalPreviewClose();
     });
     expect(navigate).toHaveBeenCalledWith('/sales-invoice', { replace: true, state: {} });
+  });
+
+  // ETP-5209 — Post reachable from the row-hover kebab menu, plus a second bulk
+  // BulkDocumentAction instance for Post. The gate itself (processed + not
+  // posted) is covered exhaustively in useInvoiceWindow.test.js — these tests
+  // only verify the window wires the shared helper through correctly.
+  describe('ETP-5209 — Post row-kebab entry and bulk button', () => {
+    it('offers the post menu action for a processed, unposted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'N' } });
+      expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
+    });
+
+    it('does not offer the post menu action for an already-posted row', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const actions = lastListViewProps.rowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
+      expect(actions).toEqual([]);
+    });
+
+    it('bumps refreshKey when a neoAction menu action (post) completes', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      const beforeRefresh = lastListViewProps.refreshTrigger;
+      act(() => {
+        lastListViewProps.rowQuickActions.onMenuActionExecuted({ neoAction: 'post' });
+      });
+      expect(lastListViewProps.refreshTrigger).toBe(beforeRefresh + 1);
+    });
+
+    it('renders both the process and the post bulk BulkDocumentAction instances', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.getByTestId('bulk-document-action-process')).toBeInTheDocument();
+      expect(screen.getByTestId('bulk-document-action-post')).toBeInTheDocument();
+    });
+
+    // ETP-5209 regression: production crash root cause. ListView.jsx invokes
+    // `bulkActions` as a PLAIN FUNCTION CALL — `bulkActions({...})` — inside its
+    // own render body, never as JSX (`<bulkActions />`). The mocked ListView
+    // above renders it via JSX (`<props.bulkActions .../>`), which is exactly
+    // why the old suite never caught this: JSX invocation gives a function
+    // component its own hook dispatcher, so a stray `useUI()` inside the
+    // wrapper would have passed silently there. Calling the captured
+    // `bulkActions` reference directly here, OUTSIDE of any React render pass,
+    // reproduces the same hook-dispatcher-less context production hits — any
+    // hook call inside the wrapper throws React's "Invalid hook call" error
+    // here, exactly as it would crash with "Rendered more hooks than during
+    // the previous render" in production the moment a row got selected.
+    it('ETP-5209 regression: bulkActions wrapper is callable as a plain function (not JSX) without an Invalid Hook Call error', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(() => lastListViewProps.bulkActions({
+        selectedRows: [{ id: 'inv-1', processed: 'Y', posted: 'N' }],
+        clearSelection: vi.fn(),
+        token: 'tkn',
+        apiBaseUrl: '/api',
+        windowName: 'sales-invoice',
+      })).not.toThrow();
+    });
+  });
+
+  // ── ETP-5302 — reactivating a POSTED invoice from the bulk bar ──────────────
+  // The bug: bulk RE on a Completada + Contabilizada invoice failed with
+  // "Factura contabilizada" while the form kebab succeeded, because the kebab
+  // chains unpost → RE (`preUnpost: true` in decisions.json) and the bulk bar sent
+  // a bare RE, which C_INVOICE_POST rejects while Posted='Y'.
+  describe('ETP-5302 — preUnpostActions on the bulk process button', () => {
+    const callFor = (labelKey) => bulkDocumentActionCalls.find((p) => p.labelKey === labelKey);
+
+    it("passes preUnpostActions={['RE']} to the process (reactivate) bulk instance", () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('process').preUnpostActions).toEqual(['RE']);
+    });
+
+    // Scoped to RE on purpose: a confirm (CO) must never reverse accounting.
+    it('limits the opt-in to RE — no other action triggers the pre-unpost', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('process').preUnpostActions).not.toContain('CO');
+      expect(callFor('process').preUnpostActions).toHaveLength(1);
+    });
+
+    it('does NOT opt the Post bulk instance into the pre-unpost chain', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(callFor('post').preUnpostActions).toBeUndefined();
+    });
+
+    // PRODUCT RULE: on an invoice the accounting reversal is a step INSIDE
+    // Reactivar, never a standalone bulk action of its own (unlike goods-receipt /
+    // goods-shipment, which do mount a "Descontabilizar" button).
+    it('mounts NO standalone bulk unpost button', () => {
+      render(<SalesInvoiceWindow windowName="sales-invoice" apiBaseUrl="/api" token="tkn" />);
+
+      expect(screen.queryByTestId('bulk-document-action-unpost')).not.toBeInTheDocument();
+      expect(bulkDocumentActionCalls.map((p) => p.labelKey)).not.toContain('unpost');
+    });
   });
 });

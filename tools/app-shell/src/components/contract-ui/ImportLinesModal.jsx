@@ -1,8 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+
+// A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
+// intentionally ignored — matches the existing Math.abs behavior for negativeQuantity mode.
+// `tooHigh` distinguishes "numeric but over the max" from every other invalid case
+// (empty/non-numeric/zero/negative) so callers can pick the right error message.
+function classifyQtyDraft(raw, maxQty) {
+  if (raw === undefined || raw.trim() === '') return { valid: false, tooHigh: false };
+  const parsed = Number(raw);
+  const isNumeric = Number.isFinite(parsed);
+  const magnitude = Math.abs(parsed);
+  if (isNumeric && magnitude > 0 && magnitude <= maxQty) return { valid: true, tooHigh: false };
+  return { valid: false, tooHigh: isNumeric && magnitude > maxQty };
+}
 
 export default function ImportLinesModal({
   invoiceId,
@@ -26,8 +40,16 @@ export default function ImportLinesModal({
   showPriceColumns = true,
   negativeQuantity = false,
   linesEndpoint,
+  submitImport,
+  filterZeroQty = false,
+  autoSelectOnExpand = false,
+  eagerLoadLines = true,
+  showAvailableQtyColumn = false,
+  qtyColumnLabelKey = 'qty',
 }) {
-  if (!linesEndpoint) throw new Error('ImportLinesModal: linesEndpoint prop is required');
+  if (!linesEndpoint && !submitImport) {
+    throw new Error('ImportLinesModal: linesEndpoint prop is required unless submitImport is provided');
+  }
   const ui = useUI();
   const apiFetch = useApiFetch(base);
   const [documents, setDocuments] = useState([]);
@@ -40,6 +62,7 @@ export default function ImportLinesModal({
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const [lineQuantities, setLineQuantities] = useState({});
+  const [qtyDrafts, setQtyDrafts] = useState({});
   const [eagerLoadingLines, setEagerLoadingLines] = useState(false);
   const [excludedByCurrency, setExcludedByCurrency] = useState(false);
 
@@ -61,7 +84,7 @@ export default function ImportLinesModal({
   // Eagerly load all lines once documents arrive so fully-imported invoices can be
   // filtered out before the user sees the list (avoids "appears then disappears" flicker).
   useEffect(() => {
-    if (loading) return;
+    if (loading || !eagerLoadLines) return;
     const docs = documents;
     if (docs.length === 0) return;
     let cancelled = false;
@@ -69,7 +92,7 @@ export default function ImportLinesModal({
     Promise.all(
       docs.map(doc =>
         fetchLines({ base, headers, docId: doc.id, sharedContext })
-          .then(lines => ({ docId: doc.id, lines }))
+          .then(lines => ({ docId: doc.id, lines: filterZeroQty ? lines.filter(l => (l._maxQty || 0) > 0) : lines }))
           .catch(() => ({ docId: doc.id, lines: [] })),
       ),
     ).then(results => {
@@ -104,11 +127,15 @@ export default function ImportLinesModal({
     if (docLines[docId] || loadingLines.has(docId)) return;
     setLoadingLines(prev => { const n = new Set(prev); n.add(docId); return n; });
     try {
-      const enrichedLines = await fetchLines({ base, headers, docId, sharedContext });
+      const fetchedLines = await fetchLines({ base, headers, docId, sharedContext });
+      const enrichedLines = filterZeroQty ? fetchedLines.filter(l => (l._maxQty || 0) > 0) : fetchedLines;
       setDocLines(prev => ({ ...prev, [docId]: enrichedLines }));
       const qtyDefaults = {};
       enrichedLines.forEach(l => { qtyDefaults[l.id] = l._maxQty || 0; });
       setLineQuantities(prev => ({ ...prev, ...qtyDefaults }));
+      if (autoSelectOnExpand) {
+        setSelected(prev => { const n = new Set(prev); enrichedLines.forEach(l => n.add(l.id)); return n; });
+      }
     } catch { /* silent */ } finally { setLoadingLines(prev => { const n = new Set(prev); n.delete(docId); return n; }); }
   };
 
@@ -149,36 +176,65 @@ export default function ImportLinesModal({
     return { checked: false, indeterminate: true };
   };
 
+  const collectSelectedLines = () => {
+    const lines = [];
+    for (const doc of documents) {
+      for (const line of (docLines[doc.id] || [])) {
+        if (!selected.has(line.id)) continue;
+        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
+        lines.push({ line, qty, docId: doc.id });
+      }
+    }
+    return lines;
+  };
+
+  // Caller-provided batch submit (e.g. the return-flow's single POST action).
+  const importViaSubmitHandler = async () => {
+    const lines = collectSelectedLines();
+    const result = await submitImport({ lines, base, headers, invoiceId, sharedContext });
+    if (!result?.ok) {
+      toast.error(result?.error || ui('failedToImportLines'));
+      return;
+    }
+    toast.success(ui(successMessageKey, { count: result.count ?? lines.length }));
+    onSuccess();
+  };
+
+  // Default: one POST per selected line against `linesEndpoint`.
+  const importViaPerLinePost = async () => {
+    let lineNo = 10;
+    let errors = 0;
+    const importedDocIds = new Set();
+    for (const doc of documents) {
+      const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
+      if (lines.length === 0) continue;
+
+      for (const line of lines) {
+        const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
+        const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+        const res = await apiFetch(`/${linesEndpoint}`, {
+          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
+        });
+        if (!res.ok) errors++;
+        else importedDocIds.add(doc.id);
+        lineNo += 10;
+      }
+    }
+    if (afterImport) await afterImport({ importedDocIds, sharedContext, base, headers, invoiceId });
+    if (errors > 0) {
+      toast.warning(`Imported with ${errors} error(s) — review the invoice`);
+    } else {
+      toast.success(ui(successMessageKey));
+    }
+    onSuccess();
+  };
+
   const handleImport = async () => {
     if (selected.size === 0 || importing) return;
     setImporting(true);
     try {
-      let lineNo = 10;
-      let errors = 0;
-
-      const importedDocIds = new Set();
-      for (const doc of documents) {
-        const lines = (docLines[doc.id] || []).filter(l => selected.has(l.id));
-        if (lines.length === 0) continue;
-
-        for (const line of lines) {
-          const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
-          const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
-          const res = await apiFetch(`/${linesEndpoint}`, {
-            method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
-          });
-          if (!res.ok) errors++;
-          else importedDocIds.add(doc.id);
-          lineNo += 10;
-        }
-      }
-      if (afterImport) await afterImport({ importedDocIds, sharedContext, base, headers, invoiceId });
-      if (errors > 0) {
-        toast.warning(`Imported with ${errors} error(s) — review the invoice`);
-      } else {
-        toast.success(ui(successMessageKey));
-      }
-      onSuccess();
+      if (submitImport) await importViaSubmitHandler();
+      else await importViaPerLinePost();
     } catch (err) { toast.error(err.message || 'Failed to import'); } finally { setImporting(false); }
   };
 
@@ -189,7 +245,7 @@ export default function ImportLinesModal({
   };
   const fmtNum = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }) : '-';
 
-  return (
+  return createPortal(
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
       <div onClick={e => e.stopPropagation()} style={{ width: 580, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))' }}>
 
@@ -280,7 +336,8 @@ export default function ImportLinesModal({
                           <>
                             <div style={{ display: 'flex', padding: '4px 12px 4px 48px', fontSize: 11, fontWeight: 600, color: 'hsl(var(--text-disabled))', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
                               <span style={{ flex: 1 }}>{ui('product')}</span>
-                              <span style={{ width: 70, textAlign: 'right' }}>{ui('qty')}</span>
+                              {showAvailableQtyColumn && <span style={{ width: 90, textAlign: 'right' }}>{ui('qty')}</span>}
+                              <span style={{ width: showAvailableQtyColumn ? 90 : 70, textAlign: 'right' }}>{ui(qtyColumnLabelKey)}</span>
                               {showPriceColumns && <span style={{ width: 80, textAlign: 'right' }}>{ui('price')}</span>}
                               {showPriceColumns && <span style={{ width: 80, textAlign: 'right' }}>{ui('amount')}</span>}
                             </div>
@@ -320,25 +377,61 @@ export default function ImportLinesModal({
                                   <span style={{ fontSize: 13, color: imported ? 'hsl(var(--text-disabled))' : 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: lineSelected ? 500 : 400 }}>
                                     {line._productName}{imported && <span style={{ fontSize: 11, marginLeft: 6, color: 'hsl(var(--text-disabled))' }}>{line._inDraftShipments?.length ? `${ui('inDraftShipment')}: ${line._inDraftShipments.join(', ')}` : ui('alreadyImported')}</span>}
                                   </span>
-                                  <span style={{ width: 70, flexShrink: 0, textAlign: 'right' }}>
-                                    <input
-                                      type="number"
-                                      min={negativeQuantity ? -maxQty : 1}
-                                      max={negativeQuantity ? -1 : maxQty}
-                                      value={displayQty}
-                                      onClick={e => e.stopPropagation()}
-                                      onChange={e => {
-                                        const magnitude = Math.abs(Number(e.target.value) || 1);
-                                        const v = Math.max(1, Math.min(maxQty, magnitude));
-                                        setLineQuantities(prev => ({ ...prev, [line.id]: v }));
-                                      }}
-                                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                      style={{
-                                        width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                        border: qtyEdited ? '1px solid var(--color-border-warning, var(--status-warning-fg))' : '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))',
-                                        background: qtyEdited ? 'var(--color-background-warning, var(--status-warning-bg))' : 'hsl(var(--card))',
-                                      }}
-                                    />
+                                  {showAvailableQtyColumn && (
+                                    <span style={{ width: 90, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
+                                      {fmtNum(maxQty)}
+                                    </span>
+                                  )}
+                                  <span style={{ width: showAvailableQtyColumn ? 90 : 70, flexShrink: 0, textAlign: 'right' }}>
+                                    {(() => {
+                                      const draft = qtyDrafts[line.id];
+                                      const draftInvalid = draft !== undefined && !classifyQtyDraft(draft, maxQty).valid;
+                                      let borderColor;
+                                      let backgroundColor;
+                                      if (draftInvalid) {
+                                        borderColor = '1px solid hsl(var(--destructive))';
+                                        backgroundColor = 'hsl(var(--destructive) / 0.08)';
+                                      } else if (qtyEdited) {
+                                        borderColor = '1px solid var(--color-border-warning, var(--status-warning-fg))';
+                                        backgroundColor = 'var(--color-background-warning, var(--status-warning-bg))';
+                                      } else {
+                                        borderColor = '0.5px solid var(--color-border-secondary, hsl(var(--text-disabled)))';
+                                        backgroundColor = 'hsl(var(--card))';
+                                      }
+                                      return (
+                                        <input
+                                          type="number"
+                                          min={negativeQuantity ? -maxQty : 1}
+                                          max={negativeQuantity ? -1 : maxQty}
+                                          value={draft ?? displayQty}
+                                          onClick={e => e.stopPropagation()}
+                                          onChange={e => {
+                                            const raw = e.target.value;
+                                            setQtyDrafts(prev => ({ ...prev, [line.id]: raw }));
+                                          }}
+                                          onBlur={() => {
+                                            const raw = qtyDrafts[line.id];
+                                            if (raw !== undefined) {
+                                              const check = classifyQtyDraft(raw, maxQty);
+                                              if (check.valid) {
+                                                setLineQuantities(prev => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
+                                              } else if (check.tooHigh) {
+                                                toast.error(ui('qtyMaxAllowed', { max: maxQty }));
+                                              } else {
+                                                toast.error(ui('qtyMustBePositive'));
+                                              }
+                                              setQtyDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n; });
+                                            }
+                                          }}
+                                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          style={{
+                                            width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
+                                            border: borderColor,
+                                            background: backgroundColor,
+                                          }}
+                                        />
+                                      );
+                                    })()}
                                   </span>
                                   {showPriceColumns && (
                                     <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
@@ -379,6 +472,7 @@ export default function ImportLinesModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

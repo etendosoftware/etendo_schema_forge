@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { DataTable } from '@/components/contract-ui';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { useLocale, useLocaleSwitch, useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -58,7 +59,10 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const { selectedOrg } = useAuth();
   const orgId = selectedOrg?.id ?? null;
-  const { profile, siiRecord, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const {
+    profile, tbaiRecord,
+    earliestSiiCutoverDate,
+  } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
 
   // ETP-5087: BOTH fiscal columns resolve synchronously from the single,
@@ -90,34 +94,67 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
   const columns = useMemo(() => {
     const fiscalCols = [];
-    // ETP-5122: SII books by accounting date, not invoice date (mirrors
-    // Classic's AEATSII_PreSII_Invoice auxiliary input, which compares
-    // DateAcct). A row dated before the org's SII adoption date shows no
-    // status at all — the column stays as long as the profile enables SII,
-    // since other rows may still be eligible.
+    // ETP-5229 (corrected): the status badge VALUE reads directly off the
+    // invoice's OWN persisted status field — no config-scoped lookup. Classic
+    // never links a sent invoice's status to any particular fiscal config row
+    // (see useFiscalStatus.js for the full root-cause writeup), so an invoice
+    // genuinely sent under a PREVIOUS, since-superseded config must keep
+    // showing its real status forever.
+    //
+    // But live user testing found that removing ALL date gating was wrong: a
+    // row dated BEFORE the system's earliest-ever cutover for this org (e.g. an
+    // invoice from before SII was ever configured) must show a dash. SII is
+    // gated per-row here, client-side, on isSifEligibleByDate against the
+    // EARLIEST cutover across ALL of the org's config rows (active or
+    // deactivated) — never the currently active config's own (possibly later)
+    // cutover date, which would incorrectly blank a real historical status.
+    // TBAI/Batuz uses the SAME earliest-across-all-rows semantics but applies
+    // the gate INSIDE the stored function backing its column (see the
+    // `showTbai` block below) since ETP-5216/ETP-5229. The SII column itself
+    // still only appears when the profile enables SII (`targets.showSii`) —
+    // org/territory-scoped, not date-scoped.
+    // ETP-5229 item #17: eligible-but-not-yet-sent must render as "Pendiente"
+    // (SII's real `'PE'` AD code, the same code `UpdateInvoicesPreSii` writes
+    // once an invoice is queued), not as the same dash used for not-eligible —
+    // see `useFiscalStatus.js` for the full writeup.
     if (targets.showSii) {
       fiscalCols.push({
         key: '_siiStatus', type: 'custom', label: siiColLabel,
         render: (row) => (
-          isSifEligibleByDate(row.accountingDate, siiRecord?.fechaAcogidaSII)
-            ? <FiscalStatusBadge
-                status={row.aeatsiiEstado ?? null}
-                data-testid="FiscalStatusBadge__6b7cdb" />
-            : <span className="text-muted-foreground">—</span>
+          <FiscalStatusBadge
+            status={isSifEligibleByDate(row.accountingDate, earliestSiiCutoverDate) ? (row.aeatsiiEstado ?? 'PE') : null}
+            data-testid="FiscalStatusBadge__6b7cdb" />
         ),
       });
     }
     if (targets.showTbai) {
       fiscalCols.push({
-        // ETP-5216: backed by the stored computed AD column EM_ETGO_Tbai_Status,
-        // shared by AR and AP. It used to be key '_tbaiStatus' with no `column`,
-        // fed by TbaiSyncStatusInjector — which made isFilterableColumn drop it
-        // from the advanced filter in SILENCE, and is exactly how a dead injector
-        // went unnoticed for months (ETP-4391). `type: 'custom'` still drives the
-        // badge cell; `column` + `filterMode` give the filter and sort a real
-        // backend field, the same pairing `transactionDocument` uses below.
+        // ETP-5216 (fixed under ETP-5229): backed by the stored computed AD
+        // column EM_ETGO_Tbai_Status, shared by AR and AP. It used to be key
+        // '_tbaiStatus' with no `column`, fed by TbaiSyncStatusInjector — which
+        // made isFilterableColumn drop it from the advanced filter in SILENCE,
+        // and is exactly how a dead injector went unnoticed for months
+        // (ETP-4391). `type: 'custom'` still drives the badge cell; `column` +
+        // `filterMode` give the filter and sort a real backend field, the same
+        // pairing `transactionDocument` uses below.
         key: 'eTGOTbaiStatus', column: 'em_etgo_tbai_status', type: 'custom',
-        filterMode: 'text', label: tbaiColLabel,
+        filterMode: 'enumLabel', label: tbaiColLabel,
+        // ETP-5216 follow-up: the stored function returns a CLOSED catalogue of
+        // six codes, so the filter is a picker, not free text. `filterMode:
+        // 'text'` sent iContains against codes the user never sees — the cell
+        // renders 'NoAplica' as a dash and every other code as a translated
+        // FiscalStatusBadge label, so there was nothing to type. 'enumLabel'
+        // also brings the isNull operator, which is the only way to reach rows
+        // whose stored value was never computed. Values are i18n keys;
+        // AdvancedFilterBuilder's labelFor() runs them through ui().
+        enumLabels: {
+          Pendiente: 'fiscalMonitor.tbai.status.Pendiente',
+          Recibido:  'fiscalMonitor.tbai.status.Recibido',
+          Enviada:   'fiscalMonitor.tbai.status.Enviada',
+          Rechazado: 'fiscalMonitor.tbai.status.Rechazado',
+          Error:     'fiscalMonitor.tbai.status.Error',
+          NoAplica:  'fiscalMonitor.tbai.status.NoAplica',
+        },
         // `eTGOTbaiStatus` stays the PRIMARY source: it carries the REAL outcome
         // of the submission to Batuz (Recibido / Rechazado / Error), and it is the
         // only source that can say *rejected*. `tbaiIssent` (AD column
@@ -126,11 +163,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // Reading the flag first would let a rejection render as a cheerful
         // "Enviada". `isSent` is used rather than a plain truthy test because NEO
         // may deliver the flag as the AD character `'N'`, truthy in JS.
-        // 'NoAplica' means the invoice predates the organization's Batuz adoption
-        // date (or the organization never joined): not pending anything, ever, so
-        // it renders as a dash. That gate used to run here as isSifEligibleByDate()
-        // against the SELECTED org's date; the stored column now decides it per
-        // invoice, against the invoice's OWN organization.
+        //
+        // The adoption-date gate that used to run here client-side
+        // (isSifEligibleByDate against the SELECTED org's earliestTbaiCutoverDate)
+        // now lives INSIDE the stored function (ETGO_GET_TBAI_STATUS), decided
+        // per invoice against its OWN organization's EARLIEST tbai_config
+        // cutover — active or not (ETP-5229). 'NoAplica' means the invoice
+        // predates that date, or the org never joined: not pending anything,
+        // ever, so it renders as a dash. Batuz's territorial eligibility
+        // (Bizkaia-only) is unchanged — still decided entirely by
+        // `getInvoiceFiscalTargets` via `targets.showTbai`.
         render: (row) => (
           isTbaiStatusNotApplicable(row.eTGOTbaiStatus)
             ? <span className="text-muted-foreground">—</span>
@@ -143,6 +185,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
 
     return [
       { key: 'invoiceDate', column: 'DateInvoiced', type: 'date', dot: false, required: true },
+      // ETP-5274: internal AD document number, distinct from `orderReference`
+      // (POReference, the supplier's own reference, relabeled "Document No." /
+      // "Nº documento" below). No explicit `label` — resolves via
+      // `window.labelOverrides.DocumentNo` ("N° interno" / "Internal No."),
+      // same mechanism `orderReference` already relies on.
+      { key: 'documentNo', column: 'DocumentNo', type: 'string', required: true },
       {
         key: 'transactionDocument',
         column: 'C_DocTypeTarget_ID',
@@ -158,6 +206,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // which otherwise resolves to "Documento transacción".
         labels: { [locale]: t('documentType') },
         label: t('documentType'),
+        // `custom` has no width entry in linesColumnWidth.js (generic 120px
+        // fallback), but the widest label here ("Factura rectificativa") alone
+        // measures ~128px — with the cell's own overflow-hidden now in effect
+        // (ETP-5281), a too-narrow column clipped the pill mid-word with no
+        // ellipsis instead of showing the full label.
+        minWidth: 160,
         render: (row) => {
           const cfg = SUBTYPE_BADGE[getApSubtype(row)];
           if (!cfg) return <span className="text-muted-foreground">—</span>;
@@ -220,6 +274,16 @@ export default function PurchaseInvoiceHeaderTable(props) {
         // to text mode, which has no `greaterThan`, and the operator select
         // renders empty (ETP-4681).
         filterMode: 'numeric',
+        // `custom` has no width entry in linesColumnWidth.js, so it falls back
+        // to the generic 120px basis — 24px of cell padding leaves only 96px
+        // for the button, and the "pending" badge (dot + amount) alone already
+        // measures ~97px for a 3-digit amount. The ~1px overflow made the
+        // cell's own `text-overflow: ellipsis` kick in on the whole button,
+        // rendering a literal "…" next to the pill. ETP-5268 follow-up: the
+        // credit-available pill grew a 72px inline amount box (6-digit
+        // truncation + tooltip), pushing its natural width past 160px and
+        // clipping the pill itself — 220px covers that plus larger amounts.
+        minWidth: 220,
         render: (row) => {
           const currency = row['currency$_identifier'] || 'EUR';
           // ETP-4841: the badge follows the SIGN of the total, not the document
@@ -239,6 +303,12 @@ export default function PurchaseInvoiceHeaderTable(props) {
             // supplier, never money still owed to them — the label stays
             // "Saldo a favor" for any remaining unused balance, however much
             // of it has already been applied elsewhere.
+            // ETP-5268 follow-up — the pill shows the amount again, but capped
+            // to ~6 digits before ellipsing via TruncatedText: it measures its
+            // own scrollWidth vs clientWidth, so the tooltip with the full
+            // amount only opens when the value genuinely doesn't fit that
+            // width — a short amount (e.g. "15 €") shows in full with no
+            // tooltip at all.
             return (
               <button
                 type="button"
@@ -246,7 +316,11 @@ export default function PurchaseInvoiceHeaderTable(props) {
                 style={{...NOWRAP_FLEX,display:'inline-flex',alignItems:'center',gap:7,font:'600 13px/1 Inter',padding:'6px 11px',borderRadius:8,background:'var(--status-info-bg)',border:'1px solid var(--status-info-border)',color:'var(--status-info-fg)',cursor:'pointer',fontVariantNumeric:'tabular-nums'}}
               >
                 <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-info-fg)',flexShrink:0,display:'inline-block'}}/>
-                {ui('cpFavorBadge')} · {formatCurrency(currency, badge.amount)}
+                {ui('cpFavorBadge')}
+                <TruncatedText
+                  text={formatCurrency(currency, badge.amount)}
+                  className="w-[72px] shrink-0 text-left"
+                  data-testid="TruncatedText__6b7cdb" />
               </button>
             );
           }
@@ -286,14 +360,13 @@ export default function PurchaseInvoiceHeaderTable(props) {
             >
               <span style={{width:8,height:8,borderRadius:'50%',background:'var(--status-warning-fg)',flexShrink:0,display:'inline-block'}}/>
               {formatCurrency(currency, badge.amount)}
-              <span style={{display:'inline-flex',alignItems:'center',color:'var(--status-warning-fg)'}}><Plus size={13} data-testid="Plus__6b7cdb" /></span>
             </button>
           );
         },
       },
       { key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status', type: 'percent' },
     ];
-  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, siiRecord, tbaiRecord]);
+  }, [gl, ui, locale, targets, siiColLabel, tbaiColLabel, earliestSiiCutoverDate]);
 
   return (
     <>

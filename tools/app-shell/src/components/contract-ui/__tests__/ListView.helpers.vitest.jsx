@@ -1,6 +1,7 @@
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { noOpExtractQueryParamConditions } from './testUtils/gridQueryMock.js';
 import { splitFilterParts, ListView } from '../ListView.jsx';
 
 const mockHook = {
@@ -39,7 +40,10 @@ vi.mock('@/i18n', () => ({
 vi.mock('@/components/CurrentWindowContext', () => ({ useRegisterWindowContext: () => {} }));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({ useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }) }));
-vi.mock('@/lib/gridQuery', () => ({ buildAdvancedFilterCriteria: () => null }));
+vi.mock('@/lib/gridQuery', () => ({
+  buildAdvancedFilterCriteria: () => null,
+  extractQueryParamConditions: noOpExtractQueryParamConditions,
+}));
 vi.mock('@/hooks/useWindowFilterPresets', () => ({ useWindowFilterPresets: () => ({ presets: [], savePreset: vi.fn(), deletePreset: vi.fn() }) }));
 vi.mock('../ReportDrawer.jsx', () => ({ default: () => null }));
 vi.mock('../DocumentPrintDrawer.jsx', () => ({ default: () => null, printDocuments: vi.fn() }));

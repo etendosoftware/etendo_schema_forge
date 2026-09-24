@@ -5,6 +5,8 @@ import { resolveRoleDisplayName } from '@/lib/roleNameI18n.js';
 import { fetchTemplateRoles, fetchRolesOverview } from '@/lib/rolesApi.js';
 import { resolveDefaultRoleId } from './RoleChipsCell.jsx';
 import { useRoleSelection } from './roleSelectionContext.js';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const MAX_COLLAPSED_CHIPS = 3;
 
@@ -53,7 +55,7 @@ export default function AssignTemplateRolesControl(props) {
   const isAdminRoleHolder = !!(adminRoleId && currentDefaultRoleId && currentDefaultRoleId === adminRoleId);
 
   useEffect(() => {
-    if (!hasPersistedUser || !token || !apiBaseUrl) {
+    if (!hasPersistedUser || !apiBaseUrl) {
       setLoading(false);
       return undefined;
     }
@@ -138,6 +140,22 @@ export default function AssignTemplateRolesControl(props) {
     );
   }
 
+  // ETP-5278 — `roles`/`adminRoleId` are still `[]`/`null` while the effect above is in
+  // flight (mount, or a re-mount after navigating away and back). Without this guard the
+  // code below falls straight through to `selectedRoles = roles.filter(...)` with `roles`
+  // still empty, rendering "Sin roles asignados" regardless of what selectedRoleIds
+  // actually holds — checked BEFORE isAdminRoleHolder for the same reason UserRolesTab.jsx
+  // checks its own `loading` before its "zero selected" empty state (see that file's own
+  // comment on the dead-code ordering bug this exact mistake causes).
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-2 w-full" data-testid="AssignTemplateRolesControl__loading">
+        <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
+        <Skeleton className="h-10 w-full" data-testid="AssignTemplateRolesControl__loading-skeleton" />
+      </div>
+    );
+  }
+
   // ETP-5019 — the owner/admin cannot compose additional roles at all; render a locked
   // placeholder instead of the interactive editor (structural UI block, on top of the
   // unconditional backend rejection — see the effect above and
@@ -156,7 +174,13 @@ export default function AssignTemplateRolesControl(props) {
   const overflowCount = selectedRoles.length - visibleChips.length;
 
   return (
-    <div className="flex flex-col gap-2 w-full" ref={containerRef} data-testid="AssignTemplateRolesControl">
+    // ETP-5193 (Fix 1) — `relative` anchors the options panel below, which is now
+    // `absolute` (see `AssignTemplateRolesControl__options`) instead of a normal-flow
+    // sibling. Before this, expanding the control pushed every form section below it
+    // downward — a true overlay never adds layout height. `containerRef`'s existing
+    // click-away-to-close wiring is unaffected: it still measures/contains the same
+    // DOM subtree, only the CSS positioning of the panel inside it changed.
+    <div className="relative flex flex-col gap-2 w-full" ref={containerRef} data-testid="AssignTemplateRolesControl">
       <label className="text-sm font-medium text-foreground">{ui('assignedRolesLabel')}</label>
       <div
         role="button"
@@ -198,28 +222,58 @@ export default function AssignTemplateRolesControl(props) {
             +{overflowCount}
           </span>
         )}
+        {/* ETP-5193 (Fix 2) — `shrink-0` pins the chevron's intrinsic size so it never
+            gets flex-shrunk (the default for any flex child) as the row's content
+            width changes when the first chip replaces the placeholder text. Without
+            it, the icon could render a hair narrower right at that transition,
+            reading as a small horizontal jump since `ml-auto` re-anchors it to the
+            row's right edge on every render. The bigger, page-level horizontal shift
+            this ticket also reported was actually caused by Fix 1's bug above: the
+            options panel used to add real layout height while the control was open,
+            which could push total page height past the viewport and toggle the
+            vertical scrollbar — shifting all content sideways by the scrollbar's
+            width. Making the panel `absolute` (Fix 1) removes that page-height change
+            entirely, so that shift cannot happen anymore either. */}
         <ChevronDown
-          className="h-3.5 w-3.5 ml-auto text-muted-foreground"
+          className="h-3.5 w-3.5 ml-auto shrink-0 text-muted-foreground"
           data-testid="ChevronDown__16443b" />
       </div>
       {isEditing && (
-        <div className="flex flex-col gap-1 rounded-lg border border-input bg-card p-2 pl-4" data-testid="AssignTemplateRolesControl__options">
+        <div
+          className="absolute left-0 top-full z-20 mt-1 flex w-full flex-col gap-1 rounded-lg border border-input bg-card p-2 pl-4 shadow-md"
+          data-testid="AssignTemplateRolesControl__options"
+        >
           {roles.map((role) => {
             const checked = selectedRoleIds.includes(role.id);
+            const roleLabel = resolveRoleDisplayName(ui, role.name);
             return (
-              <label
+              // ETP-5193 (Fix 3) — the shared `Checkbox` (design-system tokens,
+              // `bg-primary`/`border-primary` + white check icon) renders its OWN
+              // native `<label>` around a real (visually-hidden) `<input>` — nesting
+              // it inside a SECOND `<label>` here (the previous shape, wrapping a
+              // bare `<input type="checkbox">`) is invalid HTML and, per the documented
+              // real-click fragility of this exact component (see
+              // `ImportLinesModal.realCheckbox.vitest.jsx`, ETP-5067), risks a second
+              // synthetic click reaching the input. Using a plain `<div>` with its own
+              // `onClick` — and `stopPropagation` on the `Checkbox` itself, matching
+              // `DataTable.jsx`/`ListModalWindow.jsx`'s own Checkbox-in-a-clickable-row
+              // precedent — toggles the role exactly once whether the click lands on
+              // the checkbox or on the label text beside it.
+              <div
                 key={role.id}
+                onClick={() => toggleRole(role.id)}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
                 data-testid={`AssignTemplateRolesControl__toggle-${role.id}`}
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={checked}
                   onChange={() => toggleRole(role.id)}
-                  className="h-4 w-4 rounded border-input"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={roleLabel}
+                  data-testid={`AssignTemplateRolesControl__checkbox-${role.id}`}
                 />
-                {resolveRoleDisplayName(ui, role.name)}
-              </label>
+                <span>{roleLabel}</span>
+              </div>
             );
           })}
         </div>

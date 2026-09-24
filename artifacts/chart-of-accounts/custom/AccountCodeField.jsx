@@ -107,7 +107,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
       </div>
       {error && (
         <p
-          className="text-xs text-destructive-foreground mt-1"
+          className="text-xs text-destructive mt-1"
           data-testid="account-code-error"
           role="alert"
         >

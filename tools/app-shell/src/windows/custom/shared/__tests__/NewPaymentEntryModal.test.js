@@ -14,9 +14,64 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
   });
 
   it('drives the cuadre via the usePaymentBalance hook', () => {
-    // round2 is also imported (ETP-4504 amount-in-account conversion math).
-    assert.match(src, /import \{ usePaymentBalance, formatPlain, round2 \} from '\.\/usePaymentBalance\.js'/);
+    // round2 is also imported (ETP-4504 amount-in-account conversion math), and
+    // parseMaskedAmount since ETP-5107 (reading back a value that came OUT of a
+    // MaskedAmountInput — see the three-parser note below).
+    // Asserted per-name rather than as one exact import line, so reordering or adding a
+    // binding does not fail the suite while every required binding stays pinned.
+    const importClause = src.match(/import \{([^}]*)\} from '\.\/usePaymentBalance\.js'/);
+    assert.ok(importClause, 'the modal must import from ./usePaymentBalance.js');
+    const imported = importClause[1].split(',').map(s => s.trim()).filter(Boolean);
+    // NOTE: parsePlain is deliberately NOT required here. Since ETP-5107 it has no call site
+    // left in this file (the amount-in-account field moved to parseMaskedAmount), so pinning it
+    // would freeze a dead import into the contract. The category itself is still guarded below.
+    for (const name of ['usePaymentBalance', 'formatPlain', 'parseMaskedAmount', 'round2']) {
+      assert.ok(
+        imported.includes(name),
+        `${name} must be imported from ./usePaymentBalance.js (got: ${imported.join(', ')})`,
+      );
+    }
     assert.match(src, /usePaymentBalance\(\{\s*total,\s*dir,\s*sources,\s*usedSources:/s);
+  });
+
+  // ETP-5107: this modal reads THREE different SHAPES of numeric string, each with its own
+  // parser, and the distinction is load-bearing — pick the wrong one and the value is silently
+  // off by 1000, with no error anywhere.
+  //
+  //  1. RATES → parseLocaleNumber directly. A rate arrives canonical dot-decimal from the
+  //     backend, where `0.92` means zero-point-nine-two; the STRUCTURAL parser (parsePlain,
+  //     lib/parseAmountInput.js) would strip that '.' as grouping and read it as 92.
+  //  2. Values coming OUT of a masked field → parseMaskedAmount. MaskedAmountInput emits a
+  //     CLEAN dot-decimal value, so a user typing `483,945` produces the string "483.945".
+  //     parsePlain's structural rule ("a lone separator with exactly 3 digits after it is
+  //     thousands grouping") read that as 483945 — a silent 1000x error. On this very
+  //     amount-in-account field the same defect turned a typed `329,225` into 329225 and
+  //     derived an exchange rate of 680,28722 out of thin air (QA, ETP-5107). That is why the
+  //     field moved OFF parsePlain; parseMaskedAmount tries the canonical parser first and
+  //     falls back to the structural one only for a two-separator string.
+  //  3. Pure formatPlain DISPLAY strings ("1.234,56") → parsePlain. Still correct, still used:
+  //     a clean value can never carry two separators, so a string the canonical parser rejects
+  //     is necessarily formatPlain output, which is exactly what parsePlain exists to read.
+  //
+  // A bare parseFloat remains banned in all three categories — that is the ORIGINAL defect this
+  // guard was written for: parseFloat read the seeded "5.050,00" as 5.05 and derived a wildly
+  // wrong rate from it.
+  it('parses the amount-in-account field with parseMaskedAmount and the rate with parseLocaleNumber (ETP-5107)', () => {
+    assert.match(src, /import \{ parseLocaleNumber \} from '@\/lib\/parseLocaleNumber\.js'/);
+    // Amount-in-account onChange: the masked-aware reader, never a bare parseFloat on the raw input.
+    assert.match(src, /const raw = e\.target\.value;\s*\n\s*setAmountStr\(raw\);[\s\S]{0,600}?const n = parseMaskedAmount\(raw\);/);
+    assert.doesNotMatch(src, /parseFloat\(raw/);
+    assert.doesNotMatch(src, /parseFloat\([^)]*\.replace\(/);
+    // ...and never the STRUCTURAL parser again: `const n = parsePlain(raw)` is the 1000x bug.
+    assert.doesNotMatch(src, /const n = parsePlain\(raw\)/);
+    // The same field's value prop reads the state back with the same masked-aware parser.
+    assert.match(src, /value=\{parseMaskedAmount\(amountStr\)/);
+    assert.doesNotMatch(src, /parsePlain\(amountStr\)/);
+    // Typed rate memo and the rate seeding: parseLocaleNumber directly.
+    assert.match(src, /const n = parseLocaleNumber\(rateStr\)\.value;/);
+    assert.match(src, /const n = parseLocaleNumber\(rawRate\)\.value;/);
+    assert.doesNotMatch(src, /parsePlain\(rateStr\)/);
+    assert.doesNotMatch(src, /parsePlain\(rawRate\)/);
   });
 
   // ETP-4314: fmtCur() (used for the read-only ExcessBand amount and the PIS
@@ -204,13 +259,15 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     });
 
     it('gates saveDisabled and confirmDisabled on missingRequired', () => {
+      // ETP-5434: `loading` was split into `fieldsLoading` (catalogs) and `scheduleResolving`
+      // (paymentPlan), folded together into the derived `submitLocked` that both gates now read.
       assert.match(
         src,
-        /const saveDisabled = saving \|\| loading \|\| missingRequired;/,
+        /const saveDisabled = saving \|\| submitLocked \|\| missingRequired;/,
       );
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
+        /const confirmDisabled = saving \|\| submitLocked \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
       );
     });
 
@@ -219,7 +276,9 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       // the disabled-state wiring now lives on the extracted buttons, and the parent wires
       // the same submit('draft') / submit('confirm') callbacks in as props.
       assert.match(src, /data-testid="cp-save-draft" onClick=\{onSaveDraft\} disabled=\{saveDisabled\}/);
-      assert.match(src, /data-testid="cp-confirm" onClick=\{onConfirm\} disabled=\{confirmDisabled \|\| loading\}/);
+      // ETP-5434: the button's own `|| loading` OR was removed — `submitLocked` is now folded
+      // into `confirmDisabled` itself (computePaymentModalState), so the button just reads it.
+      assert.match(src, /data-testid="cp-confirm" onClick=\{onConfirm\} disabled=\{confirmDisabled\}/);
       assert.match(src, /onSaveDraft=\{\(\) => submit\('draft'\)\}/);
       assert.match(src, /onConfirm=\{\(\) => submit\('confirm'\)\}/);
     });
@@ -467,10 +526,10 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
       // ETP-4891 wrapped the expression and appended `|| psd2Blocked` (a transfer aimed at an
       // account whose PSD2 connection is inactive), so the whole chain is matched across lines
-      // rather than pinned to one.
+      // rather than pinned to one. ETP-5434 then folded the split `loading` into `submitLocked`.
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
+        /const confirmDisabled = saving \|\| submitLocked \|\| missingRequired \|\| !balance\.canConfirm\s*\|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
       );
     });
 
@@ -485,10 +544,89 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /const ibanInvalid = \(iban \|\| ''\)\.trim\(\) !== '' && !isValidIban\(iban\);/);
     });
 
-    it('renders the inline IBAN error (testid + i18n key) only while the IBAN is invalid', () => {
-      assert.match(src, /\{ibanInvalid && \(/);
-      assert.match(src, /data-testid="cp-pis-iban-error"/);
-      assert.match(src, /\{ui\('financeAccountsNewIbanInvalid'\)\}/);
+    // ETP-5177: the IBAN message is no longer conditionally rendered at this call site. It is
+    // handed to ControlWithError, which always reserves the line and only mounts the <p> when the
+    // `error` prop is non-null — so the modal keeps its height when the message appears or clears.
+    // What must stay pinned here is the wiring: the ternary on ibanInvalid, the testid the rest of
+    // the suite asserts on, and the i18n key (never a hardcoded string).
+    it('passes the IBAN message to ControlWithError via the ibanInvalid ternary (testid + i18n key)', () => {
+      assert.match(
+        src,
+        /<ControlWithError\s+error=\{ibanInvalid \? ui\('financeAccountsNewIbanInvalid'\) : null\}\s+testid="cp-pis-iban-error"/,
+      );
+      // The old hand-written conditional <p> must NOT come back — it is what resized the modal.
+      assert.doesNotMatch(src, /\{ibanInvalid && \(/);
+    });
+
+    // ETP-5177: ControlWithError is the single place that reserves the inline-validation line.
+    // The slot div is UNCONDITIONAL (that is the whole fix) while the <p> stays conditional, so
+    // existing "no error" assertions on the original testid keep their meaning.
+    it('ControlWithError always renders the reserved slot and only conditionally the message', () => {
+      assert.match(src, /const FIELD_ERROR_LINE_HEIGHT = 16;/);
+      assert.match(src, /function ControlWithError\(\{ error, testid, children \}\)/);
+      assert.match(src, /data-testid=\{`\$\{testid\}-slot`\}/);
+      assert.match(src, /minHeight: FIELD_ERROR_LINE_HEIGHT/);
+      assert.match(src, /\{error && <p role="alert" style=\{fieldErrorStyle\} data-testid=\{testid\}>\{error\}<\/p>\}/);
+    });
+  });
+
+  // ETP-5434: `refreshVersion: false` opts a POST out of the core's post-mutation version-refresh
+  // GET (0.7-1.9s in production) that exists to keep the optimistic-lock token fresh after a
+  // mutation. It is safe ONLY for the loading effect's three genuinely read-only actions
+  // (invoiceAccounts, invoicePaymentMethods, invoiceCreditSources — confirmed read-only in
+  // PaymentActionHandlerSupport.routeQuery). Copying it onto any action that DOES mutate
+  // (registerPayment, pisPaymentStatus, cancelPisPayment, retryPisPayment, or the second
+  // PIS-accounts `post` helper) would reintroduce a stale optimistic-lock token bug (ETP-5255)
+  // — this is the guardrail against that regression.
+  describe('refreshVersion:false stays scoped to the read-only loading POSTs (ETP-5434)', () => {
+    it('is used to fetch invoiceAccounts, invoicePaymentMethods and invoiceCreditSources', () => {
+      assert.match(src, /post\('invoiceAccounts'\)/);
+      assert.match(src, /post\('invoicePaymentMethods'\)/);
+      assert.match(src, /post\('invoiceCreditSources', creditSourcesBody\)/);
+    });
+
+    it('appears exactly ONCE in the whole file as a real value (i.e. outside the explanatory comment above it) — on the shared read-only post() helper', () => {
+      // NOTE: the comment directly above the post() helper also says the literal phrase
+      // "refreshVersion: false" in prose (explaining what the flag does) — a bare
+      // /refreshVersion:\s*false/ count would see 2 and always fail. Requiring the trailing
+      // `}` (closing the fetch options object) is what isolates the real, executable one: the
+      // comment's occurrence is immediately followed by a backtick, never a brace.
+      const occurrences = src.match(/refreshVersion:\s*false\s*\}/g) || [];
+      assert.equal(
+        occurrences.length, 1,
+        'refreshVersion: false must appear exactly once as a real options value — any further occurrence means it leaked onto a mutating action',
+      );
+
+      const helperIdx = src.indexOf("const post = (action, body = '{}') => apiFetch(");
+      // NOT src.indexOf('refreshVersion: false') — that phrase's FIRST occurrence is the
+      // explanatory comment sitting directly above this helper, which would report itself
+      // as "before" the helper and false-fail this assertion. The trailing `}` (the real,
+      // executable one, matched exactly like above) is what disambiguates the two.
+      const flagIdx = src.indexOf('refreshVersion: false }');
+      assert.ok(helperIdx > -1, 'the shared read-only post() helper must exist');
+      assert.ok(flagIdx > -1 && flagIdx > helperIdx && flagIdx < helperIdx + 300,
+        'refreshVersion: false must sit inside the shared read-only post() helper');
+    });
+
+    it('does NOT appear on any of the mutating action calls in this file', () => {
+      // Each mutating call site is inspected in isolation (its own `action/<name>` slice) so this
+      // guardrail pinpoints exactly which one regressed, instead of a single file-wide assertion.
+      for (const action of ['registerPayment', 'pisPaymentStatus', 'cancelPisPayment', 'retryPisPayment']) {
+        const callIdx = src.indexOf(`action/${action}\``);
+        assert.ok(callIdx > -1, `the ${action} call site must exist`);
+        const callSnippet = src.slice(callIdx, callIdx + 250);
+        assert.doesNotMatch(
+          callSnippet, /refreshVersion/,
+          `${action} mutates state and must never carry refreshVersion — it would reintroduce a stale optimistic-lock token (ETP-5255)`,
+        );
+      }
+    });
+
+    it('does NOT appear on the second (PIS-accounts) post() helper either — untouched by ETP-5434', () => {
+      const pisHelperIdx = src.indexOf('const post = (action) => apiFetch(');
+      assert.ok(pisHelperIdx > -1, 'the PIS-accounts post() helper must exist');
+      const pisHelperSnippet = src.slice(pisHelperIdx, pisHelperIdx + 200);
+      assert.doesNotMatch(pisHelperSnippet, /refreshVersion/);
     });
   });
 });

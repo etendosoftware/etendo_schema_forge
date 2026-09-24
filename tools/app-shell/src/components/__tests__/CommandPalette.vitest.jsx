@@ -10,6 +10,16 @@ vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/sales-invoice' }),
 }));
 
+const mockUseFeatureFlag = vi.hoisted(() => vi.fn(() => false));
+const mockUseAuth = vi.hoisted(() => vi.fn(() => ({ capabilities: { isAdminOrClientAdmin: true } })));
+vi.mock('@/lib/flags', () => ({
+  useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
+  ACCT_PROCESS_MONITOR: 'acct-process-monitor',
+  PUBLIC_API_KEYS: 'public-api-keys',
+  PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+}));
+vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }));
+
 // Controlled menu fixture: one visible group with a visible and a hidden item,
 // plus one fully hidden group.
 // The component at src/components/CommandPalette.jsx imports '../menu.json'
@@ -24,6 +34,8 @@ vi.mock('../../menu.json', () => ({
         hidden: false,
         items: [
           { name: 'sales-order', label: 'Sales Order', hidden: false },
+          { name: 'acct-process-monitor', label: 'Accounting Process', hidden: false, featureFlag: 'acct-process-monitor', capability: 'isAdminOrClientAdmin' },
+          { name: 'api-keys', label: 'Public API Keys', hidden: false, featureFlag: 'public-api-keys', capability: 'isAdminOrClientAdmin' },
           { name: 'deal', label: 'Deal', hidden: true },
         ],
       },
@@ -112,6 +124,33 @@ describe('CommandPalette', () => {
     // translatedLabel = 'translated:Sales Order', label = 'Sales Order', name = 'sales-order'
     const expectedValue = 'translated:Sales Order Sales Order sales-order';
     expect(screen.getByTestId(`cmd-item-${expectedValue}`)).toBeInTheDocument();
+  });
+
+  it('hides public API keys when the feature flag is off', () => {
+    render(<CommandPalette />);
+    openPalette();
+    expect(screen.queryByText('translated:Public API Keys')).not.toBeInTheDocument();
+  });
+
+  it('hides accounting processes when their feature flag is off', () => {
+    render(<CommandPalette />);
+    openPalette();
+    expect(screen.queryByText('translated:Accounting Process')).not.toBeInTheDocument();
+  });
+
+  it('shows public API keys only for an admin when the feature flag is on', () => {
+    mockUseFeatureFlag.mockReturnValue(true);
+    render(<CommandPalette />);
+    openPalette();
+    expect(screen.getByText('translated:Public API Keys')).toBeInTheDocument();
+  });
+
+  it('hides public API keys from a non-admin even when the feature flag is on', () => {
+    mockUseFeatureFlag.mockReturnValue(true);
+    mockUseAuth.mockReturnValue({ capabilities: { isAdminOrClientAdmin: false } });
+    render(<CommandPalette />);
+    openPalette();
+    expect(screen.queryByText('translated:Public API Keys')).not.toBeInTheDocument();
   });
 
   it('highlights the matching text in textual search results', async () => {

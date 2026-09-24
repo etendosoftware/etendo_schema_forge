@@ -4,8 +4,9 @@ import { captureScreenshot } from '../helpers/captureScreenshot.js';
 import { ensureProductSetup, PRODUCT_FIXTURE_ALPHA } from '../helpers/product-helpers.js';
 import {
   loadCredentials, slow, waitForDetailReady, saveDraft, selectVendorBP,
-  addProductLine, ensureVendorSetup, clickConfirmButton, dismissSuccessModal,
-  expectStatusPill, safeReload, VENDOR_FIXTURE_NAME, waitForDocumentActionResponse,
+  addProductLine, ensureVendorSetup, dismissSuccessModal,
+  expectStatusPill, expectDocumentStatus, pickRectifiableInvoice,
+  VENDOR_FIXTURE_NAME,
 } from '../helpers/purchase-helpers.js';
 
 /**
@@ -49,20 +50,30 @@ import {
  *      a Return to Vendor Shipment ("Albarán de Devolución a Proveedor") in
  *      Draft
  *   7. Confirm the return — the "¿Gestionar factura rectificativa?" toggle
- *      ("Crear Factura Rectificativa") defaults to checked — confirm with it
- *      checked, generating a Purchase Invoice in Draft
+ *      ("Crear Factura Rectificativa") defaults to checked. Because step 5
+ *      left the receipt uninvoiced, the backend's chain detection finds no
+ *      candidate, so ETP-5381 preselects nothing and the confirm button stays
+ *      disabled until an invoice to rectify is PICKED by hand — which is the
+ *      manual-pick path this spec now also covers. Confirming then generates
+ *      the Purchase Invoice.
  *   8. Navigate (via the confirm result modal's "Ver factura") to the
  *      generated invoice and verify: doc type reads as rectificativa, line
  *      quantity is NEGATIVE, total amount is NEGATIVE — this is the exact
  *      assertion that would have caught the sign bug before the fix
- *   9. Confirm the rectificativa invoice and verify Completed — unless this
- *      hits the same known environment gap as the Sales spec, where
- *      completing a rectificativa document can fail with "The Period does
- *      not exist or it is not opened" (root-caused inconclusively, NOT a bug
- *      in this test — see the ETP-4737 rectificativa-scope note). If hit,
- *      the test reports it instead of failing outright, since the
- *      Draft-state/negative-amount/doc-type assertions already proved the
- *      actual generation logic works.
+ *   9. Verify the rectificativa invoice arrived ALREADY Completed — ETP-5381
+ *      creates and confirms it in one step, so it has no draft stage and
+ *      renders no Confirmar action. A closed accounting period therefore
+ *      fails the createReturnInvoice call in step 7, not a later confirm.
+ *
+ * <p>PRECONDITION worth knowing: the rectifiable-invoice candidates are
+ * filtered by business partner and transaction side
+ * (RectifiableInvoiceUtils), so this flow needs at least one CONFIRMED
+ * purchase invoice for `E2E Vendor Fixture` to exist. In an
+ * `--project=integration` run that is satisfied by
+ * `purchase-order-full-flow.integration.spec.js`, which runs earlier
+ * (workers: 1, alphabetical) against the same vendor fixture. Run this spec
+ * alone against a tenant that has none and `pickRectifiableInvoice` fails
+ * fast naming exactly that.
  *
  * Requires a running backend + dev server. Runs whenever the suite executes
  * `--project=integration` — no custom env-var gate; Playwright's own
@@ -266,7 +277,10 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
     });
 
     await test.step('Confirm the return with rectificative invoice generation', async () => {
-      const confirmReturnBtn = page.getByTestId('action-confirm-with-credit');
+      // ETP-5408: "Confirmar" is the generic draftMode Confirm (`action-save`), like every
+      // other document window; it opens the same ConfirmInOutModal through the window's
+      // CONFIRM_EVENT. Disabled until the lines load — the toPass retry absorbs that.
+      const confirmReturnBtn = page.getByTestId('action-save');
       const returnConfirmModal = page.getByTestId('confirm-inout-modal');
 
       await expect(async () => {
@@ -279,6 +293,16 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(invoiceToggle).toHaveAttribute('aria-checked', 'true');
       await expect(returnConfirmModal.getByText('Crear Factura Rectificativa', { exact: true })).toBeVisible();
 
+      // ETP-5381: a rectificative invoice cannot be confirmed without declaring
+      // which invoice it corrects (ETSG_CHECK_RECTIF_INV_DOC), and it is now
+      // confirmed at creation — so the choice has to be made here, up front.
+      // `useRectifiableInvoices` preselects ONLY when the backend's chain
+      // detection reports exactly one candidate; this flow deliberately confirms
+      // the receipt with the invoice toggle OFF, so the chain finds none, nothing
+      // is preselected and `confirm-modal-confirm-btn` stays correctly disabled
+      // until an invoice is picked by hand. That is the case this step now covers.
+      await pickRectifiableInvoice(page, returnConfirmModal);
+
       const returnDocActionPromise = page.waitForResponse(
         (resp) =>
           resp.url().includes('/action/createReturnInvoice') &&
@@ -286,6 +310,9 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
           resp.status() < 400,
         { timeout: 30_000 },
       );
+      await expect(returnConfirmModal.getByTestId('confirm-modal-confirm-btn'),
+        '[ETP-5381] The confirm button should enable once an invoice to rectify is selected',
+      ).toBeEnabled({ timeout: 10_000 });
       await returnConfirmModal.getByTestId('confirm-modal-confirm-btn').click();
       await returnDocActionPromise;
       await slow(page);
@@ -306,11 +333,23 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await slow(page);
 
       // Verify: doc type reads as rectificativa. "Tipo de documento" (transactionDocument)
-      // renders as a disabled <input> (EntityForm's renderReadOnlyFk), so its value must be
-      // read via toHaveValue — getByText only matches rendered text content, never an
-      // input's value, so it can never see this field regardless of backend correctness.
-      await expect(page.getByTestId('field-transactionDocument').locator('input'))
-        .toHaveValue(/rectificativ/i, { timeout: 15_000 });
+      // is a DocumentType-reference FK, so EntityForm renders it two different ways
+      // depending on readOnlyLogic: a disabled <input> (renderReadOnlyFk) when the
+      // record is locked, or a Radix SelectTrigger <button> with the label as rendered
+      // text (SelectorInput's `field-${key}` testid, ETP-4600) when it's editable. Since
+      // ETP-5274 this field's readOnlyLogic is `@Processed@='Y'`; since ETP-5381 the
+      // invoice arrives already CONFIRMED (Processed='Y'), so it now renders read-only —
+      // but read the value generically instead of assuming either shape, since that is
+      // exactly the kind of thing that flips back.
+      const docTypeField = page.getByTestId('field-transactionDocument');
+      await expect(docTypeField).toBeVisible({ timeout: 15_000 });
+      await expect(async () => {
+        const input = docTypeField.locator('input');
+        const displayedValue = (await input.count()) > 0
+          ? await input.inputValue()
+          : await docTypeField.innerText();
+        expect(displayedValue).toMatch(/rectificativ/i);
+      }).toPass({ timeout: 15_000 });
 
       // Verify: line quantity is NEGATIVE (ETP-4737 sign-asymmetry regression). This
       // window's line grid is not a semantic <table> — rows render as
@@ -327,76 +366,47 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
       await expect(totalValue).toBeVisible({ timeout: 10_000 });
       await expect(totalValue).toContainText(/^-/, { timeout: 5_000 });
 
-      await expectStatusPill(page, /borrador|draft/i, 'Invoice should be in Draft status');
+      // ETP-5381: the rectificative invoice is created AND confirmed in one step by
+      // createReturnInvoice, so it arrives Completed — there is no Borrador stage any
+      // more. Asserted on the language-independent `data-status` code.
+      await expectDocumentStatus(page, 'CO',
+        '[ETP-5381] The rectificative purchase invoice should arrive already Completed, not Draft');
     });
 
-    await test.step('Confirm the rectificative invoice (may hit known env gap)', async () => {
-      // Completing a rectificativa document was seen to sometimes fail with
-      // "The Period does not exist or it is not opened" — a known environment
-      // gap, NOT a bug in this test. If hit, report instead of failing.
+    await test.step('The rectificative invoice arrives already confirmed (ETP-5381)', async () => {
+      // ETP-5381: createReturnInvoice now creates AND confirms the rectificative invoice
+      // in one step, so there is no draft stage left to confirm by hand. A completed
+      // draftMode document renders no save-actions row at all
+      // (shouldRenderSaveActionsRow in DetailView.jsx), so `action-save` is absent.
       //
-      // ARMED BEFORE THE CLICK, and the previous implementation's bug was
-      // exactly that it wasn't: it did `invoiceCompletedPill.waitFor({ state:
-      // 'visible' })` AFTER clicking, racing it against a periodError text
-      // wait. But `document-status-pill` is ALREADY visible when this step
-      // starts — it has read "Borrador" since the previous step's own
-      // assertion. `waitFor({ state: 'visible' })` only checks the element's
-      // CURRENT state; it does NOT wait for a *change* to that state. So that
-      // race leg resolved in milliseconds with "Borrador" (no match against
-      // /completado|completed/), the whole Promise.race settled on `null`
-      // almost instantly, and the code fell straight through to
-      // `page.goto(currentInvoiceUrl)` a few lines below — aborting the
-      // confirm PATCH/POST that was still in flight on the backend. The
-      // invoice was never actually confirmed; it stayed legitimately in
-      // Borrador. Waiting on the confirm request's own network response
-      // (which can only resolve once the backend has actually answered) is
-      // the only reliable way to know the confirm settled before navigating
-      // away. Do not reintroduce a DOM-visibility no-op here.
-      const confirmed = waitForDocumentActionResponse(page, 'purchase-invoice');
-      await clickConfirmButton(page);
-      const confirmResponse = await confirmed;
+      // The known "The Period does not exist or it is not opened" environment gap this
+      // step used to tolerate can no longer surface HERE: the completion happens inside
+      // the createReturnInvoice POST the previous step already waits on, so a closed
+      // period fails that call instead, before an invoice exists to navigate to. The
+      // screenshot below is kept for exactly that reason — if the persisted status ever
+      // comes back as anything but CO, the page is worth looking at.
+      await expect(page.getByTestId('action-save'),
+        '[ETP-5381] A document that arrives confirmed must offer no Confirmar action',
+      ).toBeHidden({ timeout: 10_000 });
 
-      if (confirmResponse.status() >= 400) {
-        const periodError = page.getByText(/period does not exist|no existe el periodo|periodo no existe/i);
-        const isPeriodError = await periodError.isVisible({ timeout: 10_000 }).catch(() => false);
-
-        if (isPeriodError) {
-          await captureScreenshot(page, {
-            path: 'e2e/test-results/purchase-rectificativa-period-error.png',
-            fullPage: true,
-          }).catch(() => {});
-          test.info().annotations.push({
-            type: 'known-environment-issue',
-            description:
-              'Confirming the rectificative purchase invoice hit "The Period does not exist or '
-              + 'it is not opened" — a known, inconclusively root-caused environment gap (see '
-              + 'ETP-4737 rectificativa scope notes), NOT a bug in this test. The invoice was '
-              + 'already verified in Draft with the correct doc type and negative amounts above, '
-              + 'which is the live proof that the Purchase-side sign-asymmetry fix holds.',
-          });
-          return;
-        }
-
-        // A real failure, not the known period gap — surface it clearly instead of
-        // letting a later assertion time out with no diagnostic value.
-        const body = await confirmResponse.text().catch(() => '<unreadable response body>');
-        throw new Error(
-          `Rectificative purchase invoice confirm failed with HTTP ${confirmResponse.status()}: ${body}`,
-        );
-      }
-
-      // Confirm response was successful — dismiss the success modal if present.
-      const invoiceCloseBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-      if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await invoiceCloseBtn.click();
-        await slow(page);
-      }
-
-      // Reload to get fresh status — use goto on current URL to avoid ERR_ABORTED
+      // Re-read the record from the backend so the asserted status is the PERSISTED one,
+      // not what the create response painted. goto on the current URL rather than
+      // reload(), to avoid ERR_ABORTED when an internal navigation is still settling.
       const currentInvoiceUrl = page.url();
       await page.goto(currentInvoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
+      const finalPill = page.getByTestId('document-status-pill').first();
+      await expect(finalPill).toBeVisible({ timeout: 15_000 });
+      if ((await finalPill.getAttribute('data-status')) !== 'CO') {
+        await captureScreenshot(page, {
+          path: 'e2e/test-results/purchase-rectificativa-not-confirmed.png',
+          fullPage: true,
+        }).catch(() => {});
+      }
+      await expectDocumentStatus(page, 'CO',
+        '[ETP-5381] The rectificative purchase invoice should still read Completed after a reload',
+        20_000);
       await expectStatusPill(page, /completado|completed/i, 'Invoice should be Completed', 20_000);
     });
   });

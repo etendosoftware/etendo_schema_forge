@@ -22,6 +22,7 @@ window-locks.json
 .active-locale
 tools/app-shell/dist/
 tools/app-shell/dist-e2e/
+gateway/dist/
 tools/app-shell/.env.local
 tools/app-shell/.env.development
 tools/app-shell/.env.development.local
@@ -47,6 +48,10 @@ e2e/.auth-credentials-*.json
 tmp/
 sonar-results.md
 .scannerwork/
+
+# MCP usage telemetry dumps (scripts/mcp-usage-dump.sh) — data, never versioned
+/mcp-usage/*
+!/mcp-usage/README.md
 
 # Generated at runtime — not versioned
 coverage/
@@ -108,3 +113,4 @@ docs/plans/drafts/
 # schema_forge.properties.example to schema_forge.properties and fill in your
 # own paths; only the .example is versioned.
 schema_forge.properties
+mcp-usage/

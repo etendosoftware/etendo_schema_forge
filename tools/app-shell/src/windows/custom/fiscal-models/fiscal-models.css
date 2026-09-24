@@ -686,6 +686,11 @@
   padding: 14px 20px; border-top: 1px solid var(--fm-border-1);
   display: flex; gap: 8px; justify-content: space-between;
 }
+/* ETP-5229 item #10 polish: PresentModal's footer sits right below its two-column
+   card area, which already reads as visually distinct — drop the divider line so
+   the footer only relies on its own padding for separation. Scoped to this one
+   modal (`.fm-present-modal`) so FileGenModal/NewDeclModal keep the rule line. */
+.fm-present-modal .fm-config-modal__footer { border-top: none; }
 
 /* ─── Small action / compare buttons ───────────────────────────────── */
 .fm-btn {
@@ -1219,8 +1224,10 @@
   flex: 1; padding: 0 12px;
   font: 400 14px/20px var(--fm-font-sans, system-ui);
   color: hsl(var(--foreground));
-  display: flex; align-items: center; justify-content: flex-start;
+  display: block; line-height: 52px;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .fm-aeat-cell--empty { border-color: hsl(var(--border-subtle)); background: hsl(var(--muted)); box-shadow: none; width: 260px; height: 52px; flex-shrink: 0; }
 .fm-aeat-cell--fixed { color: inherit; }
@@ -1427,5 +1434,6 @@
 /* ── Compact casilla cells (liquidación sections) ───────────────────── */
 .fm-aeat-section--compact .fm-aeat-cell { width: 180px; height: 40px; }
 .fm-aeat-section--compact .fm-aeat-cell--empty { width: 180px; height: 40px; }
+.fm-aeat-section--compact .fm-aeat-cell__value { line-height: 40px; }
 .fm-aeat-section--compact .fm-aeat-col-headers__cell { width: 180px; }
 .fm-aeat-section--compact .fm-aeat-group-bracket::before { right: 568px; } /* 3×180 − same gap offsets = 808−240 */

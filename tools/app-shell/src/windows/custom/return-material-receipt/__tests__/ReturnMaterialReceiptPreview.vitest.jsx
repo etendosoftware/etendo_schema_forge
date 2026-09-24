@@ -47,7 +47,17 @@ vi.mock('../../shared/PreviewActionButtons.jsx', () => ({
   }),
   ReceiptSendModal: (props) => {
     mockCapturedSendModalProps.current = props;
-    return <div data-testid="receipt-send-modal" data-pdf-url={props.pdfBlobUrl} />;
+    return (
+      <div data-testid="receipt-send-modal" data-pdf-url={props.pdfBlobUrl}>
+        {/* ETP-5124 — exposes a way to simulate the modal reporting a successful send,
+            mirroring GoodsShipmentPreviewEmails.vitest.jsx's send-modal-sent button. */}
+        {props.onSent && (
+          <button data-testid="receipt-send-modal-sent" onClick={() => props.onSent()}>
+            Simulate Sent
+          </button>
+        )}
+      </div>
+    );
   },
   PreviewPdfPanel: (props) => <div data-testid="preview-pdf-panel" data-pdf-url={props.pdfUrl} />,
 }));
@@ -73,7 +83,7 @@ vi.mock('../../shared/pdfUtils.js', () => ({
   downloadBlobAsFile: vi.fn(),
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ReturnMaterialReceiptPreview from '../ReturnMaterialReceiptPreview.jsx';
 
 const defaultReceipt = {
@@ -189,5 +199,64 @@ describe('ReturnMaterialReceiptPreview', () => {
     const receiptWithoutPartner = { ...defaultReceipt, 'businessPartner$_identifier': undefined };
     renderPreview({ receipt: receiptWithoutPartner });
     expect(screen.queryByTestId('modal-subtitle')).not.toBeInTheDocument();
+  });
+
+  describe('ETP-5124 — email send wiring (return-material-receipt-send contract)', () => {
+    function lastBuildContentArgs() {
+      return mockBuildReturnPreviewContent.mock.calls.at(-1)?.[0];
+    }
+
+    it('passes onEmail as a function when the receipt is Confirmed (CO)', () => {
+      renderPreview();
+      expect(lastBuildContentArgs().onEmail).toBeInstanceOf(Function);
+    });
+
+    it('passes onEmail as undefined when the receipt is not Confirmed', () => {
+      renderPreview({ receipt: { ...defaultReceipt, documentStatus: 'DR' } });
+      expect(lastBuildContentArgs().onEmail).toBeUndefined();
+    });
+
+    it('builds emailsCard with the receipt id and the given apiBaseUrl', () => {
+      renderPreview();
+      const { emailsCard } = lastBuildContentArgs();
+      expect(emailsCard.documentId).toBe('rmr-1');
+      expect(emailsCard.apiBaseUrl).toBe('/api/return-material-receipt');
+    });
+
+    it('builds emailsCard with a defined numeric refreshSignal', () => {
+      renderPreview();
+      expect(typeof lastBuildContentArgs().emailsCard.refreshSignal).toBe('number');
+    });
+
+    it('sets emailsCard.onSend to a function when the receipt is Confirmed (CO)', () => {
+      renderPreview();
+      expect(lastBuildContentArgs().emailsCard.onSend).toBeInstanceOf(Function);
+    });
+
+    it('leaves emailsCard.onSend undefined when the receipt is not Confirmed', () => {
+      renderPreview({ receipt: { ...defaultReceipt, documentStatus: 'DR' } });
+      expect(lastBuildContentArgs().emailsCard.onSend).toBeUndefined();
+    });
+
+    it('passes pdfBlobLoading=true to ReceiptSendModal while the PDF is still generating', () => {
+      mockUseReturnReceiptPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: true, error: null });
+      renderPreview();
+      expect(mockCapturedSendModalProps.current.pdfBlobLoading).toBe(true);
+    });
+
+    it('passes pdfBlobLoading=false to ReceiptSendModal once the PDF has resolved', () => {
+      mockUseReturnReceiptPdf.mockReturnValue({ pdfUrl: 'blob:fake-url', pdfBlob: new Blob(), loading: false, error: null });
+      renderPreview();
+      expect(mockCapturedSendModalProps.current.pdfBlobLoading).toBe(false);
+    });
+
+    it('bumps emailsCard.refreshSignal on a subsequent render when ReceiptSendModal reports a successful send', () => {
+      renderPreview();
+      const before = lastBuildContentArgs().emailsCard.refreshSignal;
+
+      fireEvent.click(screen.getByTestId('receipt-send-modal-sent'));
+
+      expect(lastBuildContentArgs().emailsCard.refreshSignal).not.toBe(before);
+    });
   });
 });

@@ -14,12 +14,25 @@
 // `<MemoryRouter>` from the outside has no effect on which route renders — `BrowserRouter`
 // reads `window.location` directly. To exercise a given path we push it onto
 // `window.history` before rendering, same as a real browser navigation would.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import { AppShellRuntime } from '@etendosoftware/app-shell-core/runtime';
 import { buildRuntimeRoutes } from '../runtime-routes.jsx';
 import en_US from '../locales/en_US.json';
 import es_ES from '../locales/es_ES.json';
+
+const { authLogoutOverride } = vi.hoisted(() => ({ authLogoutOverride: { current: null } }));
+
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useAuthOptional: () => {
+      const auth = actual.useAuthOptional();
+      return authLogoutOverride.current ? { ...auth, logout: authLogoutOverride.current } : auth;
+    },
+  };
+});
 
 const LOCALE_DICTIONARIES = { en_US, es_ES };
 
@@ -40,15 +53,38 @@ vi.mock('../components/CopilotContext.jsx', () => ({
   useCopilot: () => ({ open: () => {} }),
 }));
 
+// ETP-5195 — a provider seeded with a token starts `isSessionReady: false` and POSTs
+// /sws/neo/refreshtoken once on mount; until that settles the shell renders its pending
+// fallback, which is an EMPTY body. This file deliberately ran without a fetch mock, so every
+// route assertion below started failing on a blank document rather than on its own subject.
+// `{ unchanged: true }` is the backend's own no-op answer (SFRefreshToken stopped minting a JWT
+// when the role has not changed), inside the `{ result: "<json>" }` envelope the NEO webhook
+// bridge wraps every response in.
+beforeEach(() => {
+  globalThis.fetch = vi.fn(async () => ({
+    ok: true,
+    status: 200,
+    headers: { get: () => 'application/json' },
+    json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+  }));
+});
+
 afterEach(() => {
   cleanup();
+  authLogoutOverride.current = null;
   window.localStorage.clear();
   window.history.pushState({}, '', '/');
 });
 
 function renderAt(path, {
   windowMap = { 'sales-order': { slug: 'sales-order' } },
-  auth = { loginPath: '/login', initialSession: { token: 'test-token' } },
+  // ETP-4576: `credentialMode` defaults to `auto`, so AuthProvider restores the session
+  // from the server on mount and `status` sits at 'booting' until that settles. AuthGate
+  // renders its `bootingFallback` (null by default) meanwhile, so without opting out this
+  // test renders an empty body and every route assertion below fails. The subject here is
+  // route composition, not the restore, so it takes the documented `null` escape hatch -
+  // which makes `status` resolve synchronously from the seeded token.
+  auth = { loginPath: '/login', initialSession: { token: 'test-token' }, restoreSession: null },
   // DashboardPage waits on `useCurrency()` resolving to a non-null value before leaving its
   // skeleton state. With a token set, CurrencyProvider's effect fetches `${apiBaseUrl}/session`
   // for real (no fetch mock here) and silently swallows the failure, leaving the currency code
@@ -72,14 +108,25 @@ function renderAt(path, {
 }
 
 describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
-  it('routes a window path through WindowLoader with the given windowMap', () => {
+  it('routes a window path through WindowLoader with the given windowMap', async () => {
     renderAt('/sales-order');
-    expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    // ETP-5195: AppShellRuntime now gates authenticated routes behind an async
+    // session-readiness cycle (AppShellRuntime.jsx returns `pendingFallback` while
+    // `isSessionReady === false`). The `auth.initialSession` here carries a real
+    // token with no mocked `/sws/neo/refreshtoken` fetch, so the refresh attempt
+    // fails and the session becomes ready on the next tick (by design, per
+    // sessionController.js) — wait it out instead of asserting synchronously.
+    await waitFor(() => {
+      expect(screen.getByTestId('window-loader')).toHaveTextContent('sales-order:http://x/api');
+    });
   });
 
-  it('routes a window record path through WindowLoader too', () => {
+  it('routes a window record path through WindowLoader too', async () => {
     renderAt('/sales-order/123');
-    expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    // Same session-readiness gate as above.
+    await waitFor(() => {
+      expect(screen.getByTestId('window-loader')).toBeInTheDocument();
+    });
   });
 
   it('renders a business landing page for a known path', async () => {
@@ -124,11 +171,68 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     sessionEntries.forEach(([key, value]) => window.localStorage.setItem(key, value));
     renderAt('/logout', { auth: { loginPath: '/login' } });
 
-    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(window.location.search).toBe('');
-    expect(window.location.href).not.toContain('/onboarding?returnTo=/logout');
-    expect(window.localStorage.getItem('sf_auth_token')).toBeNull();
-    expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
+    expect(window.location.href).not.toContain('/login?returnTo=/logout');
+    for (const key of [
+      'sf_auth_token',
+      'sf_auth_user',
+      'sf_auth_client_id',
+      'sf_auth_rolelist',
+      'sf_auth_selected_role',
+      'sf_auth_selected_org',
+      'sf_platform_token',
+    ]) {
+      expect(window.localStorage.getItem(key), `${key} is cleared on logout`).toBeNull();
+    }
+  }, 30000);
+
+  it('waits for cookie-session revocation before navigating away from logout', async () => {
+    let resolveRevocation;
+    const revocationStarted = vi.fn();
+    globalThis.fetch = vi.fn((input, options = {}) => {
+      if (options.method === 'DELETE' && String(input).endsWith('/sws/go/session')) {
+        revocationStarted();
+        return new Promise((resolve) => {
+          resolveRevocation = () => resolve({
+            ok: true,
+            status: 204,
+            headers: { get: () => null },
+            json: async () => ({}),
+          });
+        });
+      }
+
+      if (!options.method && String(input).endsWith('/sws/go/session')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: { message: 'No active session' } }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+      });
+    });
+
+    authLogoutOverride.current = () => globalThis.fetch('/sws/go/session', { method: 'DELETE' });
+
+    renderAt('/logout', {
+      auth: { loginPath: '/login' },
+    });
+
+    await waitFor(() => expect(revocationStarted).toHaveBeenCalledOnce());
+    expect(window.location.pathname).toBe('/logout');
+
+    resolveRevocation();
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Correo electrónico/ })).toBeInTheDocument();
   }, 30000);
 
   it.each([
@@ -137,14 +241,38 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     '/logout?returnTo=https%3A%2F%2Fattacker.example%2Fsteal',
     '/logout?returnTo=%2F%2Fattacker.example%2Fsteal',
     '/logout?returnTo=%2F%25',
-  ])('uses onboarding as the safe destination for unsafe logout return targets: %s', async (path) => {
+  ])('uses login as the safe destination for unsafe logout return targets: %s', async (path) => {
     window.localStorage.setItem('sf_platform_token', 'platform-token');
     renderAt(path, { auth: { loginPath: '/login' } });
 
-    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(window.location.search).toBe('');
     expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
   }, 30000);
+
+  it('renders the login form at /login instead of redirecting to the onboarding wizard', async () => {
+    globalThis.fetch.mockImplementation(async (input, options = {}) => {
+      if (String(input).endsWith('/sws/go/session') && !options.method) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: { message: 'No active session' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+      };
+    });
+    renderAt('/login', { auth: { loginPath: '/login' } });
+
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Correo electrónico/ })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/login');
+  });
 
   it('resolves a lazy-loaded route via Suspense', async () => {
     // The brief's literal assertion (`findByText(/.+/)`) is ambiguous here: once AppStorePage

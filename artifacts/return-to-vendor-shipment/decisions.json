@@ -3,9 +3,6 @@
   "window": {
     "category": "purchases",
     "name": "Return to Vendor Shipment",
-    "sendDocument": {
-      "enabled": false
-    },
     "relatedDocuments": true,
     "notesField": "description",
     "dateFilterKey": "movementDate",
@@ -14,6 +11,14 @@
     "hideDeleteWhenComplete": true,
     "hidePrintWhen": { "documentStatus": { "notEquals": "CO" } },
     "maxDetailLines": 0,
+    "draftMode": {
+      "enabled": true,
+      "processField": "documentAction",
+      "processValue": "CO",
+      "label": "Confirmar",
+      "disableWhenEmpty": true,
+      "_note": "ETP-5408: Confirmar renders through the generic draftMode Save/Confirm block, exactly like goods-receipt/goods-shipment. The window's index.jsx overrides this prop with the same values plus an onConfirm that dispatches 'return-to-vendor-shipment:open-confirm-modal'; ConfirmWithCreditButton (topbarRight) listens for it and runs its own confirm flow (ConfirmInOutModal + optional rectificative invoice). This declaration keeps the generated Page (and the contract) in agreement with what the runtime renders. disableWhenEmpty mirrors the old linesCount === 0 gate. No keepSaveWhenCompletedFields: once completed nothing on the header is saveable, so the Save/Confirm row disappears, the same as goods-shipment."
+    },
     "customComponents": {
       "bottomSection": "ReturnToVendorShipmentBottomPanel",
       "topbarRight": "ConfirmWithCreditButton"
@@ -47,6 +52,15 @@
         "visibleWhenFieldFalse": "posted",
         "successKey": "documentPosted",
         "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
       }
     ],
     "statusPills": [

@@ -4,10 +4,14 @@ import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import ProductTable from './ProductTable';
 import ProductForm from './ProductForm';
+import CostingTable from './CostingTable';
+import CostingForm from './CostingForm';
 import AccountingTable from './AccountingTable';
 import AccountingForm from './AccountingForm';
+import ProductStockDefaultsWatcher from '@/windows/custom/product/ProductStockDefaultsWatcher';
 import ProductAdditionalInfoPanel from '@/windows/custom/product/ProductAdditionalInfoPanel';
 import { AttachmentsTab } from '@/components/attachments';
+import ProductCostBanner from '@/windows/custom/product/ProductCostBanner';
 import ProductPriceBar from '@/windows/custom/product/ProductPriceBar';
 import catalogs from './mockCatalogs';
 import ProductGallery from '@/windows/custom/product/ProductGallery';
@@ -114,17 +118,13 @@ export const api = {
     "costing": {
       "get": true,
       "getById": true,
-      "post": false,
-      "put": false,
-      "patch": false,
-      "delete": false,
+      "post": true,
+      "put": true,
+      "patch": true,
+      "delete": true,
       "listUrl": "/sws/neo/product/costing",
       "detailUrl": "/sws/neo/product/costing/{id}",
-      "supportedFilters": [],
-      "methods": [
-        "GET",
-        "GETBYID"
-      ]
+      "supportedFilters": []
     },
     "transactionAdjustments": {
       "get": true,
@@ -323,22 +323,6 @@ export const api = {
       "url": "/sws/neo/product/billOfMaterials/selectors/bOMProduct"
     },
     {
-      "entity": "costing",
-      "field": "warehouse",
-      "column": "M_Warehouse_ID",
-      "reference": "Warehouse",
-      "inputMode": "selector",
-      "url": "/sws/neo/product/costing/selectors/warehouse"
-    },
-    {
-      "entity": "costing",
-      "field": "cCurrencyID",
-      "column": "C_Currency_ID",
-      "reference": "Currency",
-      "inputMode": "selector",
-      "url": "/sws/neo/product/costing/selectors/cCurrencyID"
-    },
-    {
       "entity": "transactionAdjustments",
       "field": "cCurrencyID",
       "column": "C_Currency_ID",
@@ -520,12 +504,20 @@ export const api = {
   "labelOverrides": {
     "en_US": {
       "M_Product_Category_ID": "Category",
-      "ProductType": "Type"
+      "ProductType": "Type",
+      "DateFrom": "Start Date",
+      "DateTo": "Expiry Date"
     },
     "es_ES": {
       "M_Product_Category_ID": "Categoría",
       "ProductType": "Tipo",
-      "Value": "Código"
+      "Value": "Código",
+      "DateFrom": "Fecha de inicio",
+      "DateTo": "Fecha de expiración"
+    },
+    "es_AR": {
+      "DateFrom": "Fecha de inicio",
+      "DateTo": "Fecha de expiración"
     }
   }
 };
@@ -558,6 +550,11 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         breadcrumb={breadcrumb}
       api={api}
         secondaryTabs={[
+          { key: 'costing', label: 'Costing', Table: CostingTable, Form: CostingForm, addLineFields: { entry: [
+          { key: 'cost', column: 'Cost', type: 'number', required: true, label: 'Cost' },
+          { key: 'startingDate', column: 'DateFrom', type: 'date', required: true, label: 'Starting Date' },
+          { key: 'endingDate', column: 'DateTo', type: 'date', label: 'Ending Date' },
+          ], derived: [], hidden: [] }, requireSavedRecord: true, tabOrder: 500 },
           { key: 'accounting', label: 'Accounting', Table: AccountingTable, Form: AccountingForm, addLineFields: { entry: [
           { key: 'fixedAsset', column: 'P_Asset_Acct', type: 'selector', label: 'Product Asset', reference: 'ValidCombination', inputMode: 'selector' },
           { key: 'productExpense', column: 'P_Expense_Acct', type: 'selector', required: true, label: 'Product Expense', reference: 'ValidCombination', inputMode: 'selector' },
@@ -565,6 +562,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
           { key: 'productCOGS', column: 'P_Cogs_Acct', type: 'selector', label: 'Product COGS', reference: 'ValidCombination', inputMode: 'selector' },
           ], derived: [], hidden: [] }, requireSavedRecord: true, maxDetailLines: 1, tabOrder: 500, visibleWhenCapability: 'showAccountingFields' },
         ]}
+        formFooter={ProductStockDefaultsWatcher}
         primaryTabs={[
           { key: 'general', label: 'General' },
           { key: 'additionalInfo', label: 'Additional Info', Panel: ProductAdditionalInfoPanel },
@@ -583,6 +581,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
         contentBg="bg-card"
         formCardPadding="px-2"
         customTabs={[{ key: 'pricing', labelKey: 'price', Component: ProductPriceBar, placement: 'tab', tabOrder: 100 }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Product", config: {} } }]}
+        headerContent={(data) => <ProductCostBanner data={data} />}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
@@ -615,7 +614,7 @@ export default function ProductPage({ windowName, recordId, ...props }) {
       hideLink
       labelOverrides={labelOverrides}
       rowQuickActions={{}}
-      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt","xlsx"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"database","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"example":"SKU-1001","column":"Value","type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"example":"Tornillo hexagonal M8","column":"Name","type":"string"},{"target":"description","aliases":["descripcion","descripción"],"example":"Tornillería inoxidable","label":"Description","column":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"example":"Item","column":"ProductType","type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","required":false,"example":"Unidad","column":"C_UOM_ID","type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price","isNumeric":true,"example":"12,50","labelKey":"importHeaderSalesPrice"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra","coste","costo"],"label":"Purchase Price","isNumeric":true,"example":"8,20","labelKey":"importHeaderPurchasePrice"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category","example":"Herramientas","column":"M_Product_Category_ID"}]}}
+      import={{"enabled":true,"spec":"product","entity":"product","descriptor":"product","formats":["csv","txt","xlsx"],"limit":{"maxRows":5000,"concurrency":4},"dedupe":{"scope":"database","key":["searchKey"]},"fields":[{"target":"searchKey","aliases":["codigo","código","sku"],"label":"Search Key","required":true,"example":"SKU-1001","column":"Value","type":"string"},{"target":"name","aliases":["nombre"],"label":"Name","required":true,"example":"Tornillo hexagonal M8","exampleKey":"importExampleProductName","column":"Name","type":"string"},{"target":"description","aliases":["descripcion","descripción","description"],"example":"Tornillería inoxidable","exampleKey":"importExampleProductDescription","label":"Description","column":"Description","required":false,"type":"textarea"},{"target":"productType","aliases":["tipo","tipo de producto"],"label":"Product Type","required":false,"example":"Item","exampleKey":"importExampleProductType","column":"ProductType","type":"enum"},{"target":"uOM","aliases":["unidad de medida","unidad","um","uom"],"label":"Unit of Measure","matchEntity":"UOM","required":false,"example":"Unidad","exampleKey":"importExampleProductUom","column":"C_UOM_ID","type":"foreignKey","reference":"UOM"},{"required":false,"type":"string","target":"salesPrice","aliases":["precio de venta","precio venta","precio","pvp"],"label":"Sales Price","isNumeric":true,"example":"12,50","exampleKey":"importExampleProductSalesPrice","labelKey":"importHeaderSalesPrice"},{"required":false,"type":"string","target":"purchasePrice","aliases":["precio de compra","precio compra"],"label":"Purchase Price","isNumeric":true,"example":"8,20","exampleKey":"importExampleProductPurchasePrice","labelKey":"importHeaderPurchasePrice"},{"target":"cost","aliases":["costo","coste","coste estandar","coste estándar","costo estandar","costo estándar","standard cost"],"label":"Cost","required":false,"isNumeric":true,"example":"7,40","exampleKey":"importExampleProductCost","labelKey":"importHeaderCost","column":"Cost","type":"string"},{"required":false,"type":"string","target":"costStartingDate","aliases":["fecha de inicio","fecha inicio","vigente desde","fecha de inicio del coste","starting date"],"label":"Cost Starting Date","example":"01/01/2026","exampleKey":"importExampleProductCostStartingDate","labelKey":"importHeaderCostStartingDate"},{"required":false,"type":"string","target":"category","aliases":["categoria","categoría","codigo categoria","código categoría","nombre categoria","nombre categoría"],"label":"Category","example":"Herramientas","exampleKey":"importExampleProductCategory","column":"M_Product_Category_ID"}]}}
       {...props} window={effectiveWindow}
     />
   );

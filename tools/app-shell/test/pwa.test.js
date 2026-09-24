@@ -3,6 +3,7 @@ import { strict as assert } from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const APP_SHELL = resolve(import.meta.dirname, '..');
 
@@ -71,18 +72,13 @@ describe('PWA configuration', () => {
   });
 
   it('OnboardingFlow clears SW caches on environment login', () => {
-    // Cache clearing moved to OnboardingFlow in etendo-go-core (shared across locales)
-    const flowPath = resolve(
-      APP_SHELL,
-      '..',
-      '..',
-      'node_modules',
-      '@etendosoftware',
-      'etendo-go-core',
-      'src',
-      'onboarding',
-      'OnboardingFlow.jsx'
-    );
+    // Cache clearing moved to OnboardingFlow in etendo-go-core (shared across locales).
+    // Resolved via the package's own export map (not a hand-rolled root node_modules
+    // path) because npm workspace hoisting is not guaranteed: it can install this
+    // package under tools/app-shell/node_modules instead of the repo root depending
+    // on the resolved version tree, and a hardcoded root path breaks silently then.
+    const entryUrl = import.meta.resolve('@etendosoftware/etendo-go-core');
+    const flowPath = resolve(fileURLToPath(entryUrl), '..', 'onboarding', 'OnboardingFlow.jsx');
     const content = readFileSync(flowPath, 'utf8');
     assert.ok(content.includes('caches.keys()'), 'should enumerate caches');
     assert.ok(content.includes('caches.delete'), 'should delete caches');

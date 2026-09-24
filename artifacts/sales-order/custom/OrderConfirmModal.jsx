@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Truck, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Confirmation modal for Sales Order.
@@ -34,10 +35,13 @@ export default function OrderConfirmModal({
   const [needsReload,    setNeedsReload]    = useState(false);
 
   const orderUrl = `${apiBaseUrl}/header`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
 
   // Fetch fresh record + line count on mount
@@ -46,8 +50,8 @@ export default function OrderConfirmModal({
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${orderUrl}/${orderId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${orderUrl}/${orderId}`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -62,7 +66,7 @@ export default function OrderConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId, orderUrl, apiBaseUrl, headers]);
+  }, [orderId, orderUrl, apiBaseUrl, apiFetch]);
 
   const d              = freshData || data || {};
   const documentNo     = d.documentNo || '';
@@ -100,9 +104,9 @@ export default function OrderConfirmModal({
     try {
       // Step 1: Confirm the order (always)
       if (!orderProcessed) {
-        const processRes = await fetch(
+        const processRes = await apiFetch(
           `${orderUrl}/${orderId}/action/DocAction`,
-          { method: 'POST', headers, body: JSON.stringify({ action: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ action: 'CO' }) },
         );
         if (!processRes.ok) {
           const err = await processRes.json().catch(() => null);
@@ -129,9 +133,9 @@ export default function OrderConfirmModal({
 
       // Step 2: Create shipment if checked
       if (createShipment) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${orderUrl}/${orderId}/action/createShipment`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -146,15 +150,18 @@ export default function OrderConfirmModal({
           id:         shipment?.id ?? null,
           documentNo: shipment?.documentNo || '',
           total:      shipment?.grandTotal != null ? formatCurrency(currency, shipment.grandTotal) : '',
+          // ETP-5381: the pill below badges off this. An auto-generated invoice is confirmed
+          // on creation, so a hardcoded "Borrador" would be a lie the user acts on.
+          documentStatus: shipment?.documentStatus ?? null,
         };
       }
 
       // Step 3: Create invoice if checked.
       // Uses order quantities (ordered - already invoiced), independent of the shipment above.
       if (createInvoice) {
-        const res = await fetch(
+        const res = await apiFetch(
           `${orderUrl}/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -169,6 +176,9 @@ export default function OrderConfirmModal({
           id:         invoice?.id ?? null,
           documentNo: invoice?.documentNo || '',
           total:      invoice?.grandTotal != null ? formatCurrency(currency, invoice.grandTotal) : '',
+          // ETP-5381: the pill below badges off this. An auto-generated invoice is confirmed
+          // on creation, so a hardcoded "Borrador" would be a lie the user acts on.
+          documentStatus: invoice?.documentStatus ?? null,
         };
       }
 
@@ -214,7 +224,6 @@ export default function OrderConfirmModal({
   if (createdDocs) {
     const { shipment, invoice } = createdDocs;
     const both = !!(shipment && invoice);
-    const statusLabel = ui('statusDraft');
 
     return (
       <div style={overlayStyle}>
@@ -237,14 +246,14 @@ export default function OrderConfirmModal({
                 <DocPill
                   label={ui('shipmentDoc', { number: shipment.documentNo })}
                   total={shipment.total}
-                  statusLabel={statusLabel}
+                  documentStatus={shipment.documentStatus}
                 />
               )}
               {invoice && (
                 <DocPill
                   label={ui('invoiceDoc', { number: invoice.documentNo })}
                   total={invoice.total}
-                  statusLabel={statusLabel}
+                  documentStatus={invoice.documentStatus}
                 />
               )}
             </div>
@@ -434,7 +443,17 @@ function CheckboxCard({ checked, onChange, icon, title, subtitle }) {
 
 /* ── Doc pill ─────────────────────────────────────────────────── */
 
-function DocPill({ label, total, statusLabel }) {
+/**
+ * One created-document pill. The badge reads the document's OWN status: ETP-5381 makes an
+ * auto-generated invoice arrive confirmed while the shipment beside it is still a draft, so
+ * the two can legitimately disagree. Same palette and label rule as ConfirmResultModal.
+ */
+function DocPill({ label, total, documentStatus }) {
+  const ui = useUI();
+  const confirmed = documentStatus === 'CO';
+  const tone = confirmed
+    ? { bg: 'var(--status-success-bg)', fg: 'var(--status-success-fg)' }
+    : { bg: 'var(--status-warning-bg)', fg: 'var(--status-warning-fg)' };
   return (
     <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'wrap' }}>
       <span>{label}</span>
@@ -443,9 +462,9 @@ function DocPill({ label, total, statusLabel }) {
       )}
       <span style={{
         fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-        background: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)',
+        background: tone.bg, color: tone.fg,
       }}>
-        {statusLabel}
+        {ui(confirmed ? 'statusCompleted' : 'statusDraft')}
       </span>
     </div>
   );

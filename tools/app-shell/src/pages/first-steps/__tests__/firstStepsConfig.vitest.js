@@ -16,27 +16,29 @@ import {
   firstStepsTotal,
   isProductivePlan,
   isStepDone,
+  isStepGated,
   toggleableStepIds,
   visibleFirstSteps,
 } from '../firstStepsConfig.js';
+import { DEMO_DATA_TRANSFER_STEP } from '../demoDataTransferStep.js';
 
 const ALL_TOGGLEABLE = ['company-data', 'fiscal-config', 'products', 'contacts',
   'invoice-sequence', 'team'];
 /** What a free/trial tenant can tick: the same list minus the two `productiveOnly` steps. */
 const TRIAL_TOGGLEABLE = ['company-data', 'products', 'contacts', 'team'];
 const FREE = 'free';
+const TRANSFER_PENDING = { available: true, done: false };
+const TRANSFER_DONE = { available: true, done: true };
 
 /**
- * Every plan-aware helper takes the plan LAST and defaults to productive when it is absent, so
- * the calls below that pass no plan are asserting the full 7-step behaviour on purpose — that
+ * Plan-aware helpers default to productive when the plan is absent, so
+ * the calls below that pass no plan are asserting the full 7-step flag-off behaviour on purpose — that
  * default is the documented fail-open direction, not an oversight.
  */
 
 describe('firstStepsConfig — catalogue shape', () => {
-  it('exposes seven steps, in the order the page renders them', () => {
-    // Numbering the user sees: 1 create-account (always done), 2 company-data,
-    // 3 fiscal-config, 4 products, 5 contacts, 6 invoice-sequence, 7 team. Invoice
-    // numbering sits AFTER the data loading and BEFORE the team invitations on purpose —
+  it('exposes seven base steps, in the order the page renders them', () => {
+    // Invoice numbering sits AFTER the data loading and BEFORE the team invitations —
     // a tenant picks its invoice series once its products and contacts are in, and the
     // invitations are the last thing it does.
     expect(FIRST_STEPS.map((step) => step.id)).toEqual([
@@ -71,7 +73,7 @@ describe('firstStepsConfig — catalogue shape', () => {
   it('gives every toggleable step a description, an action and a time estimate', () => {
     // The expanded row renders `descKey`, the action control and the minutes chip — a
     // toggleable step missing any of them would expand into an empty, dead row.
-    for (const step of FIRST_STEPS.filter((s) => !s.alwaysDone)) {
+    for (const step of FIRST_STEPS.filter((s) => !s.alwaysDone && s.action !== 'dataTransfer')) {
       expect(step.descKey, `${step.id}.descKey`).toBeTruthy();
       expect(step.action, `${step.id}.action`).toBeTruthy();
       expect(step.minutes, `${step.id}.minutes`).toBeGreaterThan(0);
@@ -93,7 +95,7 @@ describe('firstStepsConfig — toggleableStepIds is the write allowlist', () => 
    * REGRESSION GUARD. This array is handed to `useFirstSteps` as `allowedIds` and is the
    * ONLY thing that keeps a non-writable id off `POST /sws/go/onboarding/first-steps`.
    * `EtendoGoJwtServlet.FIRST_STEPS_IDS` allowlists exactly these six ids and silently drops
-   * anything else, so sending a seventh would persist a state that reads back different from
+   * anything else, so sending the server-owned transfer would persist a state that reads back different from
    * what was sent — adding a step here means adding it there too.
    */
   it('is exactly the six user-writable ids, in catalogue order', () => {
@@ -101,7 +103,7 @@ describe('firstStepsConfig — toggleableStepIds is the write allowlist', () => 
   });
 
   it('narrows to the four a trial tenant can reach', () => {
-    // The two productiveOnly steps are not on screen for a trial, so they must not be
+    // Productive-only steps are not on screen for a trial, so they must not be
     // writable either — `useFirstSteps` uses this as its `allowedIds`.
     expect(toggleableStepIds(FREE)).toEqual(TRIAL_TOGGLEABLE);
   });
@@ -118,12 +120,20 @@ describe('firstStepsConfig — toggleableStepIds is the write allowlist', () => 
     }
   });
 
-  it('holds every non-alwaysDone step and nothing else', () => {
+  it('holds every user-writable step and nothing else', () => {
     expect(toggleableStepIds(PLAN_PRODUCTIVE)).toEqual(
-      FIRST_STEPS.filter((step) => !step.alwaysDone).map((step) => step.id),
+      FIRST_STEPS.filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
+        .map((step) => step.id),
     );
     expect(toggleableStepIds(PLAN_PRODUCTIVE))
       .toHaveLength(firstStepsTotal(PLAN_PRODUCTIVE) - 1);
+  });
+
+  it('never offers the server-owned transfer as a user toggle', () => {
+    expect(DEMO_DATA_TRANSFER_STEP.action).toBe('dataTransfer');
+    expect(DEMO_DATA_TRANSFER_STEP.productiveOnly).toBe(true);
+    expect(toggleableStepIds(PLAN_PRODUCTIVE)).not.toContain(DEMO_DATA_TRANSFER_STEP.id);
+    expect(toggleableStepIds(FREE)).not.toContain(DEMO_DATA_TRANSFER_STEP.id);
   });
 });
 
@@ -146,8 +156,8 @@ describe('the plan gate — a trial sees a shorter checklist', () => {
     expect(visibleFirstSteps(PLAN_PRODUCTIVE)).toEqual(FIRST_STEPS);
   });
 
-  it('marks exactly the two steps that a trial cannot act on', () => {
-    // Stated against the flag rather than the filtered list, so adding a third
+  it('marks exactly the two base steps that a trial cannot act on', () => {
+    // Stated against the flag rather than the filtered list, so adding another
     // productiveOnly step has to be a deliberate edit here too.
     const gated = FIRST_STEPS.filter((step) => step.productiveOnly).map((step) => step.id);
     expect(gated).toEqual(['fiscal-config', 'invoice-sequence']);
@@ -159,7 +169,7 @@ describe('the plan gate — a trial sees a shorter checklist', () => {
      * no platform token, a failed `/sws/go/environments`, or a client id with no matching
      * row. Reading that as "free" would silently strip invoice numbering and the fiscal
      * setup from a tenant that paid for them, with nothing on screen to explain it. Showing
-     * a trial two extra rows is the cheaper mistake, and it is also what every tenant saw
+     * a trial extra rows is the cheaper mistake, and it is also what every tenant saw
      * before this gate existed.
      */
     it.each([[undefined], [null]])('treats %s as productive', (plan) => {
@@ -179,23 +189,23 @@ describe('the plan gate — a trial sees a shorter checklist', () => {
   });
 
   describe('the counters follow the visible list', () => {
-    it('counts 1/5 on a fresh trial and 1/7 on a fresh productive tenant', () => {
+    it('counts 1/5 on a fresh trial and 1/7 on a flag-off productive tenant', () => {
       expect(countCompletedSteps([], FREE)).toBe(1);
       expect(firstStepsTotal(FREE)).toBe(5);
       expect(countCompletedSteps([], PLAN_PRODUCTIVE)).toBe(1);
       expect(firstStepsTotal(PLAN_PRODUCTIVE)).toBe(7);
     });
 
-    it('reaches all-set on a trial without the two hidden steps', () => {
+    it('reaches all-set on a trial without the hidden steps', () => {
       // The whole point of the gate: a trial tenant must be able to finish the checklist.
-      // Before it, the two productiveOnly rows made 7/7 unreachable in a trial.
+      // Before it, productiveOnly rows made completion unreachable in a trial.
       expect(areAllStepsDone(TRIAL_TOGGLEABLE, FREE)).toBe(true);
       expect(areAllStepsDone(TRIAL_TOGGLEABLE, PLAN_PRODUCTIVE)).toBe(false);
     });
 
     it('does not count a hidden step that is already completed', () => {
       // Reachable for real: a tenant completes everything while productive, and a later
-      // /environments hiccup reports free. Counting the hidden rows would render 7/5.
+      // /environments hiccup reports free. Counting hidden rows would exceed 5/5.
       expect(countCompletedSteps(ALL_TOGGLEABLE, FREE)).toBe(5);
       expect(countCompletedSteps(ALL_TOGGLEABLE, FREE))
         .toBeLessThanOrEqual(firstStepsTotal(FREE));
@@ -238,6 +248,11 @@ describe('isStepDone', () => {
     expect(isStepDone(toggleableStep, undefined)).toBe(false);
     expect(isStepDone(alwaysDoneStep, null)).toBe(true);
   });
+
+  it('reads transfer completion only from the server result', () => {
+    expect(isStepDone(DEMO_DATA_TRANSFER_STEP, ['demo-data-transfer'], TRANSFER_PENDING)).toBe(false);
+    expect(isStepDone(DEMO_DATA_TRANSFER_STEP, [], TRANSFER_DONE)).toBe(true);
+  });
 });
 
 describe('countCompletedSteps', () => {
@@ -275,8 +290,14 @@ describe('countCompletedSteps', () => {
   });
 
   it('never exceeds the total', () => {
-    expect(countCompletedSteps([...ALL_TOGGLEABLE, 'create-account', 'ghost']))
-      .toBe(firstStepsTotal(PLAN_PRODUCTIVE));
+    expect(countCompletedSteps([...ALL_TOGGLEABLE, 'create-account', 'ghost'], PLAN_PRODUCTIVE, TRANSFER_DONE))
+      .toBe(firstStepsTotal(PLAN_PRODUCTIVE, TRANSFER_DONE));
+  });
+
+  it('counts the transfer only when the server reports it done', () => {
+    expect(countCompletedSteps(['demo-data-transfer'], PLAN_PRODUCTIVE, TRANSFER_PENDING)).toBe(1);
+    expect(countCompletedSteps([], PLAN_PRODUCTIVE, TRANSFER_DONE)).toBe(2);
+    expect(countCompletedSteps([], FREE, TRANSFER_DONE)).toBe(1);
   });
 });
 
@@ -292,8 +313,9 @@ describe('areAllStepsDone', () => {
     }
   });
 
-  it('is true only once every toggleable id is present', () => {
-    expect(areAllStepsDone(ALL_TOGGLEABLE)).toBe(true);
+  it('requires both every toggleable id and server-confirmed transfer completion', () => {
+    expect(areAllStepsDone(ALL_TOGGLEABLE, PLAN_PRODUCTIVE, TRANSFER_PENDING)).toBe(false);
+    expect(areAllStepsDone(ALL_TOGGLEABLE, PLAN_PRODUCTIVE, TRANSFER_DONE)).toBe(true);
   });
 
   it('is not satisfiable by padding `completed` with unknown ids', () => {
@@ -308,20 +330,24 @@ describe('findExpandedStepId', () => {
 
   it('walks forward as steps are completed, skipping the alwaysDone row', () => {
     expect(findExpandedStepId(['company-data'])).toBe('fiscal-config');
-    expect(findExpandedStepId(['company-data', 'fiscal-config'])).toBe('products');
-    expect(findExpandedStepId(['company-data', 'fiscal-config', 'products']))
+    expect(findExpandedStepId(['company-data', 'fiscal-config'], PLAN_PRODUCTIVE, TRANSFER_PENDING))
+      .toBe('demo-data-transfer');
+    expect(findExpandedStepId(['company-data', 'fiscal-config'], PLAN_PRODUCTIVE, TRANSFER_DONE)).toBe('products');
+    expect(findExpandedStepId(['company-data', 'fiscal-config', 'products'], PLAN_PRODUCTIVE, TRANSFER_DONE))
       .toBe('contacts');
   });
 
   it('collapses every row once they are all done', () => {
     expect(findExpandedStepId(ALL_TOGGLEABLE)).toBe(null);
+    expect(findExpandedStepId(ALL_TOGGLEABLE, PLAN_PRODUCTIVE, TRANSFER_PENDING)).toBe('demo-data-transfer');
+    expect(findExpandedStepId(ALL_TOGGLEABLE, PLAN_PRODUCTIVE, TRANSFER_DONE)).toBe(null);
   });
 
   it('expands the first INCOMPLETE step, not the next one after the last completed', () => {
     // Completing out of order must reopen the earlier gap rather than move on.
     expect(findExpandedStepId(['products', 'contacts', 'team'])).toBe('company-data');
     expect(findExpandedStepId(['company-data', 'fiscal-config', 'contacts',
-      'invoice-sequence', 'team'])).toBe('products');
+      'invoice-sequence', 'team'], PLAN_PRODUCTIVE, TRANSFER_DONE)).toBe('products');
   });
 
   it('tolerates a missing/invalid `completed`', () => {
@@ -334,6 +360,46 @@ describe('findExpandedStepId', () => {
     for (const completed of [[], ['company-data'], ['company-data', 'products'],
       ['company-data', 'products', 'contacts'], ALL_TOGGLEABLE]) {
       expect(alwaysDoneIds).not.toContain(findExpandedStepId(completed));
+    }
+  });
+});
+
+
+describe('firstStepsConfig — step routes (ETP-5364)', () => {
+  it('sends the team step to Usuarios, not Roles', () => {
+    // Inviting someone creates a USER. Roles is where permissions are shaped afterwards, and
+    // landing there first made the step read as a different, later job.
+    const team = FIRST_STEPS.find((step) => step.id === 'team');
+    expect(team.to).toBe('/user');
+  });
+});
+
+describe('firstStepsConfig — isStepGated (ETP-5364)', () => {
+  const fiscal = () => FIRST_STEPS.find((step) => step.id === 'fiscal-config');
+
+  it('declares the yes/no question on fiscal-config and nowhere else', () => {
+    expect(fiscal().gateQuestionKey).toBe('firstStepsFiscalConfigQuestion');
+    for (const step of FIRST_STEPS.filter((s) => s.id !== 'fiscal-config')) {
+      expect(step.gateQuestionKey).toBeNull();
+    }
+  });
+
+  it('gates an unanswered, incomplete step', () => {
+    expect(isStepGated(fiscal(), false, false)).toBe(true);
+  });
+
+  it('stops gating once the user answers yes', () => {
+    expect(isStepGated(fiscal(), false, true)).toBe(false);
+  });
+
+  it('never gates a completed step — the tick IS the answer', () => {
+    expect(isStepGated(fiscal(), true, false)).toBe(false);
+    expect(isStepGated(fiscal(), true, true)).toBe(false);
+  });
+
+  it('never gates a step that asks nothing', () => {
+    for (const step of FIRST_STEPS.filter((s) => !s.gateQuestionKey)) {
+      expect(isStepGated(step, false, false)).toBe(false);
     }
   });
 });

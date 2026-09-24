@@ -22,13 +22,17 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
+// ETP-5395 — mutable ref so the "non-owner" case below can flip `isOwner` without a second
+// `vi.mock` registration; every other test in this suite exercises an Owner account (the
+// pre-ETP-5395 default), reset in `beforeEach`.
+const authCapabilities = vi.hoisted(() => ({ current: { isAdminOrClientAdmin: true, isOwner: true } }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({
     token: 'test-token',
     username: 'testuser',
     logout: () => {},
     windowAccess: {},
-    capabilities: { isAdminOrClientAdmin: true },
+    capabilities: authCapabilities.current,
   }),
 }));
 
@@ -94,10 +98,12 @@ vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
     return {
       completed: [],
       seen: gate.scenario.seen || optimisticSeen,
+      dismissed: gate.scenario.dismissed === true,
       loading: gate.scenario.loading,
       error: gate.scenario.error,
       toggleStep: async () => true,
       markSeen,
+      setDismissed: async () => true,
     };
   },
 }));
@@ -110,6 +116,7 @@ const LOADED_UNSEEN = { loading: false, error: null, seen: false };
 beforeEach(() => {
   vi.clearAllMocks();
   setScenario({ loading: true, error: null, seen: false });
+  authCapabilities.current = { isAdminOrClientAdmin: true, isOwner: true };
 });
 
 describe('DashboardPage — First Steps gate (ETP-5190)', () => {
@@ -204,5 +211,50 @@ describe('DashboardPage — First Steps gate (ETP-5190)', () => {
     expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 0));
     expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+
+  // ETP-5395 — "Primeros pasos" is Owner-only. A non-owner must never be bounced there, even on
+  // a never-seen account: `seen` is meaningless for them, so `markSeen()` must not fire either
+  // (that POST is what the real gate uses to record the visit — see the header comment).
+  it('does not redirect a never-seen NON-owner account to /first-steps', async () => {
+    authCapabilities.current = { isAdminOrClientAdmin: true, isOwner: false };
+    setScenario(LOADED_UNSEEN);
+    render(<DashboardPage />);
+
+    expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+});
+
+describe('DashboardPage — a dismissed checklist is never forced back on (ETP-5364)', () => {
+  it('renders the dashboard for an unseen account that dismissed the checklist', async () => {
+    // NOT covered by `seen`. A user who opened /first-steps from the sidebar and pressed
+    // "Finalizar configuración inicial" there has never spent the one-time redirect, so `seen`
+    // is still false — without this clause their very next dashboard visit would bounce them
+    // onto the page the button just promised to put away.
+    setScenario({ loading: false, error: null, seen: false, dismissed: true });
+    render(<DashboardPage />);
+
+    expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
+    expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
+  });
+
+  it('records no visit for a dismissed account', async () => {
+    setScenario({ loading: false, error: null, seen: false, dismissed: true });
+    render(<DashboardPage />);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+
+  it('still redirects an unseen account that has NOT dismissed it', async () => {
+    // The guard above must not swallow the normal post-signup redirect.
+    setScenario(LOADED_UNSEEN);
+    render(<DashboardPage />);
+
+    expect(screen.getByTestId('navigate-stub')).toHaveAttribute('data-to', '/first-steps');
+    await waitFor(() => expect(gate.markSeen).toHaveBeenCalledTimes(1));
   });
 });

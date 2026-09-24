@@ -47,6 +47,26 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   ),
 }));
 
+// ETP-5402 QA follow-up — ReportViewerPage now filters its gallery/selected report against the
+// caller's own per-report access map (fetchMyReportAccess()); full access to every catalog id
+// keeps this file's existing fixtures (report-journal-entries and friends) visible, matching the
+// `useWindowAccess: () => 'full'` mock above.
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchMyReportAccess: () => Promise.resolve({
+    reportAccess: {
+      'tax-report': 'full',
+      'aging-receivable': 'full',
+      'aging-payable': 'full',
+      'balance-sheet': 'full',
+      'profit-loss': 'full',
+      'report-general-ledger': 'full',
+      'report-journal-entries': 'full',
+      'report-trial-balance': 'full',
+      'inventory-stock-report': 'full',
+    },
+  }),
+}));
+
 vi.mock('@/components/layout/PageMetaContext', () => ({
   useSetPageMeta: vi.fn(),
 }));
@@ -276,6 +296,33 @@ describe('ReportViewerPage — popup-single selector (SelectorPopup)', () => {
       ([url]) => typeof url === 'string' && url.includes('/render')
     );
     expect(renderCalls.length).toBe(0);
+  });
+
+  // Regression test (ETP-5246): the popup's fixed width was widened again,
+  // from w-[32rem] max-w-[90vw] (512px, capped at 90% viewport) to
+  // w-[42rem] max-w-[90vw] (672px, capped at 90% viewport) so longer
+  // account/org names don't get cut off. Asserts the container box (found
+  // via the search input, which sits inside it) carries the new width
+  // classes and neither of the old ones, so a future edit can't silently
+  // narrow it back.
+  it('renders the popup container with the widened w-[42rem] max-w-[90vw] classes (not the old w-96 or w-[32rem])', async () => {
+    const user = userEvent.setup();
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/api/reports') return Promise.resolve(makeReportsListResponse(POPUP_REPORT));
+      return Promise.resolve(makeSelectorResponse([{ id: 'a1', name: 'Cash' }]));
+    });
+
+    render(<ReportViewerPage />);
+    await waitFor(() => expect(screen.getByText('Account')).toBeInTheDocument());
+    await user.click(screen.getByText('selectPlaceholder'));
+
+    const searchInput = await screen.findByPlaceholderText('Search...');
+    const popupBox = searchInput.closest('.rounded-xl');
+    expect(popupBox).toBeTruthy();
+    expect(popupBox.classList.contains('w-[42rem]')).toBe(true);
+    expect(popupBox.classList.contains('max-w-[90vw]')).toBe(true);
+    expect(popupBox.classList.contains('w-96')).toBe(false);
+    expect(popupBox.classList.contains('w-[32rem]')).toBe(false);
   });
 
   it('passes dependsOn extraParams (account schema) when opening a dependent popup with a resolved dependency', async () => {

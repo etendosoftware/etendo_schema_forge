@@ -72,9 +72,13 @@ import {
 import { cn } from '@/lib/utils.js';
 import { useMenuLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { useFavorites } from '@/components/layout/FavoritesContext';
-import { useFeatureFlag, PROOF_OF_CONCEPT_MENU } from '@/lib/flags';
+import { useFeatureFlag, PROOF_OF_CONCEPT_MENU, ACCT_PROCESS_MONITOR, PUBLIC_API_KEYS } from '@/lib/flags';
 import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { environmentPlanLabelKey } from '@/lib/environmentPresentation.js';
+import {
+  environmentCommercialLabel,
+  environmentPlanLabelKey,
+  environmentRelationshipLabel,
+} from '@/lib/environmentPresentation.js';
 import menuConfig from '@/menu.json';
 import { useFirstStepsProgressOptional } from '@/pages/first-steps/FirstStepsContext.jsx';
 
@@ -102,6 +106,17 @@ const ICON_MAP = {
 
 /** `menu.json` group that carries the onboarding checklist. */
 const FIRST_STEPS_GROUP = 'First Steps';
+
+// Keep feature metadata on the menu entry itself. Favorites are persisted as a reduced `{name,
+// label}` shape, so this index lets an old favorite inherit the canonical gate without keeping a
+// second hand-maintained item-name map in the component.
+const MENU_ITEM_FEATURE_FLAGS = Object.freeze(
+  Object.fromEntries(
+    menuConfig.menu.flatMap(group => group.items || [])
+      .filter(item => item.featureFlag)
+      .map(item => [item.name, item.featureFlag])
+  )
+);
 
 function CollapsedGroupPopover({
   group,
@@ -359,9 +374,14 @@ function ExpandedGroupSection({
 /**
  * ETP-5190 — `x/7` progress on the First Steps entry.
  *
- * Only ever an ADDITION to the label: the entry itself is never hidden and never disabled,
- * whatever the count says, because the checklist has to stay reachable after the one-time
- * dashboard redirect has been spent (and after every step is done, to un-tick one).
+ * Only ever an ADDITION to the label: this badge never hides or disables the entry, whatever the
+ * count says, because the checklist has to stay reachable after the one-time dashboard redirect
+ * has been spent (and after every step is done, to un-tick one). The ONE thing that removes the
+ * entry is ETP-5364's explicit `dismissed` flag — a deliberate act by the user, never a
+ * consequence of the count reaching its total. That removal is NOT done here: like every other
+ * menu axis it is an item-level predicate in `filterMenuGroupsByAccess`
+ * (`"hideWhenFirstStepsDismissed"` in menu.json), applied before `SideMenu` is handed its groups.
+ * Filtering it in this component instead is what made the entry flash in and out on reload.
  *
  * Renders nothing while the state is loading, when it failed to load, or when the sidebar is
  * rendered outside a `FirstStepsProvider` (bare component tests) — a badge that flashed `1/7`
@@ -559,6 +579,10 @@ export default function SideMenu({
   // This is visual gating only. The windows remain protected by normal AD role
   // filtering; the flag merely stops offering this internal menu section.
   const showProofOfConceptMenu = useFeatureFlag(PROOF_OF_CONCEPT_MENU);
+  // ETP-5269. Item-level flag gating, where Proof of Concept above gates a whole group. Visual
+  // only: the route is registered unconditionally and SFAcctProcessMonitor enforces admin access.
+  const showAcctProcessMonitor = useFeatureFlag(ACCT_PROCESS_MONITOR);
+  const showPublicApiKeys = useFeatureFlag(PUBLIC_API_KEYS);
   // Unconditional since ETP-4966: owning more than one environment is a shipped
   // capability, so the switcher is always available. The hook already returns an
   // empty list for a session that cannot list environments, which is what keeps
@@ -577,12 +601,34 @@ export default function SideMenu({
     return map;
   }, []);
 
-  const resolvedMenuGroups = menuGroups
+  const featureFlagValues = useMemo(() => ({
+    [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
+    [PUBLIC_API_KEYS]: showPublicApiKeys,
+    // ETP-5436 — an item can now ALSO declare featureFlag: PROOF_OF_CONCEPT_MENU (e.g.
+    // quick-sales-order/quick-purchase-order in menu.json), so CommandPalette's generic
+    // item-level filter hides them from search when the flag is off. This map must agree
+    // with showProofOfConceptMenu's group-level gate above, or an item inside an unlocked
+    // group would still be filtered out here as if the flag were unset.
+    [PROOF_OF_CONCEPT_MENU]: showProofOfConceptMenu,
+  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu]);
+
+  // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
+  // from menuGroups, so returning early for that group let a favourited flag-gated item stay
+  // visible with the flag off — the one hole through which a gated entry could still be reached.
+  // An explicitly declared but unknown flag fails closed; ordinary entries with no featureFlag
+  // remain visible.
+  const resolvedMenuGroups = useMemo(() => menuGroups
     .filter(g => g.group !== 'Proof of Concept' || showProofOfConceptMenu)
     .map((g) => {
-      if (g.group !== 'Favorites') return g;
-      return { ...g, items: favorites };
-    });
+      const items = g.group === 'Favorites' ? favorites : (g.items || []);
+      return {
+        ...g,
+        items: items.filter((item) => {
+          const flag = item.featureFlag || MENU_ITEM_FEATURE_FLAGS[item.name];
+          return flag == null || featureFlagValues[flag] === true;
+        }),
+      };
+    }), [menuGroups, favorites, showProofOfConceptMenu, featureFlagValues]);
 
   const activeGroup = findActiveGroup(resolvedMenuGroups, location.pathname, location.search);
   const tMenu = useMenuLabel();
@@ -665,6 +711,11 @@ export default function SideMenu({
                       {ui(environmentPlanLabelKey(currentEnvironment))}
                     </span>
                   )}
+                  {currentEnvironment && environmentCommercialLabel(currentEnvironment, ui) && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {environmentCommercialLabel(currentEnvironment, ui)}
+                    </span>
+                  )}
                   <ChevronDown
                     className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     data-testid="ChevronDown__247c75" />
@@ -699,6 +750,16 @@ export default function SideMenu({
                         )}>
                           {ui(environmentPlanLabelKey(env))}
                         </span>
+                        {environmentCommercialLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentCommercialLabel(env, ui)}
+                          </span>
+                        )}
+                        {environmentRelationshipLabel(env, ui) && (
+                          <span className="ml-2 shrink-0 text-[10px] text-muted-foreground">
+                            {environmentRelationshipLabel(env, ui)}
+                          </span>
+                        )}
                         {switching === env.clientId && (
                           <Loader2
                             className="h-3.5 w-3.5 ml-2 shrink-0 animate-spin"

@@ -53,6 +53,16 @@ describe('SendToSifButton', () => {
     vi.restoreAllMocks();
   });
 
+  it('does not render when isDocumentReadOnly is true, even with pending SII/TBAI targets (ETP-5205)', () => {
+    renderButton({ isDocumentReadOnly: true });
+    expect(screen.queryByRole('button', { name: 'sendToSif' })).not.toBeInTheDocument();
+  });
+
+  it('regression: renders when isDocumentReadOnly is false/absent (existing behavior)', () => {
+    renderButton();
+    expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
+  });
+
   it('renders for completed invoices with pending fiscal targets', async () => {
     renderButton();
     await waitFor(() => {
@@ -232,6 +242,66 @@ describe('SendToSifButton', () => {
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       // ETP-5027: purchase-invoice always resolves to the Batuz-specific copy.
       expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5272 follow-up: onSave/isDirty must reach SifSendingModal unchanged, so a
+  // dirty header is flushed before the SII/TBAI process actions run.
+  describe('flushes pending header edits before sending (ETP-5272)', () => {
+    it('saves before sending when the header is dirty', async () => {
+      const callOrder = [];
+      const onSave = vi.fn(async () => {
+        callOrder.push('save');
+        return { id: 'INV_1' };
+      });
+      global.fetch = vi.fn(() => {
+        callOrder.push('send');
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
+      });
+
+      // Only SII pending (aeatsiiIssent: true means TBAI is already sent), so a
+      // single process action fires and callOrder stays unambiguous.
+      renderButton({
+        onSave,
+        isDirty: true,
+        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      expect(onSave).toHaveBeenCalledTimes(1);
+      expect(callOrder).toEqual(['save', 'send']);
+    });
+
+    it('does not call onSave when the header is clean', async () => {
+      const onSave = vi.fn(async () => ({ id: 'INV_1' }));
+
+      renderButton({
+        onSave,
+        isDirty: false,
+        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
+
+      await waitFor(() => {
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      });
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('blocks the send and surfaces an error when the save fails', async () => {
+      const onSave = vi.fn(async () => null);
+
+      renderButton({ onSave, isDirty: true });
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
+      fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
+
+      await screen.findByText('sendToSifSaveError');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 });

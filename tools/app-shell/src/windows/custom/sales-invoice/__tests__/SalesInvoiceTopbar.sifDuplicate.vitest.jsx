@@ -67,8 +67,13 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
 }));
 
+// ETP-4576: InvoiceTopbarExtra reads its installments through apiFetch now, not a raw
+// fetch, so this mock has to DELEGATE to the `global.fetch` stub installed in beforeEach.
+// Returning a bare `vi.fn()` hands the component `undefined` instead of a response, the
+// installments list comes back empty, and it takes the early return that owns no
+// SendToSifButton - which reads exactly like the button having been deleted.
 vi.mock('@/auth/useApiFetch.js', () => ({
-  useApiFetch: vi.fn(() => vi.fn()),
+  useApiFetch: vi.fn(() => (...args) => global.fetch(...args)),
 }));
 
 // The org profile that UNMASKS the bug — 'verifactu' would hide it entirely.
@@ -147,17 +152,24 @@ describe('SalesInvoiceTopbar — SIF button ownership (ETP-5027)', () => {
       expect(screen.getByTestId('payment-status-badge')).toBeInTheDocument();
     });
 
-    // The owning instance sits in InvoiceTopbarExtra's document-action group:
-    // payment-status badge -> SIF -> SendDocumentButton (envelope).
+    // The owning instance sits in InvoiceTopbarExtra's document-action group,
+    // after the payment-status badge: payment-status badge -> SIF.
+    //
+    // ETP-5260 note: the envelope "Send by email" button (SendDocumentButton)
+    // used to render right after SIF, inline in this same tree, and this test
+    // originally asserted that third position too. It has since moved to the
+    // topbarSecondary slot (SalesInvoiceSecondaryActions, left of Save/Confirm
+    // — see that component's own file header) and is no longer a descendant of
+    // SalesInvoiceTopbar at all, so it is not rendered by `renderTopbar()`
+    // above. Its own Copy link -> Clone -> Send DOM order is covered generically
+    // by DocumentSecondaryActions.vitest.jsx ("renders Copy link, Clone and
+    // Send in that DOM order").
     const badge = screen.getByTestId('payment-status-badge');
     const sif = screen.getByRole('button', { name: 'sendToSif' });
-    const envelope = screen.getByTestId('send-document-btn');
 
     expect(
       badge.compareDocumentPosition(sif) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      sif.compareDocumentPosition(envelope) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(screen.queryByTestId('send-document-btn')).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import {
   resolvePositiveInt,
   getSurveyConfig,
@@ -16,6 +17,7 @@ import {
   DEFAULT_SURVEY_RESPONSE_COOLDOWN_DAYS,
   DEFAULT_SURVEY_CSAT_MIN_DOCS,
   DEFAULT_SURVEY_CSAT_DOC_GAP,
+  DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS,
 } from '../survey-config.js';
 
 const MS_DAY = 86_400_000;
@@ -179,6 +181,40 @@ describe('getSurveyTypeConfig', () => {
       expect(config.minDocuments).toBe(DEFAULT_SURVEY_CSAT_MIN_DOCS);
     });
   });
+
+  // ETP-4353 Phase 2: minAccountAgeMs now picks a different env var + default depending on
+  // surveyKey — csat_onboarding gets its own 1-day-default knob instead of inheriting nps's
+  // 60-day one, so an unconfigured csat_onboarding row keeps its pre-refactor 24h behavior.
+  describe('per-surveyKey minAccountAgeMs selection (csat_onboarding vs nps)', () => {
+    it('resolves csat_onboarding to the 1-day default, not the nps 60-day default', () => {
+      const config = getSurveyTypeConfig('csat_onboarding', {});
+      expect(config.minAccountAgeMs).toBe(DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS * MS_DAY);
+      expect(config.minAccountAgeMs).toBe(1 * MS_DAY);
+    });
+
+    it('resolves nps to its own 60-day default, unaffected by the new csat_onboarding branch', () => {
+      const config = getSurveyTypeConfig('nps', {});
+      expect(config.minAccountAgeMs).toBe(DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY);
+    });
+
+    it('VITE_SURVEY_ONBOARDING_DELAY_DAYS overrides csat_onboarding only, not nps', () => {
+      const env = { VITE_SURVEY_ONBOARDING_DELAY_DAYS: '3' };
+      expect(getSurveyTypeConfig('csat_onboarding', env).minAccountAgeMs).toBe(3 * MS_DAY);
+      expect(getSurveyTypeConfig('nps', env).minAccountAgeMs).toBe(DEFAULT_SURVEY_NPS_MIN_AGE_DAYS * MS_DAY);
+    });
+
+    it('VITE_SURVEY_NPS_MIN_AGE_DAYS overrides nps only, not csat_onboarding', () => {
+      const env = { VITE_SURVEY_NPS_MIN_AGE_DAYS: '20' };
+      expect(getSurveyTypeConfig('nps', env).minAccountAgeMs).toBe(20 * MS_DAY);
+      expect(getSurveyTypeConfig('csat_onboarding', env).minAccountAgeMs).toBe(DEFAULT_SURVEY_ONBOARDING_DELAY_DAYS * MS_DAY);
+    });
+
+    it('a remote perSurvey.csat_onboarding.minAccountAgeDays takes precedence over both env var and default', () => {
+      setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { minAccountAgeDays: 5 } } });
+      const config = getSurveyTypeConfig('csat_onboarding', { VITE_SURVEY_ONBOARDING_DELAY_DAYS: '3' });
+      expect(config.minAccountAgeMs).toBe(5 * MS_DAY);
+    });
+  });
 });
 
 describe('isSurveyTypeEnabled', () => {
@@ -232,16 +268,22 @@ describe('getRemoteCannedResponses', () => {
 });
 
 describe('loadRemoteSurveyConfig', () => {
-  it('does nothing when apiBaseUrl is null/undefined or token is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined or token is missing — inverted: the cookie carries the session', async () => {
     const fetchImpl = vi.fn();
     await loadRemoteSurveyConfig({ apiBaseUrl: null, token: 'tok', fetchImpl });
     await loadRemoteSurveyConfig({ apiBaseUrl: undefined, token: 'tok', fetchImpl });
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: null, fetchImpl });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchImpl).toHaveBeenCalled();
   });
 
   it('still fetches when apiBaseUrl is an empty string (the real dev-mode value from getApiBase())', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+        // ETP-4576 — the token argument is ignored by the shared builders: the credential comes
+    // from the active scheme, so the test declares the scheme instead of passing a value.
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok' });
     await loadRemoteSurveyConfig({ apiBaseUrl: '', token: 'tok', fetchImpl });
     expect(fetchImpl).toHaveBeenCalledWith('/sws/survey-config/', {
       headers: { Authorization: 'Bearer tok', 'Accept-Language': 'es_ES' },
@@ -252,6 +294,9 @@ describe('loadRemoteSurveyConfig', () => {
     const payload = { maxPerMonth: 9, canned: {} };
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
 
+        // ETP-4576 — the token argument is ignored by the shared builders: the credential comes
+    // from the active scheme, so the test declares the scheme instead of passing a value.
+    setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'tok-123' });
     await loadRemoteSurveyConfig({ apiBaseUrl: '/etendo', token: 'tok-123', fetchImpl });
 
     expect(fetchImpl).toHaveBeenCalledWith('/etendo/sws/survey-config/', {
@@ -279,13 +324,16 @@ describe('loadRemoteSurveyConfig', () => {
 });
 
 describe('submitSurveyResponse', () => {
-  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing', async () => {
+  it('does nothing when apiBaseUrl is null/undefined, token is missing, or surveyKey is missing — inverted: the cookie carries the session', async () => {
     const fetchImpl = vi.fn();
     await submitSurveyResponse({ apiBaseUrl: null, token: 'tok', surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: undefined, token: 'tok', surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: '/etendo', token: null, surveyKey: 'nps', fetchImpl });
     await submitSurveyResponse({ apiBaseUrl: '/etendo', token: 'tok', surveyKey: null, fetchImpl });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetchImpl).toHaveBeenCalled();
   });
 
   it('posts the survey response with a Bearer token, JSON content type, and full body', async () => {

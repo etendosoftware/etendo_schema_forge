@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.4.0",
   "generatedAt": "2026-09-08T16:52:49.566Z",
-  "contractChecksum": "90f903662a5ed719",
+  "updatedAt": "2026-09-19T19:45:53.408Z",
+  "contractChecksum": "06ca4005fbe9d457",
   "apiPrediction": {
     "specName": "document-sequence",
     "baseUrl": "/sws/neo/document-sequence",
@@ -9,13 +10,19 @@
       "sequence": {
         "get": true,
         "getById": true,
-        "post": true,
+        "post": false,
         "put": true,
         "patch": true,
-        "delete": true,
+        "delete": false,
         "listUrl": "/sws/neo/document-sequence/sequence",
         "detailUrl": "/sws/neo/document-sequence/sequence/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID",
+          "PUT",
+          "PATCH"
+        ]
       }
     },
     "selectors": [],
@@ -39,14 +46,10 @@
     "labelOverrides": {
       "es_ES": {
         "Name": "Nombre",
+        "Description": "Descripción",
         "Prefix": "Prefijo",
-        "Suffix": "Sufijo",
         "StartNo": "Número inicial",
-        "CurrentNext": "Próximo número",
-        "IncrementNo": "Incremento",
-        "StartNewYear": "Reiniciar cada año",
-        "IsAutoSequence": "Numeración automática",
-        "Description": "Descripción"
+        "CurrentNext": "Próximo número"
       }
     }
   },
@@ -55,16 +58,10 @@
       "sequence": {
         "fields": {
           "name": {
+            "readOnly": true,
             "required": true
           },
           "description": {},
-          "autoNumbering": {
-            "required": true
-          },
-          "incrementBy": {
-            "required": true,
-            "defaultValue": "1"
-          },
           "nextAssignedNumber": {
             "required": true,
             "defaultValue": "1000000"
@@ -73,13 +70,7 @@
             "required": true,
             "defaultValue": "1000000"
           },
-          "prefix": {},
-          "suffix": {},
-          "restartSequenceEveryYear": {},
-          "valueFormat": {},
-          "mask": {
-            "defaultValue": "#######"
-          }
+          "prefix": {}
         }
       }
     },
@@ -93,9 +84,6 @@
     ],
     "minimumCreate": {
       "headerFields": [
-        "name",
-        "autoNumbering",
-        "incrementBy",
         "nextAssignedNumber",
         "startingNo"
       ],
@@ -112,9 +100,6 @@
         "operation": "createHeader",
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
-          "name",
-          "autoNumbering",
-          "incrementBy",
           "nextAssignedNumber",
           "startingNo"
         ]
@@ -124,5 +109,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "362c56f2693d2f51"
+  "checksum": "640789c96fcee759"
 }

@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useLabel, useUI } from '@/i18n';
-import { simSearch } from '@etendosoftware/app-shell-core/lib/simSearch.js';
+import { simSearchEveryLanguage } from '@etendosoftware/app-shell-core/lib/simSearch.js';
 import { useBatch } from '../copilot/ocr/ingest/useBatch.js';
 
 /**
@@ -36,7 +36,10 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   const ui = useUI();
   const t = useLabel(labelOverrides);
   const apiFetch = useApiFetch(apiBaseUrl);
-  const { runBatch } = useBatch({ apiBaseUrl, token });
+  // ETP-5371 — `useBatch` asks `neoBaseUrl.js` for the NEO root itself; it no longer takes
+  // `apiBaseUrl`, which it used to chop a segment off. `apiBaseUrl` is still this hook's own
+  // base for the existing-record lookup below, and must be the SPEC's URL.
+  const { runBatch } = useBatch({ token });
   const entity = importConfig?.entity;
 
   // ETP-4696/ETP-4997 — `headerScope` appends a localized qualifier naming the tab a column
@@ -81,8 +84,25 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     params.append('criteria', JSON.stringify(criteria));
     params.append('_startRow', '0');
     params.append('_endRow', '1000');
-    const res = await apiFetch(`/${entity}?${params.toString()}`);
-    if (!res.ok) throw new Error(`existing-record lookup failed: ${res.status}`);
+    // ETP-5374 — `on401: 'ignore'`. This is a pre-flight courtesy check whose whole contract is
+    // that failing must never block an import the server would have accepted; logging the user
+    // out is the most extreme way of blocking it. Without this, one 401 here tears down the
+    // session and the import dialog along with it, mid-review, with nothing said. A genuinely
+    // expired session still logs out at the next real request, which is the one the user is
+    // actually waiting on. The 401 is handed back as a normal `!res.ok` and the review screen
+    // reports the check as incomplete.
+    const res = await apiFetch(`/${entity}?${params.toString()}`, { on401: 'ignore' });
+    // ETP-5350 — `messageKey`/`params` alongside the English text, the contract
+    // `ImportDialog.localizeError` (and now `sendRow`) reads: a plain module has no
+    // translator, so it declares the key and lets the dialog resolve it. Without this the
+    // developer-facing sentence below WAS the message the user read, in English, in the
+    // middle of a Spanish flow.
+    if (!res.ok) {
+      throw Object.assign(
+        new Error(`existing-record lookup failed: ${res.status}`),
+        { messageKey: 'importErrorLookupFailed', params: { status: res.status } },
+      );
+    }
     const json = await res.json().catch(() => null);
     const data = json?.response?.data ?? json?.data ?? [];
     // Only the key columns are read back; anything else the endpoint returns is ignored.
@@ -121,6 +141,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
     },
     mapping: {
       notImported: ui('importNotImported'),
+      alreadyAssigned: ui('importAlreadyAssigned'),
       mappedSummary: ui('importMappedSummary'),
       editMatch: ui('importEditMatch'),
       editTitle: ui('importEditColumnTitle'),
@@ -145,12 +166,22 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       filterError: ui('importFilterError'),
       skip: ui('importSkip'),
       skipped: ui('importSkipped'),
+      // ETP-5349. Not rendered in the grid — this is the reason written into the
+      // downloadable error file for a row the user skipped by hand, which is the only
+      // kind of skip that records no reason of its own.
+      skippedByUser: ui('importSkippedByUser'),
       unskip: ui('importUnskip'),
       downloadErrors: ui('importDownloadErrors'),
       status: ui('importStatus'),
       statusOk: ui('importStatusOk'),
       statusError: ui('importStatusError'),
       fieldErrorsTooltip: ui('importFieldErrorsTooltip'),
+      // ETP-5350. The unresolved-foreign-key popover — where a user lands to fix the very
+      // row that failed, and the last part of this dialog still hardcoded in English.
+      fkSearchPlaceholder: ui('importFkSearchPlaceholder'),
+      fkSearching: ui('importFkSearching'),
+      fkNoMatches: ui('importFkNoMatches'),
+      fkUseTyped: ui('importFkUseTyped'),
       bulkApplyTitle: ui('importBulkApplyTitle'),
       bulkApplyDescription: ui('importBulkApplyDescription'),
       bulkApplyOnlyThis: ui('importBulkApplyOnlyThis'),
@@ -170,12 +201,24 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
       requestSent: ui('importSystemErrorRequestSent'),
       serverResponse: ui('importSystemErrorServerResponse'),
     },
+    // ETP-5225 — what the X does while the send is running. Not a cancel: the rows already
+    // accepted are committed, so the dialog states that instead of offering to undo it.
+    sendingClose: {
+      title: ui('importSendingCloseTitle'),
+      body: ui('importSendingCloseBody'),
+      keepWatching: ui('importSendingCloseKeepWatching'),
+      closeAnyway: ui('importSendingCloseAnyway'),
+    },
   }), [ui]);
 
   return useMemo(() => ({
     token,
     postBatch: runBatch,
-    simSearchFn: simSearch,
+    // ETP-5350: every installed AD language, not just the session one. The endpoint
+    // translates the term OUT of the session language before matching the English base
+    // rows, so an English value always matched and a Spanish one only matched a Spanish
+    // session — the same CSV passed for one user of a client and failed for another.
+    simSearchFn: simSearchEveryLanguage,
     labels,
     translate: ui,
     fieldLabelFn,

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { resolveHideMoreMenu } from './DetailView.jsx';
 import { maybeSaveBeforeConfirm } from './detailViewHelpers.jsx';
+import { runPreUnpost } from '@/lib/preUnpost.js';
 
 /**
  * Kebab ("more actions") menu of the detail toolbar.
@@ -92,12 +93,12 @@ export function DetailMoreActionsMenu({
     if (!(await maybeSaveBeforeConfirm({ isDirty: hook.isDirtyHeader, handleSave: hook.handleSave }))) {
       return false;
     }
-    if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-      const unpostResult = await neoAction.execute(currentId, 'unpost');
-      if (!unpostResult.success) {
-        toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-        return false;
-      }
+    const preUnpost = await runPreUnpost({
+      recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+    });
+    if (!preUnpost.success) {
+      toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+      return false;
     }
     try {
       await docAction.execute(currentId, action.documentAction);
@@ -105,6 +106,11 @@ export function DetailMoreActionsMenu({
       toast.success(msg);
       // ETP-4563 cache fix: post-action refresh must force a fresh network read
       // so the shared cache does not serve the pre-mutation record.
+      // ETP-5378 — invalidate the LIST cache too, not just this record. ETP-4563 (the note
+      // above) fixed the record read; the cached grid page was left holding the pre-action
+      // row, so Cancelar navigated back to a list that still showed the old status until the
+      // user hit refresh by hand. Same trio handleProcessSuccess already runs in useEntity.
+      hook.invalidateEntityCache?.();
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
@@ -119,6 +125,11 @@ export function DetailMoreActionsMenu({
       toast.success(msg);
       // ETP-4563 cache fix: post-action refresh must force a fresh network read
       // so the shared cache does not serve the pre-mutation record.
+      // ETP-5378 — invalidate the LIST cache too, not just this record. ETP-4563 (the note
+      // above) fixed the record read; the cached grid page was left holding the pre-action
+      // row, so Cancelar navigated back to a list that still showed the old status until the
+      // user hit refresh by hand. Same trio handleProcessSuccess already runs in useEntity.
+      hook.invalidateEntityCache?.();
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } else {
@@ -176,12 +187,12 @@ export function DetailMoreActionsMenu({
                   await runNeoMenuAction(action);
                   return;
                 }
-                if (action.preUnpost && (data?.posted === 'Y' || data?.posted === true)) {
-                  const unpostResult = await neoAction.execute(currentId, 'unpost');
-                  if (!unpostResult.success) {
-                    toast.error(translateBackendError(unpostResult.message, ui) || ui('actionFailed'));
-                    return;
-                  }
+                const preUnpost = await runPreUnpost({
+                  recordId: currentId, record: data, enabled: action.preUnpost, execute: neoAction.execute,
+                });
+                if (!preUnpost.success) {
+                  toast.error(translateBackendError(preUnpost.message, ui) || ui('actionFailed'));
+                  return;
                 }
                 if (action.columnName) {
                   hook.handleProcess?.({ columnName: action.columnName, name: action.key });
@@ -216,7 +227,7 @@ export function DetailMoreActionsMenu({
               token={token}
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
-              onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

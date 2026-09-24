@@ -77,45 +77,56 @@ Two consequences follow, and neither is hypothetical:
 6. **Branch B — the account lookup failed.** The checkout is shown anyway. The backend is the
    authority on whether payment is required, so a failed lookup in the browser must not block
    a legitimate upgrade.
-7. **Branch C — the account already owns at least one tenant.** The page shows a Free vs
-   Productive comparison and a checkout form: a name for the new tenant, plus cardholder,
-   card number, expiry and CVC.
-8. **The user fills the form and submits.** Everything from here to step 12 happens in the
-   browser. In Vite development, the upgrade API calls remain same-origin (`/sws/...`) so
-   the Vite proxy can forward them to the configured Etendo context; `VITE_API_BASE` must not
-   make the browser call Tomcat directly.
-9. **The form is validated locally.** The tenant name must be non-empty and must not match a
-   tenant the account already owns — resubmitting an existing name would be treated by the
-   backend as *resuming* that tenant rather than creating a new one, so the page rejects it
-   rather than let a "success" hand back something the user already had. The card must be 16
-   digits, the expiry a valid future month, the CVC three or four digits.
-10. **The decline path is simulated locally.** One specific test card number,
-    `4000000000000002`, always simulates an issuer decline. It never reaches the network; the
-    page reports a declined payment and stops. The purpose is to let anyone exercise the
-    error path without a backend.
-11. **Any other valid card mints a mock payment token** in the browser: the literal string
-    `mock-paid-` followed by random lowercase hexadecimal.
-12. **The browser posts the tenant request to the backend**, at `POST /sws/go/onboarding`,
-    carrying the tenant name, currency, country, language and that payment token. It
-    authenticates with the account-level *platform* token, not the session token of the
-    tenant the user is currently inside, because creating a tenant is an account operation.
-13. **The backend runs the paywall** — described in full in Part 3. It answers one of two ways.
-14. **Refused:** HTTP 402 with a small JSON body saying payment is required. No provisioning
-    has started, so nothing has to be cleaned up. The page shows a payment error and returns
-    the user to the form.
-15. **Allowed:** the backend opens a streaming response and starts provisioning, emitting one
-    progress message per stage as it goes.
-16. **The page renders provisioning live**, in six named stages: *setup*, *client*,
-    *organization*, *dataset*, *sequences*, *finalize*.
-17. **The tenant is marked productive** during provisioning — a small record attached to the
-    new tenant saying it is on the paid plan.
-18. **The stream ends with a result message.** On success the page shows a confirmation panel.
-19. **The user continues, and is signed out.** This is deliberate: which tenant you are in is
-    chosen at sign-in, and there is no in-app tenant switcher in this version. Signing out is
-    the shortest honest route to the new tenant.
-20. **At the next sign-in the environment picker lists both tenants** — the original free one
-    and the new productive one, each badged with its plan and productive ones sorted first — and
-    the user chooses which to enter.
+7. **Branch C — the account already owns at least one environment.** The page presents the
+   Free and Productive plans. Selecting Productive opens the Add-ons step, which remains in the
+   flow for every origin. When the current authenticated environment is a demo, this step offers
+   product and contact transfer choices. When the current environment is already productive, it
+   explains that the new environment starts without demo data and offers no transfer controls.
+   Back from Add-ons returns to the plan step; Continue opens payment. Back from payment returns
+   to Add-ons, preserving the current form and transfer selections.
+8. **The user enters the new environment name on the payment step.** A productive-origin
+   purchase starts with a blank name so the current environment is not mistaken for the target.
+   A demo-origin purchase can select an exact source environment; the request carries its
+   `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
+   the account. Productive-origin requests discard any demo selection.
+9. **The browser creates a durable billing purchase** through the account-scoped
+   `POST /sws/go/billing/purchases` endpoint. The request describes the action, target name,
+   locale and, only for a demo-origin purchase, the selected `demoClientId` and products/contacts
+   transfer choices. The backend records both against the checkout request before redirecting to
+   Stripe; the browser also carries the toggles through the redirect for the onboarding request.
+   The browser does not collect or send card details. In Vite development, upgrade API calls
+   remain same-origin (`/sws/...`) for the Vite proxy to forward to Etendo.
+10. **The backend creates hosted Stripe Checkout.** The configured Stripe Price is the source of
+    the amount, currency and billing interval returned by `GET /sws/go/billing/offers` for the
+    plan preview. Checkout uses the same server-configured Price ID. Stripe owns card entry and
+    payment; the Etendo GO page redirects to the returned hosted URL.
+11. **Stripe returns the browser to Etendo GO.** A successful return includes the durable
+    checkout request ID. The page asks the backend for payment status and begins provisioning
+    only after the backend confirms payment. A cancelled return clears the pending browser state
+    and the Stripe return query parameters. Unit coverage exercises this cancellation handler;
+    the browser redirect behavior has not been runtime-verified as part of this task.
+12. **The backend provisions against the paid purchase ID.** The purchase ID is sent as the
+    onboarding payment token, and the backend checks its account ownership and paid status. For a
+    demo-origin purchase, the backend uses the exact stored demo client ID and transfer choice.
+    A productive-origin purchase discards any stale demo ID or transfer options in the request,
+    so it cannot copy from a demo.
+13. **A failure after payment leaves a recoverable purchase.** The billing overview shows only
+    purchases with confirmed payment: *paid*, *preparing*, or *ready*. Unpaid `CREATING` and
+    `CREATED` checkout attempts are hidden; they are not paid purchases or environments. Resuming
+    a paid purchase reuses its existing `purchaseId`, exact demo source, and server-persisted
+    products/contacts selection; it does not create a second charge or choose a source by name.
+    The backend uses a fenced provisioning claim and reruns the idempotent reconciliation chain,
+    so a retry continues the paid request instead of creating another purchase. Legacy paid
+    records without a recorded selection fail closed and need support-assisted resolution.
+14. **The page waits for the canonical environment selector to catch up.** Provisioning returns
+    the new Etendo `clientId`; the page refreshes the account environment list and matches that
+    exact ID. It does not treat a matching name as proof that the new environment is present. If
+    the projection has not caught up after bounded retries, the page offers an explicit sync
+    retry.
+15. **The user can enter the new environment.** Once the exact `clientId` appears in the
+    canonical list, the success action switches directly to that environment. The picker lists
+    the account's environments, with productive ones sorted first and each environment badged
+    with its plan.
 
 ## 1.4 The plan is visible in the picker
 
@@ -324,62 +335,69 @@ keeps scoring its paths, specs and open items as shipped.
 
 # Part 3 — The paywall
 
-## 3.1 What the contract is
+## 3.1 Billing and onboarding contracts
 
-| | |
+The paid flow has separate contracts for the commercial purchase and environment provisioning:
+
+| Endpoint | Purpose |
 |---|---|
-| Endpoint | `POST /sws/go/onboarding` |
-| New payload field | `paymentToken` (string, optional) |
-| Refusal status | **HTTP 402** |
-| Refusal body | `{"error": "payment_required", "message": "…"}` |
-| Success | An NDJSON stream of progress messages, ending in a result |
+| `GET /sws/go/billing/offers` | Returns the current productive offer's `amountMinor`, `currency`, and recurring `interval`. The backend retrieves these from the configured Stripe Price. |
+| `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. |
+| `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
+| `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
+| `GET /sws/go/checkout/sessions/{requestId}` | Returns whether the backend has confirmed payment for this account's checkout request. Unknown or foreign IDs are indistinguishable from pending. |
+| `POST /sws/go/onboarding` | Starts the existing NDJSON provisioning stream using the paid checkout request ID as `paymentToken`. |
 
-The gate runs **after** the request's token, payload and currency are validated but
-**before** the stream opens and before any provisioning. Two consequences follow: a refused
-request leaves no half-created tenant behind, and it can answer with a plain JSON error
-rather than having to express a failure inside a stream that has already started.
+The payment decision remains server-authoritative. Stripe's signed webhook records payment
+against the durable checkout request; a browser return URL alone never authorizes provisioning.
+The onboarding endpoint validates the account, request ownership, paid state, and provisioning
+claim before opening the stream. A refusal is returned as JSON before provisioning begins.
 
-The browser client checks the response status before touching the response body for exactly
-this reason, so a 402 never reaches the stream reader.
+## 3.2 The purchase and retry lifecycle
 
-## 3.2 The decision, step by step
+The checkout request ID is the stable correlation key across Stripe, payment confirmation, and
+provisioning. It is also the purchase ID shown to the browser. The request records the target
+environment name and, when selected, the demo's exact `AD_CLIENT_ID`; it is not reconstructed by
+searching a name after payment.
 
-The paywall is a standalone, directly testable unit rather than inline servlet code, because
-it is the authoritative permission check.
+An unpaid `CREATING` or `CREATED` purchase is not an environment and is omitted from the recovery
+list. It can reopen hosted checkout using the same request ID when the user submits the same
+purchase intent again. Once payment is confirmed, the UI shows the purchase as `PAID`,
+`PROVISIONING`, or `PROVISIONED`. Resuming a paid purchase reuses its existing `purchaseId` as the
+onboarding `paymentToken`; it does not create a second purchase or charge. The backend atomically
+claims the paid request for provisioning. Concurrent attempts are fenced, and a retry after a
+recorded failure or expired provisioning lease re-enters the idempotent reconciliation chain for
+the same environment.
 
-1. **Is this a conversion of an existing environment (`upgradeAction=convert-demo`)?** → it skips
-   both free paths below and goes straight to the payment check. A conversion is a purchase, and
-   without this it would look exactly like an ordinary resume and pass for free.
-2. **Does the account own no environments at all?** → **Allowed.** A first environment is always free.
-3. **Does the request name an environment the account already owns?** → **Allowed.** That is the
-   *resume* path — a partially provisioned environment being reconciled — not a new one, so
-   it is not charged again.
-4. **Otherwise, the payment token decides.** Approved → allowed. Absent → refused as
-   `PAYMENT_REQUIRED`. Rejected → refused as `PAYMENT_DECLINED`. Both refusals answer 402 with
-   `error: payment_required` and differ only in the message, so the client does not branch on
-   the code.
+For a new demo-origin purchase, the selected demo's exact `AD_CLIENT_ID` and the products/contacts
+transfer choice are stored against the checkout request before redirect. Onboarding and paid
+retries use that purchase-bound selection; the backend restores it over any browser-supplied values.
+The source is not inferred from a name or selected by looking for the only free demo. A recorded
+empty source remains empty. Productive-origin requests
+discard stale demo and transfer fields and cannot copy from a demo. Legacy paid purchases that
+predate persisted selection cannot be resumed automatically: the backend fails closed with
+`PURCHASE_SELECTION_UNAVAILABLE` and requires a new purchase or support-assisted resolution. It
+does not guess a source for those rows.
 
-## 3.3 The mock payment provider, stated plainly
+After provisioning, the response includes the newly created environment's `clientId`. The UI
+refreshes the canonical environment list and waits for an entry with that exact ID before
+offering the environment switch. Matching `clientName` is insufficient because names can
+collide. If the list projection is delayed, a bounded automatic refresh is followed by a user
+visible sync retry; it does not trigger another payment or provisioning run.
 
-The token's *shape* decides the outcome, and nothing else:
+## 3.3 Stripe offer and payment
 
-| Token | Outcome |
-|-------|---------|
-| `mock-paid-<hex>` | Approved |
-| `mock-declined`, or any other value | Declined |
-| absent or blank | Missing |
+The backend reads the configured recurring Stripe Price using its server-side secret key and
+projects that same Price's `unit_amount`, `currency`, and recurring interval from
+`GET /sws/go/billing/offers`. Checkout submits the configured Price ID as its single line item.
+The projection rejects unavailable, inactive, non-recurring, or unsupported interval prices
+rather than displaying a locally maintained fallback that could disagree with checkout.
 
-**The token is client-mintable and not single-use.** The backend does not call a provider,
-does not confirm that any charge occurred, does not consume the token, and does not bind it
-to a nonce, an account or an amount. Anyone who can reach the endpoint can hand-write
-`mock-paid-deadbeef` and be provisioned a tenant. The gate is a placeholder for the flow, not
-a control that protects revenue.
-
-`mock-declined` is declared for contract completeness but is **never transmitted** — the
-browser simulates declines locally and returns before issuing any request, so the backend
-only ever sees an approved-shaped token or none at all.
-
-What *is* real today: the flag evaluation, the paywall decision, and the plan marker.
+The browser formats Stripe's integer `amountMinor` using the returned currency, including
+zero-decimal and compatibility currencies, then displays the returned interval. If the offer
+cannot be retrieved, the page does not invent a fallback amount. Card details are entered on
+Stripe's hosted page; the Etendo GO browser neither collects nor mints payment tokens. The
+checkout request ID is an internal correlation key, not proof of payment by itself.
 
 ## 3.4 The plan marker
 
@@ -436,26 +454,27 @@ direct request.
 The exposure hook in §2.5 only reports that the menu item was evaluated, not what the user did
 on `/upgrade`. `UpgradePage.jsx` and `lib/upgrade/` emit their own events, through the same
 `OBSERVABILITY_EVENTS` registry and `track()` call the rest of the app uses (see
-`docs/ops/mixpanel-kpi-emission-spec.md`), so this funnel is queryable in Mixpanel like any
-other product flow:
+`docs/ops/mixpanel-kpi-emission-spec.md`), so the emitted parts of this funnel are queryable in
+Mixpanel like any other product flow:
 
 | Event | Fired when | Key properties |
 | --- | --- | --- |
 | `upgrade_page_viewed` | Account lookup settles, once | `branch`: `checkout` \| `first_tenant_free` \| `unavailable` |
 | `upgrade_first_tenant_free_continued` | User continues from the first-tenant-free panel to onboarding | — |
-| `upgrade_existing_tenant_name_blocked` | Frontend validation catches a `clientName` the account already owns | — |
-| `upgrade_session_expired` | Submit reached `runUpgrade` with no platform token | — |
-| `upgrade_checkout_submitted` | Validated form submitted, before the network call | `currency`, `countryCode` |
-| `upgrade_payment_declined` | Either decline path | `reason`: `test_card` (client-side, never reaches the network) \| `backend_402` |
-| `upgrade_tenant_provisioning_succeeded` | NDJSON stream resolved with `success: true` | `durationMs`, `currency`, `countryCode` |
-| `upgrade_tenant_provisioning_failed` | Stream resolved without success, or the request/stream itself failed for a reason other than a decline | `durationMs`, `errorCode` |
+| `upgrade_existing_tenant_name_blocked` | Reserved in the event registry; currently not emitted | — |
+| `upgrade_session_expired` | Reserved in the event registry; currently not emitted | — |
+| `upgrade_checkout_submitted` | Validated form submitted, before creating the billing purchase | `upgradeAction` |
+| `upgrade_payment_declined` | Defined for a future backend/webhook emitter; currently not emitted by the browser because Stripe owns card entry and decline handling | `reason` |
+| `upgrade_tenant_provisioning_succeeded` | NDJSON stream resolved with `success: true` | `durationMs`, `upgradeAction` |
+| `upgrade_tenant_provisioning_failed` | Checkout return, onboarding stream, or provisioning request failed | `durationMs`, `errorCode` |
 | `upgrade_enter_tenant_failed` | Post-success "enter the new tenant" step could not switch environments | — |
 
 Two things this table makes possible that flag exposure alone cannot: a **checkout funnel**
-(`upgrade_checkout_submitted` → `upgrade_tenant_provisioning_succeeded`, conversion and drop-off
-by decline reason) and a **provisioning latency KPI** (`durationMs` on the terminal events,
-p50/p90 over time). `durationMs` is measured client-side from the moment the network call starts,
-not from page load, so it excludes however long the user spent filling in the form.
+(`upgrade_checkout_submitted` → `upgrade_tenant_provisioning_succeeded`, conversion and drop-off)
+and a **provisioning latency KPI** (`durationMs` on the terminal events, p50/p90 over time).
+`durationMs` is measured from the checkout submission through the Stripe return and provisioning,
+not from page load, so it includes the time spent on Stripe but excludes time spent choosing a plan
+and filling in the environment name.
 
 New event property names must also be added to `SAFE_EVENT_PROPERTY_KEYS` in
 `lib/observability/payload.js` — a second, global allowlist independent of the per-event one in
@@ -631,10 +650,10 @@ The full treatment, including how each protocol was arrived at, is in
 
 ---
 
-# Part 5 — The two futures
+# Part 5 — Future work and current payment guarantees
 
-Both are decided in direction and unbuilt in fact. Each has explicitly named preconditions,
-recorded so that whoever picks the work up finds them before starting rather than during.
+The hosted flag control plane remains future work. Payments, by contrast, already use Stripe;
+§5.2 records the guarantees and recovery boundaries of the shipped purchase flow.
 
 ## 5.1 Future one — a hosted control plane
 
@@ -706,44 +725,30 @@ rare unexplained mismatch instead of an obvious failure.
   definitions never become ready and every flag reads `false` — but that looks *identical* to
   the flag simply being off, so check it first if flags never turn on.
 
-## 5.2 Future two — real payments
+## 5.2 Real payments and recovery
 
-Replacing the mock with a gateway client is necessary and **not sufficient**. Three gaps in
-the surrounding flow have to close with it, and four further defects sit in the same bundle.
+Stripe Checkout and the signed webhook are part of the current flow, not a future gateway
+integration. The webhook is the payment authority; a browser redirect cannot mark a purchase as
+paid. Billing records retain the request ID, account, target name, selected demo source, payment
+status, and the created client ID. The Stripe Price lookup that feeds the UI preview reads the
+same configured Price ID used as the hosted Checkout line item.
 
-**Gap 1 — Replay.** The token is never consumed, so one approved payment can create N
-tenants. A real flow needs the token marked as spent, or bound to a single tenant creation.
+The purchase ID is also the idempotency and recovery key. A paid retry reuses that ID, and a
+conditional provisioning claim fences concurrent requests. On a failed or abandoned provisioning
+attempt, the backend can retry the idempotent setup chain for the same environment. It does not
+turn a paid retry into a new purchase. If the environment was created but bookkeeping could not
+mark the purchase provisioned, the purchase projection can remain stalled; operators should
+reconcile that billing record against the environment's stored `clientId` before intervening.
 
-**Gap 2 — Check-then-act.** The paywall reads ownership; provisioning creates the client
-afterwards; there is no lock in between. Two concurrent requests both pass the gate. A real
-flow needs the ownership check and the creation to be atomic, or a uniqueness constraint that
-catches the loser.
+The selector update is a separate projection step. Provisioning success is not shown as ready
+until the canonical account environment list contains the exact returned `clientId`. A delayed
+projection leaves the user on a recoverable sync screen, where retry refreshes the list without
+restarting payment or provisioning.
 
-**Gap 3 — No atomicity between payment and provisioning.** The paywall passes, provisioning
-then runs and can still fail; its rollback undoes the data changes and reports failure. With a
-real gateway that is a **captured charge with no tenant**, and there is no refund,
-retry-with-credit or idempotency path anywhere in this flow. A real flow needs the charge
-authorized before provisioning and captured only after it succeeds, or a compensating refund
-on failure.
-
-**Four defects bundled with them**, three of which bite as soon as the flag is enabled for
-anyone, gateway or not:
-
-- *No in-flight guard on submit* — **gateway-triggered.** Eight scripted same-tick clicks
-  produce eight requests with eight tokens; the submit handler sets no submitting state and the
-  button is never disabled. A human double-click cannot reproduce it. A real charge per request
-  would make it expensive.
-- *No navigation guard mid-provisioning* — **flag-on.** Going back or refreshing during
-  provisioning is silent; explanatory copy is the only mitigation.
-- *Unbounded tenant name on both ends* — **flag-on.** No length limit in the input and none in
-  the request parser, which rejects only the empty string. An oversized name passes the paywall
-  and fails deep inside provisioning — that is, after the point where a real charge would have
-  been taken. Note it is the *easiest trigger* for Gap 3, not the same thing: bounding the input
-  closes the trigger, not the gap.
-- *Session expiry reported late* — **flag-on.** The page knows at mount that the platform token
-  is missing, but still renders the checkout, so the user fills in card details before being
-  told the session is gone.
-
+The cancellation return handler removes the pending browser state and strips the Stripe return
+parameters so a page reload does not reuse a stale return URL. This behavior has unit regression
+coverage; this document does not claim an end-to-end browser verification of leaving and closing
+the Stripe hosted page.
 ---
 
 # Appendix — Vocabulary

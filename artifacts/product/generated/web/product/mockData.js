@@ -24,7 +24,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 38907,
     "eTGOSalePrice": 38907,
-    "eTGOStock": 99.44
+    "eTGOStock": 99.44,
+    "eTGOCost": 38907
   },
   {
     "id": "mock-product-002",
@@ -49,7 +50,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 9306,
     "eTGOSalePrice": 9306,
-    "eTGOStock": 96.94
+    "eTGOStock": 96.94,
+    "eTGOCost": 9306
   },
   {
     "id": "mock-product-003",
@@ -74,7 +76,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 11544,
     "eTGOSalePrice": 11544,
-    "eTGOStock": 12.48
+    "eTGOStock": 12.48,
+    "eTGOCost": 11544
   },
   {
     "id": "mock-product-004",
@@ -99,7 +102,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 11872,
     "eTGOSalePrice": 11872,
-    "eTGOStock": 96.31
+    "eTGOStock": 96.31,
+    "eTGOCost": 11872
   },
   {
     "id": "mock-product-005",
@@ -124,7 +128,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 48460,
     "eTGOSalePrice": 48460,
-    "eTGOStock": 31.27
+    "eTGOStock": 31.27,
+    "eTGOCost": 48460
   },
   {
     "id": "mock-product-006",
@@ -149,7 +154,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 45418,
     "eTGOSalePrice": 45418,
-    "eTGOStock": 76.52
+    "eTGOStock": 76.52,
+    "eTGOCost": 45418
   },
   {
     "id": "mock-product-007",
@@ -174,7 +180,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 33840,
     "eTGOSalePrice": 33840,
-    "eTGOStock": 2.66
+    "eTGOStock": 2.66,
+    "eTGOCost": 33840
   },
   {
     "id": "mock-product-008",
@@ -199,7 +206,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 25716,
     "eTGOSalePrice": 25716,
-    "eTGOStock": 10.03
+    "eTGOStock": 10.03,
+    "eTGOCost": 25716
   },
   {
     "id": "mock-product-009",
@@ -224,7 +232,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 44780,
     "eTGOSalePrice": 44780,
-    "eTGOStock": 93.97
+    "eTGOStock": 93.97,
+    "eTGOCost": 44780
   },
   {
     "id": "mock-product-010",
@@ -249,7 +258,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 12483,
     "eTGOSalePrice": 12483,
-    "eTGOStock": 1.1
+    "eTGOStock": 1.1,
+    "eTGOCost": 12483
   },
   {
     "id": "mock-product-011",
@@ -274,7 +284,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 46022,
     "eTGOSalePrice": 46022,
-    "eTGOStock": 79.99
+    "eTGOStock": 79.99,
+    "eTGOCost": 46022
   },
   {
     "id": "mock-product-012",
@@ -299,7 +310,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 38634,
     "eTGOSalePrice": 38634,
-    "eTGOStock": 53.61
+    "eTGOStock": 53.61,
+    "eTGOCost": 38634
   }
 ];
 
@@ -714,146 +726,86 @@ export const billOfMaterials = [
 export const costing = [
   {
     "id": "mock-costing-001",
-    "costType": "Sample costType",
     "cost": 99.44,
     "startingDate": "2026-01-15",
     "endingDate": "2026-01-15",
-    "quantity": 5,
-    "warehouse": "Main Warehouse",
-    "cCurrencyID": "USD",
-    "originalCost": 99.44,
     "productId": "mock-product-001"
   },
   {
     "id": "mock-costing-002",
-    "costType": "Sample costType",
     "cost": 96.94,
     "startingDate": "2026-01-16",
     "endingDate": "2026-01-16",
-    "quantity": 33,
-    "warehouse": "East Distribution Center",
-    "cCurrencyID": "EUR",
-    "originalCost": 96.94,
     "productId": "mock-product-002"
   },
   {
     "id": "mock-costing-003",
-    "costType": "Sample costType",
     "cost": 12.48,
     "startingDate": "2026-01-17",
     "endingDate": "2026-01-17",
-    "quantity": 86,
-    "warehouse": "West Hub",
-    "cCurrencyID": "GBP",
-    "originalCost": 12.48,
     "productId": "mock-product-003"
   },
   {
     "id": "mock-costing-004",
-    "costType": "Sample costType",
     "cost": 96.31,
     "startingDate": "2026-01-18",
     "endingDate": "2026-01-18",
-    "quantity": 3,
-    "warehouse": "North Storage",
-    "cCurrencyID": "USD",
-    "originalCost": 96.31,
     "productId": "mock-product-004"
   },
   {
     "id": "mock-costing-005",
-    "costType": "Sample costType",
     "cost": 31.27,
     "startingDate": "2026-01-19",
     "endingDate": "2026-01-19",
-    "quantity": 91,
-    "warehouse": "South Logistics",
-    "cCurrencyID": "EUR",
-    "originalCost": 31.27,
     "productId": "mock-product-005"
   },
   {
     "id": "mock-costing-006",
-    "costType": "Sample costType",
     "cost": 76.52,
     "startingDate": "2026-01-20",
     "endingDate": "2026-01-20",
-    "quantity": 31,
-    "warehouse": "Central Depot",
-    "cCurrencyID": "GBP",
-    "originalCost": 76.52,
     "productId": "mock-product-006"
   },
   {
     "id": "mock-costing-007",
-    "costType": "Sample costType",
     "cost": 2.66,
     "startingDate": "2026-01-21",
     "endingDate": "2026-01-21",
-    "quantity": 89,
-    "warehouse": "Regional Warehouse A",
-    "cCurrencyID": "USD",
-    "originalCost": 2.66,
     "productId": "mock-product-007"
   },
   {
     "id": "mock-costing-008",
-    "costType": "Sample costType",
     "cost": 10.03,
     "startingDate": "2026-01-22",
     "endingDate": "2026-01-22",
-    "quantity": 39,
-    "warehouse": "Regional Warehouse B",
-    "cCurrencyID": "EUR",
-    "originalCost": 10.03,
     "productId": "mock-product-008"
   },
   {
     "id": "mock-costing-009",
-    "costType": "Sample costType",
     "cost": 93.97,
     "startingDate": "2026-01-23",
     "endingDate": "2026-01-23",
-    "quantity": 49,
-    "warehouse": "Main Warehouse",
-    "cCurrencyID": "GBP",
-    "originalCost": 93.97,
     "productId": "mock-product-009"
   },
   {
     "id": "mock-costing-010",
-    "costType": "Sample costType",
     "cost": 1.1,
     "startingDate": "2026-01-24",
     "endingDate": "2026-01-24",
-    "quantity": 72,
-    "warehouse": "East Distribution Center",
-    "cCurrencyID": "USD",
-    "originalCost": 1.1,
     "productId": "mock-product-010"
   },
   {
     "id": "mock-costing-011",
-    "costType": "Sample costType",
     "cost": 79.99,
     "startingDate": "2026-01-25",
     "endingDate": "2026-01-25",
-    "quantity": 25,
-    "warehouse": "West Hub",
-    "cCurrencyID": "EUR",
-    "originalCost": 79.99,
     "productId": "mock-product-011"
   },
   {
     "id": "mock-costing-012",
-    "costType": "Sample costType",
     "cost": 53.61,
     "startingDate": "2026-01-26",
     "endingDate": "2026-01-26",
-    "quantity": 21,
-    "warehouse": "North Storage",
-    "cCurrencyID": "GBP",
-    "originalCost": 53.61,
     "productId": "mock-product-012"
   }
 ];

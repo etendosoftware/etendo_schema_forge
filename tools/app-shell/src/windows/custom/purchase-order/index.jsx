@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
-import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import BulkPurchaseOrderMoreMenu from '@generated/purchase-order/custom/BulkPurchaseOrderMoreMenu';
+import PurchaseOrderReactivateBulkAction from '@generated/purchase-order/custom/PurchaseOrderReactivateBulkAction';
 import { ConfirmModal as PoConfirmModal, PoConfirmResultModal, ManageDocsLauncher as PoManageDocsLauncher } from '@generated/purchase-order/custom/PurchaseOrderActions';
+import PurchaseOrderSecondaryActions from '@generated/purchase-order/custom/PurchaseOrderSecondaryActions';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
@@ -71,11 +72,15 @@ function PurchaseOrderBulkActions(props) {
   return (
     <>
       <BulkPurchaseOrderMoreMenu {...props} data-testid="BulkPurchaseOrderMoreMenu__b7ace5" />
-      <BulkDocumentAction
-        {...props}
-        buildActions={buildInOutActions}
-        labelKey="confirmBulk"
-        data-testid="BulkDocumentAction__b7ace5" />
+      {/* ONE "Procesar" button for the whole selection bar, like every other
+          document window: the dialog's dropdown offers Confirmar and/or
+          Reactivar depending on what is selected. ETP-5315 first added its
+          Reactivate as a SECOND button beside the CO-only one, which put two
+          buttons in the bar at once for a mixed draft+completed selection and
+          left a lone "Reactivar" for a completed-only one. Folding both into
+          this component also retires the `buildInOutActions` gate and the
+          `reactivateBulk` label that split was forced to invent. */}
+      <PurchaseOrderReactivateBulkAction {...props} data-testid="BulkDocumentAction__b7ace5" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -96,6 +101,15 @@ export default function PurchaseOrderWindow(props) {
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
 
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  // ETP-5205 — moved up from below useOrderWindow: menuActions now needs this tier to
+  // gate itself, and useWindowAccess doesn't depend on anything useOrderWindow
+  // produces, so this reordering changes nothing else (hook order just needs to stay
+  // stable across renders, not match any particular sequence).
+  const windowAccessTier = useWindowAccess('181');
+
   const {
     refreshKey, setRefreshKey,
     renderPreview, rowQuickActions,
@@ -105,14 +119,18 @@ export default function PurchaseOrderWindow(props) {
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'purchase-order',
-    deliveryKey: 'deliveryStatusPurchase',
+    windowReadOnly: windowAccessTier === 'read-only',
     manageLabelKeys: PO_MANAGE_LABELS,
     confirmLabelKey: 'poConfirmBtn',
+    confirmedTitleKey: 'poConfirmedTitle',
+    primaryDoc: { key: 'receipt', type: 'entrada', route: 'goods-receipt' },
+    invoiceDoc: { key: 'invoice', type: 'facturaCompra', route: 'purchase-invoice' },
     headers,
     ConfirmModal: PoConfirmModal,
     ConfirmResultModal: PoConfirmResultModal,
     ManageDocsLauncher: PoManageDocsLauncher,
     setCloneTargets,
+    showReactivate: true,
     usePdf: usePurchaseOrderPdf,
     documentType: tMenu('Purchase Order'),
   });
@@ -123,10 +141,6 @@ export default function PurchaseOrderWindow(props) {
     apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases', specName: 'purchase-order',
   });
 
-  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
-  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
-  // Checked once here, before either branch, so both list and detail are covered.
-  const windowAccessTier = useWindowAccess('181');
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).
@@ -147,6 +161,7 @@ export default function PurchaseOrderWindow(props) {
           draftMode={draftModeWithModal}
           linesEmptyState={LinesEmptyState}
           lineCellBadges={taxSifCellBadges}
+          topbarSecondary={PurchaseOrderSecondaryActions}
           data-testid="GeneratedApp__b7ace5" />
         {contactPortal}
         {taxSifModal}

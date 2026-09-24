@@ -371,4 +371,274 @@ describe('product import descriptor', () => {
       assert.equal(ops[0].body.productCategory, undefined);
     });
   });
+
+  // ETP-5245 ------------------------------------------------------------------------
+  // The selector now exposes the tenant's own M_PriceList.IsDefault flag
+  // (ProductPriceHandler.enrichSelectorItem). Within a direction the import must land on THAT
+  // tariff, so an imported price and the price shown in the product list (which comes from the
+  // ETGO_PRODUCT_*_PRICE computed columns, themselves keyed off the default tariff) agree.
+  describe('default tariff preference', () => {
+    it('picks the tariff the tenant flagged as default among several sales price lists', async () => {
+      stubFetch([
+        { id: 'PLV-SALES-OTHER', salesPriceList: true, default: false },
+        { id: 'PLV-SALES-DEFAULT', salesPriceList: true, default: true },
+        { id: 'PLV-SALES-THIRD', salesPriceList: true, default: false },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-sales'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-DEFAULT');
+    });
+
+    it('reads the flag from the priceListVersion$default alias too', async () => {
+      stubFetch([
+        { id: 'PLV-SALES-OTHER', salesPriceList: true },
+        { id: 'PLV-SALES-DEFAULT', salesPriceList: true, 'priceListVersion$default': true },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-alias'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-DEFAULT');
+    });
+
+    it("accepts Etendo's 'Y'/'N' char booleans for the flag", async () => {
+      stubFetch([
+        { id: 'PLV-SALES-OTHER', salesPriceList: 'Y', default: 'N' },
+        { id: 'PLV-SALES-DEFAULT', salesPriceList: 'Y', default: 'Y' },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-yn'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-DEFAULT');
+    });
+
+    it('keeps the pre-ETP-5245 behaviour (first match wins) when no tariff is flagged', async () => {
+      stubFetch([
+        { id: 'PLV-SALES-FIRST', salesPriceList: true },
+        { id: 'PLV-SALES-SECOND', salesPriceList: true },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-none'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-FIRST');
+    });
+
+    it('keeps the pre-ETP-5245 behaviour when every tariff is flagged false', async () => {
+      stubFetch([
+        { id: 'PLV-SALES-FIRST', salesPriceList: true, default: false },
+        { id: 'PLV-SALES-SECOND', salesPriceList: true, default: false },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-allfalse'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-FIRST');
+    });
+
+    // Direction is still decided BEFORE the default flag: an unflagged version is only a
+    // fallback for sales, so a default-flagged unflagged one must not outrank a real sales list.
+    it('never lets a default-flagged unflagged version outrank an explicitly sales-flagged one', async () => {
+      stubFetch([
+        { id: 'PLV-UNFLAGGED-DEFAULT', default: true },
+        { id: 'PLV-SALES-PLAIN', salesPriceList: true },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-order'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-SALES-PLAIN');
+    });
+
+    it('still falls back to an unflagged version for sales, preferring the flagged-default one', async () => {
+      stubFetch([
+        { id: 'PLV-UNFLAGGED-FIRST' },
+        { id: 'PLV-UNFLAGGED-DEFAULT', default: true },
+      ]);
+      const ops = await buildOperations({ ...baseRow, salesPrice: '10' }, productConfig('tok-def-unflagged'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-UNFLAGGED-DEFAULT');
+    });
+
+    it('picks the default purchase tariff among several purchase price lists', async () => {
+      stubFetch([
+        { id: 'PLV-PURCHASE-OTHER', salesPriceList: false },
+        { id: 'PLV-PURCHASE-DEFAULT', salesPriceList: false, default: true },
+      ]);
+      const ops = await buildOperations({ ...baseRow, purchasePrice: '10' }, productConfig('tok-def-purchase'));
+      assert.equal(ops[1].body.priceListVersion, 'PLV-PURCHASE-DEFAULT');
+    });
+
+    // REGRESSION GUARD: purchase still requires salesPriceList === false explicitly. Filing a
+    // purchase price against an unflagged (possibly sales) tariff would corrupt the sale price of
+    // every product in it — so "no purchase list" must stay an error, never a silent fallback.
+    it('never files a purchase price on an unflagged version, even one flagged as default', async () => {
+      stubFetch([{ id: 'PLV-UNFLAGGED-DEFAULT', default: true }]);
+      await assert.rejects(
+        () => buildOperations({ ...baseRow, purchasePrice: '10' }, productConfig('tok-def-nopurchase')),
+        /No purchase price list is configured/,
+      );
+    });
+
+    it('never files a purchase price on a sales tariff flagged as default', async () => {
+      stubFetch([{ id: 'PLV-SALES-DEFAULT', salesPriceList: true, default: true }]);
+      await assert.rejects(
+        () => buildOperations({ ...baseRow, purchasePrice: '10' }, productConfig('tok-def-salesonly')),
+        /No purchase price list is configured/,
+      );
+    });
+
+    it('resolves each direction to its own default tariff in the same row', async () => {
+      stubFetch([
+        { id: 'PLV-SALES-OTHER', salesPriceList: true },
+        { id: 'PLV-SALES-DEFAULT', salesPriceList: true, default: true },
+        { id: 'PLV-PURCHASE-OTHER', salesPriceList: false },
+        { id: 'PLV-PURCHASE-DEFAULT', salesPriceList: false, default: true },
+      ]);
+      const ops = await buildOperations(
+        { ...baseRow, salesPrice: '150', purchasePrice: '100' },
+        productConfig('tok-def-both'),
+      );
+      assert.equal(ops.find((op) => op.id === 'salesPrice').body.priceListVersion, 'PLV-SALES-DEFAULT');
+      assert.equal(ops.find((op) => op.id === 'purchasePrice').body.priceListVersion, 'PLV-PURCHASE-DEFAULT');
+    });
+  });
+});
+
+/**
+ * ETP-5227 — "importar con codigoCategoria existente falla persistentemente".
+ *
+ * The catalogue read used to swallow every failure into `[]`, which is indistinguishable from
+ * "this tenant has no categories": the resolver then auto-created a category that already
+ * existed and the database rejected it on its unique index, so the user was shown a raw English
+ * backend complaint about a category plainly visible in the UI. And because that `[]` was cached
+ * per token, every retry for the life of the tab replayed it.
+ */
+describe('ETP-5227 — a category catalogue that cannot be read', () => {
+  const translate = (key, params = {}) => (key === 'importErrorCategoryLookupFailed'
+    ? `No se pudieron consultar las categorías, no se pudo asignar "${params.category}".`
+    : key);
+
+  /** Fails the category endpoint, serves everything else normally. */
+  function stubCategoryFailure(shouldFail) {
+    const fetchMock = vi.fn(async (url) => {
+      if (String(url).includes('/product-category/')) {
+        return shouldFail() ? { ok: false, status: 500, json: async () => ({}) }
+          : { ok: true, json: async () => ({ response: { data: [{ id: 'CAT-HERR', searchKey: 'HERRAMIENTAS', name: 'Herramientas' }] } }) };
+      }
+      return { ok: true, json: async () => ({ items: SALES_ITEMS }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('fails the row with a translated message rather than creating a category that already exists', async () => {
+    stubCategoryFailure(() => true);
+    await assert.rejects(
+      () => buildOperations(
+        { ...baseRow, category: 'HERRAMIENTAS' },
+        productConfig('tok-5227-lookup', { translate }),
+      ),
+      /No se pudieron consultar las categorías, no se pudo asignar "HERRAMIENTAS"\./,
+    );
+  });
+
+  it('does not remember the failure — the next attempt reads the catalogue again and resolves', async () => {
+    // The "persistente" half of the report: the failed read was cached per token, so retrying
+    // could never succeed until the tab was reloaded.
+    let failing = true;
+    stubCategoryFailure(() => failing);
+    const token = 'tok-5227-retry';
+
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, category: 'HERRAMIENTAS' }, productConfig(token, { translate })),
+      /No se pudieron consultar/,
+    );
+
+    failing = false;
+    const ops = await buildOperations({ ...baseRow, category: 'HERRAMIENTAS' }, productConfig(token, { translate }));
+    assert.equal(ops[0].body.productCategory, 'CAT-HERR');
+  });
+});
+
+/**
+ * ETP-5350 — the cost and its starting date, both rows of M_Costing.
+ *
+ * A cost is not a product column: it is a record of the costing engine's own table, reached
+ * through the `costing` entity, which `artifacts/product/decisions.json` already wires to
+ * `productCostingHandler`. `/batch` runs handler hooks whenever the entity declares a
+ * `Java_Qualifier`, so an imported cost takes exactly the path the Costing tab takes — which is
+ * why this op carries only two fields and the tests below assert what is NOT sent as carefully
+ * as what is.
+ */
+describe('product import descriptor — cost (ETP-5350)', () => {
+  it('adds a parentRef-linked costing op, with no price-list lookup of its own', async () => {
+    const fetchMock = stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '7,40' }, productConfig('tok-cost-1'));
+
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.ok(cost, `expected a costing op, got: ${ops.map((o) => o.entity).join(', ')}`);
+    assert.equal(cost.parentRef, 'product');
+    assert.equal(cost.body.cost, '7.4');
+    // No PRICE-LIST fetch: the handler derives the organisation and its currency server-side,
+    // so a cost-only row must not pay for a price-list-version lookup it has no use for. (The
+    // one call it does make is `/defaults`, which every row makes for the UOM.)
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    assert.ok(!urls.some((u) => u.includes('M_PriceList_Version_ID')), `unexpected PLV lookup: ${urls.join(', ')}`);
+  });
+
+  it('never sends endingDate — the key\'s absence is what makes the handler infer 31-12-9999', async () => {
+    // CostingUtils.getLastDate() only runs when the field is missing. Sending it empty, or
+    // null, stops the inference and leaves the cost with no end of validity.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-2'));
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.ok(!('endingDate' in cost.body), `expected endingDate to be absent, got: ${JSON.stringify(cost.body)}`);
+  });
+
+  it('sends only cost and startingDate — everything else is the handler\'s to decide', async () => {
+    // costType/manual/permanent/production, the organisation and ITS currency (not the AD
+    // default, which is USD) all come from ProductCostingHandler. Sending any of them from here
+    // would be a second source of truth for values the Costing tab already gets right.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-3'));
+    const cost = ops.find((o) => o.entity === 'costing');
+    assert.deepEqual(Object.keys(cost.body).sort(), ['cost', 'startingDate']);
+  });
+
+  it('emits NO costing op for a blank cost, so one empty cell cannot lose the whole product', async () => {
+    // `/batch` is all-or-nothing per row and the handler rejects a blank cost, so a row that
+    // says nothing about cost must produce no op at all — same contract buildPriceOperation has.
+    stubFetch(SALES_ITEMS);
+    const blank = await buildOperations({ ...baseRow, cost: '   ' }, productConfig('tok-cost-4'));
+    const absent = await buildOperations({ ...baseRow }, productConfig('tok-cost-5'));
+    assert.equal(blank.find((o) => o.entity === 'costing'), undefined);
+    assert.equal(absent.find((o) => o.entity === 'costing'), undefined);
+  });
+
+  it('defaults startingDate to the LOCAL calendar today, never the UTC one', async () => {
+    // `new Date().toISOString().slice(0, 10)` is yesterday for most of the evening under
+    // America/Argentina/Buenos_Aires, which would silently backdate every imported cost.
+    // ETP-4031 / ETP-4850 are the same bug class, twice shipped.
+    stubFetch(SALES_ITEMS);
+    const ops = await buildOperations({ ...baseRow, cost: '10' }, productConfig('tok-cost-6'));
+    const now = new Date();
+    const localToday = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    assert.equal(ops.find((o) => o.entity === 'costing').body.startingDate, localToday);
+  });
+
+  it('normalizes the four date shapes a file can carry to yyyy-MM-dd', async () => {
+    // Day-first for every separated form, matching the template's example and all three
+    // locales: 01/08/2026 is 1 August, never 8 January.
+    stubFetch(SALES_ITEMS);
+    const shapes = ['01/08/2026', '01-08-2026', '01.08.2026', '2026-08-01'];
+    for (const [i, raw] of shapes.entries()) {
+      const ops = await buildOperations(
+        { ...baseRow, cost: '10', costStartingDate: raw },
+        productConfig(`tok-cost-date-${i}`),
+      );
+      assert.equal(ops.find((o) => o.entity === 'costing').body.startingDate, '2026-08-01', `for ${raw}`);
+    }
+  });
+
+  it('rejects a negative cost rather than letting the handler 400 at confirm time', async () => {
+    stubFetch(SALES_ITEMS);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, cost: '-5' }, productConfig('tok-cost-neg')),
+      /negative/i,
+    );
+  });
+
+  it('localizes its own errors through the injected translate', async () => {
+    stubFetch(SALES_ITEMS);
+    const translate = (key) => (key === 'importErrorNegativeCost' ? 'El coste no puede ser negativo.' : key);
+    await assert.rejects(
+      () => buildOperations({ ...baseRow, cost: '-5' }, productConfig('tok-cost-neg-i18n', { translate })),
+      /El coste no puede ser negativo\./,
+    );
+  });
 });

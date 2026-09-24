@@ -10,7 +10,7 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Add, edit, and remove quotation lines with product, description, quantity, Net List Price, discount, tax, and line gross amount.
 - Render Net List Price in the quotation grid as a currency-formatted `amount` column backed by `PriceList`, instead of exposing the derived `unitPrice` (`PriceActual`) as the visible price column.
 - Keep the quotation in draft while the commercial proposal is being prepared, then explicitly send that draft into an `Under Evaluation` state before final conversion.
-- From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a draft sales invoice.
+- From `Under Evaluation`, create a downstream sales order and, in the current custom overlay, optionally create a sales invoice (confirmed on creation since ETP-5381).
 - Send the quotation document by email from the record view, once it is no longer in `Draft` (from `Under Evaluation` onward).
 - Inspect related downstream sales orders and invoices from the quotation record when those documents exist.
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
@@ -24,6 +24,7 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - List interaction: the custom wrapper injects a `CustomQuotationTable` (with `dot: false` on the date column). The `DateOrdered` column label is renamed to "Quotation Date" / "Fecha de presupuesto" via `decisions.json → window.labelOverrides`, overriding the global locale label "Order Date" / "Fecha de pedido" for both the list grid and the detail form (the wrapper no longer ships a local `LABEL_OVERRIDES` map; the value flows from decisions through `QuotationPage.jsx`'s generated `labelOverrides` constant). The visible columns, in order, are: Fecha de presupuesto (no dot indicator), Document No., Business Partner, Document Status, Valid Until, and Total Gross Amount. `Valid Until` is placed between Document Status and Total Gross Amount on purpose, so the validity date is adjacent to the total and the user can triage each row by deciding whether the total is still actionable. The wrapper also enables clone-from-grid via the shared `CloneOrderModal` and feeds a `refreshTrigger` counter into the generated `ListView`, so when the user closes the clone result modal the list auto-refreshes and the new draft quotations show up without a manual reload.
 - Record interaction: the detail page shows the quotation header form, a child lines table and line form, summary amounts, record status, top-bar actions, and a Related Documents tab.
 - Lines tab layout: this window is the pilot for `window.linesLayout = "inlineEditable"`. The Lines tab uses `InlineLinesPanel` (40 px rows in Inter font, pencil + trash hover-action icons on the right). Pencil flips the row into inline edit; trash deletes. All columns are inline-editable. FK fields (product, tax) use `InlineSearchCombo`: a text input with server-side search so the user can filter by typing (e.g., "IVA" filters all IVA rates). Product is a lookup field that opens `ProductSearchDrawer`. The add-line button, related-documents panel, notes panel and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
+- **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the quotation untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
 - Available record-level affordances in current evidence: duplicate and cancel menu entries, a send-document button, and a draft-only confirmation button.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 
@@ -39,7 +40,8 @@ Let a sales user prepare a customer quotation, review commercial terms before co
 - Pricing dependency: line product selection auto-fills `listPrice` (Net List Price), `tax`, `uOM`, `grossUnitPrice`, and `discount` from the active price list via the `SL_Order_Product` callout. The `forceCalloutFields: ["listPrice","unitPrice","tax","uOM","grossUnitPrice","discount"]` declaration on the `product` field bypasses the `touchedFieldsRef` guard so callout-returned values are applied even when the user has not directly touched those fields. `discount` is included because product/price-list callouts may return a customer- or product-specific discount on product selection. The Classic callout returns the price as `standardPrice` (PriceStd); `DetailView.jsx` maps it to `listPrice` when the callout zeroes out the `listPrice` field.
 - Line recalculation — client-side model (ETP-3662): `orderedQuantity`, `listPrice`, and `discount` changes are computed entirely in the browser via `useLineGrossAmount` — no callout round-trip is fired for those fields. The formula is `lineGrossAmount = orderedQuantity × listPrice × (1 − discount/100) × taxFactor`, where `taxFactor` is resolved from (in priority order) the product callout response, the tax selector aux data, an in-memory cache, or a ratio derived from sibling lines. The `tax` field still fires a callout (to obtain `taxRate`), but `orderedQuantity`, `listPrice`, and `discount` are pure client-side. After save, `unitPrice = listPrice × (1 − discount/100)` is injected into the POST body as Classic's `priceActual`; `lineGrossAmount` is trusted by `NeoDefaultsService` and stored as-is. Saved lines trigger the `Line_Recalc_Totals` event handler to refresh header totals.
 - Status-driven behavior: editable header fields become read-only when the quotation is processed. The generated detail page still hides the delete affordance for completed records; the print action was previously hidden as well but is now shown (see ETP-4729 note under "Automated evidence" — `hidePrint` was removed).
-- Topbar button order: matches `sales-order` and `sales-invoice` — `Clonar` (icon-only, Secondary Outline style, `#D1D4DB` border, `#64748B` icon color, hover background `#F1F5F9`) and the send-document icon come from `QuotationTopbarActions` (the `topbarRight` slot), then the framework renders the trash icon and the kebab `⋮` menu, and finally the `Guardar` (outline) and `Confirmar` (primary) pair come from the framework's `draftMode` block. The previous layout rendered a hardcoded blue `Confirmar` at the start of the topbar; that button was removed and the same flow is now driven through `draftMode` so the visual order matches the rest of the sales windows. `decisions.json` declares `entities.header.draftMode.enabled = true` and `window.hideSaveStatuses = ["CA","ETGO_CI","CL","VO","CJ"]` so the save/confirm pair only renders in DR/UE and disappears once the quotation is closed.
+- **Topbar button order (updated by ETP-5260 — supersedes the pre-5260 layout described below):** trash icon → `Copiar enlace` → `Clonar` (both from `QuotationSecondaryActions`, wired as `topbarSecondary`) → kebab `⋮` (`Reject`, UE only) → `Guardar`/`Confirmar` (framework `draftMode` block) → send-document icon (from `QuotationTopbarActions`, `topbarRight` — the one PRIMARY-slot item this window has). `Clonar` (icon-only, Secondary Outline style, `#D1D4DB` border, `#64748B` icon color, hover background `#F1F5F9`) uses `cloneActionName: 'cloneRecord'` / `headerEntity: 'quotation'`, matching the pre-ETP-5260 inline `CloneOrderModal` call. Send stays gated to non-Draft statuses (`status !== 'DR'`, ETP-4717 — available from "Bajo evaluación" onward); clicking it dispatches a `sales-quotation:open-send-modal` window event that `QuotationTopbarActions.jsx` listens for, since only that component carries the client-rendered PDF/documentType context `SendDocumentModal` needs — `QuotationTopbarActions` itself no longer renders any inline button, only modals. See `docs/ui-customization.md` §3b for the general slot-classification rule.
+- **Pre-ETP-5260 layout (historical, kept for context on the `draftMode` migration below):** `Clonar` and the send-document icon used to come from `QuotationTopbarActions` (the `topbarRight` slot, then rendered AFTER Save/Confirm), followed by the trash icon and the kebab, and finally `Guardar`/`Confirmar`. The previous layout rendered a hardcoded blue `Confirmar` at the start of the topbar; that button was removed and the same flow is now driven through `draftMode` so the visual order matched the rest of the sales windows — that part of the migration is unaffected by ETP-5260. `decisions.json` declares `entities.header.draftMode.enabled = true` and `window.hideSaveStatuses = ["CA","ETGO_CI","CL","VO","CJ"]` so the save/confirm pair only renders in DR/UE and disappears once the quotation is closed.
 - Confirm flow dispatch: the wrapper at `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` overrides the generated `draftMode` with a `draftModeWithModal` whose `onConfirm` dispatches the DOM event `sales-quotation:open-confirm-modal`. `QuotationTopbarActions.jsx` listens for that event and routes to the right modal: `SendToEvaluationModal` when `documentStatus === 'DR'` (DR → UE), `QuotationConfirmModal` when `documentStatus === 'UE'` (UE → CA / ETGO_CI). This keeps the bespoke two-state flow without renouncing the standard sales-window topbar layout.
 - Save/Confirm visibility during Under Evaluation: standard Etendo flips the `processed` flag to `Y` once the quotation transitions to `UE`, which would normally trigger the framework's `isDraftModeCompleted` shortcut (defined as `processed=Y || documentStatus='CO'`) and hide the Save/Confirm pair. Because the quotation must still expose `Confirmar` in `UE` to drive the convert-to-order/invoice modal, the window declares `entities.header.draftMode.completedStatuses = ["CA","ETGO_CI","CL","VO","CJ"]`. With that explicit list, `DetailView` only treats those terminal codes as completed and keeps Save/Confirm rendered for `DR` and `UE`. Generic windows that omit `completedStatuses` still get the original `processed=Y || CO` behavior — see `tools/app-shell/src/components/contract-ui/DetailView.jsx`.
 - Reject flow (UE only): the kebab (⋮) on a quotation in `UE` exposes a `Reject` item with the `XCircle` icon (Figma redesign), declared in `decisions.json → window.menuActions[reject]` (`visibleWhenStatus: ["UE"]`). The wrapper at `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` overrides the generated `menuActions` with a function so the `onClick` can dispatch the DOM event `sales-quotation:open-reject-modal` (decisions.json is JSON and cannot carry functions). `QuotationTopbarActions.jsx` listens for that event and renders `RejectQuotationModal` via portal. The modal exposes a search-typeahead — modelled after the `businessPartner` selector — that fetches the `C_Reject_Reason` list from `${apiBaseUrl}/quotation/selectors/C_Reject_Reason_ID`. A "+ Crear razón" button at the top of the dropdown opens `CreateRejectReasonModal`, which POSTs `{ name }` to `${apiBaseUrl}/quotation/{id}/action/createRejectReason` (handled by `CreateRejectReasonHandler` in `com.etendoerp.go`); on success the new row is appended to the typeahead cache and preselected. Confirming the parent modal POSTs to `${apiBaseUrl}/quotation/{id}/action/rejectQuotation` with `{ rejectReason: "<id>" }`. The `RejectQuotationHandler` flips DocStatus to `CJ`, persists `rejectReason`, and sets `processed = true`. After success the modal reloads the page; once the quotation is in `CJ`, `hideSaveStatuses` and `completedStatuses` both list `CJ`, so the Save/Confirm pair disappears, the `Reject` kebab item hides (its `visible` predicate excludes `CJ`), and the field-level `readOnlyLogic` (`@DocStatus@='CJ'|@DocStatus@='CA'`, inherited from the AD column rules) renders the form fully read-only.
@@ -63,16 +65,23 @@ The "Facturar directamente" action on the confirmation modal calls
 to `CreateDraftInvoiceHandler` in `com.etendoerp.go`. The handler reuses the
 sales-order code path: it copies the quotation header (business partner,
 currency, payment terms, price list) and the lines (product, quantity, prices)
-into a new sales invoice in `DR` (Draft) status via the native
-`CreateInvoiceLinesFromProcess`.
+into a new sales invoice via the native `CreateInvoiceLinesFromProcess`. Since
+ETP-5381 the handler does not stop there: the same request also completes the
+invoice through `InvoiceCompletionService`, so it reaches the user in `CO`
+(Confirmed), never in `DR`. The action keeps its name — `createDraftInvoice` —
+but no longer leaves a draft behind. See "Invoice is created and confirmed in
+one step — ETP-5381" below.
 
 The success state of `QuotationConfirmModal` displays the invoice doc number
 followed by the formatted grand total and the quotation's currency identifier
 (e.g. `Factura #10000083 · 48.40 EUR`). The order branch already rendered the
 currency; the invoice branch was previously dropping the suffix.
 
-After the invoice is persisted, the source quotation's DocStatus is set to
-`ETGO_CI` ("Closed - Invoice Created") via a direct OBDal write. This mirrors
+After the invoice is **completed** (ETP-5381 moved this write to after the
+completion, not merely after the insert), the source quotation's DocStatus is
+set to `ETGO_CI` ("Closed - Invoice Created") via a direct OBDal write, so
+`ETGO_CI` now means "a confirmed invoice exists for this quotation" rather than
+"one was attempted". This mirrors
 the standard Etendo pattern in `ConvertQuotationIntoOrder`, which sets DocStatus
 to `CA` ("Closed - Order Created") when an order is generated from a
 quotation. The transition is performed without invoking `C_Order_Post`, so it
@@ -82,6 +91,15 @@ of the quotation's `Processed` flag or prior status.
 The line quantity invoiced is `orderedQuantity − invoicedQuantity` per line.
 Lines whose pending is zero are skipped; if every line is fully invoiced, the
 handler returns HTTP 400 with "No hay líneas a facturar en este pedido".
+
+Before that generic check runs, **guard P6** (ETP-5381) rejects a quotation
+already closed as invoiced: `assertQuotationNotInvoiced`
+(`CreateDraftInvoiceHandler.java:291-296`) throws `AlreadyInvoicedException`
+with "An invoice has already been generated for this quotation." when
+`documentStatus == 'ETGO_CI'`, surfaced as **HTTP 409**. The pending-quantity
+check would also have stopped the request, but with a message ("no lines to
+invoice") that tells the user nothing about what actually happened; P6 runs
+before any write, so a duplicate request leaves no trace.
 
 ETP-4006 (IV-11) extends the same handler to carry the discount surface
 to the new invoice. `NeoCommercialDocumentFactory.createInvoiceFromOrderHeader`
@@ -114,7 +132,7 @@ the discount. The earlier client-side factor double-applied it.
 ## Gap assessment
 
 - The kebab (⋮) menu now exposes only the `Reject` action (visible when `documentStatus === 'UE'`). Both the previous `Duplicate` entry (redundant with the topbar `Clonar` button) and the previous `Cancel` placeholder (wired to an empty `onClick` and never functional) were removed.
-- The detail page includes a draft-only confirmation modal that can create an order or draft invoice. Quotation-to-order remains the documented core conversion rule kept in decisions; the quotation-to-draft-invoice path is implemented in `CreateDraftInvoiceHandler` (com.etendoerp.go) by mirroring the sales-order branch — see "Invoice creation flow" above.
+- The detail page includes a draft-only confirmation modal that can create an order or an invoice. Quotation-to-order remains the documented core conversion rule kept in decisions; the quotation-to-invoice path is implemented in `CreateDraftInvoiceHandler` (com.etendoerp.go) by mirroring the sales-order branch — since ETP-5381 that branch creates **and confirms** the invoice in one step, so the quotation never yields a draft invoice. See "Invoice creation flow" above.
 - `lineGrossAmount` updates instantly in the grid on every `orderedQuantity`, `listPrice`, or `discount` keystroke (client-side). Header totals (`summedLineAmount`, `grandTotalAmount`) only refresh after a line save — that timing gap is expected and not a bug.
 - The decisions file keeps a rule that should default `validUntil` from `orderDate`, but the generated form only shows `orderDate` with an explicit default value. The intended validity-date default is therefore not clearly evidenced in the current UI layer.
 - Related documents are clearly enabled for orders, but invoice lookup currently queries sales invoices by `salesOrder` using the quotation record id. That may work only if backend linkage matches this assumption; otherwise invoice visibility from the quotation tab is an open ambiguity.
@@ -178,7 +196,7 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 
 - **ETP-4103 — Generator fix (labelOverrides deduplication)**: `const labelOverrides` in the generated page now references `api.labelOverrides` instead of re-embedding the full object. No functional change — field labels and selectors behave identically.
 - **ETP-4468 — Confirm no longer discards an unsaved header edit**: previously, editing a header field and clicking **Confirmar** (UE status, opens `QuotationConfirmModal`) without hitting **Save** first silently converted the quotation with the OLD header values — the modal fetched its own stale server copy (`freshData`) and prioritized it over the in-memory `data` prop, and neither conversion path (`Convertquotation` nor `createDraftInvoice`) triggered a save. Fixed by (1) `DetailView.jsx` now passes `onSave={() => hook.handleSave({ silent: true })}` into the `topbarRight` slot alongside `onProcess`/`onRefresh`; (2) `QuotationTopbarActions.jsx` (the `topbarRight` component for this window) threads `onSave` into `QuotationConfirmModal`, which force-saves (`await onSave()`, aborting with an error if it fails) once before either conversion POST; (3) the modal's data-source priority was flipped to `const d = data || freshData || {}` so the in-memory (possibly unsaved-but-present) `data` wins over the stale fetch. `artifacts/sales-quotation/custom/__tests__/QuotationConfirmModal.test.js` and `QuotationTopbarActions.test.js` lock the prop threading, the `data`-over-`freshData` priority, and the save-before-confirm ordering via source-reading regex assertions.
-- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `artifacts/sales-quotation/custom/QuotationTopbarActions.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
+- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/sales-quotation/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `QuotationTopbarActions.jsx` (`topbarRight`) — it moved to `QuotationSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone.
 
 ## Currency selector and quotation-to-order conversion — ETP-4027
 
@@ -393,3 +411,85 @@ Automated evidence: `src/locales/__tests__/etp5125-printable-tax-labels.test.js`
 `documentPdf.template.vitest.jsx`, plus
 `lib/__tests__/attachmentFreshness.test.js` and `lib/__tests__/rendererBuildEpoch.vitest.js` for
 the cache invalidation.
+
+## Invoice is created and confirmed in one step — ETP-5381
+
+Confirming a quotation with "Facturar directamente" used to leave a **draft**
+sales invoice behind. A draft reserves nothing — `c_orderline.qtyinvoiced` is
+only written when the invoice is completed — so the same quotation could be
+invoiced twice, and `invoiceStatus` (which filters `docstatus NOT IN ('VO','CL','DR')`)
+stayed at 0%, blinding every visual guard built on top of it.
+
+`createDraftInvoice` now creates and completes the invoice in a **single atomic
+request**. `CreateDraftInvoiceHandler` calls
+`InvoiceCompletionService.completeInvoiceOrThrow` (`InvoiceCompletionService.java:167`),
+which runs the `CO` document action through core `ProcessInvoiceUtil` — not
+`C_Invoice_Post0` directly — so the `ProcessInvoiceHook` CDI chain (Verifactu /
+TBAI) fires, which it never did through NEO's generic process dispatch.
+
+**Rollback is all-or-nothing.** The creation handler only `flush()`es; the commit
+belongs to `ProcessInvoiceUtil`, which rolls back on error. A failed completion
+therefore reverts the header, its lines, the discount line, the line links **and
+the document-number sequence advance** together — no orphan draft, no burned
+document number. Because the session is closed mid-request, the handler captures
+the invoice id before completing and re-reads the entity afterwards
+(`CreateDraftInvoiceHandler.java:228-241`); the re-read also picks up the
+`DocumentNo` the completion may have reassigned from the document type's
+sequence.
+
+**Ordering.** `markQuotationAsInvoiceCreated` now runs **after** the completion
+(`CreateDraftInvoiceHandler.java:232-237`). This is the invariant guard P6 relies
+on: `ETGO_CI` is only written once a confirmed invoice exists.
+
+**To modify an auto-generated invoice**, the user reactivates it: both
+`sales-invoice` and `purchase-invoice` expose a `reactivate` menu action
+(`documentAction: 'RE'`, `preUnpost: true`, `visibleWhenStatus: 'CO'` —
+`artifacts/sales-invoice/contract.json:26-34`), which is now the only route back
+to `DR`. Editing before confirming is no longer an option on this path.
+
+**Frontend.** `QuotationConfirmModal.jsx` no longer hardcodes `status: 'Draft'` on
+the result card — it reads the real `documentStatus` from the response
+(`status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft')`),
+so the badge renders "Completado" / "Completed" in success green instead of a
+false "Borrador". `backendErrors.js` maps the new 409 literal to
+`backendError.quotationAlreadyInvoiced` ("Ya se ha generado una factura para este
+presupuesto." / "An invoice has already been generated for this quotation.").
+
+**Known residual gap (UI copy, not behavior):** the confirm modal's invoice card
+still describes the outcome as a draft. `soCreateInvoiceCheckDesc` reads "Se
+generará una factura en borrador con las cantidades del pedido" / "A draft
+invoice will be created using order quantities", and `rmrCreateInvoiceConfirmDesc`
+still offers to "revisarla y confirmarla antes de enviarla". Those keys were not
+reworded in this ticket; the invoice they describe is now confirmed on creation.
+
+### Manual verification
+
+1. On a quotation in `UE`, confirm with "Facturar directamente" and verify the
+   generated invoice opens in **Confirmado**, not Borrador, and that the result
+   card's badge reads "Completado" in success green.
+2. Verify the quotation moved to `ETGO_CI` and that the invoice's document number
+   is the one shown in the result card.
+3. Trigger the same action again on that quotation and verify it is rejected with
+   the translated 409 message ("Ya se ha generado una factura para este
+   presupuesto."), and that **no** second invoice and no burned document number
+   are left behind.
+4. Force the completion to fail (e.g. a Verifactu/TBAI configuration error) and
+   verify nothing is persisted — no draft invoice, and the next successful run
+   reuses the same next document number.
+
+### Automated evidence
+
+- `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/schemaforge/InvoiceCompletionServiceTest.java` (new) covers the extracted completion path.
+- `CreateDraftInvoiceHandlerTest.java` and `NeoInvoiceSupportTest.java` were extended for the create-and-confirm flow and guard P6.
+- `AbstractInvoiceHeaderHandlerTest.java`'s 131 tests (including its 8 completion tests) pass unmodified — `completeInvoiceIfNeeded` keeps its guard and simply delegates to the new service.
+- `artifacts/sales-quotation/custom/__tests__/QuotationConfirmModal.test.js` gained a `created-document status badge (ETP-5381)` block: it asserts the status is derived from the backend `documentStatus` and never a hardcoded `Draft`, that `'CO'` maps to the Completed badge state, that the fallback to `Draft` applies only when an older backend sends no status at all, that the status is read off the response payload (not the request or the quotation), that the badge colours warning for a draft and success otherwise, that both states go through `ui()`, and that the order branch's `RE -> DR -> Draft` reactivation mapping is untouched.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E')` →
+`'none' | 'read-only' | 'full'`) must hide every mutating control in a window the Solo Lectura role
+can see. For this window: the row-kebab Confirmar/Rechazar entries. Window-level tier wiring is
+independent of the shared `useOrderWindow` hook other windows on this page use — `QuotationPage.jsx`
+calls `useWindowAccess` itself, forces `effectiveWindow.readOnly`, and renders `WindowAccessGuard`
+directly. Not live-testable in this session — the quotation list was empty for the available
+read-only-tier test role; relies on unit-test coverage.

@@ -1,9 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-// Mock i18n hooks
+// Mock i18n hooks. useUI is wrapped in vi.fn() (rather than a bare arrow
+// factory) so the ETP-5300 translation-regression describe below can swap in
+// a Spanish translator via mockImplementation() and prove the labels reach
+// the jsreport payload — every other describe keeps the default English
+// pass-through (key => key) untouched.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => key,
+  useUI: vi.fn(() => (key) => key),
   useLabel: () => (key) => key,
   useMenuLabel: () => (key) => key,
   useLocale: () => ({}),
@@ -31,6 +35,7 @@ vi.mock('@/lib/statusBadge.js', () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+import { useUI } from '@/i18n';
 import ReportDrawer from '../ReportDrawer.jsx';
 
 const BASE_PROPS = {
@@ -151,6 +156,164 @@ describe('ReportDrawer', () => {
   });
 });
 
+describe('ReportDrawer — ETP-5300 preview re-render regression', () => {
+  // This describe manages its own fetch mock per-test (mockFetchWithJsreport),
+  // so calls must not accumulate across tests — the top-level describe's
+  // beforeEach does not apply here (sibling describe block).
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Distinct fetch mock from the top-level describe's beforeEach: jsreport must
+  // be reachable (ping ok) AND the render POST ('/jsreport/api/report') must be
+  // separately mocked so it doesn't fall through to the generic "data fetch"
+  // branch, which returns .json() but not .text()/.blob().
+  function mockFetchWithJsreport({ jsreportOk = true } = {}) {
+    mockFetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/jsreport/api/ping')) {
+        return Promise.resolve({ ok: jsreportOk });
+      }
+      if (typeof url === 'string' && url.includes('/jsreport/api/report')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('<html><body>report</body></html>'),
+          blob: () => Promise.resolve(new Blob(['<html></html>'])),
+        });
+      }
+      // Entity data fetch (fetchAllRecords via apiFetch)
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          response: { data: [{ id: '1', documentNo: 'SO-001', grandTotal: 100 }] },
+        }),
+      });
+    });
+  }
+
+  // Number of render/export calls sent to jsreport so far. We assert on this
+  // observable side effect rather than iframe DOM content — jsdom's
+  // iframe.onload / contentDocument.write behavior is unreliable in tests (see
+  // ReportDrawer.jsx's iframeShowingBlobRef comment for why the real browser
+  // needs that branch at all).
+  function renderCallCount() {
+    return mockFetch.mock.calls.filter(
+      ([url]) => typeof url === 'string' && url.includes('/jsreport/api/report')
+    ).length;
+  }
+
+  it('re-clicking the preview button re-renders the report on every click', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+
+    // Wait past the initial automatic preview render. jsreportAvailable starts
+    // as null (before the ping resolves), so the very first render pass may
+    // take the local-HTML fallback branch; the effect re-runs once
+    // jsreportAvailable flips to true and only then hits jsreport.
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    const previewButton = screen.getByText('preview');
+
+    // Snapshot the count right before each click rather than asserting a fixed
+    // absolute total, since the exact number of pre-click renders depends on
+    // effect-rerun timing (jsreportAvailable/reportRows resolution order).
+    const before1 = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before1));
+
+    const before2 = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before2));
+  });
+
+  it('clicking preview when it is already the active format still triggers a re-render', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    // activeFormat is already 'preview' (the component's initial state) — this
+    // click produces NO activeFormat value transition. The fix must not rely
+    // on such a transition to re-fire the render effect (that's what
+    // previewNonce is for).
+    const previewButton = screen.getByText('preview');
+    const before = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(before));
+  });
+
+  it('PDF then preview still redisplays the report (iframeShowingBlobRef branch)', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+    URL.createObjectURL = vi.fn(() => 'blob:generated');
+    URL.revokeObjectURL = vi.fn();
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    const pdfButton = screen.getByText('pdf');
+    await waitFor(() => expect(pdfButton).not.toBeDisabled());
+
+    const beforePdf = renderCallCount();
+    await user.click(pdfButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(beforePdf));
+
+    const previewButton = screen.getByText('preview');
+    const beforePreview = renderCallCount();
+    await user.click(previewButton);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThan(beforePreview));
+  });
+
+  it('reopening the drawer after switching format resets activeFormat back to preview', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport();
+
+    const { rerender } = render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => expect(renderCallCount()).toBeGreaterThanOrEqual(1));
+
+    // Switch away from the default 'preview' format.
+    const pdfButton = screen.getByText('pdf').closest('button');
+    await waitFor(() => expect(pdfButton).not.toBeDisabled());
+    await user.click(pdfButton);
+    await waitFor(() => expect(pdfButton.className).toMatch(/bg-primary/));
+
+    // Close the drawer. Per the fix's comment (ETP-5300, Lea's QA comment),
+    // ListView always renders <ReportDrawer/> and only toggles `open` — the
+    // component itself is never unmounted — so `rerender` (not a fresh
+    // `render`) is the faithful way to reproduce the bug here.
+    rerender(<ReportDrawer {...BASE_PROPS} open={false} />);
+
+    // Reopen.
+    rerender(<ReportDrawer {...BASE_PROPS} open={true} />);
+
+    await waitFor(() => {
+      const previewButton = screen.getByText('preview').closest('button');
+      expect(previewButton.className).toMatch(/bg-primary/);
+    });
+    const pdfButtonAfterReopen = screen.getByText('pdf').closest('button');
+    expect(pdfButtonAfterReopen.className).not.toMatch(/bg-primary/);
+  });
+
+  it('clicking preview does not call jsreport when jsreport is unavailable (local HTML fallback)', async () => {
+    const user = userEvent.setup();
+    mockFetchWithJsreport({ jsreportOk: false });
+
+    render(<ReportDrawer {...BASE_PROPS} />);
+    await waitFor(() => {
+      expect(screen.getByText('jsreportNotAvailableBanner')).toBeInTheDocument();
+    });
+
+    const previewButton = screen.getByText('preview');
+    await waitFor(() => expect(previewButton).not.toBeDisabled());
+
+    await user.click(previewButton);
+
+    expect(renderCallCount()).toBe(0);
+  });
+});
+
 describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () => {
   // HELPERS_CODE is a self-contained Handlebars-helpers string sent directly to
   // jsreport (same cross-process constraint as templates/reports/helpers — see
@@ -192,5 +355,89 @@ describe('ReportDrawer — embedded jsreport HELPERS_CODE formatCurrency', () =>
     }
     const fn = new Function(`${built.slice(groupStart, gi + 1)}\n${built.slice(startIdx, i + 1)}; return formatCurrency;`)();
     expect(fn(1355.2)).toBe('1.355,20');
+  });
+});
+
+describe('ReportDrawer — ETP-5300 translated report labels (Lea QA follow-up)', () => {
+  // Reproduces the bug the user found live: "records", "Filters:", "Yes"/"No",
+  // "Total: … records" and "Generated by Etendo Go" were hardcoded English
+  // literals in the jsreport payload/template regardless of the app locale.
+  // The fix threads `reportLabels` (sourced from `ui()`) into the payload's
+  // `data.meta` — asserted here directly on the JSON body sent to
+  // `/jsreport/api/report`, since that is what the server-side Handlebars
+  // template actually reads (the template itself is not executed in jsdom).
+  const ES_LABELS = {
+    records: 'registros',
+    filters: 'Filtros',
+    total: 'Total',
+    reportGeneratedBy: 'Generado por Etendo Go',
+    yes: 'Sí',
+    no: 'No',
+    report: 'Informe',
+  };
+  const esUi = (key) => ES_LABELS[key] ?? key;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Stable reference across renders, matching useUI()'s real memoization
+    // contract (see reportLabels' useMemo comment in ReportDrawer.jsx).
+    useUI.mockImplementation(() => esUi);
+    mockFetch.mockImplementation((url) => {
+      if (typeof url === 'string' && url.includes('/jsreport/api/ping')) {
+        return Promise.resolve({ ok: true });
+      }
+      if (typeof url === 'string' && url.includes('/jsreport/api/report')) {
+        return Promise.resolve({
+          ok: true,
+          text: () => Promise.resolve('<html><body>report</body></html>'),
+          blob: () => Promise.resolve(new Blob(['<html></html>'])),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          response: { data: [{ id: '1', documentNo: 'SO-001', grandTotal: 100 }] },
+        }),
+      });
+    });
+  });
+
+  // Restore the default English pass-through so later tests/files are never
+  // affected by this describe's override (clearAllMocks() clears call
+  // history but not a previously-set mockImplementation).
+  afterEach(() => {
+    useUI.mockImplementation(() => (key) => key);
+  });
+
+  function lastReportPayload() {
+    const call = mockFetch.mock.calls
+      .filter(([url]) => typeof url === 'string' && url.includes('/jsreport/api/report'))
+      .pop();
+    if (!call) return null;
+    const [, options] = call;
+    return JSON.parse(options.body);
+  }
+
+  it('threads Spanish-translated labels into the jsreport payload meta instead of hardcoded English', async () => {
+    render(<ReportDrawer {...BASE_PROPS} />);
+
+    await waitFor(() => expect(lastReportPayload()).not.toBeNull());
+
+    const meta = lastReportPayload().data.meta;
+    expect(meta.generatedByLabel).toBe('Generado por Etendo Go');
+    expect(meta.recordsLabel).toBe('registros');
+    expect(meta.totalLabel).toBe('Total');
+    expect(meta.filtersLabel).toBe('Filtros');
+    expect(meta.yesLabel).toBe('Sí');
+    expect(meta.noLabel).toBe('No');
+  });
+
+  it('falls back to the translated report title (not the hardcoded "Report") when no title prop is given', async () => {
+    const { title, ...propsWithoutTitle } = BASE_PROPS;
+    render(<ReportDrawer {...propsWithoutTitle} />);
+
+    await waitFor(() => expect(lastReportPayload()).not.toBeNull());
+
+    expect(lastReportPayload().data.meta.title).toBe('Informe');
   });
 });

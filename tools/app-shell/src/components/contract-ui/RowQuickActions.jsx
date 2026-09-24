@@ -1,11 +1,28 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { toast } from 'sonner';
 import { Pencil, Copy, Mail, MoreVertical, Trash2, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
 import { isDeleteVisibleForRecord, evalRowVisibleWhen } from '@/utils/recordActions.js';
-import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
+import { runPreUnpost } from '@/lib/preUnpost.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
+
+// Resolves whether an action should render, given its actionsConfig entry
+// (decisions.json → window.rowQuickActions.actions.<key>) and an optional fallback
+// visibleWhen expression (e.g. a menuAction descriptor's own `.visibleWhen`).
+//
+// `show: false` is checked FIRST and short-circuits to hidden regardless of
+// `visibleWhen` — this is the documented contract (docs/decisions-reference.md,
+// "Row Quick Actions"): "`false` removes it from both the fixed buttons and the
+// kebab." `true`, the process-promotion strings `'fixed'`/`'kebab'`, and an absent
+// `show` all fall through unchanged to the existing visibleWhen evaluation
+// (defaults to visible when no expression is set).
+function isActionVisible(config, fallbackVisibleWhen, row) {
+  if (config?.show === false) return false;
+  return evalRowVisibleWhen(config?.visibleWhen ?? fallbackVisibleWhen, row);
+}
 
 /**
  * RowQuickActions — hover-revealed action icons overlaid at the end of a list row.
@@ -17,6 +34,20 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  *   4. More (kebab)    — popover containing every menuActions[] item from the window config
  *   5. Delete          — respects the same hideDeleteWhenComplete + statusField gate as DetailView
  *
+ * `menuActions` entries with a `neoAction` field (ETP-5414) support two optional siblings:
+ *   - `neoActionName` — overrides the literal wire action name sent to
+ *     `POST {apiBaseUrl}/{entity}/{id}/action/{name}`, defaulting to `neoAction` itself.
+ *   - `preUnpost` — when true, reverses the record's accounting first (via the shared
+ *     `runPreUnpost`/`unpost` mechanism, same as `BulkDocumentAction.jsx` and
+ *     `DetailMoreActionsMenu.jsx`) if the row is currently posted, before running the main
+ *     action; a preUnpost failure toasts and aborts before the main action ever fires.
+ * `menuActions` itself, and the function form's return value, MUST be synchronous — it is
+ * read directly (`typeof menuActions === 'function' ? menuActions({row,...}) : menuActions`)
+ * with no `await` anywhere in the render path. An action whose ELIGIBILITY needs an async
+ * check (e.g. a per-row field fetch) cannot express that as `visible`; it has to do the
+ * check inside its own `onClick` instead (see amortización's `confirm` entry for the
+ * pattern) and decide there whether to proceed or show an error.
+ *
  * Per-button in-flight state (plan §2.6): each canonical button and kebab item tracks its own
  * pending Promise locally via `inFlight[key]`. While pending, that button is disabled and shows
  * a spinner; the rest of the row remains interactive. Rows are independent of each other.
@@ -26,8 +57,15 @@ import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
  * `@/utils/recordActions.js` (same matcher as DetailView's `evalDisplayLogicRaw`). ANDed with the
  * existing edit-view visibility (delete gate, `documentPreview`, `action.visible`).
  *
- * The wrapping <td> uses absolute positioning so the icons overlay the trailing
- * grid columns and reveal on `group-hover/row` (set by DataTable's <TableRow>).
+ * This component is always absolutely positioned (see the className comment
+ * below for why), inside a `<td>` DataTable always renders at this window's
+ * own full reserved width and `position: sticky; right: 0` (ETP-5268 —
+ * quickActionsColumnStyle/quickActionsColumnClassName). That sticky cell —
+ * not this component — is what makes the pill appear to float over trailing
+ * columns while there's more to scroll, and settle into normal flow once the
+ * user reaches the true end: a pure CSS "frozen last column" effect, so the
+ * pill's own positioning here never has to know or care which of those two
+ * states it's currently in.
  *
  * NOTE: this component is generic — every prop is optional and gates behavior
  * gracefully. It is safe to mount on every list row regardless of window config.
@@ -72,9 +110,12 @@ export default function RowQuickActions({
   // Optional per-action config from decisions.json → window.rowQuickActions.actions.
   // Shape: { edit: { show: true, visibleWhen?: string }, duplicate: ..., email: ..., delete: ...,
   //          <processKey>: { show: 'fixed'|'kebab'|false, visibleWhen?: string } }
-  // Only `visibleWhen` is consumed here (per-action display-logic gate). Show/hide decisions
-  // for canonical buttons are still derived from the existing props (documentPreview, statusField,
-  // hideDeleteWhenComplete) — `actionsConfig` only refines visibility further.
+  // `show === false` unconditionally hides the action (checked before `visibleWhen`, see
+  // `isActionVisible`); any other `show` value (`true`, absent, or the process-promotion
+  // strings `'fixed'`/`'kebab'` — the latter not yet implemented as a fixed-slot promotion,
+  // it currently just falls through to the kebab like any other menuAction) falls through to
+  // `visibleWhen`. This is layered on top of, not a replacement for, the existing per-canonical-
+  // button gates derived from other props (documentPreview, statusField, hideDeleteWhenComplete).
   actionsConfig = null,
   // View-only window (decisions.json → window.readOnly, threaded via ListView →
   // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
@@ -94,11 +135,12 @@ export default function RowQuickActions({
   // is already scoped to the spec; entity segment mirrors useDocumentAction.
   const neoAction = useNeoAction({ specName: windowName, entityName: entity, apiBaseUrl, token });
 
-  // visibleWhen lookup for a given action key. Falls back to `true` when no expression set.
-  const passesVisibleWhen = useCallback((key) => {
-    const expr = actionsConfig?.[key]?.visibleWhen;
-    return evalRowVisibleWhen(expr, row);
-  }, [actionsConfig, row]);
+  // Visibility lookup for a given canonical action key (edit/duplicate/email/delete).
+  // Honors `actionsConfig[key].show === false` (unconditional hide) before falling back
+  // to `visibleWhen` (`true` when no expression set). See `isActionVisible` above.
+  const passesVisibleWhen = useCallback((key) => (
+    isActionVisible(actionsConfig?.[key], undefined, row)
+  ), [actionsConfig, row]);
 
   // Wrap a handler so we track in-flight state per button. Idempotent: if already in-flight
   // for that key, we ignore the click (no double-submit).
@@ -168,12 +210,10 @@ export default function RowQuickActions({
     : menuActions;
   const visibleMenuActions = (Array.isArray(resolvedMenuActions) ? resolvedMenuActions : [])
     .filter(a => a && a.visible !== false)
-    .filter(a => evalRowVisibleWhen(
-      // Prefer the per-key override in actionsConfig (decisions.json), fall back to the
-      // expression possibly attached to the menuAction descriptor itself.
-      actionsConfig?.[a.key]?.visibleWhen ?? a.visibleWhen,
-      row,
-    ));
+    // Prefer the per-key override in actionsConfig (decisions.json) — including its
+    // `show: false` hide — fall back to the visibleWhen possibly attached to the
+    // menuAction descriptor itself.
+    .filter(a => isActionVisible(actionsConfig?.[a.key], a.visibleWhen, row));
 
   // ETP-3504 — Figma exact colors:
   // - Neutral icons (Edit, Clone, Email, More): hsl(var(--text-disabled))
@@ -189,12 +229,58 @@ export default function RowQuickActions({
     setInFlight(prev => ({ ...prev, [key]: true }));
     try {
       if (action.documentAction) {
+        // ETP-5378 — same rule the detail kebab applies (DetailMoreActionsMenu's
+        // runDocumentAction): reactivating an already-posted document must reverse its
+        // accounting first, or the backend rejects the bare docAction with "Factura
+        // contabilizada". Shared with the detail kebab and the bulk bar via lib/preUnpost.js
+        // so the three surfaces cannot drift apart again.
+        const pre = await runPreUnpost({
+          recordId: row?.id,
+          record: row,
+          enabled: action.preUnpost,
+          execute: neoAction.execute,
+        });
+        if (!pre.success) {
+          onMenuActionExecuted?.(action, { success: false, message: pre.message });
+          return;
+        }
         const result = await docAction.execute(row?.id, action.documentAction);
         onMenuActionExecuted?.(action, result);
         return;
       }
       if (action.neoAction) {
-        const result = await neoAction.execute(row?.id, action.neoAction);
+        // ETP-5414 — `neoActionName` is an OPTIONAL override of the literal wire action
+        // name, defaulting to `neoAction` itself. Mirrors `BulkDocumentAction.jsx`'s own
+        // `wireActionName = actions.find(...)?.neoActionName ?? selectedAction`: a window
+        // can label a kebab entry however it wants (`key`/`labelKey`) for UI purposes while
+        // still hitting a specific real button/process via `neoActionName`. Amortización's
+        // "Confirmar"/"Reactivar" don't strictly need this split at the ROW level (each
+        // kebab entry is independent, unlike the bulk dropdown's single shared
+        // `selectedAction`), but the field exists for the same reason and the same shape as
+        // the bulk one, so a future caller with an actual per-row naming collision doesn't
+        // have to reinvent it. Every existing caller (none of which set `neoActionName`)
+        // is unaffected: `wireActionName === action.neoAction`, unchanged.
+        const wireActionName = action.neoActionName ?? action.neoAction;
+        // ETP-5414 — optional pre-step, same mechanism `BulkDocumentAction.jsx` and
+        // `DetailMoreActionsMenu.jsx` already use: reverse the accounting first when
+        // `action.preUnpost` is set AND the row is currently posted (`runPreUnpost`'s own
+        // no-op guard covers every other case — unset flag, or a row that isn't posted —
+        // so this call is safe to make unconditionally whenever a neoAction fires).
+        const pre = await runPreUnpost({
+          recordId: row?.id, record: row, enabled: !!action.preUnpost, execute: neoAction.execute,
+        });
+        if (!pre.success) {
+          // RowQuickActions never toasts for the declarative documentAction/neoAction
+          // paths (see class docblock — "toast/snackbar is the host's responsibility"),
+          // but a preUnpost failure has nowhere else to surface: the main action below
+          // never runs, so there is no `result` for the host's `onMenuActionExecuted` to
+          // report on its own. Toasting here (mirroring `DetailMoreActionsMenu.jsx`'s own
+          // identical preUnpost failure handling) is the one exception to that rule.
+          toast.error(translateBackendError(pre.message, ui) || ui('actionFailed'));
+          onMenuActionExecuted?.(action, { success: false, message: pre.message });
+          return;
+        }
+        const result = await neoAction.execute(row?.id, wireActionName);
         onMenuActionExecuted?.(action, result);
         return;
       }
@@ -210,6 +296,11 @@ export default function RowQuickActions({
       // Surface failures via console; toast/snackbar is the host's responsibility.
       // eslint-disable-next-line no-console
       console.error('Quick action failed:', err);
+      // ETP-5378 — useDocumentAction THROWS on failure (useNeoAction resolves to
+      // {success:false} instead), so without this the host never heard about a failed
+      // documentAction row action and the user saw nothing at all. Hand it the same
+      // {success:false, message} shape the neoAction path already delivers.
+      onMenuActionExecuted?.(action, { success: false, message: err?.message });
     } finally {
       setInFlight(prev => {
         const next = { ...prev };
@@ -217,11 +308,67 @@ export default function RowQuickActions({
         return next;
       });
     }
-  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight]);
+  }, [docAction, neoAction, row, windowName, apiBaseUrl, token, onMenuActionExecuted, inFlight, ui]);
 
   return (
     <div
-      className={`absolute right-3 top-1/2 -translate-y-1/2 flex flex-row items-center justify-center gap-0.5 h-10 px-3 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 transition-opacity z-10 ${QUICK_ACTIONS_PILL_CLASS}`.trim()}
+      // Always absolutely positioned — this MUST stay out of normal flow:
+      // regardless of hover state (only `opacity` toggles), so in-flow it
+      // would inflate every row's height to fit these 32-40px icon buttons
+      // even while invisible — that regression shipped and was caught by
+      // hand on /contacts before being reverted here. `inset-y-0 h-full`
+      // (rather than a fixed `h-10` centered via `top-1/2 -translate-y-1/2`)
+      // sizes it to the enclosing <td>'s own full height instead of a
+      // shorter fixed height floating inside it.
+      //
+      // ETP-5268 follow-up — "las acciones no deberian estar en la columna,
+      // si no que siempre tiene que estar al hacer hover": the reserved
+      // column width/space stays (DataTable's own quickActionsColumnStyle is
+      // untouched), but the icons themselves are hover-only again —
+      // `opacity-0 group-hover/row:opacity-100`, no transition class, so the
+      // toggle is instant ("sacale la transicion... que sea 100% rapido").
+      // Independent of the cell's own `group-hover/row:sticky` (this div
+      // stays `position: absolute` either way, so hiding it at rest never
+      // reintroduces the row-height regression above).
+      //
+      // ETP-5268 follow-up — "no forma parte de una columna ... va con la
+      // pantalla": DataTable's quick-actions column used to be
+      // UNCONDITIONALLY `sticky right-0`, floating over whatever real
+      // column was scrolled underneath any time there was overflow — live-
+      // verified overlapping far more of the neighboring column than was
+      // ever genuinely hidden. The column now sits in plain, normal table
+      // flow by default, and only becomes sticky WHILE the row is hovered
+      // (`group-hover/row:sticky` — see DataTable's quickActionsColumnClassName),
+      // and even then CSS sticky positioning is a no-op once the column is
+      // already fully in view — so it only ever floats/covers when there's
+      // genuinely still something to reach ("al hacer hover y no verse la
+      // ultima columna que se vea el stick de botones como estaba antes").
+      //
+      // ETP-5268 follow-up — "se nota como una diferencia en los colores":
+      // this pill used to carry its OWN background (`bg-card` at rest,
+      // `group-hover/row:bg-muted` on hover) — matching the row's hover
+      // color in NAME, but not in actual pixels: the row's own hover tint
+      // is the translucent `hover:bg-muted/50` (getRowClassName's default
+      // `tint` style), a visibly LIGHTER gray than the same token at full
+      // opacity. Since this pill is narrower than the cell's own reserved
+      // width, that mismatch painted as a seam INSIDE one cell — solid gray
+      // under the icons, lighter translucent gray in the gutter beside them
+      // — live-verified. This div now sets NO background of its own at
+      // all: the masking/tinting background lives on the enclosing `<td>`
+      // instead (DataTable's quickActionsColumnClassName), applied to the
+      // WHOLE cell so gutter and icons always match — solid `bg-muted` only
+      // when hover-sticky can actually float this pill over real data
+      // (masking beats color-matching there), otherwise nothing, letting
+      // the row's own `hover:bg-muted/50` show through this div exactly as
+      // it does everywhere else in the row, at rest AND transitioning.
+      className={[
+        // `right-0` (not `right-3`) — flush against the cell's own right
+        // edge, no outer margin: "que se empuje al fondo, tiene como un
+        // espacio" (a `right-3` gap here read as an unexplained sliver of
+        // the reserved column left uncovered at the true edge). `px-3`
+        // keeps the icons themselves off the very edge as inner padding.
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100',
+      ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}
     >

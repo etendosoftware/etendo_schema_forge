@@ -12,6 +12,7 @@ This is **not** the full Etendo Classic "Organization" window. It flattens a cur
 - Edit fiscal identification: NIF, legal name (razón social), and fiscal address (via an inline address editor — create or pick an existing address, no separate navigation).
 - View (read-only) the organization's country and currency, both derived from existing AD_Org/AD_OrgInfo data — not editable from this screen.
 - Edit public contact details (email, phone, website) — always editable, optional, and unrelated to any linked Business Partner.
+- Upload, view, or replace the organization's digital certificate (ETP-5391) — see "Digital certificate section" below; the same certificate SII/Verifactu/TicketBAI use.
 - See a sticky "unsaved changes" banner (yellow dot, bold title, secondary hint) whenever any field differs from the last-loaded state, with Discard / Guardar cambios actions.
 
 ## AD window mapping
@@ -35,6 +36,10 @@ Backed by the real Etendo Classic AD_Window **`Organization`, ID `110`** — thi
 | `A40755889D614B358959BBA14D9B669A` | Email Configuration | `C_POC_CONFIGURATION` | No |
 
 The other 9 tabs (Period Control ×3, General Ledgers, Intrastat, Data Sets, Warehouse, IAE, Certificado Digital, Representante Legal, Email Configuration) are entirely out of scope for this ticket — none of their fields are extracted, curated, or exposed anywhere in this window.
+
+## Window-access gate (ETP-5395 Fix 3)
+
+`OrganizationPage.jsx` is a fully hand-written custom page (`registry.js` loads it directly for `"organization"`, never a generated `Page.jsx`), so it never automatically picked up the generic `useWindowAccess`/`WindowAccessGuard` gate `generate-frontend.js` wires into every generated window despite this window carrying a real `AD_Window_ID` (`110`) — the same class of gap ETP-4658 found and fixed for `financial-account`/`sales-invoice`/etc. Without it, a role with no grant on this window still fired the `organization`/`information` fetches, got a correct backend 403 (`"Access denied to spec for current role"`), and `useOrganizationData.js`'s HTTP-status-only error message rendered raw ("HTTP 403" + a Retry button that can never help). Fixed by adding `const windowAccessTier = useWindowAccess('110'); if (windowAccessTier === 'none') return <WindowAccessGuard windowId="110" />;`, checked after every other hook (Rules-of-Hooks-safe) and before the `loading`/`error` early returns.
 
 ## Interaction model
 
@@ -117,6 +122,40 @@ A later ETP-4749 review round removed the original "Nombre comercial" field (`C_
 ## Field change: contact fields moved from Business Partner to dedicated AD_OrgInfo columns
 
 A later round removed the Business-Partner-sourced contact fields (email/phone/website via `AD_OrgInfo.businessPartner` → `contacts` spec) and replaced them with three new, dedicated `AD_OrgInfo` columns (`EM_Etgo_Email`, `EM_Etgo_Phone`, `EM_Etgo_Web`), added in `com.etendoerp.go`. This removed the entire "is a Business Partner linked, and did it load" state machine: the "no BP linked" notice, the "BP linked but failed to load" notice + retry affordance, and the `disabled`/gray styling on those three inputs are all gone. The fields are now always editable, plain optional strings on the `information` entity, handled exactly like `taxID` or `locationAddress` in `useOrganizationData.js`'s `load`/`save`.
+
+## Digital certificate section (ETP-5391)
+
+A "Certificado digital" section now sits on this page between "Datos fiscales" and "Datos de
+contacto" — `SectionRow` with `titleKey="fiscal.cert.section.legend"` /
+`descKey="fiscal.cert.section.hint"`, wrapping `CertSection` (imported directly from
+`../fiscal-config/CertSection.jsx`, **not forked**). It lets a user upload, view, or replace the
+organization's digital certificate straight from this window, instead of only through one of the
+SII/Verifactu/TicketBAI tabs on the Fiscal Config window.
+
+**This is the SAME certificate as SII/Verifactu/TicketBAI, not a separate one per fiscal system.**
+`CertSection` fetches `GET {neoBase}/certificate?orgId=` and the backend
+(`NeoCertificateHelper.java`, `com.etendoerp.go`) resolves and stores the certificate keyed by
+organization alone (`ETSG_Certificate`, the same table backing Classic AD window 110's
+"Certificado Digital" tab — see "AD window mapping" above) — there is no per-fiscal-system
+partition on the backend at all. `SiiSection`/`VerifactuSection`/`TbaiSection` in `fiscal-config`
+each mount this identical component; uploading or replacing the certificate from any one of those
+four places (this window's own section, or any of the three fiscal-config tabs) updates the exact
+same record and is immediately reflected everywhere else it's shown. See `fiscal-config.md`'s
+"Certificate upload (CertModal + CertSection)" for the shared component's full behavior (drag-drop,
+`CertModal`'s pick → verify → done/confirmNif steps, expiry warnings).
+
+`context` is intentionally omitted on this window's `<CertSection>` call (unlike the fiscal-config
+tabs, which each pass their own `context="sii"|"verifactu"|"tbai"`) — `CertModal`'s
+`CONTEXT_SUBTITLE` map only has entries for those three fiscal systems, so an unmatched/undefined
+context already falls back to the generic `ui('fiscal.cert.subtitle.default')` copy, which reads at
+the organization level rather than naming any one fiscal system — exactly right for this page.
+
+**AD window mapping note:** the "Certificado Digital" tab row in the table above is still marked
+"No" for the ETP-4749 flattening (this window's `decisions.json` does not extract that AD_Tab
+through the normal pipeline) — this section reaches the same underlying data through the NEO
+Headless `/certificate` endpoint and a reused React component instead, the same pattern
+`fiscal-config.md` already documents for its own three tabs. No new extension point or generic
+component was introduced; this is a straight reuse of an existing org-scoped endpoint and component.
 
 ## Actividades del IAE (ETP-4975)
 
@@ -292,7 +331,7 @@ case list, deliberately).
 - `tools/app-shell/src/components/contract-ui/CreatableSearchSelect.jsx` / `InlineSearchCombo.jsx` — QA-found pagination fixes (scroll-triggered "load more" was cutting results short) plus the `searchGenerationRef` fix (ETP-4975 BUG-2): a new search fired while a scroll-page fetch was still in flight could otherwise let the stale page's results land after the new search's, since both fixes share the same "tag every fetch with its search generation, discard a resolved fetch whose generation is no longer current" pattern.
 - `tools/app-shell/src/lib/imageUpload.js` — `sanitizeImageName()`, shared by this window's `OrgLogoField.jsx` and the generic `ImageField.jsx` (contract-ui): truncates upload filenames to AD_Image's 60-char `Name` limit.
 - `tools/app-shell/src/windows/custom/organization/__tests__/useOrganizationData.vitest.js` — load/save behavior (including the direct AD_OrgInfo contact columns), error handling.
-- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard.
+- `tools/app-shell/src/windows/custom/organization/__tests__/OrganizationPage.vitest.jsx` — field rendering, unsaved-changes banner, business-type card selection/colors, save flow, warehouse-spec address `apiBaseUrl` regression guard, plus (ETP-5395 Fix 3) a `WindowAccessGuard`-renders-instead-of-the-raw-error-box regression test for a `'none'` access tier.
 - `tools/app-shell/src/windows/custom/organization/__tests__/ActividadesIaeSection.vitest.jsx` — grid rendering, selector picks, default toggle, add/delete rows, missing-code hint (ETP-4975).
 - `tools/app-shell/src/windows/custom/organization/__tests__/useActividadesIae.vitest.jsx` — load/create/update/delete, `enforceSingleDefault` sweep behavior including the per-row-swallowed-failure case (ETP-4975).
 - `tools/app-shell/src/windows/custom/fiscal-models/models/303/__tests__/AeatSubmitFlow.missingIaeGuard.vitest.jsx` — the "Marcar como Presentado" pre-flight guard: blocks/proceeds cases, fail-open on fetch error, CTA navigation (ETP-4975).

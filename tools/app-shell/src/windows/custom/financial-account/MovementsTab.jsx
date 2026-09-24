@@ -100,7 +100,7 @@ function applyFilters(movements, filters) {
  * }} props
  */
 export const MovementsTab = forwardRef(function MovementsTab(
-  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false },
+  { account, totals, movements, enabledDimensions = [], headerDimensions = [], loading, onReload, highlightTxnId = null, txnUnbounded = false, autoOpenNewMovement = false, windowReadOnly },
   ref,
 ) {
   const [filters, setFilters] = useState({
@@ -160,6 +160,24 @@ export const MovementsTab = forwardRef(function MovementsTab(
   // reason is spelled out only when a single row was selected.
   const { deleteMovement } = useDeleteMovement();
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // ETP-4972 QA finding (comment 145559) — applying/changing the quick filters
+  // (date range, type, search) or the advanced filter must drop the current
+  // checkbox selection, so a bulk "Delete selected" can never fire against
+  // movements the user is no longer looking at (same generic rule applied to
+  // ListView; this tab keeps its own local filter + selection state instead
+  // of ListView's). Deliberately excludes `sortKey`/`sortDirection`
+  // (useClientSort below): reordering the same filtered rows doesn't change
+  // which ones are visible.
+  const didInitialSelectionClearRef = useRef(false);
+  useEffect(() => {
+    if (!didInitialSelectionClearRef.current) {
+      didInitialSelectionClearRef.current = true;
+      return;
+    }
+    clearSelection();
+  }, [filters, advancedFilter, clearSelection]);
+
   const paymentRemovalRef = useRef(true);
   const { requestBatchDelete, batchDeleteDialog, deleting: bulkDeleting } = useBatchDeleteDialog({
     deleteOneFn: (id) => deleteMovement({ id, paymentRemoval: paymentRemovalRef.current }),
@@ -274,17 +292,20 @@ export const MovementsTab = forwardRef(function MovementsTab(
           viewport-fixed pill via SelectionToolbar; it no longer occupies a
           slot in this flow (the wrapping div here used to reserve space for
           the old in-flow bar). */}
-      <BulkDeleteSelectionBar
-        count={selectedIds.size}
-        deleting={bulkDeleting}
-        onCancel={clearSelection}
-        onDelete={requestDelete}
-        data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
+      {!windowReadOnly && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={requestDelete}
+          data-testid="MovementsBulkDeleteSelectionBar__c1f76a" />
+      )}
       <MovementsToolbar
         filters={filters}
         onFiltersChange={handleFilterChange}
         advancedFilter={advancedFilter}
         onAdvancedFilterChange={setAdvancedFilter}
+        windowReadOnly={windowReadOnly}
         onNewMovement={() => setNewMovementOpen(true)}
         onTransfer={() => setTransferOpen(true)}
         onRefresh={onReload}
@@ -325,11 +346,12 @@ export const MovementsTab = forwardRef(function MovementsTab(
           onReload={onReload}
           onEdit={setEditMovement}
           accountCurrencyId={account?.currencyId}
+          windowReadOnly={windowReadOnly}
           data-testid="MovementsTable__c1f76a" />
       </div>
       {batchDeleteDialog}
       <NewTransactionModal
-        open={newMovementOpen || !!editMovement}
+        open={(newMovementOpen || !!editMovement) && !windowReadOnly}
         accountId={account?.id}
         accountName={account?.name ?? ''}
         accountCurrency={account?.currencyIso
@@ -340,7 +362,7 @@ export const MovementsTab = forwardRef(function MovementsTab(
         onClose={() => { setNewMovementOpen(false); setEditMovement(null); }}
         onSuccess={() => onReload?.()}
         data-testid="NewTransactionModal__c1f76a" />
-      {transferOpen ? (
+      {transferOpen && !windowReadOnly ? (
         <FundsTransferModal
           sourceAccountId={account?.id}
           onClose={() => setTransferOpen(false)}

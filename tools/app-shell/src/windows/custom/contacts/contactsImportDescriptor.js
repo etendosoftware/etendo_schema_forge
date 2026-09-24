@@ -2,7 +2,17 @@ import { registerImportDescriptor } from '@etendosoftware/app-shell-core/lib/imp
 import { registerImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import { getFkResolver } from '@etendosoftware/app-shell-core/lib/import/fkResolvers.js';
 import { resolveOrAutoCreateDependentEntity, getResolutionCache } from '@etendosoftware/app-shell-core/lib/import/resolveDependentEntity.js';
+import { fetchNeoList } from '@etendosoftware/app-shell-core/lib/import/fetchNeoList.js';
+import {
+  getCachedCategories,
+  categoryLookupFailedMessage,
+  categoryCreateFailedError,
+} from '@/lib/importCategoryResolution.js';
 import { resolveCodedCellOrThrow, codedCellError, codeLabels } from '@/lib/codedValue.js';
+import {
+  getTaxIdError,
+  TAX_ID_CHECK_DIGIT_ERROR_KEY,
+} from '@/lib/taxIdValidation.js';
 import { registerExportHints } from '@/lib/importExportColumns.js';
 import { asDependentEntityInput } from '@/lib/dependentEntityCell.js';
 
@@ -11,7 +21,28 @@ import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // could ever populate it — the mirror image of the "column with no consumer" problem.
 const BP_TARGETS = ['name', 'etgoFirstname', 'etgoLastname', 'etgoEmail', 'etgoPhone', 'etgoWeb', 'oBTIKTaxIDKey', 'etgoIsperson', 'taxID'];
 const CONTACT_TARGETS = ['firstName', 'lastName', 'email', 'phone', 'position'];
-const HAS_ADDRESS = (row) => Boolean(row.address || row.city || row.postal || row.country);
+/**
+ * Whether the row says anything about where the contact is, i.e. whether a `locationAddress`
+ * op has to be built at all.
+ *
+ * `region` belongs in this list even though it is the only part that cannot stand on its own.
+ * Leaving it out (ETP-5350) meant a row carrying a province and nothing else produced NO
+ * location op, so the province was dropped without a word — the exact silent-drop failure
+ * ETP-4997 removed from the browser-side resolver, reintroduced one level up in the predicate
+ * that decides whether to ask at all.
+ *
+ * A province with no country now reaches `resolveLocation` and fails its row on the country
+ * check instead. That is the intended posture, not a regression: `ContactsLocationAddressHandler`
+ * refuses a region name with no country for a reason it states — "does this country have
+ * regions" is unanswerable without the country — and a reported row beats a lost value.
+ *
+ * The province is TRIMMED before the test while the other parts keep plain truthiness. A
+ * whitespace-only province already meant "absent" everywhere else in this descriptor, and a
+ * bare `Boolean("   ")` is true — it would build a location op out of nothing but spaces.
+ */
+const HAS_ADDRESS = (row) => Boolean(
+  row.address || row.city || row.postal || row.country || String(row.region ?? '').trim(),
+);
 const businessPartnerCategoriesCache = new Map();
 
 function detectEtendoBase() {
@@ -23,33 +54,45 @@ function detectEtendoBase() {
   return import.meta.env?.VITE_API_BASE || '';
 }
 
-async function fetchBusinessPartnerCategories(token) {
+/**
+ * ETP-5227 — the same defect as `productImportDescriptor`, and here for the same reason: this
+ * descriptor was copied from that one, `?limit=1000` included. NEO does not read that parameter
+ * and caps an unpaged list at 100 rows, so a tenant past 100 contact categories got a phantom
+ * "does not exist" and an auto-create the database rejected. See `fetchNeoList`'s header.
+ */
+function fetchBusinessPartnerCategories(token) {
   const base = detectEtendoBase();
-  const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory?limit=1000`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return [];
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    return Array.isArray(data) ? data : [];
-  } catch (e) {
-    return [];
-  }
+  return fetchNeoList(`${base}/sws/neo/business-partner-category/businessPartnerCategory`, { token });
 }
 
 function getExistingBusinessPartnerCategories(token, existingCategoriesOverride) {
   if (existingCategoriesOverride) return Promise.resolve(existingCategoriesOverride);
-  const key = token || 'default';
-  if (!businessPartnerCategoriesCache.has(key)) {
-    businessPartnerCategoriesCache.set(key, fetchBusinessPartnerCategories(token));
-  }
-  return businessPartnerCategoriesCache.get(key);
+  return getCachedCategories(
+    businessPartnerCategoriesCache,
+    token,
+    () => fetchBusinessPartnerCategories(token),
+  );
 }
 
 function pick(row, targets) {
   const body = {};
   for (const t of targets) if (row[t] !== undefined) body[t] = row[t];
   return body;
+}
+
+/**
+ * ETP-5031 follow-up — `etgoWeb` is stored WITHOUT its scheme: the Contacts form's fixed
+ * "https://" chip (decisions.json `inputPrefix`) means a manually-entered contact never has
+ * one in the stored value, and BusinessPartnerHandler's server-side domain-shape check
+ * (added alongside the email/phone checks) now rejects a value that still carries one — it
+ * cannot tell "the scheme" from "part of an invalid host". A CSV `web` column commonly
+ * contains a full URL ("https://acme.com") since that is what a human actually types/copies,
+ * so the import must normalize it the same way the form's chip does, not assume the cell is
+ * already bare. Reproduced live: an un-normalized cell 400'd the whole business partner
+ * create, which is what silently dropped rows from ETP-4905's own Tomcat integration spec.
+ */
+function stripUrlScheme(value) {
+  return String(value ?? '').replace(/^https?:\/\//i, '');
 }
 
 // Mirrors useEntity.js's derivePersonName exactly (the known-working manual create flow).
@@ -74,7 +117,9 @@ const DEFAULT_TAX_ID_KEY = '1';
 // identificacion expedido por el pais, 5=Certificado de residencia fiscal, 6=Otro documento
 // probatorio, 7=No Censado. Before ETP-4995 the column accepted ONLY the raw code, so a user
 // who typed the label they see in the UI ("NIF") had the row rejected by the list reference.
-const TAX_ID_KEY_VALUES = {
+// Exported since ETP-5373 so the template test can dispatch the tax-id example on the SAME
+// label table the import itself resolves with, instead of restating which labels mean NIF.
+export const TAX_ID_KEY_VALUES = {
   // 'CIF' is not an AD_Ref_List name, but it is what people actually type: CIF was the
   // Spanish company tax ID until it was folded into NIF in 2008, and this window's own
   // tax-id column was labelled "CIF/NIF" until ETP-4992 renamed it to "NIF" (CIF no longer
@@ -131,17 +176,38 @@ function deriveSearchKey(name) {
 }
 
 /**
- * C_BPartner.Name is mandatory and `searchKey` is derived from it, so a row that reaches
- * here without one produces a business partner with no commercial name and an empty key.
- * That used to happen silently whenever a CSV's only name column was "nombre" (which
- * mapped to etgoFirstname). "nombre" now maps to `name`, and a person-only row still works
- * because first+last name compose one — but a row with neither must fail loudly.
+ * Normalizes the identity fields according to the selected contact type. C_BPartner.Name
+ * is mandatory for both types, but it means Legal Name for a company and is server-derived
+ * from first+last for a person. The CSV must not leak the inactive type's fields into the
+ * persisted business partner.
  */
-function resolveBusinessPartnerName(bpFields, config) {
+function normalizeBusinessPartnerIdentity(bpFields, config) {
+  const isPerson = resolveCodedCellOrThrow(bpFields.etgoIsperson, IS_PERSON_VALUES, {
+    defaultCode: DEFAULT_IS_PERSON, fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate: config.translate,
+  });
   const explicit = String(bpFields.name ?? '').trim();
-  if (explicit) return explicit;
-  const derived = derivePersonName(bpFields.etgoFirstname, bpFields.etgoLastname);
-  if (derived) return derived;
+  const firstName = String(bpFields.etgoFirstname ?? '').trim();
+  const lastName = String(bpFields.etgoLastname ?? '').trim();
+  const derived = derivePersonName(firstName, lastName);
+  if (isPerson === 'Y') {
+    if (!firstName || !lastName) {
+      const message = typeof config.translate === 'function'
+        ? config.translate('importErrorPersonNameRequired')
+        : 'A person contact requires both first name and last name.';
+      throw new Error(message);
+    }
+    return { isPerson, name: derived };
+  }
+  if (explicit) {
+    delete bpFields.etgoFirstname;
+    delete bpFields.etgoLastname;
+    return { isPerson, name: explicit };
+  }
+  if (firstName && lastName) {
+    delete bpFields.etgoFirstname;
+    delete bpFields.etgoLastname;
+    return { isPerson, name: derived };
+  }
   const message = typeof config.translate === 'function'
     ? config.translate('importErrorMissingContactName')
     : 'This row has no commercial name and no first/last name, so the contact cannot be created.';
@@ -150,7 +216,12 @@ function resolveBusinessPartnerName(bpFields, config) {
 
 async function resolveCategoryId(row, config) {
   if (!row.category) return null;
-  const categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+  let categories;
+  try {
+    categories = await getExistingBusinessPartnerCategories(config.token, config.existingCategories);
+  } catch (error) {
+    throw new Error(categoryLookupFailedMessage(row.category, config));
+  }
   const runCache = getResolutionCache(config.token || 'contacts-import');
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
@@ -163,7 +234,7 @@ async function resolveCategoryId(row, config) {
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
-      throw new Error(errJson?.error?.message || errJson?.message || 'Contact category creation failed');
+      throw categoryCreateFailedError(errJson?.error?.message || errJson?.message || '', row.category, config);
     }
     const json = await res.json().catch(() => null);
     const record = json?.response?.data?.[0] ?? json?.data?.[0] ?? json;
@@ -228,13 +299,93 @@ async function resolveLocation(row, config) {
  *
  * Same tables and same wording as the send path below — see `codedCellError`.
  */
+/**
+ * ETP-5350 — the CIF/NIF, checked while the user is still REVIEWING.
+ *
+ * `taxIdValidation.js` is the browser mirror of `SpanishTaxIdValidator.java` and the Contacts
+ * FORM has used it all along, but the import never called it: `registerImportRowValidator`
+ * only covered the two AD-coded cells. So a malformed tax id sat in "Correctas", and the user
+ * discovered it only after confirming, as a raw untranslated server message — the same
+ * late-and-technical failure ETP-4996 removed for `oBTIKTaxIDKey` and `etgoIsperson`.
+ *
+ * Reproduced live on 2026-09-20: a check-digit typo and an 18-character paste both reached
+ * "Correctas" and came back 400 from `BusinessPartnerHandler` at confirm time.
+ *
+ * Blank is deliberately NOT an error here. `getTaxIdError` waves an empty value through, and
+ * the column's own `required: true` is enforced by `validateRow`; reporting it twice would put
+ * two messages on one cell.
+ */
+function taxIdCellError(raw, translate) {
+  const key = getTaxIdError(raw);
+  if (!key) return null;
+  const fallback = key === TAX_ID_CHECK_DIGIT_ERROR_KEY
+    ? 'The check digit does not match. Review the number.'
+    : 'Enter a valid NIF, CIF or NIE.';
+  return { target: 'taxID', message: translatedOrFallback(key, fallback, translate) };
+}
+
+/**
+ * The translated text for `key`, or `fallback` when there is no dictionary or the dictionary
+ * echoes the key back — the standing posture of this import: an echoed key is a miss, not a
+ * translation. Extracted because the same four-line dance sat at three call sites and carried
+ * most of `contactIdentityErrors`'s cognitive complexity (S3776).
+ */
+function translatedOrFallback(key, fallback, translate) {
+  if (typeof translate !== 'function') return fallback;
+  const translated = translate(key);
+  return translated && translated !== key ? translated : fallback;
+}
+
+/**
+ * A person contact is identified by first AND last name, so a missing half fails the row on
+ * that very cell. Split out of `contactIdentityErrors` for S3776.
+ */
+function personNameErrors(firstName, lastName, translate) {
+  const message = translatedOrFallback('importErrorPersonNameRequired',
+    'A person contact requires both first name and last name.', translate);
+  return [
+    ...(!firstName ? [{ target: 'etgoFirstname', message }] : []),
+    ...(!lastName ? [{ target: 'etgoLastname', message }] : []),
+  ];
+}
+
+function contactIdentityErrors(row, translate) {
+  if (row.name === undefined && row.etgoFirstname === undefined
+      && row.etgoLastname === undefined && row.etgoIsperson === undefined) {
+    return [];
+  }
+  let type;
+  try {
+    type = resolveCodedCellOrThrow(row.etgoIsperson, IS_PERSON_VALUES, {
+      defaultCode: DEFAULT_IS_PERSON, fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
+    });
+  } catch {
+    // The coded-value validator below owns the invalid-type error.
+    return [];
+  }
+  const firstName = String(row.etgoFirstname ?? '').trim();
+  const lastName = String(row.etgoLastname ?? '').trim();
+  if (type === 'Y') {
+    return personNameErrors(firstName, lastName, translate);
+  }
+  if (!String(row.name ?? '').trim() && !(firstName && lastName)) {
+    const message = translatedOrFallback('importErrorMissingContactName',
+      'This row has no commercial name and no first/last name, so the contact cannot be created.',
+      translate);
+    return [{ target: 'name', message }];
+  }
+  return [];
+}
+
 registerImportRowValidator('contacts', (row, { translate } = {}) => [
+  taxIdCellError(row.taxID, translate),
   codedCellError(row.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
     target: 'oBTIKTaxIDKey', fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate,
   }),
   codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
     target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
   }),
+  ...contactIdentityErrors(row, translate),
 ].filter(Boolean));
 
 // ETP-4997 — the CSV export derives its columns from these same import fields, but reads the
@@ -291,6 +442,7 @@ registerExportHints('contacts', {
 
 registerImportDescriptor('contacts', async (row, config) => {
   const bpFields = pick(row, BP_TARGETS);
+  if (bpFields.etgoWeb !== undefined) bpFields.etgoWeb = stripUrlScheme(bpFields.etgoWeb);
   // C_BPartner.Value (DAL property `searchKey`) is `required: true` but `form: false` —
   // hidden from every BusinessPartner create form, this one included (verified against
   // artifacts/contacts/contract.json). There is no server-side default for it (confirmed:
@@ -316,17 +468,15 @@ registerImportDescriptor('contacts', async (row, config) => {
   // not be imported without manually deleting the column. Only a non-blank, VALID cell
   // may override a default; an unrecognized one fails its own row with a message naming
   // the accepted values, instead of a bare 400 from the backend.
-  const bpName = resolveBusinessPartnerName(bpFields, config);
+  const identity = normalizeBusinessPartnerIdentity(bpFields, config);
   const bpBody = {
     ...bpFields,
-    name: bpName,
+    name: identity.name,
     oBTIKTaxIDKey: resolveCodedCellOrThrow(bpFields.oBTIKTaxIDKey, TAX_ID_KEY_VALUES, {
       defaultCode: DEFAULT_TAX_ID_KEY, fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate: config.translate,
     }),
-    etgoIsperson: resolveCodedCellOrThrow(bpFields.etgoIsperson, IS_PERSON_VALUES, {
-      defaultCode: DEFAULT_IS_PERSON, fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate: config.translate,
-    }),
-    searchKey: deriveSearchKey(bpName),
+    etgoIsperson: identity.isPerson,
+    searchKey: deriveSearchKey(identity.name),
   };
 
   const categoryId = await resolveCategoryId(row, config);

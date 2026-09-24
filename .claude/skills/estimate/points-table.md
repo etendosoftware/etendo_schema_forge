@@ -55,6 +55,7 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `suppress-existing-behavior` | 1 | Conditionally hide/disable an existing flow (a popup, an indicator, an action) for some cases |
 | `wire-native-process-button` | 1 | Surface an existing AD process / posting / Complete button on a new variant. The **process logic is reuse** — score only the wiring, not the logic. |
 | `multi-variant-window-framework` | 5 | **First** time hosting N variants/doc-types under one **existing** window (variant selector + conditional wiring). The novelty is the framework; later variants get the second-mover discount. |
+| `unify-duplicate-component` | 8 | Consolidate N **independent, already-diverged** reimplementations of the same UI pattern (found via code inspection, not a shared import) into one shared piece, migrating every call site while preserving each one's domain deltas. Heavier than `refactor-extract` (2, extracting one clean helper out of code you're already touching) because the inputs are N *pre-existing, drifted* copies — reconciling their differing data shapes (e.g. one flow has no "already delivered" reference column, another does) is design work, not extraction. Lighter than `new-ad-table`/`document-auto-generation`-class backend builds. First occurrence of this shape gets `new-pattern-no-precedent` on top; do not also apply `second-mover-reuse` to the unification itself (only to a *later* consumer's migration). |
 
 ### Generation & backend (Etendo Go)
 
@@ -65,6 +66,8 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `java-handler-complex` | 5 | Handler with non-trivial business logic, stock movements, transactions |
 | `stock-movement` | 3 | Physical inventory movement on confirm (partial qty support) |
 | `webhook-config` | 2 | New webhook / NEO config push for a window |
+| `new-ad-table` | 5 | A brand-new Etendo table: physical model XML + AD sourcedata (`AD_TABLE`/`AD_COLUMN`) + entity generation. Includes the human-run `export.database` / `generate.entities` coordination and the property-name trap (the generated accessor comes from the **column** name — `C_BPARTNER_ID` → `getBpartner()`, not `getBusinessPartner()`), which does not surface until the real entity exists. Constraints/indexes still need direct DDL; the alter-db webhooks cannot create them. |
+| `third-party-sdk-integration` | 3 | Add a third-party Java SDK the backend calls at runtime: dependency + version compatibility with what is already on the classpath + getting the jar onto Etendo's `WebContent/WEB-INF/lib` + confirming no shading conflict. Heavier than `webhook-config` because the Etendo classpath, not just config, is involved. Pair with the `external-service-dependency` risk in §2 when the SDK talks to a network service. |
 
 > **⚠️ Reuse warning — "does the platform already do this?"** Before scoring any backend row, ask
 > whether the behaviour is already delivered by an **existing native process** that NEO Headless
@@ -112,6 +115,7 @@ real justification — do not stack speculatively.
 | `late-test-discovery` | +30% | Functional flow likely to surface bugs only during QA/manual testing |
 | `external-backend-change` | +30% | Requires a coordinated change in `com.etendoerp.go` (Java) |
 | `unclear-requirements` | +30% | Acceptance criteria fuzzy or likely to change mid-task |
+| `external-service-dependency` | +30% | Puts a third-party network service in a request or startup path **whose resilience you must build yourself**. The cost is the failure-mode design (never block, never fail, bounded timeout, cached last-known-good), per-environment credentials, and container egress. **Do NOT apply when a mature vendor SDK already provides in-memory caching, background polling and default-on-failure** — that is the SDK's job, and charging for it is double-counting (caught 2026-09-10: this factor plus `new-pattern-no-precedent` inflated a ConfigCat estimate ~2.5x). Check what the SDK does before applying. |
 
 ---
 

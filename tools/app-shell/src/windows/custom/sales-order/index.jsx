@@ -6,6 +6,7 @@ import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReacti
 import BulkOrderMoreMenu from '@generated/sales-order/custom/BulkOrderMoreMenu';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
 import { ConfirmModal, ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
+import OrderCreateInvoiceSecondaryActions from '@generated/sales-order/custom/OrderCreateInvoiceSecondaryActions';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
@@ -78,6 +79,13 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
 
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  // ETP-5205 — moved up from below useOrderWindow: same rationale as
+  // purchase-order/index.jsx.
+  const windowAccessTier = useWindowAccess('143');
+
   const {
     refreshKey, setRefreshKey,
     renderPreview, rowQuickActions,
@@ -87,9 +95,12 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'sales-order',
-    deliveryKey: 'deliveryStatus',
+    windowReadOnly: windowAccessTier === 'read-only',
     manageLabelKeys: SO_MANAGE_LABELS,
     confirmLabelKey: 'soConfirmBtn',
+    confirmedTitleKey: 'soConfirmedTitle',
+    primaryDoc: { key: 'shipment', type: 'salida', route: 'goods-shipment' },
+    invoiceDoc: { key: 'invoice', type: 'facturaVenta', route: 'sales-invoice' },
     headers,
     ConfirmModal,
     ConfirmResultModal,
@@ -106,10 +117,6 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'sales', specName: 'sales-order',
   });
 
-  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
-  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
-  // Checked once here, before either branch, so both list and detail are covered.
-  const windowAccessTier = useWindowAccess('143');
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).
@@ -134,6 +141,7 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
           linesEmptyState={LinesEmptyState}
           {...rest}
           lineCellBadges={taxSifCellBadges}
+          topbarSecondary={OrderCreateInvoiceSecondaryActions}
           data-testid="GeneratedApp__6339e4" />
         {contactPortal}
         {taxSifModal}

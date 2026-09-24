@@ -1,5 +1,9 @@
 /**
- * ETP-5190 — the `x/7` progress badge on the sidebar's First Steps entry.
+ * ETP-5190 — the plan-sized progress badge on the sidebar's First Steps entry.
+ *
+ * ETP-5364's `dismissed` flag — the one thing that removes that entry — is NOT decided here. It
+ * is an item-level predicate in `filterMenuGroupsByAccess`, asserted in registry.vitest.jsx; the
+ * last describe below only pins that this component does not second-guess it.
  *
  * Separate from `SideMenu.vitest.jsx` because this suite needs a real `FirstStepsContext`
  * provider around the menu, and that suite's fixture deliberately renders it bare.
@@ -34,6 +38,8 @@ vi.mock('@/components/layout/FavoritesContext', () => ({
 vi.mock('@/lib/flags', () => ({
   useFeatureFlag: () => false,
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+  ACCT_PROCESS_MONITOR: 'acct-process-monitor',
+  PUBLIC_API_KEYS: 'public-api-keys',
 }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({
@@ -122,6 +128,13 @@ const tenantPlan = vi.hoisted(() => ({ plan: 'productive', loading: false }));
 vi.mock('@/hooks/useTenantPlan.js', () => ({
   useTenantPlan: () => tenantPlan,
 }));
+const transfer = vi.hoisted(() => ({
+  status: 'NOT_REQUESTED', products: {}, contacts: {}, loading: false, available: false, error: false,
+}));
+// A 404 from the backend means this flag is off, so the productive checklist has seven rows.
+vi.mock('@/pages/first-steps/useDemoDataTransfer.js', () => ({
+  useDemoDataTransfer: () => transfer,
+}));
 
 import SideMenu from '../SideMenu.jsx';
 import { FirstStepsProvider } from '@/pages/first-steps/FirstStepsContext.jsx';
@@ -134,11 +147,12 @@ const MENU_GROUPS = [
   { group: 'Home', icon: 'Home', section: 'General', items: [{ name: 'dashboard', label: 'Home' }] },
 ];
 
-function setState({ completed = [], loading = false, error = null } = {}) {
+function setState({ completed = [], loading = false, error = null, dismissed = false } = {}) {
   hook.value = {
-    completed, seen: false, loading, error,
+    completed, seen: false, dismissed, loading, error,
     toggleStep: async () => true,
     markSeen: async () => true,
+    setDismissed: async () => true,
   };
 }
 
@@ -153,12 +167,15 @@ beforeEach(() => {
   setState();
   tenantPlan.plan = PLAN_PRODUCTIVE;
   tenantPlan.loading = false;
+  transfer.status = 'NOT_REQUESTED';
+  transfer.available = false;
+  transfer.loading = false;
 });
 
 describe('First Steps sidebar badge — the denominator follows the plan', () => {
-  it('reads x/5 on a trial, not x/7', () => {
+  it('reads x/5 on a trial, not x/8', () => {
     // The badge must agree with the page. It renders `progress.total`, which the provider
-    // sizes from the plan — a hardcoded 7 here would read as two steps permanently missing.
+    // sizes from the plan — a hardcoded 8 here would show steps a trial cannot reach.
     tenantPlan.plan = 'free';
     setState({ completed: ['company-data'] });
     renderMenu();
@@ -174,7 +191,7 @@ describe('First Steps sidebar badge — the denominator follows the plan', () =>
   });
 
   it('renders no badge while the plan is still being resolved', () => {
-    // Same reason the loading state hides it: a badge that flashed 1/7 and then became 1/5
+    // Same reason the loading state hides it: a badge that flashed 1/8 and then became 1/5
     // reads as progress lost.
     tenantPlan.plan = null;
     tenantPlan.loading = true;
@@ -185,7 +202,7 @@ describe('First Steps sidebar badge — the denominator follows the plan', () =>
 });
 
 describe('First Steps sidebar badge — expanded', () => {
-  it('shows 1/7 on a fresh account, next to a link that still works', () => {
+  it('shows 1/7 on a fresh productive account when transfer is not exposed', () => {
     renderMenu();
     expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`1/${PRODUCTIVE_TOTAL}`);
     expect(screen.getByTestId('menu-item-first-steps')).toHaveAttribute('href', '/first-steps');
@@ -198,7 +215,7 @@ describe('First Steps sidebar badge — expanded', () => {
   });
 
   it('keeps the entry — and the badge — once everything is done', () => {
-    // The whole point of the acceptance criterion: at 7/7 the entry must NOT disappear, because
+    // The whole point of the acceptance criterion: at 8/8 the entry must stay, because
     // that is the only way back in to un-tick a step.
     setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
     renderMenu();
@@ -206,9 +223,26 @@ describe('First Steps sidebar badge — expanded', () => {
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 
+  it('adds the eighth count only when the backend exposes a completed transfer', () => {
+    setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    transfer.available = true;
+    transfer.status = 'COMPLETED';
+    renderMenu();
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`8/${PRODUCTIVE_TOTAL + 1}`);
+  });
+
   it('renders no badge while the state is loading', () => {
-    // A badge that flashed 1/7 before the real count arrived would read as progress lost.
+    // A badge that flashed 1/8 before the real count arrived would read as progress lost.
     setState({ loading: true });
+    renderMenu();
+    expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
+  });
+
+  it('renders no badge while the server-owned transfer status is loading', () => {
+    transfer.status = 'LOADING';
+    transfer.loading = true;
+    transfer.available = true;
     renderMenu();
     expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
     expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
@@ -249,5 +283,38 @@ describe('First Steps sidebar badge — collapsed', () => {
   it('never renders the expanded badge in the collapsed rail', () => {
     renderMenu({ expanded: false });
     expect(screen.queryByTestId('menu-first-steps-progress')).not.toBeInTheDocument();
+  });
+});
+
+describe('First Steps sidebar entry — what this component does NOT decide (ETP-5364)', () => {
+  it('renders whatever groups it is handed, dismissed or not', () => {
+    // `dismissed` is applied by `filterMenuGroupsByAccess` (the fourth menu axis,
+    // `"hideWhenFirstStepsDismissed"` in menu.json) BEFORE AppLayout hands the groups down —
+    // see registry.vitest.jsx. SideMenu deliberately does not re-check it: a group filter here
+    // was the first implementation, and because the checklist state arrives on its own request
+    // the entry rendered and then vanished on every reload and locale change.
+    setState({ dismissed: true });
+    renderMenu();
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
+  });
+
+  it('keeps Home reachable in every checklist state', () => {
+    // The ticket's other acceptance criterion, asserted here as well as on the filter because
+    // Home must survive the whole render path, not just the predicate.
+    for (const dismissed of [true, false, undefined]) {
+      setState({ dismissed });
+      const { unmount } = renderMenu();
+      expect(screen.getByTestId('menu-item-dashboard')).toHaveAttribute('href', '/dashboard');
+      unmount();
+    }
+  });
+
+  it('completing every step does NOT dismiss on its own', () => {
+    // Finishing the list and choosing to put it away are two different acts. Deriving one from
+    // the other would take the entry from a user who never asked, with no way to un-tick a step.
+    setState({ completed: ['company-data', 'invoice-sequence', 'fiscal-config', 'products', 'contacts', 'team'] });
+    renderMenu();
+    expect(screen.getByTestId('menu-first-steps-progress')).toHaveTextContent(`7/${PRODUCTIVE_TOTAL}`);
+    expect(screen.getByTestId('menu-item-first-steps')).toBeInTheDocument();
   });
 });

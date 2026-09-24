@@ -49,6 +49,7 @@ import {
   maybeSaveBeforeProcess,
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
+  buildCustomAddModalOnSaved,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -141,9 +142,13 @@ describe('normalizePatchFieldValues', () => {
   // numeric-looking value (e.g. the attributeSetValue "0" sentinel) must stay
   // a string, never be coerced to Number.
   describe('with field metadata (ETP-4886 — _ID columns stay strings)', () => {
+    // ETP-5107 — `unitPrice` now needs a declared numeric `type` for
+    // buildRowValueCoercer to coerce it: a matched field is gated strictly by
+    // `type` (against NUMERIC_FIELD_TYPES), never by the value's shape alone,
+    // mirroring what every real window's addLineFields.entry declares (plan §9.2).
     const fields = [
       { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
-      { key: 'unitPrice', column: 'PriceActual' },
+      { key: 'unitPrice', column: 'PriceActual', type: 'amount' },
     ];
 
     it('does NOT coerce an _ID-backed field even when its value looks numeric', () => {
@@ -173,12 +178,17 @@ describe('normalizePatchFieldValues', () => {
   });
 });
 
-describe('buildRowValueCoercer (ETP-4886)', () => {
+describe('buildRowValueCoercer (ETP-4886, comma-awareness ETP-5107)', () => {
+  // ETP-5107 — `unitPrice`/`discount` need a declared numeric `type` (as every
+  // real window's addLineFields.entry has, plan §9.2) for the coercer to act
+  // on them at all: a MATCHED field is now gated strictly by `type` against
+  // NUMERIC_FIELD_TYPES, never by the value's shape — only a key with NO
+  // matching field at all falls back to the legacy shape heuristic.
   const fields = [
     { key: 'attributeSetValue', column: 'M_AttributeSetInstance_ID' },
     { key: 'businessPartner', column: 'C_BPartner_ID' },
-    { key: 'unitPrice', column: 'PriceActual' },
-    { key: 'discount', column: 'Discount' },
+    { key: 'unitPrice', column: 'PriceActual', type: 'amount' },
+    { key: 'discount', column: 'Discount', type: 'number' },
   ];
 
   it('does not coerce an _ID-backed field even when its value looks numeric ("0", "19", negative, decimal)', () => {
@@ -227,14 +237,34 @@ describe('buildRowValueCoercer (ETP-4886)', () => {
     expect(coerce(false, 'attributeSetValue')).toBe(false);
   });
 
-  it('leaves comma-decimal (locale) strings untouched even for numeric non-_ID fields', () => {
+  // ETP-5107 Bug 1 regression — this used to be titled "leaves comma-decimal
+  // strings untouched", asserting the exact bug this ticket fixes: a value
+  // typed with the Spanish decimal separator (`,`) reached NEO Headless as
+  // the literal, un-coerced string "10,50", which the backend rejects as an
+  // invalid BigDecimal (Error 400). Now a matched numeric-typed field runs
+  // the value through the canonical parseLocaleNumber(), so a comma-decimal
+  // string is correctly coerced to a real Number, not silently sent broken.
+  it('coerces a comma-decimal (locale) string to a Number for a numeric non-_ID field (ETP-5107 Bug 1)', () => {
     const coerce = buildRowValueCoercer(fields);
-    expect(coerce('10,50', 'unitPrice')).toBe('10,50');
+    expect(coerce('10,50', 'unitPrice')).toBe(10.5);
+    expect(coerce('-3,5', 'discount')).toBe(-3.5);
   });
 
-  it('a field present in the map but with no column value falls back to the numeric heuristic', () => {
+  // ETP-5107 regression fix — a MATCHED field (present in `fields`) whose
+  // `type` is simply undeclared (not merely non-numeric) still falls back to
+  // the legacy shape heuristic, exactly like a key entirely ABSENT from
+  // `fields`: the gate is "is `type` declared at all" (`field?.type != null`),
+  // not "does a field object exist". Only a field whose `type` IS declared —
+  // even to something non-numeric like `'text'` — skips the heuristic
+  // fallback and is left uncoerced.
+  it('a matched field with no declared type still falls back to the legacy numeric heuristic', () => {
     const coerce = buildRowValueCoercer([{ key: 'weirdField' }]);
     expect(coerce('42', 'weirdField')).toBe(42);
+  });
+
+  it('a key with NO matching field at all still falls back to the legacy numeric heuristic', () => {
+    const coerce = buildRowValueCoercer([{ key: 'weirdField' }]);
+    expect(coerce('42', 'trulyUnmappedKey')).toBe(42);
   });
 });
 
@@ -834,5 +864,93 @@ describe('buildHeaderFormData (ETP-5052)', () => {
     expect(data).toEqual({ id: '1', warehouse: 'W1' });
     expect('hasLines' in data).toBe(false);
     expect(result).toEqual({ id: '1', warehouse: 'W1', hasLines: true });
+  });
+});
+
+// --- ETP-5366 follow-up: the customAddModal onSaved path (e.g. Contacts' address
+// form) persists via its own raw fetch, bypassing handleAddChild/handleUpdateChild
+// entirely — the only places that invalidate BOTH the child collection cache and the
+// PARENT entity's own list cache. buildCustomAddModalOnSaved is what has to do that
+// invalidation instead. Before invalidateEntityCache() existed in this function, the
+// window's grid kept serving its pre-save cached page (e.g. a rolled-up "Dirección"
+// list column) for up to `recordStaleTime` after the user navigated back to it.
+describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
+  function makeSecondaryHook(overrides = {}) {
+    return {
+      invalidateChildrenCache: vi.fn(),
+      invalidateEntityCache: vi.fn(),
+      handleSelect: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  it('invalidates the children cache, the parent entity cache, re-selects the parent, and closes the modal — in that order', () => {
+    const secondaryHook = makeSecondaryHook();
+    const secondaryHooks = [secondaryHook];
+    const parent = { id: 'BP-1', name: 'ACME' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks, idx: 0, hook, setCustomModalState });
+    onSaved();
+
+    expect(secondaryHook.invalidateChildrenCache).toHaveBeenCalledWith(parent.id);
+    expect(secondaryHook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    expect(secondaryHook.handleSelect).toHaveBeenCalledWith(parent);
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+
+    // Order matters: the entity cache must be dropped BEFORE handleSelect re-reads it,
+    // otherwise handleSelect's fetch would still be served from the stale cache entry
+    // (the same failure mode ETP-5366 fixed for the children collection — see
+    // useEntity.cache.vitest.jsx test 18).
+    const invalidateEntityOrder = secondaryHook.invalidateEntityCache.mock.invocationCallOrder[0];
+    const handleSelectOrder = secondaryHook.handleSelect.mock.invocationCallOrder[0];
+    expect(invalidateEntityOrder).toBeLessThan(handleSelectOrder);
+  });
+
+  it('falls back to hook.editing when hook.selected is unset (new/unsaved header)', () => {
+    const secondaryHook = makeSecondaryHook();
+    const editing = { id: 'BP-2', name: 'Draft Partner' };
+    const hook = { selected: null, editing };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks: [secondaryHook], idx: 0, hook, setCustomModalState });
+    onSaved();
+
+    expect(secondaryHook.invalidateChildrenCache).toHaveBeenCalledWith(editing.id);
+    expect(secondaryHook.handleSelect).toHaveBeenCalledWith(editing);
+  });
+
+  it('reaches the tab at the given idx, not just the first secondary hook', () => {
+    const otherHook = makeSecondaryHook();
+    const targetHook = makeSecondaryHook();
+    const parent = { id: 'BP-1' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({
+      secondaryHooks: [otherHook, targetHook],
+      idx: 1,
+      hook,
+      setCustomModalState,
+    });
+    onSaved();
+
+    expect(targetHook.invalidateEntityCache).toHaveBeenCalledTimes(1);
+    expect(targetHook.handleSelect).toHaveBeenCalledWith(parent);
+    expect(otherHook.invalidateEntityCache).not.toHaveBeenCalled();
+    expect(otherHook.handleSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the secondary hook is missing invalidation methods (optional chaining)', () => {
+    const secondaryHooks = [{ handleSelect: vi.fn() }];
+    const parent = { id: 'BP-1' };
+    const hook = { selected: parent, editing: null };
+    const setCustomModalState = vi.fn();
+
+    const onSaved = buildCustomAddModalOnSaved({ secondaryHooks, idx: 0, hook, setCustomModalState });
+    expect(() => onSaved()).not.toThrow();
+    expect(secondaryHooks[0].handleSelect).toHaveBeenCalledWith(parent);
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
   });
 });

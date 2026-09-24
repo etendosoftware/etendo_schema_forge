@@ -94,7 +94,15 @@ test('imports a product and creates its missing category', async ({ page }) => {
     ].join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__chip-categoria')).toContainText('Category');
+  // ETP-5223: the chip reads `<source column>→<target caption>`, and the target
+  // caption is now resolved through `fieldLabelFn` (the session language) instead of
+  // the English `field.label` declared in decisions.json. Mocked specs run in es_ES,
+  // so accept either locale's caption for M_Product_Category_ID ("Category" /
+  // "Categoría") — per the e2e guide's mock-mode rule on localized text. The regex is
+  // anchored on `categoria→` so it still asserts the RESOLVED TARGET half: the
+  // `categoria` source column on its own can never satisfy it.
+  await expect(page.getByTestId('ImportColumnMapping__chip-categoria'))
+    .toContainText(/categoria\s*→\s*(Categoría|Category)/);
   await captureScreenshot(page, {
     path: resolve(evidenceDir, 'ETP-4905-product-import-category-review.png'),
     fullPage: true,
@@ -199,7 +207,12 @@ test('keeps invalid rows out of the batch and allows valid rows to continue', as
     ].join('\n')),
   });
 
-  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/4');
+  // ETP-4954: the mapping modal is now field-first — the count is FIELDS with a source out
+  // of all importable fields, not columns mapped out of columns present. ETP-5350 took
+  // Product from 8 to 10 by adding `cost` and `costStartingDate` to
+  // `artifacts/product/decisions.json` → `window.import.fields`, so the denominator tracks
+  // that list: add a field there and this number moves.
+  await expect(page.getByTestId('ImportColumnMapping__summaryCount')).toContainText('4/10');
 
   // The two invalid rows fail at DIFFERENT stages, and ETP-4996 is what moved the first one.
   // BAD-PRICE-4905 is caught during REVIEW: `isNumeric` on the price column makes validateRow

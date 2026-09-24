@@ -79,6 +79,79 @@ const FIXES_WITH_REPORT = new Set([
   // AND which of the two guards protected it — the canonical "skipped part of its own work" case,
   // same pattern as R19. See cli/test/data-fixes-r34-fin-account-cleared-payment-accounts.test.js.
   '20260908T120000Z__R34-fin-account-cleared-payment-accounts',
+  // R35 (ETP-5247) backfills/corrects the "Acreedor" C_BP_Group's 5 posting accounts,
+  // resolving each by account VALUE against the tenant's own chart; its @report lists
+  // any of the 5 target account codes that genuinely does not exist in that chart —
+  // same "flag, don't guess" pattern as R19/R28/R31.
+  '20260909T120000Z__R35-acreedor-bp-group-acct-accounts',
+  // R35 (ETP-5245) marks one default price list per trade direction. Its @report is an
+  // AMBIGUITY report rather than a "skipped work" one: @apply always resolves a direction that
+  // has candidates, so what needs a human is the direction with no active list at all, the one
+  // carrying SEVERAL pre-existing defaults (deliberately not de-duplicated — choosing which
+  // deliberate flag to clear is not a data-fix's decision), and the one whose single default sits
+  // among N>1 active lists. Empty — `detail` null — on the healthy GO shape of exactly one active
+  // list and one default per direction.
+  '20260909T120000Z__R35-pricelist-isdefault',
+  // R37 (ETP-5274) deactivates the internal "Reversed Sales/Purchase Invoice" doctypes and their
+  // numbering sequences, but the shared-sequence guard deliberately leaves a sequence ACTIVE when
+  // another doctype that stays active still uses it (confirmed real case: client "F&B
+  // International Group", sequence "ES Return Material Sales Invoice" shared between the
+  // deactivated "Reversed Sales Invoice" and the still-active "ES Return Material Sales
+  // Invoice"). Its @report lists every such sequence plus the doctype that kept it alive — same
+  // "flag, don't guess" pattern as R19.
+  '20260916T120000Z__R37-deactivate-reversed-invoice-doctypes',
+  // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
+  // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
+  // untouched because isready='N' — an org whose alta never completed is missing far more
+  // than this one column (no accounting schema, no business partners, no products), so
+  // filling it would mask a half-created tenant rather than fix it. Same "flag, don't guess"
+  // pattern as R19/R28/R35: the fix declines part of its own scope and says so instead of
+  // silently doing nothing. Empty — `detail` null — on any tenant whose orgs are all ready.
+  '20260918T120000Z__R38-org-legalentity-pointer',
+  // R38 (ETP-5285) sets the product-defined PREFIX and aligns STARTNO/CURRENTNEXT at 1000000 on
+  // the five document series Etendo GO configures. Like its sibling R31-document-sequence-startno
+  // above — and unlike the "flag, don't guess" entries — its @report is a pure POST-CONDITION: it
+  // lists any in-scope series still off target AFTER the apply. All three UPDATEs are
+  // unconditional within their IS DISTINCT FROM guard, so there is no legitimate "left off target"
+  // case and it should always come back empty, leaving `detail` null on the APPLIED ledger row. A
+  // non-empty detail means a row was skipped or something raced the update. Verified empty on the
+  // dev fleet: 94 applied, 461 rows, 0 left off target.
+  // See cli/test/data-fixes-r38-document-sequence-series-prefixes.test.js.
+  '20260919T120000Z__R38-document-sequence-series-prefixes',
+  // R39 (ETP-5364) creates the AP Invoice FC sequence and links its doctype to it. Its @report
+  // checks the post-condition after @apply: any returned doctype is still off target and needs
+  // investigation. A successful apply leaves the report empty and ledger detail null.
+  '20260922T120000Z__R39-ap-invoice-fc-series',
+  // R39 (ETP-5364) clears ticket-tagged descriptions from three document sequences. Its @report
+  // checks that no such description remains after @apply; a returned row signals an incomplete
+  // update or a concurrent write, while a successful apply leaves ledger detail null.
+  '20260922T130000Z__R39-document-sequence-clear-descriptions',
+  // R39 (ETP-5442) backfills C_ELEMENTVALUE_OPERAND (formula-account rows, e.g.
+  // "P.G.D = P.G.C + P.G.19") that GO onboarding never imported. @check only requires that a
+  // formula account's OWNER exists in the tenant's chart, so a tenant whose chart is missing one
+  // of the accounts an operand REFERENCES still matches @check and gets marked APPLIED — the
+  // @apply join simply finds nothing for that line. Its @report lists every operand line that
+  // could not be created and which side (formula account, referenced account, or both) is
+  // missing from the chart — same "flag, don't guess" pattern as R19/R28/R31/R35/R37/R38: the fix
+  // declines part of its own scope instead of silently pretending it succeeded. Empty — `detail`
+  // null — whenever the tenant's chart carries every account this fix references.
+  '20260922T120000Z__R39-elementvalue-operand-backfill',
+  // R39 (gap C3) opens every C_PeriodControl row of a period whose aggregate status is
+  // Mixed, but deliberately never touches a Permanently Closed row and respects the same
+  // future-Permanently-Closed-period guard AD Process 167 itself enforces. Its @report
+  // lists every row still 'N'/'C' in a still-Mixed period after @apply, with the reason
+  // (blocked by a sibling 'P' row vs. blocked by the future-period guard) — same
+  // "flag, don't guess" pattern as R19.
+  '20260921T120000Z__R39-mixed-period-open',
+  // R39 (ETP-5364, gap N7) creates the AP Invoice "FC" sequence and points the AP Invoice doctype
+  // at it. Its @report is a post-condition check, not a decline list: it lists the doctype only if
+  // it is STILL not numbered by an on-target FC sequence after @apply, so it is empty on every
+  // clean run — a non-empty `detail` means something raced the update.
+  '20260922T120000Z__R39-ap-invoice-fc-series',
+  // R39 (ETP-5364) clears the ticket-tagged descriptions of three document sequences. Same
+  // post-condition shape: the @report lists a sequence whose description is STILL set after @apply
+  // and is empty whenever nothing was written between the update and the read.
+  '20260922T130000Z__R39-document-sequence-clear-descriptions',
 ]);
 
 async function loadCatalogFiles() {

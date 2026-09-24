@@ -21,6 +21,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38907,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-15",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-15",
@@ -44,11 +45,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-15",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-15",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-15"
   },
   {
     "id": "mock-header-002",
@@ -70,6 +70,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 9306,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-16",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-16",
@@ -93,11 +94,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-16",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-16",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-16"
   },
   {
     "id": "mock-header-003",
@@ -119,6 +119,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11544,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-17",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-17",
@@ -142,11 +143,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-17",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-17",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-17"
   },
   {
     "id": "mock-header-004",
@@ -168,6 +168,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 11872,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-18",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-18",
@@ -191,11 +192,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-18",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-18",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-18"
   },
   {
     "id": "mock-header-005",
@@ -217,6 +217,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 48460,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-19",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-19",
@@ -240,11 +241,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-19",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-19",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-19"
   },
   {
     "id": "mock-header-006",
@@ -266,6 +266,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 45418,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-20",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-20",
@@ -289,11 +290,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-20",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-20",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-20"
   },
   {
     "id": "mock-header-007",
@@ -315,6 +315,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 33840,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-21",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-21",
@@ -338,11 +339,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-21",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-21",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-21"
   },
   {
     "id": "mock-header-008",
@@ -364,6 +364,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 25716,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-22",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-22",
@@ -387,11 +388,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-22",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-22",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-22"
   },
   {
     "id": "mock-header-009",
@@ -413,6 +413,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 44780,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-23",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-23",
@@ -436,11 +437,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-23",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "DR",
     "eTGODeliveryStatus": "DR",
-    "eTGODueDate": "2026-01-23",
-    "eTGOTbaiStatus": "DR"
+    "eTGODueDate": "2026-01-23"
   },
   {
     "id": "mock-header-010",
@@ -462,6 +462,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 12483,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-24",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-24",
@@ -485,11 +486,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-24",
     "eTGOCurrencyRate": "USD",
+    "eTGOTbaiStatus": "CO",
     "eTGODeliveryStatus": "CO",
-    "eTGODueDate": "2026-01-24",
-    "eTGOTbaiStatus": "CO"
+    "eTGODueDate": "2026-01-24"
   },
   {
     "id": "mock-header-011",
@@ -511,6 +511,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 46022,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-25",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-25",
@@ -534,11 +535,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-25",
     "eTGOCurrencyRate": "EUR",
+    "eTGOTbaiStatus": "VO",
     "eTGODeliveryStatus": "VO",
-    "eTGODueDate": "2026-01-25",
-    "eTGOTbaiStatus": "VO"
+    "eTGODueDate": "2026-01-25"
   },
   {
     "id": "mock-header-012",
@@ -560,6 +560,7 @@ export const header = [
     "posted": "Sample posted",
     "outstandingAmount": 38634,
     "priceList": "Sample priceList",
+    "accountingDate": "2026-01-26",
     "project": "Sample project",
     "costcenter": "Sample costcenter",
     "etsgDateOperation": "2026-01-26",
@@ -583,11 +584,10 @@ export const header = [
     "processed": "Sample processed",
     "aeatsiiErrorCode": "Sample aeatsiiErrorCode",
     "aeatsiiErrorMsg": "Sample aeatsiiErrorMsg",
-    "aeatsiiFechaRegCont": "2026-01-26",
     "eTGOCurrencyRate": "GBP",
+    "eTGOTbaiStatus": "IP",
     "eTGODeliveryStatus": "IP",
-    "eTGODueDate": "2026-01-26",
-    "eTGOTbaiStatus": "IP"
+    "eTGODueDate": "2026-01-26"
   }
 ];
 

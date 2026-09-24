@@ -15,7 +15,7 @@ vi.mock('react-router-dom', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() },
+  toast: { error: vi.fn(), success: vi.fn() },
 }));
 
 vi.mock('@/i18n', () => ({
@@ -89,9 +89,10 @@ function ConfirmModal({ orderId, onClose, onConfirmed }) {
   );
 }
 
-function ConfirmResultModal({ docs, currency, navigate: modalNavigate, onClose }) {
+function ConfirmResultModal({ title, docs, currency, navigate: modalNavigate, onClose }) {
   return (
     <div data-testid="confirm-result">
+      <span data-testid="confirm-result-title">{title}</span>
       <span>{currency}</span>
       <span>{docs.map((doc) => doc.num).join('|')}</span>
       <button type="button" onClick={() => modalNavigate('/sales-invoice/inv-1')}>go invoice</button>
@@ -105,7 +106,18 @@ function ManageDocsLauncher({ orderId, onClose, onCreated }) {
     <div data-testid="manage-docs">
       <span>{orderId}</span>
       <button type="button" onClick={onClose}>close manage</button>
-      <button type="button" onClick={onCreated}>created docs</button>
+      {/* ETP-5295 — a real ManageDocsLauncher always calls onCreated with the created-docs
+          object, never a raw DOM event; pass a realistic sales-order shape so this mock
+          exercises the same contract useOrderWindow now depends on. */}
+      <button
+        type="button"
+        onClick={() => onCreated({
+          shipment: { id: 'ship-1', documentNo: 'GS-1', amount: 10 },
+          invoice: { id: 'inv-1', documentNo: 'SI-1', amount: 20 },
+        })}
+      >
+        created docs
+      </button>
     </div>
   );
 }
@@ -116,7 +128,10 @@ function renderOrderHook(props = {}) {
     token: 'tok',
     apiBaseUrl: '/sws/neo/sales-order',
     specName: 'sales-order',
-    deliveryKey: 'deliveryStatus',
+    // ETP-5295 — `deliveryKey` is deliberately absent: the hook no longer takes it. The manage
+    // decision is read from the backend annotations on the row, not from a per-window percent
+    // column, so a fixture still passing `deliveryKey` would be silently ignored and would
+    // suggest a parameter that no longer exists.
     manageLabelKeys: {
       both: 'manageBoth',
       primary: 'manageShipment',
@@ -170,7 +185,7 @@ describe('useOrderWindow', () => {
     expect(screen.getByTestId('order-preview')).toHaveTextContent('so-preview');
 
     const actions = result.current.rowQuickActions.menuActions({
-      row: { id: 'so-4', deliveryStatus: 100, invoiceStatus: 100, hasLinkedDocuments: false },
+      row: { id: 'so-4', hasLinkedDocuments: false },
       status: 'CO',
     });
     expect(actions.find((action) => action.key === 'reactivate')).toMatchObject({
@@ -180,6 +195,67 @@ describe('useOrderWindow', () => {
 
     act(() => result.current.rowQuickActions.onMenuActionExecuted({ documentAction: 'RE' }));
     expect(result.current.refreshKey).toBe(2);
+  });
+
+  it('hides reactivate entirely when showReactivate is not passed (defaults to false)', () => {
+    const { result } = renderOrderHook();
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-5', hasLinkedDocuments: false },
+      status: 'CO',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toBeUndefined();
+  });
+
+  it('hides reactivate when the row has linked documents, even if showReactivate is true', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-6', hasLinkedDocuments: true },
+      status: 'CO',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toMatchObject({
+      documentAction: 'RE',
+      visible: false,
+    });
+  });
+
+  it('hides reactivate when the row status is not Confirmed (CO), even if showReactivate is true', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-7', hasLinkedDocuments: false },
+      status: 'DR',
+    });
+
+    expect(actions.find((action) => action.key === 'reactivate')).toMatchObject({
+      documentAction: 'RE',
+      visible: false,
+    });
+  });
+
+  it('returns an empty menuActions list when windowReadOnly is true, regardless of status/manage/reactivate eligibility (ETP-5205)', () => {
+    const { result } = renderOrderHook({ showReactivate: true, windowReadOnly: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-ro-1', hasLinkedDocuments: false, needsPrimaryDoc: true },
+      status: 'CO',
+    });
+
+    expect(actions).toEqual([]);
+  });
+
+  it('regression: menuActions still returns entries when windowReadOnly is false/absent', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-ro-2', hasLinkedDocuments: false },
+      status: 'CO',
+    });
+
+    expect(actions.find((a) => a.key === 'reactivate')).toBeDefined();
   });
 
   // ETP-4717 — this hook builds rowQuickActions by hand (bypassing the
@@ -199,8 +275,6 @@ describe('useOrderWindow', () => {
     const row = {
       id: 'so-10',
       documentStatus: 'DR',
-      deliveryStatus: 0,
-      invoiceStatus: 0,
       currency: 'EUR',
       currency$_identifier: 'EUR',
       orderDate: '2026-07-01',
@@ -249,12 +323,20 @@ describe('useOrderWindow', () => {
     expect(result.current.refreshKey).toBe(1);
   });
 
-  it('opens manage launcher for partially fulfilled confirmed rows and refreshes on created docs', () => {
+  // ETP-5295 — `onCreated` now routes its `docs` into the SAME result popup the
+  // "Confirmar" flow uses (previously the argument was discarded and the launcher just
+  // closed + refreshed). Assert the popup renders with the docs-created title, and that
+  // refreshKey only bumps once the popup itself is closed (not immediately on creation).
+  it('opens manage launcher for partially fulfilled confirmed rows, shows the docs-created result, and refreshes on close', () => {
     const { result } = renderOrderHook();
+    // ETP-5295 — "partially fulfilled" is now stated by the backend annotations on the row
+    // (shipment still pending, invoice already done), not inferred from the DeliveryStatus /
+    // InvoiceStatus percent columns this fixture used to carry. Those percents no longer reach
+    // any decision, so leaving them here would have asserted a dead path.
     const row = {
       id: 'so-manage',
-      deliveryStatus: 50,
-      invoiceStatus: 100,
+      needsPrimaryDoc: true,
+      needsInvoiceDoc: false,
     };
 
     const manageAction = result.current.rowQuickActions
@@ -276,6 +358,339 @@ describe('useOrderWindow', () => {
     unmount();
 
     expect(result.current.manageLauncher).toBeNull();
+    expect(result.current.refreshKey).toBe(0);
+
+    render(result.current.confirmResultPortal);
+    expect(screen.getByTestId('confirm-result-title')).toHaveTextContent('soDocsCreatedTitle');
+    expect(screen.getByTestId('confirm-result')).toHaveTextContent('GS-1|SI-1');
+
+    act(() => {
+      screen.getByText('close result').click();
+    });
+    expect(result.current.confirmResultPortal).toBeNull();
     expect(result.current.refreshKey).toBe(1);
+  });
+});
+
+// ETP-5295 — the confirm/manage result popup used to hardcode the sales-order shape
+// (`confirmedDocs.shipment` + `soConfirmedTitle`) directly inside `useOrderWindow`. It is now
+// parametrized via `confirmedTitleKey`/`primaryDoc`/`invoiceDoc`, and the "manage" (create-docs)
+// flow routes its result into the SAME popup instead of discarding it. These tests cover the
+// purchase-order shape specifically, the manage-flow-produced-a-result case, the toast fallback
+// when neither document was created, and a regression guard against the old hardcoded key.
+describe('useOrderWindow — parametrized confirm/manage result popup (ETP-5295)', () => {
+  const PO_CONFIRMED_TITLE_KEY = 'poConfirmedTitle';
+  const PO_PRIMARY_DOC = { key: 'receipt', type: 'entrada', route: 'goods-receipt' };
+  const PO_INVOICE_DOC = { key: 'invoice', type: 'facturaCompra', route: 'purchase-invoice' };
+
+  function POConfirmModal({ orderId, onClose, onConfirmed }) {
+    return (
+      <div data-testid="po-confirm-modal">
+        <span>{orderId}</span>
+        <button type="button" onClick={onClose}>close confirm</button>
+        <button
+          type="button"
+          onClick={() => onConfirmed({
+            receipt: { id: 'receipt-1', documentNo: 'GR-1', amount: 15 },
+            invoice: { id: 'poinv-1', documentNo: 'PI-1', amount: 25 },
+          })}
+        >
+          confirm po docs
+        </button>
+      </div>
+    );
+  }
+
+  // Exposes the raw props ConfirmResultModal receives so assertions can check `type`/`route`
+  // per doc instead of fighting real modal markup, per Tester convention.
+  function InspectableResultModal({ title, docs, currency, onClose }) {
+    return (
+      <div data-testid="inspect-result">
+        <span data-testid="inspect-title">{title}</span>
+        <span data-testid="inspect-currency">{currency}</span>
+        <pre data-testid="inspect-docs">{JSON.stringify(docs)}</pre>
+        <button type="button" onClick={onClose}>close result</button>
+      </div>
+    );
+  }
+
+  function makeManageDocsLauncherWithDocs(docsToCreate) {
+    return function InlineManageDocsLauncher({ orderId, onClose, onCreated }) {
+      return (
+        <div data-testid="manage-docs-inline">
+          <span>{orderId}</span>
+          <button type="button" onClick={onClose}>close manage</button>
+          <button type="button" onClick={() => onCreated(docsToCreate)}>created docs</button>
+        </div>
+      );
+    };
+  }
+
+  it('renders purchase-order doc shape (type/route) and poConfirmedTitle through the confirm flow', async () => {
+    const { result } = renderOrderHook({
+      confirmedTitleKey: PO_CONFIRMED_TITLE_KEY,
+      primaryDoc: PO_PRIMARY_DOC,
+      invoiceDoc: PO_INVOICE_DOC,
+      ConfirmModal: POConfirmModal,
+      ConfirmResultModal: InspectableResultModal,
+    });
+    // No orderDate → the exchange-rate lookup inside the "confirm" click handler is skipped,
+    // so confirmRow is set synchronously.
+    const row = { id: 'po-1', documentStatus: 'DR', currency$_identifier: 'USD' };
+
+    const confirmAction = result.current.rowQuickActions.menuActions({ row, status: 'DR' })[0];
+    await act(async () => {
+      await confirmAction.onClick({ row });
+    });
+
+    const { unmount } = render(result.current.confirmPortal);
+    act(() => {
+      screen.getByText('confirm po docs').click();
+    });
+    unmount();
+
+    render(result.current.confirmResultPortal);
+    expect(screen.getByTestId('inspect-title')).toHaveTextContent(PO_CONFIRMED_TITLE_KEY);
+    expect(JSON.parse(screen.getByTestId('inspect-docs').textContent)).toEqual([
+      { type: 'entrada', num: 'GR-1', amount: 15, route: '/goods-receipt/receipt-1' },
+      { type: 'facturaCompra', num: 'PI-1', amount: 25, route: '/purchase-invoice/poinv-1' },
+    ]);
+  });
+
+  it('routes ManageDocsLauncher onCreated into the same result popup with the docs-created title (purchase-order)', () => {
+    const { result } = renderOrderHook({
+      confirmedTitleKey: PO_CONFIRMED_TITLE_KEY,
+      primaryDoc: PO_PRIMARY_DOC,
+      invoiceDoc: PO_INVOICE_DOC,
+      ConfirmResultModal: InspectableResultModal,
+      ManageDocsLauncher: makeManageDocsLauncherWithDocs({
+        receipt: { id: 'receipt-9', documentNo: 'GR-9', amount: 99 },
+      }),
+    });
+    const row = { id: 'po-manage', needsPrimaryDoc: true, needsInvoiceDoc: false };
+
+    const manageAction = result.current.rowQuickActions
+      .menuActions({ row, status: 'CO' })
+      .find((action) => action.key === 'manage');
+
+    act(() => manageAction.onClick({ row }));
+    const { unmount } = render(result.current.manageLauncher);
+    act(() => {
+      screen.getByText('created docs').click();
+    });
+    unmount();
+
+    expect(result.current.manageLauncher).toBeNull();
+    render(result.current.confirmResultPortal);
+    expect(screen.getByTestId('inspect-title')).toHaveTextContent('soDocsCreatedTitle');
+    expect(JSON.parse(screen.getByTestId('inspect-docs').textContent)).toEqual([
+      { type: 'entrada', num: 'GR-9', amount: 99, route: '/goods-receipt/receipt-9' },
+    ]);
+  });
+
+  it('falls back to a success toast and resets state when the flow created no document', () => {
+    const { result } = renderOrderHook({
+      ManageDocsLauncher: makeManageDocsLauncherWithDocs({ shipment: null, invoice: null }),
+    });
+    const row = { id: 'so-empty', needsPrimaryDoc: true, needsInvoiceDoc: false };
+
+    const manageAction = result.current.rowQuickActions
+      .menuActions({ row, status: 'CO' })
+      .find((action) => action.key === 'manage');
+
+    act(() => manageAction.onClick({ row }));
+    const { unmount } = render(result.current.manageLauncher);
+    act(() => {
+      screen.getByText('created docs').click();
+    });
+    unmount();
+
+    expect(toast.success).toHaveBeenCalledWith('soDocsCreatedTitle');
+    expect(result.current.confirmResultPortal).toBeNull();
+    expect(result.current.manageLauncher).toBeNull();
+    expect(result.current.refreshKey).toBe(1);
+
+    // A subsequent render shows no leftover popup — state was fully reset.
+    const { container } = render(<>{result.current.confirmResultPortal}{result.current.manageLauncher}</>);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('does not read confirmedDocs.shipment for purchase-order config (regression guard)', () => {
+    const { result } = renderOrderHook({
+      confirmedTitleKey: PO_CONFIRMED_TITLE_KEY,
+      primaryDoc: PO_PRIMARY_DOC,
+      invoiceDoc: PO_INVOICE_DOC,
+      ConfirmResultModal: InspectableResultModal,
+      // Only `.shipment` is populated — purchase-order's config reads `.receipt`/`.invoice`,
+      // so this must be treated as "created nothing", never as a confirmed primary doc.
+      ManageDocsLauncher: makeManageDocsLauncherWithDocs({
+        shipment: { id: 'ship-only', documentNo: 'GS-X', amount: 5 },
+      }),
+    });
+    const row = { id: 'po-shipment-only', needsPrimaryDoc: true, needsInvoiceDoc: false };
+
+    const manageAction = result.current.rowQuickActions
+      .menuActions({ row, status: 'CO' })
+      .find((action) => action.key === 'manage');
+
+    act(() => manageAction.onClick({ row }));
+    const { unmount } = render(result.current.manageLauncher);
+    act(() => {
+      screen.getByText('created docs').click();
+    });
+    unmount();
+
+    expect(result.current.confirmResultPortal).toBeNull();
+    // This came through the manage-flow, so the toast carries the manage-flow's title
+    // (already set before the doc-shape check runs), not the confirm-flow's default key.
+    expect(toast.success).toHaveBeenCalledWith('soDocsCreatedTitle');
+  });
+});
+
+// ETP-5295 — the manage ("Gestionar") kebab entry: what decides whether it appears, and with
+// which of the three labels.
+//
+// It used to be derived from the list's `DeliveryStatus` / `InvoiceStatus` percent columns, which
+// answer a DIFFERENT question than the flow the entry launches: a DRAFT shipment/receipt/invoice
+// already covers the pending work while the percent still reads < 100. The kebab therefore
+// offered entries whose `ManageDocsLauncher` closed silently, hid entries the detail-page button
+// still offered, and could promise a section ("... y factura") the modal would not render.
+//
+// The decision now comes from two backend annotations on the row — `needsPrimaryDoc` /
+// `needsInvoiceDoc` — computed server-side with the detail form's exact formula. These tests pin
+// both halves of that: the visibility AND the label, per combination.
+describe('useOrderWindow — manage action derives from backend pending flags (ETP-5295)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchOptionalJson.mockResolvedValue(null);
+  });
+
+  function manageActionFor(row, status = 'CO') {
+    const { result } = renderOrderHook();
+    return result.current.rowQuickActions
+      .menuActions({ row, status })
+      .find((action) => action.key === 'manage');
+  }
+
+  it('shows the primary-doc label when only the primary document is pending', () => {
+    expect(manageActionFor({ id: 'r1', needsPrimaryDoc: true, needsInvoiceDoc: false })).toMatchObject({
+      visible: true,
+      label: 'manageShipment',
+    });
+  });
+
+  it('shows the invoice label when only the invoice is pending', () => {
+    expect(manageActionFor({ id: 'r2', needsPrimaryDoc: false, needsInvoiceDoc: true })).toMatchObject({
+      visible: true,
+      label: 'manageInvoice',
+    });
+  });
+
+  it('shows the combined label when both documents are pending', () => {
+    expect(manageActionFor({ id: 'r3', needsPrimaryDoc: true, needsInvoiceDoc: true })).toMatchObject({
+      visible: true,
+      label: 'manageBoth',
+    });
+  });
+
+  it('hides the entry when both flags are false', () => {
+    expect(manageActionFor({ id: 'r4', needsPrimaryDoc: false, needsInvoiceDoc: false })).toMatchObject({
+      visible: false,
+      label: '',
+    });
+  });
+
+  // The label must be cleared, not merely hidden: an entry rendered by a consumer that reads
+  // `label` without honouring `visible` would otherwise show a stale action name.
+  it('emits an empty label — not a stale one — when the entry is hidden', () => {
+    expect(manageActionFor({ id: 'r5', needsPrimaryDoc: false, needsInvoiceDoc: false }).label).toBe('');
+  });
+
+  it("accepts the AD string form of the annotations ('Y' / 'N')", () => {
+    expect(manageActionFor({ id: 'r6', needsPrimaryDoc: 'Y', needsInvoiceDoc: 'N' })).toMatchObject({
+      visible: true,
+      label: 'manageShipment',
+    });
+    expect(manageActionFor({ id: 'r7', needsPrimaryDoc: 'N', needsInvoiceDoc: 'N' })).toMatchObject({
+      visible: false,
+    });
+  });
+
+  // An ABSENT annotation (legacy backend, or a spec whose handler does not annotate) hides the
+  // entry. That is the deliberate choice recorded in the hook: defaulting to "pending" would
+  // reinstate the reported bug — a menu entry that leads nowhere — whereas hiding it only removes
+  // a shortcut, since the same flow stays reachable from the order's detail page, which derives
+  // the answer from the shipments/invoices/lines it fetches itself.
+  it('hides the entry when the row carries no annotation at all', () => {
+    expect(manageActionFor({ id: 'r8', documentStatus: 'CO' })).toMatchObject({
+      visible: false,
+      label: '',
+    });
+  });
+
+  it('hides the entry when only one annotation is present and it is false', () => {
+    expect(manageActionFor({ id: 'r9', needsInvoiceDoc: false })).toMatchObject({ visible: false });
+  });
+
+  it('shows the entry when only one annotation is present and it is true', () => {
+    expect(manageActionFor({ id: 'r10', needsInvoiceDoc: true })).toMatchObject({
+      visible: true,
+      label: 'manageInvoice',
+    });
+  });
+
+  // The percent columns are no longer consulted anywhere. A row that still carries them (every
+  // real list row does — they are real AD columns) must not influence the decision in either
+  // direction, or the two sources of truth this ticket collapsed would quietly come back.
+  it('ignores the legacy DeliveryStatus / InvoiceStatus percent columns entirely', () => {
+    // Percents say "everything pending", annotations say nothing is → hidden.
+    expect(manageActionFor({
+      id: 'r11', deliveryStatus: 0, invoiceStatus: 0, needsPrimaryDoc: false, needsInvoiceDoc: false,
+    })).toMatchObject({ visible: false });
+
+    // Percents say "all done", annotations say work remains → shown.
+    expect(manageActionFor({
+      id: 'r12', deliveryStatus: 100, invoiceStatus: 100, needsPrimaryDoc: true, needsInvoiceDoc: true,
+    })).toMatchObject({ visible: true, label: 'manageBoth' });
+  });
+
+  // The flow the entry launches only exists for a confirmed order, so the status gate stays even
+  // when the backend says work is pending (a draft order's lines are still editable).
+  for (const status of ['DR', 'VO', 'CL']) {
+    it(`hides the entry for status ${status} even with both flags true`, () => {
+      expect(manageActionFor(
+        { id: `r-status-${status}`, needsPrimaryDoc: true, needsInvoiceDoc: true },
+        status,
+      )).toMatchObject({ visible: false, label: '' });
+    });
+  }
+
+  // A row whose `documentStatus` never arrived yields `status === undefined`. Called through
+  // `menuActions` directly rather than the helper above, whose `= 'CO'` default parameter would
+  // silently substitute the very value under test.
+  it('hides the entry when status is undefined, even with both flags true', () => {
+    const { result } = renderOrderHook();
+    const action = result.current.rowQuickActions
+      .menuActions({ row: { id: 'r-no-status', needsPrimaryDoc: true, needsInvoiceDoc: true }, status: undefined })
+      .find((entry) => entry.key === 'manage');
+    expect(action).toMatchObject({ visible: false, label: '' });
+  });
+
+  it('does not throw for a row with no fields at all', () => {
+    expect(() => manageActionFor({})).not.toThrow();
+    expect(manageActionFor({})).toMatchObject({ visible: false });
+  });
+
+  it('uses the caller-supplied label keys, not hardcoded sales-order strings', () => {
+    const { result } = renderOrderHook({
+      manageLabelKeys: { both: 'poManageBoth', primary: 'poManageReceipt', invoice: 'poManageInvoice' },
+    });
+    const labelFor = (row) => result.current.rowQuickActions
+      .menuActions({ row, status: 'CO' })
+      .find((action) => action.key === 'manage').label;
+
+    expect(labelFor({ id: 'po-a', needsPrimaryDoc: true, needsInvoiceDoc: false })).toBe('poManageReceipt');
+    expect(labelFor({ id: 'po-b', needsPrimaryDoc: false, needsInvoiceDoc: true })).toBe('poManageInvoice');
+    expect(labelFor({ id: 'po-c', needsPrimaryDoc: true, needsInvoiceDoc: true })).toBe('poManageBoth');
   });
 });

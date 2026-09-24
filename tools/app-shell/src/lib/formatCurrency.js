@@ -52,9 +52,39 @@ function placeCompactSymbol(formatted, currencyCode, symbol) {
   return `${negative ? '-' : ''}${symbol}${digits}`;
 }
 
+/**
+ * `toFixed`, but rounding HALF-UP on the DECIMAL value rather than on its binary approximation.
+ *
+ * `(2.675).toFixed(2)` is `"2.67"`, because 2.675 is stored as 2.67499999999999982…; the same
+ * happens to 10.135, 1.005 and 8.575. The backend rounds these the other way — `com.etendoerp.go`
+ * uses `RoundingMode.HALF_UP` throughout (23 `setScale` call sites; `TotalDiscountService` even
+ * declares it as a constant), and `BigDecimal` works on exact decimals — so the UI was showing one
+ * cent less than the value the backend computed and Classic displays. This is a DISPLAY fix that
+ * brings the two into alignment; it changes no stored or computed value (ETP-5107 QA round 2).
+ *
+ * Shifting the decimal point through the string form avoids the lossy `× 10^n` multiply, which is
+ * why the common `Math.round(n * 100) / 100` workaround — and even the `+ Number.EPSILON` variant
+ * used elsewhere in this repo — still get 8.575 wrong: at that magnitude the binary error is larger
+ * than EPSILON, so nudging by it does not cross the boundary. `abs` is always non-negative here
+ * (the caller splits the sign off first), so `Math.round`'s round-half-toward-+∞ is exactly
+ * half-up in magnitude.
+ *
+ * At magnitudes where `String(n)` switches to exponential notation (≥ 1e21) the shifted literal is
+ * unparseable, so this falls back to plain `toFixed` — which is what ran before and is itself
+ * degenerate there (`(1e21).toFixed(2)` is `"1e+21"`, and the grouping loop below then renders it
+ * as `1e.+21`). Preserved as-is rather than fixed: it is pre-existing, unreachable for any real
+ * monetary amount, and outside this change's display-rounding scope.
+ */
+function toFixedHalfUp(abs, digits) {
+  const shifted = Number(`${abs}e${digits}`);
+  if (!Number.isFinite(shifted)) return abs.toFixed(digits);
+  const rounded = Number(`${Math.round(shifted)}e-${digits}`);
+  return Number.isFinite(rounded) ? rounded.toFixed(digits) : abs.toFixed(digits);
+}
+
 function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalSeparator) {
   const abs = Math.abs(num);
-  const fixed = abs.toFixed(maxFrac);
+  const fixed = toFixedHalfUp(abs, maxFrac);
   // Guard against "-0,00" (ETP-5132) — mirrors the ETP-4898 guard already
   // applied server-side in report-html-helpers.js's formatCurrency.
   // `num < 0` is false for -0 (it's numerically equal to 0), so a bare sign
@@ -104,6 +134,8 @@ function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalS
  * @param {boolean} [options.compact=false] - Use compact notation (e.g. "12,5 mil €" instead of
  *   "12.500,00 €"). Additive/backward-compatible — omitting the third argument entirely keeps
  *   every existing call site's output unchanged.
+ * @param {number} [options.minimumFractionDigits=2] - Minimum decimal digits to display.
+ * @param {number} [options.maximumFractionDigits=2] - Maximum decimal digits to display.
  * @returns {string} Formatted currency string, or '—' for invalid/missing values.
  *
  * @example
@@ -138,10 +170,46 @@ export function getCurrencySymbol(currencyCode) {
   }
 }
 
-export function formatCurrency(currencyCode, value, { compact = false } = {}) {
+/**
+ * Localizes a plain (UNGROUPED) number for display: 10.5 → "10,5" under the shipped es-ES config.
+ *
+ * This is the display counterpart of `formatCurrency` for the numeric types that are deliberately
+ * NOT amount/price-shaped — `number`, `decimal`, `integer`, `quantity`, `percent`. Those must not
+ * get thousands grouping or forced 2 decimals (a `% de descuento` of 10.5 is not "10,50 €"), but
+ * they still must not show JS's own `.` in a comma-decimal UI.
+ *
+ * That is precisely the defect QA reopened ETP-5107 for: a Sales Order line rendering
+ * `% de descuento` as `10.5` right next to a `Precio` of `44,00`. Rendering a raw JS number —
+ * `String(value)`, `${value}`, or letting it fall through to a bare `<span>{value}</span>` — is the
+ * bug, because a number literal's separator is JS syntax, not a locale.
+ *
+ * Unlike `formatCurrency` this neither pads nor rounds: it only swaps the separator, so an integer
+ * stays bare (5 → "5") and precision is preserved exactly as stored.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string} the localized number, or '' for null/blank
+ */
+export function formatPlainDecimal(value) {
+  if (value == null || value === '') return '';
+  const { decimalSeparator } = getCurrencyFormatConfig();
+  if (decimalSeparator === '.') return String(value);
+  return String(value).split('.').join(decimalSeparator);
+}
+
+export function formatCurrency(currencyCode, value, {
+  compact = false,
+  minimumFractionDigits = 2,
+  maximumFractionDigits = 2,
+} = {}) {
   if (value == null || !Number.isFinite(Number(value))) return '—';
 
   const amount = Number(value);
+  const minFrac = Number.isInteger(minimumFractionDigits)
+    ? Math.max(0, Math.min(20, minimumFractionDigits))
+    : 2;
+  const maxFrac = Number.isInteger(maximumFractionDigits)
+    ? Math.max(minFrac, Math.min(20, maximumFractionDigits))
+    : Math.max(2, minFrac);
 
   if (compact) {
     // Deliberately still Intl-driven, es-ES fixed — compact notation (magnitude
@@ -156,8 +224,8 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
         style: 'currency',
         currency: currencyCode,
         currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: minFrac,
+        maximumFractionDigits: maxFrac,
         useGrouping: true,
         notation: 'compact',
       });
@@ -172,7 +240,7 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   }
 
   const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
-  const formattedNumber = groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
+  const formattedNumber = groupWithSeparators(amount, minFrac, maxFrac, thousandsSeparator, decimalSeparator);
 
   // Validate currencyCode the same way the old single combined Intl.NumberFormat
   // call did — an invalid/missing code throws here (e.g. undefined, or a

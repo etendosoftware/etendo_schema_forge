@@ -28,6 +28,6 @@ export function useLogout() {
     // login in this same browser (see providers/mixpanel.js). Fire-and-forget
     // so a slow/failed provider never blocks the actual logout.
     void reset();
-    (logout || notifyAmbientUnauthorized)();
+    return (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

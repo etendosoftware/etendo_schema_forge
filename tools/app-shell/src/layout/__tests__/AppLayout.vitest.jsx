@@ -29,10 +29,13 @@ vi.mock('@/auth/useLogout.js', () => ({
 // WalkthroughProvider (which navigates on the user's behalf between the steps
 // of a guided flow). A module-level fn keeps its identity stable across
 // renders, matching what a real router hands out.
+// ETP-5443 follow-up: useLocation is ALSO a vi.fn() now (it used to be a plain arrow) —
+// the environment-access-gate exempt-path tests need to override the current pathname
+// per render, the same way useSearchParams already does for embedded mode.
 const navigateMock = vi.fn();
 vi.mock('react-router-dom', () => ({
   Outlet: () => <div data-testid="outlet">Outlet</div>,
-  useLocation: () => ({ pathname: '/sales-order/123' }),
+  useLocation: vi.fn(() => ({ pathname: '/sales-order/123' })),
   useNavigate: () => navigateMock,
   useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
 }));
@@ -64,6 +67,22 @@ vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => useEnvironmentSwitchMock(),
 }));
 
+// ETP-4576 — NoAccessScreen's role list now comes from the session (`useAuthOptional()?.roleList`)
+// rather than from `sf_auth_rolelist` in localStorage. That key is in LEGACY_AUTH_KEYS, so
+// `purgeLegacyAuthStorage` deletes it and the read answered "[]" for every user: `hasRole` was
+// permanently false and the screen told everyone nobody had assigned them a role, including the
+// user whose role simply grants no window — the one distinction it exists to make.
+//
+// These tests mount no AuthProvider, so the optional hook answers `undefined` on its own; this
+// mock is what lets a case declare the session it is describing. `importOriginal` rather than a
+// bare object: this barrel also publishes `apiFetch` and the header builders, and replacing it
+// wholesale would take out every other module in the tree that reaches them.
+const useAuthOptionalMock = vi.fn(() => null);
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useAuthOptional: () => useAuthOptionalMock(),
+}));
+
 // ETP-5240 — AppLayout now also calls useWindowAccessSafe() (alongside the
 // pre-existing useCapabilitiesSafe()) and threads its return value through to
 // filterMenuGroupsByAccess() as the 4th arg. Both are `vi.fn()`s (not plain
@@ -75,6 +94,31 @@ vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
 vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
   useCapabilitiesSafe: vi.fn(() => ({})),
   useWindowAccessSafe: vi.fn(() => ({})),
+}));
+
+// ETP-5443 follow-up — AppLayout now also calls useEnvironmentAccessGate(), the React
+// binding over the module-level store lib/environmentAccessGate.js keeps (see that
+// module's own suite for the detection story: a NEO 402 on windowaccessmap parsed into
+// 'DEMO_TRIAL_EXPIRED' | 'SUBSCRIPTION_REQUIRED' | null). What AppLayout owes the feature
+// is the CONDITIONAL RENDER off whatever this hook returns, not the detection itself —
+// hence a bare vi.fn(), same pattern as useRoleMenu/useCapabilitiesSafe above. Default
+// `null` ("access not blocked") leaves every pre-existing test in this file unchanged.
+vi.mock('@/hooks/useEnvironmentAccessGate.js', () => ({
+  useEnvironmentAccessGate: vi.fn(() => null),
+}));
+
+// ETP-5364 — AppLayout now MOUNTS FirstStepsProvider itself (above the allowedIds gate, so the
+// checklist GET starts alongside SFListMenu instead of after it) and threads
+// `useFirstStepsProgressOptional()?.dismissed` into filterMenuGroupsByAccess as the 5th arg.
+// Both are stubbed here for the same reason useAccountIdentity is: the real provider calls
+// useApiFetch/useAuthOptional and useTenantPlan, none of which this file's tree provides. The
+// provider stub is a pass-through, so what is asserted is that AppLayout WRAPS its tree in it.
+// Default `{ dismissed: false }` = "loaded, not dismissed", which leaves every other test in
+// this file unchanged — none of them declares hideWhenFirstStepsDismissed on an item.
+const useFirstStepsProgressOptionalMock = vi.fn(() => ({ dismissed: false }));
+vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
+  FirstStepsProvider: ({ children }) => <div data-testid="first-steps-provider">{children}</div>,
+  useFirstStepsProgressOptional: () => useFirstStepsProgressOptionalMock(),
 }));
 
 // Same situation as useRoleMenu above: AppLayout now mounts useAccountIdentity()
@@ -96,6 +140,15 @@ vi.mock('@/lib/flags/useAccountIdentity.js', () => ({
 // to src/lib/observability/__tests__/useSessionStartTracking.vitest.js.
 vi.mock('@/lib/observability/useSessionStartTracking.js', () => ({
   useSessionStartTracking: vi.fn(),
+}));
+
+// ETP-5402 QA follow-up — AppLayout now fires its own fetchMyReportAccess() call (not routed
+// through useAuth()/AuthContext, unlike capabilities/windowAccess above) to feed
+// filterMenuGroupsByAccess's report-access fallback. Left unmocked, the real (unmocked) fetch
+// runs against jsdom's absent network and its rejection can surface as an unhandled rejection on
+// a LATER test in this file — mocking it keeps every test in this file deterministic.
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchMyReportAccess: vi.fn(() => Promise.resolve({ reportAccess: {} })),
 }));
 
 // Mock layout components. menuGroups is rendered (serialized) so tests can
@@ -189,9 +242,10 @@ import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
 import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
+import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
 import { buildMenuGroups } from '@/windows/registry.js';
 import { defaultNavigation, expectedNavigation, navigationPermissions, expectNavigation } from '@/windows/__tests__/navigationExpectations.js';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import AppLayout from '../AppLayout.jsx';
 
 describe('AppLayout — normal mode', () => {
@@ -262,11 +316,13 @@ describe('AppLayout — normal mode', () => {
     expect(mainDiv.style.marginLeft).toBe('240px');
   });
 
-  it('filters menuGroups to empty (fail-closed) while useRoleMenu is loading (undefined), instead of the FOUC full-then-shrink behavior', () => {
-    // ETP-4598 regression test: while the SFListMenu fetch is in flight,
-    // useRoleMenu() returns undefined (not null). AppLayout must treat that
-    // as "filter to nothing yet" so SideMenu never briefly renders the full,
-    // unfiltered menu before the real allowed-id Set arrives.
+  it('renders AppLayoutLoading (not SideMenu/Outlet/menu groups) while useRoleMenu is loading (undefined), instead of the FOUC full-then-shrink behavior', () => {
+    // ETP-5395 regression test: while the SFListMenu fetch is in flight,
+    // useRoleMenu() returns undefined (not null). AppLayout must render the
+    // blank AppLayoutLoading placeholder instead of the sidebar/Outlet tree —
+    // filterMenuGroupsByAccess's stand-in empty Set only hides windowId-bearing
+    // items, so an id-less item (like "dashboard" below) would otherwise still
+    // slip through and become reachable before the real allowed-id Set arrives.
     vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
 
     const props = {
@@ -279,7 +335,7 @@ describe('AppLayout — normal mode', () => {
         {
           group: 'Tools',
           // No windowId/processId/obuiappProcessId — never filtered, per
-          // filterMenuGroupsByAccess's own contract.
+          // filterMenuGroupsByAccess's own contract, yet still must not render.
           items: [{ name: 'dashboard', label: 'Dashboard' }],
         },
       ],
@@ -287,18 +343,9 @@ describe('AppLayout — normal mode', () => {
 
     render(<AppLayout {...props} />);
 
-    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
-
-    // Sales had a windowId-bearing item and no allowed ids yet -> emptied,
-    // and (being non-Favorites) dropped entirely.
-    expect(groups.find((g) => g.group === 'Sales')).toBeUndefined();
-    // Favorites always survives even while empty.
-    expect(groups.find((g) => g.group === 'Favorites')).toBeDefined();
-    // Tools has no windowId on its item, so it's never filtered out.
-    const tools = groups.find((g) => g.group === 'Tools');
-    expect(tools).toBeDefined();
-    expect(tools.items).toHaveLength(1);
-    expect(tools.items[0].name).toBe('dashboard');
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
   });
 
   it('passes menuGroups through UNFILTERED when useRoleMenu resolves to null (fail-open contract, asserted explicitly rather than relying on the default mock value)', () => {
@@ -349,6 +396,65 @@ describe('AppLayout — normal mode', () => {
     expect(reports).toBeDefined();
     expect(reports.items.map((i) => i.name)).toContain('report-viewer-finance');
   });
+
+  it('threads the checklist dismissal through to filterMenuGroupsByAccess as the 5th arg (ETP-5364)', () => {
+    const props = {
+      menuGroups: [
+        {
+          group: 'First Steps',
+          items: [{ name: 'first-steps', label: 'Primeros pasos', hideWhenFirstStepsDismissed: true }],
+        },
+      ],
+    };
+
+    const { rerender } = render(<AppLayout {...props} />);
+    let groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    // Default mock is `{ dismissed: false }` -> the entry is offered.
+    expect(groups.find((g) => g.group === 'First Steps')).toBeDefined();
+
+    useFirstStepsProgressOptionalMock.mockReturnValueOnce({ dismissed: true });
+    rerender(<AppLayout {...props} />);
+    groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    expect(groups.find((g) => g.group === 'First Steps')).toBeUndefined();
+  });
+
+  it('hides the entry while the checklist state is still unknown (ETP-5364)', () => {
+    // THE REGRESSION TEST for "aparece brevemente y luego se oculta". Before the fix the
+    // provider was mounted BELOW the allowedIds gate, so its GET could not start until the
+    // sidebar was already painting and `dismissed` was necessarily unanswered on that first
+    // render. Whatever the timing, an unanswered state must not put the entry on screen.
+    useFirstStepsProgressOptionalMock.mockReturnValueOnce(null);
+    render(<AppLayout menuGroups={[
+      { group: 'First Steps', items: [{ name: 'first-steps', hideWhenFirstStepsDismissed: true }] },
+      { group: 'Home', items: [{ name: 'dashboard' }] },
+    ]} />);
+
+    const groups = JSON.parse(screen.getByTestId('side-menu-groups').textContent);
+    expect(groups.find((g) => g.group === 'First Steps')).toBeUndefined();
+    // ...and Home is never collateral damage.
+    expect(groups.find((g) => g.group === 'Home')).toBeDefined();
+  });
+});
+
+describe('AppLayout — loading gate (ETP-5395)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('renders AppLayoutLoading and does not mount SideMenu or Outlet while allowedIds is undefined', () => {
+    vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  });
 });
 
 describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
@@ -378,12 +484,19 @@ describe('AppLayout shipped permission-anchor menu (ETP-5240)', () => {
   it.each(anchors)('%s follows loading, grant and revocation with the real menu', (name, id) => {
     const menuGroups = buildMenuGroups();
     const { rerender } = render(<AppLayout menuGroups={menuGroups} />);
-    expectSidebarAnchors([]);
+    // ETP-5395 — while allowedIds is undefined (SFListMenu in flight), AppLayout
+    // now renders AppLayoutLoading unconditionally and mounts nothing else, so
+    // no anchor can show yet regardless of the sidebar-groups check below.
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
 
-    // The anchor map can resolve before SFListMenu: independent axes.
+    // The anchor map can resolve before SFListMenu (independent axes), but the
+    // loading gate still blocks rendering until allowedIds itself resolves —
+    // so the grant here is not yet visible.
     vi.mocked(useWindowAccessSafe).mockReturnValue({ [id]: 'read-only' });
     rerender(<AppLayout menuGroups={menuGroups} />);
-    expectSidebarAnchors([name]);
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
 
     // User = 108 from committed core-maps/ad-menu-cache.json. Nonempty so
     // this checks sidebar permissions, not the shell-wide no-access screen.
@@ -445,14 +558,15 @@ describe('AppLayout — no-access guard (ETP-4514)', () => {
     expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument();
   });
 
-  it('does NOT render the blocking screen while useRoleMenu is still loading (undefined)', () => {
+  it('renders AppLayoutLoading — neither the blocking screen nor the sidebar/Outlet — while useRoleMenu is still loading (undefined)', () => {
     vi.mocked(useRoleMenu).mockReturnValueOnce(undefined);
 
     render(<AppLayout {...defaultProps} />);
 
+    expect(screen.getByTestId('AppLayoutLoading__488148')).toBeInTheDocument();
     expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
-    expect(screen.getByTestId('outlet')).toBeInTheDocument();
-    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
   });
 
   it('does NOT render the blocking screen when useRoleMenu resolves to null (unauthenticated / fail-open)', () => {
@@ -556,12 +670,18 @@ describe('AppLayout — no-access company switch (ETP-5202)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useRoleMenu).mockReturnValue(null);
+    // `clearAllMocks` clears calls, not implementations, so a `mockReturnValue` left by another
+    // describe would survive into these cases. Reset to "no session", which is what a tree with no
+    // AuthProvider really answers.
+    useAuthOptionalMock.mockReturnValue(null);
     withEnvironments([]);
   });
 
   it('lists the account companies, with the current one shown but not selectable', () => {
     blockAccess();
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Current Corp');
+    // ETP-4576 — the trigger's "Current Corp" is read off the environment list below, matched on
+    // `currentClientId`. It used to be seeded here through `sf_auth_client_name`, a legacy key the
+    // purge deletes, so the trigger was really rendering the `yourCompany` fallback.
     withEnvironments([CURRENT, OTHER]);
 
     render(<AppLayout {...defaultProps} />);
@@ -723,29 +843,47 @@ describe('AppLayout — no-access company switch (ETP-5202)', () => {
  * window. Telling the first user "your role has no permissions" sends them to ask for the wrong
  * thing, and they have no way to tell that the screen guessed.
  *
- * The session's own role list is what tells the two apart, so these tests drive the branch
- * through `sf_auth_rolelist` exactly as the screen reads it.
+ * The session's own role list is what tells the two apart.
+ *
+ * ETP-4576 — it used to be read out of `sf_auth_rolelist`, and the company name out of
+ * `sf_auth_client_name`. Both are legacy auth keys that `purgeLegacyAuthStorage` deletes on mount,
+ * so the reads answered "[]" and "": `hasRole` was permanently false and EVERY user got the
+ * no-role sentence, which is the guess this screen exists not to make — and the company name was
+ * always the generic fallback. The screen now takes the role list from the session and the company
+ * name from the environment list `useEnvironmentSwitch` already loads, so these cases drive both
+ * through those, and one of them seeds the dead keys to prove they are ignored.
  */
-describe('AppLayout — no-access explanation (ETP-5202)', () => {
+describe('AppLayout — no-access explanation (ETP-5202, ETP-4576)', () => {
   const defaultProps = {
     menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
   };
+
+  const ACME = { clientId: 'CLIENT-CURRENT', clientName: 'Acme Corp', orgName: 'Main Org' };
+
+  /** The session the screen reads its role list from. `null` is a tree with no AuthProvider. */
+  function withSession(session) {
+    useAuthOptionalMock.mockReturnValue(session);
+  }
+
+  function withEnvironments(environments) {
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments,
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+    });
+  }
 
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.localStorage.clear();
     vi.mocked(useRoleMenu).mockReturnValue(new Set());
-    useEnvironmentSwitchMock.mockReturnValue({
-      environments: [],
-      switchTo: switchToMock,
-      switching: null,
-      currentClientId: 'CLIENT-CURRENT',
-    });
+    withSession(null);
+    withEnvironments([ACME]);
   });
 
   it('says the role grants nothing when the session holds a role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1', name: 'Sales' }]));
+    withSession({ roleList: [{ id: 'ROLE-1', name: 'Sales' }] });
 
     render(<AppLayout {...defaultProps} />);
 
@@ -760,7 +898,7 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
   });
 
   it('says no role has been assigned when the session holds none', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
+    withSession({ roleList: undefined });
 
     render(<AppLayout {...defaultProps} />);
 
@@ -777,20 +915,18 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
   });
 
   it('treats an empty role list as no role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', '[]');
+    withSession({ roleList: [] });
 
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
   });
 
-  // The role list is JSON that arrived from the network and has sat in storage since; a parse
-  // failure must degrade to the safer message, not take the whole screen down. This is the
-  // assertion that breaks first if somebody removes the try/catch as dead weight.
-  it('survives an unparseable role list and falls back to no role', () => {
-    globalThis.localStorage.setItem('sf_auth_client_name', 'Acme Corp');
-    globalThis.localStorage.setItem('sf_auth_rolelist', '{');
+  // The screen mounts in a tree that may have no AuthProvider above it, so the optional hook
+  // answers `undefined`. Reading `.roleList` off that without the guard throws and takes the whole
+  // blocking screen down — replacing "you have no access" with a blank page.
+  it('survives having no session at all and falls back to no role', () => {
+    withSession(null);
 
     expect(() => render(<AppLayout {...defaultProps} />)).not.toThrow();
 
@@ -798,24 +934,245 @@ describe('AppLayout — no-access explanation (ETP-5202)', () => {
     expect(screen.getByTestId('no-access-message')).toHaveTextContent('Acme Corp');
   });
 
-  // A role list that parses but is not an array (a bare object, `null`, a number) is just as
-  // unusable as one that does not parse.
-  it('falls back to no role when the stored role list is not an array', () => {
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify({ id: 'ROLE-1' }));
+  // A role list that is not an array (a bare object, a string, a number) is as unusable as none.
+  // The session is decoded from a JWT the backend sent, so its shape is not this screen's to trust.
+  it('falls back to no role when the session role list is not an array', () => {
+    withSession({ roleList: { id: 'ROLE-1' } });
 
     render(<AppLayout {...defaultProps} />);
 
     expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessNoRoleTitle);
   });
 
-  // Without a stored company name the sentence still has to read as a sentence.
-  it('falls back to the generic company wording when no company name is stored', () => {
-    globalThis.localStorage.setItem('sf_auth_rolelist', JSON.stringify([{ id: 'ROLE-1' }]));
+  // THE regression, stated directly: the dead keys are seeded with values that contradict the
+  // session, and the screen must follow the session. Before ETP-4576 this test would have read
+  // both of them and produced the no-role sentence for a user who holds a role.
+  it('ignores the legacy storage keys entirely, even when they say otherwise', () => {
+    globalThis.localStorage.setItem('sf_auth_client_name', 'Stale Corp');
+    globalThis.localStorage.setItem('sf_auth_rolelist', '[]');
+    withSession({ roleList: [{ id: 'ROLE-1', name: 'Sales' }] });
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('no-access-title')).toHaveTextContent(LABELS.noAccessRoleTitle);
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    expect(message.textContent).not.toContain('Stale Corp');
+  });
+
+  // The company name is resolved by matching `currentClientId` against the list, not by taking the
+  // first entry: an account in several companies would otherwise be told it is stuck in whichever
+  // one the backend happened to return first.
+  it('names the company the session is actually in, not the first one listed', () => {
+    withEnvironments([
+      { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Main Org' },
+      ACME,
+    ]);
+    withSession({ roleList: [{ id: 'ROLE-1' }] });
+
+    render(<AppLayout {...defaultProps} />);
+
+    const message = screen.getByTestId('no-access-message');
+    expect(message).toHaveTextContent('Acme Corp');
+    expect(message.textContent).not.toContain('Other Corp');
+  });
+
+  // Without the list — the account cannot list environments, or the current client is not in it —
+  // the sentence still has to read as a sentence.
+  it('falls back to the generic company wording when the current company is not listed', () => {
+    withEnvironments([]);
+    withSession({ roleList: [{ id: 'ROLE-1' }] });
 
     render(<AppLayout {...defaultProps} />);
 
     const message = screen.getByTestId('no-access-message');
     expect(message).toHaveTextContent(LABELS.yourCompany);
     expect(message.textContent).not.toContain('{companyName}');
+  });
+});
+
+/**
+ * ETP-5443 follow-up — the dedicated blocked-access screen for a commercial cut-off (demo
+ * trial expired / subscription payment grace elapsed), replacing NoAccessScreen's generic
+ * "your role has no access" copy for this specific, actionable cause. See
+ * lib/environmentAccessGate.js for how the decision is detected (a NEO 402 on
+ * `/sws/neo/windowaccessmap`, parsed into `DEMO_TRIAL_EXPIRED` | `SUBSCRIPTION_REQUIRED` |
+ * `null`) — this file only mocks the React binding (`useEnvironmentAccessGate`), same as it
+ * already does for useRoleMenu/useCapabilitiesSafe.
+ *
+ * `/account` and `/upgrade` are the two routes this screen's own CTA sends the user to, and
+ * both resolve through the account's platform token rather than the blocked tenant session —
+ * so they must stay reachable while blocked. That is also why the 402 folding
+ * `useRoleMenu()`'s allowedIds into a confirmed empty Set (same shape ETP-4514's
+ * NoAccessScreen reacts to) must NOT show up as "your role has no access" on those two paths.
+ */
+describe('AppLayout — environment access gate (ETP-5443 follow-up)', () => {
+  const defaultProps = {
+    menuGroups: [{ group: 'Sales', items: [{ name: 'sales-order', label: 'Sales Order', windowId: '800166' }] }],
+  };
+
+  const CURRENT = { clientId: 'CLIENT-CURRENT', clientName: 'Current Corp', orgName: 'Main Org' };
+  const OTHER = { clientId: 'CLIENT-OTHER', clientName: 'Other Corp', orgName: 'Main Org' };
+
+  function withEnvironments(environments, overrides = {}) {
+    useEnvironmentSwitchMock.mockReturnValue({
+      environments,
+      switchTo: switchToMock,
+      switching: null,
+      currentClientId: 'CLIENT-CURRENT',
+      ...overrides,
+    });
+  }
+
+  function withPathname(pathname) {
+    vi.mocked(useLocation).mockReturnValue({ pathname });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Access not blocked, on an ordinary (non-exempt) route, nowhere else to go — each test
+    // below opts into the specific state it is about.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(null);
+    withPathname('/sales-order/123');
+    withEnvironments([]);
+  });
+
+  it('renders the demo-expired blocked screen (and not NoAccessScreen/sidebar/Outlet) when the decision is DEMO_TRIAL_EXPIRED', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    // The 402 that produces this decision also fails windowaccessmap, which useRoleMenu
+    // folds into the same confirmed-empty-Set shape as a genuinely zero-access role.
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('blocked-access-title')).toHaveTextContent(LABELS.blockedAccessDemoExpiredTitle);
+    expect(screen.getByTestId('blocked-access-message')).toHaveTextContent(LABELS.blockedAccessDemoExpiredMessage);
+    expect(screen.getByTestId('blocked-access-cta')).toHaveTextContent(LABELS.blockedAccessUpgradeCta);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('side-menu')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('outlet')).not.toBeInTheDocument();
+  });
+
+  it('navigates to /upgrade when the demo-expired CTA is clicked', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('blocked-access-cta'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/upgrade');
+  });
+
+  it('renders the subscription-required blocked screen (and not NoAccessScreen) when the decision is SUBSCRIPTION_REQUIRED', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('blocked-access-title')).toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredTitle);
+    expect(screen.getByTestId('blocked-access-message')).toHaveTextContent(LABELS.blockedAccessSubscriptionRequiredMessage);
+    expect(screen.getByTestId('blocked-access-cta')).toHaveTextContent(LABELS.blockedAccessManageSubscriptionCta);
+
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+  });
+
+  it('navigates to /account when the subscription-required CTA is clicked', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+    await user.click(screen.getByTestId('blocked-access-cta'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/account');
+  });
+
+  // Regression: an ALLOWED environment whose role simply grants no windows is a DIFFERENT
+  // problem (ETP-4514) from a commercial cut-off, and must keep getting the ORIGINAL screen —
+  // this feature must not swallow that case just because both render off a confirmed-empty Set.
+  it('renders the ORIGINAL NoAccessScreen, unchanged, when access is not blocked but the role grants no windows', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue(null);
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('NoAccessScreen__488148')).toBeInTheDocument();
+    expect(screen.getByTestId('no-access-title')).toBeInTheDocument();
+    expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+  });
+
+  it('keeps the environment switcher and logout available on the blocked screen', async () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withEnvironments([CURRENT, OTHER]);
+    const user = userEvent.setup();
+
+    render(<AppLayout {...defaultProps} />);
+
+    const block = screen.getByTestId('blocked-access-company-switch');
+    expect(block).toHaveTextContent(LABELS.switchCompany);
+    expect(screen.getByTestId('blocked-access-company-trigger')).toHaveTextContent('Current Corp');
+    expect(screen.getByTestId('blocked-access-company-CLIENT-OTHER')).toHaveTextContent('Other Corp');
+    expect(screen.getByTestId('blocked-access-company-CLIENT-CURRENT')).toBeDisabled();
+
+    await user.click(screen.getByTestId('blocked-access-company-CLIENT-OTHER'));
+    expect(switchToMock).toHaveBeenCalledWith(expect.objectContaining({ clientId: 'CLIENT-OTHER' }));
+
+    const logoutButton = screen.getByTestId('BlockedAccessScreenLogout__488148');
+    expect(logoutButton).toBeInTheDocument();
+    await user.click(logoutButton);
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the company switch on the blocked screen when the account owns nowhere else to go', () => {
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withEnvironments([CURRENT]);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('blocked-access-company-switch')).not.toBeInTheDocument();
+    // The escape hatch stays even with nowhere else to go.
+    expect(screen.getByTestId('BlockedAccessScreenLogout__488148')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['/upgrade', 'the exact /upgrade path'],
+    ['/upgrade/checkout', 'an /upgrade sub-route'],
+    ['/account', 'the exact /account path'],
+    ['/account/subscription', 'an /account sub-route'],
+  ])('renders the normal Outlet/SideMenu tree instead of any blocking screen on %s (%s)', (pathname) => {
+    // Both guards must be skipped, not just the blocked screen: the 402 that sets
+    // environmentAccessDecision also folds useRoleMenu()'s allowedIds into a confirmed empty
+    // Set, so the exempt check has to beat NoAccessScreen's size-check too (see the comment in
+    // AppLayoutAccessGate above the exempt-path check).
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('DEMO_TRIAL_EXPIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withPathname(pathname);
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.queryByTestId('BlockedAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('NoAccessScreen__488148')).not.toBeInTheDocument();
+    expect(screen.getByTestId('outlet')).toBeInTheDocument();
+    expect(screen.getByTestId('side-menu')).toBeInTheDocument();
+  });
+
+  it('does NOT exempt an unrelated path that merely shares the same prefix (e.g. /accountingXYZ)', () => {
+    // Guards the `startsWith` check in isEnvironmentGateExemptPath: it must require an exact
+    // path segment boundary ('/account' or '/account/...'), not any pathname sharing the
+    // literal prefix.
+    vi.mocked(useEnvironmentAccessGate).mockReturnValue('SUBSCRIPTION_REQUIRED');
+    vi.mocked(useRoleMenu).mockReturnValue(new Set());
+    withPathname('/accountingXYZ');
+
+    render(<AppLayout {...defaultProps} />);
+
+    expect(screen.getByTestId('BlockedAccessScreen__488148')).toBeInTheDocument();
   });
 });

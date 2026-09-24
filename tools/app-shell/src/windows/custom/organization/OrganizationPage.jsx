@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,12 @@ import OrgLogoField from './OrgLogoField.jsx';
 import BusinessTypeCards from './BusinessTypeCards.jsx';
 import { getCountryFlag } from './countryFlag.js';
 import ActividadesIaeSection from './ActividadesIaeSection.jsx';
+// ETP-5391 — reused as-is from fiscal-config (NOT forked): the backend
+// (`GET/POST/DELETE /sws/neo/certificate?orgId=...`, NeoCertificateHelper.java) is
+// already organization-scoped, not per fiscal system, so the same component that
+// SiiSection/VerifactuSection/TbaiSection each mount surfaces the org's one real
+// certificate here too, at the org level, instead of only inside each fiscal tab.
+import CertSection from '../fiscal-config/CertSection.jsx';
 
 // The AD_OrgInfo "Location / Address" identifier is a composed string
 // (e.g. "Santa Fe - 446 - 5800 - Rio Cuarto - España") — the country is the
@@ -265,6 +271,20 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
     }
   };
 
+  // ETP-5395 Fix 3 — this custom window never delegated to a generated Page.jsx (registry.js
+  // loads OrganizationPage.jsx directly for "organization"), so it never picked up the
+  // ETP-4520 access-tier guard despite menu.json carrying a real windowId ("110") — same gap
+  // ETP-4658 already found and fixed for financial-account/sales-invoice/etc. Without this,
+  // a role with no grant on this window still fired the fetch, got a correct backend 403
+  // ("Access denied to spec for current role"), and useOrganizationData's HTTP-status-only
+  // error message rendered raw in the destructive error box below with a Retry button that
+  // can never succeed. Checked after every other hook so hook order stays stable regardless
+  // of the tier (mirrors financial-account/index.jsx's own placement).
+  const windowAccessTier = useWindowAccess('110');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="110" data-testid="WindowAccessGuard__organization" />;
+  }
+
   if (loading) {
     return (
       <div className="px-6 py-8 space-y-4" data-testid="OrganizationPage__loading">
@@ -476,6 +496,25 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
               </div>
             </div>
           </div>
+        </SectionRow>
+
+        {/* Certificado digital (ETP-5391) — org-scoped, not per fiscal system (see
+            NeoCertificateHelper.java). Reuses fiscal-config's SiiSection/VerifactuSection/
+            TbaiSection cert title+hint keys directly (no new key pair needed — they already
+            read as generic org-level copy, not SII/Verifactu/TBAI-specific text). `context`
+            is intentionally omitted: CertModal's CONTEXT_SUBTITLE only has entries for
+            tbai/sii/verifactu, so an unmatched/undefined context already falls back to
+            ui('fiscal.cert.subtitle.default') — which is itself worded at the org level,
+            not any one fiscal system. */}
+        <SectionRow
+          titleKey="fiscal.cert.section.legend"
+          descKey="fiscal.cert.section.hint"
+          testId="OrganizationPage__section-certificate"
+          data-testid="SectionRow__a5f503">
+          <CertSection
+            orgId={orgId}
+            apiBaseUrl={apiBaseUrl}
+            data-testid="CertSection__a5f503" />
         </SectionRow>
 
         {/* Datos de contacto */}

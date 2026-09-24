@@ -14,7 +14,8 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Inspect the invoice from the list without immediately leaving the list route, then move into full edit mode when needed.
 - Understand the payable relationship to the originating purchase order, related goods receipts, and downstream payment-out records.
 - Open payment detail flows when the invoice is completed and still has an amount pending.
-- Complete multiple draft invoices at once from the list selection bar using the bulk action, labeled "Confirmar" (i18n key `confirmBulk`) for draft selections.
+- Complete multiple draft invoices — or reactivate multiple completed ones — at once from the list selection bar using the bulk action, labeled "Procesar" (i18n key `process`); its dialog offers **Confirmar** / **Confirm** (`CO`) for draft selections and **Reactivar** / **Reactivate** (`RE`) for completed ones, and its confirm button reads **Aceptar** / **Accept**. Bulk **Reactivar** works on an already-posted invoice: it unposts each posted row first, exactly as the detail kebab does (ETP-5302). The list refetches in place afterwards — scroll position and active filters survive.
+- Post ("Contabilizar") a completed, not-yet-posted invoice directly from the list — via the row-hover kebab menu for a single record, or via the dedicated "Contabilizar" bulk action in the list selection bar for multiple selected records — without needing to open the record in form view first (ETP-5209).
 - Copy a direct link to a record — from the list selection bar when exactly one row is selected, or from the record detail view once the record is saved.
 
 ## Interaction model
@@ -23,19 +24,26 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Visibility: visible from the Purchases menu.
 - Implementation type: custom window override registered in `tools/app-shell/src/windows/registry.js`, combining generated header/detail scaffolding with custom list preview, topbar, line table, bottom panel, and related-documents behavior.
 - Window shape: master-child. The master record is the invoice header and the main child dataset is invoice lines; the detail page also surfaces a custom related-documents tab instead of relying on the generated payment secondary tabs.
-- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. FK fields in line rows (product, tax, account, project, cost center, asset, and dimension fields) use `InlineSearchCombo`: a text input with server-side search that lets the user filter by typing — for example, typing "IVA" filters all matching tax rates. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference.
-- List interaction: the list uses a custom `PurchaseInvoiceHeaderTable` component (`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`). The visible columns, in order, are: Invoice Date (no dot indicator), Document No. (`POReference`, relabeled through `window.labelOverrides`), Due Date (4-state dot computed from the row's `outstandingAmount` and shown as "—" when no due date exists on the row). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status, Total Gross Amount, **Outstanding Amount** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Outstanding Amount" / "Saldo pendiente" so the grid reads in payment terms rather than ledger terms; ETP-5106 also added an `es_AR` override, which previously fell through to the raw AD label "Total Pendiente"), and **Delivery Status** (a percent progress bar driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the list. When the fiscal profile enables SII for the organisation, an **SII Status** badge column is injected between Document Status and Total Gross Amount. The badge reads `row.aeatsiiEstado` directly from the list API response — no secondary fetch is needed (ETP-4125 eliminated the batch `useInvoiceListFiscalStatus` hook that previously caused HTTP 403 errors on large invoice lists due to nginx URL-length limits). The badge component is `FiscalStatusBadge` from the shared module. **Verifactu is a sales-only fiscal system — it never appears as a column or badge in the purchase-invoice list. TBAI (ETP-5087) is sales-only unless the active TBAI config's territory is Bizkaia (`etsgSifTerritory === 'BIZKAIA'`), in which case purchase invoices become TBAI-eligible too — see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below.** When the top-nav organisation's active TBAI config is Bizkaia, a **Batuz Status** column (`invoiceList.col.tbaiStatusPurchase` — deliberately not the generic "TicketBAI Status" wording) is injected next to the SII column. It reads `row.eTGOTbaiStatus` — the real submission outcome (`Recibido` / `Rechazado` / `Error`), which since ETP-5216 is the stored computed AD column `EM_ETGO_Tbai_Status` on `c_invoice` rather than a server-injected field, exactly as the sales-invoice list does — and falls back to the invoice's own `row.tbaiIssent` boolean (`EM_Tbai_Issent`) rendering "Enviada"/"Pendiente" only when no sync state exists yet — see "List Batuz column — real sync state with a send-flag fallback, synchronous global visibility (ETP-5087)" below for the full mechanism and its documented trade-off. **ETP-5216 follow-up — the adoption-date gate now lives in the database.** An invoice dated before its organization joined Batuz (or belonging to an organization with no active `tbai_config` row) gets the literal `NoAplica` from `ETGO_GET_TBAI_STATUS`, and the cell renders it as a dash via `isTbaiStatusNotApplicable()` (`shared/fiscalTargets.js`). ETP-5122 had put that gate in the cell as `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`, which had two defects once the column became filterable: the backend could not see the rule (so filtering by "Pendiente" returned rows the grid drew as a dash), and `useFiscalConfig(orgId)` is called with the SELECTED organization, so every row was measured against one adoption date instead of its own organization's. The gate is unchanged for SII and VERI*FACTU, whose columns are not stored computed columns. Selecting a row opens a preview modal instead of navigating directly to the detail route. **ETP-4833:** the doc-type badge and the four `outstandingAmount` badges/buttons (`Aplicada`, `Saldo a favor · X €`, `Pagada`, and the pending-payment button) all declare `whiteSpace: 'nowrap'` (plus `flexShrink: 0` on the four flex-based ones, via the shared `NOWRAP_FLEX` style const) so two-word labels and amount+icon content never wrap onto a second line when the grid's column width shrinks.
+- Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. FK fields in line rows (product, tax, account, project, cost center, asset, and dimension fields) use `InlineSearchCombo`: a text input with server-side search that lets the user filter by typing — for example, typing "IVA" filters all matching tax rates. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column no longer ellipsizes — it declares `noTruncate: true` in the generated `LinesTable.jsx`, so the full product name is always visible, scrolling horizontally within its own cell when it overflows; `description` is unchanged (still truncates with a hover tooltip). The add-row form is now a genuine child of the same scrollable element the saved rows scroll in (a shared-registry portal, `tools/app-shell/src/lib/linesScrollHost.js`), so scrolling the grid horizontally while adding a line keeps both in sync — previously the add-row was a separate, independently-scrolled table that stayed put while saved rows scrolled underneath it. The expand-row "Dimensiones contables" panel (`project`/`costcenter`) now also truncates a long selector value with a native hover tooltip showing the full text, instead of letting it overflow the panel's fixed-width grid cell.
+- **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the invoice untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
+- List interaction: the list uses a custom `PurchaseInvoiceHeaderTable` component (`tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx`). The visible columns, in order, are: Invoice Date (no dot indicator), **Internal No.** (`DocumentNo`, the system-generated internal document number, relabeled through `window.labelOverrides` as "N° interno" / "Internal No." — ETP-5274; distinct from `POReference` below, which is the supplier's own reference), Document Type (badge, `C_DocTypeTarget_ID`), Document No. (`POReference`, relabeled through `window.labelOverrides`), Due Date (4-state dot computed from the row's `outstandingAmount` and shown as "—" when no due date exists on the row). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status, Total Gross Amount, **Outstanding Amount** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Outstanding Amount" / "Saldo pendiente" so the grid reads in payment terms rather than ledger terms; ETP-5106 also added an `es_AR` override, which previously fell through to the raw AD label "Total Pendiente"), and **Delivery Status** (a percent progress bar driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the list. When the fiscal profile enables SII for the organisation, an **SII Status** badge column is injected between Document Status and Total Gross Amount. The badge reads `row.aeatsiiEstado` directly from the list API response — no secondary fetch is needed (ETP-4125 eliminated the batch `useInvoiceListFiscalStatus` hook that previously caused HTTP 403 errors on large invoice lists due to nginx URL-length limits). The badge component is `FiscalStatusBadge` from the shared module. **Verifactu is a sales-only fiscal system — it never appears as a column or badge in the purchase-invoice list. TBAI (ETP-5087) is sales-only unless the active TBAI config's territory is Bizkaia (`etsgSifTerritory === 'BIZKAIA'`), in which case purchase invoices become TBAI-eligible too — see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below.** When the top-nav organisation's active TBAI config is Bizkaia, a **Batuz Status** column (`invoiceList.col.tbaiStatusPurchase` — deliberately not the generic "TicketBAI Status" wording) is injected next to the SII column. It reads `row.eTGOTbaiStatus` — the real submission outcome (`Recibido` / `Rechazado` / `Error`), which since ETP-5216 is the stored computed AD column `EM_ETGO_Tbai_Status` on `c_invoice` rather than a server-injected field, exactly as the sales-invoice list does — and falls back to the invoice's own `row.tbaiIssent` boolean (`EM_Tbai_Issent`) rendering "Enviada"/"Pendiente" only when no sync state exists yet — see "List Batuz column — real sync state with a send-flag fallback, synchronous global visibility (ETP-5087)" below for the full mechanism and its documented trade-off. **ETP-5216 follow-up — the adoption-date gate now lives in the database.** An invoice dated before its organization joined Batuz (or belonging to an organization with no active `tbai_config` row) gets the literal `NoAplica` from `ETGO_GET_TBAI_STATUS`, and the cell renders it as a dash via `isTbaiStatusNotApplicable()` (`shared/fiscalTargets.js`). ETP-5122 had put that gate in the cell as `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`, which had two defects once the column became filterable: the backend could not see the rule (so filtering by "Pendiente" returned rows the grid drew as a dash), and `useFiscalConfig(orgId)` is called with the SELECTED organization, so every row was measured against one adoption date instead of its own organization's. The gate is unchanged for SII and VERI*FACTU, whose columns are not stored computed columns. Selecting a row opens a preview modal instead of navigating directly to the detail route. **ETP-4833:** the doc-type badge and the four `outstandingAmount` badges/buttons (`Aplicada`, `Saldo a favor · X €`, `Pagada`, and the pending-payment button) all declare `whiteSpace: 'nowrap'` (plus `flexShrink: 0` on the four flex-based ones, via the shared `NOWRAP_FLEX` style const) so two-word labels and amount+icon content never wrap onto a second line when the grid's column width shrinks.
 - Detail interaction: the record page uses the generated header page with a custom lines table, a custom topbar, summary amounts, notes editing, footer totals, and related-document chips. The principal header section shows `POReference` as `Document No.` / `Nº documento`, placed right after `Business Partner`, while the internal AD `documentNo` field stays hidden in this custom workflow. `POReference` remains editable after completion, but becomes read-only once the invoice has been declared to the AEAT SII (`EM_Aeatsii_Issent = 'Y'`) — see the dedicated section below.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
 - A **SIF** tab (Suministro Inmediato de Facturación) is available in the detail tab strip when the organisation is configured for SII, or for TBAI on a Bizkaia (Batuz) territory (Verifactu is never shown for purchase invoices — see below, and see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below for the TBAI condition). The tab is declared in `decisions.json → window.extraTabs` and rendered by the shared `tools/app-shell/src/windows/custom/shared/SifTab.jsx` component. For purchase invoices the SII panel uses the `aeatsiiClaveTipoFc` field and the purchase-specific invoice type options (F6 / LC / F5 / F1). **ETP-4401:** the per-invoice `tbaiSequence`/`tbaiInvoicenum`/`tbaiInvoiceseq` fields (and, at the time, `tbaiIssent`) were given an explicit `"visibility": "discarded"` override in `decisions.json` so they no longer reach the frontend contract, because TBAI chaining sequences are now generated automatically per fiscal configuration by the `TbaiConfigSequenceHandler` NeoHandler instead of being tracked per invoice. **ETP-5087 partially reverses this for `tbaiIssent` only:** it is now `{ "visibility": "readOnly", "form": false }`, which puts the value back in the frontend contract as data for the list's Batuz column while still keeping it off the detail form. The sequencing fields stay `discarded`. When no fiscal target is active for the organisation, the SIF tab now disappears entirely from the detail tab strip instead of showing an empty-state message: `SifTab.jsx` reports its own visibility via the `onVisibilityChange` callback that `tools/app-shell/src/components/contract-ui/DetailView.jsx` passes to every `placement: 'tab'` custom tab, and the view redirects to the first remaining tab if the hidden tab was the active one. Editable fields are patched immediately on blur via `PATCH /sws/neo/purchase-invoice/header/{id}`.
 - **Line-level "tax needs SIF configuration" shortcut (ETP-4888 point 5):** on the lines grid's `tax` cell, an amber warning-color badge (`text-status-warning-foreground`) renders inline right next to the tax value itself (`InlineLinesPanel`'s `cellBadges` slot, `docs/ui-customization.md` §14e) ONLY when the selected tax is missing its TBAI/Verifactu key — never for SII, which has nothing to configure at tax level (its equivalent, `aeatsiiCauseExemption`, lives on the invoice header and is handled by the SIF tab above, unaffected by this feature). Clicking it opens `TaxSifModal.jsx` — a standalone dialog shared with sales-invoice (own vertical layout: tax-name pill, single-line label, `EnumSearchSelect` code+description picker, caption, footer — see `docs/ui-design-guidelines.md`), that reuses `TaxSifField.jsx`'s pure `selectSifFields()` to show the same 0–2 applicable fields the Tax window's own header form would, and saves the fix directly without leaving the invoice. Gated by `decisions.json → window.lineTaxSifTrigger` (see `docs/decisions-reference.md`); the "missing" check is driven by a backend selector enrichment (`InvoiceLineTaxSifSelectorPolicy`, `com.etendoerp.go`) that projects the relevant `C_Tax` columns onto the tax selector's response, scoped to this window and sales-invoice only — see `docs/ui-customization.md` §14e for the full mechanism. **ETP-5027 — document-direction gate:** the badge (and therefore the modal) is additionally gated by `getInvoiceFiscalTargets(specName, profile, tbaiRecord.etsgSifTerritory)`, threaded into `selectSifFields({ targets })` via `useTaxSifLineRowActions`. On a PURCHASE document VERI*FACTU **never** applies (it only ever sends sales — `VerifactuUtils.java:159,507`, `ETVFAC_C_INVOICE_SET_VERIFACTU.xml:71`) and TicketBAI applies **only when the TBAI territory is BIZKAIA** (Batuz/LROE is the sole purchase path — `PurchaseInvoiceBatuzRegister.java`, `SynchronizeUtils.java:266`; there is no Gipuzkoa/Araba purchase schema). Outside those cases no badge is shown and the modal never opens, because the key could never be transmitted.
+
+  **ETP-5229 (item #1):** the modal now forwards the invoice/order's own organization as the `sifContextOrgId` query param on save, so the tax-level SIF override is written under the SAME legal entity the badge-read path resolves it from — fixing a bug where the save succeeded but the warning badge stayed stuck when the user's session org differed from the document's own org. Shared fix across all four windows (`useTaxSifLineRowActions.jsx` / `TaxSifModal.jsx` / `helpers.js`'s `patchById`) — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Line-tax SIF quick-fix modal now saves under the invoice's own org, not the session org (ETP-5229, item #1)". **ETP-5229 (item #1, follow-up correction):** a SECOND, independent root cause was found for the same never-clearing badge on compound taxes — the tax selector permanently excludes a compound tax's rate-component children (`AD_Ref_Table` reference 158's `Parent_Tax_ID IS NULL` filter), so the completeness check always fell back to the summary tax's own (always-blank) columns. Fixed via an additive `includeTaxChildren` selector param — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Compound-tax children invisible to the tax selector — second, independent root cause (ETP-5229)".
 - **SIF error banner removed from the header (ETP-5057):** the invoice header no longer renders a red `SifErrorBanner` card for SII submission errors — the `headerExtra.customForm: "SifErrorBanner"` wiring was removed from `decisions.json` and the (now-orphaned) `SifErrorBanner.jsx` component (both the shared implementation and the per-window re-export) was deleted. SII incident detail — rejection reasons, error codes, structured AEAT responses — now lives exclusively in the Fiscal Monitor (`/fiscal-monitor`; see `docs/generated-custom-windows/fiscal-monitor.md`, section "SII section (`SiiMonitorSection`)"). VeriFactu does not apply to purchase invoices (see "Verifactu does not apply to purchase invoices" below), so this window's banner only ever showed the SII half. The invoice itself still shows its existing minimal sending-status indicator unchanged by this removal: the SII `FiscalStatusBadge` status pill column in `PurchaseInvoiceHeaderTable` (list) and the status badge in the SIF tab panel (detail) — no new indicator was added.
 
 ## Reactive behavior and dependencies
 
 - Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
 - **Capability-gated `posted` field/status pill (ETP-4520):** the header `posted` field (rendered as a `Posted`/`Not posted` status pill on the detail header and as a `Posted` boolean badge column in the grid) carries `"visibleWhenCapability": "showAccountingFields"` in `artifacts/purchase-invoice/decisions.json`, mirroring the sales-invoice implementation. This is resolved against `capabilities.showAccountingFields`, fetched once at role-selection via `GET /sws/neo/windowaccessmap` (NEO pseudo-spec bridge) and exposed through `useAuth().capabilities`. The field backs the `AD_Role.EM_ETGO_Show_Acct_Fields` ("Show Accounting Fields") checkbox — Etendo Classic-only for this MVP, no GO-app UI to toggle it — and the server resolves it with an Administrator bypass. A role without the capability never sees the column or the pill at all (the field is omitted, not disabled/hidden): `DataTable.jsx` filters the column out of `visibleColumns` and `DetailView.jsx` returns `null` for the status pill before it renders, both via the shared `isCapabilityVisible()` helper (`tools/app-shell/src/lib/capabilityVisibility.js`) fed by `useCapabilitiesSafe()`. Administrator sessions always see the field regardless of the checkbox.
-- Unified document/accounting date (ETP-4531, redefined 2026-07-17): `accountingDate` (`DateAcct`) is `visibility: system` — fully hidden from the UI, not present in `frontendContract.entities.header.fields` at all. `invoiceDate` is the single visible date field. Per classic AD metadata, `C_Invoice.DateInvoiced` carries `AD_Column.AD_Callout_ID = com.etendoerp.sif.general.callouts.SifInvoiceOperationDateCallout`, which extends `org.openbravo.erpCommon.ad_callouts.SE_Invoice_AccountingDate` and auto-fills `dateAcct` from `dateInvoiced`. This cascade is now intentionally allowed to flow through untouched — the earlier `PurchaseInvoiceHeaderHandler#afterCallout` guard that stripped it (ETP-4531's original, now-superseded scope; see `docs/feedback.md`) has been removed on the `com.etendoerp.go` side, so saving the invoice writes the same date to both `invoiceDate` and `accountingDate` internally, and the accounting facts generated on posting reflect that unified value as the journal entry's accounting date.
+- **Independent accounting date (ETP-5273, re-reverts ETP-4531):** `accountingDate` (`DateAcct`) is again an independent, editable header field — `"visibility": "editable"`, `section: "principal"`, `seq: 35`, hidden from the grid (`grid: false`) but present in the form (`form: true`) and in `frontendContract.entities.header.fields`. `readOnlyLogic: "@Posted@='Y'"` — editable while the invoice is Borrador or Confirmado, locked once it is `Posted` (in the GL ledger), and editable again if the entry is reversed/unposted. `@Posted@` is used deliberately instead of this window's dominant `@Processed@='Y'` pattern: `Processed='Y'` alone would also lock the date during a failed posting attempt, where the user still needs to correct it before retrying.
+  - **Sync direction is one-way, exactly like Classic:** editing `invoiceDate` cascades into `accountingDate` server-side via the native classic callout `SifInvoiceOperationDateCallout` (registered on `C_Invoice.DateInvoiced`, extending `SE_Invoice_AccountingDate`), executed through `NeoCalloutService` — no Etendo GO-side guard blocks it, because this cascade is the intended behavior. Editing `accountingDate` never touches `invoiceDate` — the callout registered on `DateAcct` is `SE_Invoice_TaxDate`, which writes `Taxdate` only.
+  - **On creation only**, `accountingDate` defaults to `invoiceDate`'s value when the client does not send an explicit `accountingDate` (`NeoHandlerUtils.mirrorAccountingDateOnCreate`, called from `PurchaseInvoiceHeaderHandler`). On every subsequent `PUT`/`PATCH`, this mirror is a no-op — an `accountingDate` the user edited by hand is never clobbered by a later save of unrelated header fields.
+  - **This is a third design, not a plain revert of ETP-4531's original independent-date work** (which used a `blockCalloutFieldUpdate` guard to strip the `invoiceDate → accountingDate` cascade entirely, keeping the two dates fully decoupled in both directions). ETP-5273 explicitly aligns with Classic instead, where changing the invoice date visibly updates the accounting date live, and that guard has been removed from `com.etendoerp.go` with zero call sites remaining.
+  - **Frontend guard interaction:** the generic "protect user-touched fields from callout overwrites" guard (ETP-3836, `detailViewHelpers.jsx`) would otherwise permanently freeze `accountingDate` the first time a user edits it by hand, since Classic re-applies the `invoiceDate → accountingDate` cascade on every subsequent invoice-date change. `isDocumentDateCascadeTarget(key, triggerField, documentDateField)` exempts `accountingDate` specifically when the trigger is this window's declared `documentDateField` (`invoiceDate`), so the cascade keeps working even after a manual edit — see `docs/feedback.md` for the full bug history.
 - The `date` field in `AddPaymentModal.jsx` (the "New payment" popup triggered from the invoice detail) uses the generic `DateField` component (`tools/app-shell/src/components/ui/date-field.jsx`) — Figma-aligned calendar popover with always-visible calendar icon, month/year picker, and Etendo yellow hover on filled-black elements. These defaults matter because a new payable document starts as draft and incomplete before lines and payment activity exist.
 - Partner address is a dependent selector filtered by the selected business partner. The business partner also drives header callouts, and the custom page blocks line creation until a business partner is present.
 - The purchase order reference is part of the header contract and is used by the custom related-documents surface to show the linked purchase order and to fetch related goods receipts for the same order. The related-documents component fetches the full purchase order record via `fetchById('purchase-order', 'header', ...)` so the chip renders the formatted title (`Order #<documentNo>`), the grand total amount with currency symbol, and the document status — matching the same visual style used by the sales-invoice related-documents chip. The supplier invoice reference (`orderReference`, DB column `POReference`, displayed as `Document No.` / `Nº documento`) is a free-text header field surfaced in the detail form so the user can reconcile the invoice against the supplier's own paper document; it stays editable after completion, and is locked only once the invoice has been submitted to the AEAT SII — see the dedicated `orderReference` section below.
@@ -44,11 +52,12 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Line pricing follows `INVOICE_LINE_CONFIG` (see `docs/line-pricing-model.md`). The editable fields are `listPrice` (PriceList column) and `etgoDiscount` (`EM_Etgo_Discount`, a Number column added by `com.etendoerp.go`). `unitPrice` (PriceActual) is hidden; it is computed at POST/PATCH as `listPrice × (1 − etgoDiscount/100)`. The product selector provides the correct price-list price via `NeoSelectorService.enrichProductSelectorWithPrices`, which populates both the display-side fields and `_aux._PSTD/_PLIST` so `SL_Invoice_Product` returns the price-list price. Guard 1 in `DetailView.jsx` maps `standardPrice → listPrice` universally when `listPrice` is null or zero. Changing the product resets `etgoDiscount` to 0. `grossAmount` is computed client-side as `invoicedQuantity × listPrice × (1 − etgoDiscount/100) × taxFactor`. The `decisions.json` declares `lineEntityConfig: "invoice"`, which drives all of these behaviors via the generator and `DetailView.jsx`.
 - The preview modal and the detail topbar both treat the invoice as a payable document. They read payment-plan and payment/payment-history data to show paid versus outstanding state, and they expose payment actions only when the invoice is completed and still has an outstanding balance.
 - The detail topbar shows a payment-status pill only for completed invoices. The pill label and amount react to whether the invoice is fully paid or still pending, and clicking it opens the shared invoice payment modal.
-- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (Facturas Rectificativas de Compra with a negative total only, ETP-4738 — no supplier credit accrual in it1; see "Saldo a favor restricted to Facturas Rectificativas — ETP-4738" below) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option; the former *Dar vuelto* / refund option was removed for both directions in ETP-4504). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field.
+- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (Facturas Rectificativas de Compra with a negative total only, ETP-4738 — no supplier credit accrual in it1; see "Saldo a favor restricted to Facturas Rectificativas — ETP-4738" below) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option; the former *Dar vuelto* / refund option was removed for both directions in ETP-4504). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field. The history popup's body (loading skeleton / empty state / populated list) carries a fixed `BODY_MIN_HEIGHT` (200px) floor so the panel no longer visibly resizes when it switches between those three states (ETP-5253).
 - Drafts reserve what they are going to pay (ETP-4895): a draft payment does not lower the invoice's outstanding, so both the history popup's **"+ Añadir pago"** button and the preview modal's **Registrar pago** action offer only what the drafts left free — `outstanding − Σ|amount|` over the non-processed payments. When the drafts already reserve the whole outstanding the button stays visible but **disabled**, with the `cpAddPaymentBlockedByDraft` tooltip ("Ya hay un borrador que cubre el total pendiente…"); it re-enables as soon as the draft is deleted or confirmed. When a draft covers only part of the invoice (e.g. 10 on a 26,62 invoice) a new payment is still allowed and **"Nuevo pago"** opens defaulted to the remainder, not to the full outstanding. Editing an existing draft excludes that draft from the reservation, so it can still be raised up to the full outstanding. Implemented in `InvoicePaymentHistoryModal.jsx` (`freeToAllocate`) and `useInvoicePreview.js` (`freeToAllocate` / `addPaymentBlockedByDraft`, consumed by `InvoicePreview.jsx` and `preview-cards/PaymentsCard.jsx`).
 - Rectificative invoices (RECTIFICATIVA subtype — see "Factura Rectificativa — ETP-4737" below — with a negative total, ETP-4738; the retired "AP CreditMemo" / "AP Credit Memo" types are deactivated, covered under ETP-4737): the detail topbar badge mirrors the grid's "Pendiente de pago" cell — green **"Aplicada"** once the rectificativa is fully consumed, else a purple clickable **"Saldo a favor · remaining"** badge that opens the same history popup as the grid (previously a static non-clickable "Crédito aplicado · total" pill). Inside the popup, the pending widget relabels to **"Saldo a favor"** with the remaining balance, each row shows how much of the rectificativa that payment consumed (`− appliedToInvoice` from the `invoicePayments` action, negative when consuming it), and the **"+ Añadir pago"** button is hidden.
 - Payment method / account defaults (ETP-4331) — mirrors Etendo Classic's `AddPaymentDefaultValuesHandler` priority instead of an arbitrary first-in-list pick: **Método de pago** defaults to the invoice's own configured method (falling back to the business partner's method if the invoice has none); **Cuenta** is filtered to only the accounts that support the selected method (and match the invoice currency), defaulting in priority order to (1) the business partner's preferred account for this direction (`pOFinancialAccount` for payments) when it supports the method, (2) the account flagged `default` on `FIN_Financial_Account_PaymentMethod` for that method, (3) the first account that supports the method. Changing **Método de pago** re-filters and, if needed, re-selects **Cuenta** using the same priority; clearing **Método de pago** never silently refills **Cuenta** (a prior bug where clearing the method after clearing the account caused the account to reappear on its own is fixed). Backend surfaces this via `paymentMethodIds`/`defaultForMethodIds` per account and `defaultMethodId`/`bpPreferredAccountId` on the `invoiceAccounts` response (`PaymentRegistrationService.java`).
-- Topbar clone button: icon-only (no text label), styled as Secondary Outline (`#D1D4DB` border, `#FFFFFF` background, `#64748B` icon color, `0px 1px 2px 0px #1212170D` shadow). Hover shifts background to `#F1F5F9`. Implemented via the shared `tools/app-shell/src/windows/custom/shared/CloneButton.jsx` component, which is also used by `SalesInvoiceTopbar.jsx`.
+- Topbar clone button: icon-only (no text label), styled as Secondary Outline (`#D1D4DB` border, `#FFFFFF` background, `#64748B` icon color, `0px 1px 2px 0px #1212170D` shadow). Hover shifts background to `#F1F5F9`. Implemented via the shared `DocumentSecondaryActions.jsx`'s `CloneButton` (see below), the same one `SalesInvoiceSecondaryActions.jsx` uses.
+- **Button order (ETP-5260):** Copy link → Clone render to the LEFT of Save/Confirm via `PurchaseInvoiceSecondaryActions.jsx` (wired as the `topbarRight`-slot replacement from `index.jsx`, a thin adapter around the shared `DocumentSecondaryActions`, since this window is on the prop-hardcoded "Camino B" path — see the ETP-5260 plan doc); `PurchaseInvoiceTopbar.jsx` keeps only the payment-status pill (a primary/status indicator), to the RIGHT of Save/Confirm. Clone reuses the `cloneInvoiceError`/`invoiceProcessing` i18n keys the inline call used before ETP-5260. No generic `showSend` — instead, `SendToSifButton` (send invoice to SII/TBAI) renders as a `children` extension of `DocumentSecondaryActions`, after Clone, matching the DF's "Enviar" position in the secondary group while staying a window-specific fiscal concern (its own `status === 'CO'` + pending SII/TBAI-target gating, unrelated to `DocumentSecondaryActions.showSend`). See `docs/ui-customization.md` §3b for the general slot-classification rule.
 - When the fiscal profile enables a manual fiscal target for purchase invoices, completed purchase invoices expose `Enviar a SIF` in both the detail topbar and the preview modal. The matrix is spec-specific: `sii` and `sii-navarra` show SII; `tbai` shows TicketBAI **only when the active TBAI config's territory is Bizkaia** (see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below), and shows nothing for purchases on any other territory; `sii+tbai` shows SII always, plus TicketBAI too when the territory is Bizkaia; `verifactu` shows no manual send button because Verifactu is sent automatically on completion.
 - The detail bottom panel also includes the same SIF status block used by sales invoices, rendered below Related Documents and Notes. It shows SII/TBAI tabs depending on the org fiscal profile (and, for TBAI, the territory — see below), exposes the current send status badges, and allows inline editing of the SII metadata fields that remain editable for the current document state.
 - **Verifactu does not apply to purchase invoices.** The SIF bottom-panel block for purchases shows only SII and TBAI tabs according to the fiscal matrix; the `verifactu` profile shows no bottom-panel block for purchases because Verifactu is a sales-only fiscal system in Etendo.
@@ -68,7 +77,7 @@ The territory value comes from `tbaiRecord?.etsgSifTerritory` (via `useFiscalCon
 - `sifSending.js` (`getPendingSifTargets`) — now accepts `territory` as a fourth argument, defaulting to `null`, and forwards it to `getInvoiceFiscalTargets`.
 - `useInvoicePreview.js` — computes `territory` and returns it alongside `profile` for `InvoicePreview.jsx` to consume.
 - `InvoicePreview.jsx` (`InvoiceGeneralTab`) — passes `territory` into both `getInvoiceFiscalTargets` and `useFiscalStatus`.
-- `useFiscalStatus.js` — now accepts `territory` as a sixth argument (default `null`) and includes it in the effect's dependency array so a territory change re-derives which fiscal statuses to fetch.
+- `useFiscalStatus.js` — accepts `territory` as its fourth argument (default `null`) and includes it in the `useMemo` dependency array so a territory change re-derives which fiscal statuses are shown. **(ETP-5229 update:** the hook's signature is `useFiscalStatus(invoice, specName, profile, territory, cutoverDates)` — the `orgId`/`apiBaseUrl` arguments described when this paragraph was first written no longer exist, and a 5th `cutoverDates` argument (`{ sii, tbai, verifactu }`, each an earliest-ever cutover ISO date from `useFiscalConfig`) was added back in item #16 to gate eligibility; see [`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229) and its "Second correction" subsection.)
 - `useSifFieldPatcher.js` — gates which SIF fields are editable inline on the SIF tab using the same territory-aware `getInvoiceFiscalTargets` call.
 - `PurchaseInvoiceHeaderTable.jsx` also derives `territory` locally from `useFiscalConfig`'s `tbaiRecord`.
 
@@ -78,7 +87,7 @@ The territory value comes from `tbaiRecord?.etsgSifTerritory` (via `useFiscalCon
 
 The fix exposes the invoice's own organization as a header field: `artifacts/purchase-invoice/decisions.json → entities.header.fields.organization` is promoted from the extraction default (`system`, backend-only) to `{ "name": "adOrgId", "visibility": "readOnly", "form": false }` — the same override `sales-invoice` already carried. `adOrgId` now appears in `contract.json`'s `frontendContract` (readOnly, not shown in the form) so every fetched invoice record carries `data.adOrgId` (`AD_Org_ID`) alongside the rest of its header fields.
 
-`tools/app-shell/src/windows/custom/shared/resolveInvoiceOrgId.js` centralizes the resolution: `data?.adOrgId ?? selectedOrgId ?? null`, i.e. prefer the invoice's own org, falling back to the top-nav selector only when the record hasn't exposed `adOrgId` (e.g. a stale cached record). `SendToSifButton.jsx`, `useSifFieldPatcher.js`, and `useInvoicePreview.js` all call it now. `useFiscalStatus.js` and `InvoicePreview.jsx` needed no change — they already accept/forward `orgId` as a parameter/prop rather than resolving it themselves, so fixing the source (`useInvoicePreview.js`) fixes them transitively.
+`tools/app-shell/src/windows/custom/shared/resolveInvoiceOrgId.js` centralizes the resolution: `data?.adOrgId ?? selectedOrgId ?? null`, i.e. prefer the invoice's own org, falling back to the top-nav selector only when the record hasn't exposed `adOrgId` (e.g. a stale cached record). `SendToSifButton.jsx`, `useSifFieldPatcher.js`, and `useInvoicePreview.js` all call it now. At the time this was written, `useFiscalStatus.js` and `InvoicePreview.jsx` needed no change — they already accepted/forwarded `orgId` as a parameter/prop rather than resolving it themselves. **(ETP-5229 update:** `useFiscalStatus.js` no longer takes an `orgId`/`apiBaseUrl` at all — it reads the invoice's own header fields directly and needs no org resolution of any kind for the fiscal STATUS badge. `resolveInvoiceOrgId`/`orgId` remain in use for the fiscal CONFIG lookup (`useFiscalConfig`, eligibility-by-date gating), which is a separate, still-legitimate per-org concern — see the ETP-5229 writeup linked above.)
 
 **`PurchaseInvoiceHeaderTable.jsx` stays on the global `selectedOrg` — deliberately.** An intermediate revision of ETP-5087 argued the opposite (each row carries its own `adOrgId`, so a page could span legal entities with different TBAI territories) and rebuilt the list column on a per-row async org resolution. That was reverted: the extra asynchrony caused three consecutive regressions and bought no capability an invoice list needs, since a list is browsed one org at a time. Both fiscal columns are resolved from the top-nav org in a single synchronous memo — see "List Batuz column — real sync state with a send-flag fallback, synchronous global visibility (ETP-5087)" below. Per-row org resolution (`resolveInvoiceOrgId`) remains correct and in use on the **detail/preview** path, which genuinely operates on one record.
 
@@ -134,7 +143,7 @@ The consequence, accepted deliberately: a page that mixes legal entities from *d
 
 None of that bought a capability the list actually needs: an invoice list is browsed one org at a time. `useOrgFiscalConfigs.js` and its test file have been deleted; `resolveInvoiceOrgId.js` remains, still used by the **detail** path (`SendToSifButton.jsx`, `useSifFieldPatcher.js`, `useInvoicePreview.js`), which is genuinely per-record and unaffected.
 
-**Detail panel is unchanged.** `useFiscalStatus.js` still fetches the `tbai-facturas-enviadas` spec per invoice when a detail/preview is opened. That is one request per record on an explicit user action — correct there, and out of scope for the list.
+**Detail panel — updated by ETP-5229.** `useFiscalStatus.js` no longer fetches the `tbai-facturas-enviadas` spec (or any other network resource) at all — it derives the TBAI status synchronously from the invoice's own `tbaiSyncEstado`/`tbaiIssent` header fields, the same fields this list column reads. See [`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229) for why the previous per-invoice config-scoped fetch was itself a bug, not just an efficiency concern.
 
 **Popup wording (`sifSending.js`) — confirmation AND result:** every user-visible string in the `Enviar a SIF` popup that names the TBAI scheme uses the Batuz wording on a purchase invoice and the generic TicketBAI wording on a sales invoice. All three selectors live in `sifSending.js` and switch on the same strict `specName === 'purchase-invoice'` check:
 
@@ -188,7 +197,8 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
 8. Under an org configured for `sii`, `sii-navarra`, `tbai`, or `sii+tbai`, open a completed purchase invoice and confirm `Enviar a SIF` appears in both the detail topbar and the preview modal only for the purchase-side target defined by the fiscal matrix: SII for `sii` / `sii-navarra`; TicketBAI for `tbai` **only when the active TBAI config's territory is Bizkaia** (hidden entirely for Álava/Gipuzkoa); SII plus TicketBAI-on-Bizkaia for `sii+tbai`. Trigger it and verify the confirmation text matches the pending target and successful sends refresh the invoice state.
 9. From the detail footer or related-documents tab, confirm links are available to the source purchase order, related goods receipts, and downstream payment-out records when those relationships exist. The purchase order chip must show the formatted label (`Order #<documentNo>`), the grand total with currency symbol, and the document status pill — not the raw `_identifier` string (`documentNo - date - amount`).
 10. Open a completed purchase invoice detail and confirm the kebab menu exposes `Reactivate` and `Post` (gated on `processed && !posted`) — see `window.menuActions` in `decisions.json`. SII sending is a separate detail-topbar action (`Enviar a SIF`), not a kebab entry — see "Send to SII from the detail topbar" below.
-11. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Confirmar (N)` button. Verify the expected status transition and a result toast.
+11. From the list, select multiple draft invoices and confirm the bulk action bar shows a `Procesar (N)` button whose dropdown offers **Confirmar** (`CO`); then select multiple completed invoices and confirm the same button offers **Reactivar** (`RE`). Confirm the dialog's confirm button reads **Aceptar** / **Accept** (not "Completado"). Verify the expected status transition and a result toast.
+11b. **ETP-5302 — bulk reactivate of a posted invoice.** Complete an invoice, post it ("Contabilizar"), then select it in the list and run `Procesar` → **Reactivar**. It must return to draft and the toast must report it as successful. Before this fix the row failed with `{"status":"error","message":"Factura contabilizada"}` while reactivating the very same invoice from its form kebab succeeded. Also confirm the page does **not** reload: scroll down a long list, apply a filter, run the bulk action, and verify the filter and scroll position survive and only the rows refetch.
 12. Open an existing draft invoice without touching any field and confirm the "Save Draft" button is **disabled**. Change any header field and confirm it becomes enabled. Save and confirm it disables again. Revert the changed field to its original value without saving and confirm the button disables once more. Add a line: once the add-row is submitted, the button should disable again if no header changes remain pending. Confirm the "Confirm" button stays enabled throughout all these states.
 13. Open a purchase invoice detail and confirm the bottom panel shows a `SIF` section below Documents and Notes whenever the fiscal profile enables a purchase-side fiscal target. Verify the visible tabs follow the fiscal matrix: SII for `sii` / `sii-navarra`, TicketBAI for `tbai` only when the org's active TBAI config territory is Bizkaia (hidden for Álava/Gipuzkoa), SII plus TicketBAI-on-Bizkaia for `sii+tbai`, and Verifactu never for purchase invoices. Confirm the SII badge reflects `aeatsiiEstado`, the TBAI badge reflects `tbaiIssent` (only reachable on Bizkaia), the Verifactu badge reflects `etvfacInvoiceStatus`, and SII inline edits persist through `PATCH /sws/neo/purchase-invoice/header/{id}`.
 14. Open a saved record and confirm the **Attachments** tab is visible in the tab strip. Upload a file and verify it appears in the table. Download it and delete it. When multiple files exist, confirm 'Download all (ZIP)' and 'Delete all' appear in the table header and that 'Delete all' shows a confirmation dialog before removing all files.
@@ -198,7 +208,12 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
 
 ## Automated evidence
 
-- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="confirmBulk"` so the button renders as "Confirmar" / "Confirm". The `menuActions` array in `artifacts/purchase-invoice/decisions.json` declares `reactivate` and `post` only — SII sending is handled separately by the detail-topbar `SendToSifButton` (see "Send to SII from the detail topbar" near the `agentPrompt` section below), not by a kebab entry.
+- `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` provides the bulk-action component mounted in the purchase-invoice list selection bar, mounted with `labelKey="process"` so the button renders as "Procesar" / "Process", with "Confirmar" / "Confirm" (`labelKey: 'confirm'`) as the `CO` entry inside its dropdown. The `menuActions` array in `artifacts/purchase-invoice/decisions.json` declares `reactivate` and `post` only — SII sending is handled separately by the detail-topbar `SendToSifButton` (see "Send to SII from the detail topbar" near the `agentPrompt` section below), not by a kebab entry. That decisions.json `menuActions` array only drives the form-view kebab (`HeaderPage`'s detail branch, which the wrapper below does not override); the list view is a hand-rolled `ListView` the wrapper always overrides, so its row-kebab and bulk actions are wired directly in code (see ETP-5209 note below), not read from decisions.json.
+- **ETP-5209 — Post reachable from the list, not just form view**: `tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`'s `buildInvoiceRowQuickActions()` (shared with sales-invoice) adds a `menuActions` entry (`{ neoAction: 'post' }`) to the row-hover kebab, gated on `!posted && processed` (same gate as the decisions.json-driven form-view Post action) — mirrored in `purchase-invoice/index.jsx`'s `rowQuickActions` wiring. A successful post refreshes the list via `onMenuActionExecuted` bumping `refreshKey`. For bulk, `PurchaseInvoiceBulkAction` in `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` renders a second `BulkDocumentAction` instance (`actionMode="neoAction"`, `buildActions={buildPostActions}`, `rowFilter={postRowFilter}`, `labelKey="post"`) alongside the existing confirm/reactivate one — `buildPostActions`/`postRowFilter` are exported from `BulkDocumentAction.jsx` and shared across purchase-invoice, sales-invoice, goods-receipt, and goods-shipment. `postRowFilter` is a plain `(row, action, ui) => ...` function (not a `createPostRowFilter(ui)` factory), so it is passed by reference — the `ui` translator is supplied by `BulkDocumentAction`'s own `handleDone` at call time, not by the window wrapper. A row already posted, or not yet processed, is excluded from the bulk run with a translated rejection message (`bulkRowAlreadyPosted` / `bulkRowNotCompleted`).
+- **ETP-5302 — selection-bar button renamed to "Procesar", dropdown option renamed to "Confirmar"**: the floating selection-bar button is now mounted with `labelKey="process"` ("Procesar" / "Process") — the `confirmBulk` key it used before was deleted from `en_US.json`, `es_ES.json` and `es_AR.json`. In the same move, `BulkDocumentAction`'s `CO` entry (in both `buildInOutActions` and the default `buildActions`) switched from `labelKey: 'book'` to `labelKey: 'confirm'`, so the dropdown option that completes the document now reads "Confirmar" / "Confirm". The `RE` entry keeps `labelKey: 'reactivate'`. Labels only — the dialog, the per-row `Promise.allSettled` loop, the `documentAction=CO` call and the result toast are untouched. The second selection-bar button added by ETP-5209 (`labelKey="post"`, "Contabilizar") is unaffected.
+- **ETP-5302 — BUG: bulk reactivate failed on a posted invoice.** Reactivating a Completed + Posted invoice from the selection bar returned `{"status":"error","message":"Factura contabilizada"}` and counted the row as failed, while the same action from the detail kebab worked. **Root cause:** the "reactivate unposts first" rule is declared as `preUnpost: true` on the `reactivate` menu action in `artifacts/purchase-invoice/decisions.json`, but it was implemented *only* inside `tools/app-shell/src/components/contract-ui/DetailMoreActionsMenu.jsx` (and duplicated across its two branches). `BulkDocumentAction` knew nothing about the flag and sent a bare `docAction: 'RE'`, which Core rejects — `src-db/database/model/functions/C_INVOICE_POST.xml:948`, `IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR('@InvoiceDocumentPosted@')`, surfaced as "Factura contabilizada" via the `InvoiceDocumentPosted` `AD_MESSAGE`. **Fix:** the rule now lives in one place, `tools/app-shell/src/lib/preUnpost.js` (`isPosted(row)` — only `'Y'`/`true` count, since the AD Posted-status domain also carries `T`, `E`, `D`, `p`, `i`; and `runPreUnpost({recordId, record, enabled, execute})` → `{ran, success, message}`), called by both `DetailMoreActionsMenu.jsx` (behaviour unchanged) and `BulkDocumentAction.jsx`'s new `preUnpostActions` prop. `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` mounts the confirm/reactivate instance with `preUnpostActions={['RE']}`. Each row runs unpost → `RE`; a failed unpost aborts that row (a document still carrying its accounting entries is never reactivated) and is reported with the translated backend message. `preUnpost.js` is deliberately a plain module, not a hook, because `BulkDocumentAction` is reached from a `bulkActions` slot that `ListView` invokes as a flat function call (the ETP-5209 Rules-of-Hooks constraint). Full reference: `docs/ui-customization.md` §9e.
+- **ETP-5302 — no standalone bulk "Descontabilizar" on this window, by design.** `BulkDocumentAction.jsx` also exports `buildUnpostActions`/`unpostRowFilter`, mounted by `goods-receipt` and `goods-shipment`. Purchase-invoice deliberately does **not** mount them even though it mounts the post pair: on an invoice, reversing the accounting is a step *inside* Reactivate (`preUnpost`), never a user-facing action of its own. That is why the unpost pair is separate from `buildPostActions`/`postRowFilter` rather than the post builder being taught to also emit `unpost`.
+- **ETP-5302 — the bulk action no longer reloads the page.** `ListView.jsx` now passes `refresh` in the `bulkActions` slot context, and `BulkDocumentAction` ends with `clearSelection()` → toast → `refresh()`. The old `sessionStorage` + `window.location.reload()` path survives only as a fallback for a host mounted outside that slot. The dialog's confirm button reads `ui('accept')` ("Aceptar" / "Accept"); it used to read `ui('done')` ("Completado"), which is the name of a document state shown in this very list's "Estado doc." column, so it read as though it would mark the documents completed. `done` was left untouched — `RecordCreateModal.jsx` still uses it.
 - `tools/app-shell/src/lib/__tests__/dateOnly.test.js`, `tools/app-shell/src/lib/__tests__/invoiceDueDate.test.js`, and `tools/app-shell/src/windows/custom/purchase-invoice/__tests__/PurchaseInvoiceHeaderTable.test.js` provide source-level and helper-level regression coverage for due-date calendar normalization, locale formatting, max-installment selection, and the paid/overdue/soon/ok state derivation that drives the dot color and the red-text reinforcement on overdue rows in the purchase-invoice list.
 - Shared shell and entity-loading behavior is documented in `docs/generated-custom-windows/app-shell-functional-flows.md`.
 - **ETP-4520** — `artifacts/purchase-invoice/decisions.json`, `artifacts/purchase-invoice/contract.json`, and the generated `HeaderPage.jsx`/`HeaderTable.jsx` all carry `"visibleWhenCapability": "showAccountingFields"` on the `posted` field. `tools/app-shell/src/lib/capabilityVisibility.js`, `tools/app-shell/src/hooks/useCapabilitiesSafe.js`, `tools/app-shell/src/components/contract-ui/DataTable.jsx`, and `tools/app-shell/src/components/contract-ui/DetailView.jsx` prove the shared omit-not-disable gating mechanism, with source-reading coverage in `tools/app-shell/src/lib/__tests__/capabilityVisibility.test.js`, `tools/app-shell/src/hooks/__tests__/useCapabilitiesSafe.vitest.jsx`, `tools/app-shell/src/components/contract-ui/__tests__/DataTable.capabilityVisibility.vitest.jsx`, and `tools/app-shell/src/components/contract-ui/__tests__/DetailView.capabilityVisibility.vitest.jsx`.
@@ -212,7 +227,7 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
   - `tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx` — wires `useInvoicePreview` data into `GenericPreviewModal`; drives the left-panel strategy (drop zone vs. cached file vs. spinner), the `attachmentConfig` prop, and the modal action buttons (Send, Add Payment, Download PDF, Edit).
   - `tools/app-shell/src/windows/custom/shared/GenericPreviewModal.jsx` — domain-agnostic slide-in preview shell. Receives `attachmentConfig` and manages the entire file-persistence lifecycle via `usePreviewAttachment`: GET on mount, drop zone when no file, POST on upload, DELETE on delete button. Emits `data-testid="generic-preview-modal"` and `data-testid="preview-drop-zone"`.
   - `tools/app-shell/src/windows/custom/shared/usePreviewAttachment.js` — GET/POST/DELETE against `/sws/neo/preview-file`. No-op when `storeCondition=false`. Manages the `storedFile` object URL lifecycle (revoke on unmount).
-  - `tools/app-shell/src/windows/custom/purchase-invoice/InvoiceLineTableCustom.jsx` — hardcoded column list: product, description, invoiced quantity, net unit price (`key: 'listPrice'`, `column: 'PriceList'`, `type: 'amount'`), % discount (`key: 'etgoDiscount'`), tax, line gross amount. The editable price field is `listPrice` (PriceList column), not `unitPrice` (PriceActual). `etgoDiscount` (`EM_Etgo_Discount`) is the discount field for invoice lines. This aligns with `addLineFields.entry` in the generated `HeaderPage.jsx` and with the `INVOICE_LINE_CONFIG` used by `DetailView.jsx`.
+  - `artifacts/purchase-invoice/generated/web/purchase-invoice/LinesTable.jsx` (pipeline-generated, rendered through `InlineLinesPanel` since `window.linesLayout = "inlineEditable"`) — column list: product, description, invoiced quantity, net unit price (`key: 'listPrice'`, `column: 'PriceList'`, `type: 'amount'`), % discount (`key: 'etgoDiscount'`), tax, line gross amount, plus an expand-row `dimensionsPanel` column for `project`/`costcenter`. The editable price field is `listPrice` (PriceList column), not `unitPrice` (PriceActual). `etgoDiscount` (`EM_Etgo_Discount`) is the discount field for invoice lines. This aligns with `addLineFields.entry` in the generated `HeaderPage.jsx` and with the `INVOICE_LINE_CONFIG` used by `DetailView.jsx`. **ETP-5133:** the `product` column declares `noTruncate: true` — the product name renders in full, scrolling horizontally within its cell on overflow, instead of ellipsizing; `description` is unchanged (still truncates with a hover tooltip). There is no hand-written custom lines-table component for this window anymore — see "Dead custom lines-table components removed (ETP-5133)" below.
   - `tools/app-shell/src/windows/custom/purchase-invoice/RelatedDocuments.jsx` — fetches the full purchase order via `fetchById` to render the order chip with formatted title, amount, currency, and status. Goods receipts are fetched via `fetchByCriteria('goods-receipt', ...)` on the same PO id. Payments are resolved through payment-plan → payment-detail → payment-out chain.
   - `tools/app-shell/src/windows/custom/shared/InvoicePaymentHistoryModal.jsx` — uses `useApiFetch()` for authenticated payment-plan, payment-history, financial-account, and register-payment requests instead of receiving token props; refetches the payment plan (not just the payment list) after a payment is registered so its own "Saldo pendiente" stays accurate within the same modal session.
   - `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceHeaderTable.jsx` — the list's payment badge cell; `onPaymentAdded` calls `props.onDataMutated` (wired by `ListView.jsx` to the list's data-refresh hook) so the "Saldo pendiente" column refreshes after registering a payment without a manual reload.
@@ -223,7 +238,7 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
 - **ETP-4315 QA follow-up — attach-before-save on a new invoice**: `decisions.json → window.attachments.saveBeforeAttach: true` (only window with this flag today). Dropping a file on a brand-new, unsaved invoice used to fail silently — `recordId` is the literal string `"new"` while creating, which is truthy, so the dropzone stayed enabled but the upload 404'd against a non-existent `C_Invoice` id. `AttachmentsTab.jsx` now checks `isNew && config.saveBeforeAttach`: it force-saves the header via the already-passed `onSaveHeader({ navigateAfter: false })` (same mechanism `secondaryTabs.requireSavedRecord` uses for Exchange Rates on this window), uploads against the id it returns (`useAttachments.upload(file, { recordId })` — the hook now accepts an override id for exactly this case), then calls `onGoToSavedRecord(saved)` to land on the persisted record with the tab still open. A failed save (validation) shows the usual toast and never attempts the upload. Deliberately **not** applied to every window — see the ETP-4315 comment thread: other windows are a separate follow-up to *disable* the dropzone until saved, not to auto-save on drop.
 - `e2e/tests/flows/invoice-preview-modal.spec.js` — 5 Playwright tests for `GenericPreviewModal` lifecycle in mock mode: row click opens the modal, X button dismisses it, backdrop click dismisses it, tabs are rendered and switching works, Edit navigates to the detail URL.
 - `e2e/tests/flows/invoice-preview-persistence.spec.js` — 7 Playwright tests for file persistence in mock mode: drop zone visible when no file is cached, GET fires with correct `specName=purchase-invoice` and `recordId`, file upload triggers POST with correct body params, file view is shown when a cached file exists, delete button sends DELETE and restores the drop zone, completed sales invoice fires GET with `specName=sales-invoice`, draft sales invoice does NOT fire GET (storeCondition=false).
-- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`; `tools/app-shell/src/windows/custom/purchase-invoice/PurchaseInvoiceTopbar.jsx` (the `topbarRight` component for this window) wires `CopyRecordLinkButton` into the detail topbar.
+- **ETP-4721 — Copy link**: `tools/app-shell/src/hooks/useCopyLinkAction.js` implements `useCopyLinkAction` (grid selection-bar copy) and `useCopyRecordLinkAction` (detail-topbar copy); `tools/app-shell/src/components/contract-ui/CopyLinkButton.jsx` and `CopyRecordLinkButton.jsx` render the tooltip-wrapped buttons for each context. `tools/app-shell/src/windows/custom/purchase-invoice/index.jsx` wires the grid action into `bulkActions` and passes `hideLink` to `<ListView>`. **Since ETP-5260**, the detail-topbar Copy link button no longer lives in `PurchaseInvoiceTopbar.jsx` — it moved to `PurchaseInvoiceSecondaryActions.jsx` (`topbarSecondary`), left of Save/Confirm, alongside Clone and `SendToSifButton`.
 
 ## Validation & Error Handling — ETP-4005
 
@@ -244,6 +259,27 @@ Regenerated on 2026-05-12 as part of the feature/ETP-3908 epic merge. No functio
 ## Import-from-order and import-from-receipt — ETP-3908
 
 Two new line-import flows are now available on draft purchase invoices when a business partner is selected:
+
+
+**Header order reference (`C_Invoice.C_Order_ID`) — ETP-5381.** Adding a line that carries a
+`salesOrderLine` re-derives the parent invoice's order reference server-side, in
+`InvoiceLineHandler#syncInvoiceOrderReferenceAfterLineSave` (`com.etendoerp.go`, POST only). It
+replicates Classic's `Create Lines From` rule verbatim
+(`UpdateInvoiceLineInformation#setOrderReferenceInInvoiceHeaderIfLinkedOnlyToTheSameOrderOrBlankIt`):
+the header points at the line's order, and is **blanked to null** as soon as the invoice also holds
+a line from a different order, rather than naming an arbitrary one. It is derived from the persisted
+lines, not from the set of documents the popup sent, so importing from a SHIPMENT that traces back
+to an order links the header too, and a second import from another order self-corrects.
+
+This **cannot** be done with a frontend PATCH after import: `C_Order_ID` is `isreadonly='Y'` on the
+`header` entity of both invoice specs, so `NeoFieldFilter#filterWriteRequest` strips it — HTTP 200,
+nothing written. The goods-receipt import modal's `afterImport` does PATCH `salesOrder`, and that
+works only because the field is `isreadonly='N'` in ITS spec; copying that code into an invoice
+window produces a silent no-op. Before the fix the invoice showed "Sin documentos relacionados"
+while the same invoice built in Classic showed its order chip — `RelatedDocuments.jsx` reads the
+header's `salesOrder`. GO's own auto-generation path was never affected
+(`CreateDraftInvoiceHandler` already called `invoice.setSalesOrder`); only the manual
+import-lines path left it empty.
 
 **Import from Purchase Order** (`artifacts/purchase-invoice/custom/ImportFromPurchaseOrderModal.jsx`):
 - Lists confirmed purchase orders (`documentStatus=CO`) for the same supplier with `invoiceStatus < 100`.
@@ -276,6 +312,8 @@ Two new line-import flows are now available on draft purchase invoices when a bu
 3. Calls `hook.handleChange('etgoTotalDiscount', pct)` to update the local editing state so a subsequent document save does not overwrite the freshly persisted discount with the stale header snapshot.
 
 **`ImportLinesModal.jsx`** (`tools/app-shell/src/components/contract-ui/`) is now fully window-agnostic: the previously hardcoded `${base}/sales-invoice/lines` POST endpoint is replaced by a required `linesEndpoint` prop. A runtime guard (`throw new Error(...)`) prevents accidental omission. Existing sales-invoice wrappers pass `linesEndpoint="sales-invoice/lines"` explicitly.
+
+**`ImportLinesModal.jsx` — free-typing quantity field, ETP-5178:** the per-line quantity input in both `ImportFromPurchaseOrderModal` and `ImportFromGoodsReceiptModal` no longer clamps the value on every keystroke — typing, select-all, delete, and decimal entry all work freely. Range/validity (numeric, non-zero, magnitude ≤ the line's available quantity) is checked only on `onBlur`: an invalid value reverts to the last committed value and shows a `toast.error`, either `qtyMaxAllowed` ("The maximum allowed is {max}" / "El máximo permitido es {max}") when the value exceeds the available quantity, or `qtyMustBePositive` ("The quantity must be greater than 0" / "La cantidad debe ser mayor a 0") for zero/negative/empty/non-numeric input. Fixed once in the shared component, so it applies identically to every import modal that embeds it.
 
 **Automated evidence (ETP-3908)**:
 - `e2e/tests/flows/purchase-invoice-import-from-order.mocked.spec.js` — 4 mocked Playwright tests: single line (asserts POST body fields), multiple lines (asserts 2 POSTs), line-level discount (asserts `etgoDiscount: 15` in POST), order-level discount (asserts header PATCH with `etgoTotalDiscount: 15`).
@@ -522,6 +560,75 @@ stale pre-send value. The fix and full root-cause writeup live in
 [`sales-invoice.md` — "TBAI status staleness fix in invoice preview — ETP-4391"](sales-invoice.md#tbai-status-staleness-fix-in-invoice-preview--etp-4391);
 only the spec name and which of the three panels apply differ between the two windows.
 
+**Superseded by ETP-5229.** The mechanism this fix relied on (an event-driven
+network re-fetch) was removed when `useFiscalStatus.js` was rearchitected to read the
+invoice's own header fields synchronously instead of querying config-scoped monitor
+specs — see [`sales-invoice.md` — "Config-independent fiscal status badge in invoice
+preview — ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229).
+The observable behavior this section describes (the pill updates after a same-session
+send) is preserved, now as a natural consequence of `p.displayInvoice` refreshing.
+
+**Second/third fix under the same ticket — list column and preview InfoRow gates
+(ETP-5229).** The original ETP-5229 pass only fixed `useFiscalStatus.js`; live testing
+then found the exact same config-date-gating bug still live in two more places for this
+window:
+
+- **List column.** `PurchaseInvoiceHeaderTable.jsx` (the component actually served at
+  runtime — see `customLoaders['purchase-invoice']` in
+  `tools/app-shell/src/windows/registry.js`) gated its `_siiStatus`/`_tbaiStatus`
+  `FiscalStatusBadge` cell renders with
+  `isSifEligibleByDate(row.accountingDate/invoiceDate, siiRecord/tbaiRecord?.<adoptionDate>)`,
+  which resolves against the org's single **currently active** fiscal config. An invoice
+  dated before that config's own cutover rendered a dash even when
+  `row.aeatsiiEstado`/`row.tbaiSyncEstado` held a real status from a previous config. The
+  gate was removed; the badge now renders unconditionally off the row's own field, gated
+  only by `targets.showSii`/`targets.showTbai` (org/territory eligibility, not date).
+  `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx` — a pipeline-generated
+  duplicate that is **not** wired into `windowLoaders`/`customLoaders` and therefore not
+  currently live — carried the identical SII-only bug and was fixed the same way for
+  consistency.
+- **Preview InfoRow.** `InvoicePreview.jsx`'s `InvoiceGeneralTab` (shared with
+  sales-invoice) additionally gated each `InfoRow` with a `*EligibleByDate` check on top
+  of `fiscalTargets.showX`, so even after `useFiscalStatus` was fixed to return the
+  correct status, the row that would have shown it stayed hidden for a pre-cutover
+  invoice. The date checks were removed; visibility is now `fiscalTargets.showX` alone.
+
+Full writeup, the org-scoped-vs-date-scoped distinction, and the one call site that is
+correctly LEFT date-gated (`sifSending.js`'s new-send eligibility) live in
+[`sales-invoice.md` — "Config-independent fiscal status badge in invoice preview —
+ETP-5229"](sales-invoice.md#config-independent-fiscal-status-badge-in-invoice-preview--etp-5229).
+
+**Correction (ETP-5229, item #16) — "no date gate at all" was itself wrong.** Live
+testing found that removing the gate entirely made SII/TBAI status badges show for
+invoices dated before the org ever configured that system at all — e.g. an invoice dated
+09/09/2026 showed "Estado SII: Pendiente" for an org whose only-ever SII config has an
+acogida date of 10/09/2026. `PurchaseInvoiceHeaderTable.jsx` (and the dead-code duplicate)
+now re-gate each fiscal column's `render()` on `isSifEligibleByDate(row.accountingDate /
+row.invoiceDate, earliestSiiCutoverDate / earliestTbaiCutoverDate)`, where the earliest-*
+values come from `useFiscalConfig` and are the MINIMUM cutover date across **all** of the
+org's config rows for that system ever created (active or deactivated) — not the currently
+active config's own date. This still correctly shows a real status for an invoice sent
+under an old, superseded config, while correctly hiding a status for an invoice that
+predates the system's existence for the org entirely. Full writeup (including where the
+earliest-cutover value is computed and why no new API call was needed) lives in
+[`sales-invoice.md` — "Second correction — 'no date gate at all' was itself wrong
+(ETP-5229, item #16)"](sales-invoice.md#second-correction--no-date-gate-at-all-was-itself-wrong-etp-5229-item-16).
+
+**Refinement (ETP-5229, item #17) — "not applicable" and "applicable but unsent" both
+showed a dash.** Within the eligible branch above, an empty `row.aeatsiiEstado` still
+collapsed to the same dash as a not-eligible row, so a user could not tell "SII will never
+apply" from "SII applies, just not sent yet". `PurchaseInvoiceHeaderTable.jsx` (and the
+dead-code duplicate `artifacts/purchase-invoice/custom/InvoiceHeaderTable.jsx`) now fall
+back to `row.aeatsiiEstado ?? 'PE'` instead of `?? null` when eligible — `'PE'` is the real
+AD code Classic itself writes when an invoice is queued for SII
+(`UpdateInvoicesPreSii.SII_STATUS`), and `FiscalStatusBadge` already renders it as a
+"Pendiente" pill. The TBAI/Batuz column in this file already had the equivalent
+`?? 'Pendiente'` fallback before this change — the gap was SII-only here. Not-eligible rows
+are unaffected (still a dash). Full writeup, including the Verifactu/TBAI side (sales-only
+and detail-badge respectively) and why SII genuinely had this gap in all four render sites,
+lives in [`sales-invoice.md` — "Third refinement — 'not applicable' and 'applicable but
+unsent' both showed a dash (ETP-5229, item #17)"](sales-invoice.md#third-refinement--not-applicable-and-applicable-but-unsent-both-showed-a-dash-etp-5229-item-17).
+
 ## Bank transfer (PIS) via Salt Edge — ETP-4406
 
 Purchase invoices can now be paid by a **real bank transfer** initiated inline from the
@@ -558,6 +665,13 @@ Because that select takes a typed IBAN as well as a listed one, it overrides
 `CreatableSearchSelect`'s generic `searchLabelPrefix {label}...` placeholder with its own
 `cpPisIbanPlaceholder` ("Buscar o introducir IBAN destino...", ETP-5177) so both paths are visible;
 the hand-typed one is what `createLabel`/`onCreateRequest` (`cpPisIbanUseTyped`) commits.
+A typed IBAN is checked with the shared `isValidIban` (ISO 13616 mod-97) and an invalid one both
+disables Confirmar and shows `financeAccountsNewIbanInvalid` under the select. That message sits in
+a line the `ControlWithError` wrapper reserves **permanently** — the slot is rendered whether or not
+there is an error, only the `<p>` is conditional — because the modal has a fixed width but an
+automatic height and is vertically centred, so a message mounting used to resize it and make it
+jump (ETP-5177). The same wrapper carries the two conversion-field messages; anything added to this
+modal that validates inline must go through it rather than rendering its own conditional `<p>`.
 The primary footer button changes to **"Continuar al banco"** (`cpPisConfirmButton`).
 
 The default is re-derived whenever the selected account's currency changes, so switching to a
@@ -806,35 +920,53 @@ lines-scoped `useDisplayLogic` call existing at all) were found and fixed — fu
 `sales-invoice.md`. `header.project`/`header.costcenter` are now genuinely config-gated at
 runtime.
 
-**Non-grid line fields under inlineEditable — resolved (ETP-4543).** `lines.project`/
-`lines.costcenter` carry correct contract metadata and are correctly evaluated, but this
-window uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` (the sidebar
-that would otherwise render them) never mounts — so the two fields had no UI surface at all,
-evaluator fix notwithstanding (Jira ETP-4543 / GitHub `etendosoftware/etendo_schema_forge#895`).
-Fixed by adding `project`/`costcenter` as columns to `InvoiceLinesTable.jsx` (the shared,
-hand-written line table used by both `sales-invoice` and `purchase-invoice`) and wiring
-dynamic column visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and
-`DetailView.jsx`'s memoized `lineHiddenColumns`. With the client's Proyecto/Centro de costo
-dimension toggles OFF, the columns do not render; with them ON, they do. See `sales-invoice.md`
-for the full write-up (including the verified list of which windows actually hit this gap).
+**Non-grid line fields under inlineEditable — resolved (ETP-4543, later superseded, see below).**
+`lines.project`/`lines.costcenter` carry correct contract metadata and are correctly evaluated,
+but this window uses `window.linesLayout = "inlineEditable"`, under which `LinesForm.jsx` (the
+sidebar that would otherwise render them) never mounts — so the two fields had no UI surface at
+all, evaluator fix notwithstanding (Jira ETP-4543 / GitHub
+`etendosoftware/etendo_schema_forge#895`). At the time, this was fixed by adding `project`/
+`costcenter` as columns to `InvoiceLinesTable.jsx` — a hand-written line table for
+`sales-invoice`/`purchase-invoice` that, unknown at the time, was never actually reachable from
+either window's running app (see the ETP-4529 paragraph below) — and by wiring dynamic column
+visibility through `InlineLinesPanel.jsx`'s new `hiddenColumns` prop and `DetailView.jsx`'s
+memoized `lineHiddenColumns`. The `hiddenColumns` plumbing is still in use today (see below); the
+`InvoiceLinesTable.jsx` half of this fix never took effect and the file has since been deleted —
+see "Dead custom lines-table components removed (ETP-5133)" below. See `sales-invoice.md` for the
+full write-up (including the verified list of which windows actually hit this gap).
 
 ### Header section placement fix + expand-panel supersession (ETP-4529 follow-up)
 
 `header.project`/`header.costcenter` moved from `"section": "other"` to `"section": "principal"`
 so they render in the main visible form area instead of the secondary/collapsed one — same fix
-as `sales-invoice.md`. Separately, the plain `project`/`costcenter` grid columns added above
-were superseded by a single `type: 'dimensionsPanel'` column on `InvoiceLinesTable.jsx` (the
-same shared component both windows use) — full write-up, including a wiring gap discovered
-while doing this (`InvoiceLinesTable.jsx` is not currently reachable from either window's
-running app), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.
+as `sales-invoice.md`. Separately, the plain `project`/`costcenter` grid columns ETP-4543 had
+added to `InvoiceLinesTable.jsx` were superseded by a single `type: 'dimensionsPanel'` column —
+full write-up, including the wiring gap discovered while doing this (`InvoiceLinesTable.jsx` was
+not reachable from either window's running app, so neither version of the column ever rendered
+live), in `sales-invoice.md` and `docs/feedback.md`'s ETP-4543 supersession note.
 
-**Resolved (ETP-4529 generator support):** since `InvoiceLinesTable.jsx` doesn't actually render
-for this window either, `generate-frontend.js`'s `generateTableComponent` (`schema_forge_core`)
-now emits the `dimensionsPanel` column directly from `decisions.json`. `lines.project.dimensionsPanel`
-and `lines.costcenter.dimensionsPanel` are `true` (grid stays `false`); the actually-rendered
-generated `LinesTable.jsx` declares the synthetic column, so the panel renders for real — see
-`sales-invoice.md`'s matching note, `docs/decisions-reference.md` (`dimensionsPanel`), and
-`docs/ui-customization.md` §14b.
+**Resolved (ETP-4529 generator support).** Since `InvoiceLinesTable.jsx` never rendered for this
+window, the real fix is at the generator level: `generate-frontend.js`'s `generateTableComponent`
+(`schema_forge_core`) emits the `dimensionsPanel` column directly from `decisions.json`.
+`lines.project.dimensionsPanel` and `lines.costcenter.dimensionsPanel` are `true` (grid stays
+`false`); the actually-rendered generated `LinesTable.jsx` declares the synthetic column, so the
+panel renders for real — see `sales-invoice.md`'s matching note, `docs/decisions-reference.md`
+(`dimensionsPanel`), and `docs/ui-customization.md` §14b.
+
+### Dead custom lines-table components removed (ETP-5133)
+
+`InvoiceLinesTable.jsx` (the shared hand-written line table referenced by the two historical
+sections above) and its per-window wrapper `InvoiceLineTableCustom.jsx` have been **deleted**,
+along with their test files. Neither had ever actually rendered for this window — every fix
+described above that targeted them was live only in the pipeline-generated `LinesTable.jsx`
+(confirmed dead code per `docs/feedback.md`'s ETP-4543/ETP-4529 entries, which document the
+reachability gap; the ETP-5133 entry there records the deletion). This window's lines grid has
+always been, and remains, `artifacts/purchase-invoice/generated/web/purchase-invoice/LinesTable.jsx`,
+rendered through `InlineLinesPanel`/`DataTable`'s shared `inlineEditable` rendering — see the
+"Contract and UI evidence reviewed" bullet above. The two historical sections above are kept as
+written (not rewritten) since they accurately describe what was attempted and why it never took
+effect; only this note and the surrounding cross-references were updated to stop describing the
+deleted files as if they still existed.
 
 ### "Añadir dimensiones" moved to a hover action, column no longer shown (ETP-4610)
 
@@ -1321,7 +1453,9 @@ Completing a draft invoice over MCP:
 
 Flow encoded in the prompt: `DR -> CO` completes (computes taxes/totals, creates the payment
 plan), `DR -> VO` voids, `CO -> RE` reactivates and **unposts first** when the invoice was
-already posted (the Reactivate menu action carries `preUnpost: true`), `CO -> CL` closes.
+already posted (the Reactivate menu action carries `preUnpost: true`; since ETP-5302 the same
+two-step sequence runs from the list's bulk bar too, via `preUnpostActions={['RE']}`, and both
+paths share `tools/app-shell/src/lib/preUnpost.js`), `CO -> CL` closes.
 Posting is a **separate** action on this window (`menuActions` key `post`, gated on
 `processed && !posted`) and is **not** a `documentAction` value — the prompt explicitly tells
 the agent never to send `PO` here.
@@ -1337,10 +1471,70 @@ plain `aeatsiiSend` kebab-menu entry (`window.menuActions`) that called the back
 `SendToSifButton` into sales-invoice's topbar instead (see `sales-invoice.md`), so purchase-invoice
 keeps this single, fiscal-profile-aware entry point and does not gain a duplicate kebab action.
 
+**Registry-error correction resend (ETP-5272):** this window shares `SendToSifButton.jsx` and
+`../shared/sifSending.js` with sales-invoice, so it gets the same fix — see
+`sales-invoice.md` §"Registry-error correction resend (ETP-5272)" for the full explanation. In
+short: `getPendingSifTargets()` now also offers `sendSii: true` whenever
+`invoice.aeatsiiErrorRegistral` is truthy, independently of `aeatsiiIssent`, so the `Send to SIF`
+button reappears after a registry-error correction cycle instead of staying hidden forever once
+`aeatsiiIssent` is `true`. The backend routing fix in `SiiSendHandler.java` — also shared, not
+window-specific Java code — is a plain 2-way split: normal send goes to `MultiEnvioFactura`
+(communication type `A0`, "alta") as before; whenever `Invoice.isAeatsiiErrorRegistral()` is
+`true`, it routes to `MultiInvoiceSIIModification` instead (communication type `A1`, via the
+same `NeoProcessService.executeObuiappClass` bridge `MultiEnvioFactura` uses) — the real resend
+for a corrected invoice, unconditionally, with no branch on the invoice's AEAT error code. An
+earlier version of this fix also special-cased error code `"3000"` to route into
+`CorrectDuplicateInvoiceError` (a read-back/sync against AEAT, not a resend) — that 3-way split
+was scope creep beyond what was asked and has been removed.
+
+**Follow-up bug fixed — "Enviar a SIF" now flushes pending header edits first (ETP-5272):** this
+window shares the fix with sales-invoice — see `sales-invoice.md` §"Follow-up bug fixed — 'Enviar
+a SIF' now flushes pending header edits first (ETP-5272)" for the full explanation. In short:
+`SifSendingModal.jsx` used to call `Em_aeatsii_send`/`Em_Tbai_Xmlgenerator` without first saving
+any pending header edit (e.g. a just-ticked `aeatsiiErrorRegistral`), which only lives in the
+in-memory pending-edits state since ETP-4463 until a full header save flushes it — a silent
+desync between what the button showed and what the backend actually routed on. `SifSendingModal`
+now accepts generic `onSave`/`isDirty` props, plumbed here through `PurchaseInvoiceTopbar.jsx` →
+`SendToSifButton.jsx` from `DetailView`'s existing `hook.handleSave`/`isDirty` (the same values
+`SalesInvoiceTopbar.jsx` plumbs on the sales side), and awaits the save before sending whenever the
+header is dirty — skipping it entirely on a clean header. A failed save blocks the send and
+surfaces the error instead of proceeding with stale data.
+
 This runs `PurchaseInvoiceHeaderHandler` exactly as the UI does — including the total-discount
 line created before completion — because `neo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
+
+**"Fecha Registro Contable" column mapping verified — ETP-5272 point 2 (no bug found):**
+investigated whether this window's "Fecha Registro Contable" field (`aeatsiiFechaRegCont` in
+`decisions.json`/schema-raw, still `"visibility": "editable"`, `"form": false` here — unlike
+sales-invoice, this field stays as-is on purchase-invoice) actually persists into Classic's
+accounting-registration-date column, or was silently writing into `DateAcct` ("Fecha Contable" /
+Accounting Date) instead. Verdict: **the mapping is correct, no fix needed.** Evidence:
+- `AD_Column` for the field (`F2759A840ED24FEEAB925A72B6D85717`, `columnname =
+  EM_Aeatsii_Fecha_Reg_Cont`) is a distinct column from `DateAcct` (`AD_Column_ID 3508`,
+  `columnname = DateAcct`) on `C_Invoice` — confirmed by direct DB query, not assumed from naming.
+- The pushed NEO config (`ETGO_SF_FIELD` row `355844B956484233873562F30BDAC4CA` for
+  purchase-invoice's header entity) has `ad_column_id = F2759A840ED24FEEAB925A72B6D85717` — i.e.
+  it is bound to `EM_Aeatsii_Fecha_Reg_Cont`, not `DateAcct`. `decisions.json` has no property that
+  can override a field's column binding (it always comes 1:1 from `AD_Column.columnname` at
+  extraction time), so there is no schema_forge-side mechanism that could misdirect this write in
+  the first place.
+- Classic backend: `AEATSII_C_INVOICE_POST_EP.xml` (`org.openbravo.module.sii`, the DB function
+  that runs on invoice posting) sets `em_aeatsii_fecha_reg_cont = Cur_Sii_Invoice.fecha_reg_cont`
+  (derived from `current_date`) — it never touches `dateacct`. No Java handler (classic SII module
+  or `com.etendoerp.go`) was found that writes this field's value into `DateAcct` or vice versa.
+- Empirical DB check across 1918 purchase invoices: 1772 have `em_aeatsii_fecha_reg_cont IS NULL`
+  (never triggered — expected, only posting-with-SII-active populates it) and, of the remainder,
+  only 2 rows have a `DateAcct` that differs from `em_aeatsii_fecha_reg_cont` on the date they
+  disagree — i.e. the two columns are independently maintained, not aliased; the near-identical
+  values seen on same-day-posted demo invoices are coincidental (both default to "today" around
+  posting time), not evidence of a shared column.
+
+No `decisions.json`/NEO change was made for this window as part of this investigation — this
+field's configuration is untouched. See `sales-invoice.md` §"'Fecha Registro Contable' field
+removed — ETP-5272 point 2" for that window's field-removal change (out of scope here — this
+window keeps the field per this ticket's scope).
 
 ### Write off the invoice difference (ETP-4797)
 
@@ -1384,14 +1578,18 @@ final fix passes the literal `true` to `hidePrintWhen` instead, which
 `evaluateFieldCondition(true, data) → true` treats as an unconditional match, gating **only**
 the detail view; the list keeps its pre-ticket, untouched, always-visible print button. See
 `docs/decisions-reference.md` ("Print Visibility") for the generic `hidePrintWhen` mechanism.
-## OCR reader — create-contact pre-fill — ETP-4855
+## OCR reader — create-contact pre-fill — ETP-4855 (superseded by ETP-5332)
 
 When the OCR reader cannot match the invoice's supplier to an existing business partner, the
-vendor field offers "create contact" and opens `CreateContactModal`. That popup used to open
-**completely empty**, discarding everything the extraction had already read — the user retyped
-the name, tax ID and address by hand.
+vendor field offers "create contact". Originally this opened `CreateContactModal`, a hand-rolled
+reimplementation of the Contacts window, which used to open **completely empty**, discarding
+everything the extraction had already read. ETP-4855 fixed the empty-popup problem by pre-filling
+it; ETP-5332 then deleted `CreateContactModal`/`EntityCreationModal` entirely and replaced the
+popup with `RecordCreateModal` mounting the **real** Contacts window (`docs/ui-customization.md`
+§19/§19b), so the pre-fill mechanism below had to move with it — and it now covers less ground
+than it used to, per the known gap section further down.
 
-### The pre-fill chain
+### The pre-fill chain today
 
 Four links, each of which has to carry the data:
 
@@ -1400,52 +1598,61 @@ Four links, each of which has to carry the data:
 | 1 | `ocrDocTypes.js` → `extraHeaderFields` | asks the vision model for the address/contact block |
 | 2 | `ocrDocTypes.js` → `createPrefilledFrom` | maps extracted payload keys → **contact-form field ids** |
 | 3 | `kinds/EntityField.jsx` | builds the `prefilled` map (generic — reads the config, no per-window code) |
-| 4 | `CreateContactModalAdapter.jsx` | forwards the whole map as the modal's `prefill` prop |
+| 4 | `CreateContactModalAdapter.jsx` → `buildOcrContactSeed` | narrows the map to the `businessPartner` **header** fields and hands it to `RecordCreateModal` as `initialData` |
 
-`createPrefilledFrom` is keyed by **form field id**, not by AD column: `name`, `taxID`,
-`address`, `postalCode`, `city`, `country`, `etgoEmail`, `etgoPhone`. Adding a field to the
-popup is one entry there plus one `extraHeaderFields` entry — no component change.
+`createPrefilledFrom` still lists all eight keys — `name`, `taxID`, `address`, `postalCode`,
+`city`, `country`, `etgoEmail`, `etgoPhone` — matching what the vision model extracts, but
+`buildOcrContactSeed` only forwards `name` (via `buildContactSeed`, which also sets `customer`/
+`vendor` from the invoice's purchase direction), `taxID`, `etgoEmail` and `etgoPhone`. Adding a
+new header field to the popup is still one entry in `createPrefilledFrom` plus a line in
+`buildOcrContactSeed`; a genuinely new extraction field is one `extraHeaderFields` entry.
 
-### Why `country` is special
+### Why `address`, `postalCode`, `city` and `country` are no longer seeded
 
-Text fields are seeded straight into `EntityCreationModal`'s `initialValues`. `country` (and
-`region`) cannot be: the form holds an **option id**, while the invoice prints a **label**
-("España"). Writing the label in would satisfy the required-field check with a value the API
-rejects.
+The window-mode popup runs the Contacts window's **own** `useEntity`, whose `initialData` option
+(the `§19b` seeding mechanism) only reaches the **header** record (`businessPartner` fields).
+`address`/`postalCode`/`city`/`country` belong to the `locationAddress` **child tab**, created
+through a different code path (`LocationEditorModal.jsx`) that `initialData` does not touch.
+Seeding a child tab's first row is a different mechanism from `useEntity.handleNew` and was not
+built as part of ETP-5332 — so a match extracted by OCR is simply not pre-filled today, and the
+user types the address by hand as they would for a manually opened "+ Crear contacto". This is
+tracked as debt `ocr-contact-address-prefill` in `flags-registry.json`.
 
-So those two are resolved through `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) against
-the country selector — accent- and case-insensitive, exact match first, then a prefix match in
-either direction so `España` still finds `ESPAÑA (ES)`. **No match leaves the field empty**
-rather than guessing: a wrong country id is invisible to the user, an empty picker is not.
+The country-label-to-option-id resolution this section used to describe (`matchOptionByLabel`
+against the country selector, with an `EntityCreationModal` `patchValues` prop merging in the
+value once the selector loaded) belonged entirely to the deleted fallback form and no longer
+exists in the OCR path. `matchOptionByLabel` (`src/lib/matchOptionLabel.js`) itself is not
+deleted — it now backs `src/lib/defaultCountry.js` — but nothing in the create-contact flow
+calls it any more.
 
-The selector options are fetched *after* the modal mounts, and `EntityCreationModal` snapshots
-`initialValues` in a `useState` initializer — so a late value cannot be delivered through it.
-That is what the `patchValues` prop is for: it merges into fields that are **still empty**,
-which makes it both idempotent and safe against clobbering something the user typed while the
-options were loading. Resolving the country also seeds `currentCountry`, because the region
-selector only loads once a country is known.
+### Side effect that no longer applies
 
-### Side effect worth knowing
-
-`CreateContactModal` creates the BP up front (`BP → address → contacts → banks → billing
-PATCH`) and posts the address whenever `address || city || country` is set. Pre-filling the
-address block therefore means the new BP now gets a location — which is what
+Before ETP-5332, `CreateContactModal` created the BP up front (`BP → address → contacts → banks
+→ billing PATCH`) and posted the address whenever `address || city || country` was set, so a
+pre-filled address block meant the new BP got a location immediately — which is what
 `resolvePartnerAddress` in `ingest/purchaseInvoiceDescriptor.js` looks up for the invoice
-header's `partnerAddress` (NOT NULL on `C_Invoice`). Before this change, a BP created from the
-OCR popup had no location at all.
+header's `partnerAddress` (NOT NULL on `C_Invoice`). Since the address is no longer seeded (see
+above), a BP created from the OCR popup today has no location until someone adds one.
+
+**That is not a dead end, and the mandatory address the old modal enforced was redundant against
+the affordance that already existed.** `partnerAddress` is a `C_BPartner_Location_ID` column, and
+`EntityForm`'s `DependentFkField` dispatches exactly that column to `PartnerAddressPicker`, which
+renders a **"+ Añadir dirección"** row in the dropdown and opens `LocationEditorModal` with `bpId`
+set to the partner just selected. So a contact that arrives on the invoice without a location gets
+one created inline, on the document, against the right parent. The Contacts window itself has
+always permitted a partner with no location; only the deleted popup forced one, and it forced it
+on one of the two paths. What remains is the typing, which is what
+`ocr-contact-address-prefill` covers.
 
 ### Automated evidence
 
-- `src/lib/__tests__/matchOptionLabel.test.js` — label matching, including the refusal to
-  prefix-match a 2-character option label and the empty-on-no-match contract.
-- `src/components/contract-ui/__tests__/CreateContactModal.vitest.jsx` → `describe('CreateContactModal — pre-fill')`
-  — free-text seeding, country label kept out of the form, resolution once the selector loads,
-  and `initialQuery` precedence.
-- `src/components/contract-ui/__tests__/EntityCreationModal.vitest.jsx` → `describe('EntityCreationModal — patchValues')`
-  — fills empty, never overwrites typed input, successive patches.
 - `src/components/copilot/ocr/__tests__/ocrDocTypes.prefill.vitest.js` — every
   `createPrefilledFrom` source must be a key the extraction schema actually emits. A typo there
   fails silently at runtime (the field just looks unextracted), so it is asserted in CI.
+- `CreateContactModalAdapter.jsx`'s own `buildOcrContactSeed` has no dedicated test file today —
+  it is exercised indirectly through whatever OCR/create-contact E2E coverage exists.
+- `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
+  `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
 
 ## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
 
@@ -1683,3 +1890,45 @@ secondary line at all.
 - `artifacts/purchase-invoice/generated/web/purchase-invoice/HeaderPage.jsx` — `selectorPriceCurrency="org"` passed to
   `DetailView`.
 - `sf-validate-pipeline --scope=purchase-invoice` — clean.
+
+### Invoice quantity is no longer capped against the shipment — ETP-5381
+
+`AbstractInvoiceHeaderHandler.validateLineQtyBeforeComplete` (and its helper
+`checkInoutEntryForOverInvoicing`) have been **removed**, together with the `ETGO_InvoiceLineAlreadyInvoiced`
+AD_MESSAGE, its `backendErrors.js` matcher and its i18n keys. Do not reinstate them.
+
+The guard capped every invoice line at the pending quantity of the shipment/receipt line it pointed
+at. It took that ceiling from `ABS(sil.movementqty)` in `NeoInvoiceSupport.queryPendingQtyPerLine`,
+whose row filter is `WHERE sil.m_inout_id = ? AND sil.isactive = 'Y'` — **no docstatus filter on the
+shipment**. (Every `docstatus NOT IN ('VO','CL','DR')` clause in that query filters INVOICES, not the
+shipment.) So an unconfirmed shipment, which has delivered nothing, capped the invoice.
+
+Reported case: order for 15 → shipment created from it, edited down to 10, left in **draft** →
+invoice created from the ORDER, reactivated and set to 12 → completion refused with *"the quantity to
+invoice (12) exceeds the pending quantity (10). It may already be invoiced in another document."*
+Both clauses were false: 15 were pending on the order, and no other invoice existed.
+`InvoiceLineLinker` had attached the invoice line to the draft shipment line — its query matches on
+`C_OrderLine_ID` and does not look at the shipment's status either — which is what handed the guard
+the wrong ceiling.
+
+**What still protects over-invoicing:** the core, in `C_INVOICE_POST`. For every invoice line carrying
+a `C_OrderLine_ID` it computes `ABS(ol.qtyordered) - ABS(ol.qtyinvoiced + qty)` and raises
+`@QtyInvoicedHigherOrdered@` when that goes negative. That ceiling is measured against the **order**,
+which is the commitment, and it is Classic's own behaviour.
+
+**Known gap, accepted:** that core check is conditional on `C_OrderLine_ID`, so an invoice line with
+no order behind it (invoiced straight from a standalone shipment) now has no quantity ceiling at all.
+Flagged rather than papered over; covering it would need a validation against the *confirmed*
+shipment, which is a separate decision.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier must hide every mutating control in a window the Solo
+Lectura role can see. For this window: the secondary-actions bar's Clone (shared
+`DocumentSecondaryActions` via `topbarSecondary`) and the bulk-selection toolbar's document
+actions. **"Enviar a SIF" (`SendToSifButton`, rendered inside `PurchaseInvoiceSecondaryActions`)
+was initially missed** — its sibling on sales-invoice (`InvoiceTopbarExtra`) forwards
+`isDocumentReadOnly` to `SendToSifButton`, but this window's own wrapper destructured only
+`{ data, recordId, apiBaseUrl, onSave, isDirty }` from its props and silently dropped the prop, so
+the button stayed visible/clickable for a completed invoice with pending SII/TBAI targets even
+under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `d134ecb82`).

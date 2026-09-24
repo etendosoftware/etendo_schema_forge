@@ -1,11 +1,31 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadCustomModule,
+  apiFetchToGlobalFetch,
+} from '../../../_test-support/loadCustomModule.js';
+import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'ImportFromReturnShipmentModal.jsx'), 'utf8');
+
+// `realHelpers` are the REAL production helpers, evaluated straight out of the
+// .jsx (see artifacts/_test-support/loadCustomModule.js, ETP-5381). The
+// re-derived copies further down this file predate that loader and are still
+// clones — porting them is tracked separately; anything ADDED here must use
+// `realHelpers` so it cannot drift from production.
+const { helpers: realHelpers, source: src } = loadCustomModule(
+  join(__dirname, '..', 'ImportFromReturnShipmentModal.jsx'),
+  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
+  // binding the loader strips); the stub forwards to `globalThis.fetch`,
+  // which is what the mocks below install.
+  { moduleApiFetch: apiFetchToGlobalFetch },
+);
+
+// The invoice-line -> order-line FK key, read from the generated contract
+// (ETGO_SF_FIELD.java_qualifier for C_INVOICELINE.C_OrderLine_ID).
+const ORDER_LINE_FK = orderLineApiKey('sales-invoice');
 
 describe('ImportFromReturnShipmentModal', () => {
   it('exports a default function component', () => {
@@ -727,19 +747,82 @@ describe('ImportFromReturnShipmentModal — end-to-end cross-invoice orderLine d
 // import (ImportFromShipmentModal keeps qty positive).
 // ---------------------------------------------------------------------------
 
-describe('ImportFromReturnShipmentModal — buildLineBody negative quantity', () => {
-  it('negates the imported quantity and derives a matching negative lineNetAmount', () => {
-    const qty = 5;
-    const unitPrice = 10;
-    const negQty = -Math.abs(qty);
-    const lineNetAmount = negQty * unitPrice;
-    assert.equal(negQty, -5);
-    assert.equal(lineNetAmount, -50);
+// ---------------------------------------------------------------------------
+// buildLineBody — exercised against the REAL production helper (not a copy and
+// not inline arithmetic). The price callout is stubbed as a non-ok response, so
+// resolveLinePrice falls back to the line's `_unitPrice`.
+// ---------------------------------------------------------------------------
+
+describe('ImportFromReturnShipmentModal — buildLineBody', () => {
+  afterEach(() => {
+    mock.reset();
   });
 
-  it('always negates even if a caller mistakenly passes an already-negative qty', () => {
-    const qty = -3;
-    const negQty = -Math.abs(qty);
-    assert.equal(negQty, -3);
+  const buildArgs = (line) => ({
+    line,
+    qty: 5,
+    invoiceId: 'inv1',
+    lineNo: 10,
+    sharedContext: { invoiceHeader: {}, productAuxMap: {} },
+    base: '/b',
+    headers: {},
+  });
+
+  function stubCallout() {
+    globalThis.fetch = mock.fn(async () => ({ ok: false, json: async () => ({}) }));
+  }
+
+  it('negates the imported quantity and derives a matching negative lineNetAmount', async () => {
+    stubCallout();
+    const body = await realHelpers.buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', _unitPrice: 10,
+    }));
+    assert.equal(body.invoicedQuantity, -5);
+    assert.equal(body.lineNetAmount, -50);
+  });
+
+  it('always negates even if a caller mistakenly passes an already-negative qty', async () => {
+    stubCallout();
+    const body = await realHelpers.buildLineBody({
+      ...buildArgs({ id: 'rl1', product: 'p1', _unitPrice: 10 }),
+      qty: -3,
+    });
+    assert.equal(body.invoicedQuantity, -3);
+  });
+
+  // ETP-5381 REGRESSION GUARD — the FK must travel under the spec's key.
+  // NeoFieldFilter.filterRecord drops any key absent from the spec silently
+  // (HTTP 200, line created, C_OrderLine_ID NULL), which keeps M_MATCHSO empty
+  // and skips `UPDATE C_ORDERLINE SET QtyInvoiced`.
+  it('sends the return line source order line under the spec API key for C_OrderLine_ID', async () => {
+    stubCallout();
+    const body = await realHelpers.buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(body[ORDER_LINE_FK], 'ol1');
+    assert.equal(body.goodsShipmentLine, 'rl1');
+  });
+
+  it('does not send the order line under a key the NEO spec would silently drop', async () => {
+    stubCallout();
+    const body = await realHelpers.buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: 'ol1', _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, 'cOrderlineId'), false);
+  });
+
+  it('sends an explicit null when the return line has no linked order line', async () => {
+    stubCallout();
+    const body = await realHelpers.buildLineBody(buildArgs({
+      id: 'rl1', product: 'p1', [ORDER_LINE_FK]: null, _unitPrice: 10,
+    }));
+    assert.equal(Object.hasOwn(body, ORDER_LINE_FK), true);
+    assert.equal(body[ORDER_LINE_FK], null);
+  });
+});
+
+describe('ImportFromReturnShipmentModal — source shape (ETP-5381)', () => {
+  it('never mentions the non-existent cOrderlineId key', () => {
+    assert.doesNotMatch(src, /cOrderlineId/);
   });
 });

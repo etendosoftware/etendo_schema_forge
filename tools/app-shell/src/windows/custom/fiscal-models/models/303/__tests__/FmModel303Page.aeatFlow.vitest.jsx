@@ -1,4 +1,4 @@
-// Vitest tests for the ETP-4456 wiring between PresentModal's 4th
+// Vitest tests for the ETP-4456 wiring between PresentModal's 3rd
 // ("aeat_telematic") path and AeatSubmitFlow inside FmModel303Page.jsx.
 // Kept in its own file (rather than editing FmModel303Page.vitest.jsx) so
 // its PresentModal/AeatSubmitFlow mocks — which need to actually invoke
@@ -48,18 +48,19 @@ vi.mock('../FmBoxes303.jsx', () => ({ default: () => null }));
 // enumeration step) doesn't tolerate a trap that unconditionally returns a function for any
 // key. AeatSubmitFlow.jsx is mocked wholesale below, so its own lucide-react imports (Loader2,
 // TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark) never execute in this file —
-// only FmModel303Page.jsx's own icon imports need stubbing here.
+// only FmModel303Page.jsx's own icon imports need stubbing here (Landmark included since
+// FmModel303Page.jsx also uses it for the "Go to Organization" button).
 vi.mock('lucide-react', () => ({
-  Settings: () => null, Download: () => null, OctagonAlert: () => null,
+  Settings: () => null, Download: () => null, ArrowLeft: () => null, Save: () => null, OctagonAlert: () => null,
   TriangleAlert: () => null, CircleCheck: () => null, ArrowLeftRight: () => null,
   Calculator: () => null, Loader2: () => null, MoreVertical: () => null,
   TrendingUp: () => null, TrendingDown: () => null, Clock: () => null,
   ClipboardCheck: () => null, ReceiptText: () => null, Folder: () => null,
-  FileCheck: () => null,
+  FileCheck: () => null, Landmark: () => null,
 }));
 
 // PresentModal mock: renders a button that, when clicked, reports the
-// 'aeat_telematic' sentinel status — exactly like selecting the 4th path
+// 'aeat_telematic' sentinel status — exactly like selecting the 3rd path
 // and confirming in the real component.
 vi.mock('../../../FmOverlays.jsx', () => ({
   PresentModal: ({ onConfirm }) => React.createElement(
@@ -73,7 +74,7 @@ vi.mock('../../../FmOverlays.jsx', () => ({
 }));
 
 // AeatSubmitFlow mock: exposes a button that triggers onSuccess, so we can
-// verify the page reacts to it the same way it reacts to the 3 manual paths.
+// verify the page reacts to it the same way it reacts to the 2 manual paths.
 vi.mock('../AeatSubmitFlow.jsx', () => ({
   default: ({ onSuccess }) => React.createElement(
     'button',
@@ -96,11 +97,16 @@ const BASE_DECL = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
-  it('opens AeatSubmitFlow (instead of changing status) when the aeat_telematic path is confirmed', () => {
+  // ETP-5338 pt.4 — `handlePresent` is now `async` (it awaits `persistEditableFields()`
+  // before any status transition, including opening AeatSubmitFlow — see FmModel303Page.jsx).
+  // With no pending edit these tests still resolve on the very next microtask, but that is
+  // still a real await, so `fireEvent.click` on the confirming button no longer flips
+  // `showAeatFlow` synchronously — assertions must wait for it via `findByTestId`.
+  it('opens AeatSubmitFlow (instead of changing status) when the aeat_telematic path is confirmed', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
-    // Open the present modal via the toolbar action.
+    // Open the present modal via the toolbar action (now labelled "Registrar/Presentar").
     const btns = Array.from(document.querySelectorAll('button'));
     const presentBtn = btns.find(b => b.textContent.includes('fm.action.submit'));
     fireEvent.click(presentBtn);
@@ -108,10 +114,10 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     // Our PresentModal mock immediately reports the aeat_telematic sentinel.
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
 
+    // AeatSubmitFlow must now be mounted (awaits handlePresent's flush of pending edits).
+    expect(await screen.findByTestId('aeat-flow-succeed')).toBeInTheDocument();
     // The sentinel must NOT have been treated as a real status change.
     expect(onStatusChange).not.toHaveBeenCalled();
-    // AeatSubmitFlow must now be mounted.
-    expect(screen.getByTestId('aeat-flow-succeed')).toBeInTheDocument();
     // Regression guard: PresentModal must be unmounted, not stacked underneath
     // AeatSubmitFlow — two full-viewport overlays mounted at once, and the
     // stale path-selection screen reappearing when AeatSubmitFlow later
@@ -119,14 +125,14 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     expect(screen.queryByTestId('present-confirm-aeat')).not.toBeInTheDocument();
   });
 
-  it('propagates AeatSubmitFlow onSuccess through the normal status-change path', () => {
+  it('propagates AeatSubmitFlow onSuccess through the normal status-change path', async () => {
     const onStatusChange = vi.fn();
     render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
 
     const btns = Array.from(document.querySelectorAll('button'));
     fireEvent.click(btns.find(b => b.textContent.includes('fm.action.submit')));
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
-    fireEvent.click(screen.getByTestId('aeat-flow-succeed'));
+    fireEvent.click(await screen.findByTestId('aeat-flow-succeed'));
 
     // AEAT telematic success never sends a submissionMethod from the frontend —
     // it is set server-side by Fiscal303SubmissionSupport.persistSuccessfulSubmission.

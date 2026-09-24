@@ -64,6 +64,53 @@ The `/upgrade` route is the worked example — it is registered
 **unconditionally**, and only the menu entry pointing at it is flag-gated.
 Hiding the route would imply the flag was protecting something, which it is not.
 
+`/acct-process-monitor` (ETP-5269, the accounting process monitor) is the second
+instance of the `/upgrade` shape, and the one that made the rule concrete: the
+page can schedule a real accounting run, so it is the first flag-gated surface
+where treating the flag as a boundary would have had teeth. It is still
+registered unconditionally, and what actually refuses a non-admin — on the read
+*and* on the trigger — is `NeoAccessHelper.isAdminOrClientAdmin` inside
+`SFAcctProcessMonitor`. Its E2E spec pins the behaviour with an explicit test
+named *flag off: the route still works*, so a later attempt to "harden" this by
+wrapping the route in the flag fails the build rather than quietly hiding where
+the real gate lives. See
+[generated-custom-windows/acct-process-monitor.md](generated-custom-windows/acct-process-monitor.md).
+
+It also introduced **item-level** menu gating. `SideMenu` previously flag-gated
+whole groups only (`Proof of Concept`); it now also carries a small
+`flagGatedItems` map keyed by the `menu.json` item name, so a single entry can
+be hidden without inventing a group for it. An item absent from that map is
+never flag-gated. **The filter is applied to the Favorites group too** — and it
+must stay that way: Favorites are rebuilt from the user's own saved list rather
+than from `menuGroups`, so the earlier early-return for that group let a
+favourited flag-gated item stay visible with the flag off. That was the one hole
+through which a gated entry could still be reached.
+
+`/portal/:token` (ETP-5267, the Business Partner self-service portal) is the
+same pattern taken to its conclusion. It too is registered unconditionally, but
+its flag — `bp-portal-link` — is declared and evaluated **only** in
+`com.etendoerp.go`: no key for it exists in `flag-keys.js`, nothing in the
+browser reads it, and **none must be added**. The flag gates whether the
+sales-invoice email *carries a portal link*, which is decided entirely
+server-side while the email is built; giving the browser a key would create a
+second evaluator with nothing to evaluate, and a flag whose two ends read from
+different control planes has no single truth (ETP-4966). What protects the
+portal's data is the opaque token in the URL, validated on every request.
+
+That flag is also this codebase's first **per-account targeted** one: it is
+`false` for everyone until a ConfigCat targeting rule names the sending
+account's `ETGO_ACCOUNT` email, which the backend publishes as both the
+OpenFeature targeting key and the `Email` attribute. Enablement therefore
+happens in the ConfigCat dashboard and is live within one poll interval, with no
+restart. Per-account targeting is a ConfigCat capability only — there is
+deliberately no local-properties equivalent, because with an SDK key set it
+would be inert, and a knob that silently does nothing is the ETP-4966 shape
+again. It does not reopen the `targeting-key-divergence` item below — that
+divergence needs two evaluators, and this flag has only one. See
+`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5 and
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account
+targeting*.
+
 ## Adding a flag
 
 1. Declare the key and its safe default in `lib/flags/flag-keys.js`:
@@ -220,8 +267,8 @@ environment whose key ships to a browser.
 | Where | How it gets there |
 |-------|-------------------|
 | Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
-| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*, so the pilot key reaches experimental and not staging or production. |
-| Backend | **Nowhere — the backend does not read ConfigCat.** `com.etendoerp.go` contains no ConfigCat code at all: `GoFeatureFlags.createProvider()` returns `PropertiesFeatureProvider` unconditionally, and the deployed runtime confirms it (`feature flags installed using provider 'etendo-go-properties'`). Backend flags come only from `etendo.go.flags.<key>` / `ETGO_FLAG_<KEY>`. |
+| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*: `VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL` reaches experimental and `VITE_CONFIGCAT_SDK_KEY_PRODUCTION` reaches production; staging remains empty until enabled. |
+| Backend | **`etendo.go.configcat.sdkKey`, env `ETGO_CONFIGCAT_SDK_KEY`** — since ETP-5267. `GoFeatureFlags.createProvider()` returns `ConfigCatProvider` when that key resolves and `PropertiesFeatureProvider` when it does not, so backend flags are hosted (flippable without a restart) only where the key is set, and a plain per-environment boolean (`etendo.go.flags.<key>`) everywhere else. The fallback is deliberate: dev, CI and e2e stay deterministic. Per-account targeting exists on the ConfigCat arm only. **An absent, blank or wrong key resolves every flag to its `false` code default — never to "on".** |
 
 > **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was
 > never true.** The secret is provisioned in the experimental task definition, which made the claim
@@ -467,6 +514,39 @@ still need the same badge when its package is upgraded independently.
 fields (so it would silently drop `paymentToken`) and starts reading the
 response body without checking the status (so a 402 would surface as a generic
 "no result" failure instead of a payment error).
+
+## Demo data transfer (`demo-data-transfer`, backend-only)
+
+The ETP-5364 demo-to-productive data transfer is gated OFF by a flag evaluated **only** in
+`com.etendoerp.go` (`DemoDataTransferFlag`, see that repo's
+`docs/feature-flags-and-tenant-upgrade.md`). Like `bp-portal-link`, it has **no key in
+`flag-keys.js`, and none must be added** — a browser key would be a second evaluator on a different
+control plane and targeting key (ETP-4966).
+
+The browser follows the backend instead: `useDemoDataTransfer` reports `available: true` only when
+`GET /sws/go/demo-data-transfer` answers 2xx. With the flag off that endpoint is a 404, so
+`available` stays false and `demoDataTransferStep.js` never splices the row into the First Steps
+catalogue — same rows and same `x/TOTAL` as before ETP-5364. Any other failure before a first
+successful read is treated the same way: an unknown answer hides the row.
+
+`UpgradePage` sends the selected products and contacts in the billing purchase request (and the
+legacy checkout-session request). A purchase with a recorded selection returns it as
+`dataTransfer: { products, contacts }`; resume uses that server-owned selection rather than the
+current state of the checkboxes. The purchase projection also reports `dataTransferEnabled`.
+When it is true and the purchase has no saved selection, the page shows a warning and continues
+provisioning without a transfer request; it cannot reconstruct the choice from browser state.
+The durable transfer then remains `NOT_REQUESTED` and requires operator recovery if the buyer
+expected data to move. With the flag off, resume may
+use an explicitly saved browser choice or one made in the current checkout form. It never defaults
+a missing choice to both options. The checkout selection is ignored by the durable job and the
+selection on `POST /sws/go/onboarding` continues to drive ETP-5421's synchronous
+`OnboardingDataTransferService`. With the flag on, Go records the immutable checkout selection
+before contacting the payment provider, skips the synchronous copy, and starts the durable job
+only after onboarding commits. The product copy reuses system UOMs, copies client UOM EDI codes,
+and resolves the target tax category; a missing category fails the job with a named reason so it
+can be repaired and retried. The job also rejects a source and destination with the same tenant
+ID. Owned paths, specs and remaining work are in
+[`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
 
 ## Proof of Concept menu (`proof-of-concept-menu`)
 

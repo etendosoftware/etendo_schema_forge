@@ -9,8 +9,13 @@ import { useCreateStatement } from '../useCreateStatement.js';
 // crosses the `useApiFetch` shim (it imports auth via the core package's own
 // relative path, which the `@/auth` alias does not intercept), so a real
 // AuthProvider seeded with a token is required instead.
+// ETP-4576: `credentialMode` defaults to `auto`, which turns the mount-only session
+// restore ON, so every AuthProvider issues a GET /sws/go/session of its own. The
+// subject here is the hook request itself, not the restore, so the provider opts out
+// through the documented `restoreSession={null}` escape hatch and the fetch count
+// stays the hook one. Without it the restore lands as an extra call before the asserts.
 const wrapper = ({ children }) => (
-  <AuthProvider initialSession={{ token: 'test-token' }}>{children}</AuthProvider>
+  <AuthProvider initialSession={{ token: 'test-token' }} restoreSession={null}>{children}</AuthProvider>
 );
 
 function setPathname(pathname) {
@@ -32,6 +37,8 @@ const PAYLOAD = {
     bpartnerName: 'Acme', bpartnerId: 'bp-1', glItemId: 'gl-1', in: 3500, out: 0,
   }],
 };
+
+import { appFetchCalls } from '@/test/appFetchCalls.js';
 
 describe('useCreateStatement', () => {
   beforeEach(() => {
@@ -63,9 +70,13 @@ describe('useCreateStatement', () => {
       res = await result.current.createStatement(PAYLOAD);
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('/etendo/sws/neo/bank-statements?action=create');
+    // ETP-5195: AuthProvider fires a silent `GET /sws/neo/refreshtoken` on mount, which may add
+    // an unrelated extra call — find the hook's own call by URL instead of assuming index 0/count 1.
+    const call = globalThis.fetch.mock.calls.find(
+      ([callUrl]) => callUrl === '/etendo/sws/neo/bank-statements?action=create',
+    );
+    expect(call).toBeTruthy();
+    const [url, init] = call;
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
     expect(init.headers['Content-Type']).toBe('application/json');

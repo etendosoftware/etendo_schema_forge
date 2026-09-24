@@ -86,6 +86,25 @@ describe('TbaiSection — rendering', () => {
   });
 });
 
+// ETP-5272 — external `locked` prop (forceTestMode) disables editing regardless
+// of any other state.
+describe('TbaiSection — locked prop (ETP-5272)', () => {
+  it('disables the auto-send switch when locked=true', () => {
+    render(<TbaiSection {...PROPS} locked />);
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  it('does not disable the auto-send switch when locked=false', () => {
+    render(<TbaiSection {...PROPS} locked={false} />);
+    expect(screen.getByRole('checkbox')).not.toBeDisabled();
+  });
+
+  it('hides the save button when locked=true, even with hideSave=false', () => {
+    render(<TbaiSection {...PROPS} locked hideSave={false} />);
+    expect(screen.queryByText('fiscal.save')).not.toBeInTheDocument();
+  });
+});
+
 describe('TbaiSection — validation', () => {
   it('does not validate tbaisystemdate: save succeeds even with empty value (ETP-4783: removed from UI)', async () => {
     const onSave = vi.fn();

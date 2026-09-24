@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUI } from '@/i18n';
-import { SUPPORTED_YEARS } from './models/303/fm303Layouts';
+import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
-import { Star, Play, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -30,7 +30,98 @@ function parseCityLine(cityLine) {
   return { postal, city: rest, province: '' };
 }
 
-// PresentModal — 2 manual paths + 1 opt-in AEAT sentinel path:
+// PresentOptionCard — a single selectable radio-style option row shared by both
+// columns of PresentModal. Extracted so the "Registrar presentación" and
+// "Presentar a la AEAT" columns render identical card visuals without duplicating
+// the inline-style block twice.
+function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fileRef }) {
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
+        border: `1px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border-subtle))'}`,
+        background: selected ? 'hsl(var(--muted))' : 'hsl(var(--card))',
+        boxShadow: selected ? '0 0 0 2px hsl(var(--primary) / .15)' : 'none',
+        transition: 'border-color .12s, background .12s, box-shadow .12s',
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', lineHeight: '20px' }}>
+          {t(p.titleKey)}
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 400, color: 'hsl(var(--text-disabled))', lineHeight: '18px', marginTop: 2 }}>
+          {t(p.descKey)}
+        </div>
+        {p.id === 'submitted_ack' && selected && (
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              style={{
+                fontSize: 12, padding: '5px 12px',
+                border: '1px solid hsl(var(--border-control))', borderRadius: 8,
+                cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+              }}
+              onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+            >
+              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.xml"
+              style={{ display: 'none' }}
+              onChange={onPickFile}
+            />
+          </div>
+        )}
+      </div>
+      <span style={{
+        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+        border: `2px solid ${selected ? 'hsl(var(--primary))' : 'hsl(var(--border-control))'}`,
+        background: selected ? 'hsl(var(--primary))' : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'border-color .12s, background .12s',
+      }}>
+        {selected && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))', display: 'block' }} />}
+      </span>
+    </div>
+  );
+}
+
+// PresentModalColumn — one of the two columns in the redesigned picker: a small
+// section icon + title + description, followed by its stack of PresentOptionCard.
+function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
+      </div>
+      <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', lineHeight: '16px', marginBottom: 12 }}>
+        {t(descKey)}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {paths.map(p => (
+          <PresentOptionCard
+            key={p.id}
+            p={p}
+            selected={path === p.id}
+            onSelect={() => setPath(p.id)}
+            t={t}
+            acuseFile={acuseFile}
+            onPickFile={onPickFile}
+            fileRef={fileRef}
+            data-testid="PresentOptionCard__cda0bb" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// PresentModal — 2 manual paths (left column, "Registrar presentación") + 1
+// opt-in AEAT sentinel path (right column, "Presentar a la AEAT"):
 //   1. submitted_ack   — upload PDF/XML receipt; status → submitted_ack
 //   2. submitted       — submitted without receipt; status → submitted
 //   3. aeat_telematic  — opt-in sentinel path (showAeatPath, 303 only):
@@ -38,10 +129,22 @@ function parseCityLine(cityLine) {
 //      never a real declaration status — the caller (FmModel303Page)
 //      intercepts it and opens the dedicated AeatSubmitFlow instead of
 //      changing the declaration status directly.
+// ETP-5229 item #10: this was briefly split into a separate standalone
+// button/flow outside this modal, then reverted — all 3 paths belong in
+// one "Registrar/Presentar" picker (the trigger's label was renamed from
+// "Marcar como Presentado" to reflect that it now also covers live filing).
 // The former "Otra Plataforma" (external-agency) path was removed from
 // this modal — its status remains valid and fully-rendered for any
 // declaration that already carries it, it just can no longer be newly
 // selected here.
+// Two-column redesign (ETP-5229 item #10, from Figma mockup): left column
+// ("Registrar presentación") always holds the 2 manual paths; right column
+// ("Presentar a la AEAT") holds the aeat_telematic path and only renders at
+// all when `showAeatPath` is true (303 only — 349 has no telematic path, so
+// it shows a single full-width column, matching the pre-redesign behavior).
+// The underlying `path` selection state and `canConfirm`/`handleConfirm`
+// logic are unchanged from the single-column version — only the visual
+// grouping changed.
 export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
   const ui = useUI();
   const t = ui;
@@ -56,93 +159,70 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
     onClose();
   }
 
-  const PATHS = [
-    { id: 'submitted_ack', icon: <Star size={16} strokeWidth={1.75} data-testid="Star__cda0bb" />, titleKey: 'fm.present.path.acuse',      descKey: 'fm.present.path.acuse_desc' },
-    { id: 'submitted',     icon: <Play size={16} strokeWidth={1.75} data-testid="Play__cda0bb" />, titleKey: 'fm.present.path.sin_acuse',  descKey: 'fm.present.path.sin_acuse_desc' },
-    ...(showAeatPath ? [
-      { id: 'aeat_telematic', icon: <Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />, titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' },
-    ] : []),
+  const onPickFile = (e) => setAcuseFile(e.target.files?.[0] ?? null);
+
+  const REGISTER_PATHS = [
+    { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
+    { id: 'submitted',     titleKey: 'fm.present.path.sin_acuse', descKey: 'fm.present.path.sin_acuse_desc' },
   ];
+  const AEAT_PATHS = showAeatPath
+    ? [{ id: 'aeat_telematic', titleKey: 'fm.present.path.aeat', descKey: 'fm.present.path.aeat_desc' }]
+    : [];
+
+  // Dynamic subtitle: "Modelo <model> · <period> <year>" (reuses the same
+  // formatting key NewDeclModal's preview line already uses). Falls back to
+  // the generic instructional subtitle when decl doesn't carry model/year/period
+  // (e.g. tests that pass a bare `{ id }` stub).
+  const subtitle = (decl?.model && decl?.year && decl?.period)
+    ? t('fm.new_decl.preview', { model: decl.model, period: formatPeriod(decl.period), year: decl.year })
+    : (t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración');
 
   return (
     <div className="fm-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="fm-config-modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+      <div className="fm-config-modal fm-present-modal" style={{ maxWidth: showAeatPath ? 760 : 500 }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
             <div className="fm-config-modal__title">{t('fm.present.title')}</div>
-            <div className="fm-config-modal__sub">{t('fm.present.subtitle') ?? 'Selecciona cómo fue presentada la declaración'}</div>
+            <div className="fm-config-modal__sub">{subtitle}</div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
         </div>
 
-        {/* Body */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {PATHS.map(p => (
-              <div
-                key={p.id}
-                onClick={() => setPath(p.id)}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12,
-                  padding: '14px 16px', borderRadius: 12, cursor: 'pointer',
-                  border: `1px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-subtle))'}`,
-                  background: path === p.id ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                  transition: 'border-color .12s, background .12s',
-                }}
-              >
-                <span style={{
-                  width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--muted))',
-                  color: path === p.id ? 'hsl(var(--card))' : 'hsl(var(--text-disabled))',
-                  transition: 'background .12s, color .12s',
-                }}>
-                  {p.icon}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))', lineHeight: '20px' }}>
-                    {t(p.titleKey)}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 400, color: 'hsl(var(--text-disabled))', lineHeight: '18px', marginTop: 2 }}>
-                    {t(p.descKey)}
-                  </div>
-                  {p.id === 'submitted_ack' && path === 'submitted_ack' && (
-                    <div style={{ marginTop: 10 }}>
-                      <button
-                        type="button"
-                        style={{
-                          fontSize: 12, padding: '5px 12px',
-                          border: '1px solid hsl(var(--border-control))', borderRadius: 8,
-                          cursor: 'pointer', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
-                        }}
-                        onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
-                      >
-                        {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
-                      </button>
-                      <input
-                        ref={fileRef}
-                        type="file"
-                        accept=".pdf,.xml"
-                        style={{ display: 'none' }}
-                        onChange={e => setAcuseFile(e.target.files?.[0] ?? null)}
-                      />
-                    </div>
-                  )}
-                </div>
-                <span style={{
-                  width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                  border: `2px solid ${path === p.id ? 'hsl(var(--foreground))' : 'hsl(var(--border-control))'}`,
-                  background: path === p.id ? 'hsl(var(--foreground))' : 'transparent',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transition: 'border-color .12s, background .12s',
-                }}>
-                  {path === p.id && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))', display: 'block' }} />}
-                </span>
-              </div>
-            ))}
-          </div>
+        {/* Body — two columns divided by a vertical separator when the AEAT
+            path is available; a single full-width column otherwise (349). */}
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px', display: 'flex', gap: 20 }}>
+          <PresentModalColumn
+            icon={<FileText size={16} strokeWidth={1.75} data-testid="FileText__cda0bb" />}
+            titleKey="fm.present.register_section.title"
+            descKey="fm.present.register_section.desc"
+            paths={REGISTER_PATHS}
+            path={path}
+            setPath={setPath}
+            t={t}
+            acuseFile={acuseFile}
+            onPickFile={onPickFile}
+            fileRef={fileRef}
+            data-testid="PresentModalColumn__cda0bb" />
+
+          {showAeatPath && (
+            <>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'hsl(var(--border-subtle))' }} aria-hidden="true" />
+              <PresentModalColumn
+                icon={<Landmark size={16} strokeWidth={1.75} data-testid="Landmark__cda0bb" />}
+                titleKey="fm.present.aeat_section.title"
+                descKey="fm.present.aeat_section.desc"
+                paths={AEAT_PATHS}
+                path={path}
+                setPath={setPath}
+                t={t}
+                acuseFile={acuseFile}
+                onPickFile={onPickFile}
+                fileRef={fileRef}
+                data-testid="PresentModalColumn__cda0bb" />
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -232,10 +312,10 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={substitutive}
-                onChange={() => setSubstitutive(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setSubstitutive(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.substitutive')}
             </label>
           </div>
@@ -253,19 +333,19 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={navarra}
-                onChange={() => setNavarra(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setNavarra(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.navarra')}
             </label>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={checkboxRowSt}>
-              <Checkbox
+              <CheckboxField
                 checked={guipuzcoa}
-                onChange={() => setGuipuzcoa(v => !v)}
-                data-testid="Checkbox__cda0bb" />
+                onToggle={val => setGuipuzcoa(val)}
+                data-testid="CheckboxField__cda0bb" />
               {t('fm.filegen.guipuzcoa')}
             </label>
           </div>
@@ -415,7 +495,7 @@ function ModelSelectMenu({ model, availableModels, onSelect, onClose, t }) {
 
 // YearSelectMenu — the "Año" dropdown panel for NewDeclModal. Visually and
 // mechanically a simplified sibling of ModelSelectMenu above (button trigger +
-// outside-click-to-close panel + checkmark on the selected row), but SUPPORTED_YEARS
+// outside-click-to-close panel + checkmark on the selected row), but SELECTABLE_YEARS
 // is a short flat list of plain year labels, so there's no search input and no
 // chip/subtitle here — just the year text and, for the selected one, a checkmark.
 function YearSelectMenu({ year, years, onSelect, onClose }) {
@@ -478,16 +558,20 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
   const canCreate = availableModels.length > 0;
   const [model, setModel] = useState(availableModels[0] ?? '303');
   const _cy = new Date().getFullYear();
-  const [year, setYear] = useState(SUPPORTED_YEARS.includes(_cy) ? _cy : SUPPORTED_YEARS[SUPPORTED_YEARS.length - 1]);
+  const [year, setYear] = useState(SELECTABLE_YEARS.includes(_cy) ? _cy : SELECTABLE_YEARS[SELECTABLE_YEARS.length - 1]);
   const [frequency, setFrequency] = useState('quarterly'); // 'quarterly' | 'monthly' — drives the Período grid below
   const [period, setPeriod] = useState('T1');
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [yearMenuOpen, setYearMenuOpen] = useState(false);
 
   const periods = frequency === 'monthly' ? MONTHLY_PERIODS : QUARTERLY_PERIODS;
-  // Most-recent-first for the Año dropdown — SUPPORTED_YEARS itself stays
+  // Most-recent-first for the Año dropdown — SELECTABLE_YEARS itself stays
   // ascending (other consumers, if any, keep relying on that order).
-  const yearOptions = useMemo(() => [...SUPPORTED_YEARS].sort((a, b) => b - a), []);
+  // Restricted to the current filing year only (see SELECTABLE_YEARS in
+  // fm303Layouts.js) — past years remain resolvable for existing
+  // declarations via SUPPORTED_YEARS, but are not offered here as choices
+  // for a brand-new one.
+  const yearOptions = useMemo(() => [...SELECTABLE_YEARS].sort((a, b) => b - a), []);
 
   // Periods that already carry a declaration for the currently selected model+year.
   // Rendered with a small dot badge in the grid below — informational only
@@ -498,6 +582,24 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
     const set = new Set();
     (existingDeclarations ?? []).forEach(d => {
       if (String(d.model) === String(model) && Number(d.year) === Number(year) && d.period) {
+        set.add(d.period);
+      }
+    });
+    return set;
+  }, [existingDeclarations, model, year]);
+
+  // Periods that already carry a DRAFT declaration for the currently selected model+year
+  // (ETP-5272). Unlike `existingPeriods` above (any status, purely informational), a period
+  // in this set is actively BLOCKED from selection below: a draft is an unfinished, in-progress
+  // declaration, and letting the user spawn a 2nd one for it just fragments their work across
+  // two half-finished rows instead of completing (or deleting) the existing one first. Any
+  // other existing status (ready/submitted/...) is the intended rectificativa case and stays
+  // exactly as informational/selectable as `existingPeriods` already makes it.
+  const draftPeriods = useMemo(() => {
+    const set = new Set();
+    (existingDeclarations ?? []).forEach(d => {
+      if (String(d.model) === String(model) && Number(d.year) === Number(year) && d.period
+          && d.status === 'draft') {
         set.add(d.period);
       }
     });
@@ -619,14 +721,31 @@ export function NewDeclModal({ onConfirm, onClose, activeModels, existingDeclara
               {periods.map(p => {
                 const isSelected = p === period;
                 const isExisting = existingPeriods.has(p);
+                // ETP-5272 — a draft-blocked period is disabled outright (see draftPeriods
+                // above); its tooltip is deliberately distinct from the purely-informational
+                // existing-period hint, so the user understands WHY this one can't be picked.
+                const isDraftBlocked = draftPeriods.has(p);
+                // S3358 — de-nested from a nested ternary: draft-blocked and existing each
+                // have their own distinct tooltip (see comment above), unselected/available
+                // periods get none.
+                let periodTitle;
+                if (isDraftBlocked) {
+                  periodTitle = t('fm.new_decl.period_draft_blocked_hint') ?? undefined;
+                } else if (isExisting) {
+                  periodTitle = t('fm.new_decl.period_existing_hint') ?? undefined;
+                } else {
+                  periodTitle = undefined;
+                }
                 return (
                   <button
                     key={p}
                     type="button"
                     aria-pressed={isSelected}
-                    className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}`}
-                    title={isExisting ? (t('fm.new_decl.period_existing_hint') ?? undefined) : undefined}
+                    disabled={isDraftBlocked}
+                    className={`fm-newdecl-period-btn${isSelected ? ' fm-newdecl-period-btn--selected' : ''}${isExisting ? ' fm-newdecl-period-btn--existing' : ''}${isDraftBlocked ? ' fm-newdecl-period-btn--draft-blocked' : ''}`}
+                    title={periodTitle}
                     onClick={() => {
+                      if (isDraftBlocked) return;
                       setPeriod(p);
                       // ETP-5187 (adjacent scope) — same IAE-activity reminder as
                       // FmCatalogPage's Modelo 303 activation toggle, fired here on
@@ -806,7 +925,7 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
   const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     const controller = new AbortController();
     apiFetch(`${neoBase(apiBaseUrl)}/session`, {
       baseUrl: '',
@@ -934,17 +1053,17 @@ export function ConfigDrawer({ model, onClose, token, apiBaseUrl }) {
                 </div>
                 <div style={{ display: 'flex', gap: 20 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={redeme}
-                      onChange={() => { setRedeme(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRedeme(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.redeme') ?? 'Inscrito en REDEME'}
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: 'pointer' }}>
-                    <Checkbox
+                    <CheckboxField
                       checked={recc}
-                      onChange={() => { setRecc(v => !v); setIsDirty(true); }}
-                      data-testid="Checkbox__cda0bb" />
+                      onToggle={val => { setRecc(val); setIsDirty(true); }}
+                      data-testid="CheckboxField__cda0bb" />
                     {t('fm.config.m303.recc') ?? 'Régimen RECC'}
                   </label>
                 </div>

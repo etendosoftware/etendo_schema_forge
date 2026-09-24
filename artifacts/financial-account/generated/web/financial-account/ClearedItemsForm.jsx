@@ -4,7 +4,7 @@ import { EntityForm } from '@/components/contract-ui';
 const fields = [
   { key: 'accountingDate', column: 'Dateacct', type: 'date', label: 'Accounting Date', readOnly: true, section: 'other' },
   { key: 'transactionDate', column: 'Statementdate', type: 'date', label: 'Transaction Date', readOnly: true, section: 'other' },
-  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', readOnly: true, section: 'other' },
+  { key: 'description', column: 'Description', type: 'textarea', label: 'Description', readOnly: true, section: 'other', maxLength: 255 },
   { key: 'financialAccountTransaction', column: 'FIN_Finacc_Transaction_ID', type: 'search', label: 'Financial account transaction', readOnly: true, section: 'other', reference: 'Finacc_Transaction', inputMode: 'search' },
   { key: 'bankStatementLine', column: 'FIN_Bankstatementline_ID', type: 'search', label: 'Bank Statement Line', readOnly: true, section: 'other', reference: 'Bankstatementline', inputMode: 'search' },
   { key: 'transactionType', column: 'Trxtype', type: 'select', label: 'Transaction Type', readOnly: true, section: 'other', options: [{ value: 'BPD', label: 'BP Deposit', labels: {"es_ES":"Cobro"} }, { value: 'BPW', label: 'BP Withdrawal', labels: {"es_ES":"Pago"} }, { value: 'BF', label: 'Bank fee', labels: {"es_ES":"Tasa de Banco"} }] },

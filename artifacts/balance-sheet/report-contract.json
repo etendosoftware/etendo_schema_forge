@@ -27,10 +27,10 @@
     { "name": "dateFrom", "label": { "en_US": "Starting Date", "es_ES": "Fecha de Inicio" }, "type": "date", "section": "periodo" },
     { "name": "dateTo", "label": { "en_US": "Ending Date", "es_ES": "Fecha de Fin" }, "type": "date", "section": "periodo" },
     { "name": "accountLevel", "label": { "en_US": "Account Level", "es_ES": "Nivel de cuenta" }, "type": "select", "required": true, "default": "C", "section": "agrupacion", "options": [
-      { "value": "S", "label": { "en_US": "Subaccount", "es_ES": "Subcuenta" } },
-      { "value": "D", "label": { "en_US": "Breakdown", "es_ES": "Desglose" } },
       { "value": "C", "label": { "en_US": "Account", "es_ES": "Cuenta" } },
-      { "value": "E", "label": { "en_US": "Heading", "es_ES": "Epígrafe" } }
+      { "value": "D", "label": { "en_US": "Breakdown", "es_ES": "Desglose" } },
+      { "value": "E", "label": { "en_US": "Heading", "es_ES": "Epígrafe" } },
+      { "value": "S", "label": { "en_US": "Subaccount", "es_ES": "Subcuenta" } }
     ] },
     { "name": "showOnlyAccountsWithValue", "label": { "en_US": "Show only accounts with value", "es_ES": "Mostrar solo cuentas con valor" }, "type": "toggle", "default": true, "section": "agrupacion" },
     { "name": "compareTo", "label": { "en_US": "Compare To", "es_ES": "Comparar con" }, "type": "toggle", "default": false, "section": "comparacion" },

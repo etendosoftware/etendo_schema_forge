@@ -11,6 +11,15 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+
+// ETP-5395 — mutable ref so most tests can leave the page's actual body under test (Owner
+// granted, same convention as DetailView.secondaryTabCapabilityGate.vitest.jsx) while the
+// dedicated gate describe block below flips it to exercise the redirect.
+const capabilitiesRef = vi.hoisted(() => ({ current: { isOwner: true } }));
+vi.mock('@/hooks/useCapabilitiesSafe.js', () => ({
+  useCapabilitiesSafe: () => capabilitiesRef.current,
+}));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -54,6 +63,7 @@ import {
   toggleableStepIds,
   visibleFirstSteps,
 } from '@/pages/first-steps/firstStepsConfig.js';
+import { demoDataTransferStepState } from '@/pages/first-steps/demoDataTransferStep.js';
 
 const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
 
@@ -64,29 +74,50 @@ const ALL_DONE = [...toggleableStepIds(PLAN_PRODUCTIVE)];
  * than being passed in loose, so a change to the gate shows up here as a behaviour difference
  * instead of a stale fixture that keeps asserting the old list. Defaults to productive, which
  * is the full 7-step checklist every test below expects unless it says otherwise.
+ *
+ * The transfer defaults to what the backend answers with flag `demo-data-transfer` OFF (a 404,
+ * so `available: false`): no transfer row. The transfer suite passes `available: true`.
  */
 function setHook({ completed = [], loading = false, error = null, toggleResult = true,
-  plan = PLAN_PRODUCTIVE } = {}) {
+  plan = PLAN_PRODUCTIVE, dismissed = false, dismissResult = true,
+  dataTransfer = {} } = {}) {
   const toggleStep = vi.fn(async () => toggleResult);
   const markSeen = vi.fn(async () => true);
+  const setDismissed = vi.fn(async () => dismissResult);
+  const transfer = {
+    status: 'NOT_REQUESTED',
+    products: {},
+    contacts: {},
+    loading: false,
+    available: false,
+    error: false,
+    retry: vi.fn(async () => ({ status: 'RUNNING', products: {}, contacts: {} })),
+    ...dataTransfer,
+  };
+  const demoDataTransfer = demoDataTransferStepState(transfer);
   hookState.value = {
     completed,
     seen: false,
+    dismissed,
     loading,
     error,
     toggleStep,
     markSeen,
+    setDismissed,
     plan,
-    steps: visibleFirstSteps(plan),
-    completedCount: countCompletedSteps(completed, plan),
-    total: firstStepsTotal(plan),
+    steps: visibleFirstSteps(plan, demoDataTransfer),
+    completedCount: countCompletedSteps(completed, plan, demoDataTransfer),
+    total: firstStepsTotal(plan, demoDataTransfer),
+    dataTransfer: transfer,
+    demoDataTransfer,
   };
-  return { toggleStep, markSeen };
+  return { toggleStep, markSeen, setDismissed, dataTransfer: transfer };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   setHook();
+  capabilitiesRef.current = { isOwner: true };
 });
 
 describe('FirstStepsPage — smoke and wiring', () => {
@@ -201,6 +232,83 @@ describe('FirstStepsPage — a trial tenant sees the shorter checklist', () => {
   });
 });
 
+describe('FirstStepsPage — flag demo-data-transfer OFF (ETP-5443)', () => {
+  it('renders no transfer row and the pre-ETP-5364 figures when the backend hides the transfer', () => {
+    setHook({ plan: PLAN_PRODUCTIVE, dataTransfer: { available: false, status: 'RUNNING' } });
+    render(<FirstStepsPage />);
+
+    expect(screen.queryByTestId('first-steps-step-demo-data-transfer')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-data-transfer-progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('1/7');
+  });
+});
+
+/**
+ * Flag `demo-data-transfer` ON: the backend answered the status read, so `available` is true.
+ * Every test here goes through `transferHook`, which is what keeps them testing the feature
+ * rather than the flag-off catalogue the rest of this file runs on.
+ */
+describe('FirstStepsPage — demo-to-productive data transfer', () => {
+  const transferHook = ({ dataTransfer = {}, ...rest } = {}) =>
+    setHook({ ...rest, dataTransfer: { available: true, ...dataTransfer } });
+
+  it('keeps the durable transfer row in the productive checklist', () => {
+    transferHook({ plan: PLAN_PRODUCTIVE });
+    render(<FirstStepsPage />);
+
+    expect(screen.getByTestId('first-steps-step-demo-data-transfer')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('2/8');
+  });
+
+  it('does not expose the productive transfer row to a free tenant', () => {
+    transferHook({ plan: 'free' });
+    render(<FirstStepsPage />);
+
+    expect(screen.queryByTestId('first-steps-step-demo-data-transfer')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-progress')).toHaveTextContent('1/5');
+  });
+
+  it('shows the persisted server progress while the transfer is running', async () => {
+    const user = userEvent.setup();
+    transferHook({ dataTransfer: {
+      status: 'RUNNING',
+      products: { completed: 12, total: 20 },
+      contacts: { completed: 3, total: 8 },
+    } });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));
+    expect(screen.getByTestId('first-steps-data-transfer-progress'))
+      .toHaveTextContent('firstStepsDemoDataTransferProducts');
+    expect(screen.getByTestId('first-steps-data-transfer-progress'))
+      .toHaveTextContent('firstStepsDemoDataTransferContacts');
+    expect(screen.queryByTestId('first-steps-data-transfer-retry')).not.toBeInTheDocument();
+  });
+
+  it('offers retry only for a failed transfer and starts the server-owned retry', async () => {
+    const user = userEvent.setup();
+    const { dataTransfer } = transferHook({ dataTransfer: { status: 'FAILED' } });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));
+    await user.click(screen.getByTestId('first-steps-data-transfer-retry'));
+    expect(dataTransfer.retry).toHaveBeenCalledTimes(1);
+
+    expect(screen.queryByTestId('first-steps-data-transfer-retry')).toBeInTheDocument();
+  });
+
+  it('reports a failed retry through the page error feedback', async () => {
+    const user = userEvent.setup();
+    const retry = vi.fn(async () => { throw new Error('temporary server failure'); });
+    transferHook({ dataTransfer: { status: 'FAILED', retry } });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-title-demo-data-transfer'));
+    await user.click(screen.getByTestId('first-steps-data-transfer-retry'));
+    expect(toastMock.error).toHaveBeenCalledWith('genericError');
+  });
+});
+
 describe('FirstStepsPage — one row open at a time, but any row openable', () => {
   /** The expanded row is the one that renders its action controls / checkbox. */
   const expandedIds = () => ALL_DONE
@@ -231,7 +339,7 @@ describe('FirstStepsPage — one row open at a time, but any row openable', () =
     expect(expandedIds()).toEqual(['company-data']);
   });
 
-  it('collapses every row at 7/7', () => {
+  it('collapses every row at 8/8', () => {
     setHook({ completed: ALL_DONE });
     render(<FirstStepsPage />);
     expect(expandedIds()).toEqual([]);
@@ -319,13 +427,13 @@ describe('FirstStepsPage — always-done steps are read-only', () => {
 });
 
 describe('FirstStepsPage — the all-set state', () => {
-  it('keeps the "Create invoice" button hidden below 7/7', () => {
+  it('keeps the "Create invoice" button hidden below 8/8', () => {
     setHook({ completed: ['company-data', 'products', 'contacts'] });
     render(<FirstStepsPage />);
     expect(screen.queryByTestId('first-steps-create-invoice')).not.toBeInTheDocument();
   });
 
-  it('swaps heading and subtitle copy and reveals the button at 7/7', () => {
+  it('swaps heading and subtitle copy and reveals the button at 8/8', () => {
     setHook({ completed: ALL_DONE });
     render(<FirstStepsPage />);
 
@@ -334,7 +442,7 @@ describe('FirstStepsPage — the all-set state', () => {
     expect(screen.getByTestId('first-steps-create-invoice')).toBeInTheDocument();
   });
 
-  it('uses the pre-completion copy below 7/7', () => {
+  it('uses the pre-completion copy below 8/8', () => {
     setHook({ completed: [] });
     render(<FirstStepsPage />);
     expect(screen.getByTestId('first-steps-heading')).toHaveTextContent('firstStepsPrepareAccount');
@@ -368,7 +476,9 @@ describe('FirstStepsPage — Configure navigation', () => {
 
     await user.click(screen.getByTestId('first-steps-title-team'));
     await user.click(screen.getByTestId('first-steps-configure-team'));
-    expect(navigateMock).toHaveBeenCalledWith('/roles');
+    // ETP-5364: Usuarios, not Roles — inviting someone creates a USER; the role window shapes
+    // permissions afterwards and made the step read as a different, later job.
+    expect(navigateMock).toHaveBeenCalledWith('/user');
   });
 
   it('offers an importer instead of a route on the two bulk-load steps', async () => {
@@ -401,6 +511,9 @@ describe('FirstStepsPage — Configure navigation', () => {
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-title-fiscal-config'));
+    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
+    // window. "Yes" is what puts the Configure button on screen.
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
     await user.click(screen.getByTestId('first-steps-configure-fiscal-config'));
     expect(navigateMock).toHaveBeenCalledWith('/fiscal-config');
   });
@@ -538,5 +651,268 @@ describe('FirstStepsPage — the completion checkbox', () => {
     await user.click(screen.getByTestId('first-steps-toggle-company-data'));
     await waitFor(() => expect(hookState.value.toggleStep).toHaveBeenCalled());
     expect(toastMock.error).not.toHaveBeenCalled();
+  });
+});
+
+describe('FirstStepsPage — Owner-only gate (ETP-5395)', () => {
+  /**
+   * A real destination route rather than a mocked `useNavigate`/stubbed `<Navigate>`, so the
+   * redirect is asserted by where the user actually ends up — same convention as
+   * InviteAcceptancePage.tenantEntry.vitest.jsx's `renderPage()`.
+   */
+  function renderAtFirstSteps() {
+    return render(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('redirects to /dashboard instead of rendering when the user is not the account Owner', () => {
+    capabilitiesRef.current = { isOwner: false };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('redirects to /dashboard when isOwner is missing from the capabilities map (fail-closed)', () => {
+    capabilitiesRef.current = {};
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+
+  it('renders the page normally, not the redirect, when isOwner is true', () => {
+    capabilitiesRef.current = { isOwner: true };
+    renderAtFirstSteps();
+
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('dashboard-landed')).not.toBeInTheDocument();
+  });
+
+  // [ETP-5395 QA] — ownership transferred (or the capabilities map otherwise refreshed to
+  // isOwner: false) WHILE the user already has this page open, with no full page reload. The
+  // gate is not a mount-only check: `useCapabilitiesSafe()` reads live context state and the
+  // `if (capabilities.isOwner !== true) return <Navigate .../>` runs on every render, so the
+  // very next re-render (triggered by AuthContext's own focus/visibility/poll-driven capability
+  // refresh — see AuthContext.jsx's refresh()) must bounce the now-non-owner user out, not leave
+  // them stranded on a page they can no longer legitimately see.
+  it('redirects to /dashboard on the next render after isOwner flips to false mid-session (ownership transferred, no reload)', () => {
+    capabilitiesRef.current = { isOwner: true };
+    const { rerender } = renderAtFirstSteps();
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
+
+    capabilitiesRef.current = { isOwner: false };
+    rerender(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
+  });
+});
+
+describe('FirstStepsPage — finishing the setup (ETP-5364)', () => {
+  it('offers "Finalizar configuración inicial" only once every step is done', () => {
+    setHook({ completed: ['company-data', 'products', 'contacts'] });
+    render(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-finish-setup')).not.toBeInTheDocument();
+  });
+
+  it('shows the button, and what it does, at 8/8', () => {
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-finish-setup')).toHaveTextContent('firstStepsFinishSetup');
+    // The hint is what keeps this from reading as a destructive, one-way action.
+    expect(screen.getByTestId('first-steps-finish-setup-hint'))
+      .toHaveTextContent('firstStepsFinishSetupHint');
+  });
+
+  it('persists the dismissal when clicked', async () => {
+    const user = userEvent.setup();
+    const { setDismissed } = setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    expect(setDismissed).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the user on the page rather than navigating away', async () => {
+    // The entry has just vanished from the sidebar; leaving the user in front of the banner
+    // that explains it — and undoes it — is what makes the action reversible.
+    const user = userEvent.setup();
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a failed write, because the rollback alone is invisible', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: ALL_DONE, dismissResult: false });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-finish-setup'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+  });
+
+  it('replaces the button with the way back once dismissed', () => {
+    setHook({ completed: ALL_DONE, dismissed: true });
+    render(<FirstStepsPage />);
+
+    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-reopen')).toHaveTextContent('firstStepsReopen');
+    expect(screen.queryByTestId('first-steps-finish-setup')).not.toBeInTheDocument();
+    // Creating the first invoice is still the point of reaching 8/8.
+    expect(screen.getByTestId('first-steps-create-invoice')).toBeInTheDocument();
+  });
+
+  it('brings the checklist back from the banner', async () => {
+    const user = userEvent.setup();
+    const { setDismissed } = setHook({ completed: ALL_DONE, dismissed: true });
+    render(<FirstStepsPage />);
+
+    await user.click(screen.getByTestId('first-steps-reopen'));
+    expect(setDismissed).toHaveBeenCalledWith(false);
+  });
+
+  it('shows the banner even mid-checklist, so a dismissal is never a dead end', () => {
+    // `dismissed` is independent of completion: a user can dismiss at 8/8 and later un-tick a
+    // step. Without this the banner would disappear and the entry would be unrecoverable.
+    setHook({ completed: ['company-data'], dismissed: true });
+    render(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-reopen')).toBeInTheDocument();
+  });
+
+  it('shows no banner while the checklist is still offered', () => {
+    setHook({ completed: ALL_DONE });
+    render(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-dismissed-notice')).not.toBeInTheDocument();
+  });
+});
+
+describe('FirstStepsPage — fiscal-config asks before it configures (ETP-5364)', () => {
+  const openFiscal = (user) => user.click(screen.getByTestId('first-steps-title-fiscal-config'));
+
+  it('replaces the description and the Configure button with a yes/no question', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toHaveTextContent(
+      'firstStepsFiscalConfigQuestion');
+    expect(screen.getByTestId('first-steps-gate-yes-fiscal-config')).toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-gate-no-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-configure-fiscal-config')).not.toBeInTheDocument();
+  });
+
+  it('reveals the normal body on "yes" without persisting anything', async () => {
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
+    expect(screen.getByTestId('first-steps-configure-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+    // "Yes" is not an outcome — it only opens the step the user still has to do.
+    expect(toggleStep).not.toHaveBeenCalled();
+  });
+
+  it('completes the step on "no", through the same toggle the checkbox uses', async () => {
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-no-fiscal-config'));
+    expect(toggleStep).toHaveBeenCalledWith('fiscal-config');
+    expect(toggleStep).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a failed "no" and leaves the question up', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [], toggleResult: false });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-no-fiscal-config'));
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('asks nothing once the step is completed', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: ['fiscal-config'] });
+    render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-done-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('asks again after the user un-ticks the step', async () => {
+    // The whole reason the answer is not persisted: un-ticking is the escape hatch for someone
+    // who answered wrongly. The re-render is driven by the mocked context, so the un-tick is
+    // simulated by the state the provider would hand back next.
+    const user = userEvent.setup();
+    setHook({ completed: ['fiscal-config'] });
+    const { rerender } = render(<FirstStepsPage />);
+    await openFiscal(user);
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+
+    setHook({ completed: [] });
+    rerender(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+  });
+
+  it('forgets a "yes" once the step is ticked and un-ticked', async () => {
+    // The in-memory answer must not outlive the tick that followed it, or a user who said yes,
+    // completed the step and later un-ticked it would land back on the Configure button with
+    // the question never re-asked.
+    const user = userEvent.setup();
+    const { toggleStep } = setHook({ completed: [] });
+    const { rerender } = render(<FirstStepsPage />);
+    await openFiscal(user);
+
+    await user.click(screen.getByTestId('first-steps-gate-yes-fiscal-config'));
+    expect(screen.getByTestId('first-steps-configure-fiscal-config')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('first-steps-toggle-fiscal-config'));
+    await waitFor(() => expect(toggleStep).toHaveBeenCalledWith('fiscal-config'));
+
+    // The provider hands back the completed state, then the user un-ticks it. The row stays
+    // open throughout — `openedStepId` is untouched by either write.
+    setHook({ completed: ['fiscal-config'] });
+    rerender(<FirstStepsPage />);
+    expect(screen.queryByTestId('first-steps-gate-fiscal-config')).not.toBeInTheDocument();
+
+    setHook({ completed: [] });
+    rerender(<FirstStepsPage />);
+    expect(screen.getByTestId('first-steps-gate-fiscal-config')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-configure-fiscal-config')).not.toBeInTheDocument();
+  });
+
+  it('gates no other step', async () => {
+    const user = userEvent.setup();
+    setHook({ completed: [] });
+    render(<FirstStepsPage />);
+    for (const id of ['company-data', 'products', 'contacts', 'invoice-sequence', 'team']) {
+      await user.click(screen.getByTestId(`first-steps-title-${id}`));
+      expect(screen.queryByTestId(`first-steps-gate-${id}`)).not.toBeInTheDocument();
+    }
   });
 });

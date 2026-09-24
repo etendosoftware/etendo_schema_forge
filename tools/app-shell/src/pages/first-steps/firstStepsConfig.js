@@ -2,8 +2,8 @@
  * ETP-5190 — the declarative catalogue of post-signup "First Steps" onboarding steps.
  *
  * This module is the SINGLE place a step is added, removed or reordered. `FirstStepsPage`
- * renders whatever is here and `useFirstSteps` persists only the toggleable subset, so a new
- * step needs no change in either of them (beyond its i18n keys).
+ * renders whatever is here and `useFirstSteps` persists only the toggleable subset. A new
+ * standard step needs only its entry and i18n keys; a new action type also needs a page action.
  *
  * This module holds NO icon imports on purpose. It is read by `SideMenu` (for the sidebar's
  * progress badge) and by `DashboardPage` (for the one-time redirect), neither of which draws a
@@ -16,9 +16,9 @@
  * 20px — a lucide stand-in reads visibly different from the mockup.
  *
  * Every entry carries:
- *   - `id`         stable identifier, also the value persisted in `firstSteps.completed`.
- *                  The backend allowlists exactly the ids of the toggleable steps
- *                  (`TOGGLEABLE_STEP_IDS`) and silently drops anything else.
+ *   - `id`         stable identifier. Toggleable ids are persisted in `firstSteps.completed`;
+ *                  the backend allowlists those ids (`TOGGLEABLE_STEP_IDS`) and silently drops
+ *                  anything else. The transfer result is stored by its own server job.
  *   - `iconName`   key into `firstStepsIcons.js`, rendered in the row's leading badge.
  *   - `titleKey`   `genericLabels` key for the row title.
  *   - `descKey`    `genericLabels` key for the expanded row's description, or `null`.
@@ -31,6 +31,9 @@
  *   - `alwaysDone` see below.
  *   - `productiveOnly` the step is hidden while the tenant is on the free/trial plan. See
  *                  "Plan-dependent steps" below.
+ *   - `gateQuestionKey` `genericLabels` key for a yes/no question that REPLACES the row's
+ *                  description and action until it is answered. `null` on a step that just
+ *                  does its thing. See "Gated steps" below.
  *
  * `action` is the extension point for what a step actually DOES:
  *   - `'navigate'`  nothing but the "Configure" button that routes to `to`;
@@ -39,32 +42,57 @@
  *   - `'import'`    an "Import" button that opens the window's real import dialog in place,
  *                   because sending the user off to the list view just to find the same
  *                   button is a detour, not a step;
+ *   - `'dataTransfer'` shows the server-owned demo transfer status and a retry on failure;
  *   - `null`        nothing to do — the row is informational.
  *
  * `keepActionWhenDone` keeps a completed row's controls live. Ticking a step normally locks its
- * controls, which is what stops an already-run import from being run again by accident; company
- * data is the exception because "done" there means "I filled it in", and a company's details
- * are the one thing on this list a user genuinely comes back to change.
+ * controls, which is what stops an already-run import from being run again by accident. Company
+ * data stays editable after completion, and the transfer row keeps its server-owned result
+ * visible after completion.
  *
  * `alwaysDone` steps are rendered as completed, are NOT toggleable and are never persisted,
- * yet they DO count toward the progress figures — which is why the counter starts at 1/5 on a
- * trial and 1/7 on a productive tenant. Both numbers are derived from this array; never
- * hardcode them.
+ * yet they DO count toward the progress figures. A trial starts at 1/5. A productive tenant
+ * has seven visible steps without the transfer row, or eight when the backend exposes it;
+ * its completed count also depends on the server-owned transfer state. The total is derived
+ * from the visible list; never hardcode it.
  *
  * ## Plan-dependent steps
  *
- * A trial tenant is shown a SHORTER list. Invoice numbering and the fiscal configuration are
- * marked `productiveOnly` because neither is worth doing in a trial: a document series a tenant
- * abandons in 14 days numbers nothing, and the fiscal setup is what the productive environment
- * is created with. They appear when the tenant goes productive, which is also when the whole
- * checklist is offered again.
+ * A trial tenant is shown a SHORTER list. Invoice numbering, fiscal configuration, and the
+ * demo data transfer are `productiveOnly`. A document series a tenant abandons in 14 days
+ * numbers nothing; fiscal setup and the transfer belong to the productive environment. These
+ * rows appear when the tenant goes productive, which is also when the whole checklist is
+ * offered again.
  *
- * Every plan-aware helper here takes the plan as its LAST argument and an unknown plan
+ * Plan-aware helpers accept the plan explicitly. An unknown plan
  * (`undefined`, a session with no platform token, a failed `/environments` call) is treated as
- * productive — it shows everything. That direction is deliberate: hiding invoice numbering from
- * a tenant that paid for it is a worse failure than showing two extra rows to a trial, and it
- * is also the behaviour every tenant had before the gate existed.
+ * productive — it shows productive-only steps. That direction is deliberate: hiding invoice
+ * numbering from a tenant that paid for it is a worse failure than showing extra rows to a
+ * trial, and it is also the behaviour every tenant had before the gate existed.
+ *
+ * ## Gated steps
+ *
+ * A step with a `gateQuestionKey` does not offer its action straight away: it asks a yes/no
+ * question first, and only "yes" reveals the description and the Configure button. "No" marks
+ * the step completed, because the answer itself is the outcome — a tenant that reports to no
+ * SIF has nothing to configure.
+ *
+ * The answer is NOT persisted, on purpose. The only durable state is the step's own completed
+ * flag, which already round-trips through `POST /sws/go/onboarding/first-steps`. Un-ticking the
+ * step therefore brings the question back, which is exactly the escape hatch a user who
+ * answered wrongly needs, and it costs no new backend field.
+ *
+ * ## The demo data transfer row (flag `demo-data-transfer`)
+ *
+ * Not in `FIRST_STEPS`: it lives in `demoDataTransferStep.js` and is spliced in only when the
+ * backend exposes the transfer. Every helper that sizes or walks the list therefore takes the
+ * transfer state (`demoDataTransferStepState(...)`) as an optional trailing argument, defaulting
+ * to `NO_DEMO_DATA_TRANSFER` — the catalogue as it was before ETP-5364.
  */
+import {
+  NO_DEMO_DATA_TRANSFER,
+  withDemoDataTransferStep,
+} from './demoDataTransferStep.js';
 
 /** The plan value that unlocks `productiveOnly` steps. Mirrors TenantPlanService.PLAN_PRODUCTIVE. */
 export const PLAN_PRODUCTIVE = 'productive';
@@ -80,6 +108,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: true,
   },
   {
@@ -93,6 +122,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: true,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -106,6 +136,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: true,
+    gateQuestionKey: 'firstStepsFiscalConfigQuestion',
     alwaysDone: false,
   },
   {
@@ -119,6 +150,7 @@ export const FIRST_STEPS = [
     importSpec: 'product',
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -132,6 +164,7 @@ export const FIRST_STEPS = [
     importSpec: 'contacts',
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -145,6 +178,7 @@ export const FIRST_STEPS = [
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: true,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
   {
@@ -154,10 +188,14 @@ export const FIRST_STEPS = [
     descKey: 'firstStepsTeamDesc',
     minutes: 2,
     action: 'navigate',
-    to: '/roles',
+    // ETP-5364: Usuarios, not Roles. Inviting someone is creating a USER; the role window is
+    // where permissions are shaped afterwards, and landing there first made the step read as
+    // "define a permission scheme" — a different, later job.
+    to: '/user',
     importSpec: null,
     keepActionWhenDone: false,
     productiveOnly: false,
+    gateQuestionKey: null,
     alwaysDone: false,
   },
 ];
@@ -175,13 +213,15 @@ export function isProductivePlan(plan) {
  * component should iterate: `FIRST_STEPS` is the full catalogue and includes rows a trial
  * tenant must not be offered.
  */
-export function visibleFirstSteps(plan) {
-  return isProductivePlan(plan) ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
+export function visibleFirstSteps(plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  const productive = isProductivePlan(plan);
+  const steps = productive ? FIRST_STEPS : FIRST_STEPS.filter((step) => !step.productiveOnly);
+  return withDemoDataTransferStep(steps, transfer, productive);
 }
 
 /** Number of steps in the progress counter (`x/TOTAL`) for this plan. Derived, never hardcoded. */
-export function firstStepsTotal(plan) {
-  return visibleFirstSteps(plan).length;
+export function firstStepsTotal(plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return visibleFirstSteps(plan, transfer).length;
 }
 
 /**
@@ -189,18 +229,20 @@ export function firstStepsTotal(plan) {
  * sent to `POST /sws/go/onboarding/first-steps`.
  *
  * The SERVER allowlist is the full toggleable set, not this one — it has no notion of a plan
- * and a tenant that goes productive must be able to persist the two steps that just appeared.
+ * and a tenant that goes productive must be able to persist the two toggleable steps that
+ * appeared. The third productive-only row is the server-owned data transfer.
  * This narrower list is what `FirstStepsProvider` hands to `useFirstSteps`, so a step the
  * current plan does not show can never be written by accident.
  */
 export function toggleableStepIds(plan) {
   return visibleFirstSteps(plan)
-    .filter((step) => !step.alwaysDone)
+    .filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
     .map((step) => step.id);
 }
 
-/** True when the step renders as completed — always-done, or user-completed. */
-export function isStepDone(step, completed) {
+/** True when the step renders as completed — always-done, user-completed, or transfer-done. */
+export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER) {
+  if (step.action === 'dataTransfer') return transfer.done;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));
 }
 
@@ -211,13 +253,14 @@ export function isStepDone(step, completed) {
  * then had its plan read back as free would otherwise count a row that is not on screen, and
  * the badge would claim 6/5.
  */
-export function countCompletedSteps(completed, plan) {
-  return visibleFirstSteps(plan).filter((step) => isStepDone(step, completed)).length;
+export function countCompletedSteps(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return visibleFirstSteps(plan, transfer)
+    .filter((step) => isStepDone(step, completed, transfer)).length;
 }
 
 /** True once every visible step reads as complete — the "all set" final state. */
-export function areAllStepsDone(completed, plan) {
-  return countCompletedSteps(completed, plan) === firstStepsTotal(plan);
+export function areAllStepsDone(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  return countCompletedSteps(completed, plan, transfer) === firstStepsTotal(plan, transfer);
 }
 
 /**
@@ -227,13 +270,25 @@ export function areAllStepsDone(completed, plan) {
  *
  * Returns `null` when everything is done (the all-set state collapses every row).
  */
-export function findExpandedStepId(completed, plan) {
-  const next = visibleFirstSteps(plan)
-    .find((step) => !step.alwaysDone && !isStepDone(step, completed));
+export function findExpandedStepId(completed, plan, transfer = NO_DEMO_DATA_TRANSFER) {
+  const next = visibleFirstSteps(plan, transfer)
+    .find((step) => !step.alwaysDone && !isStepDone(step, completed, transfer));
   return next ? next.id : null;
 }
 
 /** True when the row has something to open — an always-done row is inert. */
 export function isStepExpandable(step) {
   return !step.alwaysDone && Boolean(step.descKey || step.action);
+}
+
+/**
+ * True while the step's yes/no question must REPLACE its description and action.
+ *
+ * A completed step is never gated: the question has already been answered, one way or another,
+ * and the tick is the record of it. `answered` is the page's in-memory "the user said yes"
+ * flag — nothing persists it, so un-ticking the step gates it again. See "Gated steps" in the
+ * header.
+ */
+export function isStepGated(step, done, answered) {
+  return Boolean(step.gateQuestionKey) && !done && !answered;
 }

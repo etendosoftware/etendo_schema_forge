@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { Checkbox } from '@/components/ui/checkbox';
+import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
-import { getLayout303, matchesVisibility } from './fm303Layouts.js';
-import { formatAmount, formatPercent } from '../../fiscalModelsUtils.js';
+import { getLayout303, matchesVisibility, isFieldRequired } from './fm303Layouts.js';
+import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
   iva_devengado: <TrendingUp
@@ -24,6 +24,50 @@ function formatCell(val, colType) {
 
 const COMPACT_SECTIONS = new Set(['iva_devengado', 'iva_deducible', 'resultado', 'info_adicional', 'resultado_final']);
 const TITLED_SECTIONS  = new Set(['iva_devengado', 'iva_deducible']);
+
+// ETP-5393 Bug C — `min="0"` here (driven by the shared `NEGATIVE_NOT_ALLOWED_BOXES`, see
+// fiscalModelsUtils.js) is a UX hint only — the actual enforcement (clamp + i18n error) lives
+// in FmModel303Page.jsx's handleBoxChange, since a browser `min` on <input type="number"> does
+// not block typing or blur.
+
+// Applies a derivedValue's `clampMin` (if any) to an already-computed display value.
+// A `null` display (nothing to compute) is left untouched — clamping never manufactures
+// a value out of "no value".
+function applyClampMin(value, clampMin) {
+  return value != null && clampMin != null ? Math.max(clampMin, value) : value;
+}
+
+// treatMissingAsZero branch of computeDerivedValue (box 87, box110-box78 only — AEAT
+// semantics confirmed by the product owner): a missing operand defaults to 0, EXCEPT
+// when BOTH operands are missing, in which case the cell stays blank.
+function computeDerivedValueZeroFill(dv, valueMap) {
+  const rawMinuend = valueMap[dv.box] ?? null;
+  const rawSubtrahend = dv.subtractBox != null ? (valueMap[dv.subtractBox] ?? null) : null;
+  if (rawMinuend == null && rawSubtrahend == null) return null;
+  let display = dv.abs ? Math.abs(rawMinuend ?? 0) : (rawMinuend ?? 0);
+  if (dv.subtractBox != null) display -= (rawSubtrahend ?? 0);
+  return applyClampMin(display, dv.clampMin);
+}
+
+// Default branch of computeDerivedValue (importe_devolucion, box71-box70; also casilla 107's
+// live mirror of box 65, ETP-5391): a missing operand blanks the whole result, UNLESS the
+// `derivedValue` declares its own `defaultValue` (e.g. box 107's `{ box: 65, defaultValue: 100 }`),
+// in which case that default is used instead of blanking. This was the original behavior for
+// importe_devolucion and was never disputed; `defaultValue` is additive and a no-op for any
+// `derivedValue` that doesn't declare one.
+function computeDerivedValueBlankOnMissing(dv, valueMap) {
+  const raw = valueMap[dv.box] ?? dv.defaultValue ?? null;
+  const absRaw = dv.abs ? Math.abs(raw) : raw;
+  let display = raw != null ? absRaw : null;
+  if (display != null && dv.subtractBox != null) {
+    const subtrahend = valueMap[dv.subtractBox] ?? null;
+    // Blank out (not "assume 0") when the subtrahend operand is missing — mirrors the
+    // minuend's own missing-value behavior above. A `?? 0` fallback here silently displayed
+    // the raw minuend as the result whenever the subtrahend box was empty (ETP-5338 QA cycle 1).
+    display = subtrahend != null ? display - subtrahend : null;
+  }
+  return applyClampMin(display, dv.clampMin);
+}
 
 
 export default function FmBoxes303({ boxes, year, period, sectionIds, identification, onIdentChange, onBoxChange, readOnly }) {
@@ -48,24 +92,87 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     ? layout.sections.filter(s => sectionIds.includes(s.id))
     : layout.sections;
 
-  const renderCellInput = (boxNum, val) => (
-    <input
-      type="number"
-      step="any"
-      className="fm-aeat-cell__input"
-      value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
-      onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
-      onBlur={() => { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); }}
-      onKeyDown={e => { if (e.key === 'Enter') { onBoxChange?.(boxNum, pendingValues[boxNum]); setEditingCell(null); e.target.blur(); } if (e.key === 'Escape') setEditingCell(null); }}
-      autoFocus
-      disabled={readOnly}
-    />
-  );
+  // Drops `boxNum`'s draft out of `pendingValues` entirely (deletes the key, not just sets
+  // it to something falsy) — so `hasOwnProperty` genuinely reflects "no draft for this box
+  // right now" afterward. Shared by commitCellEdit, Escape, and startEditingCell below so
+  // the three spots that must reset a draft can't drift out of sync with each other. Also
+  // fixes the ETP-5393 Bug C follow-up case: a stale draft (e.g. the "-12" the user typed
+  // before it got clamped to 0 by FmModel303Page's handleBoxChange) must not keep showing on
+  // every subsequent re-open of that same cell's editor once the persisted/displayed value has
+  // moved on.
+  const clearPendingValue = (boxNum) => {
+    setPendingValues(prev => {
+      if (!Object.prototype.hasOwnProperty.call(prev, boxNum)) return prev;
+      const next = { ...prev };
+      delete next[boxNum];
+      return next;
+    });
+  };
+
+  // Opens the inline editor for `boxNum`. Always starts from a clean draft: without this, a
+  // stale key left over from a PREVIOUS edit session of the same box (e.g. one that committed
+  // "900", after which an external prop update — a reactive box78/box110 clamp on another box —
+  // corrected `boxes` to "500") would still satisfy commitCellEdit's hasOwnProperty check on
+  // reopen-and-blur-without-typing, silently resending the stale "900" over the current "500".
+  const startEditingCell = (boxNum) => {
+    clearPendingValue(boxNum);
+    setEditingCell(boxNum);
+  };
+
+  // Percent boxes (casillas 65/89/90/91/92) follow the AEAT rule "los porcentajes se expresarán
+  // con dos decimales": never above 100, never negative, at most 2 decimal places. The HTML
+  // `max` attribute alone doesn't stop someone typing 150 and tabbing away, so the value is also
+  // clamped/rounded here, right before it's committed via onBoxChange. Returns the raw string
+  // unchanged when it isn't a parseable number (e.g. empty string, to preserve "clear the field").
+  const clampPercentValue = (raw) => {
+    const num = parseFloat(String(raw ?? '').replace(',', '.'));
+    if (isNaN(num)) return raw;
+    const clamped = Math.min(100, Math.max(0, num));
+    return String(Math.round(clamped * 100) / 100);
+  };
+
+  // Commits the pending edit for `boxNum`, if there is one. `pendingValues` only gains a
+  // key for a box once the user actually types in it (see the input's onChange below) — so
+  // a box that was never touched this edit session (pencil clicked, then blur/Escape with no
+  // keystroke) has no key in `pendingValues` at all, distinct from a box the user deliberately
+  // cleared back to `''`. The presence check (not a truthiness check on the value) is what
+  // keeps those two cases apart: calling onBoxChange with `undefined` for the untouched case
+  // used to flow into parseBoxInput(undefined) -> NaN -> null -> "remove this box", silently
+  // wiping a previously saved value on a pure no-op edit. The draft is always cleared after a
+  // commit attempt (whether it fired or not) so the NEXT edit session for this box starts clean
+  // too — see startEditingCell/clearPendingValue above.
+  const commitCellEdit = (boxNum, isPercent = false) => {
+    if (Object.prototype.hasOwnProperty.call(pendingValues, boxNum)) {
+      const raw = pendingValues[boxNum];
+      onBoxChange?.(boxNum, isPercent ? clampPercentValue(raw) : raw);
+    }
+    clearPendingValue(boxNum);
+    setEditingCell(null);
+  };
+
+  const renderCellInput = (boxNum, val, colType = 'amount') => {
+    const isPercent = colType === 'percent';
+    return (
+      <input
+        type="number"
+        step="any"
+        className="fm-aeat-cell__input"
+        value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
+        onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
+        onBlur={() => commitCellEdit(boxNum, isPercent)}
+        onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum, isPercent); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
+        autoFocus
+        disabled={readOnly}
+        max={isPercent ? 100 : undefined}
+        min={isPercent || NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum) ? 0 : undefined}
+      />
+    );
+  };
 
   const renderIdentSelectField = (f, compact = false) => (
     <div key={f.id} className="fm-aeat-ident-inline-field">
       <span className="fm-aeat-ident-inline-field__label">
-        {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
       </span>
       <select
         className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
@@ -99,15 +206,34 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     return conds.every(c => matchesSvw(c));
   };
 
-  const renderDerivedCell = (dv, ci) => {
-    const raw = valueMap[dv.box] ?? null;
-    const absRaw = dv.abs ? Math.abs(raw) : raw;
-    let display = raw != null ? absRaw : null;
-    if (display != null && dv.subtractBox != null) display = display - (valueMap[dv.subtractBox] ?? 0);
-    if (display != null && dv.clampMin != null) display = Math.max(dv.clampMin, display);
+  // Single source of computation for `derivedValue` ({ box, abs?, subtractBox?, clampMin?,
+  // defaultValue?, treatMissingAsZero? }) — shared by renderDerivedCell (rows whose derivedValue
+  // does NOT opt into treatMissingAsZero, e.g. importe_devolucion and casilla 107's live mirror
+  // of box 65, ETP-5391) and renderBoxCell's fallback below (rows that DO have a real box number
+  // AND opt into treatMissingAsZero, e.g. box 87 — ETP-5338 pt.2). Client-side display only;
+  // never feeds `manualData`/submission. See renderRowCell below for how the two are routed.
+  //
+  // Two confirmed-with-the-user semantics coexist here (ETP-5338 pt.2, cycle 2) — see
+  // computeDerivedValueZeroFill / computeDerivedValueBlankOnMissing above for the detail of each.
+  const computeDerivedValue = (dv) =>
+    dv.treatMissingAsZero
+      ? computeDerivedValueZeroFill(dv, valueMap)
+      : computeDerivedValueBlankOnMissing(dv, valueMap);
+
+  // `boxNum`/`colType`/`unit` are optional — passed by renderRowCell when the derived cell should
+  // also carry its own AD box number (e.g. casilla 107 mirroring box 65, ETP-5391) and format per
+  // the row's declared cellTypes/colTypes (reuses the same `formatCell` every other cell uses),
+  // rather than always formatting as 'amount' regardless of what the underlying box actually is.
+  // Note this path always BLANKS a computed 0 (see the `display !== 0` check below) — that's the
+  // deliberate behavioral split from renderBoxCell's derivedValue fallback, which shows a computed
+  // 0. See renderRowCell for which rows go through which.
+  const renderDerivedCell = (dv, ci, boxNum = null, colType = 'amount', unit = null) => {
+    const display = computeDerivedValue(dv);
     return (
       <div key={ci} className="fm-aeat-cell">
-        <span className="fm-aeat-cell__value">{display != null && display !== 0 ? formatCell(display, 'amount') : ''}</span>
+        {boxNum != null && <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>}
+        <span className="fm-aeat-cell__value">{display != null && display !== 0 ? formatCell(display, colType) : ''}</span>
+        {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
       </div>
     );
   };
@@ -116,21 +242,26 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     const isCellEditable = row.editable || row.editableCells?.includes(boxNum);
     const isFixed = !isCellEditable && row.fixedValues != null &&
       Object.prototype.hasOwnProperty.call(row.fixedValues, boxNum);
-    const val = isFixed
+    let val = isFixed
       ? row.fixedValues[boxNum]
       : (valueMap[boxNum] ?? row.defaultValues?.[boxNum] ?? null);
+    // Fallback for a real box that has no backend/manual value but declares a derivedValue
+    // formula (e.g. box 87 = box 110 - box 78, computed entirely client-side) — see
+    // computeDerivedValue above. Never overrides a real value; only fills the gap when the box
+    // is genuinely empty.
+    if (val == null && row.derivedValue) val = computeDerivedValue(row.derivedValue);
     const colType = row.cellTypes?.[ci] ?? section.colTypes?.[ci] ?? 'amount';
     const unit = row.cellUnits?.[ci];
     const isCellEditing = isCellEditable && editingCell === boxNum;
     return (
       <div key={ci} className={`fm-aeat-cell${isFixed ? ' fm-aeat-cell--fixed' : ''}${isCellEditable ? ' fm-aeat-cell--editable' : ''}`}>
         <span className="fm-aeat-cell__num">{String(boxNum).padStart(2, '0')}</span>
-        {isCellEditing ? renderCellInput(boxNum, val) : (
+        {isCellEditing ? renderCellInput(boxNum, val, colType) : (
           <>
             <span className="fm-aeat-cell__value">{val != null ? formatCell(val, colType) : ''}</span>
             {unit && <span className="fm-aeat-cell__unit">{unit}</span>}
             {isCellEditable && !readOnly && (
-              <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+              <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                 <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
               </button>
             )}
@@ -142,8 +273,20 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
 
   const renderRowCell = (row, section, ci) => {
     const boxNum = row.cells?.[ci] ?? null;
+    // Routing split (ETP-5391 + ETP-5338 pt.2 reconciled): a `derivedValue` row that does NOT
+    // opt into `treatMissingAsZero` (importe_devolucion, casilla 107) always renders through
+    // renderDerivedCell — even when it carries a real `boxNum` (107) — because that path blanks
+    // a computed 0 and never looks at a stray real value in valueMap. A `derivedValue` row that
+    // DOES opt into `treatMissingAsZero` (box 87) must instead go through renderBoxCell below, so
+    // a genuine non-null backend/manual value for that box wins over the derived formula, and a
+    // computed 0 still displays as "0,00" rather than blanking — see the tests in
+    // FmBoxes303.vitest.jsx for both rows for the exact contract.
+    if (row.derivedValue && !row.derivedValue.treatMissingAsZero) {
+      const colType = row.cellTypes?.[ci] ?? section.colTypes?.[ci] ?? 'amount';
+      const unit = row.cellUnits?.[ci];
+      return renderDerivedCell(row.derivedValue, ci, boxNum, colType, unit);
+    }
     if (boxNum === null) {
-      if (row.derivedValue) return renderDerivedCell(row.derivedValue, ci);
       return row.total ? null : <div key={ci} className="fm-aeat-cell fm-aeat-cell--empty" />;
     }
     return renderBoxCell(row, section, ci, boxNum);
@@ -180,11 +323,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     if (f.type === 'checkbox') {
                       return (
                         <div key={f.id} className="fm-aeat-ident-cb">
-                          <Checkbox
+                          <CheckboxField
                             checked={identification?.[f.id] ?? false}
-                            onChange={() => onIdentChange?.(f.id, !(identification?.[f.id] ?? false))}
+                            onToggle={val => onIdentChange?.(f.id, val)}
                             disabled={readOnly}
-                            data-testid="Checkbox__49d327" />
+                            data-testid="CheckboxField__49d327" />
                           <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                         </div>
                       );
@@ -193,7 +336,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     return (
                       <div key={f.id} className="fm-aeat-ident-inline-field">
                         <span className="fm-aeat-ident-inline-field__label">
-                          {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                          {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                         </span>
                         <input
                           type={f.type === 'date' ? 'date' : 'text'}
@@ -203,6 +346,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                           onChange={e => onIdentChange?.(f.id, e.target.value)}
                           autoComplete="off"
                           disabled={readOnly}
+                          maxLength={f.maxLength}
                         />
                       </div>
                     );
@@ -243,11 +387,11 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                     };
                     return (
                       <div key={f.id} className="fm-aeat-ident-cb">
-                        <Checkbox
+                        <CheckboxField
                           checked={identification?.[f.id] ?? false}
-                          onChange={handleChange}
+                          onToggle={handleChange}
                           disabled={readOnly}
-                          data-testid="Checkbox__49d327" />
+                          data-testid="CheckboxField__49d327" />
                         <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
                       </div>
                     );
@@ -256,7 +400,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                   return (
                     <div key={f.id} className="fm-aeat-ident-inline-field">
                       <span className="fm-aeat-ident-inline-field__label">
-                        {t(f.labelKey)}{f.required && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
+                        {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
                       </span>
                       <input
                         type={f.type === 'date' ? 'date' : 'text'}
@@ -266,6 +410,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                         onChange={e => onIdentChange?.(f.id, e.target.value)}
                         autoComplete="off"
                         disabled={readOnly}
+                        maxLength={f.maxLength}
                       />
                     </div>
                   );
@@ -296,6 +441,27 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                 {section.colHeaderKeys.map((k) => (
                   <span key={k} className="fm-aeat-col-headers__cell">{t(k)}</span>
                 ))}
+              </div>
+            )}
+            {/* Leading section.fields checkbox(es) — e.g. info_adicional_ultimo_periodo's merged
+                declaracion_terceros (ETP-5391). Row-based (non-identificacion) sections don't
+                otherwise render `fields`; kept minimal on purpose — reuses the exact same
+                Checkbox markup/behavior as the identificacion-type sections above, just checkbox
+                fields, rendered ahead of the row grid. */}
+            {Array.isArray(section.fields) && section.fields.length > 0 && (
+              <div className="fm-aeat-ident">
+                {section.fields
+                  .filter(f => !f.visibleWhen || matchesSvw(f.visibleWhen))
+                  .map(f => f.type === 'checkbox' && (
+                    <div key={f.id} className="fm-aeat-ident-cb">
+                      <CheckboxField
+                        checked={identification?.[f.id] ?? false}
+                        onToggle={val => onIdentChange?.(f.id, val)}
+                        disabled={readOnly}
+                        data-testid="CheckboxField__49d327" />
+                      <span className="fm-aeat-ident-cb__label">{t(f.labelKey)}</span>
+                    </div>
+                  ))}
               </div>
             )}
             {/* Rows — group consecutive group rows into bracket containers */}
@@ -343,7 +509,7 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
                                     <>
                                       <span className="fm-aeat-cell__value">{val != null ? formatCell(val, 'amount') : ''}</span>
                                       {isCellEditable && !readOnly && (
-                                        <button className="fm-aeat-cell__edit-btn" onClick={() => setEditingCell(boxNum)}>
+                                        <button className="fm-aeat-cell__edit-btn" onClick={() => startEditingCell(boxNum)}>
                                           <Pencil size={12} strokeWidth={1.5} data-testid="Pencil__49d327" />
                                         </button>
                                       )}

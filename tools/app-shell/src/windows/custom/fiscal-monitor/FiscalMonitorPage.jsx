@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useCertExpiry } from '../fiscal-config/useCertExpiry.js';
 import CertExpiryBanner from '../fiscal-config/CertExpiryBanner.jsx';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
@@ -101,6 +101,7 @@ function useDebugState(orgId, apiBaseUrl) {
   const {
     loading, error, profile: realProfile, kpis: realKpis, siiParentId,
     tbaiValidationResults: realTbaiValidationResults, refetch,
+    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
   } = useFiscalMonitor(orgId, apiBaseUrl);
 
   // Debug panel gates: mock rows/KPIs and the profile override are only ever
@@ -128,6 +129,7 @@ function useDebugState(orgId, apiBaseUrl) {
   return {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
+    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -158,6 +160,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
+    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -179,6 +182,21 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
     breadcrumb: `${ui('finance')} / ${ui('fiscal.monitor.nav')}`,
     recordCount: _totalCountMeta,
   });
+
+  // ETP-5395 Fix 3 follow-up — this custom window never delegated to a generated Page.jsx
+  // (registry.js loads FiscalMonitorPage.jsx directly for "fiscal-monitor"), so it never
+  // picked up the ETP-4520 access-tier guard despite menu.json carrying a real windowId —
+  // same gap ETP-4658 already found and fixed for financial-account/sales-invoice/etc, and
+  // the same gap this ticket already fixed for organization/fiscal-config. useFiscalMonitor.js
+  // reuses fiscal-config's shared fetchAllRows(), whose HTTP-status-only error message would
+  // otherwise render raw in the destructive box below with no retry that could ever help a
+  // genuine permission denial. Checked after every other hook so hook order stays stable
+  // regardless of the tier. Respects debugOverrideActive (like the loading/error gates just
+  // below) so the developer-only debug/mock preview isn't blocked by a real tier check.
+  const windowAccessTier = useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C');
+  if (!debugOverrideActive && windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="FEF76C3E0F104F06A89AAD15A4A4A35C" data-testid="WindowAccessGuard__fiscal-monitor" />;
+  }
 
   function handleRefresh() {
     refetch();
@@ -339,6 +357,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
                   onBpClick={(bpId) => setBpPopup({ bpId })}
                   kpis={kpis}
                   validationResults={tbaiValidationResults}
+                  earliestCutoverDate={earliestTbaiCutoverDate}
                   data-testid="TbaiMonitorSection__884f90" />
               )}
             </div>
@@ -374,6 +393,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             onBpClick={(bpId) => setBpPopup({ bpId })}
             kpis={kpis}
             validationResults={tbaiValidationResults}
+            earliestCutoverDate={earliestTbaiCutoverDate}
             data-testid="TbaiMonitorSection__884f90" />
         )}
 
@@ -391,6 +411,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             onVfErrorClick={handleVfErrorClick}
             onVfResolveClick={handleVfResolveClick}
             kpis={kpis}
+            earliestCutoverDate={earliestVerifactuCutoverDate}
             data-testid="VerifactuMonitorSection__884f90" />
         )}
       </div>

@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { TruncatedText } from '@/components/ui/truncated-text.jsx';
 import {
   Table,
   TableHeader,
@@ -81,6 +82,23 @@ const SKELETON_COL_KEYS = [
 ];
 const COL_COUNT = SKELETON_COL_KEYS.length;
 
+function movementText(value) {
+  return value == null || value === '' ? '—' : String(value);
+}
+
+/**
+ * A bounded, single-line movement value. The shared primitive keeps the full value in the DOM
+ * and opens its tooltip only when the rendered span is genuinely clipped.
+ */
+function MovementTruncatedText({ movement, field, value, className }) {
+  return (
+    <TruncatedText
+      text={movementText(value)}
+      className={className}
+      data-testid={`movement-cell-${movement.id}-${field}`} />
+  );
+}
+
 /**
  * Renderer registry — contract field name → { labelKey, headClass?, renderCell }.
  * `renderCell(movement, ctx)` receives the helpers built inside the component.
@@ -111,13 +129,23 @@ const MOVEMENT_CELL_RENDERERS = {
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); ctx.openPayment(m); }}
-            className="inline-flex items-center gap-1 text-[hsl(var(--foreground))] underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
+            className="inline-flex max-w-full min-w-0 items-center gap-1 text-[hsl(var(--foreground))] underline decoration-[hsl(var(--border-control))] underline-offset-4 hover:decoration-[hsl(var(--foreground))]"
           >
-            {m.documentNo}
-            <ArrowUpRight className="h-3 w-3" data-testid="ArrowUpRight__ae5a16" />
+            <MovementTruncatedText
+              movement={m}
+              field="documentNo"
+              value={m.documentNo}
+              className="min-w-0 flex-1 text-left"
+              data-testid="MovementTruncatedText__ae5a16" />
+            <ArrowUpRight className="h-3 w-3 shrink-0" data-testid="ArrowUpRight__ae5a16" />
           </button>
         ) : (
-          <span className="text-[hsl(var(--foreground))]">{m.documentNo}</span>
+          <MovementTruncatedText
+            movement={m}
+            field="documentNo"
+            value={m.documentNo}
+            className="text-[hsl(var(--foreground))]"
+            data-testid="MovementTruncatedText__ae5a16" />
         )}
       </TableCell>
     ),
@@ -128,7 +156,13 @@ const MOVEMENT_CELL_RENDERERS = {
     renderCell: (m) => (
       <TableCell
         className="text-sm leading-5 text-[hsl(var(--foreground))]"
-        data-testid="TableCell__ae5a16">{m.contact}</TableCell>
+        data-testid="TableCell__ae5a16">
+        <MovementTruncatedText
+          movement={m}
+          field="businessPartner"
+          value={m.contact}
+          data-testid="MovementTruncatedText__ae5a16" />
+      </TableCell>
     ),
   },
   description: {
@@ -136,8 +170,14 @@ const MOVEMENT_CELL_RENDERERS = {
     sortValue: (m) => m.description,
     renderCell: (m) => (
       <TableCell
-        className="max-w-[200px] truncate text-sm text-[hsl(var(--foreground))]"
-        data-testid="TableCell__ae5a16">{m.description}</TableCell>
+        className="max-w-[200px] text-sm text-[hsl(var(--foreground))]"
+        data-testid="TableCell__ae5a16">
+        <MovementTruncatedText
+          movement={m}
+          field="description"
+          value={m.description}
+          data-testid="MovementTruncatedText__ae5a16" />
+      </TableCell>
     ),
   },
   status: {
@@ -170,8 +210,13 @@ const MOVEMENT_CELL_RENDERERS = {
     ],
     renderCell: (m, ctx) => (
       <TableCell data-testid="TableCell__ae5a16">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-sm leading-5 text-[hsl(var(--foreground))]">{ctx.getTrxTypeLabel(m)}</span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <MovementTruncatedText
+            movement={m}
+            field="transactionType"
+            value={ctx.getTrxTypeLabel(m)}
+            className="text-sm leading-5 text-[hsl(var(--foreground))]"
+            data-testid="MovementTruncatedText__ae5a16" />
           <PostingStatusDot posted={m.posted} data-testid="PostingStatusDot__ae5a16" />
         </div>
       </TableCell>
@@ -182,8 +227,14 @@ const MOVEMENT_CELL_RENDERERS = {
     sortValue: (m) => m.glItem,
     renderCell: (m) => (
       <TableCell
-        className="max-w-[180px] truncate text-sm text-[hsl(var(--foreground))]"
-        data-testid="TableCell__ae5a16">{m.glItem || '—'}</TableCell>
+        className="max-w-[180px] text-sm text-[hsl(var(--foreground))]"
+        data-testid="TableCell__ae5a16">
+        <MovementTruncatedText
+          movement={m}
+          field="gLItem"
+          value={m.glItem}
+          data-testid="MovementTruncatedText__ae5a16" />
+      </TableCell>
     ),
   },
 };
@@ -191,12 +242,19 @@ const MOVEMENT_CELL_RENDERERS = {
 function renderContractCell(col, movement, ctx) {
   const renderer = MOVEMENT_CELL_RENDERERS[col.name];
   if (renderer) return <Fragment key={col.name} data-testid="Fragment__ae5a16">{renderer.renderCell(movement, ctx)}</Fragment>;
+  const value = movement[col.name];
   return (
     <TableCell
       key={col.name}
       className="text-sm leading-5 text-[hsl(var(--foreground))]"
       data-testid="TableCell__ae5a16">
-      {movement[col.name] ?? '—'}
+      {value == null || typeof value === 'string' ? (
+        <MovementTruncatedText
+          movement={movement}
+          field={col.name}
+          value={value}
+          data-testid="MovementTruncatedText__ae5a16" />
+      ) : value}
     </TableCell>
   );
 }
@@ -289,7 +347,12 @@ function renderBody({ loading, movements, ui, renderRow }) {
   if (movements.length === 0) {
     return (
       <TableRow className="hover:bg-transparent" data-testid="TableRow__ae5a16">
-        <TableCell colSpan={COL_COUNT} className="py-16" data-testid="TableCell__ae5a16">
+        {/* `whitespace-normal` overrides TableCell's default `whitespace-nowrap` (ETP-5281,
+            meant for a single data value that must not overflow into the next column) — it's
+            inherited, so without it the hint paragraph below could never wrap inside its own
+            `max-w-sm` box: the text rendered as one unbroken line that overflowed the box to
+            the right instead of wrapping and being centered inside it. */}
+        <TableCell colSpan={COL_COUNT} className="whitespace-normal py-16" data-testid="TableCell__ae5a16">
           <div className="flex flex-col items-center gap-2 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
               <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ae5a16" />
@@ -531,7 +594,7 @@ function computeMovementRowClassName({ selected, highlighted, expanded, rowCanEx
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit, accountCurrencyId = null,
-  sortKey = null, sortDirection = 'asc', onSort,
+  sortKey = null, sortDirection = 'asc', onSort, windowReadOnly,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -661,7 +724,7 @@ export function MovementsTable({
           {/* Kebab — visible on row hover */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
-              <MovementRowKebab movement={movement} onReload={onReload} onEdit={onEdit} data-testid="MovementRowKebab__ae5a16" />
+              <MovementRowKebab movement={movement} onReload={onReload} onEdit={onEdit} windowReadOnly={windowReadOnly} data-testid="MovementRowKebab__ae5a16" />
             </div>
           </TableCell>
         </TableRow>
@@ -690,7 +753,10 @@ export function MovementsTable({
 
   return (
     <TooltipProvider data-testid="TooltipProvider__ae5a16">
-      <Table className={dimWhileRefreshing} data-testid="Table__ae5a16">
+      {/* TruncatedText needs a bounded table layout so its span can measure actual clipping.
+          The minimum keeps structural/status/amount columns usable; narrower viewports scroll
+          horizontally instead of squeezing them until their controls disappear. */}
+      <Table className={`table-fixed min-w-[1280px] ${dimWhileRefreshing}`} data-testid="Table__ae5a16">
         <TableHeader data-testid="TableHeader__ae5a16">
           <TableRow
             className="h-10 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-[hsl(var(--foreground))]"

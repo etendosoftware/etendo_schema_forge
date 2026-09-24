@@ -41,17 +41,19 @@ const PLUGIN_SRC = readFileSync(
 );
 
 describe('report-api.js — listing report company-logo lookup (ETP-5013)', () => {
-  it('imports resolveCompanyLogoDataUrl alongside hydrateDocumentBranding from the shared package', () => {
+  it('resolves resolveCompanyLogoDataUrl alongside hydrateDocumentBranding via loadReportCli', () => {
+    // ETP-5460: switched from a static import to loadReportCli('report-branding')
+    // — see report-branding.test.js's own "consumes the shared module" describe.
     assert.match(
       PLUGIN_SRC,
-      /import \{ hydrateDocumentBranding, resolveCompanyLogoDataUrl \} from '@etendosoftware\/schema-forge-cli\/src\/report-branding\.js'/,
+      /const \{ hydrateDocumentBranding, resolveCompanyLogoDataUrl \} = await loadReportCli\('report-branding'\);/,
     );
   });
 
   it('resolves the logo for the SQL/Jasper listing branch via the shared helper, scoped by clientId and the report\'s own orgId param', () => {
     assert.match(
       PLUGIN_SRC,
-      /const companyLogoDataUrl = await resolveCompanyLogoDataUrl\(pool, \{\s*\n\s*clientId, orgId: params\.orgId, authToken,/,
+      /const companyLogoDataUrl = await resolveCompanyLogoDataUrl\(pool, \{\s*\n\s*clientId, orgId: params\.orgId, authHeaders: session\.forwardHeaders,/,
     );
   });
 
@@ -63,7 +65,7 @@ describe('report-api.js — listing report company-logo lookup (ETP-5013)', () =
     // cannot come back unnoticed in just one of them.
     assert.match(
       PLUGIN_SRC,
-      /companyLogoDataUrl = await resolveCompanyLogoDataUrl\(logoPool, \{\s*\n\s*clientId, orgId: params\.orgId, authToken, etendoBase,/,
+      /companyLogoDataUrl = await resolveCompanyLogoDataUrl\(logoPool, \{\s*\n\s*clientId: session\.clientId, orgId: params\.orgId, authHeaders: session\.forwardHeaders, etendoBase:/,
     );
   });
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.12.1",
+  "version": "0.20.1",
   "generatedAt": "2026-04-27T19:18:32.198Z",
-  "updatedAt": "2026-08-03T18:55:28.096Z",
-  "contractChecksum": "a22af17a9ef70175",
+  "updatedAt": "2026-09-22T16:03:27.614Z",
+  "contractChecksum": "5af61c5f3cdb57cc",
   "apiPrediction": {
     "specName": "tax-rate",
     "baseUrl": "/sws/neo/tax-rate",
@@ -17,7 +17,8 @@
         "listUrl": "/sws/neo/tax-rate/tax",
         "detailUrl": "/sws/neo/tax-rate/tax/{id}",
         "supportedFilters": [
-          "name"
+          "name",
+          "applicableTo"
         ]
       },
       "accounting": {
@@ -33,6 +34,14 @@
       }
     },
     "selectors": [
+      {
+        "entity": "tax",
+        "field": "taxCategory",
+        "column": "C_TaxCategory_ID",
+        "reference": "TaxCategory",
+        "inputMode": "selector",
+        "url": "/sws/neo/tax-rate/tax/selectors/taxCategory"
+      },
       {
         "entity": "accounting",
         "field": "taxDue",
@@ -73,14 +82,16 @@
         "Rate": "Índice",
         "SOPOType": "Tipo venta/compra",
         "ValidFrom": "Válido desde",
-        "Description": "Descripción"
+        "Description": "Descripción",
+        "C_TaxCategory_ID": "Categoría de impuesto"
       },
       "en_US": {
         "Name": "Name",
         "Rate": "Rate",
         "SOPOType": "Sales/Purchase Type",
         "ValidFrom": "Valid From",
-        "Description": "Description"
+        "Description": "Description",
+        "C_TaxCategory_ID": "Tax Category"
       }
     }
   },
@@ -93,6 +104,10 @@
             "required": true
           },
           "validFrom": {
+            "readOnly": true,
+            "required": true
+          },
+          "taxCategory": {
             "readOnly": true,
             "required": true
           },
@@ -169,5 +184,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "2b06b6b67fe2cb0e"
+  "checksum": "59c69d7c52a94688"
 }

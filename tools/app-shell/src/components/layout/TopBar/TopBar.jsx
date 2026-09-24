@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMenuLabel, useUI } from '@/i18n';
+import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
 import { useCopilot } from '@/components/CopilotContext';
 import { WalkthroughLauncher } from '@etendosoftware/app-shell-core/walkthrough';
 import { cn } from '@/lib/utils.js';
@@ -48,6 +51,98 @@ function resolveSelectedScope(searchSelectionTargets, currentWindowScope, vector
 function resolveScopeLabel(scope, tMenu) {
   if (!scope?.target) return scope?.label;
   return tMenu(scope.label) || scope.label;
+}
+
+function DemoTrialIndicator({ ui }) {
+  const navigate = useNavigate();
+  const { environments, currentClientId } = useEnvironmentSwitch();
+  const environment = environments.find(item => item.clientId === currentClientId);
+  if (!environment) return null;
+  const productive = isProductiveEnvironment(environment);
+  if (productive) return null;
+  const hasTrial = Number.isInteger(environment.trialDaysRemaining);
+  if (!hasTrial) return null;
+  const expired = environment.trialDaysRemaining <= 0;
+  const start = Date.parse(environment.trialStartedAt);
+  const end = Date.parse(environment.trialExpiresAt);
+  const total = end - start;
+  const remaining = Math.max(0, end - Date.now());
+  const progress = total > 0
+    ? Math.min(100, Math.max(0, (remaining / total) * 100)) : 0;
+  const label = expired
+    ? ui('environmentDemoExpired')
+    : ui('environmentTrialDaysRemaining', { days: environment.trialDaysRemaining });
+  return (
+    <div
+      className={cn(
+        'flex min-h-[46px] w-full flex-wrap items-center justify-start gap-x-4 gap-y-2 border-b px-6 py-2 text-sm',
+        expired
+          ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
+          : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+      )}
+      aria-label={label}
+      title={environment.trialExpiresAt || undefined}
+      data-testid="topbar-demo-trial-indicator"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={cn(
+          'rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
+          expired
+            ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
+            : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
+        )}>
+          {ui('environmentDemo')}
+        </span>
+        <span className="truncate font-semibold text-foreground">{label}</span>
+      </div>
+      <div className="flex w-full max-w-[360px] items-center gap-3">
+        <div
+          className={cn(
+            'h-2 min-w-20 flex-1 overflow-hidden rounded-full',
+            expired ? 'bg-status-danger-border' : 'bg-status-warning-border'
+          )}
+          aria-hidden="true"
+        >
+          <div
+            className={cn(
+              'h-full rounded-full',
+              expired ? 'bg-status-danger-foreground' : 'bg-status-warning-foreground'
+            )}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => navigate('/upgrade')}
+        className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90"
+        data-testid="topbar-go-to-payment"
+      >
+        {ui('upgradeGoToPayment')}
+      </button>
+      {/* ETP-5364 — the two caveats a user has to read BEFORE paying: this environment never
+          talks to Hacienda, and going productive carries over only contacts and products. They
+          sit next to the button rather than inside the upgrade flow because by then the
+          decision is already made. No link on "crear un entorno productivo": the button
+          immediately to its left is that link, and two controls with one destination 8px apart
+          read as a mistake. `flex-1` with a min width keeps the block on the same row when
+          there is space and wraps it onto a second line of the same (already `flex-wrap`) bar
+          when there is not.
+
+          TWO KEYS, TWO PARAGRAPHS — not one string with a `\n`. The caveats are independent
+          sentences and each gets its own line, so the break is structural and a translator
+          cannot drop it by losing an escape inside a JSON string. */}
+      <div
+        className="min-w-[16rem] flex-1 text-xs leading-snug"
+        data-testid="topbar-demo-fiscal-notice"
+      >
+        <p data-testid="topbar-demo-fiscal-notice-tax">{ui('environmentDemoFiscalNotice')}</p>
+        <p data-testid="topbar-demo-fiscal-notice-migration">
+          {ui('environmentDemoMigrationNotice')}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 export default function TopBar({
@@ -130,12 +225,14 @@ export default function TopBar({
 
   return (
     <TooltipProvider data-testid="TooltipProvider__133e64">
-      <header
-        className={cn(
-          'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
-          className
-        )}
-      >
+      <div className="flex min-w-0 shrink-0 flex-col">
+        <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
+        <header
+          className={cn(
+            'relative flex h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
+            className
+          )}
+        >
         {/* Left: back button + title + breadcrumb + 3-dot menu */}
         {(title || onBack) && (
           <div className="relative z-10 flex items-center gap-1 shrink-0 min-w-0">
@@ -356,7 +453,8 @@ export default function TopBar({
 
           {rightExtras}
         </div>
-      </header>
+        </header>
+      </div>
     </TooltipProvider>
   );
 }

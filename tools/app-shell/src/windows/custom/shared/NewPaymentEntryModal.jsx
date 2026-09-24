@@ -14,7 +14,9 @@ import { useUI } from '@/i18n';
 import { isValidIban, normalizeIban } from '@/lib/validateIban.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { openCenteredPopup } from '@/lib/popupWindow.js';
-import { usePaymentBalance, formatPlain, round2 } from './usePaymentBalance.js';
+import { usePaymentBalance, formatPlain, parseMaskedAmount, round2 } from './usePaymentBalance.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { formatCurrency, getCurrencySymbol } from '@/lib/formatCurrency.js';
 import { isCurrencySymbolRightSide } from '@/lib/currencyFormatConfig.js';
 import { useConversionRate } from './useConversionRate.js';
@@ -456,7 +458,7 @@ function blocksPsd2Confirm(psd2Blocked, process) {
 }
 
 /** Derived save/confirm gating + PIS eligibility state — extracted to keep the component's own cognitive complexity down. */
-function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
+function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, submitLocked, balance, date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban, pisAccountNumber, pisSortCode, ui }) {
   // ETP-4891: a transfer is paid over PIS, so it needs a LIVE bank connection. The three PSD2
   // states split three ways here, and only for Payment OUT (PIS never initiates inbound money):
   //   connected            → pisEligible, full PIS form
@@ -484,8 +486,11 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   // Importe, Fecha, Método de pago y Cuenta are mandatory to save or confirm. "Importe"
   // is satisfied by the total applied (cash + used credit), not the cash field alone —
   // a credit/saldo a favor line covering 100% legitimately leaves the cash amount at 0.
+  // `submitLocked` (ETP-5434) covers what the form itself cannot express: the catalogs still being
+  // in flight, and — the one that matters — the `scheduleId` lookup not having answered yet, which
+  // `missingRequired` deliberately does not test but the backend requires.
   const missingRequired = balance.funds <= 0 || !date || !methodId || !accountId || rateInvalid;
-  const saveDisabled = saving || loading || missingRequired;
+  const saveDisabled = saving || submitLocked || missingRequired;
   // For PIS, the template-specific creditor fields must be filled before confirming
   // (SEPA→IBAN, FPS→sort code + account number, DOMESTIC→any one identifier).
   const pisReady = !pisEligible || pisFieldsComplete(pisTemplate, {
@@ -494,8 +499,11 @@ function computePaymentModalState({ dir, selectedAccount, selectedMethodObj, cur
   // Only Confirm is gated on psd2Blocked. Saving a DRAFT stays allowed on purpose: with Automatic
   // Withdrawn off for transfers (ETP-4891) a draft moves no money and creates no bank transaction,
   // so there is nothing to protect the user from — and losing the typed values would be worse.
-  const confirmDisabled = saving || missingRequired || !balance.canConfirm || !!pisPolling
-    || !pisReady || psd2Blocked;
+  // `submitLocked` is folded in here rather than OR-ed at the button (as it used to be): the button
+  // was already disabled while loading, but its cursor/opacity read the bare flag and so still
+  // looked enabled. One value now drives both.
+  const confirmDisabled = saving || submitLocked || missingRequired || !balance.canConfirm
+    || !!pisPolling || !pisReady || psd2Blocked;
   const confirmLabel = pisEligible ? ui('cpPisConfirmButton') : ui('cpConfirm');
   return {
     pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
@@ -541,6 +549,31 @@ function Field({ label, required = false, children }) {
   );
 }
 
+/** Height of one inline validation line (12px/16px Inter). Reserved permanently so the modal
+ *  keeps its height when a message appears or clears — see ControlWithError (ETP-5177). */
+const FIELD_ERROR_LINE_HEIGHT = 16;
+const fieldErrorStyle = { font: '400 12px/16px Inter', color: RED_FG };
+
+/**
+ * Wraps a form control with a line that is ALWAYS reserved for its inline validation message.
+ * Only the <p> is conditional — the gap exists with and without an error — so mounting or
+ * unmounting the message never resizes the modal, which has a fixed width but an automatic
+ * height and is vertically centred in its overlay (QA of ETP-5177).
+ *
+ * The control and its message are grouped into a single child of Field so the wrapper does not
+ * inherit Field's `gap: 8`, which would otherwise apply between them.
+ */
+function ControlWithError({ error, testid, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {children}
+      <div style={{ minHeight: FIELD_ERROR_LINE_HEIGHT, marginTop: 4 }} data-testid={`${testid}-slot`}>
+        {error && <p role="alert" style={fieldErrorStyle} data-testid={testid}>{error}</p>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The rate + converted-amount pair, shown only when the invoice currency differs from the selected
  * account's (ETP-4504). Its own component for the same reason as PisTransferSection below: it is a
@@ -556,45 +589,52 @@ function ConversionFields({
   const invalid = rateMissing || rateIsOne;
   const errorText = ui(rateIsOne ? 'cpConversionRateInvalid' : 'cpConversionRateRequired');
   const boxStyle = { display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 };
-  const inputStyle = { flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' };
-  const errorStyle = { font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 };
+  // Both fields share the same error, so they light up and clear together; the reserved line
+  // keeps the pair (and the modal) at a constant height either way (ETP-5177).
+  const errorMessage = invalid ? errorText : null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '0 20px' }} data-testid="cp-conversion-fields">
       <Field label={ui('cpConversionRate')} required data-testid="Field__conversion-rate">
-        <div style={boxStyle}>
-          <input
-            type="text" inputMode="decimal" value={rateStr}
-            onChange={onRateChange}
-            data-testid="cp-conversion-rate-input"
-            style={inputStyle}
-          />
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-conversion-rate-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-conversion-rate-error" data-testid="ControlWithError__conversion-rate">
+          <div style={boxStyle}>
+            <MaskedAmountInput
+              bare
+              grouping={false}
+              value={rateStr}
+              onChange={(clean) => onRateChange({ target: { value: clean } })}
+              data-testid="cp-conversion-rate-input"
+              className="w-full border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+            />
+          </div>
+        </ControlWithError>
       </Field>
       {/* Editable, like the rate field — changing either recomputes the other (Classic parity). */}
       <Field label={ui('cpAmountInAccount')} required data-testid="Field__amount-in-account">
-        <div style={boxStyle}>
-          {(() => {
-            // ETP-4314: the currency symbol sits on whichever side the instance-wide
-            // currency format declares — never hardcoded after the amount.
-            const amountInput = (
-              <input
-                type="text" inputMode="decimal" value={amountStr}
-                onChange={onAmountChange}
-                data-testid="cp-amount-in-account-input"
-                style={inputStyle}
-              />
-            );
-            const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
-            return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
-          })()}
-        </div>
-        {invalid && (
-          <p style={errorStyle} data-testid="cp-amount-in-account-error">{errorText}</p>
-        )}
+        <ControlWithError error={errorMessage} testid="cp-amount-in-account-error" data-testid="ControlWithError__amount-in-account">
+          <div style={boxStyle}>
+            {(() => {
+              // ETP-4314: the currency symbol sits on whichever side the instance-wide
+              // currency format declares — never hardcoded after the amount.
+              const amountInput = (
+                <MaskedAmountInput
+                  bare
+                  // `amountStr` holds EITHER shape: a formatPlain display string while it is seeded
+                  // from the rate, or the mask's own CLEAN value while the user types. parseMaskedAmount
+                  // reads both — it tries the canonical parser first and only falls back to the
+                  // structural one for a string carrying two separators, which a clean value never has.
+                  // (`rateStr` above needs no conversion: it already holds a clean dot-decimal rate.)
+                  value={parseMaskedAmount(amountStr) ?? ''}
+                  onChange={(clean) => onAmountChange({ target: { value: clean } })}
+                  data-testid="cp-amount-in-account-input"
+                  className="w-full border-0 bg-transparent p-0 outline-none focus-visible:ring-0 tabular-nums"
+                />
+              );
+              const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(accountCurrency)}</span>;
+              return isCurrencySymbolRightSide(accountCurrency) ? <>{amountInput}{amountSuffix}</> : <>{amountSuffix}{amountInput}</>;
+            })()}
+          </div>
+        </ControlWithError>
       </Field>
     </div>
   );
@@ -638,12 +678,14 @@ function CreditRow({ l, currency, ui, onToggle, onUseChange, onUseBlur }) {
               // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE — this
               // flex row renders input-then-symbol for EUR/right-side, symbol-then-input for USD/left-side.
               const amountInput = (
-                <input
-                  type="text" inputMode="decimal" value={l.useStr}
-                  onChange={e => onUseChange(e.target.value)}
-                  onBlur={onUseBlur}
+                <MaskedAmountInput
+                  bare
+                  // Numeric twin of `useStr` — see the note on the main amount field above.
+                  value={l.use}
+                  onChange={(clean) => onUseChange(clean)}
+                  onCommit={() => onUseBlur()}
                   data-testid={`cp-credit-use-${l.id}`}
-                  style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                  className="flex-1 min-w-0 border-0 bg-transparent p-0 text-right outline-none focus-visible:ring-0 tabular-nums"
                 />
               );
               const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3, flexShrink: 0 }}>{curSuffix(currency)}</span>;
@@ -768,6 +810,11 @@ function Psd2InactiveWarning({ ui, accountId }) {
     <InfoBanner
       tone="warning"
       icon={AlertTriangle}
+      // ETP-5245 — the documented exception to banners being dismissible by default: this one
+      // does not accompany the form, it REPLACES it (`{psd2Blocked && <Psd2InactiveWarning/>}`
+      // against `{!psd2Blocked && (<>…form…</>)}` below). Dismissing it would leave the modal
+      // body empty — no warning, no form, and no "reconnect" link, which is the only way out.
+      dismissible={false}
       data-testid="cp-psd2-inactive-warning"
     >
       <span>{ui('cpPsd2InactiveBody')}</span>
@@ -874,6 +921,10 @@ function PisTransferSection({
         {show.iban && (
           <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <Field label={ui('cpPisIbanLabel')} required data-testid="Field__pis-iban">
+              <ControlWithError
+                error={ibanInvalid ? ui('financeAccountsNewIbanInvalid') : null}
+                testid="cp-pis-iban-error"
+                data-testid="ControlWithError__pis-iban">
               {/* White wrapper — see the template select above. */}
               <div style={{ background: 'hsl(var(--card))', borderRadius: 8 }}>
               <CreatableSearchSelect
@@ -896,11 +947,7 @@ function PisTransferSection({
                 }}
                 data-testid="cp-pis-iban-select" />
               </div>
-              {ibanInvalid && (
-                <p style={{ font: '400 12px/16px Inter', color: RED_FG, marginTop: 4 }} data-testid="cp-pis-iban-error">
-                  {ui('financeAccountsNewIbanInvalid')}
-                </p>
-              )}
+              </ControlWithError>
             </Field>
           </div>
         )}
@@ -946,7 +993,7 @@ function PisTransferSection({
  * the main component's cognitive complexity down. */
 function PaymentModalFooter({
   saving, pisPolling, pisWindowClosed, pisChecking, ui, requestClose, cancelPisWait, onReopenPis,
-  saveDisabled, confirmDisabled, loading, confirmLabel, onSaveDraft, onConfirm, floppy,
+  saveDisabled, confirmDisabled, confirmLabel, onSaveDraft, onConfirm, floppy,
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', borderTop: `1px solid ${BORDER1}`, background: 'hsl(var(--card))', flexShrink: 0 }}>
@@ -993,7 +1040,7 @@ function PaymentModalFooter({
           <button type="button" data-testid="cp-save-draft" onClick={onSaveDraft} disabled={saveDisabled} style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: `1px solid ${BORDER2}`, outline: 'none', background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', color: INK, font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: saveDisabled ? 'not-allowed' : 'pointer', opacity: saveDisabled ? 0.5 : 1 }}>
             {floppy}{ui('save')}
           </button>
-          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled || loading} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
+          <button type="button" data-testid="cp-confirm" onClick={onConfirm} disabled={confirmDisabled} className="bg-[hsl(var(--foreground))] text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors" style={{ height: 40, padding: '8px 12px', borderRadius: 360, border: 'none', outline: 'none', font: '500 14px/24px Inter', display: 'inline-flex', alignItems: 'center', gap: 8, cursor: confirmDisabled ? 'not-allowed' : 'pointer', opacity: confirmDisabled ? 0.45 : 1 }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             {confirmLabel}
           </button>
@@ -1091,7 +1138,18 @@ export default function NewPaymentEntryModal({
   const [methodId, setMethodId] = useState('');
   const [sources, setSources] = useState([]);
   const [scheduleId, setScheduleId] = useState(scheduleIdProp || '');
-  const [loading, setLoading] = useState(true);
+  // ETP-5434 — the modal's wait is split in TWO, because the two things it used to gate together
+  // have nothing to do with each other:
+  //   fieldsLoading     — the accounts + methods catalogs, i.e. what the two selects actually show.
+  //   scheduleResolving — the paymentPlan lookup that resolves `scheduleId`, which feeds no field
+  //                       at all but IS mandatory in the registerPayment body.
+  // Before the split a single `loading` was cleared in the effect's `finally`, i.e. only after the
+  // schedule lookup, so both selects sat under a skeleton for 2.9 s on a real sales invoice while
+  // the catalogs that fill them had been on the client since ~0.65 s.
+  const [fieldsLoading, setFieldsLoading] = useState(true);
+  // Starts resolved when the caller already handed us the schedule id: there is no request to wait
+  // for on that path, so Guardar/Confirmar must not be held back for it.
+  const [scheduleResolving, setScheduleResolving] = useState(!scheduleIdProp);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [dateInvalid, setDateInvalid] = useState(false);
@@ -1156,48 +1214,104 @@ export default function NewPaymentEntryModal({
   });
 
   // Fetch accounts, payment methods, credit sources, and (if needed) the schedule.
+  //
+  // ETP-5434 — these were ONE sequential block behind a single `loading` flag: the three POSTs were
+  // awaited together, then the schedule lookup, then `finally { setLoading(false) }`. Measured on a
+  // live sales invoice, the catalogs landed at ~0.65 s but the selects only appeared at 2.9 s,
+  // because `paymentPlan` (which feeds neither of them) does not even start until the invoice
+  // header GETs ahead of it in the connection queue have drained. The three concerns now run as
+  // three independent chains, each releasing exactly what it owns:
+  //   catalogs → fieldsLoading      (the two selects — the 2.9 s → ~0.65 s win)
+  //   credit   → sources            (gates nothing: usePaymentBalance re-seeds its lines when
+  //                                  `sources` arrives, so the credit section shows up on its own)
+  //   schedule → scheduleResolving  (gates Guardar/Confirmar only — see submitLocked below)
+  // The schedule lookup is also fired up front instead of after the POSTs, so its own wait starts
+  // as early as the connection queue allows.
+  //
+  // The two catalogs deliberately share ONE flag rather than one each: the default pick
+  // (seedMethodAndAccount → pickDefaultMethodId/pickDefaultAccountId) reads BOTH responses, and
+  // they land ~30 ms apart. Releasing them separately would buy those 30 ms at the price of briefly
+  // showing an account select whose options are still filtered by an empty method.
   useEffect(() => {
     let cancelled = false;
+    // Re-arm both gates: the effect keys on the invoice, so if it ever re-runs for another one,
+    // Guardar must not stay live over the previous invoice's schedule id.
+    setFieldsLoading(true);
+    setScheduleResolving(!scheduleIdProp);
+    // ETP-5434: this `post` is only ever called with the three query-shaped actions below
+    // (invoiceAccounts, invoicePaymentMethods, invoiceCreditSources) — all confirmed read-only in
+    // PaymentActionHandlerSupport.routeQuery (PaymentRegistrationService.handleListAccounts/
+    // handleListPaymentMethods, PaymentCreditSourcesService.handleListCreditSources: OBCriteria/HQL
+    // selects and JSON building only, no save/delete/flush). `refreshVersion: false` skips the
+    // core's post-POST version-refresh GET (0.7-1.9s per call in production) that exists to keep
+    // the optimistic-lock token fresh after a mutation — unneeded here since nothing mutates. Do
+    // NOT copy this onto the other `post` helper further down in this file: those actions DO mutate.
+    const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
+      { method: 'POST', body, refreshVersion: false }).catch(() => null);
+
     (async () => {
       try {
-        const post = (action, body = '{}') => apiFetch(`/${specName}/header/${invoiceId}/action/${action}`,
-          { method: 'POST', body }).catch(() => null);
-        // Edit mode: the draft's own consumption must be added back into each source's avail
-        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
-        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
-        const [accRes, methRes, srcRes] = await Promise.all([
+        const [accRes, methRes] = await Promise.all([
           post('invoiceAccounts'), post('invoicePaymentMethods'),
-          post('invoiceCreditSources', creditSourcesBody),
         ]);
         if (cancelled) return;
 
         const accJson = await readJson(accRes);
         const accList = mapAccounts(accJson);
         const methList = mapMethods(await readJson(methRes));
+        if (cancelled) return;
         setAccounts(accList);
         setMethods(methList);
-        setSources(mapSources(await readJson(srcRes)));
         bpPreferredAccountIdRef.current = accJson?.bpPreferredAccountId || '';
-        // Edit mode prefills from the draft instead of picking defaults.
+        // Edit mode prefills from the draft instead of picking defaults. It needs only these two
+        // responses (accJson/accList/methList) — never the credit sources — which is why it can run
+        // here instead of waiting for the third POST.
         seedMethodAndAccount({
           isEdit, payment, accJson, accList, methList,
           bpPreferredAccountId: bpPreferredAccountIdRef.current,
           setMethodId, setAccountId, onAmountChange: balance.onAmountChange,
         });
-
-        if (!scheduleIdProp) {
-          const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
-          if (sched && !cancelled) setScheduleId(sched);
-        }
       } catch { /* silent — fields degrade gracefully */ }
-      finally { if (!cancelled) setLoading(false); }
+      finally { if (!cancelled) setFieldsLoading(false); }
     })();
+
+    (async () => {
+      try {
+        // Edit mode: the draft's own consumption must be added back into each source's avail
+        // (and its already-used abono PSDs re-listed) so the modal can re-check them.
+        const creditSourcesBody = isEdit ? JSON.stringify({ editPaymentId: payment.id }) : '{}';
+        const srcRes = await post('invoiceCreditSources', creditSourcesBody);
+        if (cancelled) return;
+        const srcList = mapSources(await readJson(srcRes));
+        if (!cancelled) setSources(srcList);
+      } catch { /* silent — the credit section simply stays empty */ }
+    })();
+
+    (async () => {
+      if (scheduleIdProp) return;
+      try {
+        const sched = await fetchPendingSchedule(apiFetch, specName, invoiceId);
+        if (sched && !cancelled) setScheduleId(sched);
+      } catch { /* silent — submit's own !scheduleId guard reports it in the UI language */ }
+      // Resolved means "the lookup finished", NOT "we got an id": an invoice with no pending
+      // installment legitimately comes back empty, and gating on the VALUE would leave that case
+      // blocked forever instead of letting submit surface its localized message as it does today.
+      finally { if (!cancelled) setScheduleResolving(false); }
+    })();
+
     return () => { cancelled = true; };
     // apiFetch is intentionally excluded: it is re-created per render by some
     // callers (and by the test mock), which would re-run this effect on every
     // render and loop. Re-fetch only when the target invoice changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [specName, invoiceId]);
+
+  // What Guardar/Confirmar wait for. `scheduleResolving` is in here and NOT in the field gate on
+  // purpose: `submit` sends `scheduleId` and the backend rejects a body without it with a raw
+  // English 400 (PaymentActionHandlerSupport.validateBody), while `missingRequired` never checks
+  // it. Releasing the fields early without this would open a ~2.3 s window in which Guardar is
+  // clickable but `scheduleId` is still '' — turning a pure rendering win into a new failure.
+  const submitLocked = fieldsLoading || scheduleResolving;
 
   // ── account/method dependency: only accounts that support the selected method ──
   const filteredAccounts = useMemo(
@@ -1290,7 +1404,10 @@ export default function NewPaymentEntryModal({
   // input with the seeded amount instead (ETP-4876).
   useEffect(() => {
     const seedAmountFrom = (rawRate) => {
-      const n = parseFloat(String(rawRate).replace(',', '.'));
+      // A rate, not a display amount: it arrives canonical (dot-decimal) from the backend or the
+      // draft, so it goes through parseLocaleNumber directly — parsePlain would strip that '.' as
+      // a thousands separator under es-ES and read "0.92" as 92.
+      const n = parseLocaleNumber(rawRate).value;
       setAmountStr(Number.isFinite(n) && n > 0 ? formatPlain(round2(balance.amount * n)) : '');
     };
     if (!isForeign) {
@@ -1319,8 +1436,10 @@ export default function NewPaymentEntryModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isForeign, accountCurrency, conversion.rate, persistedRateApplies, persistedRate]);
   // Parse the typed rate (accepts "0.92" or "0,92"); null when blank/invalid/non-positive.
+  // A rate is never grouped and is seeded canonical from the backend, so it parses directly with
+  // parseLocaleNumber (which accepts both separators as decimal) rather than through parsePlain.
   const rate = useMemo(() => {
-    const n = parseFloat(String(rateStr).replace(',', '.'));
+    const n = parseLocaleNumber(rateStr).value;
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [rateStr]);
   // What will actually leave the bank (ETP-5084): a PIS transfer is instructed in the ACCOUNT's
@@ -1355,7 +1474,11 @@ export default function NewPaymentEntryModal({
   const onAmountChange = useCallback((e) => {
     const raw = e.target.value;
     setAmountStr(raw);
-    const n = parseFloat(String(raw).replace(',', '.'));
+    // `raw` is the mask's CLEAN value (ETP-5107). Reading it with the structural parsePlain made
+    // a typed `329,225` arrive as "329.225" and be read as 329225 — which then derived an exchange
+    // rate of 680,28722 out of thin air. parseMaskedAmount still handles the formatPlain-seeded
+    // shape ("5.050,00" → 5050), which a bare parseFloat used to turn into 5.05.
+    const n = parseMaskedAmount(raw);
     if (Number.isFinite(n) && n > 0 && balance.amount > 0) {
       skipAmountRecomputeRef.current = true;
       setRateStr(deriveRateFromAmount(n, balance.amount));
@@ -1371,7 +1494,7 @@ export default function NewPaymentEntryModal({
   const {
     pisEligible, psd2Blocked, rateMissing, rateIsOne, saveDisabled, confirmDisabled, confirmLabel,
   } = computePaymentModalState({
-      dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, loading, balance,
+      dir, selectedAccount, selectedMethodObj, currency, accountCurrency, saving, submitLocked, balance,
       date, methodId, accountId, isForeign, rate, pisPolling, pisTemplate, pisIban, pisBban,
       pisAccountNumber, pisSortCode, ui,
     });
@@ -1783,12 +1906,18 @@ export default function NewPaymentEntryModal({
               <div style={{ display: 'flex', alignItems: 'center', height: 40, border: `1px solid ${BORDER2}`, borderRadius: 8, background: 'hsl(var(--card))', boxShadow: '0 1px 2px hsl(var(--foreground) / .05)', minWidth: 0, padding: '0 12px', gap: 4 }}>
                 {(() => {
                   const amountInput = (
-                    <input
-                      type="text" inputMode="decimal" value={balance.amountStr}
-                      onChange={e => balance.onAmountChange(e.target.value)}
-                      onBlur={balance.onAmountBlur}
+                    <MaskedAmountInput
+                      bare
+                      // ETP-5107 — the NUMERIC twin, never `amountStr`. `amountStr` is a DISPLAY
+                      // string from formatPlain ("139,15"); MaskedAmountInput formats the value
+                      // itself and so needs a clean one. Feeding it the display string made
+                      // formatCurrency see NaN, render '—', and leave the field EMPTY — silently
+                      // killing the prefill of the outstanding total.
+                      value={balance.amount}
+                      onChange={(clean) => balance.onAmountChange(clean)}
+                      onCommit={() => balance.onAmountBlur()}
                       data-testid="cp-amount-input"
-                      style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', textAlign: 'right', padding: 0, font: '400 14px/24px Inter', color: INK, fontVariantNumeric: 'tabular-nums' }}
+                      className="flex-1 min-w-0 border-0 bg-transparent p-0 text-right outline-none focus-visible:ring-0 tabular-nums"
                     />
                   );
                   const amountSuffix = <span style={{ font: '400 14px/24px Inter', color: FG3 }}>{curSuffix(currency)}</span>;
@@ -1805,7 +1934,7 @@ export default function NewPaymentEntryModal({
             </Field>
             </>)}
             <Field label={ui('cpPaymentMethod')} required data-testid="Field__7727b3">
-              {loading ? (
+              {fieldsLoading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-method-select-skeleton" />
               ) : (
                 <CreatableSearchSelect
@@ -1820,7 +1949,7 @@ export default function NewPaymentEntryModal({
               )}
             </Field>
             <Field label={ui('account')} required data-testid="Field__7727b3">
-              {loading ? (
+              {fieldsLoading ? (
                 <Skeleton className="h-10 w-full rounded-lg" data-testid="cp-account-select-skeleton" />
               ) : (
                 <CreatableSearchSelect
@@ -1953,7 +2082,6 @@ export default function NewPaymentEntryModal({
           onReopenPis={onReopenPis}
           saveDisabled={saveDisabled}
           confirmDisabled={confirmDisabled}
-          loading={loading}
           confirmLabel={confirmLabel}
           onSaveDraft={() => submit('draft')}
           onConfirm={() => submit('confirm')}

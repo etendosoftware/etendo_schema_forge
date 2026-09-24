@@ -1,4 +1,5 @@
 import { renderHook, waitFor, act } from '@testing-library/react';
+import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 
 // The GET hooks below (usePendingStatementLines, useCandidateOperations, useAutoMatch) still
 // go through useNeoResource.js, which reads its token via the aliased `useAuth` — this mock
@@ -20,6 +21,7 @@ import {
   useAutoMatch,
   useApplySuggestions,
 } from '../useReconciliation.js';
+import { findFetchCall } from './findFetchCall.js';
 
 const BASE = '/sws/neo/bank-reconciliation';
 
@@ -52,6 +54,10 @@ afterEach(() => {
 });
 
 describe('usePendingStatementLines (GET)', () => {
+  // ETP-4576 — apiFetch takes the credential from the active scheme, not from an argument,
+  // so a test that expects an Authorization header has to declare the scheme first.
+  beforeEach(() => setSessionCredentials({ mode: CREDENTIAL_MODES.bearer, token: 'test-token' }));
+
   it('stays idle (no fetch, empty data) when accountId is null', async () => {
     globalThis.fetch.mockResolvedValue(getResponse({ lines: [] }));
 
@@ -266,7 +272,7 @@ describe('useReconcileGroup (POST via useNeoPost)', () => {
       returned = await result.current.reconcile({ lineId: 'l1', ops: ['o1'] });
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=reconcileGroup`);
     expect(url).toBe(`/etendo${BASE}?action=reconcileGroup`);
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -353,7 +359,7 @@ describe('useRemoveOperation (POST via useNeoPost)', () => {
       returned = await result.current.removeOperation(UNRECONCILE_PAYLOAD);
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=removeOperation`);
     expect(url).toBe(`/etendo${BASE}?action=removeOperation`);
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -431,7 +437,7 @@ describe('useReactivateSelected (POST via useNeoPost)', () => {
       returned = await result.current.reactivateSelected(UNRECONCILE_PAYLOAD);
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=reactivateSelected`);
     expect(url).toBe(`/etendo${BASE}?action=reactivateSelected`);
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer test-token');
@@ -507,7 +513,7 @@ describe('useApplySuggestions (POST via useNeoPost)', () => {
       returned = await result.current.apply({ groups: ['g1', 'g2'] });
     });
 
-    const [url, init] = globalThis.fetch.mock.calls[0];
+    const [url, init] = findFetchCall(`/etendo${BASE}?action=applySuggestions`);
     expect(url).toBe(`/etendo${BASE}?action=applySuggestions`);
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body)).toEqual({ groups: ['g1', 'g2'] });

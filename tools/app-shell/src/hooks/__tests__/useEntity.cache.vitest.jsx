@@ -17,6 +17,7 @@ import { DataProvider } from '@etendosoftware/app-shell-core/data';
 import { createQueryCache } from '@etendosoftware/app-shell-core/data';
 import { toast } from 'sonner';
 import { useEntity } from '../useEntity';
+import { buildCustomAddModalOnSaved } from '../../components/contract-ui/detailViewHelpers.jsx';
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
@@ -114,6 +115,29 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(counts.record).toBe(1); // reused from cache
   });
 
+  // ETP-5265 QA follow-up (2) — `fetchById` returns the refetch promise so a caller can
+  // stay busy until the record is genuinely back. DetailView's `onRefresh` prop is
+  // literally `() => hook.fetchById?.(id, { force: true })`, and the goods-shipment /
+  // goods-receipt Confirm flow awaits it to keep the button's spinner up; before the
+  // `return` was added it awaited `undefined` and resumed immediately.
+  it('2b. fetchById returns an awaitable promise that settles once the record is loaded', async () => {
+    const { fetchMock } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+
+    let returned;
+    await act(async () => { returned = a.result.current.fetchById('42'); });
+    expect(typeof returned?.then).toBe('function');
+    await act(async () => { await returned; });
+    expect(a.result.current.selected?.id).toBe('42');
+
+    // The id guard still short-circuits to undefined, exactly as before.
+    let guarded = 'unset';
+    await act(async () => { guarded = a.result.current.fetchById(''); });
+    expect(guarded).toBeUndefined();
+  });
+
   it('3. two consumers requesting the same record share a single request', async () => {
     const { fetchMock, counts } = makeFetch();
     globalThis.fetch = fetchMock;
@@ -197,7 +221,7 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     expect(counts.record).toBe(2);
   });
 
-  it('6. adding a child invalidates only the affected parent collection', async () => {
+  it('6. adding a child invalidates its own children collection (and, per ETP-5366, the parent entity cache too — see test 19)', async () => {
     const { fetchMock, counts } = makeFetch();
     globalThis.fetch = fetchMock;
 
@@ -210,8 +234,11 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     await act(async () => { await a.result.current.fetchChildren('p1'); });
     await waitFor(() => expect(counts.children).toBe(1));
 
-    // Adding a child under the selected parent invalidates only that collection,
-    // so the next children read refetches.
+    // Adding a child under the selected parent invalidates that collection,
+    // so the next children read refetches. NOTE: as of ETP-5366, handleAddChild
+    // ALSO invalidates the parent entity's own list/record cache (invalidateEntityCache) —
+    // this test only exercises the children-collection side of that; test 19 below
+    // covers the parent-entity side explicitly.
     await act(async () => { await a.result.current.handleAddChild({ qty: 1 }); });
     await waitFor(() => expect(counts.children).toBeGreaterThanOrEqual(2));
   });
@@ -361,5 +388,222 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     const recordCountAfterProcess = counts.record;
     await act(async () => { a.result.current.fetchById('77'); });
     await waitFor(() => expect(counts.record).toBe(recordCountAfterProcess));
+  });
+
+  // --- ETP-5366 regression: invalidateChildrenCache is part of the public API ---
+  // A secondary tab whose rows are written by a `customAddModal` never goes through
+  // handleAddChild, so nothing marked the cached child collection stale and the
+  // follow-up handleSelect re-read was served from the cache (same array instance →
+  // no-op setChildren → the tab kept showing the pre-save rows). DetailView now calls
+  // this from the modal's onSaved, which only works if the hook exports it.
+
+  it('15. invalidateChildrenCache is exported by the hook', async () => {
+    const { fetchMock } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    expect(typeof a.result.current.invalidateChildrenCache).toBe('function');
+  });
+
+  it('16. invalidateChildrenCache marks only the given parent collection stale', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(2));
+
+    // Both collections are fresh: plain re-reads are served from the cache.
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(2));
+
+    await act(async () => { a.result.current.invalidateChildrenCache('p1'); });
+
+    // p1 was dropped → a NON-forced read now reaches the network...
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(3));
+    // ...while p2's entry is untouched and still served from the cache.
+    await act(async () => { a.result.current.fetchChildren('p2'); });
+    await waitFor(() => expect(counts.children).toBe(3));
+  });
+
+  it('17. invalidateChildrenCache without a parent id is a no-op', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    // Guarded on parentId: a parent-less call must not blow away every collection.
+    await act(async () => { a.result.current.invalidateChildrenCache(undefined); });
+
+    await act(async () => { a.result.current.fetchChildren('p1'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+  });
+
+  it('18. reproduces the customAddModal sequence: an out-of-band row surfaces only after the invalidation', async () => {
+    // The server-side collection. The modal writes to it directly (its own raw
+    // apiFetch POST), which is exactly why nothing in the hook knows it changed.
+    const rows = [{ id: 'ADDR-1' }];
+    const { fetchMock, counts } = makeFetch({
+      handler: ({ method, path }) => (method === 'GET' && path === '/lines'
+        ? { ok: true, status: 200, _label: 'children', json: async () => ({ response: { data: [...rows] } }) }
+        : null),
+    });
+    globalThis.fetch = fetchMock;
+
+    const parent = { id: 'BP-1', name: 'ACME' };
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { a.result.current.handleSelect(parent); });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(1));
+    expect(counts.children).toBe(1);
+
+    // The modal persisted a second row without going through handleAddChild.
+    rows.push({ id: 'ADDR-2' });
+
+    // Pre-fix path: DetailView's onSaved called handleSelect ALONE. Its non-forced
+    // fetchChildren resolves from the still-fresh cache entry with the very same
+    // array instance, so setChildren is an Object.is no-op and the tab never updates.
+    const childrenBefore = a.result.current.children;
+    await act(async () => { a.result.current.handleSelect(parent); });
+    expect(counts.children).toBe(1);
+    expect(a.result.current.children).toBe(childrenBefore);
+    expect(a.result.current.children).toHaveLength(1);
+
+    // ETP-5366: dropping the entry first is what makes that same handleSelect reach
+    // the network — and only then does the new row reach the consumer.
+    await act(async () => {
+      a.result.current.invalidateChildrenCache(parent.id);
+      a.result.current.handleSelect(parent);
+    });
+    await waitFor(() => expect(a.result.current.children).toHaveLength(2));
+    expect(counts.children).toBe(2);
+    expect(a.result.current.children.map(r => r.id)).toEqual(['ADDR-1', 'ADDR-2']);
+  });
+
+  // --- ETP-5366 regression: child mutations must also invalidate the PARENT entity's
+  // own list/record cache, not just the children collection. A child row can carry
+  // a value the parent list row displays (a computed header total, a rolled-up
+  // address/count), so leaving the parent's cache entry fresh means the grid keeps
+  // showing pre-mutation data for up to `recordStaleTime` after editing/adding/
+  // deleting a child, until a manual refresh. Before the fix, handleAddChild/
+  // handleUpdateChild/handleDeleteChild called ONLY invalidateChildrenCache — these
+  // tests would have failed against that old code because `cache.invalidate` would
+  // never have been called with `{ entity: 'header' }`, and the parent list re-mount
+  // below would have kept serving the stale cached page (counts.list staying at 1).
+
+  it('19. handleAddChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    await act(async () => { await a.result.current.handleAddChild({ qty: 1 }); });
+
+    // The parent entity ('header'), not only the child entity ('lines'), was marked stale.
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    // Behavioral proof: the parent LIST cache was actually dropped, so returning to the
+    // grid (a fresh mount) refetches instead of serving the pre-add cached page.
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  it('20. handleUpdateChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    act(() => { a.result.current.handleUpdateChild('c1', 'qty', 5); });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  it('21. handleDeleteChild invalidates the parent entity cache, not just the children collection', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    act(() => { a.result.current.handleDeleteChild('c1'); });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    a.unmount();
+
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
+  });
+
+  // --- ETP-5366 follow-up: the customAddModal onSaved path (Contacts' address form)
+  // never goes through handleAddChild/handleUpdateChild at all — it persists via its
+  // own raw fetch and invalidates through buildCustomAddModalOnSaved instead. This
+  // mirrors test 18 (children-collection side) but goes through the REAL secondary
+  // hook instance and buildCustomAddModalOnSaved itself, proving the PARENT entity's
+  // list cache is also actually dropped end-to-end — not just that the pure function
+  // calls the right mock, as the unit tests in detailViewHelpers.vitest.js already do.
+  it('22. buildCustomAddModalOnSaved invalidates the parent entity list cache through a real useEntity instance', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(a.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(1);
+
+    // `secondaryHooks[idx]` is the same useEntity instance as the main `hook` — per
+    // buildCustomAddModalOnSaved's own doc comment, this is how a Contacts-style
+    // window actually wires it.
+    await act(async () => { a.result.current.handleSelect({ id: '1', name: 'Item 1' }); });
+    const parent = a.result.current.selected;
+    expect(parent?.id).toBe('1');
+
+    const invalidateSpy = vi.spyOn(cache, 'invalidate');
+    const setCustomModalState = vi.fn();
+    const onSaved = buildCustomAddModalOnSaved({
+      secondaryHooks: [a.result.current],
+      idx: 0,
+      hook: a.result.current,
+      setCustomModalState,
+    });
+    await act(async () => { onSaved(); });
+
+    // The parent entity ('header') cache was marked stale by the modal's onSaved,
+    // exactly as the direct handleAddChild/handleUpdateChild/handleDeleteChild paths do.
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ entity: 'header' }));
+    expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+    a.unmount();
+
+    // Behavioral proof: returning to the grid (a fresh mount) refetches instead of
+    // serving the pre-save cached page.
+    const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
+    await waitFor(() => expect(b.result.current.items.length).toBe(1));
+    expect(counts.list).toBe(2);
   });
 });

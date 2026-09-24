@@ -3,11 +3,11 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:contact
 const columns = [
-  { key: 'firstName', column: 'Firstname', type: 'string', label: 'First Name' },
-  { key: 'lastName', column: 'Lastname', type: 'string', label: 'Last Name' },
-  { key: 'email', column: 'Email', type: 'string', label: 'Email', minWidth: 320 },
-  { key: 'phone', column: 'Phone', type: 'string', label: 'Phone' },
-  { key: 'position', column: 'Title', type: 'string', label: 'Position' },
+  { key: 'firstName', column: 'Firstname', type: 'string', label: 'First Name', maxLength: 60 },
+  { key: 'lastName', column: 'Lastname', type: 'string', label: 'Last Name', maxLength: 60 },
+  { key: 'email', column: 'Email', type: 'string', label: 'Email', maxLength: 255, minWidth: 320 },
+  { key: 'phone', column: 'Phone', type: 'string', label: 'Phone', maxLength: 40 },
+  { key: 'position', column: 'Title', type: 'string', label: 'Position', maxLength: 40 },
 ];
 // @sf-generated-end columns:contact
 

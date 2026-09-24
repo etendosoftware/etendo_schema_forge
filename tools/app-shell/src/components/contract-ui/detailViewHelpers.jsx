@@ -10,6 +10,7 @@ import DocumentTotalsPanel from './DocumentTotalsPanel.jsx';
 import BalanceFooterPanel from './BalanceFooterPanel.jsx';
 import SelectionToolbar from './SelectionToolbar.jsx';
 import {computeBalance} from '@/lib/balanceTotals';
+import {formatCurrency} from '@/lib/formatCurrency.js';
 import {resolveIdentifier} from '@/lib/resolveIdentifier.js';
 import {roundAmounts} from '@/lib/lineFieldChange.js';
 import {getCatalogOptions} from '@/lib/selectorCatalog.js';
@@ -18,11 +19,110 @@ import DocumentStatusPill from './DocumentStatusPill.jsx';
 import { BlockingBpBanner } from './BlockingBpBanner.jsx';
 import { resolveOnSelectMappings } from './DataTable.jsx';
 import { isCapabilityVisible } from '@/lib/capabilityVisibility.js';
+import { NUMERIC_FIELD_TYPES } from '@/lib/numericFieldTypes.js';
+import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // Re-exported (not defined here) so this file's own React-component-heavy import
 // graph (PaymentLifecycleConfirmModal et al.) doesn't get pulled into callers —
 // like DataTable.jsx's inline-toggle error handling — that only need this one
 // pure helper. Canonical implementation lives in `@/lib/backendErrors.js`.
 export {parseBackendErrorMessage} from '@/lib/backendErrors.js';
+
+/**
+ * Header fields that are COMPUTED BY THE BACKEND FROM CHILD ROWS, and that therefore go stale the
+ * moment a secondary tab writes one (ETP-5245).
+ *
+ * `etgoHasCost` (Product) is the first: `ProductDefaultsHandler.annotateCostPresence` derives it
+ * from the existence of an `M_Costing` row and stamps it on every single-record product response.
+ * Adding a cost line is a `POST /product/costing` — a DIFFERENT entity — so nothing re-reads the
+ * product, and the header the form holds in memory keeps saying `false`. That left the "no cost
+ * defined" banner on screen after the Costing tab already showed `Costo 1`, and (worse) left the
+ * save gate in `useEntity.performSave` still refusing the save, since both read the SAME record.
+ *
+ * Add a field here only when the backend computes it from child rows AND a stale value is
+ * user-visible. Anything else does not justify the extra GET.
+ */
+export const HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS = ['etgoHasCost'];
+
+/**
+ * Whether this header carries any of the fields above, i.e. whether a child write can invalidate
+ * it. Gating on the DATA rather than on a window or tab name keeps
+ * `withHeaderRefreshOnChildWrite` generic: no other window pays for a request it does not need,
+ * and a window that starts emitting one of these flags is covered without touching DetailView.
+ */
+export function headerHasChildDerivedFields(header) {
+  if (!header?.id) return false;
+  return HEADER_FIELDS_DERIVED_FROM_CHILD_ROWS.some(key => header[key] !== undefined && header[key] !== null);
+}
+
+/**
+ * Wrap the per-tab secondary hooks so a successful child add/delete also re-reads the HEADER
+ * record into the main hook (ETP-5245).
+ *
+ * Each secondary hook is its own `useEntity` instance over the same parent entity, so it already
+ * calls `refreshHeaderTotals` after a child write — but into ITS OWN `selected`/`editing`, which
+ * nothing renders. The form, the banner and the save gate all read the MAIN hook's `editing`, so
+ * that refresh never reaches them. This wraps the two mutating handlers to also refresh the main
+ * hook, which is what makes the banner disappear when a cost line is added and — the inverse case,
+ * equally required — come back when the last one is deleted, both without a page reload.
+ *
+ * The server stays the single source of truth: nothing here recomputes the flag client-side, so
+ * the banner and the save gate can never end up disagreeing about the same record.
+ *
+ * Returns the array unchanged (same identity) when the header has no child-derived field, so the
+ * wrapping is genuinely inert for every other window.
+ */
+export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
+  const header = hook?.editing ?? hook?.selected;
+  if (!headerHasChildDerivedFields(header)) return secondaryHooks;
+  const refresh = () => {
+    const id = hook?.selected?.id ?? hook?.editing?.id;
+    if (id) hook?.refreshHeaderTotals?.(id);
+  };
+  return secondaryHooks.map(sh => {
+    if (!sh) return sh;
+    return {
+      ...sh,
+      handleAddChild: async (...args) => {
+        const result = await sh.handleAddChild?.(...args);
+        // Only on success — a refused POST changed nothing on the server.
+        if (result) refresh();
+        return result;
+      },
+      // Called once per row by the batch-delete loop, and once by the confirm dialog; both call
+      // it only after the DELETE succeeded. Mirrors the per-row `refreshHeaderTotals` the child
+      // hook itself already performs, so multi-row deletes are no chattier in kind than today.
+      handleDeleteChild: (...args) => {
+        const result = sh.handleDeleteChild?.(...args);
+        refresh();
+        return result;
+      },
+    };
+  });
+}
+
+/**
+ * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
+ *
+ * That modal persists its row with its own raw fetch, bypassing `handleAddChild`/
+ * `handleUpdateChild` entirely — the only places that mark BOTH the child collection
+ * cache (`invalidateChildrenCache`, ETP-5366) AND the PARENT entity's own list cache
+ * (`invalidateEntityCache`) stale. Without the latter, the window's grid kept serving
+ * its pre-save cached page (e.g. a rolled-up "Dirección" list column) for up to
+ * `recordStaleTime` after the user navigated back to it (ETP-5366 follow-up).
+ *
+ * `secondaryHooks[idx]` is the same `useEntity(entity, ...)` instance as the main
+ * `hook` (identical first `entity` arg), so invalidating through either reaches the
+ * same cache key.
+ */
+export function buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState }) {
+  return () => {
+    const parent = hook.selected ?? hook.editing;
+    secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
+    secondaryHooks[idx]?.invalidateEntityCache?.();
+    secondaryHooks[idx]?.handleSelect(parent);
+    setCustomModalState({ key: null, rowId: null });
+  };
+}
 
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
@@ -197,8 +297,33 @@ export function bumpFieldGeneration(key, fieldGenerationRef) {
   fieldGenerationRef.current[key] = (fieldGenerationRef.current[key] || 0) + 1;
 }
 
+/**
+ * True when `key` is the declared destination of a one-way cascade from the window's own
+ * document date, and that document date is what just triggered the callout.
+ *
+ * ETP-5273. `accountingDate` (AD column `DateAcct`) is not an independent field that merely
+ * happens to receive a collateral update: classic Etendo registers a callout on the document
+ * date column itself whose entire job is to copy it across — `SE_Invoice_AccountingDate` on
+ * `C_Invoice.DateInvoiced` (reached through `SifInvoiceOperationDateCallout`) and
+ * `SL_InOut_AccountingDate` on `M_InOut.MovementDate`. Classic re-applies that copy on EVERY
+ * change of the document date, including after the user has edited the accounting date by hand,
+ * so one manual edit must not grant the field permanent immunity — which is exactly what the
+ * user-touched guard in {@link applyCalloutFieldUpdates} would otherwise do, since
+ * `userTouchedRef` is only ever cleared on a record change.
+ *
+ * The opposite direction needs no exemption and keeps none: the callout registered on `DateAcct`
+ * is `SE_Invoice_TaxDate`, which writes `Taxdate` and never the document date.
+ *
+ * Driven by the window's declared `documentDateField`, so this covers every document window
+ * without naming any of them — `invoiceDate` for invoices, `orderDate` for orders,
+ * `movementDate` for shipments and receipts.
+ */
+export function isDocumentDateCascadeTarget(key, triggerField, documentDateField) {
+  return key === 'accountingDate' && !!documentDateField && triggerField === documentDateField;
+}
+
 export function applyCalloutFieldUpdates(updates, ctx) {
-  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef } = ctx;
+  const { data, triggerField, userTouchedRef, appliedFields, hook, api, catalogs, dispatchSnapshot, fieldGenerationRef, documentDateField } = ctx;
   for (const [key, entry] of Object.entries(updates)) {
     // Discard responses that arrived after a newer edit/dispatch already
     // moved this field on — see isStaleCalloutResponse. Checked BEFORE the
@@ -218,7 +343,13 @@ export function applyCalloutFieldUpdates(updates, ctx) {
     // coming from a callout triggered by a different field. The trigger field
     // itself always wins (it was just changed by the user) — as long as the
     // response is not stale per the check above.
-    if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue) {
+    //
+    // ETP-5273: a declared document-date cascade target is exempt — see
+    // isDocumentDateCascadeTarget. It is not collateral damage from an unrelated
+    // field's callout, it is the whole purpose of the document date's own callout,
+    // and classic re-applies it on every change.
+    if (key !== triggerField && userTouchedRef.current.has(key) && userHasValue
+        && !isDocumentDateCascadeTarget(key, triggerField, documentDateField)) {
       continue;
     }
     appliedFields.set(key, entry.value);
@@ -326,6 +457,42 @@ export function applyLocalChildRowUpdate(derivedUpdates, fieldKey, payloadValue,
 }
 
 /**
+ * ETP-5319 — a single-record PATCH response is not a reliable source for a `readOnly`
+ * grid column whose real value only exists via a GET-time backend enrichment (a join or an
+ * `afterHandle` computation keyed off the HTTP method). `M_InOutLine.orderQuantity` is the
+ * reference case: `AbstractInOutLineHandler#afterHandle` fills it in from `C_OrderLine.QtyOrdered`
+ * only when `context.getHttpMethod() === "GET"` — a PATCH's own single-entity response instead
+ * carries the plain `M_InOutLine.QuantityOrder` column, which is null for the (common) single-UOM
+ * case. Editing an unrelated field (e.g. `movementQuantity`) then PATCHes fine, but the naive
+ * `{...current, ...serverRow}` merge in `useEntity#handleUpdateChild` let that incidental
+ * `orderQuantity: null` clobber the correct value the grid was already showing — the value
+ * reappeared only after a full reload re-hit the GET path.
+ *
+ * Generic on purpose: it walks whatever `fields` descriptor list the caller has for the entity
+ * (the same `{key, readOnly}` shape the generator emits for both a Table's `columns` static and a
+ * Form component's `.fields` static — see `GoodsReceiptLineTable.jsx` / `GoodsReceiptLineForm.jsx`)
+ * and only protects the columns THAT metadata marks `readOnly`. A field the user can actually type
+ * into is never in that set, so a legitimate user-driven null (clearing an editable field) always
+ * passes through untouched — this only refuses to let an incomplete server envelope blank out a
+ * column nothing in the UI could have asked it to null.
+ */
+export function preserveGridReadOnlyValues(currentRow, serverRow, fields = []) {
+  if (!serverRow || typeof serverRow !== 'object' || !currentRow) return serverRow;
+  let patched = serverRow;
+  for (const f of fields) {
+    if (!f?.readOnly || !f.key) continue;
+    const incoming = serverRow[f.key];
+    if (incoming !== null && incoming !== undefined) continue;
+    const existing = currentRow[f.key];
+    const hadRealValue = existing !== null && existing !== undefined && existing !== '';
+    if (!hadRealValue) continue;
+    if (patched === serverRow) patched = {...serverRow};
+    patched[f.key] = existing;
+  }
+  return patched;
+}
+
+/**
  * Returns a copy of `row` without the null/empty keys the parent has set (e.g. businessPartner,
  * priceList on OrderLine). buildCalloutFormState by contract does NOT overwrite a row value with
  * the header's, so without this prune the callout would receive businessPartner=null and NEO
@@ -388,18 +555,40 @@ export function collectRowFieldValues(cleanRow, fieldValues, coerce) {
  * `fields` is the addLineFields entry list (`{ key, column, ... }`); each
  * field's `column` is the real AD DB column backing it, which is the most
  * reliable signal already available on the field object — `type` there is
- * the UI widget type (e.g. many genuinely numeric fields like `unitPrice` or
- * `discount` render as `type: 'text'`), so it can't be used to distinguish
- * IDs from amounts. A key with no matching field (not in `fields`) falls
- * back to the original numeric-looking heuristic to avoid regressing any
+ * the UI widget type. For the `addLineFields.entry` surface this coercer
+ * actually runs against (the live inline PATCH flow), every price/amount
+ * field across Sales/Purchase Order, Sales/Purchase Invoice and Sales
+ * Quotation declares a genuinely numeric `type` (verified by grep — no
+ * window declares `type: 'text'` for a price-shaped `addLineFields.entry`
+ * field; the `'text'`-typed `unitPrice`/`listPrice`/`discount` the comment
+ * above used to warn about live only on the `EntityForm`/`DetailForm`
+ * sidebar, a surface unreachable for any `linesLayout: "inlineEditable"`
+ * window — see docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §9.2),
+ * so gating by `type` here is safe. A key whose field has no declared `type`
+ * (either no matching field object at all, or a matching field that simply
+ * omits `type`) falls back to the original numeric-looking heuristic (now via
+ * `parseLocaleNumber`, so it is comma-aware too) to avoid regressing any
  * coercion path this fix doesn't have field metadata for.
+ *
+ * ETP-5107 — was a bare `/^-?\d+(\.\d+)?$/` shape test + `parseFloat`, so a
+ * value typed with a comma (`"10,4"`) was NEVER coerced and reached NEO
+ * Headless as the literal string `"10,4"`, which the backend rejects as an
+ * invalid `BigDecimal` (Error 400). Now gated by the field's declared type
+ * (not the value's shape) and parsed via the canonical `parseLocaleNumber`.
  */
 export function buildRowValueCoercer(fields) {
   const fieldsByKey = new Map((fields || []).map(f => [f.key, f]));
   const isIdColumn = (key) => /_ID$/i.test(fieldsByKey.get(key)?.column || '');
-  return (v, key) => (
-      typeof v === 'string' && !isIdColumn(key) && /^-?\d+(\.\d+)?$/.test(v) ? parseFloat(v) : v
-  );
+  return (v, key) => {
+    if (typeof v !== 'string' || isIdColumn(key)) return v;
+    const field = fieldsByKey.get(key);
+    const isNumericField = field?.type != null
+      ? NUMERIC_FIELD_TYPES.has(field.type)
+      : /^-?\d+(\.\d+)?$/.test(v);
+    if (!isNumericField) return v;
+    const { value, isValid } = parseLocaleNumber(v);
+    return isValid && value != null ? value : v;
+  };
 }
 
 /**
@@ -830,8 +1019,33 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     children: hook.children,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
-    // action (e.g. resend-invitation) the same way a `topbarExtra` component can.
-    onRefresh: () => hook.fetchById?.(data?.id),
+    // action (e.g. resend-invitation, admin promote/demote) the same way a
+    // `topbarExtra` component can.
+    // ETP-5278 — invalidateEntityCache() clears this entity's cached lists AND
+    // records (useEntity.js's ETP-4563 invalidate). useEntity.js's list-mount
+    // effect explicitly reuses a fresh cached list (loadList(false)) rather than
+    // always hitting the network, so without this a side effect here (e.g. admin
+    // promote/demote, which changes row.defaultRole) can leave the grid showing the
+    // pre-mutation row for as long as that cache entry stays within its staleTime —
+    // reproducible by acting fast enough to return to the list before it expires,
+    // which is exactly what made this easy to miss in slower manual testing.
+    // ETP-5290 — `{ force: true }` on fetchById is REQUIRED, not optional, here:
+    // without it `fetchById` serves the pre-mutation record straight out of the
+    // in-memory cache for up to `staleTime` (30s) — or indefinitely, if nothing
+    // else reads this id in the meantime — so a just-completed action's toast
+    // fires but the chip/subtab/button the user is looking at never updates until
+    // a full page reload starts with an empty cache. Every sibling `onRefresh` in
+    // DetailView.jsx itself already passes `force: true`; this was the one call
+    // site that didn't. `hook.refresh?.()` additionally force-reloads the
+    // currently-mounted LIST (mirrors `handleProcessSuccess`'s
+    // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
+    // useEntity.js) so the grid row reflects the change too, not just the open
+    // detail form.
+    onRefresh: () => {
+      hook.invalidateEntityCache?.();
+      hook.fetchById?.(data?.id, { force: true });
+      hook.refresh?.();
+    },
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button
@@ -852,8 +1066,12 @@ export function getSecondaryTabEntityKey(secondaryTabs, index) {
   return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
 }
 
-export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui) {
-  return notesFocused ? (
+// ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json
+// `api.window.readOnly` OR the runtime Solo-Lectura tier), NOT `isDocumentReadOnly` —
+// notes are documented to stay editable past document completion, so they must not
+// lock on `isDocumentReadOnly`'s extra `getDocumentReadOnly` (completion-lock) component.
+export function renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly }) {
+  return notesFocused && !readOnly ? (
       <textarea
           value={data[notesField] || ''}
           onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
@@ -870,8 +1088,8 @@ export function renderNotesField(notesFocused, data, notesField, handleChangeWit
       <div
           tabIndex={0}
           role="textbox"
-          onClick={() => setNotesFocused(true)}
-          onFocus={() => setNotesFocused(true)}
+          onClick={() => !readOnly && setNotesFocused(true)}
+          onFocus={() => !readOnly && setNotesFocused(true)}
           className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
       >
         {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}
@@ -1050,12 +1268,48 @@ export function shouldShowDetailFormSidebar(linesLayout, DetailForm, selectedLin
   return linesLayout !== 'inlineEditable' && DetailForm && (selectedLine || isClosingLine);
 }
 
+/**
+ * Secondary-tab twin of `shouldShowDetailFormSidebar` — decides whether a child
+ * tab renders its `st.Form` as a `w-[48rem]` side panel next to the tab's table.
+ *
+ * ETP-5245 — the `linesLayout !== 'inlineEditable'` term is the point of this
+ * helper. The rule "an inline-editable tab edits in the row, never in a side
+ * form" was enforced in ONE place only: `resolveSecondaryRowClickHandler`
+ * (DetailView.jsx), the row-click ENTRY point. The panel's own render guard and
+ * the empty-state's `detailSidebarOpen` twin both checked `st.Form && !st.Panel`
+ * plus a selection, so anything else that leaves a line selected brought the
+ * panel back — including `closingSecondaryLine`, which is window-global, NOT
+ * scoped to the tab being rendered. That panel is 768px wide: on Producto >
+ * Costo it squeezed the grid to ~500px, wrapped the headers onto two lines and
+ * forced a horizontal scrollbar, while duplicating fields the row already edits
+ * in place. Guarding the render site (rather than adding another entry-point
+ * check) makes the panel impossible for an inline-editable tab whatever sets
+ * the selection.
+ *
+ * Nothing is lost for an inline-editable tab: saving is the per-cell autosave
+ * (`onUpdateRow`), and deleting is the row's own hover trash plus the bulk
+ * SelectionToolbar — both already gated on `linesLayout === 'inlineEditable'`.
+ * A non-inline tab keeps the panel, its Save/Discard and its Delete button.
+ *
+ * @param {object} deps
+ * @param {string} deps.linesLayout Layout of the window's line tables.
+ * @param {object} deps.st Secondary tab definition (`Form`, `Panel`, `key`).
+ * @param {object|null} deps.selectedSecondaryLine Currently open line, if any.
+ * @param {boolean} deps.closingSecondaryLine True while the panel slides out.
+ * @returns {boolean}
+ */
+export function shouldShowSecondaryDetailSidebar({ linesLayout, st, selectedSecondaryLine, closingSecondaryLine }) {
+  if (linesLayout === 'inlineEditable') return false;
+  if (!st?.Form || st?.Panel) return false;
+  return selectedSecondaryLine?._tabKey === st.key || Boolean(closingSecondaryLine);
+}
+
 export function isInitialChildrenLoading(hook) {
   return hook.childrenLoading && hook.children.length === 0;
 }
 
-export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) {
-  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true);
+export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) {
+  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly;
 }
 
 /**
@@ -1077,8 +1331,37 @@ export function computeBalanceGate({ balanceFooter, children, pendingLineValues,
   return { balanceState, blockSaveForBalance, blockCompleteForBalance };
 }
 
-export function renderTotalsBlock({ balanceFooter, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
+/**
+ * ETP-5210 — pre-formats the debit/credit totals threaded into the lines grid
+ * (InlineLinesPanel's `balanceFooter` prop) so it can render them as a row
+ * aligned under its own Débito/Crédito columns instead of a separate summary
+ * block. Reuses `balanceState` from `computeBalanceGate` (the same numbers
+ * that gate Save/Complete — see DetailView.jsx) so the displayed totals can
+ * never disagree with the gate, and the canonical `formatCurrency` (never a
+ * hand-rolled formatter). Returns null when the window has no balanceFooter
+ * config, or before balanceState is available.
+ */
+export function buildBalanceFooterGridTotals(balanceFooter, balanceState, currency) {
+  if (!balanceFooter || !balanceState) return null;
+  return {
+    debitField: balanceFooter.debitField,
+    creditField: balanceFooter.creditField,
+    debitTotal: formatCurrency(currency, balanceState.totalDebit),
+    creditTotal: formatCurrency(currency, balanceState.totalCredit),
+  };
+}
+
+export function renderTotalsBlock({ balanceFooter, linesLayout, children, pendingLine, editingLine, lineConfig, formatAmount, currency, summary, isDocumentReadOnly, totalDiscountPct, onTotalDiscountChange }) {
   if (balanceFooter) {
+    // ETP-5210 — for the inlineEditable lines grid (the only current
+    // balanceFooter consumer, e.g. simple-g-l-journal), the debit/credit
+    // totals are rendered as a column-aligned row INSIDE InlineLinesPanel
+    // itself (see `balanceFooter` threaded into <DetailTable> in
+    // DetailView.jsx via `buildBalanceFooterGridTotals`) — no separate block
+    // here. BalanceFooterPanel remains the fallback for a future
+    // balanceFooter window on the classic (DataTable) lines layout, which
+    // does not yet have an equivalent column-aligned totals row.
+    if (linesLayout === 'inlineEditable') return null;
     return (
       <BalanceFooterPanel
         lines={children}

@@ -23,36 +23,25 @@ export function resolveRumSessionSampleRate(
   return Math.min(1, Math.max(0, parsed));
 }
 
-export function getRumConfigs(env = import.meta.env) {
+/**
+ * The deploy workflow injects the RUM IDs of its target, so the config does not
+ * depend on the domain the bundle is served from.
+ */
+export function resolveRumConfig(env = import.meta.env) {
   return {
-    'go.staging.etendo.cloud': {
-      appMonitorId: env.VITE_RUM_APP_MONITOR_ID_STAGING,
-      identityPoolId: env.VITE_RUM_IDENTITY_POOL_ID_STAGING,
-    },
-    'go.experimental.etendo.cloud': {
-      appMonitorId: env.VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL,
-      identityPoolId: env.VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL,
-    },
-    'go.etendo.cloud': {
-      appMonitorId: env.VITE_RUM_APP_MONITOR_ID_PROD,
-      identityPoolId: env.VITE_RUM_IDENTITY_POOL_ID_PROD,
-    },
+    appMonitorId: env?.VITE_RUM_APP_MONITOR_ID,
+    identityPoolId: env?.VITE_RUM_IDENTITY_POOL_ID,
   };
 }
 
-export function resolveRumConfig(hostname, env = import.meta.env) {
-  return getRumConfigs(env)[hostname];
-}
-
 export function createRumProvider({
-  hostname = globalThis.window?.location?.hostname,
   env = import.meta.env,
   AwsRumCtor = AwsRum,
   logger = console,
   enabled = true,
 } = {}) {
   const resolvedEnv = env ?? {};
-  const config = resolveRumConfig(hostname, resolvedEnv);
+  const config = resolveRumConfig(resolvedEnv);
   const sessionSampleRate = resolveRumSessionSampleRate(
     resolvedEnv.VITE_RUM_SESSION_SAMPLE_RATE
   );

@@ -5,6 +5,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
@@ -90,7 +91,7 @@ vi.mock('lucide-react', () => ({
   ChevronDown: () => null, ChevronRight: () => null, Users: () => null, FileEdit: () => null,
   Clock: () => null, TriangleAlert: () => null, Folder: () => null, ReceiptText: () => null,
   Calculator: () => null, PenLine: () => null, ShieldAlert: () => null, Info: () => null,
-  OctagonAlert: () => null, ArrowLeft: () => null, FileText: () => null,
+  OctagonAlert: () => null, ArrowLeft: () => null, Save: () => null, FileText: () => null,
   Star: () => null, ArrowUpRight: () => null, Loader2: () => null, X: () => null, Check: () => null,
   FileCheck: () => null,
 }));
@@ -213,20 +214,32 @@ describe('FmModel349Page — Calcular button', () => {
     });
   });
 
-  it('hides the Calcular button for a submitted status, while Cancelar and Generar fichero 349 remain', () => {
+  // ETP-5438 — "Generar fichero 349" is now ALSO hidden once submitted (it used to stay
+  // visible/functional regardless of status — see the removed "is visible and functional when
+  // the declaration is already submitted" test below, replaced by a "hides..." one in the
+  // "standalone Generar fichero button" describe block). Only Cancelar remains.
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted status, while Cancelar remains', () => {
     render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
     expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
     expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
-    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
   });
 
-  it('hides the Calcular button for a submitted_ack status, while Cancelar and Generar fichero 349 remain', () => {
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted_ack status, while Cancelar remains', () => {
     render(<FmModel349Page decl={makeDecl({ status: 'submitted_ack' })} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
     expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
     expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
-    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
+  });
+
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted_ext status, while Cancelar remains', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted_ext' })} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
   });
 });
 
@@ -333,13 +346,15 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
     expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
   });
 
-  it('is visible and functional when the declaration is already submitted', () => {
+  // ETP-5438 — previously "is visible and functional when the declaration is already
+  // submitted": a presented declaration must never be re-generated, matching the
+  // "Calcular"/"Registrar-Presentar" `!isSubmitted` gate this button now shares.
+  it('is hidden once the declaration is already submitted', () => {
     const { container } = render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
     const btns = Array.from(container.querySelectorAll('button'));
     const genBtn = btns.find(b => b.textContent.includes('fm.action.gen349'));
-    expect(genBtn).toBeTruthy();
-    fireEvent.click(genBtn);
-    expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
+    expect(genBtn).toBeUndefined();
+    expect(screen.queryByTestId('FileGenModal-mock')).toBeNull();
   });
 
   it('is visible and functional when the declaration is not submitted (pending)', () => {
@@ -463,5 +478,60 @@ describe('FmModel349Page — no Historial tab', () => {
   it('does not render a "Historial" tab', () => {
     const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     expect(container.textContent).not.toContain('fm.tab.history');
+  });
+});
+
+// ── Guardar button (ETP-5338 pt.5 — cross-model rollout) ────────────────────────
+//
+// 349 has no locally-edited/autosaved declaration data (see `handleSave`'s own comment in
+// FmModel349Page.jsx for the full re-investigation) — VIES results persist server-side the
+// instant they run, and every other bit of local state is ephemeral view state (filters, tab
+// selection, a dismissed banner), not declaration data. Guardar was still added here for
+// cross-model consistency once the requirement widened to "every fiscal-models declaration
+// gets a Guardar button" — but it is a deliberate no-op confirmation: no network call, always
+// "succeeds" immediately, since there is genuinely nothing pending to fail. These tests assert
+// exactly that contract, plus its position in the right-aligned primary-action group
+// (matching 303 and `saveActions.jsx`'s Save-before-Confirm convention) and that it is hidden
+// once submitted, same as its 303 counterpart.
+
+describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
+  it('renders Guardar in the right-aligned group, before Calcular', () => {
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    expect(screen.getByTestId('FmModel349Page__save')).toBeTruthy();
+    const btns = Array.from(document.querySelectorAll('button'));
+    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
+    const saveIdx = btns.findIndex(b => b.getAttribute('data-testid') === 'FmModel349Page__save');
+    const computeIdx = btns.findIndex(b => b.textContent.includes('fm.action.comput'));
+    expect(cancelIdx).toBeGreaterThanOrEqual(0);
+    expect(saveIdx).toBeGreaterThan(cancelIdx);
+    expect(computeIdx).toBeGreaterThan(saveIdx);
+  });
+
+  it('confirms immediately with a success toast and issues no network call — there is nothing to persist', async () => {
+    const { toast } = await import('sonner');
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    fireEvent.click(screen.getByTestId('FmModel349Page__save'));
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate away', () => {
+    const onBack = vi.fn();
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} onBack={onBack} />);
+    fireEvent.click(screen.getByTestId('FmModel349Page__save'));
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('is not rendered once the declaration is submitted (nothing left to confirm)', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
+    expect(screen.queryByTestId('FmModel349Page__save')).toBeNull();
+  });
+
+  it('renders no go-back button — Cancelar is the only left-side action', () => {
+    render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    expect(document.querySelector('[data-testid="FmModel349Page__goBack"]')).toBeNull();
+    const btns = Array.from(document.querySelectorAll('button'));
+    const cancelIdx = btns.findIndex(b => b.textContent.includes('fm.action.cancel'));
+    expect(cancelIdx).toBe(0);
   });
 });

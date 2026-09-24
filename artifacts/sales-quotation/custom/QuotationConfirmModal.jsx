@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -26,10 +27,13 @@ export default function QuotationConfirmModal({
   const [lineCount, setLineCount] = useState(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   const [freshData, setFreshData] = useState(null);
 
@@ -39,8 +43,8 @@ export default function QuotationConfirmModal({
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${entityUrl}/${quotationId}`, { headers }),
-          fetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${entityUrl}/${quotationId}`),
+          apiFetch(`${apiBaseUrl}/quotationLine?parentId=${quotationId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -55,7 +59,7 @@ export default function QuotationConfirmModal({
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [quotationId, entityUrl, apiBaseUrl, headers]);
+  }, [quotationId, entityUrl, apiBaseUrl, apiFetch]);
 
   // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
   // header edit the user made before clicking Confirm) must win over the
@@ -120,9 +124,9 @@ export default function QuotationConfirmModal({
       }
 
       if (selected === 'order') {
-        const res = await fetch(
+        const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/Convertquotation`,
-          { method: 'POST', headers, body: JSON.stringify({ fieldValues: {} }) },
+          { method: 'POST', body: JSON.stringify({ fieldValues: {} }) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -138,9 +142,9 @@ export default function QuotationConfirmModal({
 
         // Fetch created order by quotation link
         const criteria = JSON.stringify([{ fieldName: 'quotation', operator: 'equals', value: quotationId }]);
-        const orderRes = await fetch(
+        const orderRes = await apiFetch(
           `${baseNeoUrl}/sales-order/header?${new URLSearchParams({ criteria, _limit: '5' })}`,
-          { headers },
+          {},
         );
         if (orderRes.ok) {
           const orderJson = await orderRes.json();
@@ -152,9 +156,9 @@ export default function QuotationConfirmModal({
             let finalStatus = order.documentStatus;
             if (order.documentStatus === 'CO') {
               try {
-                const reactRes = await fetch(
+                const reactRes = await apiFetch(
                   `${baseNeoUrl}/sales-order/header/${order.id}/action/DocAction`,
-                  { method: 'POST', headers, body: JSON.stringify({ docAction: 'RE' }) },
+                  { method: 'POST', body: JSON.stringify({ docAction: 'RE' }) },
                 );
                 if (reactRes.ok) finalStatus = 'DR';
               } catch { /* best-effort */ }
@@ -173,9 +177,9 @@ export default function QuotationConfirmModal({
         setCreatedDoc({ type: 'order', id: null, documentNo: '?', total: '', status: 'Draft' });
 
       } else {
-        const res = await fetch(
+        const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}) },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);
@@ -191,7 +195,10 @@ export default function QuotationConfirmModal({
           id: doc?.id ?? null,
           documentNo: doc?.documentNo ?? '',
           total: formatCurrency(currency, doc?.grandTotalAmount ?? grandTotal),
-          status: 'Draft',
+          // ETP-5381: the invoice is created AND confirmed in one step now, so this must read
+          // the real status instead of the hardcoded 'Draft' it used to assume — otherwise the
+          // badge below says "Borrador" over a confirmed invoice.
+          status: doc?.documentStatus === 'CO' ? 'Completed' : (doc?.documentStatus ?? 'Draft'),
         });
       }
     } catch (err) {
@@ -207,7 +214,15 @@ export default function QuotationConfirmModal({
 
   const handleGoToDoc = () => {
     if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
-    const basePath = window.location.pathname.replace(/\/sales-quotation\/.*$/, '');
+    // ETP-5378 — this modal now also opens from the LIST row kebab, whose path is
+    // bare `/sales-quotation` (no trailing record id), not just the form's
+    // `/sales-quotation/{recordId}`. The old regex required a `/` right after
+    // "sales-quotation" to strip anything, so from the list it matched nothing,
+    // basePath stayed `/sales-quotation`, and the built URL doubled up into
+    // `/sales-quotation/sales-order/{id}` — a dead route (reported live: "Ver
+    // pedido" from a list-confirmed quotation). The trailing segment is optional
+    // now, so both origins strip to the same, correct app-root basePath.
+    const basePath = window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '');
     const target = createdDoc.type === 'order' ? 'sales-order' : 'sales-invoice';
     window.location.href = `${basePath}/${target}/${createdDoc.id}`;
   };

@@ -1,8 +1,10 @@
 /**
  * Tests for UserRolesTab — ETP-4906 "Roles del usuario" live permission-preview
  * matrix. See the component's own doc comment for the cross-task coupling with
- * AssignTemplateRolesControl (shared `useRoleSelection()` context) and the
- * hardcoded 3-row "General" category (never derived from SFListMenu).
+ * AssignTemplateRolesControl (shared `useRoleSelection()` context). The old
+ * hardcoded 3-row "General" category (never derived from SFListMenu) was removed
+ * in ETP-5196, matching RolesAccessMatrix.jsx's own removal (ETP-5071) — see the
+ * "never renders the old hardcoded General category header or its 3 rows" test.
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
 
@@ -30,6 +32,57 @@ vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }) => <>{children}</>,
   TooltipTrigger: ({ children }) => <>{children}</>,
   TooltipContent: (props) => <div data-testid={props['data-testid']}>{props.children}</div>,
+}));
+
+// ETP-5196 — `UserRolesTab.jsx` now imports `buildMenuWindowIndex()` (from
+// `@/pages/roles/useRolesOverviewData.js`), which in turn imports the REAL
+// `../../menu.json` at module scope. Mocked here with a small synthetic fixture —
+// SAME convention `useRolesOverviewData.vitest.js` already established for its own
+// coverage of `buildMenuWindowIndex`/`adaptMatrix` — rather than depending on real,
+// currently-live windowIds (real `menu.json` can be edited for unrelated reasons and
+// would silently break these assertions). `UserRolesTab.jsx` is at
+// `src/windows/custom/user/`, so `@/pages/roles/useRolesOverviewData.js`'s own
+// `'../../menu.json'` resolves to `src/menu.json`; from THIS test file (at
+// `src/windows/custom/user/__tests__/`), that same file is 4 levels up.
+//
+// Deliberately uses windowIds that do NOT collide with `w1`/`w2`/`w3`/`w4` (the
+// synthetic ids every pre-existing fixture/test in this file uses) — those stay
+// absent from this mocked index, so every pre-existing test keeps exercising the
+// FALLBACK (AD-tree) path completely unaffected, exactly as before this mock existed.
+vi.mock('../../../../menu.json', () => ({
+  default: {
+    menu: [
+      // groupOrder 0 — deliberately declared BEFORE 'Alpha' (reverse-alphabetical),
+      // so a test asserting groupOrder-based category order can't accidentally pass
+      // because it happens to coincide with alphabetical order.
+      { group: 'Zeta', items: [{ name: 'zeta-window', label: 'Zeta Window', windowId: 'm-zeta' }] },
+      { group: 'Alpha', items: [{ name: 'alpha-window', label: 'Alpha Window', windowId: 'm-alpha' }] }, // groupOrder 1
+      {
+        // groupOrder 2 — 'Row B' (itemOrder 0) declared BEFORE 'Row A' (itemOrder 1),
+        // likewise reverse-alphabetical at the ROW level, for the same reason.
+        group: 'RowOrderGroup',
+        items: [
+          { name: 'row-b', label: 'Row B (itemOrder 0)', windowId: 'm-row-b' },
+          { name: 'row-a', label: 'Row A (itemOrder 1)', windowId: 'm-row-a' },
+        ],
+      },
+      // groupOrder 3 — ONLY a hidden entry, no visible alternative (the real Match
+      // Rule/Periods shape) — must be excluded from the matrix entirely.
+      { group: 'HiddenOnlyGroup', items: [{ name: 'hidden-only', label: 'Hidden Only', windowId: 'm-hidden', hidden: true }] },
+      // groupOrder 4 — this id is ALSO given a (different, wrong) category/name via a
+      // per-test AD-tree fixture, to prove menu.json wins over the AD-tree fallback
+      // when a window id exists in BOTH sources.
+      { group: 'DualMappedGroup', items: [{ name: 'dual-via-menu', label: 'Dual (menu.json label)', windowId: 'm-dual' }] },
+      // groupOrder 5 — ETP-5402: a report row's own id ("tax-report") has NO AD-tree
+      // counterpart at all, so it can ONLY ever resolve via this `reportId`-keyed
+      // menu.json entry (see UserRolesTab.jsx's own JSDoc on `activeWindowIds`).
+      // hidden: true matches every real report menu.json entry (ETP-5402 bug: a report
+      // never gets its own top-level sidebar link, but that must NOT exclude it from this
+      // tab's matrix — see resolveCategoryRow's `excludeHidden` param). This fixture
+      // omitting `hidden` originally masked the bug entirely.
+      { group: 'ReportsGroup', items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report', hidden: true }] },
+    ],
+  },
 }));
 
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
@@ -246,17 +299,20 @@ describe('UserRolesTab', () => {
       expect(within(headerRow).getAllByRole('columnheader')).toHaveLength(2); // Window + Finance only
     });
 
-    it('renders the 3 hardcoded General rows as unconditional ✓ for every column', async () => {
+    // ETP-5196 — the old hardcoded 3-row "General" overlay (Inicio/Dashboard,
+    // Favoritos, Copilot, always ✓ for every column) was removed, matching
+    // `RolesAccessMatrix.jsx`'s own removal of the same overlay (ETP-5071) — see
+    // `RolesAccessMatrix.vitest.jsx`'s "no hardcoded General overlay" describe block
+    // for the sibling coverage. This file uses fixed `data-testid`s (not that file's
+    // `buildRowKey` helper), so the equivalent assertion here is a direct
+    // `queryByTestId` absence check for the category header and each of the 3 rows.
+    it('never renders the old hardcoded General category header or its 3 rows', async () => {
       renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
 
       await screen.findByTestId('UserRolesTab');
+      expect(screen.queryByTestId('UserRolesTab__category-general')).not.toBeInTheDocument();
       for (const key of ['dashboard', 'favorites', 'copilot']) {
-        const row = screen.getByTestId(`UserRolesTab__row-${key}`);
-        const cells = within(row).getAllByRole('cell');
-        // cells[0] is the window-name cell; cells[1..] are the per-role value cells.
-        expect(cells).toHaveLength(3);
-        expect(cells[1]).toHaveTextContent('✓');
-        expect(cells[2]).toHaveTextContent('✓');
+        expect(screen.queryByTestId(`UserRolesTab__row-${key}`)).not.toBeInTheDocument();
       }
     });
 
@@ -425,19 +481,6 @@ describe('UserRolesTab', () => {
       expect(pillSpanIn(cells[2]).className).not.toContain('font-bold');
     });
 
-    it('renders no winner badge for the hardcoded GENERAL_ROWS, which always agree by construction', async () => {
-      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
-
-      await screen.findByTestId('UserRolesTab');
-      for (const key of ['dashboard', 'favorites', 'copilot']) {
-        const row = screen.getByTestId(`UserRolesTab__row-${key}`);
-        expect(within(row).queryByTestId(new RegExp(`^WinnerBadge__${key}-`))).not.toBeInTheDocument();
-        const cells = within(row).getAllByRole('cell');
-        expect(pillSpanIn(cells[1]).className).toContain('font-medium');
-        expect(pillSpanIn(cells[2]).className).toContain('font-medium');
-      }
-    });
-
     it('marks a role with a real full grant as winner (bold + tooltip) and a role with no access at all plainly (full vs no-access, w1)', async () => {
       // Distinct disagreement shape from the w2 case above (readonly vs no-access): here
       // Sales has NO entry at all for w1 (global TEMPLATE_ROLES fixture always gives it
@@ -503,16 +546,47 @@ describe('UserRolesTab', () => {
       fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
     });
 
-    it('hides the composed-roles matrix and shows the full-access message when data.defaultRole matches the resolved admin role id', async () => {
+    // ETP-5196 — revised from the ETP-5071 behavior this described (which hid the matrix
+    // entirely for a confirmed admin holder). The full-access message now renders as a
+    // SIBLING above the matrix, and the matrix itself shows a single column built from
+    // `adminRole` (id `role-admin`, `isClientAdmin: true`, `windows: [w1, w2, w3]` all
+    // 'full' per the shared `ROLES_OVERVIEW` fixture) — not the stale pre-promotion
+    // `selectedRoleIds` (here `['role-fin']`, deliberately non-empty to prove the
+    // composed selection is ignored once admin-holder is detected).
+    it('shows the full-access message alongside a single admin-only column in the matrix when data.defaultRole matches the resolved admin role id', async () => {
       renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
 
       expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toHaveTextContent(
         'userRolesTabAdminFullAccessMessage',
       );
-      expect(screen.queryByTestId('UserRolesTab')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__loading')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__error')).not.toBeInTheDocument();
       expect(screen.queryByTestId('UserRolesTab__empty')).not.toBeInTheDocument();
+
+      // The matrix now DOES render (flipped from the old "hides the matrix" behavior).
+      const table = await screen.findByTestId('UserRolesTab');
+
+      // Exactly one role column — the admin column — no Finance/Sales header, even
+      // though 'role-fin' is in selectedRoleIds.
+      const headerRow = table.querySelector('thead tr');
+      const headers = within(headerRow).getAllByRole('columnheader');
+      expect(headers).toHaveLength(2); // Window + Admin only
+      expect(headers[1]).toHaveTextContent('roleNameAdmin'); // ADMIN_NAME_I18N_KEY, via the identity useUI mock
+      expect(within(headerRow).queryByText('Finance')).not.toBeInTheDocument();
+      expect(within(headerRow).queryByText('Sales')).not.toBeInTheDocument();
+      // Admin column header uses the Settings icon (gated by role.isClientAdmin), not
+      // one of the ROLE_ICONS keyed by role.name.
+      expect(within(headers[1]).getByTestId('RoleIcon__role-admin')).toBeInTheDocument();
+
+      // w1/w2/w3 (Ventas/Clientes/Proveedores) all render full-tier ✓ for the admin
+      // column, per ROLES_OVERVIEW's role-admin windows fixture — same cell-assertion
+      // pattern ("resolves cell values from each role's windows[]" test above) used
+      // elsewhere in this file.
+      for (const windowId of ['w1', 'w2', 'w3']) {
+        const row = screen.getByTestId(`UserRolesTab__row-${windowId}`);
+        const cells = within(row).getAllByRole('cell');
+        expect(cells[1]).toHaveTextContent('✓');
+      }
     });
 
     it('accepts a `defaultRole` given as an {id, name} object (defensive shape, same as RoleChipsCell/AssignRoleControl)', async () => {
@@ -563,6 +637,234 @@ describe('UserRolesTab', () => {
       expect(screen.queryByTestId('UserRolesTab__admin-full-access')).not.toBeInTheDocument();
       // isNew short-circuits before any fetch — including the one the admin check relies on.
       expect(fetchRolesOverview).not.toHaveBeenCalled();
+    });
+
+    // ETP-5196 QA edge case — the design-tension REVIEW flagged: `activeWindowIds` (the
+    // rows) comes from the UNION of every role's `windows[]` (Admin included), while the
+    // admin COLUMN's own cell values come only from `adminRole.windows[]`. If the backend
+    // ever returns an admin row with an empty `windows[]` (e.g. a provisioning gap), the
+    // row set is still derived from the OTHER roles' windows (w1/w2/w3 below, via
+    // `role-fin`/`role-sales`), so the matrix is not empty — it renders a real, if fully
+    // sparse, single admin column with '—' in every cell. This must not be confused with
+    // the `columns.length === 0` empty state: `columns` is `[adminRole]`, length 1, so
+    // that branch is never reached — `adminRole` existing (even windowless) is what keeps
+    // the table rendering rather than falling back to the "select a role" placeholder.
+    it('renders a sparse but valid single admin column (all "—") when adminRole.windows is an empty array', async () => {
+      const rolesOverviewWithWindowlessAdmin = {
+        roles: [
+          ...ROLES_OVERVIEW.roles.filter((role) => !role.isClientAdmin),
+          { id: 'role-admin', name: 'GOClient Admin', isClientAdmin: true, windows: [] },
+        ],
+      };
+      fetchRolesOverview.mockResolvedValue(rolesOverviewWithWindowlessAdmin);
+
+      renderTab({ selectedRoleIds: ['role-fin'], data: { defaultRole: 'role-admin' } });
+
+      expect(await screen.findByTestId('UserRolesTab__admin-full-access')).toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__empty')).not.toBeInTheDocument();
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const headerRow = table.querySelector('thead tr');
+      const headers = within(headerRow).getAllByRole('columnheader');
+      expect(headers).toHaveLength(2); // Window + Admin only, same as the populated case
+
+      // Rows still come from the OTHER roles' windows (role-fin/role-sales cover
+      // w1/w2), not from the (empty) admin windows list — so the matrix body is not
+      // empty even though every admin cell is '—'.
+      for (const windowId of ['w1', 'w2']) {
+        const row = screen.getByTestId(`UserRolesTab__row-${windowId}`);
+        const cells = within(row).getAllByRole('cell');
+        expect(cells[1]).toHaveTextContent('—');
+      }
+    });
+  });
+
+  // ETP-5196 — coverage for `resolveCategoryRow()`/`groupResolvedRows()`: the new
+  // `menu.json`-primary category resolution, its fallbacks (AD-tree, then the new
+  // "Other" catch-all), hidden-window exclusion, and `groupOrder`/`itemOrder`
+  // ordering. Uses the module-level `menu.json` mock declared at the top of this
+  // file (Zeta/Alpha/RowOrderGroup/HiddenOnlyGroup/DualMappedGroup, groupOrder
+  // 0..4) — none of its windowIds collide with `w1`/`w2`/`w3`/`w4`, so every test
+  // above this block is unaffected and keeps exercising the AD-tree fallback path
+  // exactly as before this mock existed (per the developer's own report: all 32
+  // pre-existing tests only ever exercised the fallback path).
+  describe('menu.json category grouping (ETP-5196)', () => {
+    beforeEach(() => {
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES);
+    });
+
+    it('resolves category/name from menu.json, overriding the AD-tree category/name, for a window id present in BOTH sources', async () => {
+      // 'm-dual' is BOTH a leaf in this AD tree (wrong category/name) AND indexed by
+      // the mocked menu.json under 'DualMappedGroup' (correct category/name) — the
+      // menu.json-resolved values must win.
+      fetchMenuTree.mockResolvedValue({
+        tree: [
+          {
+            type: 'folder',
+            name: 'WrongClassicCategory',
+            children: [{ name: 'Wrong AD Name', windowId: 'm-dual' }],
+          },
+        ],
+      });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'm-dual', name: 'Wrong AD Name', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      expect(within(table).getByText('DualMappedGroup')).toBeInTheDocument();
+      expect(within(table).getByText('Dual (menu.json label)')).toBeInTheDocument();
+      expect(within(table).queryByText('WrongClassicCategory')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Wrong AD Name')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the AD-tree category/name for a window id present in the AD tree but absent from menu.json (old behavior preserved)', async () => {
+      // w2 (Clientes/Comercial, from the shared MENU_TREE fixture) is not indexed by
+      // the mocked menu.json at all.
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW);
+      renderTab({ selectedRoleIds: ['role-fin', 'role-sales'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-w2');
+      expect(within(row).getByText('Clientes')).toBeInTheDocument();
+      expect(screen.getByTestId('UserRolesTab__category-Comercial')).toBeInTheDocument();
+    });
+
+    it('renders a window id absent from BOTH menu.json and the AD tree under the "Other" catch-all category instead of vanishing', async () => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'x-mystery', name: 'Mystery Window', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      // Identity `useUI()` mock returns the raw i18n key — 'Other' at runtime, per the
+      // en_US/es_ES `userRolesTabUncategorizedCategory` entries this fix added.
+      expect(within(table).getByText('userRolesTabUncategorizedCategory')).toBeInTheDocument();
+      expect(within(table).getByText('Mystery Window')).toBeInTheDocument();
+    });
+
+    it('excludes a row entirely (and its now-empty category) when its only menu.json entry is hidden, even though the window is active', async () => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          { id: 'role-fin', name: 'Finance', windows: [{ id: 'm-hidden', name: 'Hidden Window (AD name)', tier: 'full' }] },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      expect(within(table).queryByText('HiddenOnlyGroup')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Hidden Only')).not.toBeInTheDocument();
+      expect(within(table).queryByText('Hidden Window (AD name)')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('UserRolesTab__row-m-hidden')).not.toBeInTheDocument();
+    });
+
+    it('orders menu.json-resolved categories by groupOrder, not alphabetically (Zeta before Alpha)', async () => {
+      fetchMenuTree.mockResolvedValue({ tree: [] });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          {
+            id: 'role-fin',
+            name: 'Finance',
+            // Fed Alpha BEFORE Zeta — alphabetical order would put Alpha first too, so
+            // this alone wouldn't prove groupOrder is what's driving the sort; the
+            // assertion below only holds because groupOrder(Zeta)=0 < groupOrder(Alpha)=1.
+            windows: [
+              { id: 'm-alpha', name: 'raw alpha', tier: 'full' },
+              { id: 'm-zeta', name: 'raw zeta', tier: 'full' },
+            ],
+          },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const categoryHeaders = within(table).getAllByText(/^(Zeta|Alpha)$/);
+      expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Zeta', 'Alpha']);
+    });
+
+    it('orders rows within a menu.json category by itemOrder, not by feed order or alphabetically', async () => {
+      fetchMenuTree.mockResolvedValue({ tree: [] });
+      fetchRolesOverview.mockResolvedValue({
+        roles: [
+          {
+            id: 'role-fin',
+            name: 'Finance',
+            // Fed 'm-row-a' (itemOrder 1) BEFORE 'm-row-b' (itemOrder 0) — the output
+            // must still put Row B first. Labels are reverse-alphabetical too ("Row A"
+            // < "Row B"), so this can't accidentally pass via alphabetical sorting.
+            windows: [
+              { id: 'm-row-a', name: 'raw row a', tier: 'full' },
+              { id: 'm-row-b', name: 'raw row b', tier: 'full' },
+            ],
+          },
+        ],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const table = await screen.findByTestId('UserRolesTab');
+      const rowLabels = within(table).getAllByText(/^Row [AB] \(itemOrder \d\)$/);
+      expect(rowLabels.map((el) => el.textContent)).toEqual(['Row B (itemOrder 0)', 'Row A (itemOrder 1)']);
+    });
+  });
+
+  // ETP-5402 — a report row (e.g. "tax-report") has no AD-tree counterpart at all, so it
+  // can ONLY ever resolve through `menuIndex` (the `reportId`-keyed 'ReportsGroup' entry
+  // in this file's module-level menu.json mock, groupOrder 5) — unlike a window id, which
+  // still has the AD-tree/uncategorized fallback chain. This block proves `activeWindowIds`
+  // folds in `role.reports[]` ids and `cellValue` falls back to `role.reports` when
+  // `role.windows` has no match for that id.
+  describe('Informes subsection (ETP-5402)', () => {
+    const ROLES_OVERVIEW_WITH_REPORTS = {
+      roles: [
+        { id: 'role-fin', name: 'Finance', windows: [], reports: [{ id: 'tax-report', tier: 'full' }] },
+      ],
+    };
+    const TEMPLATE_ROLES_WITH_REPORTS = {
+      roles: [
+        { id: 'role-fin', name: 'Finance', windows: [], reports: [{ id: 'tax-report', tier: 'full' }] },
+      ],
+    };
+
+    beforeEach(() => {
+      fetchMenuTree.mockResolvedValue(MENU_TREE);
+      fetchRolesOverview.mockResolvedValue(ROLES_OVERVIEW_WITH_REPORTS);
+      fetchTemplateRoles.mockResolvedValue(TEMPLATE_ROLES_WITH_REPORTS);
+    });
+
+    it('renders a report row (resolved via its menu.json reportId entry) even though it has zero AD windows', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-tax-report');
+      expect(row).toHaveTextContent('Tax Report');
+      expect(screen.getByText('ReportsGroup')).toBeInTheDocument();
+    });
+
+    it('resolves a full-access report tier from role.reports[] (cellValue falls back to it when role.windows has no match)', async () => {
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      const row = await screen.findByTestId('UserRolesTab__row-tax-report');
+      const cells = within(row).getAllByRole('cell');
+      expect(cells[1]).toHaveTextContent('✓');
+    });
+
+    it('never renders a report row at all when no role has been granted it (activeWindowIds excludes it)', async () => {
+      fetchRolesOverview.mockResolvedValue({
+        roles: [{ id: 'role-fin', name: 'Finance', windows: [], reports: [] }],
+      });
+      fetchTemplateRoles.mockResolvedValue({
+        roles: [{ id: 'role-fin', name: 'Finance', windows: [], reports: [] }],
+      });
+      renderTab({ selectedRoleIds: ['role-fin'] });
+
+      // No report row at all — activeWindowIds never included "tax-report" for this role.
+      await screen.findByTestId('UserRolesTab');
+      expect(screen.queryByTestId('UserRolesTab__row-tax-report')).not.toBeInTheDocument();
     });
   });
 });

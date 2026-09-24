@@ -6,8 +6,14 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
+// ETP-5395 Fix 3: OrganizationPage is now gated by useWindowAccess — default to 'full' so
+// this suite keeps exercising the window as before (mirrors financial-account's own
+// ETP-4658 test convention). Mutable so a dedicated test can flip it to 'none'.
+let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'ORG_1', name: 'Acme' }, token: 'test-token' }),
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -23,6 +29,20 @@ vi.mock('@/components/contract-ui/LocationModalField.jsx', () => ({
       onClick={() => onChange('LOC_2', 'New Address - Spain')}>
       {value || 'no-location'}
     </button>
+  ),
+}));
+
+// ETP-5391 — OrganizationPage reuses fiscal-config's CertSection as-is (unmodified); stub it
+// here the same way LocationModalField is stubbed above, capturing the props this page hands
+// it so the test can assert the wiring without depending on CertSection's own fetch/upload
+// internals (already covered by fiscal-config's own test suite).
+vi.mock('@/windows/custom/fiscal-config/CertSection.jsx', () => ({
+  default: ({ orgId, apiBaseUrl, context }) => (
+    <div
+      data-testid="CertSection__stub"
+      data-org-id={orgId ?? ''}
+      data-api-base-url={apiBaseUrl ?? ''}
+      data-context={context ?? ''} />
   ),
 }));
 
@@ -55,6 +75,23 @@ function makeFetchMock(handlers) {
 describe('OrganizationPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    currentWindowAccessTier = 'full';
+  });
+
+  // ETP-5395 Fix 3 — before this fix, a 'none' tier still fired the fetch, got a real
+  // backend 403, and rendered it raw ("HTTP 403" + a Retry button that can never help).
+  it('renders WindowAccessGuard instead of the raw error box when the access tier is none', async () => {
+    currentWindowAccessTier = 'none';
+    globalThis.fetch = makeFetchMock([
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse(null, false, 403)],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse(null, false, 403)],
+    ]);
+
+    render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__error')).not.toBeInTheDocument();
   });
 
   it('renders the loaded header/info fields and hides the unsaved-changes banner until something changes', async () => {
@@ -156,6 +193,35 @@ describe('OrganizationPage', () => {
     expect(screen.getByTestId('BusinessTypeCards__option-FL')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTestId('BusinessTypeCards__check-CO')).not.toBeInTheDocument();
     expect(screen.queryByTestId('BusinessTypeCards__check-FL')).not.toBeInTheDocument();
+  });
+
+  describe('digital certificate section (ETP-5391 — reuses fiscal-config/CertSection.jsx)', () => {
+    it('renders the certificate SectionRow and forwards this org\'s orgId/apiBaseUrl to CertSection', async () => {
+      globalThis.fetch = makeFetchMock([
+        [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme' })],
+        [`/organization/information/${ORG_ID}`, () => jsonResponse({})],
+      ]);
+
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
+
+      expect(screen.getByTestId('OrganizationPage__section-certificate')).toBeInTheDocument();
+      const cert = screen.getByTestId('CertSection__stub');
+      expect(cert).toHaveAttribute('data-org-id', ORG_ID);
+      expect(cert).toHaveAttribute('data-api-base-url', API_BASE_URL);
+    });
+
+    it('does not pass a context prop (falls back to CertModal\'s generic org-level copy)', async () => {
+      globalThis.fetch = makeFetchMock([
+        [`/organization/organization/${ORG_ID}`, () => jsonResponse({ name: 'Acme' })],
+        [`/organization/information/${ORG_ID}`, () => jsonResponse({})],
+      ]);
+
+      render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+      await waitFor(() => expect(screen.getByTestId('OrganizationPage__name')).toBeInTheDocument());
+
+      expect(screen.getByTestId('CertSection__stub')).toHaveAttribute('data-context', '');
+    });
   });
 
   describe('deriveCountryFromIdentifier heuristic — País pill', () => {

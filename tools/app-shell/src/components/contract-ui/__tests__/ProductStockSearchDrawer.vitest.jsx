@@ -79,9 +79,12 @@ describe('ProductStockSearchDrawer', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('does not fetch when token is missing', () => {
+  it('does not fetch when token is missing — inverted: the cookie carries the session', () => {
     render(<ProductStockSearchDrawer {...defaultProps} token={null} />);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   it('calls onClose when overlay is clicked', async () => {
@@ -613,5 +616,34 @@ describe('ProductStockSearchDrawer', () => {
       expect(selectorCall).toBeTruthy();
       expect(selectorCall[0]).toContain('warehouseId=WH1');
     });
+  });
+  // ────────────────────────────────────────────────────────────────────────────
+  // ETP-5254 — the stock variant deliberately opts OUT of inline product creation
+  // ────────────────────────────────────────────────────────────────────────────
+
+  it('never renders the create-product row, even for an allowlisted spec', async () => {
+    // The stock variant simply does not forward `createEnabled` to the shell: creating a
+    // stockless product inside a picker that filters by stock would return an immediately
+    // empty result. The selector URL below IS allowlisted, so this pins the opt-out itself
+    // rather than incidentally relying on goods-movements being outside the allowlist.
+    render(
+      <ProductStockSearchDrawer
+        {...defaultProps}
+        selectorUrl="http://localhost/sws/neo/sales-order/lines/selectors/M_Product_ID"
+      />,
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('record-create-modal')).not.toBeInTheDocument();
+  });
+
+  it('never renders the create-product row for its usual stock-aware specs either', async () => {
+    render(<ProductStockSearchDrawer {...defaultProps} />);
+    await vi.advanceTimersByTimeAsync(50);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(screen.queryByTestId('product-search-create')).not.toBeInTheDocument();
   });
 });

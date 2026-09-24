@@ -194,6 +194,29 @@ function formatAmount(n) {
   return Number(n).toFixed(2);
 }
 
+/**
+ * Click a DataTable row and wait for the GenericPreviewModal to open.
+ *
+ * Retries the click if the panel doesn't show up within a short window:
+ * under full-suite concurrency the click can land before the row's onClick
+ * is wired up, silently doing nothing, and a single long wait then just
+ * burns its timeout on a panel that will never open.
+ */
+async function openInvoicePreviewPanel(page, row) {
+  const panel = page.getByTestId('generic-preview-modal');
+  const attempts = [2_000, 2_000, 6_000];
+  for (let i = 0; i < attempts.length; i += 1) {
+    await row.click();
+    try {
+      await panel.waitFor({ state: 'visible', timeout: attempts[i] });
+      return panel;
+    } catch (err) {
+      if (i === attempts.length - 1) throw err;
+    }
+  }
+  return panel;
+}
+
 // ---------------------------------------------------------------------------
 // Group 1: List view — grandTotalAmount rendered from API response
 // ---------------------------------------------------------------------------
@@ -204,7 +227,7 @@ test.describe('Sales Invoice — list view grandTotalAmount display (mocked)', (
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // The DataTable should render a row with the invoice document number.
     // The row is identified by data-testid="row-<id>" (DataTable convention).
@@ -222,7 +245,7 @@ test.describe('Sales Invoice — list view grandTotalAmount display (mocked)', (
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
@@ -243,16 +266,12 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     // Click the row to open the preview side panel
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await row.click();
-
-    // The GenericPreviewModal should appear
-    const panel = page.getByTestId('generic-preview-modal');
-    await expect(panel).toBeVisible({ timeout: 8_000 });
+    const panel = await openInvoicePreviewPanel(page, row);
 
     // The StatsPanel renders grandTotalAmount in the SectionCard titleRight area.
     // It shows: "EUR 447.10"
@@ -264,14 +283,11 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await row.click();
-
-    const panel = page.getByTestId('generic-preview-modal');
-    await expect(panel).toBeVisible({ timeout: 8_000 });
+    const panel = await openInvoicePreviewPanel(page, row);
 
     // Title includes the document number
     await expect(panel).toContainText(INVOICE_NO, { timeout: 5_000 });
@@ -285,14 +301,11 @@ test.describe('Sales Invoice — side panel discount display (mocked)', () => {
     await installInvoiceMocks(page);
 
     await page.goto('/sales-invoice');
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const row = page.getByTestId(`row-${INVOICE_ID}`);
     await expect(row).toBeVisible({ timeout: 10_000 });
-    await row.click();
-
-    const panel = page.getByTestId('generic-preview-modal');
-    await expect(panel).toBeVisible({ timeout: 8_000 });
+    const panel = await openInvoicePreviewPanel(page, row);
 
     // The Total SectionCard titleRight shows the grandTotalAmount.
     // It should be the adjusted value 447.10, not the raw 470.63.
@@ -326,16 +339,12 @@ async function openPreviewAndGetJsreportData(page, { jsreportCalls, headerOverri
   await installJsreportMock(page, { jsreportCalls });
 
   await page.goto('/sales-invoice');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
   // Click the row to open the InvoicePreview side panel
   const row = page.getByTestId(`row-${INVOICE_ID}`);
   await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.click();
-
-  // Wait for the panel to open
-  const panel = page.getByTestId('generic-preview-modal');
-  await expect(panel).toBeVisible({ timeout: 8_000 });
+  await openInvoicePreviewPanel(page, row);
 
   // Wait for jsreport call (PDF generation is async after panel opens)
   await expect.poll(() => jsreportCalls.length, { timeout: 20_000 }).toBeGreaterThan(0);

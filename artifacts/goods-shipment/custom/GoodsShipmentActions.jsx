@@ -1,17 +1,18 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { translateBackendError } from '@/lib/backendErrors.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI, useMenuLabel } from '@/i18n';
 import ReturnWizard from './ReturnWizard';
-import SendDocumentModal, { SendDocumentButton } from '@/components/contract-ui/SendDocumentModal';
+import SendDocumentModal from '@/components/contract-ui/SendDocumentModal';
 import GoodsShipmentConfirmModal from './GoodsShipmentConfirmModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
 import { useShipmentPdf } from '@/windows/custom/goods-shipment/useShipmentPdf';
-import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
-import { formatCurrency } from '@/lib/formatCurrency.js';
-import CopyRecordLinkButton from '@/components/contract-ui/CopyRecordLinkButton';
+import { useDocumentAction } from '@/hooks/useDocumentAction';
 
 export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl, api, onRefresh }) {
   const ui = useUI();
@@ -24,18 +25,37 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   const [showSend, setShowSend] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [invoiceResult, setInvoiceResult] = useState(null);
-  const [showClone, setShowClone] = useState(false);
   const resultNavigatedRef = useRef(false);
+
+  // Quote inputs — mirrors BulkInvoiceFromShipment.jsx's own quote exactly (see that file for
+  // the full rationale). Only meaningful here when the shipment has NO linked sales order:
+  // createFromShipments' single-shipment-with-order short-circuit into createFromOrder bills
+  // the WHOLE order's pending lines when no line overrides are sent (which this button never
+  // sends), so a quote computed from just this shipment's own lines would UNDER-report the real
+  // invoice total in that case. `hasLinkedOrder` (from the same single-record enrichment this
+  // component already receives via `data`) is what gates that off — the modal's existing
+  // linkedOrder.grandTotalAmount fallback stays in charge when a linked order exists.
+  const [selectedPriceListId, setSelectedPriceListId] = useState('');
+  const [lineDetails, setLineDetails] = useState(null);
+  const [pendingByLine, setPendingByLine] = useState(null);
+  const [orderLinePrices, setOrderLinePrices] = useState({});
+  const [tariffPrices, setTariffPrices] = useState({});
+  const [mainFetchPending, setMainFetchPending] = useState(false);
+  const [tariffFetchPending, setTariffFetchPending] = useState(false);
+  const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
 
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = data?.invoiceStatus >= 100;
   const canCreateReturn = data?.canCreateReturn === true;
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered delivery-note PDF the
   // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
@@ -43,10 +63,84 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   // unconditionally at top level (rules of hooks).
   const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading } = useShipmentPdf(recordId, apiBaseUrl, token);
 
+  // ETP-5265 — when the shipment is already fully invoiced, Confirm skips the
+  // intermediate "already invoiced" popup entirely and calls the document-action
+  // endpoint directly, like any other direct action in the app. The non-fully-invoiced
+  // flow (GoodsShipmentConfirmModal) is untouched.
+  //
+  // ETP-5265 QA follow-up (2) — in-flight feedback is the Confirm button's own spinner,
+  // never a floating toast. The listener below hands this promise back through the
+  // CustomEvent `detail` (see dispatchConfirmModalEvent in the window's index.jsx) and
+  // runDraftModeConfirm in saveActions.jsx awaits it, so whatever this function awaits
+  // is exactly how long the button stays busy. It therefore awaits the refetch too
+  // (`onRefresh`, which is `hook.fetchById(id, { force: true })` and became awaitable in
+  // useEntity.js): the first cut resolved on the POST alone (~150-300 ms locally) and the
+  // spinner was imperceptible, because the record refresh happened afterwards, out of
+  // band. Now the busy state runs unbroken from the click until the refreshed record is
+  // on screen.
+  //
+  // Two failure domains, deliberately separate: a failed POST is a failed confirmation
+  // (toast.error, no success toast, no refresh); a failed REFRESH is not — the document
+  // is confirmed, the screen is merely stale, and reporting it as an error would be a
+  // lie. Success-toast placement mirrors the native draftMode path exactly: useEntity's
+  // handleSaveAndProcess fires `toast.success` as soon as the action POST succeeds and
+  // only then refetches, so ours fires there too, not after the refresh.
+  //
+  // NOTE — this path no longer routes through `setInvoiceResult({ invoice: null })`. That
+  // setter's effect (ETP-5063) both toasts AND refreshes, and it cannot be awaited, so it
+  // cannot hold the button busy. The effect is still live and still owns the
+  // GoodsShipmentConfirmModal path, which is why the two look different here: only this
+  // branch needs a promise to hand back.
+  const confirmDocAction = useDocumentAction({ apiBaseUrl, entity: 'goodsShipment', token });
+  const confirmingFullyInvoicedRef = useRef(false);
+  const handleConfirmFullyInvoiced = useCallback(async () => {
+    if (confirmingFullyInvoicedRef.current) return;
+    confirmingFullyInvoicedRef.current = true;
+    try {
+      try {
+        await confirmDocAction.execute(recordId, 'CO');
+      } catch (err) {
+        // Domain 1 — the confirmation itself failed. Nothing else must run.
+        toast.error(err.message || ui('networkError'));
+        return;
+      }
+      // The document IS confirmed from here on. Same moment the native path toasts.
+      toast.success(ui('goodsShipment.confirmModal.confirmedTitle'));
+      // Domain 2 — a refetch failure must never read as a failed confirmation. Swallowed
+      // on purpose; the button simply stops spinning on stale (but correct) data.
+      await Promise.resolve(onRefresh?.()).catch(() => {});
+    } finally {
+      // Cleared only once BOTH the POST and the refresh have settled, so a second click
+      // cannot start while the first operation is still in flight.
+      confirmingFullyInvoicedRef.current = false;
+    }
+  }, [confirmDocAction.execute, recordId, ui, onRefresh]);
+
   useEffect(() => {
-    const handler = () => setShowConfirmModal(true);
+    // ETP-5265 QA follow-up — `e.detail.promise` is how the in-flight documentAction
+    // call reaches the core's Confirm button (see dispatchConfirmModalEvent in the
+    // window's index.jsx). The modal branch deliberately leaves it unset: opening a
+    // modal is instantaneous, so the button must not spin for it.
+    const handler = (e) => {
+      if (isFullyInvoiced) {
+        if (e?.detail) e.detail.promise = handleConfirmFullyInvoiced();
+        else handleConfirmFullyInvoiced();
+      } else {
+        setShowConfirmModal(true);
+      }
+    };
     window.addEventListener('goods-shipment:open-confirm-modal', handler);
     return () => window.removeEventListener('goods-shipment:open-confirm-modal', handler);
+  }, [isFullyInvoiced, handleConfirmFullyInvoiced]);
+
+  // ETP-5260 — the Send button now lives in the topbarSecondary slot
+  // (GoodsShipmentSecondaryActions), while this modal (with its delivery-note
+  // PDF context) stays here in topbarRight; the button dispatches this event
+  // to open it.
+  useEffect(() => {
+    const handler = () => setShowSend(true);
+    window.addEventListener('goods-shipment:open-send-modal', handler);
+    return () => window.removeEventListener('goods-shipment:open-send-modal', handler);
   }, []);
 
   useEffect(() => {
@@ -54,11 +148,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/return-material-receipt/returnMaterialReceipt/_/action/availableShipmentLines`,
           {
             method: 'POST',
-            headers,
             body: JSON.stringify({ shipmentId: recordId }),
           },
         );
@@ -68,7 +161,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [wizardOpen, recordId, base, headers]);
+  }, [wizardOpen, recordId, base, apiFetch]);
 
   // ETP-5063 — when confirming the shipment created no related invoice, skip
   // the result modal and communicate success via an auto-dismissing toast
@@ -81,13 +174,149 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
     }
   }, [invoiceResult, onRefresh, ui]);
 
+  // Fetches this shipment's pending-quantity map, which now ALSO carries each pending line's
+  // product and salesOrderLine (ETP-5410 follow-up — see
+  // CreateDraftInvoiceHandler#handlePendingLines), so this used to be two requests and is now
+  // one. Skipped entirely when a linked order exists (see hasLinkedOrder above): the quote would
+  // be misleading there, not just imprecise.
+  useEffect(() => {
+    if (!showInvoiceConfirm || hasLinkedOrder || !recordId) {
+      setLineDetails(null);
+      setPendingByLine(null);
+      setOrderLinePrices({});
+      setMainFetchPending(false);
+      return;
+    }
+    let cancelled = false;
+    setMainFetchPending(true);
+    (async () => {
+      const pendingRes = await apiFetch(
+        `${base}/goods-shipment/goodsShipment/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token },
+      ).catch(() => null);
+      if (cancelled) return;
+
+      const pendingData = pendingRes?.ok ? (await pendingRes.json())?.response?.data || [] : [];
+      const details = {};
+      const pendingMap = {};
+      pendingData.forEach(item => {
+        details[item.lineId] = { product: item.product, salesOrderLine: item.salesOrderLine || null };
+        pendingMap[item.lineId] = Number(item.pendingQty) || 0;
+      });
+      setLineDetails(details);
+      setPendingByLine(pendingMap);
+
+      // Order-linked LINES (as opposed to the header-level linked order gated above) are still
+      // priced at their own order line's unitPrice, never the Tarifa — see the bulk component's
+      // comment for the full Core-verified rationale.
+      const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
+      const prices = {};
+      await Promise.all(orderLineIds.map(async (id) => {
+        try {
+          const res = await apiFetch(`${base}/sales-order/lines/${id}`, { baseUrl: '', token });
+          if (res.ok) {
+            const ol = (await res.json())?.response?.data?.[0];
+            if (ol) prices[id] = Number(ol.unitPrice) || 0;
+          }
+        } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
+      }));
+      if (!cancelled) {
+        setOrderLinePrices(prices);
+        setMainFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showInvoiceConfirm, hasLinkedOrder, recordId, base, apiFetch, token]);
+
+  // Tariff prices for lines with no linked order line — reactive to the Tarifa selection.
+  useEffect(() => {
+    if (!lineDetails || !selectedPriceListId) { setTariffPrices({}); return; }
+    const products = [...new Set(
+      Object.values(lineDetails).filter(d => !d.salesOrderLine).map(d => d.product).filter(Boolean),
+    )];
+    if (products.length === 0) { setTariffPrices({}); return; }
+    let cancelled = false;
+    setTariffFetchPending(true);
+    (async () => {
+      try {
+        // ETP-5410 follow-up: a dedicated POST action that prices exactly these product ids,
+        // instead of the generic product-browse selector (up to 500 rows, filtered client-side)
+        // — see MultiDocumentInvoiceSupport#resolveProductPrices in com.etendoerp.go.
+        const res = await apiFetch(
+          `${base}/goods-shipment/goodsShipment/${recordId}/action/productPrices`,
+          {
+            method: 'POST',
+            baseUrl: '',
+            token,
+            body: JSON.stringify({ productIds: products, priceListId: selectedPriceListId }),
+          },
+        );
+        if (!res.ok || cancelled) return;
+        const items = (await res.json())?.response?.data || [];
+        const prices = {};
+        items.forEach(item => {
+          if (item.productId) prices[item.productId] = Number(item.price) || 0;
+        });
+        if (!cancelled) setTariffPrices(prices);
+      } catch { /* products left unpriced just don't contribute to the quote */
+      } finally {
+        if (!cancelled) setTariffFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lineDetails, selectedPriceListId, recordId, base, apiFetch, token]);
+
+  const quoteAmount = useMemo(() => {
+    if (!lineDetails || !pendingByLine) return null;
+    let sum = 0;
+    let resolvedAny = false;
+    for (const [lineId, qty] of Object.entries(pendingByLine)) {
+      if (!qty) continue;
+      const detail = lineDetails[lineId];
+      if (!detail) continue;
+      const price = detail.salesOrderLine
+        ? orderLinePrices[detail.salesOrderLine]
+        : tariffPrices[detail.product];
+      if (price != null) {
+        sum += qty * price;
+        resolvedAny = true;
+      }
+    }
+    return resolvedAny ? sum : null;
+  }, [lineDetails, pendingByLine, orderLinePrices, tariffPrices]);
+
+  // Only overrides the modal's own default (linkedOrder.grandTotalAmount, or the documentNo
+  // fallback) once a real quote has resolved — while it hasn't, the modal keeps showing
+  // whatever it already showed before this feature existed.
+  const cardAmountLabel = quoteAmount != null
+    ? formatCurrency(data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier'] || '', quoteAmount)
+    : undefined;
+
+  // Whether any pending line still needs a Tarifa-sourced price we haven't fetched yet.
+  const needsTariffPricing = !!(lineDetails && pendingByLine
+    && Object.entries(pendingByLine).some(([lineId, qty]) => {
+      if (!qty) return false;
+      const detail = lineDetails[lineId];
+      return !!(detail && !detail.salesOrderLine);
+    }));
+  // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+  // documentNo fallback while the quote was still resolving — the exact same "wrong value
+  // flashes, then gets replaced" glitch already fixed on the bulk toolbar actions
+  // (BulkInvoiceFromShipment.jsx), just showing a document number instead of "N envíos".
+  // Unifies onto the same fix: cardAmountLoading shows a skeleton placeholder instead, so this
+  // and the bulk modal never disagree on what "the quote is still loading" looks like. Gated on
+  // hasLinkedOrder like the rest of the quote feature — when a linked order exists, the quote
+  // is never computed at all, so there is nothing to show a loading state for.
+  const quoteLoading = !hasLinkedOrder && (
+    mainFetchPending || (needsTariffPricing && (!selectedPriceListId || tariffFetchPending))
+  );
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-shipment/goodsShipment/${recordId}/action/createDraftInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -96,15 +325,20 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
       const json = await res.json();
       const invoiceId = json?.response?.data?.id;
       const docNo = json?.response?.data?.documentNo || '';
+      setShowInvoiceConfirm(false);
       setInvoiceResult({
         invoice: {
           id: invoiceId || null,
           documentNo: docNo,
           amount: json?.response?.data?.grandTotalAmount ?? null,
+          // ETP-5381: the result modal badges off this — the invoice is confirmed on creation.
+          documentStatus: json?.response?.data?.documentStatus ?? null,
         },
       });
     } catch (err) {
-      toast.error(err.message || ui('failedToCreateInvoice'));
+      // ETP-5381: the duplicate-invoice guard answers in English (the module's convention;
+      // backendErrors.js localizes it), so without this the user reads the raw literal.
+      toast.error(translateBackendError(err.message, ui) || ui('failedToCreateInvoice'));
     } finally {
       setCreatingInvoice(false);
     }
@@ -118,9 +352,16 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           onClick={() => setShowInvoiceConfirm(true)}
           disabled={creatingInvoice}
           className="inline-flex items-center gap-1.5 text-[13px] font-medium transition-colors"
-          style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid var(--status-info-border)', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--status-info-fg)'; }}
+          // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
+          // not a button-background token — which rendered a saturated blue instead of
+          // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
+          // The `1px solid var(--status-info-border)` ring was a leftover from that same
+          // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
+          // border at all, just the dark fill.
+          style={{ padding: '4px 12px', borderRadius: 6, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))', opacity: creatingInvoice ? 0.6 : 1, cursor: creatingInvoice ? 'not-allowed' : 'pointer' }}
+          // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
+          onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
@@ -148,68 +389,47 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={() => setShowClone(true)}
-        className="inline-flex items-center gap-1.5 text-[13px] font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-        style={{ padding: '4px 12px', borderRadius: '6px', borderWidth: '1px' }}
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
-        {ui('cloneOrderBtn')}
-      </button>
+      {/* ETP-5260 — Clone/Copy-link/Send moved to the topbarSecondary slot
+          (GoodsShipmentSecondaryActions). This component now only renders the
+          PRIMARY flow buttons above and the modals below. */}
 
-      {isCompleted && <SendDocumentButton onClick={() => setShowSend(true)} />}
-
-      <CopyRecordLinkButton recordId={recordId} windowName="goods-shipment" />
-
-      {!isCompleted && showConfirmModal && isFullyInvoiced
-        ? createPortal(
-            <ConfirmShipmentInvoicedModal
-              base={base}
-              headers={headers}
-              recordId={recordId}
-              data={data}
-              onConfirmed={() => {
-                setShowConfirmModal(false);
-                setInvoiceResult({ invoice: null });
-              }}
-              onClose={() => setShowConfirmModal(false)}
-            />,
-            document.body,
-          )
-        : !isCompleted && showConfirmModal && (
-            <GoodsShipmentConfirmModal
-              base={base}
-              headers={headers}
-              recordId={recordId}
-              data={data}
-              onConfirmed={({ invoice }) => {
-                setShowConfirmModal(false);
-                setInvoiceResult({ invoice: invoice || null });
-              }}
-              onClose={() => setShowConfirmModal(false)}
-            />
-          )
-      }
+      {/* ETP-5265 — the fully-invoiced case no longer opens a confirm popup here;
+          see handleConfirmFullyInvoiced above. This modal only ever renders now
+          for the normal (not-fully-invoiced) confirm flow. */}
+      {!isCompleted && !isFullyInvoiced && showConfirmModal && (
+        <GoodsShipmentConfirmModal
+          base={base}
+          recordId={recordId}
+          data={data}
+          onConfirmed={({ invoice }) => {
+            setShowConfirmModal(false);
+            setInvoiceResult({ invoice: invoice || null });
+          }}
+          onClose={() => setShowConfirmModal(false)}
+        />
+      )}
 
       {showInvoiceConfirm && (
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
           pendingQtyUrl={`${base}/goods-shipment/goodsShipment/${recordId}/action/pendingInvoiceLines`}
+          cardAmountLabel={cardAmountLabel}
+          cardAmountLoading={quoteLoading}
           showPriceListPicker
           isSOTrx
           apiBaseUrl={apiBaseUrl}
           token={token}
-          onConfirm={(priceListId) => { setShowInvoiceConfirm(false); handleCreateInvoice(priceListId); }}
+          onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
+          onPriceListChange={setSelectedPriceListId}
         />
       )}
 
       {invoiceResult?.invoice?.id && createPortal(
         <ConfirmResultModal
           title={ui('soInvoiceCreated')}
-          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
+          docs={[{ type: 'facturaVenta', num: invoiceResult.invoice.documentNo, amount: invoiceResult.invoice.amount, documentStatus: invoiceResult.invoice.documentStatus, route: `/sales-invoice/${invoiceResult.invoice.id}` }]}
           primary={ui('soViewInvoice')}
           currency={data?.['currency$_identifier'] || ''}
           navigate={(route) => { resultNavigatedRef.current = true; navigate(route); }}
@@ -229,19 +449,6 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         document.body,
       )}
 
-      {showClone && createPortal(
-        <CloneOrderModal
-          recordId={recordId}
-          data={data}
-          apiBaseUrl={apiBaseUrl}
-          headers={headers}
-          headerEntity="goodsShipment"
-          routePrefix="/goods-shipment/"
-          onClose={() => setShowClone(false)}
-        />,
-        document.body,
-      )}
-
       <style>{`@keyframes spin { from { transform:rotate(0deg) } to { transform:rotate(360deg) } }`}</style>
 
 
@@ -250,8 +457,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         onClose={() => setWizardOpen(false)}
         shipmentData={data}
         lines={returnLines}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
+        base={base}
         onSuccess={(returnData) => {
           setWizardOpen(false);
           if (returnData?.id) {
@@ -282,143 +488,5 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
         document.body,
       )}
     </>
-  );
-}
-
-// ── ConfirmShipmentInvoicedModal (shipment already fully invoiced — confirm only) ──
-
-function ConfirmShipmentInvoicedModal({ data, base, headers, recordId, onConfirmed, onClose }) {
-  const ui = useUI();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const invoices = Array.isArray(data?.linkedInvoices) ? data.linkedInvoices : [];
-  const firstInvoice = invoices[0] || null;
-  const extraCount = invoices.length - 1;
-  const docNo = data?.documentNo || '';
-  const bpName = data?.['businessPartner$_identifier'] || '';
-
-  const fmtAmount = (v, currency) => {
-    if (v == null) return '';
-    return formatCurrency(currency, v);
-  };
-
-  const statusLabel = { CO: ui('orderStatusCompleted'), DR: ui('orderStatusDraft') };
-
-  const handleConfirm = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${base}/goods-shipment/goodsShipment/${recordId}/action/documentAction`,
-        { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
-      );
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
-      }
-      onConfirmed();
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / .45)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 460, borderRadius: 14, background: 'hsl(var(--card))', boxShadow: '0 24px 60px -12px hsl(var(--foreground) / .35)', overflow: 'hidden' }}>
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 14px' }}>
-          <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('goodsShipment.confirmModal.titleConfirm')}</span>
-          <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
-        </div>
-
-        <div style={{ padding: '0 20px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{docNo}</span>
-            {bpName && <><span style={{ color: 'hsl(var(--muted-foreground))', fontSize: 13 }}>·</span><span style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))' }}>{bpName}</span></>}
-          </div>
-
-          {firstInvoice && (
-            <div style={{ border: '1px solid hsl(var(--foreground))', borderRadius: 11, padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 9, background: 'var(--status-info-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--status-info-fg)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-                  <polyline points="14 2 14 8 20 8"/>
-                  <line x1="16" y1="13" x2="8" y2="13"/>
-                  <line x1="16" y1="17" x2="8" y2="17"/>
-                </svg>
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{ui('goodsShipment.confirmModal.invoiceRef')} {firstInvoice.documentNo}</span>
-                  <span style={{ fontSize: 11, fontWeight: 500, padding: '3px 9px', borderRadius: 6, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)', whiteSpace: 'nowrap' }}>
-                    {statusLabel[firstInvoice.documentStatus] || firstInvoice.documentStatus}
-                  </span>
-                </div>
-                {firstInvoice.grandTotalAmount != null && (
-                  <div style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-                    {fmtAmount(firstInvoice.grandTotalAmount, firstInvoice['currency$_identifier'])}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => { onClose(); navigate(`/sales-invoice/${firstInvoice.id}`); }}
-                style={{ all: 'unset', fontSize: 13, fontWeight: 600, color: 'var(--status-info-border)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--status-info-fg)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--status-info-border)'; }}
-              >
-                {ui('goodsShipment.confirmModal.viewInvoice')}
-              </button>
-            </div>
-          )}
-
-          {extraCount > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: 'hsl(var(--card))', borderRadius: 9, border: '1px solid hsl(var(--card))' }}>
-              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--status-info-bg)', background: 'hsl(var(--card))', borderRadius: 99, padding: '2px 9px', border: '1px solid var(--status-info-bg)', flexShrink: 0 }}>+{extraCount}</span>
-              <span style={{ fontSize: 13, color: 'hsl(var(--muted))' }}>{ui('goodsShipment.confirmModal.moreInvoices')}</span>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--status-success-bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5, margin: 0 }}>
-              {ui('goodsShipment.confirmModal.fullyInvoicedInfo')}{' '}
-              <strong style={{ color: 'hsl(var(--foreground))' }}>{ui('goodsShipment.confirmModal.noNewInvoice')}</strong>
-            </p>
-          </div>
-
-          {error && (
-            <div style={{ fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', padding: '8px 12px', borderRadius: 6 }}>
-              {error}
-            </div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 20px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
-          <button type="button" onClick={onClose} disabled={loading} style={{ fontSize: 13, padding: '9px 16px', borderRadius: 9, border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>
-            {ui('cancel')}
-          </button>
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={loading}
-            style={{ height: 40, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, padding: '0 18px', borderRadius: 9, border: 'none', background: loading ? 'var(--status-info-fg)' : 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: loading ? 'not-allowed' : 'pointer' }}
-            onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-            onMouseLeave={e => { if (!loading) e.currentTarget.style.background = 'var(--status-info-fg)'; }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            {loading ? ui('processing') : ui('goodsShipment.confirmModal.confirmBtn')}
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }

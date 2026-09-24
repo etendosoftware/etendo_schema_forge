@@ -274,6 +274,8 @@ Owner: whoever next touches the goods-shipment window.
 - Also discovered while wiring this in: for sales-invoice/purchase-invoice, `InvoiceLinesTable.jsx` (and its per-window wrapper components `SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx`) are **not currently reachable from the running app** — neither window's `decisions.json` sets `window.customLinesComponent`, so `HeaderPage.jsx` renders the plain generated `LinesTable.jsx` (a separate file with its own hardcoded columns, no project/costcenter, no dimensionsPanel) via `DetailTable={LinesTable}`, never `InvoiceLinesTable.jsx` via `CustomLines`. This predates ETP-4529 (the wrapper files exist since ETP-3908/ETP-3569) and is unrelated to this fix's correctness — flagged for the coordinator since it means neither ETP-4543's original columns nor ETP-4529's `dimensionsPanel` column render live for these two windows today without further wiring work (and, per the point above, `customLinesComponent`'s contract doesn't fit `InvoiceLinesTable.jsx` as-is either).
 
 **Resolved (ETP-4529, generator support in `schema_forge_core`):** the "coordinator decision" and the "no equivalent override mechanism" gap called out above are both closed — not by adding a lines-tab override point, but by extending the generator itself. `generate-frontend.js`'s `generateTableComponent` now emits the synthetic `dimensionsPanel` column directly from a new `decisions.json` field flag (`dimensionsPanel: true`, read independently of `grid` — see `docs/decisions-reference.md`), for ANY pipeline-generated lines table. This sidesteps the `InvoiceLinesTable.jsx` reachability gap entirely for sales-invoice/purchase-invoice (that component stays dead code; the fix lives in the ACTUALLY-rendered generated `LinesTable.jsx`) and gives goods-shipment/goods-receipt the column for the first time. All four windows now set `lines.project.dimensionsPanel`/`lines.costcenter.dimensionsPanel` to `true` (grid stays `false`) and were regenerated. Verified additive: `generateTableComponent` on an entity with zero `dimensionsPanel: true` fields (e.g. `physical-inventory`) produces a byte-identical `contract.json`/generated output (same checksum, only `updatedAt` differs). Full generator design + verification: see the ETP-4529 developer delivery report (or `git log` on `cli/src/generate-frontend.js`/`resolve-curated.js`/`generate-contract.js` in `schema_forge_core` for "ETP-4529"). One pre-existing, unrelated item surfaced while regenerating these 4 windows: their committed `apiPrediction.actions` were stale relative to already-published core behavior (a `field` key dropped in favor of richer `name`/`actionType`/`parameters`/etc. metadata) — confirmed to reproduce with the plain published `@etendosoftware/schema-forge-cli@0.3.9` too, unrelated to this change; worth a coordinator-scheduled `make regen` sweep across the repo.
+
+**Dead code deleted (ETP-5133).** `InvoiceLinesTable.jsx`, `SalesInvoiceLinesTable.jsx`, and `InvoiceLineTableCustom.jsx` — flagged as unreachable above and again by the ETP-4529 generator-support resolution — have now been deleted outright, along with their own test files. A live-browser check during ETP-5133 found that a fix (the new `noTruncate` column flag) had been mistakenly applied to this dead `InvoiceLinesTable.jsx` file instead of the actually-rendered generated `LinesTable.jsx`, which is what finally prompted removing the files rather than continuing to carry them as documented dead weight. Nothing outside their own tests ever imported them (confirmed via a repo-wide reference search before deletion); `sales-invoice`/`purchase-invoice`'s lines grid has rendered exclusively through the pipeline-generated `LinesTable.jsx` (via `InlineLinesPanel`/`DataTable`'s shared `inlineEditable` rendering) since before this fix, so the deletion changes no runtime behavior. A future reader hitting this entry or the ETP-4529 one above should treat the "not currently reachable" language as historical — the files themselves no longer exist. See `docs/generated-custom-windows/purchase-invoice.md` and `sales-invoice.md` for the corrected doc sections, and `docs/ui-customization.md` §14b for the `noTruncate`/`dimensionsPanel` mechanics on the surviving generated component.
 ---
 
 ## `lineHiddenColumns` Hid Unrelated Grid Columns (product/listPrice/grossAmount) — ETP-4530
@@ -346,6 +348,109 @@ Regression coverage: `tools/app-shell/src/components/contract-ui/__tests__/Detai
 **The bug (same shape as the real ETP-4609 fix in `ProductCustomTable.jsx`):** `ContactsTable.jsx` declares `const HIDDEN_COLS = ['__contactType']`, passes `hiddenColumns={HIDDEN_COLS}` to `DataTable`, and then spreads `{...rest}` (containing whatever the caller passed in) *after* that prop, e.g. `hiddenColumns={HIDDEN_COLS} ... {...rest}`. `ListView.jsx` unconditionally forwards its own `hiddenColumns` prop (default `[]`) to whatever `Table` component a window wires in. Because the spread lands after the local assignment, a live caller's `hiddenColumns={[]}` (or any other value) would silently clobber `HIDDEN_COLS`, and `__contactType` would render as a visible grid column instead of staying hidden. This is exactly the bug ETP-4609 fixed in `ProductCustomTable.jsx` by destructuring the incoming prop and merging (`[...new Set([...local, ...incoming])]`) instead of relying on spread order.
 
 **Why it wasn't fixed here:** out of scope for ETP-4609 (that ticket's QA pass found this only as a cross-window regression check while verifying the real fix, and the bug predates ETP-4609). Since the file is currently unreachable from any live window, there is no user-facing impact today.
+
+---
+
+## [2026-09-11] ETP-5273 — Second scope reversal on the same field: independent accounting date, again, but not the same design as before
+
+**Note:** this is not a bug entry — it records a second scope reversal on `accountingDate`, on the
+same field that `docs/feedback.md`'s own `[2026-07-17] ETP-4531` entry above already documents
+once. Read that entry first; this one assumes it. A future reader who only sees "independent
+accounting date, editable, `readOnlyLogic: @Posted@='Y'`" and reaches for the pre-ETP-4531 design
+(the `blockCalloutFieldUpdate` guard) will implement the WRONG thing — see below.
+
+**What changed.** ETP-5273 re-reverts ETP-4531's unification for exactly two windows —
+`sales-invoice` and `purchase-invoice`. `accountingDate` goes back to `visibility: "editable"`,
+`section: "principal"`, `seq: 35`, `readOnlyLogic: "@Posted@='Y'"`. `sales-order`, `purchase-order`,
+`goods-shipment`, and `goods-receipt` are explicitly OUT of this ticket's final scope and keep
+`accountingDate` as `visibility: system`, unified with the document date on every write.
+
+**Why it is a re-revert and not a feature:** the field, the guard pattern, and the design already
+existed once (pre-ETP-4531) and were removed inside a single PR with no separate revert PR — see
+the July entry above for the full commit trail (`c6d0aabc`, `aa009f51`, PR 741/914). There was no
+technical defect in the original implementation; ETP-4531 was a pure product scope call. ETP-5273
+restores editability on product's request to "align the behavior with Classic."
+
+**The scope also moved mid-implementation.** The ticket, as originally read, covered SIX windows:
+`sales-invoice`, `purchase-invoice`, `goods-shipment`, `goods-receipt`, `sales-order`, and
+`purchase-order`. Work started on that basis and produced a real, tested implementation for all
+six — including a restored `blockCalloutFieldUpdate` guard and brand-new `afterCallout()` overrides
+on `AbstractOrderHeaderHandler` for the two order windows, which had never had this guard before.
+Partway through, the ticket's author rewrote the ticket to cover invoices only. **All of the
+order/shipment/receipt work was reverted, not merely abandoned** — `AbstractOrderHeaderHandler`,
+`GoodsReceiptHeaderHandler`, `GoodsShipmentHeaderHandler`, `NeoDefaultsCascadeHelper`,
+`NeoCrudHandler`, and the four windows' `artifacts/` were restored to their pre-task state, and NEO
+was re-pushed so those four windows' `ETGO_SF_FIELD` rows went back to `isreadonly='Y'` /
+`visibility='system'` (verified directly against the DB). If you find any trace of order/shipment
+guard code in a stale branch or worktree, it does not reflect the shipped design — discard it.
+
+**ETP-5273 is a THIRD design, not the same one as before ETP-4531— read this before reaching for
+`blockCalloutFieldUpdate`.** The pre-ETP-4531 implementation kept `documentDate` and
+`accountingDate` fully decoupled in both directions via a guard that stripped the classic AD
+callout cascade. Once ETP-5273's guard was actually restored and tested against the acceptance
+criteria, it turned out to make the field NOT follow the document date at all — the opposite of
+what the ticket's CA/CP-1 asked for ("al crear un documento, la fecha contable toma el mismo valor
+que la fecha del documento" — and implicitly, changing the document date should still visibly move
+the accounting date, matching Classic). The shipped design instead:
+- lets the native classic callout (`SifInvoiceOperationDateCallout` → `SE_Invoice_AccountingDate`
+  on `C_Invoice.DateInvoiced`) run completely unguarded, so `invoiceDate → accountingDate` syncs
+  one-way on every write, exactly like Classic;
+- relies on `NeoHandlerUtils.mirrorAccountingDateOnCreate` — POST-only, and only when the client
+  sent no explicit `accountingDate` — instead of a per-write unconditional mirror, so a manually
+  edited `accountingDate` survives later saves of unrelated header fields.
+
+`blockCalloutFieldUpdate` has zero call sites left in `com.etendoerp.go`; it is not merely dormant,
+it does not exist. See `docs/neo-headless-extensibility.md`'s "Post-hook: Guard a Field Against
+Callout Cross-Updates" section for the up-to-date state of that pattern.
+
+**Frontend bug uncovered along the way, not introduced by this ticket:** once `accountingDate`
+became editable and testable end-to-end on GO, a "field gets permanently stuck" bug surfaced —
+change the invoice date, hand-edit the accounting date, then change the invoice date again: in
+Classic the accounting date keeps following; in GO (before the fix) it stopped moving after the
+manual edit. Root cause: the "protect user-touched fields from callout overwrites" guard added by
+ETP-3836 (`detailViewHelpers.jsx`, `applyCalloutFieldUpdates`) marks any field the user has typed
+into as permanently exempt from later callout updates, and never re-arms it except on a full
+record change. That guard is correct for genuinely independent fields (picking a new business
+partner should not silently overwrite payment terms the user just adjusted), but `accountingDate`
+under ETP-5273 is not an independent field being collaterally touched — it is the declared,
+one-way cascade target of the document date's own callout, which Classic re-applies on every
+change. **Fix:** `isDocumentDateCascadeTarget(key, triggerField, documentDateField)`, a narrow
+exemption keyed off the window's own declared `documentDateField` prop (already threaded through
+`DetailView.jsx`, so no pipeline/generator change was needed). Anyone touching
+`detailViewHelpers.jsx`'s user-touched-field guard in the future should know this exemption exists
+and why — it is easy to mistake for scope creep on the guard rather than a required carve-out for
+one-way cascades declared by the window itself.
+
+`goods-shipment` and `goods-receipt` were deliberately NOT given this same frontend fix, even
+though they have the identical underlying vulnerability if their accounting date is ever made
+visible: neither window declares `window.documentDateField`, so the prop falls back to its default
+(`'orderDate'`, a field that does not exist on either window) and the exemption never activates.
+See the collateral-finding entry immediately below for why this was left alone.
+
+**Two collateral findings — explicitly OUT of scope for ETP-5273, not resolved, flagged for their
+own ticket:**
+1. **Currency conversion is silently disabled on `goods-shipment`/`goods-receipt`.** Both windows
+   fall back to the nonexistent `documentDateField` default described above, which also feeds
+   `DetailView.jsx`'s currency-conversion effect (`hook.selected?.[documentDateField]` is always
+   `undefined` there, so the effect aborts every time). Both windows do have a currency field
+   (`etgoCurrency`), so this is a real, live gap, not theoretical. Declaring
+   `documentDateField: "movementDate"` on these windows would fix both this and the frontend
+   cascade-guard gap above in one move, but doing so was judged out of scope for a fecha ticket —
+   flipping on currency conversion is an unrelated behavior change and deserves its own ticket and
+   its own validation.
+2. **AD drift in `goods-receipt`:** regenerating this window with a fresh extract surfaced a
+   `descriptionOnly` (`IsDescription`) line field absent from the committed `contract.json`. It was
+   excluded from this changeset as out of scope, but the NEO push performed while restoring the
+   revert DID include it, so the local DB now has that field configured while the repo does not.
+   Whoever picks up `goods-receipt` next should regenerate and commit it deliberately to close this
+   gap, rather than being surprised by an untracked NEO/repo mismatch.
+
+**Lesson:** the same field flip-flopped design twice inside four months on the same underlying
+tension — "independent" vs. "unified" accounting date — with no code defect driving either change,
+only a product scope call each time. Before restoring ANY previously-removed guard or mirror
+pattern for a field, re-derive the desired behavior against Classic first (as ETP-5273 ultimately
+did) rather than assuming the last implementation you can find in git history is the target — it
+may be exactly the design the ticket is asking you to move away from.
 
 **Evidence:** `tools/app-shell/src/windows/custom/contacts/__tests__/ContactsTable.vitest.jsx` has a corresponding `it.skip(...)` test (`'keeps HIDDEN_COLS even when the parent forwards its own hiddenColumns=[] (ListView default)'`) that reproduces the clobbering and is skipped rather than deleted, precisely so it stays discoverable.
 
@@ -1714,6 +1819,53 @@ diff — they are the artefact most likely to be wrong and the one a future read
 
 ---
 
+## `decisions.json` list-view props are dead code for hand-rolled window wrappers (ETP-5209)
+
+**Component:** `purchase-invoice`, `sales-invoice`, `goods-receipt`, `goods-shipment` — all four are
+registered in `tools/app-shell/src/windows/registry.js` pointing at a hand-written
+`tools/app-shell/src/windows/custom/<window>/index.jsx` wrapper, not directly at the generated
+`artifacts/<window>/generated/web/<window>/index.jsx`.
+
+**Symptom / trap:** Editing `artifacts/<window>/decisions.json → window.rowQuickActions.menuActions`
+or `window.customComponents.bulkActions`, then running `make regen`, produces a correctly compiled
+generated `HeaderPage.jsx`/`<Entity>Page.jsx` — but the change has **zero effect** on what the user
+actually sees for the list view of these four windows.
+
+**Root cause:** Each wrapper's list branch calls the generated `<ListView>`/`<GeneratedApp>` (or
+renders its own `<ListView>` directly) with explicit `rowQuickActions={...}` and `bulkActions={...}`
+props of its own. In every generated `<Entity>Page.jsx` the decisions-derived defaults for these
+props are emitted *before* `{...props}` in the JSX call (e.g. `rowQuickActions={{"actions":{...}}}
+... {...props}`), so any same-named prop the caller passes always wins — the decisions.json-declared
+version is never mounted. The generated form-view (`menuActions`) is NOT always shadowed the same
+way: it depends on whether the specific wrapper happens to pass its own `menuActions` prop into the
+detail branch (`goods-receipt` and `goods-shipment`'s wrappers differ from each other here — check
+each wrapper's `recordId` branch individually before assuming decisions.json's `window.menuActions`
+is or isn't live for a given window's form view).
+
+**Fix (for ETP-5209):** Reachability additions for these four windows' list-view row-kebab and bulk
+selection bar were made directly in the wrapper files and their shared helper
+(`tools/app-shell/src/windows/custom/shared/useInvoiceWindow.js`,
+`tools/app-shell/src/windows/custom/{purchase-invoice,sales-invoice,goods-receipt,goods-shipment}/index.jsx`),
+plus two new exports on the generic `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx`
+(`buildPostActions`, `postRowFilter` — a plain `(row, action, ui) => ...` function, not a
+`createPostRowFilter(ui)` factory; a factory would force every `bulkActions` wrapper to call
+`useUI()` itself, which is the Rules-of-Hooks violation this ticket also fixes) reused across all
+four. `decisions.json` was
+deliberately left untouched for these four windows' list-view wiring — editing it would have been
+inert busywork requiring a `make regen` cycle for a config path the runtime never reads.
+
+**Lesson.** Before editing `decisions.json` for a window's list-view behavior (row-kebab menu
+actions, bulk actions, custom list components), check `tools/app-shell/src/windows/registry.js`
+first. If the registry entry points at `tools/app-shell/src/windows/custom/<window>/index.jsx`
+rather than `@generated/<window>/...`, read that wrapper's list branch for an explicit
+`rowQuickActions`/`bulkActions` prop before touching decisions.json — it likely shadows the
+generated default entirely, and the actual fix belongs in the wrapper (or a `shared/` helper it
+imports), not in the pipeline artifact. This same shadow pattern already applied to `topbarRight`
+for `sales-invoice` (see ETP-5027 comment in that window's `index.jsx`), so it is not new to this
+window family — just previously undocumented for `rowQuickActions`/`bulkActions` specifically.
+
+---
+
 ## [2026-09-07] ETP-5233 — Kebab menu hid Post/Unpost on every statically read-only window, for every user, regardless of role access
 
 **Component:** `DetailView.jsx` — `windowReadOnly` derivation and its single `DetailMoreActionsMenu`
@@ -1998,6 +2150,259 @@ broken for any Organization-level role; only a core fix closes them. Written up 
   RTK's prettified summary, not an applicable patch — discovered *after* reverting. Use
   `rtk proxy git diff`, and validate with `git apply --check` before relying on it.
 
+---
+
+## [2026-09-09] ETP-5245 — Secondary tabs have no per-row delete gate (accepted debt)
+
+**Component:** `tools/app-shell/src/components/contract-ui/DetailView.jsx` +
+`DataTable.jsx` / `InlineLinesPanel.jsx`
+
+**Symptom:** The Product window's new **Cost** tab (ETP-5245) lists the whole `M_Costing` history —
+rows the user typed *and* rows the costing engine generated. Engine rows must never be deleted, but
+the trash icon renders on every row. Clicking it on an engine row produces a backend `403`
+("This cost was calculated by the system and cannot be modified or deleted."), so the user is
+stopped, but only after acting: the affordance promises something the system will refuse.
+
+**Root cause:** The delete affordance is decided **per entity, not per row**.
+`DetailView.jsx:638` derives `onDeleteRow` from `props.crud?.[props.st.key]?.delete` — one boolean
+for the whole `costing` entity — and `DataTable.jsx:1689` renders the trash `TableCell` for every
+row as soon as that handler exists (`InlineLinesPanel`'s `canDelete` gate behaves the same way).
+There is no hook for "this entity is deletable, but *this row* is not". `hideDelete` (see
+`docs/decisions-reference.md`) can only turn the capability off for the entire entity, which would
+also block deleting the manual rows the tab exists to maintain.
+
+**Fix (partial, deliberate):** `ProductCostingHandler.guardEngineRow` returns `403` on any
+`PATCH`/`PUT`/`DELETE` against a row with `ISMANUAL != 'Y'`, and the message is translated through
+`lib/backendErrors.js` (`backendError.costingEngineRowLocked`). This was reviewed and **accepted**
+for ETP-5245 rather than blocked, because a server-side guard is the only one that also covers the
+REST API and the MCP — a UI-only gate would have been the weaker half of the pair regardless.
+
+**Open work:** a `canDeleteRow` predicate (record → boolean) on `DataTable` / `InlineLinesPanel`,
+plumbed from `DetailView`'s secondary-tab props and declarable from `decisions.json` the way
+`readOnlyLogicJs` already is for fields. Corrected 2026-09-10: an earlier version of this entry
+claimed both components live in `schema_forge_core` and that the change would need a package
+publish plus a pin bump here. That is wrong — `DataTable.jsx` and `InlineLinesPanel.jsx` are both
+in this repo under `tools/app-shell/src/components/contract-ui/`, exported by the local barrel.
+The work is therefore a single-repo change and cheaper than this entry first estimated.
+Not scheduled.
+
+**Lesson:** A row-level invariant cannot be expressed with an entity-level flag. When a tab mixes
+records with different write rules — user-authored vs. machine-authored, draft vs. posted — the
+backend guard is mandatory and the UI gate is, at best, a courtesy. Ship the guard first, and record
+the missing affordance instead of pretending the UI covers it.
+
+---
+
+## [2026-09-10] ETP-5245 — Hovering a lines row deleted its amount cell when the amount was not the last column
+
+**Component:** `tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx` (`trailingColumn`)
+
+**Symptom:** In Product > **Cost**, hovering a row made the **Cost** value disappear and pushed the
+two date cells one slot to the left, while the header stayed put — the row's content and the header
+no longer lined up. The other rows were unaffected. Measured on the reporter's screenshots: the
+dates moved ~170px left, exactly one column width, and the edit/delete icons appeared on the far
+right.
+
+**Root cause:** `InlineLinesPanel` suppresses one cell while the hover/edit **action strip** is
+showing, so the icons can take that cell's space without the row reflowing. The strip is always
+appended at the **end** of the row's flex container, so this only works if the suppressed cell is
+the **last** one. The old `trailingColumn` instead scanned the columns *backwards for the last one
+of `type: 'amount'`*, wherever it sat. On the Cost tab the columns are `cost` (amount),
+`startingDate`, `endingDate`, so it picked `cost` — the **first** column: hover removed the leading
+flex child and every following cell slid left into the vacated slot. Because `trailingColumn` was
+non-null, `reserveActionSlot` stayed `false`, so neither the header nor the un-hovered rows reserved
+the strip's slot and the misalignment was visible.
+
+**Not specific to Cost.** Any lines / secondary tab whose amount column is not last had the same
+bug, e.g. purchase-invoice's Payment Details (`amount`, `invoicePaid`), sales-order's Payment Plan,
+price-list's lines. The main document Lines tabs never showed it because there the amount genuinely
+is the last grid column, which is why it went unnoticed since the layout shipped (ETP-3908).
+
+**Fix:** `trailingColumn` now only ever resolves to the **last visible column**, and only when that
+column is an `amount` (and not `noTrailing`). Every other shape falls into the pre-existing
+`reserveActionSlot` path, which reserves the 160px slot on the header and on every row, so nothing
+reflows on hover. Regression test:
+`tools/app-shell/src/components/contract-ui/__tests__/InlineLinesPanel.trailingAmountColumn.vitest.jsx`.
+
+**Lesson:** A "swap this cell for the hover actions" trick is a positional contract, not a type
+contract. If the replacement UI renders at a fixed position (here: appended last), the cell it
+replaces must be pinned to that same position — selecting it by column *type* silently breaks the
+moment a window orders its columns differently.
+
+---
+
+## [2026-09-10] ETP-5245 — Line date fields rendered as plain text boxes instead of the app date picker
+
+**Component:** `DataTable.jsx` (`renderInlineAddFieldControl`) and `InlineLinesPanel.jsx` (`EditCell`)
+
+**Symptom:** In Product > **Cost**, the add-line row rendered *Starting Date* / *Ending Date* as bare
+text inputs whose only affordance was the field label as a placeholder — no calendar, no mask, and
+whatever free text the user typed went into the POST body verbatim.
+
+**Root cause — two different renderers, three different date controls.** The same date column
+reaches the user through three independent code paths, and only one of them used the app's
+`DateField`:
+
+| Path | Renderer | Control (before) |
+|---|---|---|
+| Form / detail | `EntityForm.renderDateField` | `DateField` ✅ |
+| Add-line row | `DataTable.renderInlineAddFieldControl` | **none** → fell through to `renderInputCell`, a `type="text"` box |
+| Inline edit of an existing row | `InlineLinesPanel.EditCell` | native `<input type="date">` |
+
+The add-row of an `inlineEditable` tab is **not** `InlineLinesPanel` — the generated
+`<Window>Table.jsx` renders a header-hidden `<DataTable hideHeader hideDataRows>` as a sibling while
+`addRow.active` is true (see `docs/ui-customization.md`, "Add-line flow"). `renderInlineAddFieldControl`
+dispatches on lookup / search / static-select / selector / checkbox and then falls through to
+`renderInputCell`; it has **never** had a `date` branch (`git log -S "field.type === 'date'"` on
+`DataTable.jsx` returns nothing).
+
+**Fix:** both paths now render `DateField`. `DateField.onChange` always emits `yyyy-MM-dd` (or `''`
+when cleared) — the exact wire format the rest of the pipeline assumes for a date (see
+`normalizeCreationDefaults` in `hooks/useEntity.js`: "dd-MM-yyyy → yyyy-MM-dd (HTML date input)") —
+so the swap also *fixes* the format, which free text never guaranteed. Regression test:
+`tools/app-shell/src/components/contract-ui/__tests__/linesDateField.vitest.jsx`.
+
+**Two accepted gaps**, both pre-existing for the other rich controls in that dispatcher: `DateField`
+takes no `ref`, so a date column that is the FIRST add-row field gets no `firstInputRef` autofocus
+(same as the `PillToggle` branch); and it takes no `onKeyDown`, so row-level Enter/Escape does not
+fire from inside it — `DateField` binds both itself.
+
+**Generic, not Cost-specific.** Every window with a `type: 'date'` field in an `addLineFields.entry`
+was affected: `price-list` (`priceListVersion.validFromDate`), `purchase-order`
+(`orderLine.scheduledDeliveryDate`), `requisition` (`lines.needByDate`), `sii-monitor`
+(`issuedInvoices`: 4 date fields), plus `product` (`costing`).
+
+**Lesson:** the same column type is rendered by three sibling components here (form field, add-row
+cell, inline-edit cell) and each keeps its own type-dispatch `if` chain. When adding or fixing a
+field-type control, grep all three — a branch missing from one of them degrades silently into the
+fall-through renderer instead of erroring.
+
+---
+
+## [2026-09-10] ETP-5245 — A declared `javaQualifier` that was never pushed silently disables the whole handler
+
+**Component:** `ETGO_SF_ENTITY.Java_Qualifier` (config state) / `NeoHookDispatcher.dispatchWithHooks`
+
+**Symptom:** The Product > Cost add-row opened with **Starting Date empty**, even though
+`ProductCostingHandler.injectCostingDefaults` pre-fills it with the product's creation date and the
+backend was demonstrably deployed (the "stockable product with no cost" banner, fed by
+`etgoHasCost` from `ProductDefaultsHandler`, rendered fine).
+
+**Root cause — configuration, not code.** `NeoHookDispatcher.dispatchWithHooks`
+(`NeoHookDispatcher.java:77-79`) reads `entity.getJavaQualifier()` and, when it is blank, returns
+`defaultAction.get()` **without consulting any handler at all**. The DB said:
+
+```
+product | accounting | productAccountingHandler
+product | costing    | <NULL>          <-- declared in decisions.json, never pushed
+product | price      | productPriceHandler
+product | product    | productDefaultsHandler
+product | stock      | productStockWarehouseHandler
+```
+
+`costing.javaQualifier` exists only in the WORKING TREE of `artifacts/product/contract.json` — at
+`HEAD` and `HEAD~1` the key is absent. All five entity rows were written by the same push
+(`created = updated = 2026-09-09 14:11:42`), from a contract that did not yet carry it. The four
+older handlers landed; the new one could not.
+
+**This was never only about the date.** With the qualifier blank, `ProductCostingHandler` was
+**entirely inert** — `handle()` too, so `prepareCreate` (which forces `costType='STA'`,
+`permanent=false`, `production=false`, `manual=true`) and `guardEngineRow`'s 403 on engine rows
+were BOTH off. The tab looked like it worked while every guarantee the handler exists to provide
+was absent.
+
+**Fix:** re-push the spec (`sf-push-neo product`, i.e. `make regen ONLY=product PUSH_TO_NEO=1`),
+then `./gradlew export.database` in the Etendo root so the value survives a rebuild. Verified
+`costing → productCostingHandler` after the push. No restart needed: `NeoServlet.findEntity`
+(`NeoServlet.java:230`) reads `ETGO_SF_ENTITY` through an `OBCriteria` on every request, uncached.
+
+**Open gap (generic).** Nothing detects this. `sf-validate-pipeline` runs without DB access, so it
+cannot compare a declared `javaQualifier` against `ETGO_SF_ENTITY`, and NEO does not warn when it
+skips a handler. Any entity whose handler is declared but unpushed is silently dead, in any window.
+A DB-aware check ("every `backendContract.entities.*.javaQualifier` resolves to a non-null
+`Java_Qualifier` for that spec") would have caught this in one query.
+
+**Lesson:** a declared handler is not a deployed handler. When a NeoHandler "does not run", check
+`ETGO_SF_ENTITY.Java_Qualifier` in the DB **before** reading a single line of Java — the dispatcher
+fails open and silent, and a sibling handler working in the same window proves nothing about yours.
+
+---
+
+## [2026-09-10] ETP-5245 — Entity-level `orderBy` in decisions.json is a dead key
+
+**Component:** `decisions.json` (entity level) / `@etendosoftware/schema-forge-cli`
+
+**Symptom:** Four windows declare an entity-level `"orderBy"` in `decisions.json`
+(`chart-of-accounts`, `cost-center`, `matched-purchase-invoices`, `service-project`) and none of
+them is ordered by it. The key looks configured and does nothing.
+
+**Root cause:** no consumer. The key survives into no contract — `grep '"orderBy"'` returns 1 hit in
+each of those four `decisions.json` and **0** in each corresponding `contract.json`. The only
+`orderBy` in the published CLI is `extract-fields.js:199`, `ref_table_orderby`, which is a
+*selector's* reference-table order read out of `AD_REF_TABLE` — unrelated to an entity's row order.
+There is also no column to push it to: `ETGO_SF_ENTITY` has `SEQNO`, which orders the entities
+among themselves, not the rows within one.
+
+**Consequence:** row order is whatever the DAL returns, i.e. the database's plan. Four windows
+believe they are sorted and are not.
+
+**Workaround used for ETP-5245 (Cost tab):** the handler defaults the DAL `_sortBy` query param on
+a list GET when the caller sent none — see `ProductCostingHandler.applyDefaultSort`. Query-level,
+so it survives pagination, and it applies to UI, REST and MCP alike. It is per-entity Java, though,
+not configuration: it does not scale to the four windows above.
+
+**Lesson:** a decisions key with no consumer is worse than no key — it reads as configured
+behaviour. Either implement `orderBy` end to end (resolve → contract → a new `ETGO_SF_ENTITY`
+column → a default `_sortBy` in `NeoCrudHandler.buildDalParams`) or delete it from the four
+windows. Until then, treat any `orderBy` in a `decisions.json` as documentation of an intent, not
+as behaviour.
+
+---
+
+## [2026-09-10] `FinancialAccountsPageHandler` echoes `updated` without the XSD colon (latent, not failing)
+
+**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler` (its `row.updated`, ~line 343)
+
+**Status:** NOT a live bug. Noted while fixing ETP-5245 in `ProductPriceHandler`, deliberately left
+alone: it is out of that ticket's scope and it works today. Recorded so somebody picks it up on
+purpose rather than rediscovering it under a production incident.
+
+**Symptom:** none yet. The value it emits is accepted and every edit saves.
+
+**The fragility:** it formats `updated` with `JsonUtils.createDateTimeFormat()` alone, which yields
+an RFC-822 offset with **no colon** (`2026-08-15T10:30:00-0300`). Core's reader repair step,
+`JsonUtils.convertFromXSDToJavaFormat` (`modules_core/org.openbravo.service.json/.../JsonUtils.java`
+lines 159-172), recognises **only** the colon form: it checks `charAt(length-3) == ':'` and, for
+anything else, falls through to `return dateValue + "+0000"`. So the colon-less token becomes
+`2026-08-15T10:30:00-0300+0000`, and it parses correctly **only** because `SimpleDateFormat.parse`
+stops at the end of the pattern and ignores the trailing characters. The offset that wins is the
+real one, by accident of parser leniency — not by the repair step doing its job.
+
+**Why this is worth fixing anyway:** the value feeds optimistic-locking, whose comparison is exact
+equality to the second (`NeoRecordVersion#equalToTheSecond`, mirroring core's
+`JsonToDataConverter#areDatesEqual(d1, d2, true, false)`). If that leniency ever changes — a
+stricter parser, a reader that validates the repaired string, a caller that round-trips the token
+through anything else — the failure is not a parse error. It is `stale_record` on every single
+write, with the row untouched and nothing in the logs pointing at a date format. That is precisely
+what ETP-5245 was: `ProductPriceHandler` dropped the offset entirely, the reader read the value as
+UTC, and on a UTC-3 server **no price could be edited at all**.
+
+**The fix, when someone takes it:** wrap the output in `JsonUtils.convertToCorrectXSDFormat(...)`,
+as `ProductPriceHandler#toXsdStamp` now does. The reader then strips the colon back out and parses
+exactly what was written, with the repair branch never entered. Verified across offsets: `-03:00`,
+`+00:00`, `+05:30` and `+12:45` all round-trip to the original instant — `convertToCorrectXSDFormat`
+inserts the colon by position (`length-2`), which is safe because the RFC-822 offset is always
+exactly four digits.
+
+**Regression guard to copy:** assert that the reader RECOGNISES the offset rather than repairing it,
+i.e. `convertFromXSDToJavaFormat(echoed) != echoed + "+0000"`. That one assertion catches both the
+missing offset and the colon-less offset, and it is zone-independent. See
+`ProductPriceHandlerTest#testEchoedUpdatedRoundTripsToTheStoredInstantUnderAnyServerZone`.
+
+**Lesson:** "it parses" is not "it is read correctly". When a value crosses into core's readers,
+write the shape core's own writers emit — the shape its repair step was built to accept — instead
+of a shape that survives on parser leniency.
+
 ## [2026-09-09] ETP-5216 — Making a column filterable moves the goalposts for every rule that was living in its cell
 
 **Component:** the TicketBAI / Batuz list column —
@@ -2084,3 +2489,401 @@ dead column the ticket set out to fix. It was right (both configured organizatio
 2026-09-08 and no invoice is later than that), but a reviewer opening a dev instance would have
 filed it as a regression. When a column's correct state in dev data is uniform, say so out loud
 before somebody else looks at it.
+
+## [2026-09-11] Pre-existing flake — `contacts-list-sort-column-width.mocked.spec.js` (ETP-5182 test), unrelated to ETP-5281
+
+**Component:** the ETP-5182 regression spec itself
+(`e2e/tests/flows/contacts-list-sort-column-width.mocked.spec.js`), not `DataTable.jsx`.
+
+**Symptom:** the spec asserts the `name` column header's `getBoundingClientRect().width` is
+identical (< 0.5px tolerance) before and after clicking the header to sort. It fails intermittently
+with diffs around 0.35–0.75px, and looks exactly like a regression from whatever DataTable change
+landed most recently (it did, for ETP-5281's header-truncation/`max-w-full` work — but is not).
+
+**Root cause — confirmed NOT the sort action.** Instrumented the header's width right after
+`page.goto()` with no sort click at all: on a cold page load the `<th>` box measures a transient
+value (observed 138.7–138.9px) that, after ~200–300ms and/or any subsequent layout pass (font
+metrics settling, most likely — `table-layout: fixed`'s "first row" width computation is sensitive
+to this), snaps to a stable value (139.25px in this repro) and stays there for the rest of the
+browser context's life. The test's "before" measurement is taken very soon after the header becomes
+visible; its "after" measurement is taken later (after waiting for the sort request + long-name
+rows to render), giving the settle time to complete. The diff the test sees is the gap between the
+cold and settled measurements — nothing to do with sorting, the arrow glyph, or column content.
+
+**Proof it predates ETP-5281.** Ran the identical spec, full mocked suite, on `develop` HEAD
+(`ebf319cfe`, zero ETP-5281 commits applied) — same test fails on the first attempt with the same
+signature, passes on retry. Also reproduced standalone on the ETP-5281 branch itself with
+`--repeat-each` across multiple runs: fails roughly 1-in-3 attempts, single-worker, no sort-content
+variation involved.
+
+**Status:** not fixed here — flagged for whoever next touches this spec. A real fix likely means
+letting the page settle (e.g. two `requestAnimationFrame`s, or a short fixed wait) before taking the
+"before" measurement, not loosening the 0.5px tolerance (which is correctly guarding against a real
+class of bug — table-layout content-driven resize — that this spec exists to catch).
+
+## [2026-09-17] ETP-4879 — One date field feeding two backend date properties silently rolled back the accounting date
+
+**Component:** `NewTransactionModal.jsx` (`tools/app-shell/src/windows/custom/financial-account/`)
+and `FinancialAccountTransactionsHandler.applyEditableDimensions` (`com.etendoerp.go`).
+
+**Symptom:** QA reported that editing a "Procesada" (Processed but not yet Posted) financial-account
+movement from the kebab's Editar action could fail to save ("falla al guardar"). **This specific
+symptom was never reproduced live** — a full static read of the Core trigger that guards this table
+(`APRM_FIN_FINACC_TRAN_CHECK_TRG`) found no condition in the common case (Processed, not
+reconciled, G/L item preserved) that would reject the save. The real, confirmed bug found during
+that same investigation is a separate data-integrity issue, described below — it is a plausible but
+**unconfirmed** explanation for the original report, not a proven root cause. Treat ETP-4879 as
+having fixed a real bug it found, not as a confirmed fix for the exact QA repro; if "falla al
+guardar" resurfaces, reproduce it live (capture the actual HTTP response / Tomcat log) before
+assuming this ticket already covers it.
+
+**Root cause (confirmed).** `NewTransactionModal.jsx` collapses the movement's transaction date and
+accounting date into a single form field (`form.date`), and built both `transactionDate` and
+`accountingDate` from that one value on every save. The backend's `applyEditableDimensions` — the
+applier used whenever a movement is Processed but not Posted — unconditionally called
+`trx.setTransactionDate(...)` and `trx.setDateAcct(...)` from whatever the request body carried.
+So a movement whose accounting date (`DATEACCT`) had legitimately diverged from its transaction
+date got `DATEACCT` silently rewritten back to the transaction date on **any** edit through this
+modal while Processed — including an edit that only touched a dimension. No error, no warning: the
+save succeeded, and the wrong date change is exactly what a purely-dimensions edit should never
+have caused.
+
+**Fix.** `applyEditableDimensions` no longer touches `transactionDate`/`dateAcct` at all — a
+Processed-but-not-Posted movement's dates are now immutable through this endpoint, matching the
+other locked fields (amount, direction, currency, status). The frontend was updated in lockstep:
+`NewTransactionModal.jsx` now disables the date input whenever `movement.processed` is true
+(`lockWhileProcessed`), so the UI and the backend contract agree instead of the UI silently sending
+a value the backend used to accept and misapply.
+
+**Lesson.** When a UI field maps to more than one backend property (here: one date input feeding
+both `transactionDate` and `accountingDate`), a handler that blindly reassigns both from the same
+incoming value will silently collapse them the moment they are allowed to diverge — even on an
+edit that has nothing to do with either field. The fix is not to validate the incoming value more
+carefully; it is to stop accepting it at all once the record's state says that property is no
+longer editable. See `docs/generated-custom-windows/financial-account.md` ("Edit mode") for the
+full field-acceptance table, and `com.etendoerp.go`'s `docs/neo-headless.md` §5.3 ("Real-world
+example — `FinancialAccountTransactionsHandler`") for the backend contract.
+
+---
+
+## [2026-09-16] ETP-5302 — One rule, two implementations: bulk reactivate failed on a posted invoice
+
+**Component:** `tools/app-shell/src/components/contract-ui/BulkDocumentAction.jsx` and
+`DetailMoreActionsMenu.jsx` — the `preUnpost` rule.
+
+**Symptom:** Reactivating a Completed + **Posted** invoice from the list's floating selection
+bar returned `{"status":"error","message":"Factura contabilizada"}` and the row was counted
+as failed. Reactivating the *very same invoice* from its detail-form kebab worked. Two
+surfaces, one action, opposite outcomes — which is what made it read as a data or permissions
+problem rather than a wiring one.
+
+**Root cause:** The rule *"reactivating a posted document reverses its accounting first"* is
+declared per window in `decisions.json` as `preUnpost: true` on the `reactivate` menu action
+(`sales-invoice`, `purchase-invoice`, `amortization`). It was **implemented only in
+`DetailMoreActionsMenu.jsx`** — and duplicated across that component's two branches, so it was
+already two copies before the bulk bar existed. `BulkDocumentAction` had no knowledge of the
+attribute at all and sent a bare `docAction: 'RE'`, which Core rejects:
+`src-db/database/model/functions/C_INVOICE_POST.xml:948` —
+`IF (v_Posted='Y') THEN RAISE_APPLICATION_ERROR('@InvoiceDocumentPosted@')`, translated to
+"Factura contabilizada" through the `InvoiceDocumentPosted` `AD_MESSAGE`.
+
+**Fix:** The rule moved to a single home, `tools/app-shell/src/lib/preUnpost.js`:
+`isPosted(row)` and `runPreUnpost({recordId, record, enabled, execute})` → `{ran, success,
+message}`. `DetailMoreActionsMenu`'s two branches now call it (observable behaviour
+unchanged) and `BulkDocumentAction` gained a `preUnpostActions` prop, mounted as
+`preUnpostActions={['RE']}` by both invoice windows. Each row runs unpost → action; a failed
+unpost aborts that row, so a document still carrying its accounting entries is never
+reactivated.
+
+**Lesson (the generalisable one).** A behaviour *declared* in `decisions.json` but
+*implemented* in one component is a rule with no single owner. Every other surface that can
+trigger the same action silently ignores it, and nothing fails at build time, in review, or
+in the pipeline validator — the divergence only surfaces when a user runs the action from the
+other surface. **Before adding a second surface for an existing action (a bulk bar, a row
+kebab, an MCP tool), grep `decisions.json` for the flags that action carries and check each
+one is honoured, not just the happy-path call.** If a flag's handling lives inline in a
+component, extract it to `lib/` as the first step, not as cleanup afterwards.
+
+**Two supporting notes worth keeping:**
+
+- `isPosted` counts only `'Y'` / `true`. The AD *Posted status* domain also holds `T`, `E`,
+  `D`, `p`, `i` (Error, Invalid Account, …) — none of which mean posted. A truthiness check on
+  `row.posted` would treat every one of them as posted and unpost a document that never was.
+- `preUnpost.js` is deliberately **not a hook**. `BulkDocumentAction` is reached from a
+  `bulkActions` slot that `ListView` invokes as a flat function call, so anything reachable
+  from there must stay hook-free — this is the same constraint that produced the ETP-5209
+  production crash *"Rendered more hooks than during the previous render"*.
+
+**Deliberately not harmonised:** the order windows do **not** get `preUnpostActions`.
+`C_ORDER_POST1.xml` has no `Posted` guard on its `RE` branch, so unposting there would be a
+gratuitous accounting reversal, not a fix. Opt-in per window is the correct shape here — a
+"consistency" pass that applies it to every window offering `RE` would be a regression.
+## [2026-09-17] ETP-5395 — Three related access-control gaps: role-less invite race, un-gated First Steps, stale menu-access cache
+
+Three independent fixes shipped under one ticket, all in the same theme (a session/role/ownership
+signal was either resolved too late, not checked at all, or trusted too long). Documented together
+because they were delivered, reviewed and QA'd as one unit; each has its own component/root cause.
+
+### Point 1 — Role-less invited user could briefly see the full app
+
+**Component:** `tools/app-shell/src/layout/AppLayout.jsx` (`etendo_schema_forge`);
+`packages/app-shell-core/src/auth/AuthContext.jsx` (`schema_forge_core`, shared auth code).
+
+**Symptom:** A role-less user (an invited user right after accepting the invite, before any role
+is assigned) could briefly see the full app — sidebar included, with "Primeros pasos" reachable —
+instead of being held on a loading/no-access state until access resolved.
+
+**Root cause:** two independent bugs, both real, both needed fixing:
+1. `AuthContext`'s access-loading effect refused to run at all unless `state.session.selectedRole`
+   was set (`if (!state.isSessionReady || state.needsRefresh || state.accessLoaded ||
+   !state.session.selectedRole) return;`). A role-less session (empty `roleList`) never gets a
+   `selectedRole` — it's not "not yet arrived," it's a legitimate terminal shape for this session —
+   so the effect returned early on every render, `accessLoaded` never became `true`, and every
+   consumer waiting on it (`useRoleMenu()` included) hung indefinitely instead of resolving to "no
+   access."
+2. Independently, while `useRoleMenu()`'s `allowedIds` was `undefined` (fetch in flight, including
+   the hung-forever case above), `AppLayout` passed a stand-in empty `Set` into
+   `filterMenuGroupsByAccess()`. That stand-in only hides menu items carrying a
+   `windowId`/`processId`/`obuiappProcessId` — an item with none of those (`menu.json`'s
+   `first-steps`/`dashboard` entries) was never filtered by that function regardless of the `Set`
+   it received, so it rendered immediately and was reachable via `<Outlet>` for the entire loading
+   window, however long that turned out to be.
+
+**Fix:** `AuthContext`'s effect no longer gates on `selectedRole` — `loadAccess()` already
+short-circuits to `{}` with no network call when `selectedRole` is missing, so letting the effect
+run for that case is safe and correctly resolves `accessLoaded: true`. `AppLayout` now renders a
+blank `AppLayoutLoading` placeholder and mounts nothing routed at all (no sidebar, no `Outlet`)
+while `allowedIds === undefined`, instead of passing a stand-in `Set` through the filter.
+
+**Rejected approach:** An earlier attempt fixed this at the OTHER end — guarding
+`routeByEnvironments` against a role-less environment login at login time, so a role-less session
+could never reach the vulnerable code path (`545376bd5`/`fb61b0562`, then reverted by
+`e7db6ed6d`/`c645d843b`; net diff in `schema_forge_core`'s `OnboardingFlow.jsx` is zero). It was
+abandoned in favor of the `AuthContext` fix above.
+
+**Lesson:** An effect gated on "wait until X is present" needs to distinguish "X hasn't arrived
+yet" from "X will never arrive for this valid session shape" — a role-less session is the latter,
+and treating it like the former turns a should-resolve-to-empty case into a permanent hang.
+Blocking entry at the point where a bad state is *created* (login) is tempting because it feels
+like it prevents the bug outright, but it only closes the one door you're looking at — this exact
+role-less shape can also arise from a role being revoked mid-session, which login-time blocking
+never touches. Fixing the state resolution itself (making `accessLoaded` correctly settle for
+every valid session shape) closes the gap regardless of how that shape is reached, which is why it
+was kept over the reverted login-time guard.
+
+---
+
+### Point 2 — "Primeros pasos" was visible to every user, not just the tenant Owner
+
+**Component:** `SFWindowAccessMap.java` (`com.etendoerp.go`); `menu.json`, `FirstStepsPage.jsx`,
+`DashboardPage.jsx` (`etendo_schema_forge`).
+
+**Symptom:** The First Steps onboarding checklist was reachable by any authenticated user in a
+tenant — via the sidebar menu entry or a direct `/first-steps` URL — and `DashboardPage`'s
+auto-redirect ("send an unseen user to First Steps") fired for non-owners too. Per ETP-4830,
+"Primeros pasos" is meant to be Owner-only (`AD_User.EM_ETGO_Is_Owner`).
+
+**Root cause:** no session-level signal existed to express "is this user the tenant Owner."
+`menu.json`'s declarative `capability` gate had nothing to check ownership against, and neither
+`FirstStepsPage` nor `DashboardPage` had any owner check at all — the checklist's audience had
+simply never been restricted since it was built.
+
+**Fix:** `SFWindowAccessMap` now resolves and returns `capabilities.isOwner` per-user (via
+`OwnerSupport.isOwner(userId)`), resolved identically in both the admin/client-admin bypass branch
+and the normal per-role branch — ownership is orthogonal to admin status, so a client-admin who is
+also the owner gets `true`, and one who isn't still gets `false`. `menu.json`'s `first-steps` entry
+now declares `"capability": "isOwner"`, hiding the sidebar entry for non-owners.
+`FirstStepsPage` redirects to `/dashboard` whenever `capabilities.isOwner !== true` (fail-closed,
+same convention as every other capability read through `useCapabilitiesSafe()`), closing the
+direct-URL hole the menu gate alone left open. `DashboardPage`'s unseen-checklist auto-redirect now
+also requires `isOwner === true`, so a non-owner is never bounced to a page they can't use.
+
+**Lesson:** A `menu.json` capability gate hides the *entry point*, it is not an access boundary by
+itself — a route reachable by direct URL needs the same predicate enforced on the page (and on
+anything that auto-navigates to it) independently. Also worth flagging for whoever writes the next
+React gate like this one: the redirect must run AFTER every hook has executed unconditionally on
+every render (Rules of Hooks) — an early `return <Navigate .../>` placed before the component's own
+hooks is invalid even when the gating condition looks like it "obviously" belongs at the top; this
+exact ordering mistake was introduced and caught within this same ticket (`7d72f89d1`) before
+reaching REVIEW.
+
+---
+
+### Point 3 — Sidebar could serve a stale menu for up to a minute after a real permission change
+
+**Component:** `tools/app-shell/src/App.jsx` (`MENU_ACCESS_CACHE_TTL_MS`).
+
+**Symptom:** After an admin edited a role's window/process access, the affected user's tab could
+keep showing the OLD sidebar sections for up to 60 seconds — even though `windowAccess`/
+`capabilities` (uncached) refreshed correctly and the "Tus permisos fueron actualizados" banner
+correctly fired on the very next refresh cycle. Only the menu tree underneath the banner lagged.
+
+**Root cause:** `MENU_ACCESS_CACHE_TTL_MS` was set to 60 seconds by analogy to two unrelated
+numbers — this app's own query-cache default staleness, and the 5-minute poll this whole mechanism
+tolerates as a worst case — rather than being sized to the actual burst it exists to collapse
+(several focus/blur events firing a few hundred milliseconds apart when multiple dialogs/tabs open
+in quick succession). 60s is roughly two orders of magnitude larger than that burst window, which
+is more than enough time to span a real admin-driven permission change and serve it stale.
+
+**Fix:** Shrunk the TTL to 3 seconds — over 10x headroom above the actual burst case it needs to
+absorb, while being far too short to meaningfully outlive a real permission change relative to how
+far apart genuine refresh triggers (a separate focus event, a visibility change, the 5-minute poll)
+actually fire in practice.
+
+**Lesson:** Size a cache TTL to the specific race it exists to collapse, not by analogy to a
+different cache's default or a different mechanism's worst-case interval. "Same order of magnitude
+as an unrelated cache's staleness" reads as principled but can hide a value that is 15-20x too
+large for the problem actually being solved — trace back to the smallest window that still absorbs
+the burst, not the largest window that still "feels safe."
+
+---
+
+**Known non-blocking follow-ups (QA, not yet separately ticketed):**
+- ~~**Bounded but real request-volume increase under a sustained `/sws/neo/listmenu` outage.**~~
+  **Resolved by ETP-5403.** The shrunk 3s TTL used to also govern the FAILURE case (the
+  `MENU_ACCESS_UNREACHABLE` sentinel), raising the failure-retry ceiling from roughly once/minute
+  (old 60s TTL) to roughly 20 times/minute (new 3s TTL) per session for as long as the outage
+  lasted. ETP-5403 decoupled the two: failure outcomes are now cached under their own
+  `MENU_ACCESS_FAILURE_TTL_MS` (60s, back near the pre-ETP-5395 baseline) in `App.jsx`'s
+  `fetchMenuAccess()`, while the success-path TTL stays at 3s.
+- **A different, pre-existing route to role loss is not covered by either Point 1 fix.** When an
+  admin revokes a role and the affected user's session detects it via the existing periodic-refresh
+  machinery (ETP-5195/ETP-5189) rather than via the invite-acceptance race this ticket fixes, the
+  client-side `selectedRole` is not cleared — a pre-existing architectural gap in that refresh
+  machinery, not touched by ETP-5395. Noted here for whoever next works on session/role refresh,
+  not filed as a separate ticket.
+
+---
+
+## [2026-09-24] ETP-5395 — Slow SFListMenu showed every sidebar entry in production
+
+**Component:** `tools/app-shell/src/App.jsx` (`MENU_ACCESS_FETCH_TIMEOUT_MS`).
+
+**Symptom:** On app.etendo.ai a Purchasing ("Compras") user saw the whole sidebar (Ventas included) on every load, and a
+freshly invited user with no roles saw it right after accepting the invitation.
+
+**Root cause:** `fetchWindowAccess` races `/sws/neo/listmenu` against a timeout and, when the timeout wins, reports
+the menu as unreachable. `useRoleMenu` then fails open and `AppLayout` renders the unfiltered menu. The timeout was
+1s (ETP-5189, added so a hung request cannot stall E2E bootstrap), but production answered a correct tree in 2.1s.
+The role-less case was the same race on the first, cold request; the later refocus answered fast and correctly
+showed "Tu rol no tiene acceso".
+
+**Fix:** timeout raised to 10s, which still guards against a request that never answers while clearing real latency.
+Regression test: `App.vitest.jsx` "uses a slow but successful SFListMenu answer instead of failing open".
+A timed-out request is now also cached as a failure (60s failure TTL) and detached, so a request that never
+answers no longer makes every later load wait the full timeout again; if it does answer later, that answer
+replaces the cached failure.
+
+**Lesson:** a timeout whose fallback is fail-OPEN is a permission decision, not a performance knob. Size it against
+production latency, not local or mocked latency.
+
+---
+
+## [2026-09-23] ETP-5395 (post-merge regression) — Two custom windows never wired the standard access-tier gate
+
+**Component:** `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx`,
+`tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx`.
+
+**Symptom:** First live QA pass on ETP-5395 Points 1-3 (comment #146376, 2026-09-23) reported that,
+for a role with no grant on these two windows (role "Compras"/Purchasing in the reported case),
+"Organización" and "Configuración Fiscal" showed a raw, untranslated error instead of the app's
+usual no-access treatment — e.g. `"No se pudo cargar la información de la organización: HTTP 403"`
+with a Retry button, rather than the styled `WindowAccessGuard` panel every other gated window
+shows.
+
+**Investigation note (ruled out before finding the real cause):** the QA report landed the same day
+as two unrelated cookie-session-migration PRs (ETP-4575/ETP-4576) merged, so the initial hypothesis
+was a credential-plumbing regression from that migration. Live-reproduced against a local dev
+backend (real login as a composed Purchasing-role user, captured actual network responses) and
+ruled that out directly: the backend answered a clean, correct, already-translatable
+`{"error":{"message":"Access denied to spec for current role","status":403}}` — genuinely correct
+access denial, unrelated to either cookie-session PR.
+
+**Root cause:** every custom (hand-written, non-generated) window with a real `AD_Window_ID` is
+supposed to wire the generic `useWindowAccess`/`WindowAccessGuard` pair (`@/auth/AuthContext.jsx`,
+the same mechanism `generate-frontend.js` wires automatically into every GENERATED window) — this
+was already done by hand for `financial-account`/`sales-invoice`/`purchase-order`/`sales-order`/
+`amortization`/`purchase-invoice` under **ETP-4658** ("this custom window never delegated to a
+generated Page.jsx... so it never picked up the ETP-4520 access-tier guard despite the contract
+carrying a real window.id" — that ticket's own comment in `financial-account/index.jsx`).
+`organization` and `fiscal-config` were simply 2 more custom windows that never got this same
+treatment — a pre-existing gap, not a regression from the cookie-session migration or from anything
+ETP-5395's own Points 1-3 touched. Without the guard, the page's own data-fetch hook
+(`useOrganizationData.js`, `useFiscalConfig.js`'s shared `fetchAllRows()`) still fired, got the
+correct backend 403, and rendered its own bare `Error("HTTP ${status}")` message raw, with a Retry
+button that can never help a genuine permission denial.
+
+**Fix:** added the exact same guard ETP-4658 already established, verbatim — `const
+windowAccessTier = useWindowAccess(<windowId>); if (windowAccessTier === 'none') return
+<WindowAccessGuard windowId={<windowId>} />;`, placed after every other hook call (Rules-of-Hooks-
+safe) and before the page's `loading`/`error` early returns. No new component, no change to the
+hooks' own error handling — the fix is entirely "wire the pre-existing mechanism", not "teach the
+hook about 403".
+
+**Lesson:** When a custom (hand-written) window carries a real `AD_Window_ID`, wiring
+`useWindowAccess`/`WindowAccessGuard` is not optional cleanup — it is the ONLY thing standing between
+a correct backend permission denial and a raw, untranslated technical error reaching the user. A
+`throw new Error('HTTP ' + status)` inside a data-fetch hook is not itself a bug in isolation; it
+only becomes user-visible garbage when the page around it has no access-tier gate to short-circuit
+before ever reaching that error path. Before writing (or reviewing) any new hand-written custom
+window that maps to a real `AD_Window_ID`, check for this gate first — grep the window's own
+`index.jsx`/`Page.jsx` for `WindowAccessGuard`, don't assume the generic mechanism applies just
+because the contract has a `window.id`.
+
+~~**Not fixed in this pass, flagged only:** `fiscal-monitor` shares the identical gap.~~
+**Fixed same day (user-requested follow-up, 2026-09-23).** `useFiscalMonitor.js` reuses the same
+`fetchAllRows()` helper from `useFiscalConfig.js`, and had zero `WindowAccessGuard`/`useWindowAccess`
+references anywhere in its own custom directory. Fixed identically: `FiscalMonitorPage.jsx` now
+checks `useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C')` right after its last hook
+(`useSetPageMeta`), before `handleRefresh`/the render branches — one difference from the
+`organization`/`fiscal-config` fix: the check is `!debugOverrideActive && windowAccessTier ===
+'none'`, matching this page's own existing `loading`/`error` gates, which already respect the
+developer-only debug/mock profile override the same way. Regression test added to
+`FiscalMonitorPage.vitest.jsx`, verified to fail without the fix and pass with it.
+
+~~Also found in the same investigation: the "Roles del usuario" admin UI broken under the cookie
+scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
+promoting/demoting through the real UI works under cookie sessions. Not a bug.
+
+---
+
+## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
+
+**Component:** `artifacts/goods-movements/decisions.json` + `GoodsMovementsHeaderHandler.java`
+
+**Symptom:** The Goods Movements window had `post`/`unpost` `menuActions` and a `posted`
+`statusPills` entry in `decisions.json`, and the generated detail kebab rendered the Post/Unpost
+buttons — but clicking either one returned `Action not found: post` from the form, and the exact
+same document had no way to post from the list at all. The Not Posted Documents window could post
+the identical record without any error, because it calls `DocumentPostingService` directly.
+
+**Root cause:** A `post`/`unpost` `menuActions` pair in `decisions.json` only tells the generator to
+render two buttons that call `POST /sws/neo/<spec>/<entity>/{id}/action/post`. It does **not**, by
+itself, make that endpoint do anything. Three separate pieces all have to be present for the
+request to succeed:
+1. The header's `NeoHandler` must route `post`/`unpost` to `DocumentPostingService.handleAction()`
+   — otherwise the generic `NeoButtonActionHelper` dispatcher tries to resolve `post` as an AD
+   column name, fails, and 404s with `Action not found: post`.
+2. The `posted` column must be **declared as a field** in `decisions.json` (readOnly badge) —
+   otherwise it stays classified as an implicit AD-button *action* in `contract.json`, absent from
+   `entities.<entity>.fields`, so the `menuActions` visibility gate and the `statusPills` entry both
+   read a value the contract never actually exposes.
+3. A separate, hand-written `javaQualifier` typo/duplicate in the same `entities.header` object
+   (`"javaQualifier": "document-posting"` followed immediately by `"javaQualifier":
+   "goodsMovementsHeaderHandler"`) silently lost the first value to `JSON.parse`'s
+   last-key-wins — an earlier attempt to route through the shared `@Named("document-posting")`
+   handler had been overwritten and nobody noticed, because a duplicate JSON key is not a parse
+   error.
+
+**Fix:** Added the `posted` field declaration, routed `post`/`unpost` in
+`GoodsMovementsHeaderHandler.handle()` to `DocumentPostingService.handleAction()` (mirroring
+`GoodsReceiptHeaderHandler`), removed the duplicate `javaQualifier` key, and added the matching
+list-level `BulkDocumentAction`s + row-kebab entry so the same gate applies wherever the button
+appears.
+
+**Lesson:** A `menuActions`/`statusPills` entry referencing `post`/`unpost` (or any `neoAction`) is
+not self-sufficient — grep the target window's `NeoHandler` for a `DocumentPostingService` (or
+equivalent) call before assuming the wiring is complete, and confirm the field the action's
+visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
+action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
+error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).

@@ -73,6 +73,24 @@ async function renderCardWithRows(rows, props = {}) {
   return view;
 }
 
+// ETP-5304 — jsdom reports scrollWidth === clientWidth === 0 for every element, so
+// the "is the line actually clipped?" gate inside TruncatedText can only be driven
+// by stubbing both measurements on the element. Same technique (and same helper
+// shape) as components/ui/__tests__/truncated-text.vitest.jsx, which is the unit
+// spec for that gate.
+function setMetrics(el, scrollWidth, clientWidth) {
+  Object.defineProperty(el, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(el, 'clientWidth', { configurable: true, value: clientWidth });
+}
+
+const MANY_RECIPIENTS = ['alice@acme.com', 'bob@acme.com', 'carol@acme.com', 'dave@acme.com'];
+const MANY_RECIPIENTS_TEXT = MANY_RECIPIENTS.join(', ');
+
+async function renderOneRow(overrides = {}) {
+  await renderCardWithRows([{ ...SENT_ROW, ...overrides }]);
+  return screen.findByTestId('TruncatedText__emails');
+}
+
 describe('EmailsCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -158,13 +176,21 @@ describe('EmailsCard', () => {
       expect(historyCalls()[0][0]).toBe('/api/documentemailhistory?recordId=a%20b%2Fc%26d');
     });
 
-    it('sends the request through the session-authenticated helper (bearer + locale headers)', async () => {
+    it('sends the request through the session-authenticated helper, never its own headers', async () => {
       await renderCardWithRows([]);
       const [, init] = historyCalls()[0];
+      // ETP-4685 — the locale header has to travel, or the backend resolves *_Trl names in the
+      // AD language and the card shows English.
       expect(init.headers).toEqual(expect.objectContaining({
-        Authorization: 'Bearer test-token',
         'Accept-Language': expect.any(String),
       }));
+      // ETP-4576 — the credential is whatever the ACTIVE SCHEME supplies, and the session double
+      // above is a bearer one, so the bearer is what travels. This used to assert the header was
+      // absent, which read as "the cookie scheme sends none" but actually pinned the pre-merge
+      // wiring, where the host wrapper handed createApiFetch a CSRF token in the credential's
+      // slot. What the card must never do is build the header itself; that is the module-wide
+      // G1 invariant's job, and the value here has to come from the session and nowhere else.
+      expect(init.headers.Authorization).toBe('Bearer test-token');
     });
   });
 
@@ -188,23 +214,23 @@ describe('EmailsCard', () => {
 
     it('keeps the empty state out of the DOM once rows are rendered', async () => {
       await renderCardWithRows([SENT_ROW]);
-      expect(await screen.findByText('Your invoice is ready')).toBeInTheDocument();
+      expect(await screen.findByText('client@acme.com')).toBeInTheDocument();
       expect(screen.queryByText('previewCardNoEmailHistory')).not.toBeInTheDocument();
     });
   });
 
   describe('ETP-5069 — row rendering', () => {
-    it('renders the recipients and the subject of each send', async () => {
+    it('renders the recipients of each send (subject is no longer shown, ETP-5069)', async () => {
       await renderCardWithRows([SENT_ROW, FAILED_ROW]);
       expect(await screen.findByText('client@acme.com')).toBeInTheDocument();
       expect(screen.getByText('ops@acme.com')).toBeInTheDocument();
-      expect(screen.getByText('Your invoice is ready')).toBeInTheDocument();
-      expect(screen.getByText('Delivery attempt for INV-001')).toBeInTheDocument();
+      expect(screen.queryByText('Your invoice is ready')).not.toBeInTheDocument();
+      expect(screen.queryByText('Delivery attempt for INV-001')).not.toBeInTheDocument();
     });
 
     it('renders the send date as a formatted date-time, not the raw ISO instant', async () => {
       const { container } = await renderCardWithRows([SENT_ROW]);
-      await screen.findByText('Your invoice is ready');
+      await screen.findByText('client@acme.com');
       expect(container.textContent).not.toContain('2026-03-15T10:30:00Z');
       expect(container.textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
       expect(container.textContent).toMatch(/\d{2}:\d{2}/);
@@ -222,165 +248,175 @@ describe('EmailsCard', () => {
 
     it('orders the history newest first', async () => {
       const { container } = await renderCardWithRows([FAILED_ROW, SENT_ROW]);
-      await screen.findByText('Your invoice is ready');
-      const subjects = container.textContent;
-      expect(subjects.indexOf('Your invoice is ready'))
-        .toBeLessThan(subjects.indexOf('Delivery attempt for INV-001'));
+      await screen.findByText('client@acme.com');
+      const text = container.textContent;
+      expect(text.indexOf('client@acme.com')).toBeLessThan(text.indexOf('ops@acme.com'));
     });
 
     it('keeps the fail-closed send link contract while rendering history rows', async () => {
       await renderCardWithRows([SENT_ROW]);
-      await screen.findByText('Your invoice is ready');
+      await screen.findByText('client@acme.com');
       expect(screen.queryByText('previewCardSendEmail')).not.toBeInTheDocument();
     });
   });
 
-  describe('ETP-5069 — success vs failure statuses', () => {
-    it('renders a SENT row with the sent label and a success tone', async () => {
+  describe('ETP-5069 — success vs failure statuses (collapsed to exactly 2 visual states)', () => {
+    it('renders a SENT row with the success label and a success tone', async () => {
       const { container } = await renderCardWithRows([SENT_ROW]);
-      expect(await screen.findByText('emailHistoryStatusSent')).toBeInTheDocument();
+      expect(await screen.findByText('emailHistoryStatusSuccess')).toBeInTheDocument();
       expect(container.querySelector('.status-tag--success')).not.toBeNull();
     });
 
     it('renders a DUPLICATE row as a success — it is an idempotent re-send, not a failure', async () => {
       const { container } = await renderCardWithRows([{ ...SENT_ROW, status: 'DUPLICATE' }]);
-      expect(await screen.findByText('emailHistoryStatusDuplicate')).toBeInTheDocument();
+      expect(await screen.findByText('emailHistoryStatusSuccess')).toBeInTheDocument();
       expect(container.querySelector('.status-tag--success')).not.toBeNull();
       expect(container.querySelector('.status-tag--destructive')).toBeNull();
     });
 
-    it('shows a PROVIDER_FAILED send as an error and NEVER as sent', async () => {
+    it('shows a PROVIDER_FAILED send with the failed label and NEVER as success', async () => {
       const { container } = await renderCardWithRows([FAILED_ROW]);
-      expect(await screen.findByText('emailHistoryStatusProviderFailed')).toBeInTheDocument();
-      expect(screen.queryByText('emailHistoryStatusSent')).not.toBeInTheDocument();
+      expect(await screen.findByText('emailHistoryStatusFailed')).toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryStatusSuccess')).not.toBeInTheDocument();
       expect(container.querySelector('.status-tag--destructive')).not.toBeNull();
       expect(container.querySelector('.status-tag--success')).toBeNull();
     });
 
     for (const status of ['THROTTLED', 'SUPPRESSED', 'NO_RECIPIENT', 'UNAUTHORIZED', 'VALIDATION_FAILED']) {
-      it(`shows a ${status} send as a failure, not as sent`, async () => {
+      it(`shows a ${status} send with the failed label, not as success`, async () => {
         const { container } = await renderCardWithRows([{ ...FAILED_ROW, status }]);
         await waitFor(() => expect(container.querySelector('.status-tag--destructive')).not.toBeNull());
         expect(container.querySelector('.status-tag--success')).toBeNull();
-        expect(screen.queryByText('emailHistoryStatusSent')).not.toBeInTheDocument();
+        expect(screen.queryByText('emailHistoryStatusSuccess')).not.toBeInTheDocument();
       });
     }
 
-    it('falls back to the raw status code when the status has no label key', async () => {
+    it('renders an unrecognized status code with the generic failed label, not the raw code', async () => {
       await renderCardWithRows([{ ...FAILED_ROW, status: 'SOMETHING_NEW' }]);
-      expect(await screen.findByText('SOMETHING_NEW')).toBeInTheDocument();
+      expect(await screen.findByText('emailHistoryStatusFailed')).toBeInTheDocument();
+      expect(screen.queryByText('SOMETHING_NEW')).not.toBeInTheDocument();
     });
   });
 
-  describe('ETP-5069 — expanding a row recovers the body and the attachment', () => {
-    async function expandFirstRow(rows) {
-      const view = await renderCardWithRows(rows);
-      const toggle = await screen.findByRole('button', { name: 'emailHistoryToggleDetails' });
-      fireEvent.click(toggle);
-      return view;
-    }
-
-    it('hides the message body until the row is expanded', async () => {
+  describe('ETP-5069 — row interaction is non-expandable (detail panel removed)', () => {
+    it('renders a plain row with no button role and no aria-expanded attribute', async () => {
       await renderCardWithRows([SENT_ROW]);
-      await screen.findByText('Your invoice is ready');
-      expect(screen.queryByText('emailHistoryMessage')).not.toBeInTheDocument();
-      expect(screen.queryByText(/please find the invoice attached/)).not.toBeInTheDocument();
+      await screen.findByText('client@acme.com');
+      expect(screen.queryByRole('button', { name: 'emailHistoryToggleDetails' })).not.toBeInTheDocument();
+      expect(document.querySelector('[aria-expanded]')).toBeNull();
     });
 
-    it('reveals the message body when the row is expanded', async () => {
-      await expandFirstRow([SENT_ROW]);
-      expect(screen.getByText('emailHistoryMessage')).toBeInTheDocument();
-      expect(screen.getByText(/please find the invoice attached/)).toBeInTheDocument();
-    });
+    it('never reveals CC, message body or the download link, even though the payload carries them', async () => {
+      const { container } = await renderCardWithRows([SENT_ROW]);
+      await screen.findByText('client@acme.com');
 
-    it('reveals the attachment download link when the row is expanded', async () => {
-      await expandFirstRow([SENT_ROW]);
-      const link = screen.getByRole('link', { name: 'emailHistoryDownload' });
-      expect(link).toHaveAttribute('href', 'https://files.example.com/inv-001.pdf');
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
-    });
+      // Clicking the row (there is no toggle control any more) must not reveal anything.
+      fireEvent.click(container.querySelector('[data-testid="EmailRow__d50c04"]') ?? container.firstChild);
 
-    it('reveals the sender when the row is expanded', async () => {
-      await expandFirstRow([SENT_ROW]);
-      expect(screen.getByText('Irina Urricelqui')).toBeInTheDocument();
-    });
-
-    for (const [field, value] of [
-      ['sender', 'From Sender'],
-      ['senderName', 'From SenderName'],
-      ['createdByName', 'From CreatedByName'],
-      ['userName', 'From UserName'],
-    ]) {
-      it(`resolves the sender from "${field}" when the preferred fields are absent`, async () => {
-        await expandFirstRow([{ id: 'mail-x', sentAt: SENT_ROW.sentAt, status: 'SENT', [field]: value }]);
-        expect(screen.getByText(value)).toBeInTheDocument();
-      });
-    }
-
-    it('shows the error message of a failed send when the row is expanded', async () => {
-      await expandFirstRow([FAILED_ROW]);
-      expect(screen.getByText('emailHistoryError')).toBeInTheDocument();
-      expect(screen.getByText('SMTP 550 mailbox unavailable')).toBeInTheDocument();
-    });
-
-    it('does not show an error message on a successful send', async () => {
-      await expandFirstRow([{ ...SENT_ROW, errorMessage: 'stale error from a previous attempt' }]);
-      expect(screen.queryByText('emailHistoryError')).not.toBeInTheDocument();
-      expect(screen.queryByText('stale error from a previous attempt')).not.toBeInTheDocument();
-    });
-
-    it('collapses the row again on a second click', async () => {
-      await expandFirstRow([SENT_ROW]);
-      expect(screen.getByText('emailHistoryMessage')).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'emailHistoryToggleDetails' }));
-      expect(screen.queryByText('emailHistoryMessage')).not.toBeInTheDocument();
-    });
-
-    it('expands only the clicked row, not every row', async () => {
-      await renderCardWithRows([SENT_ROW, FAILED_ROW]);
-      const toggles = await screen.findAllByRole('button', { name: 'emailHistoryToggleDetails' });
-      expect(toggles).toHaveLength(2);
-      fireEvent.click(toggles[1]);
-      expect(screen.getByText('SMTP 550 mailbox unavailable')).toBeInTheDocument();
-      expect(screen.queryByText(/please find the invoice attached/)).not.toBeInTheDocument();
-    });
-
-    it('renders no download link when the send has no attachment', async () => {
-      await expandFirstRow([{ ...SENT_ROW, downloadLink: null }]);
-      expect(screen.queryByRole('link', { name: 'emailHistoryDownload' })).not.toBeInTheDocument();
-    });
-  });
-
-  describe('ETP-5069 — CC recipients accept both wire shapes', () => {
-    it('renders CC given as an array', async () => {
-      await renderCardWithRows([SENT_ROW]);
-      fireEvent.click(await screen.findByRole('button', { name: 'emailHistoryToggleDetails' }));
-      expect(screen.getByText('emailHistoryCc')).toBeInTheDocument();
-      expect(screen.getByText('boss@acme.com, audit@acme.com')).toBeInTheDocument();
-    });
-
-    it('renders CC given as a comma-separated string', async () => {
-      await renderCardWithRows([{ ...SENT_ROW, recipientsCc: 'boss@acme.com, audit@acme.com' }]);
-      fireEvent.click(await screen.findByRole('button', { name: 'emailHistoryToggleDetails' }));
-      expect(screen.getByText('boss@acme.com, audit@acme.com')).toBeInTheDocument();
-    });
-
-    it('renders CC given as a semicolon-separated string', async () => {
-      await renderCardWithRows([{ ...SENT_ROW, recipientsCc: 'boss@acme.com;audit@acme.com' }]);
-      fireEvent.click(await screen.findByRole('button', { name: 'emailHistoryToggleDetails' }));
-      expect(screen.getByText('boss@acme.com, audit@acme.com')).toBeInTheDocument();
-    });
-
-    it('renders To given as a semicolon-separated string', async () => {
-      await renderCardWithRows([{ ...SENT_ROW, recipientsTo: 'a@acme.com; b@acme.com' }]);
-      expect(await screen.findByText('a@acme.com, b@acme.com')).toBeInTheDocument();
-    });
-
-    it('omits the CC line entirely when there is no CC', async () => {
-      await renderCardWithRows([{ ...SENT_ROW, recipientsCc: null }]);
-      fireEvent.click(await screen.findByRole('button', { name: 'emailHistoryToggleDetails' }));
       expect(screen.queryByText('emailHistoryCc')).not.toBeInTheDocument();
+      expect(screen.queryByText('boss@acme.com, audit@acme.com')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryMessage')).not.toBeInTheDocument();
+      expect(screen.queryByText(/please find the invoice attached/)).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryDownload')).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'emailHistoryDownload' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Irina Urricelqui')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryError')).not.toBeInTheDocument();
+    });
+
+    it('never reveals the error detail of a failed send either', async () => {
+      await renderCardWithRows([FAILED_ROW]);
+      await screen.findByText('ops@acme.com');
+      expect(screen.queryByText('emailHistoryError')).not.toBeInTheDocument();
+      expect(screen.queryByText('SMTP 550 mailbox unavailable')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('ETP-5304 — the recipients line reveals the full list when clipped', () => {
+    it('reveals every recipient on focus when the line does not fit the preview column', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+
+      expect(screen.getByTestId('TruncatedText__emails-tooltip'))
+        .toHaveTextContent(MANY_RECIPIENTS_TEXT);
+    });
+
+    it('closes the reveal again once the pointer or focus leaves', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+      expect(screen.getByTestId('TruncatedText__emails-tooltip')).toBeInTheDocument();
+
+      fireEvent.blur(line);
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('stays silent when the recipients already fit — no redundant tooltip', async () => {
+      const line = await renderOneRow();
+      setMetrics(line, 120, 320);
+
+      fireEvent.focus(line);
+
+      expect(line).toHaveTextContent('client@acme.com');
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('keeps the no-recipients fallback visible and silent', async () => {
+      const line = await renderOneRow({ recipientsTo: [] });
+      setMetrics(line, 90, 320);
+
+      fireEvent.focus(line);
+
+      expect(line).toHaveTextContent('emailHistoryNoRecipients');
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+    });
+
+    it('still clips the line with an ellipsis and can shrink inside the flex row', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+
+      // `truncate` keeps the ellipsis; `min-w-0` lets the flex child shrink at all
+      // (a flex item defaults to content-based min-width, so without it the line
+      // would never truncate and the reveal would never trigger).
+      expect(line.className).toContain('truncate');
+      expect(line.className).toContain('min-w-0');
+    });
+
+    it('reveals only the To recipients — never CC, the body or the sender (ETP-5069)', async () => {
+      const line = await renderOneRow({ recipientsTo: MANY_RECIPIENTS });
+      setMetrics(line, 640, 320);
+
+      fireEvent.focus(line);
+
+      const tooltip = screen.getByTestId('TruncatedText__emails-tooltip');
+      expect(tooltip).toHaveTextContent(MANY_RECIPIENTS_TEXT);
+      expect(tooltip).not.toHaveTextContent('boss@acme.com');
+      expect(tooltip).not.toHaveTextContent('audit@acme.com');
+      expect(tooltip).not.toHaveTextContent('please find the invoice attached');
+      expect(tooltip).not.toHaveTextContent('Irina Urricelqui');
+      expect(screen.queryByText('emailHistoryCc')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryMessage')).not.toBeInTheDocument();
+      expect(screen.queryByText('emailHistoryDownload')).not.toBeInTheDocument();
+    });
+
+    it('gives each history row its own reveal, and opens only the clipped one', async () => {
+      await renderCardWithRows([{ ...SENT_ROW, recipientsTo: MANY_RECIPIENTS }, FAILED_ROW]);
+      await waitFor(() => expect(screen.getAllByTestId('TruncatedText__emails')).toHaveLength(2));
+      const [newest, oldest] = screen.getAllByTestId('TruncatedText__emails');
+      expect(newest).toHaveTextContent(MANY_RECIPIENTS_TEXT);
+      expect(oldest).toHaveTextContent('ops@acme.com');
+
+      setMetrics(newest, 640, 320);
+      setMetrics(oldest, 100, 320);
+
+      fireEvent.focus(oldest);
+      expect(screen.queryByTestId('TruncatedText__emails-tooltip')).toBeNull();
+
+      fireEvent.focus(newest);
+      const tooltips = screen.getAllByTestId('TruncatedText__emails-tooltip');
+      expect(tooltips).toHaveLength(1);
+      expect(tooltips[0]).toHaveTextContent(MANY_RECIPIENTS_TEXT);
     });
   });
 
@@ -413,7 +449,7 @@ describe('EmailsCard', () => {
       expect(await screen.findByText('previewCardNoEmailHistory')).toBeInTheDocument();
 
       rerender(<EmailsCard documentId="doc-1" apiBaseUrl="/api/sales-order" refreshSignal={1} />);
-      expect(await screen.findByText('Your invoice is ready')).toBeInTheDocument();
+      expect(await screen.findByText('client@acme.com')).toBeInTheDocument();
     });
   });
 
@@ -453,16 +489,17 @@ describe('EmailsCard', () => {
         historyResponse(null, { body: { result: JSON.stringify([null, 'nope', 7, SENT_ROW]) } }),
       );
       expect(() => renderCard()).not.toThrow();
-      expect(await screen.findByText('Your invoice is ready')).toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: 'emailHistoryToggleDetails' })).toHaveLength(1);
+      expect(await screen.findByText('client@acme.com')).toBeInTheDocument();
+      // Malformed entries are skipped silently — exactly one row renders, no error, no crash.
+      expect(screen.queryByRole('button', { name: 'emailHistoryToggleDetails' })).not.toBeInTheDocument();
     });
 
     it('clears the rows and shows the empty state when documentId disappears', async () => {
       const { rerender } = await renderCardWithRows([SENT_ROW]);
-      await screen.findByText('Your invoice is ready');
+      await screen.findByText('client@acme.com');
       rerender(<EmailsCard apiBaseUrl="/api/sales-order" />);
       expect(screen.getByText('previewCardNoEmailHistory')).toBeInTheDocument();
-      expect(screen.queryByText('Your invoice is ready')).not.toBeInTheDocument();
+      expect(screen.queryByText('client@acme.com')).not.toBeInTheDocument();
     });
   });
 });

@@ -36,7 +36,9 @@ export default function AssetsSidebar({ data }) {
 
   const hasData = !!data;
   const assetValue = Number(data?.assetValue ?? 0);
-  const residualAssetValue = Number(data?.residualAssetValue ?? 0);
+  const depreciationAmt = Number(data?.depreciationAmt ?? 0);
+  const accumulatedDepreciation = Number(data?.depreciatedValue ?? 0) + Number(data?.previouslyDepreciatedAmt ?? 0);
+  const pendingToDepreciate = depreciationAmt - accumulatedDepreciation;
   const depreciatedPlan = Number(data?.depreciatedPlan ?? 0);
   const pct = Number(data?.etgoAmortizationStatus ?? 0);
   const isComplete = pct === 100;
@@ -54,8 +56,8 @@ export default function AssetsSidebar({ data }) {
             subtitle={ui('assetsBookValue')}
             data-testid="MetricCard__b651ab" />
           <MetricCard
-            label={ui('assetsResidualValueLabel')}
-            value={hasData ? formatCurrency(orgCurrency, residualAssetValue) : '—'}
+            label={ui('assetsPendingDepreciationLabel')}
+            value={hasData ? formatCurrency(orgCurrency, pendingToDepreciate) : '—'}
             data-testid="MetricCard__b651ab" />
           <MetricCard
             label={ui('assetsPlannedDepreciation')}

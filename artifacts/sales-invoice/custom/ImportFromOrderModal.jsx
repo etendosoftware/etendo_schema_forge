@@ -1,16 +1,18 @@
 import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 
-const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
+const fetchDocuments = async ({ base, bpId, invoiceId }) => {
   const [ordersRes, invLinesRes, headerRes] = await Promise.all([
-    fetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`, { headers }),
-    fetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`, { headers }),
-    fetch(`${base}/sales-invoice/header/${invoiceId}`, { headers }),
+    moduleApiFetch(`${base}/sales-order/header?_startRow=0&_endRow=500&_sortBy=creationDate desc`),
+    moduleApiFetch(`${base}/sales-invoice/lines?parentId=${invoiceId}&_startRow=0&_endRow=200`),
+    moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`),
   ]);
 
   const alreadyImportedOrderLines = new Set();
   if (invLinesRes.ok) {
     const invLines = (await invLinesRes.json())?.response?.data || [];
-    invLines.forEach(il => { if (il.cOrderlineId) alreadyImportedOrderLines.add(il.cOrderlineId); });
+    invLines.forEach(il => { if (il.salesOrderLine) alreadyImportedOrderLines.add(il.salesOrderLine); });
   }
 
   let invoiceCurrency = null;
@@ -37,8 +39,8 @@ const fetchDocuments = async ({ base, headers, bpId, invoiceId }) => {
   return { documents, sharedContext: { alreadyImportedOrderLines, orderDiscountMap }, excludedByCurrency };
 };
 
-const fetchLines = async ({ base, headers, docId, sharedContext }) => {
-  const res = await fetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`, { headers });
+const fetchLines = async ({ base, docId, sharedContext }) => {
+  const res = await moduleApiFetch(`${base}/sales-order/lines?parentId=${docId}&_startRow=0&_endRow=200`);
   if (!res.ok) return [];
   const json = await res.json();
   const lines = json?.response?.data || [];
@@ -64,15 +66,15 @@ const getDocDisplay = (doc) => ({
   date: doc.orderDate,
 });
 
-const afterImport = async ({ importedDocIds, sharedContext, base, headers, invoiceId }) => {
+const afterImport = async ({ importedDocIds, sharedContext, base, invoiceId }) => {
   const { orderDiscountMap } = sharedContext;
   const discounts = [...importedDocIds].map(id => orderDiscountMap[id]).filter(v => v > 0);
   if (discounts.length === 0) return;
   const uniqueDiscounts = [...new Set(discounts)];
   if (uniqueDiscounts.length !== 1) return;
-  await fetch(`${base}/sales-invoice/header/${invoiceId}`, {
+  await moduleApiFetch(`${base}/sales-invoice/header/${invoiceId}`, {
     method: 'PATCH',
-    headers,
+    
     body: JSON.stringify({ etgoTotalDiscount: uniqueDiscounts[0] }),
   });
 };
@@ -95,11 +97,20 @@ const buildLineBody = async ({ line, qty, invoiceId, lineNo }) => {
     tax: line.tax || null,
     uOM: line.uOM || null,
     lineNo,
-    cOrderlineId: line.id,
+    // ETP-5381: the key MUST be the spec's java_qualifier for C_OrderLine_ID. NeoFieldFilter
+    // drops any key absent from the spec silently (200, line created, FK NULL), and without
+    // C_OrderLine_ID the invoice never reaches C_INVOICE_POST's MatchSO block (no M_MATCHSO row)
+    // nor its `UPDATE C_ORDERLINE SET QtyInvoiced` — so the order stays invoiceable forever.
+    salesOrderLine: line.id,
   };
 };
 
 export default function ImportFromOrderModal(props) {
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: these modals pull from ANOTHER spec than their own window
+  // (an invoice importing shipment lines), and resolveApiUrl only skips a prefix that
+  // matches - so a configured base doubles it and 404s.
+  const apiFetch = useApiFetch('');
   return (
     <ImportLinesModal
       {...props}

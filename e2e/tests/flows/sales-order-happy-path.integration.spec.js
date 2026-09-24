@@ -5,6 +5,7 @@ import { login, navigateTo } from '../helpers/auth.js';
 import {
   ensureProductFixtures, PRODUCT_FIXTURE_ALPHA, PRODUCT_FIXTURE_BETA,
 } from '../helpers/product-helpers.js';
+import { selectCustomerWithAddress } from '../helpers/sales-helpers.js';
 
 /**
  * Sales Order + Invoice — Full happy-path integration E2E.
@@ -16,11 +17,12 @@ import {
  *   4. Add a line — select product, verify price/tax
  *   5. Save as draft
  *   6. Confirm the order — check "Crear factura" in the confirm modal
- *   7. Verify order is Completed
- *   8. Navigate to /sales-invoice — find the draft invoice
+ *   7. Open the generated invoice from the confirm result modal
+ *   8. Verify order is Completed
  *   9. Verify invoice has lines from the order
- *  10. Confirm the invoice (DR → CO)
- *  11. Verify invoice is Completed
+ *  10. Verify the invoice arrived ALREADY Completed (ETP-5381: an invoice
+ *      generated from another document is created and confirmed in one step,
+ *      so there is no draft stage and no Confirmar action on it)
  *
  * Requires a running backend + dev server. Gated by E2E_SALES_INTEGRATION=1.
  */
@@ -67,9 +69,11 @@ test.describe('Sales Order — Happy path (integration)', () => {
     'Set E2E_SALES_INTEGRATION=1 to run this live sales order integration test.',
   );
 
-  test('creates an order, confirms with invoice, then confirms the invoice', async ({ page }) => {
+  test('creates an order, confirms with invoice, and the invoice arrives confirmed', async ({ page }) => {
     const user = onboardingCreds?.email || process.env.E2E_USER;
     const password = onboardingCreds?.password || process.env.E2E_PASSWORD;
+    let orderUrl = null;
+    let invoiceUrl = null;
 
     await test.step('Login', async () => {
       await login(page, { user, password });
@@ -114,12 +118,10 @@ test.describe('Sales Order — Happy path (integration)', () => {
       }).toPass({ timeout: 15_000 });
       await slow(page);
 
-      // Pick the first real customer (skip "+ Crear contacto")
-      const bpOption = page.locator('[data-testid^="option-businessPartner-"]')
-        .filter({ hasNotText: /crear|create/i }).first();
-      await expect(bpOption).toBeVisible({ timeout: 15_000 });
-
-      await bpOption.click();
+      // Pick a real customer that HAS an address (skip "+ Crear contacto"). Not
+      // `.first()`: a customer with no C_BPartner_Location leaves partnerAddress empty,
+      // which keeps action-save-draft disabled forever — see selectCustomerWithAddress.
+      await selectCustomerWithAddress(page);
 
       // BP selection triggers multiple chained callouts (price list, payment terms,
       // currency, address, warehouse). Wait until a key derived field is populated —
@@ -276,6 +278,11 @@ test.describe('Sales Order — Happy path (integration)', () => {
     });
 
     await test.step('Confirm order — check Crear factura', async () => {
+      // Captured BEFORE the confirm: the result modal now takes us straight to the
+      // generated invoice (see the next step), so the order's own URL has to be
+      // remembered here for the "order is Completed" check further down.
+      orderUrl = page.url();
+
       // Click "Confirmar" — retry click→modal sequence
       const confirmBtn = page.getByTestId('action-save');
       const invoiceCard = page.getByText(/crear factura|create.*invoice/i).first();
@@ -304,60 +311,58 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await slow(page);
     });
 
-    await test.step('Handle success modal', async () => {
+    await test.step('Open the generated invoice from the result modal', async () => {
       const successMsg = page.getByText(/pedido confirmado|order confirmed/i);
       await expect(successMsg).toBeVisible({ timeout: 30_000 });
       await slow(page);
 
-      const closeBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-      await expect(closeBtn).toBeVisible({ timeout: 5_000 });
-      await closeBtn.click();
+      // ETP-5381: an invoice generated from another document is created AND
+      // confirmed in one step, so the old "find the draft row in the
+      // sales-invoice list" route can no longer find it — and "whichever row is
+      // Completed" would match leftovers from earlier runs. The result modal's own
+      // doc card navigates to THE invoice this order produced, which is both the
+      // record under test and the affordance a real user takes.
+      const resultModal = page.getByTestId('confirm-result-modal');
+      await expect(resultModal, 'The confirm result modal should list the generated documents')
+        .toBeVisible({ timeout: 10_000 });
+
+      const invoiceCard = resultModal.getByRole('button')
+        .filter({ hasText: /factura de venta|sales invoice/i })
+        .first();
+      await expect(invoiceCard, 'The result modal should offer the generated sales invoice')
+        .toBeVisible({ timeout: 10_000 });
+
+      // ETP-5381: the card badges the real status now instead of an unconditional
+      // "Borrador" — the invoice half of the result is Completed.
+      await expect(invoiceCard,
+        '[ETP-5381] The generated sales invoice should be badged Completed in the result modal',
+      ).toContainText(/completado|completed/i, { timeout: 5_000 });
+
+      await invoiceCard.click();
       await slow(page);
+
+      await expect(page).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
+      invoiceUrl = page.url();
+      await waitForDetailReady(page);
     });
 
     await test.step('Verify order is Completed', async () => {
-      // Reload to get fresh status — use goto on current URL instead of reload
-      // to avoid ERR_ABORTED when the confirm process triggers internal navigation
-      const currentUrl = page.url();
-      await page.goto(currentUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      // Back to the order by its captured URL — goto rather than reload, to avoid
+      // ERR_ABORTED when the confirm process triggers internal navigation.
+      await page.goto(orderUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
 
       const completedPill = page.getByTestId('document-status-pill');
       await expect(completedPill).toBeVisible({ timeout: 15_000 });
+      await expect(completedPill).toHaveAttribute('data-status', 'CO', { timeout: 10_000 });
       await expect(completedPill).toContainText(/completado|registrado|booked|completed/i, { timeout: 10_000 });
       await slow(page);
     });
 
-    await test.step('Navigate to Sales Invoice — find draft invoice', async () => {
-      await navigateTo(page, 'sales-invoice');
-      await slow(page);
-
-      await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 20_000 });
-
-      const invoiceRows = page.locator('tbody tr');
-      await expect(invoiceRows.first()).toBeVisible({ timeout: 10_000 });
-
-      // Find the draft invoice created from the order
-      const draftInvoiceRow = invoiceRows.filter({ hasText: /borrador|draft/i }).first();
-      await expect(draftInvoiceRow).toBeVisible({ timeout: 10_000 });
-
-      // Open it
-      await draftInvoiceRow.hover();
-      await slow(page);
-      const editBtn = draftInvoiceRow.getByTestId('row-quick-action-edit');
-      await expect(editBtn).toBeVisible({ timeout: 5_000 });
-      await editBtn.click();
-      await slow(page);
-    });
-
     await test.step('Verify invoice has lines from order', async () => {
+      await page.goto(invoiceUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await waitForDetailReady(page);
       await expect(page).toHaveURL(/\/sales-invoice\/[a-zA-Z0-9]+/, { timeout: 15_000 });
-
-      // Verify draft status (invoices have two pills — use first)
-      const invoicePill = page.getByTestId('document-status-pill').first();
-      await expect(invoicePill).toBeVisible({ timeout: 10_000 });
-      await expect(invoicePill).toContainText(/borrador|draft/i, { timeout: 5_000 });
 
       // Verify the invoice inherited both lines from the order
       await expect(page.getByText(PRODUCT_FIXTURE_ALPHA.name).first()).toBeVisible({ timeout: 10_000 });
@@ -366,37 +371,23 @@ test.describe('Sales Order — Happy path (integration)', () => {
       await slow(page);
     });
 
-    await test.step('Confirm invoice (DR → CO)', async () => {
-      // Click "Confirmar" — retry click→modal sequence
-      const invoiceConfirmBtn = page.getByTestId('action-save');
-      await expect(invoiceConfirmBtn).toBeVisible({ timeout: 10_000 });
-      await expect(invoiceConfirmBtn).toContainText(/confirmar|confirm/i);
+    await test.step('Invoice arrives already confirmed (ETP-5381)', async () => {
+      // Read back from the backend (the goto above re-fetched the record), so this
+      // asserts the PERSISTED status, not what the create response painted.
+      // Invoices render two pills — the first is the document status pill.
+      const invoicePill = page.getByTestId('document-status-pill').first();
+      await expect(invoicePill).toBeVisible({ timeout: 10_000 });
+      await expect(invoicePill,
+        '[ETP-5381] An invoice generated from an order should arrive Completed, not Draft',
+      ).toHaveAttribute('data-status', 'CO', { timeout: 10_000 });
+      await expect(invoicePill).toContainText(/completado|completed/i, { timeout: 10_000 });
 
-      // Declare waitForResponse BEFORE the click
-      const confirmResponse = page.waitForResponse(
-        (resp) =>
-          resp.url().includes('/sws/neo/') &&
-          resp.request().method() === 'POST' &&
-          resp.status() < 400,
-        { timeout: 30_000 },
-      );
-      await invoiceConfirmBtn.click();
-      await confirmResponse;
-      await slow(page);
-
-      // Dismiss success modal if present
-      const invoiceCloseBtn = page.getByRole('button', { name: /^(Cerrar|Close)$/ });
-      if (await invoiceCloseBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await invoiceCloseBtn.click();
-        await slow(page);
-      }
-    });
-
-    await test.step('Verify invoice is Completed', async () => {
-      // After the confirm, the UI may show the detail, the list, or a preview panel.
-      // Look for "Completado" anywhere on the page as proof the invoice was confirmed.
-      await expect(page.getByText(/completado|completed/i).first())
-        .toBeVisible({ timeout: 20_000 });
+      // A completed draftMode document renders no save-actions row at all
+      // (shouldRenderSaveActionsRow in DetailView.jsx), so there is no Confirmar
+      // button — which is how this spec used to fail after the change.
+      await expect(page.getByTestId('action-save'),
+        '[ETP-5381] A document that arrives confirmed must offer no Confirmar action',
+      ).toBeHidden({ timeout: 10_000 });
       await slow(page);
     });
   });

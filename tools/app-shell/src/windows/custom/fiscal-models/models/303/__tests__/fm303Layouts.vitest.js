@@ -1,5 +1,45 @@
 import { describe, it, expect } from 'vitest';
-import { getLayout303, applyPatch, SUPPORTED_YEARS } from '../fm303Layouts.js';
+import { getLayout303, applyPatch, SUPPORTED_YEARS, SELECTABLE_YEARS } from '../fm303Layouts.js';
+import enUS from '@/locales/en_US.json';
+import esES from '@/locales/es_ES.json';
+
+// ── ETP-5431 expected matcher shapes ──────────────────────────────────────────
+// Restated here as literals ON PURPOSE rather than imported from fm303Layouts.js: these
+// assertions must fail if the module's constants change, which they could not do if both
+// sides read the same object. See fm303Layouts.bankIbanRequiredWhen.vitest.js for the
+// behavioural (matchesVisibility-driven) coverage of the same rules.
+
+/** Nota 3's exception is NOT in play. Exact complement of NOTA3_WAIVED below. */
+const NOT_WAIVED = { field: 'baja_domiciliacion', in: [false, undefined, null, '', 'N'] };
+
+/** Condition B: rectificativa + non-zero box 111 + the cancel/modify-debit flag unmarked. */
+const RECTIFICATIVA_BRANCH = { allOf: [
+  { field: 'rectificativa', equals: true },
+  { field: '_box111NonZero', equals: true },
+  NOT_WAIVED,
+] };
+
+const TIPO_IS_DVX = { field: 'tipo_declaracion', in: ['D', 'V', 'X'] };
+const TIPO_IS_UDX = { field: 'tipo_declaracion', in: ['U', 'D', 'X'] };
+
+/** De Morgan negation of RECTIFICATIVA_BRANCH, built from `in` alone (no `not` operator). */
+const NOT_NOTA3 = { anyOf: [
+  { field: 'rectificativa', in: [false, undefined, null, '', 'N'] },
+  { field: '_box111NonZero', in: [false, undefined, null] },
+  { field: 'baja_domiciliacion', in: [true, 'Y'] },
+] };
+
+const TIPO_DVX_OUTSIDE_NOTA3 = { allOf: [TIPO_IS_DVX, NOT_NOTA3] };
+
+const SEPA_MARK_NEEDS_SWIFT = { field: 'bank_sepa', in: ['2', '3', 2, 3] };
+const SEPA_MARK_NEEDS_FOREIGN_DETAILS = { field: 'bank_sepa', in: ['3', 3] };
+
+const NOTA3_NEEDS_SWIFT = { allOf: [RECTIFICATIVA_BRANCH, SEPA_MARK_NEEDS_SWIFT] };
+const NOTA3_NEEDS_FOREIGN_DETAILS = { allOf: [RECTIFICATIVA_BRANCH, SEPA_MARK_NEEDS_FOREIGN_DETAILS] };
+
+/** Section gate, and bank_iban/bank_sepa visibility: tipo gate OR condition B. */
+const BANK_SECTION_VISIBLE_WHEN = { anyOf: [TIPO_IS_UDX, RECTIFICATIVA_BRANCH] };
+const BANK_DVX_VW = { anyOf: [TIPO_IS_DVX, RECTIFICATIVA_BRANCH] };
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -537,16 +577,99 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   const layout = getLayout303(2026, 1);
   const sec = layout.sections.find(s => s.id === 'datos_bancarios');
 
-  it('sectionVisibleWhen is an anyOf of tipo_declaracion U/D/X OR rectificativa checked', () => {
-    expect(sec.sectionVisibleWhen).toEqual({ anyOf: [
-      { field: 'tipo_declaracion', in: ['U', 'D', 'X'] },
-      { field: 'rectificativa', equals: true },
-    ] });
+  // ETP-5393 manual-QA fix — the rectificativa branch now also requires `_box111NonZero`,
+  // matching `_BANK_FULL_BLOCK_REQUIRED_WHEN` exactly, so the section hides again as soon
+  // as either rectificativa is unchecked or box 111 goes back to 0 (previously it stayed
+  // visible on rectificativa alone — see fm303Layouts.bankVisibilityReactivity.vitest.js).
+  // ETP-5431 — the rectificativa branch gained a third clause: Nota 3's exception. A taxpayer
+  // who marks `baja_domiciliacion` ("dar de baja/modificar la domiciliación efectuada") is not
+  // asked for bank data, so condition B stops firing. The tipo U/D/X branch is untouched by
+  // that — those types need an account by virtue of the type itself, outside Nota 3's scope.
+  it('sectionVisibleWhen is an anyOf of tipo U/D/X OR (rectificativa + box 111 non-zero + cancel-debit flag NOT marked)', () => {
+    expect(sec.sectionVisibleWhen).toEqual(BANK_SECTION_VISIBLE_WHEN);
   });
 
-  it('bank_iban stays required: true (Classic also requires IBAN for the rectificativa case)', () => {
+  // ETP-5393 Bug E — bank_iban is no longer a static `required: true`. It's now conditional
+  // via `requiredWhen`: always required for tipo U/D/X (unchanged, AEAT EDID065), and for a
+  // rectificativa filed under any other tipo ONLY when box 111 is non-zero — see
+  // fm303Layouts.bankIbanRequiredWhen.vitest.js for full requiredWhen coverage.
+  it('bank_iban has no static `required` flag — required is conditional via requiredWhen', () => {
     const iban = sec.fields.find(f => f.id === 'bank_iban');
-    expect(iban.required).toBe(true);
+    expect(iban.required).toBeUndefined();
+    expect(iban.requiredWhen).toEqual(BANK_SECTION_VISIBLE_WHEN);
+  });
+
+  // ETP-5431 — position 23 of the DID record carries the IBAN under marca 1/2 and a plain
+  // account number under marca 3 (one field, both roles — AEAT303Report2024#patchBankSection).
+  // It is therefore required under EVERY marca, and must never be gated by the marca at all.
+  it('bank_iban is never gated by the marca SEPA — no bank_sepa clause in its requiredWhen, and no visibleWhen', () => {
+    const iban = sec.fields.find(f => f.id === 'bank_iban');
+    expect(JSON.stringify(iban.requiredWhen)).not.toContain('bank_sepa');
+    expect(iban.visibleWhen).toBeUndefined();
+  });
+
+  // ETP-5393 follow-up (manual-QA fix) — AEAT303Report requires the FULL bank block (not just
+  // IBAN) ONLY under condition B (rectificativa + non-zero box 111) — NOT under condition A
+  // (a plain tipo U/D/X devolución/domiciliación, which requires IBAN alone per AEAT EDID065).
+  // The other 6 bank fields therefore carry a NARROWER requiredWhen than bank_iban — no
+  // `tipo_declaracion in [U,D,X]` branch.
+  // ETP-5431 — the other 6 fields no longer share ONE requiredWhen. They still all sit inside
+  // condition B (never the tipo U/D/X branch — condition A requires IBAN alone), but within it
+  // requiredness now escalates with the marca SEPA. A DESIGN DECISION, NOT A CITED AEAT RULE.
+  it('none of the other 6 bank fields carries a static `required` flag', () => {
+    ['bank_swift_bic', 'bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais', 'bank_sepa']
+      .forEach((id) => {
+        expect(sec.fields.find(f => f.id === id).required).toBeUndefined();
+      });
+  });
+
+  it('bank_sepa is the marca selector: required by condition B alone, never gated by its own value', () => {
+    const sepa = sec.fields.find(f => f.id === 'bank_sepa');
+    expect(sepa.requiredWhen).toEqual(RECTIFICATIVA_BRANCH);
+    // It must stay reachable for the whole section, or the user could not change the marca
+    // that gates the rest of the block.
+    expect(sepa.visibleWhen).toEqual(BANK_DVX_VW);
+  });
+
+  it('bank_swift_bic escalates from marca 2 — required and visible only from marca 2 upwards inside Nota 3', () => {
+    const swift = sec.fields.find(f => f.id === 'bank_swift_bic');
+    expect(swift.requiredWhen).toEqual(NOTA3_NEEDS_SWIFT);
+    expect(swift.visibleWhen).toEqual({ anyOf: [TIPO_DVX_OUTSIDE_NOTA3, NOTA3_NEEDS_SWIFT] });
+  });
+
+  it('the four foreign-bank fields escalate from marca 3 only', () => {
+    ['bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais'].forEach((id) => {
+      const field = sec.fields.find(f => f.id === id);
+      expect(field.requiredWhen).toEqual(NOTA3_NEEDS_FOREIGN_DETAILS);
+      expect(field.visibleWhen).toEqual({
+        anyOf: [TIPO_DVX_OUTSIDE_NOTA3, NOTA3_NEEDS_FOREIGN_DETAILS],
+      });
+    });
+  });
+
+  // ETP-5431 — the marca restriction must live INSIDE the Nota 3 branch, never as a sibling
+  // that would also narrow the plain tipo D/V/X branch. This is the structural guard for that
+  // scope decision (option (a)); the behavioural guard lives in the "outside Nota 3" describe
+  // block of fm303Layouts.bankIbanRequiredWhen.vitest.js.
+  it('the tipo D/V/X visibility branch is never narrowed by the marca — it is ANDed with NOT-Nota-3 instead', () => {
+    ['bank_swift_bic', 'bank_nombre', 'bank_direccion', 'bank_ciudad', 'bank_pais']
+      .forEach((id) => {
+        const field = sec.fields.find(f => f.id === id);
+        const [plainRefundBranch] = field.visibleWhen.anyOf;
+        expect(plainRefundBranch).toEqual(TIPO_DVX_OUTSIDE_NOTA3);
+        expect(JSON.stringify(plainRefundBranch)).not.toContain('bank_sepa');
+      });
+  });
+
+  // The two visibility branches must be mutually exclusive, or a tipo D inside the Nota 3 case
+  // would be shown unconditionally by its tipo while the backend blanked those very positions.
+  it('NOT_NOTA3 is the exact De Morgan complement of the rectificativa branch (no `not` operator introduced)', () => {
+    expect(NOT_NOTA3.anyOf).toHaveLength(RECTIFICATIVA_BRANCH.allOf.length);
+    // Third clause is the POSITIVE waiver test — complement of NOT_WAIVED's enumeration.
+    expect(NOT_NOTA3.anyOf[2]).toEqual({ field: 'baja_domiciliacion', in: [true, 'Y'] });
+    const swift = sec.fields.find(f => f.id === 'bank_swift_bic');
+    expect(JSON.stringify(swift.visibleWhen)).not.toContain('"not"');
+    expect(JSON.stringify(swift.visibleWhen)).not.toContain('notEquals');
   });
 
   it('titleKeyMap only maps D, X (devolucion) and U (domiciliacion) — no G, I, V entries', () => {
@@ -563,6 +686,117 @@ describe('getLayout303 — datos_bancarios section visibility (EDID065 + rectifi
   it('is still returned by getLayout303 (titleKeyMap alone satisfies the titleKey||titleKeyMap filter)', () => {
     expect(sec).toBeTruthy();
     expect(sec.titleKeyFrom).toBe('tipo_declaracion');
+  });
+});
+
+// ── ETP-5431 — bank_sepa as a select ──────────────────────────────────────────
+// Was a free-text input for a field that only ever admits 0/1/2/3. Typing anything else was
+// silently possible and only surfaced as an AEAT rejection, and the marca now drives both
+// visibility and requiredness of five other fields, so a typo there had outsized effect.
+
+describe('getLayout303 — bank_sepa marca selector (ETP-5431)', () => {
+  const sec = getLayout303(2026, 1).sections.find(s => s.id === 'datos_bancarios');
+  const sepa = sec.fields.find(f => f.id === 'bank_sepa');
+
+  it('is a select, the same shape as tipo_declaracion', () => {
+    expect(sepa.type).toBe('select');
+    expect(sepa.readOnly).toBe(false);
+    expect(Array.isArray(sepa.options)).toBe(true);
+  });
+
+  // Only the three marcas that name a real account location are offered. Marca 0 ("Vacía") is
+  // deliberately NOT selectable: leaving the field untouched is what expresses "no marca", and
+  // it already reaches the file as "0" via AEAT303Report2023#generatePageDID0's blank→"0"
+  // substitution. Offering both would have meant two indistinguishable empty choices.
+  it('offers exactly the three selectable marcas, in order, each with a labelKey', () => {
+    expect(sepa.options).toEqual([
+      { value: '1', labelKey: 'fm.ident.bank.sepa.spain' },
+      { value: '2', labelKey: 'fm.ident.bank.sepa.eu_sepa' },
+      { value: '3', labelKey: 'fm.ident.bank.sepa.rest_of_world' },
+    ]);
+  });
+
+  // The regression that protects that decision: an option carrying '' or '0' would collide
+  // with renderIdentSelectField's own placeholder, and a '0'-valued option would additionally
+  // suppress the REDEME blank-marca validation (@AEAT303_sepa_empty@) by making the field
+  // always "filled". See the placeholder tests in fm303Layouts.bankIbanRequiredWhen.vitest.js.
+  it('declares no empty-valued and no "0" option — the placeholder is the only empty choice', () => {
+    expect(sepa.options.some(o => o.value === '' || o.value == null)).toBe(false);
+    expect(sepa.options.some(o => o.value === '0')).toBe(false);
+    expect(sepa.options).toHaveLength(3);
+  });
+
+  it('every option value is a string, matching the marca clauses that gate the other fields', () => {
+    sepa.options.forEach(o => expect(typeof o.value).toBe('string'));
+  });
+
+  it('declares no hardcoded label text — every option goes through a labelKey', () => {
+    sepa.options.forEach((o) => {
+      expect(o.labelKey).toMatch(/^fm\.ident\.bank\.sepa\./);
+      expect(o).not.toHaveProperty('label');
+    });
+  });
+
+  // A missing key does not throw — useUI falls back to rendering the raw key string, so the
+  // user would see "fm.ident.bank.sepa.spain" in the dropdown. Only a test catches that.
+  it.each([['en_US', enUS], ['es_ES', esES]])(
+    '%s defines a translation for every option labelKey, and for the field label itself',
+    (_locale, bundle) => {
+      expect(bundle.genericLabels['fm.ident.bank.sepa']).toBeTruthy();
+      sepa.options.forEach((o) => {
+        expect(bundle.genericLabels[o.labelKey]).toBeTruthy();
+      });
+    },
+  );
+
+  it('both locales define exactly the three marca option keys — no orphan left behind', () => {
+    const marcaKeys = b => Object.keys(b.genericLabels)
+      .filter(k => k.startsWith('fm.ident.bank.sepa.')).sort();
+    const expected = ['fm.ident.bank.sepa.eu_sepa', 'fm.ident.bank.sepa.rest_of_world', 'fm.ident.bank.sepa.spain'];
+    expect(marcaKeys(enUS)).toEqual(expected);
+    expect(marcaKeys(esES)).toEqual(expected);
+  });
+
+  it('the two locales stay in sync — identical marca key sets', () => {
+    const keysOf = b => Object.keys(b.genericLabels).filter(k => k.startsWith('fm.ident.bank.sepa'));
+    expect(keysOf(enUS).sort()).toEqual(keysOf(esES).sort());
+  });
+});
+
+// ── ETP-5438 (AEAT spec audit): datos_bancarios field maxLength ──
+
+describe('getLayout303 — datos_bancarios field maxLength (ETP-5438)', () => {
+  const layout = getLayout303(2026, 'T2');
+  const sec = layout.sections.find(s => s.id === 'datos_bancarios');
+
+  // Values are the AEAT DID-page fixed-width record slot for each field
+  // (DR303e26v101 v1.01) — see fm303Layouts.js's own comment above these fields.
+  it.each([
+    ['bank_iban', 34],
+    ['bank_swift_bic', 11],
+    ['bank_nombre', 70],
+    ['bank_direccion', 35],
+    ['bank_ciudad', 30],
+    ['bank_pais', 2],
+  ])('%s has maxLength %i', (id, expected) => {
+    const field = sec.fields.find(f => f.id === id);
+    expect(field.maxLength).toBe(expected);
+  });
+});
+
+describe('getLayout303 — rectificativa nro_justificante maxLength (ETP-5438)', () => {
+  it('current-year (2026) rectificativa section: nro_justificante has maxLength 13', () => {
+    const layout = getLayout303(2026, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
+  });
+
+  it('pre-2023 complementaria patch: nro_justificante also has maxLength 13', () => {
+    const layout = getLayout303(2022, 'T2');
+    const sec = layout.sections.find(s => s.id === 'rectificativa');
+    const field = sec.fields.find(f => f.id === 'nro_justificante');
+    expect(field.maxLength).toBe(13);
   });
 });
 
@@ -607,5 +841,200 @@ describe('getLayout303 — sin_actividad section', () => {
     const layout = getLayout303(2026, 1);
     const sec = layout.sections.find(s => s.id === 'sin_actividad');
     expect(sec.fields[0].labelKey).toBe('fm.ident.sin_actividad');
+  });
+});
+
+// ── identificacion — dep_aduanero/dep_foral removal (ETP-5272 pt.7) ──────────
+// Both checkboxes were non-functional (no backend field ever read them) and
+// were removed from BASE's `identificacion` fields and from
+// `_2024_IDENTIFICACION_FIELDS` (shared by the 2021/2022/2024 patches) along
+// with their i18n keys. Regression guard: neither id may resurface in any
+// year's resolved identificacion field list.
+describe('getLayout303 — identificacion no longer carries dep_aduanero/dep_foral (ETP-5272 pt.7)', () => {
+  function identificacionFieldIds(year, period = 1) {
+    const layout = getLayout303(year, period);
+    const sec = layout.sections.find(s => s.id === 'identificacion');
+    return sec.fields.map(f => f.id);
+  }
+
+  it('BASE (2026) identificacion has neither dep_aduanero nor dep_foral', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2021 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2021);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2022 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2022);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('the 2024 patch (_2024_IDENTIFICACION_FIELDS) has neither field', () => {
+    const ids = identificacionFieldIds(2024);
+    expect(ids).not.toContain('dep_aduanero');
+    expect(ids).not.toContain('dep_foral');
+  });
+
+  it('nif and nombre remain present (removal did not collaterally drop sibling read-only fields)', () => {
+    const ids = identificacionFieldIds(2026);
+    expect(ids).toContain('nif');
+    expect(ids).toContain('nombre');
+  });
+});
+
+// ── Last-period-only sections (ETP-5391): tributacion_territorial,
+// info_adicional_ultimo_periodo (the latter also carries the merged
+// declaracion_terceros checkbox as a leading field) ─────────────────────────
+// Only meaningful/populated by Classic's AEAT303Report when the declared
+// period is the last one of the fiscal year (quarterly T4 / monthly 12) —
+// getLayout303 must strip both out entirely for any other period.
+
+const LAST_PERIOD_SECTION_IDS = ['tributacion_territorial', 'info_adicional_ultimo_periodo'];
+
+describe('getLayout303 — last-period-only sections are present for T4/12 and absent otherwise', () => {
+  it.each([
+    ['T1', 1], ['T2', 2], ['T3', 3],
+  ])('absent for quarterly period %s', (period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).not.toContain(id);
+  });
+
+  it.each([
+    ['1', '1'], ['2', '2'], ['3', '3'],
+    ['11 (monthly, not last)', '11'],
+  ])('absent for period %s', (_label, period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).not.toContain(id);
+  });
+
+  it.each([
+    ['T4 (quarterly last)', 'T4'],
+    ["'12' (monthly last, string)", '12'],
+    ['12 (monthly last, number)', 12],
+    ["'4' (last, string)", '4'],
+    ['4 (last, number)', 4],
+  ])('present for %s', (_label, period) => {
+    const ids = sectionIds(getLayout303(2026, period));
+    for (const id of LAST_PERIOD_SECTION_IDS) expect(ids).toContain(id);
+  });
+
+  it('sectionOrder still places the two sections between resultado_final and sin_actividad for T4', () => {
+    const ids = sectionIds(getLayout303(2026, 'T4'));
+    const rfIdx = ids.indexOf('resultado_final');
+    const saIdx = ids.indexOf('sin_actividad');
+    expect(rfIdx).toBeGreaterThan(-1);
+    expect(saIdx).toBeGreaterThan(rfIdx);
+    for (const id of LAST_PERIOD_SECTION_IDS) {
+      const idx = ids.indexOf(id);
+      expect(idx).toBeGreaterThan(rfIdx);
+      expect(idx).toBeLessThan(saIdx);
+    }
+  });
+});
+
+describe('getLayout303 — tributacion_territorial section content (T4)', () => {
+  const layout = getLayout303(2026, 'T4');
+  const sec = layout.sections.find(s => s.id === 'tributacion_territorial');
+
+  it('exists and has 5 rows (89/90/91/92 + 107 territorio_comun)', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.rows).toHaveLength(5);
+  });
+
+  it('all 4 territorial percentage rows (Álava/Gipuzkoa/Bizkaia/Navarra) are editable percent cells', () => {
+    const editableRows = ['territorio_alava', 'territorio_guipuzcoa', 'territorio_vizcaya', 'territorio_navarra'];
+    const expectedCells = { territorio_alava: 89, territorio_guipuzcoa: 90, territorio_vizcaya: 91, territorio_navarra: 92 };
+    for (const id of editableRows) {
+      const row = sec.rows.find(r => r.id === id);
+      expect(row).toBeTruthy();
+      expect(row.editable).toBe(true);
+      expect(row.cells).toEqual([expectedCells[id]]);
+      expect(row.cellTypes).toEqual(['percent']);
+      expect(row.cellUnits).toEqual(['%']);
+      expect(row.derivedValue).toBeUndefined();
+    }
+  });
+
+  it('territorio_comun (box 107) is a NOT-editable derivedValue mirroring box 65, defaulting to 100', () => {
+    const row = sec.rows.find(r => r.id === 'territorio_comun');
+    expect(row).toBeTruthy();
+    expect(row.cells).toEqual([107]);
+    expect(row.cellTypes).toEqual(['percent']);
+    expect(row.cellUnits).toEqual(['%']);
+    expect(row.editable).toBeUndefined();
+    expect(row.derivedValue).toEqual({ box: 65, defaultValue: 100 });
+  });
+});
+
+describe('getLayout303 — info_adicional_ultimo_periodo section content (T4)', () => {
+  const layout = getLayout303(2026, 'T4');
+  const sec = layout.sections.find(s => s.id === 'info_adicional_ultimo_periodo');
+
+  // ETP-5391 follow-up: declaracion_terceros (Modelo 347 filing-exemption checkbox) no longer
+  // has its own section — it is merged in as this section's leading field, matching Classic's
+  // own popup layout (grouped with these 5 boxes under one heading, no separate title of its own).
+  it('carries the merged declaracion_terceros checkbox as its leading field', () => {
+    expect(sec.fields).toHaveLength(1);
+    const field = sec.fields[0];
+    expect(field.id).toBe('declaracion_terceros');
+    expect(field.type).toBe('checkbox');
+    expect(field.readOnly).toBe(false);
+    expect(field.labelKey).toBe('fm.ident.declaracion_terceros');
+  });
+
+  it('is not sectionType identificacion (row-based section carrying a leading fields checkbox)', () => {
+    expect(sec.sectionType).toBeUndefined();
+  });
+
+  it('exists and has exactly 5 editable rows for casillas 95/97/98/127/128', () => {
+    expect(sec).toBeTruthy();
+    expect(sec.rows).toHaveLength(5);
+    const expected = {
+      info_reagyp: 95, info_bienes_usados: 97, info_agencias_viaje: 98,
+      info_oss: 127, info_intragrupo: 128,
+    };
+    for (const [id, box] of Object.entries(expected)) {
+      const row = sec.rows.find(r => r.id === id);
+      expect(row).toBeTruthy();
+      expect(row.editable).toBe(true);
+      expect(row.cells).toEqual([box]);
+    }
+  });
+
+  it('does NOT include box 96 (always zero-filled) or box 99 (DB-computed) as manual rows', () => {
+    const allCells = sec.rows.flatMap(r => r.cells ?? []);
+    expect(allCells).not.toContain(96);
+    expect(allCells).not.toContain(99);
+  });
+});
+
+// ── SELECTABLE_YEARS export (ETP-5391) ───────────────────────────────────────
+// Narrower than SUPPORTED_YEARS — only the current filing year is offered when
+// CREATING a new declaration; SUPPORTED_YEARS keeps resolving layouts for
+// existing declarations back to 2021.
+
+describe('SELECTABLE_YEARS', () => {
+  it('is an array containing only the current filing year (2026)', () => {
+    expect(SELECTABLE_YEARS).toEqual([2026]);
+  });
+
+  it('is a strict subset of SUPPORTED_YEARS', () => {
+    for (const y of SELECTABLE_YEARS) expect(SUPPORTED_YEARS).toContain(y);
+  });
+
+  it('does not include any prior filing year present in SUPPORTED_YEARS (2021-2025)', () => {
+    for (const y of [2021, 2022, 2023, 2024, 2025]) {
+      expect(SELECTABLE_YEARS).not.toContain(y);
+    }
+  });
+
+  it('SUPPORTED_YEARS still spans 2021-2026 regardless of the SELECTABLE_YEARS restriction (existing declarations still resolve)', () => {
+    expect(SUPPORTED_YEARS).toEqual([2021, 2022, 2023, 2024, 2025, 2026]);
   });
 });

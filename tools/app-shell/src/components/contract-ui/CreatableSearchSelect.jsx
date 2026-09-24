@@ -328,6 +328,12 @@ export function CreatableSearchSelect({
   const loadedForRef = useRef(null);
   // Debounce timer for serverSearch mode's typing-triggered fetch.
   const debounceRef = useRef(null);
+  // Timer for the onBlur close/reset delay below — tracked so it can be cleared on unmount,
+  // same as debounceRef. Without this, a blur that fires just before unmount (e.g. a test
+  // finishing, or the field leaving the DOM via navigation) leaves the timeout armed; it then
+  // fires after teardown and crashes calling setOpen/setEditingIntent on an unmounted component
+  // (in Vitest specifically: `window is not defined`, since jsdom's window is gone by then).
+  const blurTimeoutRef = useRef(null);
   // serverSearch mode only: mirrors `hasMore`/next-page offset in refs so the scroll handler
   // (which fires outside React's render cycle) always reads the latest value synchronously,
   // exactly like SelectorInput.jsx's hasMoreRef/offsetRef.
@@ -426,7 +432,7 @@ export function CreatableSearchSelect({
       if (valueRef.current) onChangeRef.current('', '');
       return;
     }
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
 
     const cacheKey = `${parentValue ?? ''}:${refreshKey}:${selectorContextKey}`;
     if (loadedForRef.current === cacheKey) return;
@@ -485,7 +491,7 @@ export function CreatableSearchSelect({
   useEffect(() => {
     if (!serverSearch) return;
     if (!value || displayValue) return;
-    if (!selectorUrl || !token) return;
+    if (!selectorUrl) return;
     let cancelled = false;
     apiFetch(buildUrlWithParams(selectorUrl, { ...selectorContext, id: value }), { baseUrl: '' })
       .then(res => (res.ok ? res.json() : null))
@@ -507,7 +513,7 @@ export function CreatableSearchSelect({
   // fetchPage). Cleared on unmount so no stale timer fires a setState after the component
   // is gone (the debounce timer; this function itself has no timer of its own).
   const triggerServerSearch = useCallback((searchQuery, offset = 0) => {
-    if (!serverSearch || !selectorUrl || !token) return;
+    if (!serverSearch || !selectorUrl) return;
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via
     // focus/open); offset>0 (scroll-triggered "load more") is tagged with whatever generation
@@ -561,7 +567,10 @@ export function CreatableSearchSelect({
   }, [serverSearch, selectorUrl, token, parentKey, parentValue, filterKey, apiFetch, dataCache, cacheScope]);
 
   useEffect(() => {
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
   }, []);
 
   // serverSearch mode only: reset the cached page whenever the dependent parent changes (a
@@ -929,7 +938,8 @@ export function CreatableSearchSelect({
           onKeyDown={handleInputKeyDown}
           onBlur={() => {
             isEditingRef.current = false;
-            setTimeout(() => {
+            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+            blurTimeoutRef.current = setTimeout(() => {
               setOpen(false);
               resetSearchState();
               // Revert to chip if the user blurred without picking another option

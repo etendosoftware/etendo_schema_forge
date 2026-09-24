@@ -125,6 +125,14 @@ export const api = {
     },
     {
       "entity": "assets",
+      "field": "businessPartner",
+      "column": "C_BPartner_ID",
+      "reference": "BPartner",
+      "inputMode": "search",
+      "url": "/sws/neo/assets/assets/selectors/businessPartner"
+    },
+    {
+      "entity": "assets",
       "field": "eTADASCostCenter",
       "column": "EM_Etadas_Costcenter_ID",
       "reference": "Costcenter",

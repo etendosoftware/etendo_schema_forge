@@ -50,6 +50,8 @@ const mockHook = {
   handleDelete: vi.fn().mockResolvedValue({}),
   handleDeleteChild: vi.fn(),
   handleSelect: vi.fn(),
+  invalidateChildrenCache: vi.fn(),
+  invalidateEntityCache: vi.fn(),
   handleUpdateChild: vi.fn(),
   handleAddChild: vi.fn(),
   handleProcess: vi.fn(),
@@ -158,6 +160,8 @@ function resetState() {
   mockHook.primeSaved.mockClear();
   mockHook.handleUpdateChild.mockClear();
   mockHook.handleSelect.mockClear();
+  mockHook.invalidateChildrenCache.mockClear();
+  mockHook.invalidateEntityCache.mockClear();
 }
 
 describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
@@ -364,11 +368,23 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     });
 
     await user.click(screen.getByTestId('modal-parent-refresh'));
+    // The mount-time effect already synced every secondary hook with the parent —
+    // reset so the order assertion below reads the modal's own calls, not those.
+    mockHook.handleSelect.mockClear();
+    mockHook.invalidateChildrenCache.mockClear();
     await user.click(screen.getByTestId('modal-saved'));
     await user.click(screen.getByTestId('modal-close'));
 
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.handleSelect).toHaveBeenCalledWith(mockHook.selected);
+    // ETP-5366: the modal persists the row with its own raw fetch, bypassing
+    // handleAddChild — so nothing marked the cached child collection stale and the
+    // non-forced fetchChildren inside handleSelect resolved from the cache with the
+    // very same array instance (a no-op setChildren). The tab must drop that entry
+    // FIRST, otherwise handleSelect's re-read never reaches the network.
+    expect(mockHook.invalidateChildrenCache).toHaveBeenCalledWith('123');
+    expect(mockHook.invalidateChildrenCache.mock.invocationCallOrder[0])
+      .toBeLessThan(mockHook.handleSelect.mock.invocationCallOrder[0]);
   });
 
   it('mounts secondary panels and accepts their count updates', async () => {
@@ -386,10 +402,19 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     const originalFetchChildren = mockHook.fetchChildren;
     const originalItems = mockHook.items;
     const originalEditing = mockHook.editing;
+    const originalInvalidateChildrenCache = mockHook.invalidateChildrenCache;
     mockHook.items = [mockHook.selected];
     mockHook.editing = { documentNo: mockHook.editing.documentNo };
     mockHook.fetchById = undefined;
     mockHook.fetchChildren = undefined;
+    // ETP-5366: the customAddModal onSaved reaches invalidateChildrenCache through
+    // an optional call, so a hook that predates it must not throw.
+    mockHook.invalidateChildrenCache = undefined;
+    // ETP-5378: same contract for the list-cache invalidation added to every
+    // refresh handler — it is optional-chained, so a hook build without it must
+    // still let the user refresh instead of crashing the screen.
+    const originalInvalidateEntityCache = mockHook.invalidateEntityCache;
+    mockHook.invalidateEntityCache = undefined;
     const CustomLines = ({ onRefresh, onCountChange }) => (
       <div>
         <button data-testid="optional-refresh" onClick={onRefresh}>refresh</button>
@@ -416,6 +441,8 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
       mockHook.fetchChildren = originalFetchChildren;
       mockHook.items = originalItems;
       mockHook.editing = originalEditing;
+      mockHook.invalidateChildrenCache = originalInvalidateChildrenCache;
+      mockHook.invalidateEntityCache = originalInvalidateEntityCache;
     }
   });
 
@@ -456,5 +483,162 @@ describe('DetailView — justSaved fast-path (ETP-4563)', () => {
 
     // Mismatch → normal path: no force-children fetch triggered by the fast-path.
     await waitFor(() => expect(mockHook.fetchChildren).not.toHaveBeenCalledWith('123', { force: true }));
+  });
+});
+
+/**
+ * ETP-5378 — the LIST half of every post-mutation refresh.
+ *
+ * ETP-4563 (the suites above) made each of these handlers re-read the RECORD
+ * past the freshness cache. `useEntity` caches two things, though: the record
+ * AND the list pages. A handler that only refetched the record left the cached
+ * grid page holding the pre-mutation row, so the form showed the new state while
+ * the list — re-mounted by Cancelar's plain `navigate('/'+windowName)`, which
+ * fetches nothing — still showed the old one until the user refreshed by hand.
+ * `handleProcessSuccess` in useEntity always ran the full trio
+ * (invalidateEntityCache → fetchById → refresh); these handlers now do too.
+ *
+ * Each test pins ONE call site: the invalidation happens, and it happens BEFORE
+ * the refetch — order matters, because invalidating after a read has already
+ * been issued lets the stale response repopulate the cache it just cleared.
+ */
+describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () => {
+  beforeEach(resetState);
+
+  // Compared on the LAST invocation of each spy: a stray mount-driven refetch
+  // that slips in before the click would break a first-vs-first comparison for
+  // reasons unrelated to the handler under test, while the property we care
+  // about — "this handler invalidates, THEN refetches" — still holds on the
+  // last pair.
+  const lastCall = (mockFn) => mockFn.mock.invocationCallOrder.at(-1);
+
+  /** The invalidation must precede every refetch it protects. */
+  function expectInvalidatedBeforeRefetch(...refetches) {
+    expect(mockHook.invalidateEntityCache).toHaveBeenCalled();
+    for (const refetch of refetches) {
+      expect(refetch).toHaveBeenCalled();
+      expect(lastCall(mockHook.invalidateEntityCache)).toBeLessThan(lastCall(refetch));
+    }
+  }
+
+  /** Isolate a handler's calls from anything the mount itself triggered. */
+  function clearRefreshSpies() {
+    mockHook.invalidateEntityCache.mockClear();
+    mockHook.fetchById.mockClear();
+    mockHook.fetchChildren.mockClear();
+  }
+
+  it('a header-slot refresh must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const headerExtra = (slot) => (
+      <button data-testid="slot-refresh" onClick={() => slot.onRefresh()}>refresh</button>
+    );
+    renderDetailView({ headerExtra });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('slot-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+  });
+
+  it('a header-slot refresh for an explicit record id still drops the grid page', async () => {
+    const user = userEvent.setup();
+    const headerExtra = (slot) => (
+      <button data-testid="slot-refresh-explicit" onClick={() => slot.onRefresh('999')}>refresh</button>
+    );
+    renderDetailView({ headerExtra });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('slot-refresh-explicit'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expect(mockHook.fetchById).toHaveBeenCalledWith('999', { force: true });
+  });
+
+  it('a topbarRight action must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const TopbarRight = ({ onRefresh }) => (
+      <button data-testid="topbar-right-refresh" onClick={() => onRefresh()}>refresh</button>
+    );
+    renderDetailView({ topbarRight: TopbarRight });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('topbar-right-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
+  });
+
+  it('a topbarExtra action must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const TopbarExtra = ({ onRefresh }) => (
+      <button data-testid="topbar-extra-refresh" onClick={() => onRefresh()}>refresh</button>
+    );
+    renderDetailView({ topbarExtra: TopbarExtra });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('topbar-extra-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
+  });
+
+  it('importing lines from the empty state must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    mockHook.children = [];
+    const LinesEmptyState = ({ onRefresh }) => (
+      <button data-testid="empty-state-refresh" onClick={() => onRefresh()}>refresh</button>
+    );
+    renderDetailView({ linesEmptyState: LinesEmptyState });
+
+    clearRefreshSpies();
+    await user.click(await screen.findByTestId('empty-state-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+  });
+
+  it('importing lines from the add-line menu must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const DetailExtraActions = ({ onRefresh }) => (
+      <button data-testid="detail-extra-refresh" onClick={onRefresh}>refresh</button>
+    );
+    const BottomSection = () => null;
+    BottomSection.detailExtraActions = DetailExtraActions;
+    renderDetailView({
+      bottomSection: BottomSection,
+      addLineFields: { entry: [{ key: 'quantity', type: 'number' }], derived: [] },
+    });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('detail-extra-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+  });
+
+  it('a custom lines panel refresh must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const CustomLines = ({ onRefresh }) => (
+      <button data-testid="custom-lines-refresh" onClick={onRefresh}>refresh</button>
+    );
+    renderDetailView({ DetailTable: null, CustomLines, customLinesLabel: 'Custom Lines' });
+
+    clearRefreshSpies();
+    await user.click(await screen.findByTestId('custom-lines-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+  });
+
+  it('a secondary custom modal writing the parent must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    const CustomModal = ({ onParentRefresh }) => (
+      <button data-testid="modal-parent-refresh" onClick={onParentRefresh}>refresh parent</button>
+    );
+    renderDetailView({
+      secondaryTabs: [{ key: 'addresses', label: 'Addresses', Table: MockTable, customAddModal: CustomModal }],
+    });
+
+    clearRefreshSpies();
+    await user.click(screen.getByTestId('modal-parent-refresh'));
+
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
   });
 });

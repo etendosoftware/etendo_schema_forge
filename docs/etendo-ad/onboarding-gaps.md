@@ -28,10 +28,19 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
+| I2 | Inventory / Warehouse | Default warehouse's address shows the GOClient sampledata placeholder street ("Avenida Siempreviva 44") instead of the fiscal address the tenant entered in the onboarding wizard | `OnboardingWarehouseAddressService` — new step in `ensureOnboardingDataset`, copies the fiscal address (`AD_ORGINFO.C_Location_ID`) field values onto the warehouse's own `C_Location`, right after `wireOrgInfo`. **Preventive only, by decision** — no corrective data-fix, no CUT bump | ETP-5444 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
+| K2 | Accounting dimension display | Product decision: Contacto (BP) and Producto (PR) accounting-dimension elements must always be `active` and are never editable/visible through "Dimensiones contables" — DB-confirmed `isactive` was already `'Y'` fleet-wide (no-op, kept as a correctness guard) but `ismandatory` was `'N'` for every BP/PR row (196/196), never forced before | Both fronts closed: code-side lock (`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES`, already shipped) + preventive dataset-only fix (`C_ACCTSCHEMA_ELEMENT.xml` `ISMANDATORY` N→Y for BP/PR, no new service, no CUT bump — new tenant already born correct) + corrective data-fix (`R37-acctdim-bp-pr-locked-active`) forces both flags fleet-wide | ETP-4879 |
 | L1 | Tenant ownership | New `AD_User.EM_ETGO_Is_Owner` column (owner-lock enforcement) is only auto-set for tenants created AFTER ETP-4830 shipped — every pre-existing tenant has zero owner-flagged users, so the enforcement checks are silent no-ops for them | Preventive shipped (`OwnerSupport#markAsOwnerIfNoneExists`, wired into `EtendoGoJwtServlet#createClient`); corrective backfill (`R26-tenant-owner-and-personal-role-retrofit`) shipped 2026-08-26 — both fronts closed | ETP-4877 |
 | N1 | Tenant plan / fiscal test mode | A Demo/free tenant has no way to submit SII/TicketBAI/VeriFactu in test/sandbox mode without a manual `ETSG_ForceTestMode` edit in Classic — every self-registered free tenant defaults to real (production) fiscal submissions | Both fronts closed: `OnboardingForceTestModeService` (preventive, new step in `ensureOnboardingDataset`) + `R31-force-test-mode-demo-tenants` (corrective, also backfills already-existing SII/TicketBAI/VeriFactu config rows) | ETP-5117 |
+| N5 | Initial dataset configuration | No price list is flagged as default — the curated `M_PRICELIST.xml` shipped both tariffs with `ISDEFAULT='N'`, so the four consumers that disambiguate tariffs with `isdefault DESC` (the `ETGO_PRODUCT_SALE_PRICE`/`ETGO_PRODUCT_PURCHASE_PRICE` computed columns, `PriceListPicker.jsx`, `R33`'s standard-cost anchor, and ETP-5245's new default-tariff resolver) silently fall through to an arbitrary list | Both fronts closed: preventive is dataset-only (`ISDEFAULT` `N`→`Y` on both curated tariffs in `GOClient/M_PRICELIST.xml`, already in `INCLUDED_TABLES`); corrective data-fix (`R35`) marks one active list per trade direction on already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it | ETP-5245 |
+| N6 | Initial dataset configuration | The curated `AD_SEQUENCE.xml` ships the tenant's document series with NO prefix at all (`Purchase Order`, `Standard Order`, `AR Invoice`) or with ETP-4737's interim `REC-` (both rectificativas), and `AR Invoice` starts at 10000000 instead of 1000000 — so a tenant's invoices and orders are numbered `1000000`, indistinguishable from each other, instead of the product's `PC`/`PV`/`FV`/`FVR`/`FCR` series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` sets the five prefixes and drops `AR Invoice` to 1000000); corrective data-fix (`R38-document-sequence-series-prefixes`) applies the same to already-onboarded tenants. CUT deliberately NOT bumped — a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it. The sixth series the ticket names, `FC` (Factura de compra), is NOT covered: `AP Invoice` is `IsDocNoControlled='N'` with no sequence in 76/76 doctypes, so giving it a series is a product decision, tracked separately | ETP-5285 |
+| N7 | Initial dataset configuration | `AP Invoice` ships with stock Openbravo's `IsDocNoControlled='N'` and no sequence (107 of 107 doctypes), so a purchase invoice takes its proposed number from the shared, per-doctype-agnostic `DocumentNo_C_Invoice` fallback and the tenant has no `FC` series to configure — the sixth series ETP-5285 named and could not ship | **Preventive only, dataset-only, no new service.** `GOClient/AD_SEQUENCE.xml` ships an `AP Invoice` sequence (prefix `FC`, 1000000) and `GOClient/C_DOCTYPE.xml` flips the `AP Invoice` doctype to `ISDOCNOCONTROLLED='Y'` pointing at it; `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` grows to six. Corrective data-fix (`R39-ap-invoice-fc-series`) creates the sequence and flips the doctype on already-onboarded tenants — **decision REVERSED on 2026-09-22**, see the detail section: the retrofit starts a numbering series over documents numbered by the fallback counter, accepted because no tenant is productive and going productive creates a NEW tenant born correct. CUT deliberately NOT bumped — a newborn tenant is born correct, so `R39`'s `@check` returns 0 rows for it | ETP-5364 |
+| N8 | Initial dataset configuration | Every `DocumentNo_*` sequence exists **twice** per tenant — 9888 surplus `AD_Sequence` rows across 103 of 125 clients. Openbravo's `InitialClientSetup` creates the 97 `DocumentNo_<table>` rows for a new client, and the GO dataset then imported 96 of the same names again from `GOClient/AD_SEQUENCE.xml` as fresh rows. Numbering survives by accident (`ad_sequence_doc` increments every row matching the name and reads one back non-`STRICT`), but 140 pairs have already diverged, and editing one of a pair makes the applied value non-deterministic | **Preventive only.** A new `TableCounterSequenceFilter` in `OnboardingDatasetNormalizer` drops the 96 colliding rows at IMPORT time; the source `GOClient/AD_SEQUENCE.xml` stays complete, because `install.source` seeds the GOClient sample client from it wholesale and never runs `InitialClientSetup` — deleting them there would leave the sample client unable to number a document, with no dangling FK to announce it. Same source/import split as N4b. **No corrective data-fix by decision** — the 103 existing tenants keep both copies. CUT deliberately NOT bumped: a newborn tenant is born correct and there is no fix to skip | ETP-5364 |
+| N9 | Initial dataset configuration | Three document series carry an internal, ticket-tagged `DESCRIPTION` — both rectificativas ship ETP-4737's `"ETP-4737: sequence for the unified ... rectificative invoice"` and the new purchase-invoice series briefly shipped `"ETP-5364: sequence ..."`. `artifacts/document-sequence/decisions.json` declares `description` as an **editable, grid-visible** column of the "Secuencia de documentos" window, so that engineering note is copy the tenant reads next to its own series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element on all three rows); corrective data-fix (`R39-document-sequence-clear-descriptions`) nulls it on already-onboarded tenants. The text reaches a tenant by TWO routes — the dataset and `R17-rectificativa-doctype-sequence`, which is immutable and already applied — so the fix matches by NAME, and only on `description LIKE 'ETP-%'` so a tenant-authored description survives. CUT deliberately NOT bumped | ETP-5364 |
+| P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
+| P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -294,8 +303,21 @@ comment, and the updated JUnit test) were initially blocked by this session's to
 boundary (writes outside `etendo_schema_forge`'s own working directory, and real/non-dry-run DB
 writes). The user granted this session write access to `modules/com.etendoerp.go` plus an
 allowlisted real-run/psql command, and Clerk created `feature/ETP-4947` there (off `develop`,
-working tree was clean) — all deliverables above were then completed on that branch. All changes in
-both repos remain **unstaged/uncommitted**, pending REVIEW.
+working tree was clean) — all deliverables above were then completed on that branch. Both fronts
+above (R29 corrective + the preventive dataset/CUT bump) are merged into `develop` — this was the
+first, default-only fix; superseded by the follow-up below.
+
+**Follow-up (2026-09-21) — superseded by full elimination, not just a default fix.** After this A3c
+fix shipped and QA approved it (checkbox defaults OFF, stays editable), the product decision changed:
+remove the "Permitir negativos" checkbox from the UI entirely, and close the backend write path too,
+not merely default it to `N`. This is now closed on a separate `feature/ETP-4947` branch pair (the
+Jira ticket number is reused — same ticket, later scope). `decisions.json` marks `allowNegative`
+`system`-visibility, the "Políticas contables" section is gone from `GeneralTab.jsx`, and
+`GeneralLedgerConfigurationHandler.applyGeneralChanges()` no longer accepts a client-supplied value —
+GET still reports the persisted value via `buildGeneral()`. This A3c fix (R29 + the dataset default)
+is still what guarantees that persisted value stays `N` for every onboarded tenant; nothing here is
+retired. See `docs/generated-custom-windows/general-ledger-configuration.md` and
+`artifacts/general-ledger-configuration/figma-spec.md` for the current (post-elimination) state.
 
 ### A3b — `C_ACCTSCHEMA_DEFAULT` "Defaults tab" incomplete — Jorge's list (ETP-4245 follow-up, 2026-07-06)
 
@@ -1265,6 +1287,31 @@ Then open periods from the UI: *Open/Close Period Control → Open Period*.
 
 > **Root-cause hypothesis — needs a debug trace to confirm.** Two mechanisms are plausible and not yet proven: (a) a transaction/connection split (the process runs via `ProcessRunner` while `setReady(true)` commits on the OBDal connection); or (b) a Hibernate first-level-cache overwrite — after `AD_ORG_READY` writes the columns via PL/SQL, a stale cached `Organization` entity is re-saved by `setReady(true)`, writing NULLs back over them. If (b), `DalConnectionProvider` actually shares the OBDal JDBC connection and the fix is an `OBDal.getInstance().refresh(org)` (cache eviction) before the defensive `setReady`, not a transaction fix. Confirm which one applies before changing `MarkOrgReadyStep`; the verify-and-recompute mitigation below is correct under either.
 
+> **Update (ETP-5352, 2026-09-18) — resolved defensively, root cause still not proven.** The gap resurfaced through a second, louder symptom: `C_GETTAX` cannot resolve any non-zero-rate tax when the pointer is empty, so confirming a Sales Shipment that does NOT come from a Sales Order and asking for the invoice dies with `@TaxNotFound@`. Both hypotheses above are now covered rather than discriminated — (b) by an `OBDal.refresh` before the defensive `setReady`, and the outcome of either by an idempotent recompute afterwards. Three things were also established while investigating:
+>
+> - **A third mechanism exists and is the only one the PL/SQL can produce on its own.** `ad_get_org_le_bu_treenode(org,'LE')` returns the organization itself as soon as its type carries `ISLEGALENTITY='Y'` — no tree walk, so an empty `AD_ORG_TREE` cannot by itself yield NULL. The single NULL-returning path requires `ISLEGALENTITY='N'` at the instant `AD_Org_Ready` runs, followed by a parent lookup in `AD_TREENODE` that finds nothing. `AD_Org_Ready` wraps the call in `EXCEPTION WHEN DATA_EXCEPTION THEN := NULL`, so any failure there is completely silent.
+> - **The "three of five columns populated" symptom is not evidence of a partial UPDATE.** The three survivors (`ad_periodcontrolallowed_org_id`, `ad_calendarowner_org_id`, `ad_inheritedcalendar_id`) come from functions that short-circuit on the organization's own data — `ad_org_getcalendarownertn` returns as soon as it sees the org has a calendar — and never reach the tree. Only the legal entity / business unit pair depends on the walk.
+> - **A NULL `AD_BusinessUnit_Org_ID` is normal, not part of the defect.** Every healthy "Legal with accounting" organization has it empty (93/93 on the local instance), because such a type is a legal entity and not a business unit. Treating it as a second anomaly sends the analysis down the wrong path.
+>
+> **Discriminating query for an affected tenant** — a legal-entity type here means hypothesis (a) or (b); a non-legal-entity type means the third mechanism, and the defect is in how the organization was created:
+>
+> ```sql
+> SELECT o.ad_org_id, o.ad_orgtype_id, ot.islegalentity, o.isready,
+>        o.created, o.updated, o.ad_legalentity_org_id
+> FROM ad_org o JOIN ad_orgtype ot ON ot.ad_orgtype_id = o.ad_orgtype_id
+> WHERE o.ad_client_id = '<AFFECTED_CLIENT_ID>' AND o.ad_org_id <> '0';
+> ```
+>
+> **Not reproducible on a healthy local instance, by construction.** A repro needs an organization that is both broken (empty pointer) and usable (master data to build a shipment from), and those two sets are disjoint locally: every org with an empty pointer is an alta that aborted before `markOrgReady` and has no products, price lists, warehouses or customers. A second trap compounds it — `C_GETTAX`'s filter has an escape hatch, `t.isCashVAT='N' and (t.isWithholdingTax='Y' or t.rate = 0)`, so a product in a zero-rate or exempt tax category invoices fine even on a genuinely affected tenant. The mechanism can be demonstrated without any of that, inside a rolled-back transaction: null the pointer on a healthy org and call `c_gettax(...)` with a normal-rate product before and after.
+>
+> **First local alta on the fix failed — in the guard, not in the data (2026-09-18).** Onboarding stopped at `markOrgReady` with *"organization … is not typed as a legal entity"*, while the database said the opposite: `ad_orgtype_id='1'` ("Legal with accounting"), `islegalentity='Y'`, pointer populated, both `AD_ORG_TREE` rows present. The guard read the flag with `"Y".equals(row[0])`, and that comparison is **always false**. Etendo's boolean columns are `character(1)`; Hibernate's implicit scalar resolution for a native query derives the Java type from JDBC metadata, and `Dialect` registers `Types.CHAR` at width 1 as `CharacterType` (`JdbcResultMetadata#getHibernateType` → `getColumnDisplaySize` → 1), so the value arrives as a `Character`, never a `String`. Unit tests stubbing `uniqueResult()` with `new Object[] { "Y", … }` passed while every real alta failed. Fixed with `isYesFlag()` (normalizes through `String.valueOf`, so it holds under either mapping) and tests restubbed with `Character.valueOf('Y')`. **Any new native-query read of an Etendo `Y`/`N` column must go through the same normalization.**
+>
+> Two consequences for the analysis above. First, the third mechanism (`ISLEGALENTITY='N'` when `AD_Org_Ready` ran) is **ruled out for this alta** — the type was a legal entity throughout, so if the pointer had been empty it would have been hypothesis (a) or (b). Second, `markOrgReady` sits mid-chain in `ensureOnboardingDataset`, so the false alarm aborted every step after it (fiscal data, org-info wiring, costing schedule, `C_BP_Group_Acct` patch, data-fix baseline). The chain is a reconcile model (ETP-4428) and every step is idempotent, so re-running the alta for the same client/org completes the tenant rather than requiring a fresh one.
+>
+> **The reconciliation predicate also had to be narrowed.** It matched on `ad_legalentity_org_id IS NULL OR ad_businessunit_org_id IS NULL`, and a NULL business unit is the healthy state for a legal-entity org — so the UPDATE fired on *every* alta, bumped the audit stamp and logged the WARN that is supposed to mean "AD_Org_Ready failed silently". The business-unit branch now additionally requires `ad_get_org_le_bu_treenode(ad_org_id,'BU') IS NOT NULL`, i.e. it only matches when the tree can actually supply a value. That restores the WARN as a usable signal: **if it appears on a legal-entity org, `AD_Org_Ready` genuinely left the pointer empty and hypothesis (a)/(b) is confirmed at last.**
+>
+> **Fixed by:** `OnboardingMarkOrgReadyService.reconcileOrgHierarchyPointers` / `verifyOrgHierarchy` (preventive) and `R38-org-legalentity-pointer` (corrective, superseding the never-shipped `R-legalentity` placeholder). `ad_calendarowner_org_id` is deliberately NOT recomputed by either — it was outside ETP-5352's scope and `ad_inheritedcalendar_id` is derived from it, so recomputing one alone risks an inconsistent pair.
+
 **SQL fix:**
 
 ```sql
@@ -1441,6 +1488,50 @@ ORDER BY l.value;
 runner's strict watermark never revisits a `PROCESSED` fix), a locator skipped for negative stock
 is not automatically retried once the stock is corrected by hand — an operator must force it with
 `--fix R19-locator-inventory-status --client <id>`.
+
+### I2 — Default warehouse address stuck on the GOClient sampledata placeholder (ETP-5444)
+
+**Symptom:** the default warehouse's Location/Address field ("Almacen Principal") shows an
+address unrelated to what the tenant entered when onboarding — traced to the GOClient sampledata
+placeholder street "Avenida Siempreviva 44".
+
+**Root cause:** the default warehouse's `C_Location` (`M_Warehouse.C_Location_ID`) is created by
+the GOClient sampledata import (step 1, `importOnboardingDataset`), with a fixed placeholder
+address baked into `referencedata/sampledata/GOClient/C_LOCATION.xml`. The organization's own
+fiscal address (`AD_ORGINFO.C_Location_ID`) is a completely different `C_Location` row, created
+later in the chain by `OnboardingOrgInfoService#ensureOrgInfoLocation` from the optional "Address"
+field of the "Details to start invoicing" wizard step (`OnboardingRequestData.address`). The two
+locations are unrelated, so the warehouse never reflects the fiscal address the tenant actually
+provided.
+
+**Verification (per tenant):**
+
+```sql
+SELECT w.name AS warehouse_name, wl.addressline1 AS warehouse_address,
+       oi.c_location_id AS fiscal_location_id, fl.addressline1 AS fiscal_address
+FROM m_warehouse w
+JOIN c_location wl ON wl.c_location_id = w.c_location_id
+LEFT JOIN ad_orginfo oi ON oi.ad_org_id = w.ad_org_id
+LEFT JOIN c_location fl ON fl.c_location_id = oi.c_location_id
+WHERE w.ad_client_id = '<CLIENT_ID>' AND w.isactive = 'Y';
+-- Gap present when warehouse_address still matches the sampledata placeholder and differs from
+-- fiscal_address (or fiscal_address is non-empty and warehouse_address is not aligned with it).
+```
+
+**Fronts:**
+
+| Front | Deliverable |
+|---|---|
+| **Preventive** | `OnboardingWarehouseAddressService` (new class, `com.etendoerp.go/.../onboarding/`) — copies the fiscal address's field values (`addressLine1`, `addressLine2`, `cityName`, `postalCode`, `postalAdd`, `region`, `regionName`, `city`) onto the warehouse's own, distinct `C_Location`. Country is left untouched (the sampledata warehouse location already carries the correct country). Wired as a new step, `wireWarehouseAddress`, right after `wireOrgInfo` in `ensureOnboardingDataset` (depends on the fiscal address already being located) and before the remaining steps. Unconditional overwrite on every onboarding run — no comparison against the placeholder string, so it stays correct even if the sampledata address text changes. An empty wizard "Address" results in an empty warehouse address too; this is expected, not an error. |
+| **Corrective** | **None, by explicit decision.** This gap only affects tenants onboarded before this fix ships; there is no corrective `.sql` and `ONBOARDING_PROVISIONED_THROUGH` is NOT bumped in `OnboardingBaselineService`. Post-creation sync (keeping the warehouse address in lockstep if the fiscal address changes later) is also out of scope. |
+
+**Preparatory dataset change (already applied, not part of this fix's Java):** the placeholder
+`<ADDRESS1>` line ("Avenida Siempreviva 44") was removed from
+`referencedata/sampledata/GOClient/C_LOCATION.xml` for the warehouse's `C_LOCATION_ID`
+(`A72B4E2D0E5A4369B45219D3D83E4FDC`), so a fresh GOClient import no longer seeds a street at all —
+verified: the warehouse now shows only "Spain" until `OnboardingWarehouseAddressService` fills it
+in from the fiscal address.
+
 ## J — Costing
 
 ### J1 — New tenants get ZERO `M_Costing_Rule` rows, not Average (ETP-4760, 2026-08-03)
@@ -1557,6 +1648,55 @@ also carries a `cli/src/data-fixes/sql/` directory per the repo-topology note, b
 checkout it is a stale mirror (tops out at `R8`, not kept in sync with `R9`–`R22` shipped after
 the repo split) and is not on a branch related to this ticket — no changes were made there. If it
 needs reconciling with the current fix catalog, that is a separate task.
+
+---
+
+### K2 — Contacto (BP) / Producto (PR) accounting dimensions must always be `active`, never toggleable (ETP-4879, 2026-09-17)
+
+**Symptom:** the "Dimensiones contables" screen let an operator toggle Contacto
+(Business Partner) and Producto (Product) off, but every window that actually renders these two
+dimensions (Assets, Financial Account, Amortization) already hardcodes them as always visible and
+never reads this config's `active` flag — the toggle was a no-op that only confused users.
+
+**Product decision (Santiago):** Contacto and Producto are no editable (y no visible) y siempre
+en true. Project (PJ) and Cost Center (CC) stay editable/optional, unchanged.
+
+**Code-side lock (already shipped, this branch, NOT part of this data-fix):**
+`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES = ["BP", "PR"]` — `buildDimensions()`
+excludes BP/PR rows from the GET response entirely; `applyDimensionChanges()` silently ignores any
+attempt to toggle their `active` flag, regardless of `mandatory`.
+
+**DB-state investigation (2026-09-17, this DB, confirmed by query before writing the fix):**
+
+- `C_AcctSchema_Element.isactive` was **already `'Y'` for every existing BP/PR row** (98/98 BP,
+  98/98 PR, across all 96 clients that have an accounting schema at all) — the AD-standard
+  default, same fact already recorded for K1/R23. The `IsActive` half of this fix is therefore a
+  **no-op on the current fleet**, shipped only as a correctness guard for any future/other write
+  path.
+- `ismandatory` was **`'N'` for every single BP/PR row** (196/196) — never forced anywhere before.
+  This is the real corrective content.
+- 2 client ids (throwaway Playwright "E2E User 1 ..." test tenants) have **zero** accounting-schema
+  rows at all (no `C_AcctSchema`, no `C_AcctSchema_Element` of any type) — unrelated pre-existing
+  A1/A2 "chart of accounts missing" gap, out of scope here; the fix's `@check` naturally returns 0
+  rows for them.
+
+**Safety of forcing `IsMandatory='Y'` (confirmed by reading every consumer, not assumed):**
+`applyDimensionChanges` reads `isMandatory()` only inside the `!LOCKED_DIMENSION_TYPES.contains(...)`
+branch — for BP/PR that branch is never entered, so the flag is dead code there. Classic core's
+legacy `AcctSchemaElement.getAcctSchemaElementList` (`src/org/openbravo/erpCommon/ad_forms/`) reads
+`ismandatory` only to emit a DEBUG log line, no exception, no posting effect. The actual
+posting/balancing engine (`Fact.java`/`FactLine.java`) reads only `isBalanced`, never `isMandatory`,
+off this element list. `COAUtility`/`InitialSetupUtility.insertAcctSchemaElement` (new-schema
+creation) hardcodes BP/PR to `isMandatory=false` BY DESIGN (only OO/AC are `true`) — a
+"posting requires an org and an account, not necessarily a partner/product" rule this fix does not
+contradict. Conclusion: forcing `IsMandatory='Y'` is safe defense-in-depth, not merely cosmetic.
+
+**Both fronts closed (2026-09-17):**
+
+| Front | Deliverable |
+|---|---|
+| **Corrective** | `cli/src/data-fixes/sql/20260917T120000Z__R37-acctdim-bp-pr-locked-active.sql` — one guarded `UPDATE` forcing `isactive='Y'` AND `ismandatory='Y'` for `elementtype IN ('BP','PR')`, scoped to `:client_id`. Live-validated: dry-run + real run across the full fleet (98 clients) → 96 `APPLIED` (2 or 4 rows, per number of accounting schemas) / 2 `SKIPPED_NOT_NEEDED` (the schema-less E2E tenants); re-run → 98/98 `SKIPPED_NOT_NEEDED` (96 "kept prior success state" + the 2 schema-less clients), zero `APPLIED`/`FAILED`. DB re-query after the run: 0 BP/PR rows anywhere with `isactive != 'Y'` or `ismandatory != 'Y'`. |
+| **Preventive** | Dataset-only, no new onboarding service: `com.etendoerp.go/referencedata/sampledata/GOClient/C_ACCTSCHEMA_ELEMENT.xml` already shipped BP/PR with `ISACTIVE=Y`; its `ISMANDATORY=N` for both was corrected to `Y` in the same change. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped** — a new tenant is already born correct on both flags (same "dataset-only, no CUT bump" shape as A9/N4/N5 above), so R37's own `@check` converges to 0 rows for it, a clean `SKIPPED_NOT_NEEDED`. |
 
 ---
 
@@ -2265,6 +2405,443 @@ financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`
 accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
 
 ---
+
+### N5 — No price list flagged as default (ETP-5245, 2026-09-09)
+
+**Symptom.** On every already-onboarded tenant, `SELECT * FROM m_pricelist WHERE isdefault = 'Y'`
+returns nothing. The curated dataset shipped both tariffs with `ISDEFAULT='N'`:
+
+| `m_pricelist_id` | Name | `issopricelist` |
+|---|---|---|
+| `782B468DCC3948D69BC2AE5B68C3F4A4` | Tarifa de venta principal | `Y` (sales) |
+| `F888E6AAB93E44E88433C21A8F3C0161` | Tarifa de compra principal | `N` (purchase) |
+
+`M_PRICELIST` **is** in `OnboardingDatasetDefinition.INCLUDED_TABLES` (line 92), so that XML is what
+a new tenant actually gets — a defect in the dataset's *content*, which is what the `N` series is
+for (see §N4 for the series definition), not a missing provisioning step.
+
+**Why it matters — four consumers, all of which degrade silently rather than fail:**
+
+1. `com.etendoerp.go/src-db/database/model/functions/ETGO_PRODUCT_SALE_PRICE.xml` and
+   `ETGO_PRODUCT_PURCHASE_PRICE.xml`, line 15 of each: `ORDER BY (pl.isdefault = 'Y') DESC, …`.
+   With nothing flagged that first key is constant, so the *Precio de venta* / *Precio de compra*
+   columns of the Products list resolve through the remaining keys — an arbitrary tariff on any
+   tenant holding more than one.
+2. `schema_forge/tools/app-shell/src/components/contract-ui/PriceListPicker.jsx:70` —
+   `matches.find(p => p.default) || matches[0]`: the generic fallback never finds a default and
+   always lands on the first entry the API happened to return.
+3. `cli/src/data-fixes/sql/20260903T120000Z__R33-standard-cost-anchor-unified.sql:334,351` —
+   `ORDER BY pl.isdefault DESC, …` decides which tariff a standard-cost anchor is priced from. The
+   broken flag therefore degrades one of our own fixes.
+4. ETP-5245's new Java default-tariff resolver (sales + purchase), used to auto-create the
+   zero-price lines when a product is registered: with nothing flagged it has nothing to resolve.
+
+**Scope of the flag: per client × per direction, NOT per organization.** `m_pricelist` does carry
+`ad_org_id`, and nothing in the model enforces uniqueness (the only UNIQUE constraint is
+`m_pricelist_name (name, ad_org_id, ad_client_id)`; the sole trigger, core's `m_pricelist_trg`,
+only guards `istaxincluded` changes). But every consumer above reads the flag *without* an org
+filter, so a one-default-per-org reading would hand them several flagged rows per direction on a
+multi-org tenant and restore the exact arbitrary tie-breaking being fixed. The invariant is
+therefore: **at most one active default per `(ad_client_id, issopricelist)`**.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service — `GOClient/M_PRICELIST.xml` flips `ISDEFAULT` `N`→`Y` on both curated tariffs. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped**: a newborn tenant is now born correct, so `R35`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — the case that constant's contract excludes from a bump (same reasoning as A9/`R34`). |
+| Corrective | `20260909T120000Z__R35-pricelist-isdefault.sql` — single guarded `UPDATE`, `@check`/`@apply` sharing a textually identical `ranked` CTE, plus an `@report` section. |
+
+**Deterministic pick** (only reached for a direction that has no active default at all):
+(1) most referencing `c_order` + `c_invoice` rows — the tariff the tenant actually transacts with,
+the one an operator would name; (2) has priced products in an already-valid version
+(`validfrom <= now()`), mirroring the computed-column functions' own second key; (3) oldest
+`created` — on a GO tenant, the tariff the dataset created first; (4) `m_pricelist_id ASC` as the
+absolute tie-break, which is **not** cosmetic: F&B International Group's eight purchase tariffs
+share a `created` to the millisecond, so without it the pick would not be reproducible.
+
+**Deliberately out of scope.** The fix never re-points a direction that already has an active
+default (an operator decision — QA Testing flags "Customer A" for sales), never de-duplicates a
+direction with several flagged lists (choosing which deliberate flag to clear is not a decision a
+data-fix can make), and never activates an inactive list. `@report` surfaces all three situations
+instead, and stays silent — leaving `detail` null — on the healthy GO shape of one active list and
+one default per direction.
+
+**Live validation (2026-09-09, shared dev DB, one rolled-back transaction per tenant).** All 5
+non-System clients that own price lists converge (post-apply `@check` = 0 rows in 5/5). GOClient and
+both E2E tenants: one candidate per direction, the two dataset rows, `@report` silent. F&B: sales
+"General Sales" (736 documents, 2 candidates) and purchase "Other services" (506 documents, 8
+candidates) — key 1 decided both. QA Testing: purchase "Purchase" (15 documents, 9 candidates);
+sales untouched, so `@check` returned only one row. Worst case 59 ms for the whole
+check → apply → report → re-check cycle.
+
+---
+
+### N6 — The curated dataset ships the document series with no prefix (ETP-5285, 2026-09-19)
+
+**Symptom.** On every tenant, a sales invoice and a purchase order are both numbered `1000000`.
+`SELECT name, prefix, startno, currentnext FROM ad_sequence WHERE name IN (...)` returns:
+
+| `AD_Sequence.Name` | Series | shipped `PREFIX` | shipped `STARTNO` |
+|---|---|---|---|
+| `Purchase Order` | Pedido de compra | *(null)* | 1000000 |
+| `Standard Order` | Pedido de venta | *(null)* | 1000000 |
+| `AR Invoice` | Factura de venta | *(null)* | **10000000** |
+| `Factura Rectificativa (Ventas)` | Factura de venta rectificativa | `REC-` | 1000000 |
+| `Factura Rectificativa (Compras)` | Factura de compra rectificativa | `REC-` | 1000000 |
+
+`AD_SEQUENCE` **is** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so that XML is what a new
+tenant actually gets — a defect in the dataset's *content*, which is what the `N` series is for
+(see §N4), not a missing provisioning step. The `REC-` on the two rectificativas is ETP-4737's
+interim value, never revisited; the two order sequences and `AR Invoice` never had a prefix.
+
+**Why it matters.** The prefix is what makes a document number identify its series. Without it a
+tenant cannot tell an order from an invoice by its number, and the two rectificativas share one
+prefix with each other. `AR Invoice`'s extra digit is a separate, older inconsistency — R31
+(ETP-5079) aligned its `STARTNO` and `CURRENTNEXT` with each other at 10000000 but left the
+magnitude alone; ETP-5285 sets the product value, 1000000.
+
+**Scope: five series, not six.** ETP-5285 names six. `Factura de compra` (`FC`) has no
+`AD_Sequence` to point at — `AP Invoice` carries `IsDocNoControlled='N'` and no sequence in 76 of
+76 doctypes across all 75 clients, because a purchase invoice is numbered by the supplier (stock
+Openbravo semantics). Its proposed number comes from the shared, per-tenant-duplicated
+`DocumentNo_C_Invoice` fallback. Giving `FC` a series means creating a sequence AND flipping
+`C_DocType.IsDocNoControlled` to `'Y'` for `AP Invoice` — a change to how purchase invoices are
+numbered, i.e. a product decision, deliberately out of scope.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service — `GOClient/AD_SEQUENCE.xml` sets `PC` / `PV` / `FV` / `FVR` / `FCR` and drops `AR Invoice` to `STARTNO`/`CURRENTNEXT` 1000000. `ONBOARDING_PROVISIONED_THROUGH` deliberately **NOT bumped**: a newborn tenant is now born correct, so `R38`'s `@check` returns 0 rows for it and the runner records a clean `SKIPPED_NOT_NEEDED` — the case that constant's contract excludes from a bump (same shape as A9/N4/N5) |
+| Corrective | `cli/src/data-fixes/sql/20260919T120000Z__R38-document-sequence-series-prefixes.sql` — three guarded `UPDATE`s (STARTNO, CURRENTNEXT, PREFIX), matched by `AD_Sequence.NAME`, scoped by `ad_client_id`, each self-guarded by `IS DISTINCT FROM` |
+
+**R38 does not fight R31.** R31 (`20260902T120000Z__R31-document-sequence-startno`) also targets
+`AR Invoice`, `Standard Order` and `Purchase Order`, and pins `AR Invoice` at the old 10000000.
+Fixes run in lexical filename order so R31 always runs first, and a fix already in a `PROCESSED`
+state is never re-run — a tenant needing both ends at R38's values. **Do not edit R31's `VALUES`
+to agree with R38**: tenants have already applied it as written, and rewriting an applied fix
+makes the ledger describe something that never ran.
+
+**Live validation (2026-09-19, read-only `--dry-run`).** 94 tenants `WOULD_APPLY`, 19
+`SKIPPED_NOT_NEEDED`, 0 failures. Cross-checked against the DB rather than trusted: the 19 skips
+are exactly the 19 tenants that own none of the five sequences at all (partial/legacy onboarding),
+so no tenant holding an in-scope row is skipped. 461 in-scope rows fleet-wide, none of which
+already carries any of `PC`/`PV`/`FV`/`FVR`/`FCR`.
+
+**Fiscal premise, inherited from R31 and still load-bearing.** R38 lowers `CURRENTNEXT` in either
+direction AND sets a prefix on a series that may already have issued documents — either one splits
+or duplicates a legal series on a tenant with real invoices. It rests on the premise a human
+accepted on 2026-09-02: there are no production environments yet. R38's header carries the exact
+guards to restore for the day that stops being true.
+
+**Window side (not a gap, same ticket).** ETP-5285 also cut the Document Sequence window to five
+fields and narrowed `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` from seven names to these
+five. See `docs/generated-custom-windows/document-sequence.md`. The ticket's "delete all other
+records" is not executable — the other ~235 rows are record-ID counters `ad_sequence_doc` depends
+on — so hiding them from the window is the reading that shipped.
+
+### N7 — `AP Invoice` has no document series of its own (ETP-5364, 2026-09-21)
+
+**Symptom.** The Document Sequence window shows five series. The sixth the product defines,
+`FC` (Factura de compra), is simply absent, and a purchase invoice created in Etendo GO is
+numbered `10000024` — no prefix, and from a counter shared with every other doctype that has no
+sequence.
+
+```sql
+SELECT name, docbasetype, isdocnocontrolled, docnosequence_id
+FROM c_doctype WHERE docbasetype IN ('API','ARI') AND ad_client_id = '<client>';
+```
+
+| `C_DocType.Name` | `DocBaseType` | `IsDocNoControlled` | sequence |
+|---|---|---|---|
+| `AR Invoice` | ARI | `Y` | `AR Invoice` (`FV`) |
+| `Corrective Sales Invoice` | ARI | `Y` | `Factura Rectificativa (Ventas)` (`FVR`) |
+| `Corrective Purchase Invoice` | API | `Y` | `Factura Rectificativa (Compras)` (`FCR`) |
+| **`AP Invoice`** | **API** | **`N`** | **none** |
+
+**Why it looked like a non-gap.** This is stock Openbravo, not a provisioning defect: 107 of 107
+`API` default doctypes across the fleet carry `IsDocNoControlled='N'`, because a purchase invoice
+is numbered by the supplier and the ERP only proposes a value. ETP-5285 measured exactly this and
+declared `FC` out of scope for that reason. ETP-5364 is the **product decision** that reverses it:
+in Etendo GO a purchase invoice is numbered by the tenant's own series, like every other invoice.
+
+**Both halves are required.** A sequence nothing points at shows a configurable prefix that
+governs no numbering; a doctype flipped with no sequence to read keeps using the fallback. Either
+one alone is a silent no-op.
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service. `GOClient/AD_SEQUENCE.xml` gains an `AP Invoice` sequence (prefix `FC`, `STARTNO`/`CURRENTNEXT` 1000000, mask `#######`, id `B1BF521B12684968B31531D88B9F20AB`); `GOClient/C_DOCTYPE.xml` sets the `AP Invoice` doctype to `ISDOCNOCONTROLLED='Y'` with `DOCNOSEQUENCE_ID` pointing at it. Both tables are already in `OnboardingDatasetDefinition.INCLUDED_TABLES` |
+| Corrective | **`R39-ap-invoice-fc-series` — the decision above was REVERSED on 2026-09-22.** Three guarded statements: insert the `AP Invoice` sequence (per-tenant uuid, prefix `FC`, 1000000), align it if the tenant somehow already owned one, then flip the doctype to `ISDOCNOCONTROLLED='Y'` pointing at it. See **Why the decision changed** below |
+
+**Why the decision changed (2026-09-22).** The objection was real and is unchanged: on a tenant
+that has already issued purchase invoices, those documents carry numbers minted by the shared
+`DocumentNo_C_Invoice` fallback (typically 10000000+, no prefix), so creating the series makes the
+next one `FC1000000` — the numbering both SPLITS and moves BACKWARDS. What changed is the premise it
+was weighed against:
+
+1. There are no productive tenants. Every tenant in the fleet holds trial/demo data — the same
+   premise `R38`'s header carries, restated and re-dated.
+2. **Going productive does not convert the current tenant, it creates a NEW one**, provisioned from
+   the already-corrected dataset (the app's `/upgrade` flow: *"Conserva el entorno demo y añade otro
+   entorno productivo"*). So a series split in a demo tenant never becomes a legal series, and the
+   productive environment is born with six correct series.
+
+Argument 2 is specific to this fix and is stronger than R38's, which rests on premise 1 alone.
+
+**There is no guard that makes this safe once premise 1 stops holding.** Unlike R38, which merely
+rewrites an existing series, this one starts a series over a population of documents numbered by
+something else. The correct treatment for a tenant with issued purchase invoices is a manual
+decision about the starting number, not this file — the fix's header says so in those words.
+
+**Why it is a new file and not a widened `R38`.** `R38` is already on `develop` (ETP-5285) and the
+framework's rule 3 makes an applied fix immutable. The mechanism is what bites: the runner never
+re-reads a fix in a `PROCESSED` state, so the FC half added to a widened `R38` would silently never
+run on any tenant that had already applied it — `R38`'s own header records 94 tenants `WOULD_APPLY`
+on a dry-run. A new dated file also keeps attribution honest: `R38` is ETP-5285's five series, `R39`
+is ETP-5364's sixth.
+
+**What a tenant that has NOT run `R39` sees.** Five rows in the Document Sequence window instead of
+six, and purchase invoices that keep taking the `DocumentNo_C_Invoice` number. Nothing errors: the
+window's name filter matches no row and simply returns one fewer. Treat a five-row list on such a
+tenant as expected, not as a regression.
+
+**Window side (same ticket).** `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` grows from five
+names to six and `artifacts/document-sequence/decisions.json` gains the matching `enumValues`
+entry plus `documentSequencePurchaseInvoice` in all three locale files. The enum values are
+`AD_Sequence.Name` strings, so `cli/test/document-sequence.contract.test.js` asserts them against
+the handler's list byte for byte — a mismatch there hides the row with no error anywhere. See
+`docs/generated-custom-windows/document-sequence.md`.
+
+---
+
+### N8 — The curated dataset re-ships the `DocumentNo_*` sequences the client setup already creates (ETP-5364, 2026-09-21)
+
+**Symptom.** Every `DocumentNo_*` sequence exists twice in a provisioned tenant.
+
+```sql
+SELECT count(*) AS dup_groups, sum(n - 1) AS surplus_rows, count(DISTINCT ad_client_id) AS clients
+FROM (SELECT ad_client_id, ad_org_id, name, count(*) n
+      FROM ad_sequence GROUP BY 1, 2, 3 HAVING count(*) > 1) d;
+```
+
+→ **9888 dup groups, 9888 surplus rows, 103 of 125 clients.** Every duplicated name starts with
+`DocumentNo_`; not one of the named document series is duplicated. (Rows differing only by
+organization are NOT this — per-org numbering is legitimate. The grouping is client *and* org.)
+
+**Cause — and it is not the one previously recorded.** Two creation passes ~45s apart on the same
+client:
+
+| Pass | `CREATEDBY` | `MASK` | Rows | Who |
+|---|---|---|---|---|
+| 1 | `0` | *(empty)* | 97 | Openbravo's `InitialClientSetup`, which creates a `DocumentNo_<table>` sequence per table for the new client |
+| 2 | the tenant admin | `#######` | 145 | the GO onboarding dataset import, of which **96 names collide** with pass 1 |
+
+Earlier notes blamed `EtendoGoJwtServlet.generateOnboardingSequences` (Etendo's classic *Create
+Sequences*). That is wrong and worth stating explicitly, because it sent the fix to the wrong
+place: `SequencesGenerator` names its rows `<Table>-<Column>` and sets `AD_Column_ID`, and there
+are only **206 such rows fleet-wide** — `SELECT count(*) FROM ad_sequence WHERE ad_column_id IS
+NOT NULL` — so it produced none of the 9888. The duplicates all carry `AD_Column_ID IS NULL` and
+the `#######` mask `SequencesGenerator` never leaves empty.
+
+**Why it matters.** `ad_sequence_doc` increments **every** row matching the name (`WHERE Name = …
+AND ad_client_id = …`, no org, no id) and then reads one back with a non-`STRICT` `SELECT INTO`,
+so PL/pgSQL takes an arbitrary row rather than raising. While the copies hold the same value
+either answer is correct — **140 pairs have already diverged**, and from that point the value
+applied is non-deterministic, with PostgreSQL free to relocate an updated row.
+
+**Both fronts.**
+
+| Front | Deliverable |
+|---|---|
+| Preventive | A fourth sub-filter in `OnboardingDatasetNormalizer`'s `RowExclusionFilter` composite: `TableCounterSequenceFilter` drops every `AD_SEQUENCE` row whose `NAME` starts with `DocumentNo_`, except `DocumentNo_C_ExtBP_Config_Filter_Opt` and `DocumentNo_C_ExtBP_Config_Prop_Opt` — verified to be the only two such names `InitialClientSetup` does **not** create (exactly one row per client, in all 105 clients that have them, versus two for every other). 96 rows dropped, 46 imported. Stateless and keyed on the name prefix, like `DemoMasterDataFilter`: the property that makes a row droppable is that the client setup creates it, and the `DocumentNo_<table>` name is exactly what encodes that |
+| Corrective | **None, by decision.** Deleting one row of each pair means choosing which id survives and carrying `max(currentnext)` onto it, on 103 live tenants, for counters the DAL reads by name on every insert. The 103 existing tenants keep both copies and the guidance stands: do not edit a `DocumentNo_*` row on them |
+
+**Why NOT delete them from `GOClient/AD_SEQUENCE.xml`, which is the obvious fix.** Same trap as
+§N4b, reached from a different direction. That file has two consumers: `install.source` →
+`import.sample.data` seeds the GOClient **sample client** from all 121 files wholesale and never
+runs `InitialClientSetup`, so for that consumer the XML is the only source of these counters — the
+sample client would be left unable to number a document. What makes this variant worse than N4b's
+is that it is **silent**: the removed rows are referenced by nothing (verified — zero `_ID`
+references to any of the 96 ids anywhere in the dataset), so there is no dangling foreign key,
+`enableAllFK` succeeds and `OnboardingDatasetReferentialIntegrityTest` stays green. Nothing would
+report the breakage until someone created a document in GOClient.
+`OnboardingDatasetReferentialIntegrityTest#testTheTableCounterSequencesStayInTheSourceDatasetForGoClient`
+is the guard that now makes that deletion fail loudly, with a message naming the filter.
+
+**Verifying by hand needs a Tomcat restart.** Same caveat as N4b: `INCLUDED_TABLES` and the filters
+are Java, loaded once per JVM, while the dataset XMLs are re-read on every provisioning. Expected
+end state on a newly provisioned tenant: `SELECT name, count(*) FROM ad_sequence WHERE ad_client_id
+= '<client>' GROUP BY name HAVING count(*) > 1` returns **zero rows**, and the tenant holds 97
+`DocumentNo_*` sequences (the client setup's) plus the two GO-only ones.
+
+**What the preventive change does NOT do.** It does not make any `DocumentNo_*` name worth showing
+in the Document Sequence window. Those rows are table-level *fallback* counters shared by every
+doctype without a sequence, so a prefix on one configures a series belonging to no document type —
+that objection is independent of the duplication and survives it. `DocumentSequenceHandlerTest`
+keeps the regression guard that no allowlisted name starts with `DocumentNo_`.
+
+**CUT not bumped** (`ONBOARDING_PROVISIONED_THROUGH`), for both N7 and N8: neither gap has a
+corrective fix for a newborn tenant to skip, so there is nothing for the constant to gate.
+
+## P — Scheduled Processes
+
+### N9 — The document series ship an internal, ticket-tagged description the tenant reads (ETP-5364, 2026-09-22)
+
+**Symptom.** Opening "Secuencia de documentos" shows, next to the tenant's own series, text like
+`ETP-4737: sequence for the unified sales rectificative invoice (Factura Rectificativa, AR).`
+
+**Why that is a defect and not a harmless note.** `artifacts/document-sequence/decisions.json`
+declares `description` as an **editable** column with `grid: true` and `gridOrder: 2` — second
+column in the list, right after the name. Whatever sits in `AD_Sequence.Description` is therefore
+product copy, read by the end user, on a window ETP-5285 deliberately narrowed to five fields
+precisely so that everything on it is something a tenant should see.
+
+**Which rows, and where the text comes from.** Three of the six product series, by two independent
+routes — which is why the fix matches on `NAME` and not on provenance:
+
+| Series | Text | Written by |
+|---|---|---|
+| `Factura Rectificativa (Ventas)` | `ETP-4737: sequence for the unified sales rectificative invoice (Factura Rectificativa, AR).` | `GOClient/AD_SEQUENCE.xml` **and** `R17-rectificativa-doctype-sequence` step 1a |
+| `Factura Rectificativa (Compras)` | `ETP-4737: sequence for the unified purchase rectificative invoice (Factura Rectificativa, AP).` | `GOClient/AD_SEQUENCE.xml` **and** `R17` step 2a |
+| `AP Invoice` | `ETP-5364: sequence for the purchase invoice series (Factura de compra, FC).` | `GOClient/AD_SEQUENCE.xml` (added earlier in this same ticket) |
+
+`R17` is immutable and already `APPLIED`, so the text it wrote can only be removed by a later fix.
+The other three series (`Purchase Order`, `Standard Order`, `AR Invoice`) never had a description
+and are out of scope on both fronts.
+
+| Front | Deliverable |
+|---|---|
+| Preventive | Dataset-only, no new service. `GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element from all three rows. `R39-ap-invoice-fc-series` likewise inserts its new row with `description` NULL, so the corrective for N7 cannot reintroduce what this one removes |
+| Corrective | `R39-document-sequence-clear-descriptions` — one guarded `UPDATE` setting `description = NULL` on those three names, scoped by `ad_client_id` |
+
+**Why the guard is `description LIKE 'ETP-%'` and not the exact strings.** The column is editable,
+so a tenant may legitimately have typed its own description, and that text must survive. The
+ticket-key prefix is narrow enough to match only the engineering notes and wide enough to catch a
+row whose text drifted between `R17` and the dataset. A tenant-authored description does not start
+with a ticket key.
+
+**Risk is `low`, unlike its N7 sibling.** This touches no prefix, no counter and no document, so it
+cannot renumber anything. `NULL` rather than `''` so a fixed tenant and a newborn one end up
+byte-identical.
+
+**Regression guard.** `OnboardingDatasetCorrectionsSampleDataTest#testTheProductSeriesShipWithoutAnInternalDescription`
+fails if any of the six product series ships a `DESCRIPTION` starting with `ETP-`. The regression
+path is the usual one for this class: a dataset re-export from an instance where someone pasted a
+ticket reference into the field.
+
+---
+
+### P1 — No scheduled "Costing Background process" reaches a new tenant (ETP-5245, 2026-09-10)
+
+**Symptom.** A tenant created through GO onboarding never calculates product costs automatically.
+Live on the shared dev DB: "E2E User 1 5b33eb60" has 20 `M_TRANSACTION` rows, **all 20** with
+`iscostcalculated='N'`, while carrying a perfectly valid, validated Standard-Algorithm
+`M_COSTING_RULE`. The rule is there (J1 fixed that); the engine that consumes it is not.
+
+This is the second half of the warning ETP-5245 added to the Product window — *"sin costo no se
+podrán calcular los costes ni contabilizar los movimientos"*. On a GO tenant that sentence stayed
+true even AFTER the user defined a cost, because nothing was scheduled to do the calculating.
+
+**Measured state (2026-09-10, `etendo_go_merge`).** `AD_PROCESS_REQUEST` rows per client:
+
+| Tenant | Total rows | Scheduled (`SCH`) costing request |
+|---|---|---|
+| GOClient (dataset source) | 27 | yes (freq 1) |
+| F&B International Group (core sampledata) | 72 | yes (freq 2, org `'0'`, user `'100'`) |
+| QA Testing | 16 | **no** — only a completed `COM` run |
+| E2E User 1 5b33eb60 | **2** | **no** |
+| E2E User 2 8bc91bf1 | **2** | **no** |
+| Empresa madera (onboarded 2026-09-10) | **2** | **no** |
+
+**Root cause.** `AD_PROCESS_REQUEST` is in `OnboardingDatasetDefinition.EXCLUDED_TABLES`
+(`OnboardingDatasetDefinition.java:37` — inside the `EXCLUDED_TABLES` literal spanning lines 28–47,
+*not* the `INCLUDED_TABLES` one that starts at line 49). `shouldIncludeTable()` requires
+`INCLUDED_TABLES.contains(t) && !EXCLUDED_TABLES.contains(t)`, so **zero** of the 24 rows in
+`referencedata/sampledata/GOClient/AD_PROCESS_REQUEST.xml` ever reach a new tenant.
+
+**The exclusion is correct and must stay.** Two independent reasons:
+
+1. **23 of the 24 rows are `STATUS='COM'`** — completed one-shot executions (Process Order ×13,
+   Process Inventory Count ×3, Set as Ready ×3, Create Periods, Create Price List, Generate Invoice
+   from Receipt, Post Amortization, Process Movements, Calculate Standard Costs, Update Quantity).
+   They are GOClient's execution *history*, not scheduled jobs. Importing them would copy another
+   tenant's audit trail into every new tenant, and would schedule nothing.
+2. **Every row carries cross-tenant references the normalizer does not rewrite.** `AD_USER_ID`
+   points at GOClient's own `GOAdmin` (`47EAF009B7BB42BBB663C7BA1792D958`) and `OB_CONTEXT` is a
+   JSON blob naming GOClient's user, role, client and org. `OnboardingDatasetNormalizer` remaps
+   `AD_ORG_ID` only (`OnboardingDatasetNormalizer.java:209`); `AD_USER` and `AD_ROLE` are themselves
+   excluded tables. Un-excluding `AD_PROCESS_REQUEST` would plant dangling FKs in every tenant.
+
+So **exactly one** of the 24 rows is a real scheduled job: `STATUS='SCH'`,
+`AD_PROCESS_ID=3F2B4AAC707B4CE7B98D2005CF7310B5` = `CostingBackground`. Nothing else of value is
+being lost.
+
+**Why the two rows that DO arrive, arrive.** Neither comes from the dataset:
+
+- `Get Bank Statements` (`SCH`) is built programmatically by `OnboardingBankConnectionSyncService`
+  from the tenant's own client/org/user/role.
+- `Set as Ready` (`COM`) is not provisioned at all — it is the residue of
+  `OnboardingMarkOrgReadyService` running the `AD_Org_Ready` process.
+
+That is the whole explanation for "2 of 24": the dataset contributes **nothing**, and the two
+survivors are side-effects of onboarding code.
+
+**Why it matters technically.** `org.openbravo.costing.CostingBackground` is strictly
+**client-scoped** — it lists the organizations to process with
+`ad_isorgincluded(o.id, :orgId, :clientId) <> -1`, binding `bundle.getContext().getClient()`
+(`src/org/openbravo/costing/CostingBackground.java:90-95`). No system-level or other-tenant run ever
+covers this client, so a per-tenant `AD_PROCESS_REQUEST` is genuinely required. (Contrast: Alert
+Process, Acct Server Process, Payment Monitor, Log Clean Up, Analytics Sync, Stored Column Queue
+Processor and Refresh Pending Payments are all scheduled once at System level and are *not*
+per-tenant gaps.)
+
+**Fix — the two fronts are split across two PRs.**
+
+- **Corrective (this ticket, ETP-5245):**
+  `20260910T120000Z__R36-costing-background-schedule.sql`. Creates the missing request for tenants
+  already onboarded without it. Self-contained SQL — it depends on nothing from the preventive side.
+- **Preventive (NOT this ticket):** closed by a **separate PR, authored by someone else**. ETP-5245
+  deliberately touches `com.etendoerp.go` not at all. A preventive service was drafted here and then
+  dropped once that overlap surfaced, so the two PRs do not both wire a step into
+  `ensureOnboardingDataset`.
+
+**Notes for whoever writes the preventive half** (the traps this investigation already paid for):
+
+- **Do not lift the exclusion.** The fix has to be *code*, not dataset — for the two reasons in the
+  root-cause section above (23 of 24 rows are `COM` history; every row drags GOClient's `AD_USER_ID`
+  and an `OB_CONTEXT` blob the normalizer never rewrites). The shape to copy is
+  `OnboardingBankConnectionSyncService`: build the `ProcessRequest` from the tenant's OWN client,
+  organization, admin user and admin role; create the row inside the onboarding transaction and
+  activate it in Quartz *after* the commit.
+- **Judge "already provisioned" on `status='SCH'`, never on row existence.** QA Testing has a `COM`
+  row for `CostingBackground` — a completed manual run. An existence-only probe would read that as
+  provisioned and leave the tenant permanently unscheduled. R36's `@check` gates on `SCH` for
+  exactly this reason.
+- **The request org may differ from R36's without conflict.** R36 uses the client root `'0'` because
+  `CostingBackground` only processes orgs *included in* the request's org and a legacy tenant can be
+  multi-org (QA Testing has validated costing rules on both "USA" and "Spain"). A newborn GO tenant
+  has exactly one business org, so using it there is equivalent. R36's `@check` keys on the client,
+  not the org, so either shape satisfies it.
+- **Do not bump `ONBOARDING_PROVISIONED_THROUGH` for this gap, in either PR.** See below.
+
+**Why the CUT stays put.** `ONBOARDING_PROVISIONED_THROUGH` (in `OnboardingBaselineService`)
+remains at `2026-09-02T12:00:00Z`. R36's own timestamp (`2026-09-10T12:00:00Z`) sits *above* it, so a
+freshly onboarded tenant's BASELINE watermark does not cover R36 and the runner still evaluates it
+for that tenant — which is correct while no preventive front exists: a tenant onboarded today is
+still born without the schedule. Bumping the CUT would push R36 under every new tenant's watermark
+and silently skip it for exactly the tenants that need it. Note this inverts the reasoning used for
+`R34`, which could skip its bump because its preventive front shipped in the same PR. Once the
+separate onboarding PR merges, no bump is needed either: a newborn tenant already has the `SCH` row,
+so `@check` returns 0 and the runner records `SKIPPED_NOT_NEEDED` on its own. Do **not** retire R36 —
+legacy tenants still need it.
+
+**Idempotency note that matters for BOTH halves of the gap (this fix and the separate PR).** "Already provisioned" must be judged on
+`status='SCH'`, not on the mere existence of an `AD_PROCESS_REQUEST` row for the process. QA Testing
+has a `COM` row for `CostingBackground` — a completed manual run — and treating that as a schedule
+would leave the tenant permanently unscheduled. Both `findExistingRequest` and the fix's `@check`
+gate on `SCH`.
+
 
 ## Recommended Order of Operations
 

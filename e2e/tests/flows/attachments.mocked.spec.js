@@ -32,11 +32,35 @@ const PRODUCT_HEADER = {
 
 // ─── Mock installer ────────────────────────────────────────────────────────────
 
-/** Click the Attachments tab. */
-async function openAttachmentsTab(page) {
+/**
+ * Click the Attachments tab.
+ *
+ * When `settleOn` is given, retries the click if that locator hasn't appeared
+ * yet: onClick is plain React state (no aria-selected/data-state to wait on),
+ * so under full-suite concurrency the click can land before the handler is
+ * attached and silently no-op — a single long wait then just times out on a
+ * panel that will never open. Retrying the click itself, not just the wait,
+ * is what fixes that race.
+ */
+async function openAttachmentsTab(page, settleOn) {
   const tabBtn = page.getByTestId('tab-custom:attachments');
   await tabBtn.waitFor({ state: 'visible', timeout: 8_000 });
-  await tabBtn.click();
+
+  if (!settleOn) {
+    await tabBtn.click();
+    return;
+  }
+
+  const attempts = [2_000, 2_000, 6_000];
+  for (let i = 0; i < attempts.length; i += 1) {
+    await tabBtn.click();
+    try {
+      await settleOn.waitFor({ state: 'visible', timeout: attempts[i] });
+      return;
+    } catch (err) {
+      if (i === attempts.length - 1) throw err;
+    }
+  }
 }
 
 // ─── Suite E: Product smoke ───────────────────────────────────────────────────
@@ -62,7 +86,10 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     });
 
     await page.goto(`/product/${PRODUCT_ID}`);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    // Bounded — same as every other mocked spec (e.g. amortization.mocked.spec.js). No
+    // explicit timeout here defaults to Playwright's ~30s navigation timeout, which is
+    // half this test's entire 60s budget for a wait whose result is discarded either way.
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     await expect(page.getByTestId('tab-custom:attachments')).toBeVisible({ timeout: 8_000 });
   });
@@ -107,7 +134,7 @@ test.describe('Suite E — Product smoke (mocked)', () => {
     });
 
     await page.goto(`/product/${PRODUCT_ID}`);
-    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
     const tabBtn = page.getByTestId('tab-custom:attachments');
     await tabBtn.waitFor({ state: 'visible', timeout: 8_000 });
@@ -235,7 +262,13 @@ async function installSalesOrderMocks(page, { items = [], onUpload = null, onDel
 /** Navigate to a Sales Order detail view and wait for it to settle. */
 async function gotoSalesOrder(page) {
   await page.goto(`/sales-order/${SO_ID}`);
-  await page.waitForLoadState('networkidle').catch(() => {});
+  // Bounded — same as every other mocked spec (e.g. amortization.mocked.spec.js). Without
+  // an explicit timeout this falls back to Playwright's ~30s navigation timeout, and the
+  // Sales Order detail page doesn't reliably go network-idle within that window under load
+  // — eating half of every Suite F-I test's 60s budget for a wait whose result is discarded
+  // either way, which is what turned F1's real (fast) render into a 60s timeout + "context
+  // closed" failure instead of a normal pass.
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
 const SO_ATT_1 = {
@@ -274,7 +307,7 @@ test.describe('Suite F — Sales Order: tab presence (mocked)', () => {
     await installSalesOrderMocks(page, { items: [] });
     await gotoSalesOrder(page);
 
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId('attachments-empty-state'));
 
     await expect(page.getByTestId('attachments-empty-state')).toBeVisible({ timeout: 6_000 });
   });
@@ -284,14 +317,16 @@ test.describe('Suite F — Sales Order: tab presence (mocked)', () => {
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
 
+    const attRow = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+
     // Open Attachments — attachment should load
-    await openAttachmentsTab(page);
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
+    await openAttachmentsTab(page, attRow);
+    await expect(attRow).toBeVisible({ timeout: 6_000 });
 
     // Switch to Lines tab and back — attachment row must still be there
     await page.getByTestId('tab-lines').click();
-    await openAttachmentsTab(page);
-    await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 4_000 });
+    await openAttachmentsTab(page, attRow);
+    await expect(attRow).toBeVisible({ timeout: 4_000 });
   });
 });
 
@@ -302,7 +337,7 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId('attachments-dropzone'));
 
     await expect(page.getByTestId('attachments-dropzone')).toBeVisible({ timeout: 6_000 });
 
@@ -319,7 +354,7 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId('attachments-dropzone'));
 
     await expect(page.getByTestId('attachments-dropzone')).toBeVisible({ timeout: 6_000 });
 
@@ -337,7 +372,7 @@ test.describe('Suite G — Sales Order: upload (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
 
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
 
@@ -362,9 +397,9 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
-
     const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    await openAttachmentsTab(page, row);
+
     await expect(row).toBeVisible({ timeout: 6_000 });
 
     await row.dispatchEvent('mouseover');
@@ -381,9 +416,9 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
-
     const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    await openAttachmentsTab(page, row);
+
     await expect(row).toBeVisible({ timeout: 6_000 });
 
     await row.dispatchEvent('mouseover');
@@ -400,7 +435,7 @@ test.describe('Suite H — Sales Order: delete (mocked)', () => {
     await login(page);
     await installSalesOrderMocks(page, { items: [SO_ATT_1, SO_ATT_2] });
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
 
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
     await expect(page.getByTestId(`attachment-row-${SO_ATT_2.id}`)).toBeVisible({ timeout: 3_000 });
@@ -444,9 +479,9 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     });
 
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
-
     const row = page.getByTestId(`attachment-row-${SO_ATT_1.id}`);
+    await openAttachmentsTab(page, row);
+
     await expect(row).toBeVisible({ timeout: 6_000 });
     await row.dispatchEvent('mouseover');
     await page.getByTestId(`attachment-download-${SO_ATT_1.id}`).click({ force: true });
@@ -469,7 +504,7 @@ test.describe('Suite I — Sales Order: download (mocked)', () => {
     });
 
     await gotoSalesOrder(page);
-    await openAttachmentsTab(page);
+    await openAttachmentsTab(page, page.getByTestId(`attachment-row-${SO_ATT_1.id}`));
 
     await expect(page.getByTestId(`attachment-row-${SO_ATT_1.id}`)).toBeVisible({ timeout: 6_000 });
     await page.getByTestId('attachments-download-all').click();

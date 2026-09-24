@@ -58,6 +58,66 @@ describe('QuotationConfirmModal', () => {
     });
   });
 
+  // ── ETP-5381 — the created invoice is confirmed in the same step ───────────────
+  // The invoice branch used to hardcode `status: 'Draft'`, which was true while the
+  // backend only ever returned a draft. Now it returns a completed document, and the
+  // hardcoded literal would paint a "Borrador" badge over a confirmed invoice.
+  describe('created-document status badge (ETP-5381)', () => {
+    const invoiceBlock = src.match(/setCreatedDoc\(\{\s*type: 'invoice',[\s\S]*?\n\s*\}\);/);
+
+    it('derives the invoice status from the backend documentStatus, never a hardcoded Draft', () => {
+      assert.ok(invoiceBlock, 'expected the invoice-branch setCreatedDoc call');
+      assert.doesNotMatch(invoiceBlock[0], /status:\s*'Draft'/);
+    });
+
+    it("maps documentStatus 'CO' to the Completed badge state", () => {
+      assert.match(
+        invoiceBlock[0],
+        /status:\s*doc\?\.documentStatus === 'CO'\s*\?\s*'Completed'\s*:\s*\(doc\?\.documentStatus \?\? 'Draft'\)/,
+      );
+    });
+
+    it('falls back to Draft only when the backend sends no status at all (older backend)', () => {
+      assert.match(invoiceBlock[0], /doc\?\.documentStatus \?\? 'Draft'/);
+    });
+
+    it('reads the status off the response payload, not off the request or the quotation', () => {
+      assert.match(invoiceBlock[0], /doc\?\.documentStatus/);
+      assert.doesNotMatch(invoiceBlock[0], /d\.documentStatus/);
+    });
+
+    it('drives the badge from createdDoc.status', () => {
+      assert.match(src, /const isDraft = createdDoc\.status === 'Draft';/);
+    });
+
+    it('labels the badge statusCompleted (not statusDraft) whenever the document is not a draft', () => {
+      assert.match(
+        src,
+        /const badgeLabel = isDraft \? ui\('statusDraft'\) : ui\('statusCompleted'\);/,
+      );
+    });
+
+    it('colours the badge warning for a draft and success otherwise', () => {
+      assert.match(
+        src,
+        /const badgeColor = isDraft \?\s*\{ bg: 'var\(--status-warning-bg\)', text: 'var\(--status-warning-fg\)' \}\s*:\s*\{ bg: 'var\(--status-success-bg\)', text: 'var\(--status-success-fg\)' \};/,
+      );
+    });
+
+    it('never hardcodes the badge copy — both states go through ui()', () => {
+      // Comments legitimately quote the Spanish copy when explaining the bug, so strip
+      // them before asserting on what the component actually renders.
+      const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      assert.doesNotMatch(code, /['"`]\s*Borrador\s*['"`]/);
+      assert.doesNotMatch(code, /['"`]\s*Completada\s*['"`]/);
+      assert.doesNotMatch(code, /badgeLabel\s*=\s*['"`]/);
+    });
+
+    it('leaves the order branch reactivation mapping untouched (RE -> DR -> Draft)', () => {
+      assert.match(src, /const status = finalStatus === 'DR' \? 'Draft' : 'Completed';/);
+    });
+  });
+
   describe('i18n', () => {
     it('uses the useUI() hook for translations', () => {
       assert.match(src, /from\s+['"]@\/i18n['"]/);
@@ -152,6 +212,34 @@ describe('QuotationConfirmModal', () => {
       const matches = [...src.matchAll(/dispatchEvent\(new CustomEvent\('sales-quotation:document-created'\)\)/g)];
       assert.ok(matches.length >= 2, `Expected at least 2 dispatch calls (order + invoice paths); found ${matches.length}`);
       assert.ok(matches[matches.length - 1].index > invoicePostIdx);
+    });
+  });
+
+  // ETP-5378 — handleGoToDoc's basePath regex used to require a trailing
+  // "/something" after "sales-quotation" to strip anything. That held while this
+  // modal only ever opened from the form (/sales-quotation/{recordId}), but once
+  // the row-hover Confirmar entry started opening the SAME modal from the bare
+  // list route (/sales-quotation, no trailing segment), the regex matched
+  // nothing there, basePath stayed "/sales-quotation", and "Ver pedido" built
+  // /sales-quotation/sales-order/{id} — a dead URL, reported live. Real
+  // behavioral coverage (both origins, real regex execution) lives in
+  // tools/app-shell/src/windows/custom/sales-quotation/__tests__/
+  // QuotationConfirmModal.goToDoc.vitest.jsx — this repo's node --test runner
+  // can't import a .jsx component, so this file only pins the source text like
+  // every other test in it.
+  describe('handleGoToDoc basePath (ETP-5378)', () => {
+    // Plain substring checks, not a regex matching a regex literal — the fixed
+    // pattern makes the trailing "/something" OPTIONAL: `(\/.*)?` instead of a
+    // mandatory `\/.*`.
+    const FIXED_PATTERN = String.raw`window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '')`;
+    const OLD_PATTERN = String.raw`\/sales-quotation\/.*$`;
+
+    it('strips "/sales-quotation" with an OPTIONAL trailing segment, not a mandatory one', () => {
+      assert.ok(src.includes(FIXED_PATTERN), 'expected the fixed basePath regex in handleGoToDoc');
+    });
+
+    it('no longer uses the old mandatory-trailing-slash regex', () => {
+      assert.ok(!src.includes(OLD_PATTERN), 'the pre-fix regex text must not reappear');
     });
   });
 });

@@ -22,9 +22,10 @@ describe('GoodsShipmentConfirmModal', () => {
 
   // ── ETP-4848: invoice checkbox default ─────────────────────────────────────
   // GoodsShipmentConfirmModal is only ever mounted by GoodsShipmentActions when
-  // data.invoiceStatus < 100 (see the `!isCompleted && showConfirmModal &&` branch,
-  // the fully-invoiced case renders ConfirmShipmentInvoicedModal instead), so this
-  // modal can hardcode defaultCreateInvoice=true unconditionally.
+  // data.invoiceStatus < 100 (see the `!isCompleted && !isFullyInvoiced &&
+  // showConfirmModal &&` branch; ETP-5265 removed the fully-invoiced case's
+  // popup entirely — it now confirms directly via documentAction, no modal),
+  // so this modal can hardcode defaultCreateInvoice=true unconditionally.
   describe('invoice checkbox default (ETP-4848)', () => {
     it('passes defaultCreateInvoice={true} to ConfirmInOutModal', () => {
       assert.match(src, /defaultCreateInvoice=\{true\}/);
@@ -39,9 +40,9 @@ describe('GoodsShipmentConfirmModal', () => {
     });
   });
 
-  it('passes recordId, base, headers through from props', () => {
+  it('passes recordId and base through from props, but never a credential', () => {
     assert.match(src, /base=\{base\}/);
-    assert.match(src, /headers=\{headers\}/);
+    assert.doesNotMatch(src, /headers=\{headers\}/);  // ETP-4576: the child owns its credential now
     assert.match(src, /recordId=\{recordId\}/);
   });
 

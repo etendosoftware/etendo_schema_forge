@@ -64,9 +64,9 @@ describe('report-trial-balance — accountLevel contract parameter (ETP-4898)', 
     assert.ok(section, 'expected a section with id "agrupacion"');
   });
 
-  it('offers exactly the four c_elementvalue.elementlevel values S/D/C/E, in hierarchy order', () => {
+  it('offers exactly the four c_elementvalue.elementlevel values, in the ETP-5401 UI order (C/D/E/S)', () => {
     assert.ok(Array.isArray(param.options), 'expected a literal options array');
-    assert.deepEqual(param.options.map((o) => o.value), ['S', 'D', 'C', 'E']);
+    assert.deepEqual(param.options.map((o) => o.value), ['C', 'D', 'E', 'S']);
   });
 
   it('gives every option both an en_US and an es_ES label', () => {
@@ -169,9 +169,14 @@ describe('report-trial-balance — accountLevel SQL wiring (ETP-4898)', () => {
     assert.match(finalSelect, /WHERE ev\.elementlevel = '__ACCOUNTLEVEL__'/);
   });
 
-  it('__ACCOUNTLEVEL__ is used only for the elementlevel filter', () => {
+  it('__ACCOUNTLEVEL__ is used for the elementlevel filter and the is_root ancestor check (ETP-5401)', () => {
     const hits = SQL.match(/__ACCOUNTLEVEL__/g) || [];
-    assert.equal(hits.length, 1, 'expected exactly one __ACCOUNTLEVEL__ placeholder');
+    // Once in the outer WHERE (which level to report), once inside is_root's
+    // NOT EXISTS subquery (whether a STRICT ancestor shares that same level) —
+    // Epígrafe is itself a multi-depth hierarchy (e.g. root "PYG" and child
+    // "P.G.1" both carry elementlevel='E'), so both checks must agree on the
+    // same requested level or the grand total double-counts a nested row.
+    assert.equal(hits.length, 2, 'expected exactly two __ACCOUNTLEVEL__ placeholders');
   });
 
   it('the final SELECT reports the ANCESTOR account, joined through acct_anc', () => {
@@ -192,9 +197,12 @@ describe('report-trial-balance — accountLevel SQL wiring (ETP-4898)', () => {
     // report-grouping.js's groupByIdField) — it must ride along in the
     // SELECT/GROUP BY exactly like its name column does, not as a separate
     // un-grouped column.
+    // is_root (ETP-5401) rides in the GROUP BY too — it's a per-ancestor
+    // property (whether THIS ancestor has a further ancestor at the same
+    // level), not a per-dimension one, so it belongs right after ev.name.
     assert.match(
       finalSelect,
-      /GROUP BY ev\.value, ev\.c_elementvalue_id, ev\.name, b\.bpartner_id, b\.bpname, b\.product_id, b\.productname, b\.project_id, b\.projectname, b\.costcenter_id, b\.costcentername/
+      /GROUP BY ev\.value, ev\.c_elementvalue_id, ev\.name, is_root, b\.bpartner_id, b\.bpname, b\.product_id, b\.productname, b\.project_id, b\.projectname, b\.costcenter_id, b\.costcentername/
     );
   });
 
@@ -233,17 +241,20 @@ describe('report-trial-balance — accountLevel SQL wiring (ETP-4898)', () => {
 
 // ── Part 3: template rendering (drill-down link only at level 'S') ──────────
 
+// is_root: true mirrors what the real SQL always returns for S/D/C (verified:
+// no self-nesting at those levels) and for a root Epígrafe like "PYG" — see
+// the mixed-fixture test below for the case is_root actually excludes a row.
 const ROWS = [
-  { account_no: '4300', account_id: 'ACC-1', account_name: 'Clientes', bpname: 'ACME', opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130 },
+  { account_no: '4300', account_id: 'ACC-1', account_name: 'Clientes', bpname: 'ACME', is_root: true, opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130 },
 ];
 
-function renderTemplate({ accountLevel, groupBy }) {
+function renderTemplate({ accountLevel, groupBy, rows = ROWS }) {
   const hb = Handlebars.create();
   registerReportHelpers(hb);
   const meta = {
     title: 'Trial Balance',
     generatedAt: '2026-08-19T00:00:00.000Z',
-    recordCount: ROWS.length,
+    recordCount: rows.length,
     params: { accountLevel, groupBy, dateFrom: '2026-01-01', dateTo: '2026-01-31' },
     labels: { account_no: 'Nº Cuenta', account_name: 'Nombre', activity_debit: 'Debe', activity_credit: 'Haber', balanceAsOf: 'Saldo a' },
     ui: { records: 'registros', total: 'Total', generatedBy: 'Etendo Go' },
@@ -263,7 +274,7 @@ function renderTemplate({ accountLevel, groupBy }) {
     filters: [],
     totals: {},
   };
-  return hb.compile(EXPANDED_TEMPLATE_SRC)({ css: '', meta, rows: ROWS });
+  return hb.compile(EXPANDED_TEMPLATE_SRC)({ css: '', meta, rows });
 }
 
 describe('report-trial-balance — template drill-down link vs accountLevel (ETP-4898)', () => {
@@ -327,20 +338,45 @@ describe('report-trial-balance — template drill-down link vs accountLevel (ETP
     assert.doesNotMatch(dimRow, />4300</, 'the account code is not repeated on every dimension row');
   });
 
-  it('hides the flat-branch grand-Total row at accountLevel "E" (Heading)', () => {
-    const html = renderTemplate({ accountLevel: 'E', groupBy: '' });
-    assert.doesNotMatch(html, /<tr class="acct-total">/, 'the grand-Total row must not render at accountLevel E');
-  });
-
-  for (const level of ['S', 'D', 'C']) {
-    it(`still renders the flat-branch grand-Total row at accountLevel '${level}' (regression guard)`, () => {
+  // ETP-5401 — the Total row used to be hidden entirely at accountLevel 'E'
+  // because Epígrafe's own multi-depth hierarchy (a root like "PYG" and its
+  // child "P.G.1" both carrying elementlevel='E') made a naive sum of every
+  // returned row double-count a leaf once per nesting depth. The real fix is
+  // `is_root` (SQL) + `sumFieldWhere` (template): the row now always renders,
+  // at every level, summing only the rows whose account has no ancestor at
+  // that same level.
+  for (const level of ['S', 'D', 'C', 'E']) {
+    it(`renders the flat-branch grand-Total row at accountLevel '${level}', summing only is_root rows`, () => {
       const html = renderTemplate({ accountLevel: level, groupBy: '' });
       assert.match(html, /<tr class="acct-total">/, `expected the grand-Total row at accountLevel ${level}`);
       const start = html.indexOf('<tr class="acct-total">');
       const totalRow = html.slice(start, html.indexOf('</tr>', start));
       assert.match(totalRow, /colspan="2"/, 'expected the flat-branch Total label cell');
+      // ROWS' single row is is_root: true, so the total must equal its own
+      // amounts, not 0,00 — the failure mode a missing/falsy is_root produces.
+      assert.match(totalRow, /100,00/, 'opening_balance');
+      assert.match(totalRow, /130,00/, 'closing_balance');
     });
   }
+
+  it('sums only the is_root row and excludes the non-root one (the real Epígrafe nesting case)', () => {
+    // Mirrors a real Epígrafe result: "PYG" (root, elementlevel='E', no
+    // ancestor also at 'E') and "P.G.1" (its child, ALSO elementlevel='E')
+    // both appear as separate rows over the SAME underlying leaf transactions
+    // — summing both would double the total.
+    const mixedRows = [
+      { account_no: 'PYG', account_id: 'ACC-ROOT', account_name: 'Pérdidas y ganancias', is_root: true, opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130 },
+      { account_no: 'P.G.1', account_id: 'ACC-CHILD', account_name: '1. Importe neto de la cifra de negocios', is_root: false, opening_balance: 100, activity_debit: 50, activity_credit: 20, closing_balance: 130 },
+    ];
+    const html = renderTemplate({ accountLevel: 'E', groupBy: '', rows: mixedRows });
+    const start = html.indexOf('<tr class="acct-total">');
+    const totalRow = html.slice(start, html.indexOf('</tr>', start));
+    // Must equal the single root row's amounts, NOT double them.
+    assert.match(totalRow, /100,00/, 'opening_balance must not be doubled to 200,00');
+    assert.match(totalRow, /130,00/, 'closing_balance must not be doubled to 260,00');
+    assert.doesNotMatch(totalRow, /200,00/);
+    assert.doesNotMatch(totalRow, /260,00/);
+  });
 
   it('renders the grouped per-account acct-total rows regardless of accountLevel (unaffected by ETP-5128)', () => {
     for (const level of ['S', 'D', 'C', 'E']) {
