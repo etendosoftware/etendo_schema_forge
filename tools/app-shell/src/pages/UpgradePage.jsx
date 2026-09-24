@@ -481,8 +481,10 @@ function ProgressPanel({ steps, ui }) {
  * plan-selection UI (comparison, feature matrix, annual/monthly toggle) belongs there. Do not
  * grow a pricing table here.
  *
- * The catalog is the ONLY source of a plan key. There is no hardcoded fallback key, because the
- * server requires the key and has no default: a guess here would be a purchase nobody reviewed.
+ * The catalog is the ONLY source of a plan key. There is no hardcoded fallback key: a guess here
+ * would be a purchase nobody reviewed. (The server does sell without a key while its legacy price
+ * fallback is active — ETP-5046 — but then the catalog lists exactly that plan, so the page still
+ * sends the key it showed rather than relying on the server's default.)
  */
 function PlanSelector({ state, plans, selectedPlanKey, onSelect, onRetry, ui }) {
   // Nothing to say about plans when there is no session to read them with: the submit reports
@@ -710,9 +712,10 @@ export default function UpgradePage() {
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
   // 'loading' | 'ready' | 'unavailable' | 'no-session' — the plan catalog. Unlike the
-  // environments lookup, a failure here BLOCKS checkout: the server requires a plan key and has
-  // no default, so without the catalog there is nothing legitimate to send. Guessing a key is
-  // the one thing this flow must never do.
+  // environments lookup, a failure here BLOCKS checkout: without the catalog the buyer has not
+  // been shown a price, so there is nothing legitimate to send. The server would accept a missing
+  // key only while its legacy price fallback is active (and refuses it PLAN_NOT_AVAILABLE once a
+  // priced plan exists); sending none, or guessing one, is never this page's choice to make.
   const [plansState, setPlansState] = useState('loading');
   const [plans, setPlans] = useState([]);
   const [selectedPlanKey, setSelectedPlanKey] = useState('');
@@ -1077,8 +1080,9 @@ export default function UpgradePage() {
           ...(isDemoOrigin && selectedDemoClientId ? { demoClientId: selectedDemoClientId } : {}),
           ...(includeDataTransfer ? { dataTransfer } : {}),
           upgradeAction: form.upgradeAction,
-          // Required by the server, which has no default plan. Always a KEY from the catalog,
-          // never a price and never a literal written here.
+          // Always a KEY from the catalog, never a price and never a literal written here. The
+          // server only sells without one under its legacy price fallback; the page never relies
+          // on that and sends the plan it showed.
           planKey: selectedPlanKey,
           language: getStoredLocale(),
         }
