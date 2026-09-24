@@ -291,7 +291,7 @@ test.describe('Purchase Invoice — Import from Goods Receipt (mocked)', () => {
     await expect(page.getByText('Test Product').first()).toBeVisible({ timeout: 10_000 });
 
     // Qty input pre-filled with movementQuantity=2
-    const qtyInput = page.locator('input[type="number"]').first();
+    const qtyInput = page.getByTestId('ImportLinesModal__qtyInput').first();
     await expect(qtyInput).toHaveValue('2', { timeout: 5_000 });
 
     // ETP-4299: ImportLinesModal no longer auto-selects lines — click the checkbox.
@@ -593,7 +593,7 @@ test.describe('Purchase Invoice — Import from Source Invoice (ETP-4737)', () =
 
     // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop) —
     // checked on the selectable line (invoicedQuantity=-3 → maxQty=3 → displayed as -3).
-    const qtyInputs = page.locator('input[type="number"]');
+    const qtyInputs = page.getByTestId('ImportLinesModal__qtyInput');
     await expect(qtyInputs.nth(1)).toHaveValue('-3', { timeout: 5_000 });
 
     // Select the selectable line and import it. Uses a native evaluate()-click (same

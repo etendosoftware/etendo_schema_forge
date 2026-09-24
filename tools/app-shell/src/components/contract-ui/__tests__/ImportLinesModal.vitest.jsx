@@ -423,37 +423,21 @@ describe('ImportLinesModal', () => {
     it('displays the quantity as negative when negativeQuantity is true', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded({ negativeQuantity: true });
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
       expect(qtyInput.value).toBe('-5');
     });
 
     it('keeps the quantity positive when negativeQuantity is false (default)', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded();
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
       expect(qtyInput.value).toBe('5');
-    });
-
-    it('flips the min/max attributes to negative bounds when negativeQuantity is true', async () => {
-      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      await renderExpanded({ negativeQuantity: true });
-      const qtyInput = document.body.querySelector('input[type="number"]');
-      expect(qtyInput.min).toBe('-5');
-      expect(qtyInput.max).toBe('-1');
-    });
-
-    it('keeps positive min/max bounds when negativeQuantity is false (default)', async () => {
-      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      await renderExpanded();
-      const qtyInput = document.body.querySelector('input[type="number"]');
-      expect(qtyInput.min).toBe('1');
-      expect(qtyInput.max).toBe('5');
     });
 
     it('clamps onChange to a positive magnitude internally, then re-displays it with the sign flipped', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded({ negativeQuantity: true });
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '-3' } });
       expect(qtyInput.value).toBe('-3');
@@ -462,7 +446,7 @@ describe('ImportLinesModal', () => {
     it('does NOT clamp on change when typed above maxQty (free typing); reverts to the last committed value and shows qtyMaxAllowed on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded({ negativeQuantity: true });
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '-100' } });
       // ETP-5178: typing is never clamped mid-edit, even past maxQty.
@@ -478,7 +462,7 @@ describe('ImportLinesModal', () => {
     it('does NOT snap a non-numeric input to 1 on change (free typing); reverts to the last committed value and shows qtyMustBePositive on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
       await renderExpanded({ negativeQuantity: true });
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: 'abc' } });
       // ETP-5178: no snap to 1 mid-edit.
@@ -528,15 +512,6 @@ describe('ImportLinesModal', () => {
       const totals = screen.getAllByText('77,00');
       expect(totals.length).toBeGreaterThan(0);
     });
-
-    it('adds Tailwind classes to hide the native number-input spin buttons on the quantity input', async () => {
-      defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      await renderExpanded();
-      const qtyInput = document.body.querySelector('input[type="number"]');
-      expect(qtyInput.className).toContain('[appearance:textfield]');
-      expect(qtyInput.className).toContain('[&::-webkit-outer-spin-button]:appearance-none');
-      expect(qtyInput.className).toContain('[&::-webkit-inner-spin-button]:appearance-none');
-    });
   });
 
   // ETP-5178 — quantity input: free typing, validate on blur only. Covers the
@@ -560,7 +535,7 @@ describe('ImportLinesModal', () => {
 
     it('never clamps mid-edit across multiple keystrokes, even typing past maxQty', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '1' } });
       expect(qtyInput.value).toBe('1');
@@ -572,7 +547,7 @@ describe('ImportLinesModal', () => {
 
     it('commits a valid value on blur and updates the line-total preview, without any toast', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('input[type="number"]');
+      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '3' } });
       fireEvent.blur(qtyInput);
@@ -585,7 +560,7 @@ describe('ImportLinesModal', () => {
 
     it('shows the qtyMaxAllowed toast (not qtyMustBePositive) and reverts when blurred above maxQty', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '15' } });
       fireEvent.blur(qtyInput);
@@ -599,7 +574,7 @@ describe('ImportLinesModal', () => {
       'shows the qtyMustBePositive toast (not qtyMaxAllowed) and reverts when blurred with %j',
       async (invalidValue) => {
         await renderExpandedWithQtyLine();
-        const qtyInput = document.body.querySelector('input[type="number"]');
+        const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
         fireEvent.change(qtyInput, { target: { value: invalidValue } });
         fireEvent.blur(qtyInput);
@@ -617,7 +592,7 @@ describe('ImportLinesModal', () => {
     // in ImportLinesModal.jsx) rather than assuming "negative" is always invalid.
     it('commits a typed negative draft as its positive magnitude even when negativeQuantity is false', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: '-3' } });
       fireEvent.blur(qtyInput);
@@ -628,7 +603,7 @@ describe('ImportLinesModal', () => {
 
     it('shows the qtyMustBePositive toast and reverts when blurred with a non-numeric draft', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = document.body.querySelector('input[type="number"]');
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
       fireEvent.change(qtyInput, { target: { value: 'abc' } });
       fireEvent.blur(qtyInput);
@@ -640,17 +615,89 @@ describe('ImportLinesModal', () => {
 
     it('round-trips a decimal quantity through draft -> commit', async () => {
       await renderExpandedWithQtyLine();
-      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('input[type="number"]');
+      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
 
+      // MaskedAmountInput always displays the CONFIGURED decimal separator (comma in
+      // the default es-ES-style config), whichever accepted char (',' or '.') was
+      // actually typed — see fields.jsx filterMaskChars.
       fireEvent.change(qtyInput, { target: { value: '2.5' } });
-      expect(qtyInput.value).toBe('2.5');
+      expect(qtyInput.value).toBe('2,5');
 
       fireEvent.blur(qtyInput);
 
-      expect(qtyInput.value).toBe('2.5');
+      expect(qtyInput.value).toBe('2,5');
       expect(toast.error).not.toHaveBeenCalled();
       // unitPrice 10 * qty 2.5 = 25
       expect(screen.getByText('25,00')).toBeInTheDocument();
+    });
+
+    // ETP-5429 — the actual reported bug: a Spanish user physically typing the ','
+    // key (not '.') into the quantity field. The test above already covers a
+    // dot-typed value round-tripping through the comma-configured display; this one
+    // types the comma directly to close the gap on the literal keystroke QA hit.
+    it('accepts a LITERAL comma-typed decimal quantity end-to-end (the ETP-5429 reported bug)', async () => {
+      await renderExpandedWithQtyLine();
+      const qtyInput = screen.getByText('Widget A').closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+
+      fireEvent.change(qtyInput, { target: { value: '2,5' } });
+      expect(qtyInput.value).toBe('2,5');
+
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('2,5');
+      expect(toast.error).not.toHaveBeenCalled();
+      // unitPrice 10 * qty 2.5 = 25
+      expect(screen.getByText('25,00')).toBeInTheDocument();
+    });
+
+    // ETP-5429 edge case — a comma-typed value landing EXACTLY on the maxQty
+    // boundary. Floating-point equality after the ','->'.' normalization
+    // (Number("1.0") === 1) must still satisfy `magnitude <= maxQty`.
+    it('accepts a comma-typed decimal that lands exactly on the maxQty boundary', async () => {
+      const BOUNDARY_LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 1, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 10 };
+      defaultProps.fetchLines.mockResolvedValue([BOUNDARY_LINE]);
+      renderModal();
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+      fireEvent.change(qtyInput, { target: { value: '1,0' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('1');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    // ETP-5429 edge case — malformed / partial comma drafts must never crash and
+    // must fall back to the standard "not a valid quantity" rejection, not a silent
+    // pass-through of garbage.
+    it('rejects a comma-only draft (no digits) as invalid on blur, without crashing', async () => {
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+
+      fireEvent.change(qtyInput, { target: { value: ',' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('5'); // reverts to the last committed value (maxQty default)
+      expect(toast.error).toHaveBeenCalledWith('qtyMustBePositive');
+    });
+
+    // A trailing comma with no fractional digits ("5,") is still a parseable
+    // integer (Number("5.") === 5) — must commit as valid 5, not be rejected.
+    it('commits a trailing-comma draft ("5,") as the whole number, not rejected', async () => {
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
+
+      fireEvent.change(qtyInput, { target: { value: '5,' } });
+      fireEvent.blur(qtyInput);
+
+      expect(qtyInput.value).toBe('5');
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     describe('negativeQuantity end-to-end (ETP-5178)', () => {
@@ -667,7 +714,7 @@ describe('ImportLinesModal', () => {
         fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
-        const qtyInput = document.body.querySelector('input[type="number"]');
+        const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
         fireEvent.change(qtyInput, { target: { value: '-3' } });
         fireEvent.blur(qtyInput);
 
@@ -686,7 +733,7 @@ describe('ImportLinesModal', () => {
         fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
-        const qtyInput = document.body.querySelector('input[type="number"]');
+        const qtyInput = document.body.querySelector('[data-testid="ImportLinesModal__qtyInput"]');
         fireEvent.change(qtyInput, { target: { value: '-100' } });
         expect(qtyInput.value).toBe('-100'); // free typing — no clamp mid-edit
 
@@ -896,7 +943,7 @@ describe('ImportLinesModal', () => {
     it('stops click propagation on the quantity input so it never toggles the line selection', async () => {
       await renderExpandedTwoLines();
 
-      const qtyInput = screen.getAllByTestId('checkbox')[1].closest('div[style]').querySelector('input[type="number"]');
+      const qtyInput = screen.getAllByTestId('checkbox')[1].closest('div[style]').querySelector('[data-testid="ImportLinesModal__qtyInput"]');
       fireEvent.click(qtyInput);
 
       const lineCheckbox = screen.getAllByTestId('checkbox')[1];
@@ -1149,8 +1196,11 @@ describe('ImportLinesModal', () => {
 
       await waitFor(() => expect(screen.getByText('qty')).toBeInTheDocument());
       expect(screen.getByText('returnQty')).toBeInTheDocument();
-      // The available-qty read-only cell shows the formatted _maxQty next to the editable input.
-      expect(screen.getByText('5,00')).toBeInTheDocument();
+      // The available-qty read-only cell shows the plain (unforced-2-decimal) _maxQty
+      // next to the editable input, via formatPlainDecimal — an integer like 5 renders
+      // as "5", not "5,00" (formatPlainDecimal only localizes an existing decimal point,
+      // it does not add one).
+      expect(screen.getByText('5')).toBeInTheDocument();
     });
   });
 });
