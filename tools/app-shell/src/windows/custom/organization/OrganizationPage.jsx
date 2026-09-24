@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { useUI } from '@/i18n';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { Input } from '@/components/ui/input';
@@ -270,6 +270,20 @@ export default function OrganizationPage({ token, apiBaseUrl }) {
       setSaving(false);
     }
   };
+
+  // ETP-5395 Fix 3 — this custom window never delegated to a generated Page.jsx (registry.js
+  // loads OrganizationPage.jsx directly for "organization"), so it never picked up the
+  // ETP-4520 access-tier guard despite menu.json carrying a real windowId ("110") — same gap
+  // ETP-4658 already found and fixed for financial-account/sales-invoice/etc. Without this,
+  // a role with no grant on this window still fired the fetch, got a correct backend 403
+  // ("Access denied to spec for current role"), and useOrganizationData's HTTP-status-only
+  // error message rendered raw in the destructive error box below with a Retry button that
+  // can never succeed. Checked after every other hook so hook order stays stable regardless
+  // of the tier (mirrors financial-account/index.jsx's own placement).
+  const windowAccessTier = useWindowAccess('110');
+  if (windowAccessTier === 'none') {
+    return <WindowAccessGuard windowId="110" data-testid="WindowAccessGuard__organization" />;
+  }
 
   if (loading) {
     return (

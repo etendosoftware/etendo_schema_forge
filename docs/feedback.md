@@ -2755,6 +2755,74 @@ the burst, not the largest window that still "feels safe."
 
 ---
 
+## [2026-09-23] ETP-5395 (post-merge regression) — Two custom windows never wired the standard access-tier gate
+
+**Component:** `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx`,
+`tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx`.
+
+**Symptom:** First live QA pass on ETP-5395 Points 1-3 (comment #146376, 2026-09-23) reported that,
+for a role with no grant on these two windows (role "Compras"/Purchasing in the reported case),
+"Organización" and "Configuración Fiscal" showed a raw, untranslated error instead of the app's
+usual no-access treatment — e.g. `"No se pudo cargar la información de la organización: HTTP 403"`
+with a Retry button, rather than the styled `WindowAccessGuard` panel every other gated window
+shows.
+
+**Investigation note (ruled out before finding the real cause):** the QA report landed the same day
+as two unrelated cookie-session-migration PRs (ETP-4575/ETP-4576) merged, so the initial hypothesis
+was a credential-plumbing regression from that migration. Live-reproduced against a local dev
+backend (real login as a composed Purchasing-role user, captured actual network responses) and
+ruled that out directly: the backend answered a clean, correct, already-translatable
+`{"error":{"message":"Access denied to spec for current role","status":403}}` — genuinely correct
+access denial, unrelated to either cookie-session PR.
+
+**Root cause:** every custom (hand-written, non-generated) window with a real `AD_Window_ID` is
+supposed to wire the generic `useWindowAccess`/`WindowAccessGuard` pair (`@/auth/AuthContext.jsx`,
+the same mechanism `generate-frontend.js` wires automatically into every GENERATED window) — this
+was already done by hand for `financial-account`/`sales-invoice`/`purchase-order`/`sales-order`/
+`amortization`/`purchase-invoice` under **ETP-4658** ("this custom window never delegated to a
+generated Page.jsx... so it never picked up the ETP-4520 access-tier guard despite the contract
+carrying a real window.id" — that ticket's own comment in `financial-account/index.jsx`).
+`organization` and `fiscal-config` were simply 2 more custom windows that never got this same
+treatment — a pre-existing gap, not a regression from the cookie-session migration or from anything
+ETP-5395's own Points 1-3 touched. Without the guard, the page's own data-fetch hook
+(`useOrganizationData.js`, `useFiscalConfig.js`'s shared `fetchAllRows()`) still fired, got the
+correct backend 403, and rendered its own bare `Error("HTTP ${status}")` message raw, with a Retry
+button that can never help a genuine permission denial.
+
+**Fix:** added the exact same guard ETP-4658 already established, verbatim — `const
+windowAccessTier = useWindowAccess(<windowId>); if (windowAccessTier === 'none') return
+<WindowAccessGuard windowId={<windowId>} />;`, placed after every other hook call (Rules-of-Hooks-
+safe) and before the page's `loading`/`error` early returns. No new component, no change to the
+hooks' own error handling — the fix is entirely "wire the pre-existing mechanism", not "teach the
+hook about 403".
+
+**Lesson:** When a custom (hand-written) window carries a real `AD_Window_ID`, wiring
+`useWindowAccess`/`WindowAccessGuard` is not optional cleanup — it is the ONLY thing standing between
+a correct backend permission denial and a raw, untranslated technical error reaching the user. A
+`throw new Error('HTTP ' + status)` inside a data-fetch hook is not itself a bug in isolation; it
+only becomes user-visible garbage when the page around it has no access-tier gate to short-circuit
+before ever reaching that error path. Before writing (or reviewing) any new hand-written custom
+window that maps to a real `AD_Window_ID`, check for this gate first — grep the window's own
+`index.jsx`/`Page.jsx` for `WindowAccessGuard`, don't assume the generic mechanism applies just
+because the contract has a `window.id`.
+
+~~**Not fixed in this pass, flagged only:** `fiscal-monitor` shares the identical gap.~~
+**Fixed same day (user-requested follow-up, 2026-09-23).** `useFiscalMonitor.js` reuses the same
+`fetchAllRows()` helper from `useFiscalConfig.js`, and had zero `WindowAccessGuard`/`useWindowAccess`
+references anywhere in its own custom directory. Fixed identically: `FiscalMonitorPage.jsx` now
+checks `useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C')` right after its last hook
+(`useSetPageMeta`), before `handleRefresh`/the render branches — one difference from the
+`organization`/`fiscal-config` fix: the check is `!debugOverrideActive && windowAccessTier ===
+'none'`, matching this page's own existing `loading`/`error` gates, which already respect the
+developer-only debug/mock profile override the same way. Regression test added to
+`FiscalMonitorPage.vitest.jsx`, verified to fail without the fix and pass with it.
+
+~~Also found in the same investigation: the "Roles del usuario" admin UI broken under the cookie
+scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
+promoting/demoting through the real UI works under cookie sessions. Not a bug.
+
+---
+
 ## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
 
 **Component:** `artifacts/goods-movements/decisions.json` + `GoodsMovementsHeaderHandler.java`
