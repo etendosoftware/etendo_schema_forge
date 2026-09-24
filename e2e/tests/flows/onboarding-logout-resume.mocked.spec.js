@@ -115,7 +115,7 @@ test.describe('ETP-4584 — onboarding logout and resume', () => {
     });
 
     await page.goto('/logout?returnTo=/logout');
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByTestId('action-login-submit')).toBeVisible();
     await expect.poll(() => page.evaluate(() => ({
       auth: localStorage.getItem('sf_auth_token'),

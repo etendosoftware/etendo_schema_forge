@@ -181,9 +181,9 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     const requests = await installPurchaseMock(page);
     await gotoUpgrade(page);
 
-    // Submitting unchanged: the prefilled name already equals the account's own productive
-    // environment's name, so this must be rejected client-side before any request goes out.
-    await reachPaymentStep(page);
+    // The upgrade form intentionally starts blank for a productive environment; enter its
+    // existing name explicitly to verify the client rejects it before any request goes out.
+    await reachPaymentStep(page, productiveEnv.clientName);
     await expect(page.getByTestId('upgrade-tenant-name-input')).toHaveValue(productiveEnv.clientName);
     await page.getByTestId('upgrade-submit').click();
 
