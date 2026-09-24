@@ -324,8 +324,15 @@ export default function TbaiMonitorSection({
                         data-testid="NumFactura__dd7710" />
                     </td>
                     <td>
+                      {/* ETP-5432: purchase uses the shared `warn` role (amber/orange —
+                          --fm-warning-bg/fg, themed off --status-warning-bg/fg, the same
+                          warm-color token already used for e.g. AssetsSidebar's
+                          text-status-warning-foreground) instead of `neutral`, so "Recibida"
+                          reads as a distinct, warm-toned direction rather than blending into
+                          disabled/inactive-looking chrome. `info` (sales/"Emitida") is
+                          unchanged. */}
                       <span
-                        className={`fm-pill ${rowIsSales ? 'info' : 'neutral'}`}
+                        className={`fm-pill ${rowIsSales ? 'info' : 'warn'}`}
                         data-testid="tbai-direction-badge"
                         data-direction={rowIsSales ? 'sales' : 'purchase'}
                       >
