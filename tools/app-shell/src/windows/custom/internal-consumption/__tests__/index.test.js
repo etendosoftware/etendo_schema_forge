@@ -46,11 +46,25 @@ describe('InternalConsumptionWindow custom wrapper (ETP-5445)', () => {
   describe('bulk actions', () => {
     const blocks = bulkDocumentActionBlocks();
 
-    it('renders exactly two BulkDocumentAction instances', () => {
-      assert.equal(blocks.length, 2);
+    it('renders exactly three BulkDocumentAction instances (Confirm, Post, Unpost)', () => {
+      assert.equal(blocks.length, 3);
     });
 
-    it('both bulk actions target the internalConsumption entity via neoAction mode', () => {
+    it('renders the Confirm bulk action first, before Post and Unpost', () => {
+      assert.match(blocks[0], /labelKey="confirm"/);
+      assert.match(blocks[1], /labelKey="post"/);
+      assert.match(blocks[2], /labelKey="unpost"/);
+    });
+
+    it('the Confirm bulk action wires buildConfirmActions, confirmRowFilter and the confirm label', () => {
+      const confirm = blocks.find((b) => /labelKey="confirm"/.test(b));
+      assert.ok(confirm, 'Confirm BulkDocumentAction not found');
+      assert.match(confirm, /buildActions=\{buildConfirmActions\}/);
+      assert.match(confirm, /rowFilter=\{confirmRowFilter\}/);
+      assert.match(confirm, /data-testid="BulkDocumentActionConfirm__[0-9a-f]+"/);
+    });
+
+    it('all bulk actions target the internalConsumption entity via neoAction mode', () => {
       for (const block of blocks) {
         assert.match(block, /entity="internalConsumption"/);
         assert.match(block, /actionMode="neoAction"/);
@@ -90,11 +104,17 @@ describe('InternalConsumptionWindow custom wrapper (ETP-5445)', () => {
 
     it('passes ui and a refresh callback that bumps the refresh key', () => {
       assert.match(src, /buildDocumentRowQuickActionsPostMenu\(\{[\s\S]*?\bui\b[\s\S]*?\}\)/);
-      assert.match(src, /onRefresh:\s*\(\)\s*=>\s*setRefreshKey\(k\s*=>\s*k\s*\+\s*1\)/);
+      // ETP-5445 — the refresh callback is now a named local shared with the row Confirm handler.
+      assert.match(src, /const refresh = \(\)\s*=>\s*setRefreshKey\(k\s*=>\s*k\s*\+\s*1\)/);
+      assert.match(src, /buildDocumentRowQuickActionsPostMenu\(\{[\s\S]*?onRefresh:\s*refresh\b[\s\S]*?\}\)/);
     });
 
-    it('memoizes the quick actions on ui', () => {
-      assert.match(src, /useMemo\(\(\)\s*=>\s*\(\{[\s\S]*?\}\),\s*\[ui\]\)/);
+    it('adds the row Confirm entry through extraMenuActions, gated by isConfirmableRow', () => {
+      assert.match(src, /extraMenuActions:\s*\(row\)\s*=>\s*\(isConfirmableRow\(row\)/);
+    });
+
+    it('memoizes the quick actions on ui and apiFetch', () => {
+      assert.match(src, /useMemo\(\(\)\s*=>\s*\{[\s\S]*?\},\s*\[ui,\s*apiFetch\]\)/);
     });
   });
 

@@ -128,3 +128,56 @@ describe('internal-consumption generated InternalConsumptionPage.jsx (ETP-5445)'
     assert.match(pageSrc, /customMenuContent=\{InternalConsumptionActions\}/);
   });
 });
+
+// ETP-5445 (W2) — drift guard. The list's bulk and row-hover "Confirmar" hand-copy the body
+// the form's draftMode Confirm sends (useEntity.handleSaveAndProcess:
+// `{ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }` POSTed to
+// `/action/${processField}`). If draftMode changes in decisions.json and the wrapper is not
+// updated, the grid would confirm differently from the form. The wrapper is JSX (not
+// loadable by plain node --test), so CONFIRM_PARAMS is read from its source text.
+describe('internal-consumption list Confirm matches the form draftMode Confirm (ETP-5445)', () => {
+  const wrapperSrc = readFileSync(
+    join(artifactDir, '..', '..', 'tools', 'app-shell', 'src', 'windows', 'custom', 'internal-consumption', 'index.jsx'),
+    'utf8',
+  );
+  const draftMode = contractHeader.draftMode;
+
+  function wrapperConfirmParams() {
+    const m = wrapperSrc.match(/const CONFIRM_PARAMS = (\{[^;]*\});/);
+    assert.ok(m, 'CONFIRM_PARAMS literal not found in the wrapper');
+    // The literal is a plain object of string constants — evaluate it in isolation.
+    return new Function(`return (${m[1]});`)();
+  }
+
+  it('the contract header declares an enabled draftMode with a processField', () => {
+    assert.equal(draftMode?.enabled, true);
+    assert.equal(typeof draftMode.processField, 'string');
+  });
+
+  it('CONFIRM_PARAMS equals the body handleSaveAndProcess derives from draftMode', () => {
+    const { processField, processValue, extraParams } = draftMode;
+    const formBody = { fieldValues: { [processField]: processValue }, ...(extraParams || {}) };
+    assert.deepEqual(wrapperConfirmParams(), formBody);
+  });
+
+  it('the row entry POSTs to the draftMode processField action', () => {
+    assert.match(
+      wrapperSrc,
+      new RegExp(`/internalConsumption/\\$\\{encodeURIComponent\\(row\\.id\\)\\}/action/${draftMode.processField}\``),
+    );
+    assert.match(wrapperSrc, /body:\s*CONFIRM_BODY/);
+    assert.match(wrapperSrc, /const CONFIRM_BODY = JSON\.stringify\(CONFIRM_PARAMS\)/);
+  });
+
+  it('the bulk action targets the draftMode processField with CONFIRM_PARAMS as its body', () => {
+    assert.match(
+      wrapperSrc,
+      new RegExp(`neoActionName:\\s*'${draftMode.processField}',\\s*neoActionBody:\\s*CONFIRM_PARAMS`),
+    );
+  });
+
+  it('the row URL entity matches the contract header entity name', () => {
+    assert.ok(contract.frontendContract.entities.internalConsumption, 'internalConsumption entity missing');
+    assert.match(wrapperSrc, /`\/internalConsumption\//);
+  });
+});

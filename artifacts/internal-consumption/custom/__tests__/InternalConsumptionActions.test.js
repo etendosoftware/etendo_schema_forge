@@ -77,13 +77,41 @@ describe('InternalConsumptionActions', () => {
     assert.match(src, /disabled=\{processing\}/);
   });
 
-  // ── Neutral styling (Void must NOT look destructive/red) ──────────────────────
-  it('uses semantic foreground text, not a destructive hardcoded color', () => {
-    assert.match(src, /hsl\(var\(--foreground\)\)/);
+  // ── Destructive styling (Void looks like Descontabilizar) ─────────────────────
+  // ETP-5445 user decision — "Anular" is irreversible, so it takes DetailMoreActionsMenu's
+  // DESTRUCTIVE item variant (the same branch Unpost/Descontabilizar renders with), not the
+  // neutral one. Color and hover come from Tailwind semantic classes, never inline styles.
+  it('uses the semantic destructive text color, not a neutral or hardcoded one', () => {
+    assert.match(src, /className=\{`[^`]*\btext-destructive\b/);
+    assert.doesNotMatch(src, /\btext-foreground\b/);
     assert.doesNotMatch(src, /#DC2626|#111827/);
   });
 
-  it('uses the semantic card role for the hover background', () => {
-    assert.match(src, /style\.background = 'hsl\(var\(--card\)\)'/);
+  it('uses the destructive hover background, not an inline hover handler', () => {
+    assert.match(src, /className=\{`[^`]*\bhover:bg-destructive\/10(\s|`)/);
+    assert.doesNotMatch(src, /\bhover:bg-secondary\b/);
+    assert.doesNotMatch(src, /onMouseEnter|onMouseLeave/);
+    assert.doesNotMatch(src, /style\.background\s*=/);
+    assert.doesNotMatch(src, /hsl\(var\(--/);
+  });
+
+  it('exposes data-testid="menu-action-void"', () => {
+    assert.match(src, /data-testid="menu-action-void"/);
+  });
+
+  it('matches the destructive DetailMoreActionsMenu item classes (shared base + destructive variant)', () => {
+    const cls = src.match(/className=\{`([^`]*)`\}/);
+    assert.ok(cls, 'button className template not found');
+    for (const c of ['w-full', 'text-left', 'px-2', 'py-1', 'text-sm', 'leading-6', 'transition-colors', 'flex', 'items-center', 'gap-2', 'text-destructive', 'hover:bg-destructive/10']) {
+      assert.match(cls[1], new RegExp(`(^|\\s)${c.replace(':', '\\:')}(\\s|$)`), `missing class ${c}`);
+    }
+  });
+
+  it('dims and blocks the cursor while processing, like the standard item', () => {
+    assert.match(src, /processing \? 'opacity-50 cursor-not-allowed' : ''/);
+  });
+
+  it('uses the standard item typography (Inter, weight 400)', () => {
+    assert.match(src, /style=\{\{\s*fontFamily:\s*'Inter, sans-serif',\s*fontWeight:\s*400\s*\}\}/);
   });
 });

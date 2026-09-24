@@ -34,15 +34,36 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }));
 
+// ETP-5445 — the row Confirm entry POSTs through useApiFetch. A STABLE mock (hoisted, same
+// identity every render) so the memoized rowQuickActions is not rebuilt on each render.
+const { mockApiFetch, mockExtractErrorMessage } = vi.hoisted(() => ({
+  mockApiFetch: vi.fn(),
+  mockExtractErrorMessage: vi.fn(),
+}));
+vi.mock('@/auth/useApiFetch.js', () => ({
+  useApiFetch: () => mockApiFetch,
+}));
+vi.mock('@/hooks/useEntity.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  extractErrorMessage: (...args) => mockExtractErrorMessage(...args),
+}));
+
 import { render, screen, act } from '@testing-library/react';
 import { toast } from 'sonner';
-import InternalConsumptionWindow from '../index.jsx';
+import { PROCESS_FAILURE_TOAST_DURATION_MS } from '@/hooks/useEntity.js';
+import InternalConsumptionWindow, {
+  buildConfirmActions, confirmRowFilter, isConfirmableRow,
+} from '../index.jsx';
 
 const ui = (key) => key;
 const PROCESSED_UNPOSTED = { id: 'ic-1', processed: 'Y', posted: 'N' };
 const PROCESSED_POSTED = { id: 'ic-2', processed: 'Y', posted: 'Y' };
 const DRAFT = { id: 'ic-3', processed: 'N', posted: 'N' };
 const ROWS = [PROCESSED_UNPOSTED, PROCESSED_POSTED, DRAFT];
+// ETP-5445 — a real draft as the list returns it: status DR and not processed.
+const CONFIRMABLE = { id: 'ic-4', status: 'DR', processed: 'N', posted: 'N' };
+const COMPLETED = { id: 'ic-5', status: 'CO', processed: 'Y', posted: 'N' };
+const CONFIRM_PARAMS = { fieldValues: { processNow: 'CO' }, action: 'CO' };
 
 const lastAppProps = () => generatedAppProps[generatedAppProps.length - 1];
 
@@ -52,7 +73,8 @@ function renderBulkActions() {
   render(<BulkActions selectedRows={ROWS} apiBaseUrl="/api" onDone={vi.fn()} />);
   const post = bulkActionProps.find((p) => p.labelKey === 'post');
   const unpost = bulkActionProps.find((p) => p.labelKey === 'unpost');
-  return { post, unpost };
+  const confirm = bulkActionProps.find((p) => p.labelKey === 'confirm');
+  return { post, unpost, confirm };
 }
 
 /** Rows the given bulk action would actually apply to (rowFilter === true). */
@@ -68,6 +90,8 @@ describe('InternalConsumptionWindow (ETP-5445)', () => {
     generatedAppProps.length = 0;
     bulkActionProps.length = 0;
     vi.clearAllMocks();
+    mockApiFetch.mockReset();
+    mockExtractErrorMessage.mockReset();
   });
 
   it('renders GeneratedApp forwarding its own props plus the wrapper wiring', () => {
@@ -207,6 +231,200 @@ describe('InternalConsumptionWindow (ETP-5445)', () => {
 
       expect(lastAppProps().refreshTrigger).toBe(0);
       expect(toast.success).not.toHaveBeenCalled();
+    });
+  });
+  describe('isConfirmableRow', () => {
+    it('is true only for a DR row that is not processed', () => {
+      expect(isConfirmableRow(CONFIRMABLE)).toBe(true);
+      expect(isConfirmableRow({ status: 'DR', processed: false })).toBe(true);
+    });
+
+    it('is false for a processed row, even if still flagged DR', () => {
+      expect(isConfirmableRow({ status: 'DR', processed: 'Y' })).toBe(false);
+      expect(isConfirmableRow({ status: 'DR', processed: true })).toBe(false);
+    });
+
+    it('is false for a non-draft status and for null/undefined rows', () => {
+      expect(isConfirmableRow(COMPLETED)).toBe(false);
+      expect(isConfirmableRow(DRAFT)).toBe(false);
+      expect(isConfirmableRow(null)).toBe(false);
+      expect(isConfirmableRow(undefined)).toBe(false);
+    });
+  });
+
+  describe('buildConfirmActions', () => {
+    it('offers confirm (processNow + body) when at least one selected row is a draft', () => {
+      expect(buildConfirmActions([COMPLETED, CONFIRMABLE])).toEqual([{
+        value: 'confirm',
+        labelKey: 'confirm',
+        neoActionName: 'processNow',
+        neoActionBody: CONFIRM_PARAMS,
+      }]);
+    });
+
+    it('offers nothing when no selected row is a draft', () => {
+      expect(buildConfirmActions([COMPLETED, PROCESSED_POSTED, DRAFT])).toEqual([]);
+    });
+
+    it('offers nothing for an empty selection', () => {
+      expect(buildConfirmActions([])).toEqual([]);
+    });
+  });
+
+  describe('confirmRowFilter', () => {
+    it('lets a draft through', () => {
+      expect(confirmRowFilter(CONFIRMABLE, 'confirm', ui)).toBe(true);
+    });
+
+    it('skips a non-draft with bulkRowNotDraft', () => {
+      expect(confirmRowFilter(COMPLETED, 'confirm', ui)).toBe('bulkRowNotDraft');
+      expect(confirmRowFilter({ status: 'DR', processed: 'Y' }, 'confirm', ui)).toBe('bulkRowNotDraft');
+    });
+
+    it('does not gate any other action', () => {
+      expect(confirmRowFilter(COMPLETED, 'post', ui)).toBe(true);
+    });
+  });
+
+  describe('bulk Confirm', () => {
+    it('renders a Confirm BulkDocumentAction first, wired to processNow with the confirm body', () => {
+      render(<InternalConsumptionWindow />);
+      const { confirm } = renderBulkActions();
+
+      expect(screen.getByTestId('BulkDocumentActionConfirm__b7e2c1')).toBeInTheDocument();
+      expect(bulkActionProps.map((p) => p.labelKey)).toEqual(['confirm', 'post', 'unpost']);
+      expect(confirm.entity).toBe('internalConsumption');
+      expect(confirm.actionMode).toBe('neoAction');
+      expect(confirm.buildActions).toBe(buildConfirmActions);
+      expect(confirm.rowFilter).toBe(confirmRowFilter);
+      expect(confirm.selectedRows).toBe(ROWS);
+
+      const [action] = confirm.buildActions([CONFIRMABLE]);
+      expect(action.neoActionName).toBe('processNow');
+      expect(action.neoActionBody).toEqual(CONFIRM_PARAMS);
+    });
+
+    it('applies only to the draft rows of a mixed selection', () => {
+      render(<InternalConsumptionWindow />);
+      const { confirm } = renderBulkActions();
+
+      expect(applicableRows(confirm, [CONFIRMABLE, COMPLETED, PROCESSED_POSTED])).toEqual([CONFIRMABLE]);
+    });
+  });
+
+  describe('row Confirm', () => {
+    const confirmEntry = (row) => lastAppProps().rowQuickActions.menuActions({ row })
+      .find((a) => a.key === 'confirm');
+
+    it('is shown for a draft row, ahead of any Post entry', () => {
+      render(<InternalConsumptionWindow />);
+      const actions = lastAppProps().rowQuickActions.menuActions({ row: CONFIRMABLE });
+
+      expect(actions.map((a) => a.key)).toEqual(['confirm']);
+      expect(actions[0].labelKey).toBe('confirm');
+      expect(typeof actions[0].onClick).toBe('function');
+      // Not a declarative neoAction: that path would send `{}` and double-toast.
+      expect(actions[0].neoAction).toBeUndefined();
+    });
+
+    it('is not shown for non-draft rows', () => {
+      render(<InternalConsumptionWindow />);
+      for (const row of [COMPLETED, PROCESSED_POSTED, PROCESSED_UNPOSTED, DRAFT]) {
+        expect(confirmEntry(row)).toBeUndefined();
+      }
+    });
+
+    it('POSTs the exact confirm body to the processNow URL, toasts success and refreshes', async () => {
+      mockApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) });
+      render(<InternalConsumptionWindow apiBaseUrl="/api" />);
+      const entry = confirmEntry(CONFIRMABLE);
+
+      let result;
+      await act(async () => { result = await entry.onClick({ row: CONFIRMABLE }); });
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockApiFetch.mock.calls[0];
+      expect(url).toBe('/internalConsumption/ic-4/action/processNow');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body)).toEqual(CONFIRM_PARAMS);
+      expect(result).toEqual({ success: true });
+      expect(toast.success).toHaveBeenCalledWith('documentConfirmed');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockExtractErrorMessage).not.toHaveBeenCalled();
+      expect(lastAppProps().refreshTrigger).toBe(1);
+    });
+
+    it('URL-encodes the record id', async () => {
+      mockApiFetch.mockResolvedValue({ ok: true });
+      render(<InternalConsumptionWindow />);
+      const row = { ...CONFIRMABLE, id: 'a/b c' };
+
+      await act(async () => { await confirmEntry(row).onClick({ row }); });
+
+      expect(mockApiFetch.mock.calls[0][0]).toBe('/internalConsumption/a%2Fb%20c/action/processNow');
+    });
+
+    it('on failure toasts the message from extractErrorMessage and still refreshes', async () => {
+      const res = { ok: false, status: 400 };
+      mockApiFetch.mockResolvedValue(res);
+      mockExtractErrorMessage.mockResolvedValue('Stock insuficiente');
+      render(<InternalConsumptionWindow />);
+
+      let result;
+      await act(async () => { result = await confirmEntry(CONFIRMABLE).onClick({ row: CONFIRMABLE }); });
+
+      expect(mockExtractErrorMessage).toHaveBeenCalledWith(res, expect.any(Function));
+      expect(toast.error).toHaveBeenCalledWith('Stock insuficiente', { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(result).toEqual({ success: false, message: 'Stock insuficiente' });
+      expect(lastAppProps().refreshTrigger).toBe(1);
+    });
+
+    it('falls back to actionFailed when extractErrorMessage yields nothing', async () => {
+      mockApiFetch.mockResolvedValue({ ok: false, status: 500 });
+      mockExtractErrorMessage.mockResolvedValue('');
+      render(<InternalConsumptionWindow />);
+
+      await act(async () => { await confirmEntry(CONFIRMABLE).onClick({ row: CONFIRMABLE }); });
+
+      expect(toast.error).toHaveBeenCalledWith('actionFailed', { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+      expect(lastAppProps().refreshTrigger).toBe(1);
+    });
+
+    it('error toasts use the form\'s long process-failure duration, not sonner\'s default', async () => {
+      mockApiFetch.mockResolvedValue({ ok: false, status: 400 });
+      mockExtractErrorMessage.mockResolvedValue('boom');
+      render(<InternalConsumptionWindow />);
+
+      await act(async () => { await confirmEntry(CONFIRMABLE).onClick({ row: CONFIRMABLE }); });
+
+      expect(typeof PROCESS_FAILURE_TOAST_DURATION_MS).toBe('number');
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.error.mock.calls[0][1]).toEqual({ duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+    });
+
+    it('a rejected fetch (network error) toasts actionFailed, refreshes and resolves { success: false }', async () => {
+      mockApiFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+      render(<InternalConsumptionWindow />);
+
+      let result;
+      await act(async () => { result = await confirmEntry(CONFIRMABLE).onClick({ row: CONFIRMABLE }); });
+
+      expect(result).toEqual({ success: false });
+      expect(toast.error).toHaveBeenCalledWith('actionFailed', { duration: PROCESS_FAILURE_TOAST_DURATION_MS });
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(mockExtractErrorMessage).not.toHaveBeenCalled();
+      expect(lastAppProps().refreshTrigger).toBe(1);
+    });
+
+    it('is not handled by onMenuActionExecuted (no double toast / refresh)', () => {
+      render(<InternalConsumptionWindow />);
+      const { onMenuActionExecuted } = lastAppProps().rowQuickActions;
+
+      act(() => onMenuActionExecuted(confirmEntry(CONFIRMABLE), { success: true }));
+
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(lastAppProps().refreshTrigger).toBe(0);
     });
   });
 });

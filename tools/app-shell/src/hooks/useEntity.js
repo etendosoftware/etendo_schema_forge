@@ -286,8 +286,10 @@ const DEFAULTS_TIMEOUT_MS = 4000;
 
 // ETP-5037 — a process-rejection message (e.g. Goods Movements' combined, multi-product
 // insufficient-stock message) can run considerably longer than sonner's default 4s toast
-// duration allows a user to read. See handleProcessFailure below.
-const PROCESS_FAILURE_TOAST_DURATION_MS = 8000;
+// duration allows a user to read. See handleProcessFailure below. Exported (ETP-5445) so a
+// list-level process action (Internal Consumption's row Confirmar) toasts its rejection for
+// the same time the form does.
+export const PROCESS_FAILURE_TOAST_DURATION_MS = 8000;
 
 const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
     'priceList',

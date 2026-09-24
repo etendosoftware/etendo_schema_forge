@@ -10,7 +10,7 @@ Use this window to register stock consumed inside the organization rather than s
 - Add one or more consumption lines under a header.
 - Capture the product being consumed, the movement quantity, and the storage bin used for each line. The quantity is what the user declares — it is never prefilled with the product's on-hand stock.
 - Review document status as it moves through Draft, Completed, and Voided states, and the accounting status (Posted / Not posted) in the list and in the detail header.
-- Complete a draft document with the **Confirm** button that sits next to **Save** in the detail toolbar.
+- Complete a draft document with the **Confirm** button that sits next to **Save** in the detail toolbar, or from the list (row-hover kebab or multi-select bulk bar).
 - Void a completed document from the kebab (⋮) **Void** action.
 - Post a completed document to accounting, and unpost a posted one, from the detail kebab, the list row-hover kebab, or the list multi-select bulk bar.
 
@@ -18,7 +18,7 @@ Use this window to register stock consumed inside the organization rather than s
 
 - **Route:** `/internal-consumption`, `/internal-consumption/:recordId`.
 - **Visibility:** visible from the Inventory menu as **Internal Consumption**.
-- **Implementation type:** generated window wrapped by a custom loader. `tools/app-shell/src/windows/custom/internal-consumption/index.jsx` is registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`; it forwards every prop to the generated `GeneratedApp` and adds only `bulkActions` (grid Post/Unpost), `rowQuickActions` (row-hover Post/Unpost kebab) and a `refreshTrigger`. The detail kebab keeps the generated wiring: decisions-driven `menuActions` (Post/Unpost) plus the custom `InternalConsumptionActions` component (Void), injected via `customComponents.moreMenuContent`.
+- **Implementation type:** generated window wrapped by a custom loader. `tools/app-shell/src/windows/custom/internal-consumption/index.jsx` is registered in `customLoaders` in `tools/app-shell/src/windows/registry.js`; it forwards every prop to the generated `GeneratedApp` and adds only `bulkActions` (grid Confirm/Post/Unpost), `rowQuickActions` (row-hover Confirm/Post/Unpost kebab) and a `refreshTrigger`. The detail kebab keeps the generated wiring: decisions-driven `menuActions` (Post/Unpost) plus the custom `InternalConsumptionActions` component (Void), injected via `customComponents.moreMenuContent`.
 - **Window shape:** master-child. The header entity is `internalConsumption` (`M_Internal_Consumption`, `AD_Table_ID 800168`) and the line entity is `internalConsumptionLine`. The list route opens headers; the record route opens a detail page with child lines.
 - **Backend routing:** the header entity declares `javaQualifier: "internal-consumption"`, which routes it through the `InternalConsumptionHeaderHandler` NeoHandler in `com.etendoerp.go` (post/unpost). The line entity keeps `javaQualifier: "internalConsumptionLineHandler"` (`InternalConsumptionLineHandler`).
 
@@ -46,16 +46,18 @@ Use this window to register stock consumed inside the organization rather than s
 | Action | Detail toolbar | Detail kebab (⋮) | List row-hover kebab | List multi-select bulk bar | Visible when |
 |---|---|---|---|---|---|
 | **Save** | ✅ | — | — | — | Record not processed |
-| **Confirm** ("Confirmar", completes the document) | ✅ | — | — | — | Record not processed; **enabled** only when Movement Date and Name are filled and at least one line exists |
+| **Confirm** ("Confirmar", completes the document) | ✅ | — | ✅ | ✅ | Draft (`status === 'DR'` and not processed). In the detail toolbar it is **enabled** only when Movement Date and Name are filled and at least one line exists; the list surfaces cannot see the line count (see below) |
 | **Void** ("Anular") | — | ✅ (`InternalConsumptionActions`) | — | — | `status === 'CO'` |
 | **Post** ("Contabilizar") | — | ✅ (`menuActions.post`) | ✅ | ✅ | `processed` true and `posted` false |
 | **Unpost** ("Descontabilizar", destructive) | — | ✅ (`menuActions.unpost`) | ✅ | ✅ | `posted` true |
 | **Delete** (form toolbar icon) | ✅ | — | — | — | Draft only (`hideDeleteWhenComplete`; grid delete is the generic behavior, see ETP-4656) |
 
 - `processed` is true for both Completed and Voided documents, so a voided original can still be posted (see **Void on a posted document** below).
-- The bulk bar only offers **Post** when at least one selected row is processed and unposted, and only offers **Unpost** when at least one selected row is posted (`postRowFilter` / `unpostRowFilter` from the shared `BulkDocumentAction`). Rows that do not qualify are skipped.
-- The row-hover kebab comes from the shared `buildDocumentRowQuickActionsPostMenu` (`tools/app-shell/src/windows/custom/shared/buildDocumentRowQuickActions.js`) with `includeUnpost: true`; a draft row shows neither entry. After a row action runs, the wrapper bumps `refreshTrigger` so the list reloads in place.
+- The bulk bar only offers **Confirm** when at least one selected row is a draft (`buildConfirmActions` / `confirmRowFilter` in the wrapper; non-draft rows are skipped with "No está en borrador"), **Post** when at least one selected row is processed and unposted, and only offers **Unpost** when at least one selected row is posted (`postRowFilter` / `unpostRowFilter` from the shared `BulkDocumentAction`). Rows that do not qualify are skipped.
+- The row-hover kebab comes from the shared `buildDocumentRowQuickActionsPostMenu` (`tools/app-shell/src/windows/custom/shared/buildDocumentRowQuickActions.js`) with `includeUnpost: true`; a draft row shows neither Post nor Unpost, and instead gets a **Confirm** entry passed through `extraMenuActions`. After a row action runs, the wrapper bumps `refreshTrigger` so the list reloads in place.
 - Post/Unpost call `POST /sws/neo/internal-consumption/internalConsumption/{id}/action/post` (or `/unpost`) with `neoAction` mode; success toasts use `documentPosted` / `documentUnposted`.
+- **Confirm from the list** sends exactly what the form's draftMode Confirm sends: `POST /sws/neo/internal-consumption/internalConsumption/{id}/action/processNow` with body `{"fieldValues":{"processNow":"CO"},"action":"CO"}`. The bulk bar declares it as `{ value: 'confirm', neoActionName: 'processNow', neoActionBody: … }` (the optional `neoActionBody` of `BulkDocumentAction`, see `docs/ui-customization.md`). The row entry uses an explicit `onClick` instead of a declarative `neoAction` (the row kebab's `neoAction` path always sends an empty body), and reports errors through the form's own `extractErrorMessage`. Success toasts use `documentConfirmed`.
+- **Drafts with no lines:** a list row does not carry its line count, so Confirm is offered on any draft from the list. The backend refuses an empty draft with core's `InternalConsuptionNoLines` message ("No se puede procesar un consumo interno sin líneas." / "It is not possible to process an Internal Consuption without line."), already returned in the session language, shown as the error toast (single row) or counted as a failed row (bulk).
 
 ## Reactive behavior and dependencies
 
@@ -109,7 +111,9 @@ Use this window to register stock consumed inside the organization rather than s
 14. On a Draft record, open the kebab and confirm it offers neither Void nor Post/Unpost.
 
 ### List actions
-15. Hover a processed, unposted row and confirm the row kebab offers **Contabilizar**; hover a posted row and confirm it offers **Descontabilizar**; hover a draft row and confirm neither appears. Run one and confirm the row updates without a full page reload.
+14b. Hover a draft row with lines and confirm the row kebab offers **Confirmar**; run it and confirm the success toast, and that the row moves to Completed without a full page reload. Run it on a draft with no lines and confirm the error toast reads "No se puede procesar un consumo interno sin líneas.".
+14c. Multi-select draft rows and confirm the bulk bar shows **Confirmar**; mix in a completed row and confirm it is skipped as "No está en borrador".
+15. Hover a processed, unposted row and confirm the row kebab offers **Contabilizar**; hover a posted row and confirm it offers **Descontabilizar**; hover a draft row and confirm neither appears (only **Confirmar**). Run one and confirm the row updates without a full page reload.
 16. Multi-select processed-unposted rows and confirm the bulk bar shows **Contabilizar**; select posted rows and confirm it shows **Descontabilizar**. Run each and confirm the result toast and in-place refresh.
 
 ### Cross-window
@@ -145,7 +149,7 @@ Use this window to register stock consumed inside the organization rather than s
 Internal Consumption previously declared posting as unsupported (`posted` was a `system` field and `PROCESS_Posted` was Omit). It now supports Post/Unpost end to end:
 
 - **Frontend (`decisions.json`, contract `0.19.0`):** `posted` becomes a read-only grid badge (`badge`, `badgeLabels`, `badgeVariants`) plus a detail `statusPills` entry; `menuActions` adds `post` (visible when processed and not posted) and `unpost` (visible when posted, destructive), coexisting with the Void kebab entry; `PROCESS_Posted` goes from Omit to Keep; the header entity gets `javaQualifier: "internal-consumption"`; `draftMode` switches from the window-specific `internalConsumptionProcess` label ("Procesar") to the generic `confirm` label with `disableWhenEmpty: true`; `gridOrder` 3/4 puts Status before Posted in the list.
-- **Frontend (custom loader):** new `tools/app-shell/src/windows/custom/internal-consumption/index.jsx` (grid bulk Post/Unpost + row-hover Post/Unpost kebab, mirroring `physical-inventory`) registered in `customLoaders`.
+- **Frontend (custom loader):** new `tools/app-shell/src/windows/custom/internal-consumption/index.jsx` (grid bulk Confirm/Post/Unpost + row-hover Confirm/Post/Unpost kebab; Post/Unpost mirror `physical-inventory`) registered in `customLoaders`. Bulk Confirm needed a small generic extension: `useNeoAction.execute` takes an optional `requestBody` and `BulkDocumentAction` passes an action's optional `neoActionBody` (both default to the previous empty body).
 - **Frontend (errors):** `backendErrors.js` maps core `NotCalculatedCost` (en_US and es_ES) to `backendError.costNotCalculated`.
 - **Backend (`com.etendoerp.go`):** new `InternalConsumptionHeaderHandler` delegating post/unpost to `DocumentPostingService`; the cost-calculated pre-check extended to `M_Internal_Consumption`; `InternalConsumptionLineHandler.afterCallout` strips the stock-derived quantity on product-triggered callouts; `NotPostedDocumentsHandler` maps the `"Internal Consumption"` row label to `800168` so rows there are postable. Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` (`DocumentPostingService` pre-check and `InternalConsumptionHeaderHandler` examples).
 - **Tenant data:** GOClient reference data `C_ACCTSCHEMA_TABLE` for `800168` flipped `ISACTIVE` N → Y (new tenants); data-fix R40 activates it on existing tenants (gap A4b, `docs/etendo-ad/onboarding-gaps.md`, `docs/etendo-ad/tenant-remediation-knowledge.md`). R40 must be run on each existing tenant at deploy — until then, posting there fails and the Internal Consumption filter does not appear in "Documentos no contabilizados".

@@ -43,22 +43,20 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
     }
   };
 
+  // Same markup as DetailMoreActionsMenu's standard menuActions items (classes, font,
+  // data-testid pattern `menu-action-<key>`), so "Anular" renders identically to the
+  // "Contabilizar"/"Descontabilizar" entries it shares the kebab with. Void uses the
+  // DESTRUCTIVE variant (same classes as Descontabilizar's `destructive: true`).
   return (
     <button
       type="button"
+      data-testid="menu-action-void"
       onClick={handleVoid}
       disabled={processing}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-        padding: '8px 12px', background: 'none', border: 'none',
-        textAlign: 'left', cursor: processing ? 'not-allowed' : 'pointer',
-        fontSize: 13, color: processing ? 'hsl(var(--muted-foreground))' : 'hsl(var(--foreground))',
-        opacity: processing ? 0.6 : 1,
-      }}
-      onMouseEnter={e => { if (!processing) e.currentTarget.style.background = 'hsl(var(--card))'; }}
-      onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+      className={`w-full text-left px-2 py-1 text-sm leading-6 transition-colors flex items-center gap-2 text-destructive hover:bg-destructive/10 ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+      style={{ fontFamily: 'Inter, sans-serif', fontWeight: 400 }}
     >
-      {processing ? ui('internalConsumptionVoiding') : ui('internalConsumptionVoid')}
+      <span>{processing ? ui('internalConsumptionVoiding') : ui('internalConsumptionVoid')}</span>
     </button>
   );
 }
