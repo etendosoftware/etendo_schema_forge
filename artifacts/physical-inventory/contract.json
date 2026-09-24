@@ -1,8 +1,8 @@
 {
   "version": "0.36.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-08-28T13:04:29.546Z",
-  "checksum": "88cfdcc927c68538",
+  "updatedAt": "2026-09-21T15:55:32.687Z",
+  "checksum": "b57f67c1e0e16e24",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -25,6 +25,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {
@@ -721,6 +730,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {

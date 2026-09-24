@@ -9,6 +9,7 @@
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { mockFullReportAccess } from './reportViewerTestHelpers.js';
 
 let mockSearchParams = new URLSearchParams();
 const mockSetSearchParams = vi.fn();
@@ -36,6 +37,11 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   WindowAccessGuard: (props) => (
     <div data-testid="window-access-guard" data-window-id={props.windowId} />
   ),
+}));
+
+// See reportViewerTestHelpers.js (mockFullReportAccess) for the ETP-5402 rationale.
+vi.mock('@/lib/rolesApi.js', () => ({
+  fetchMyReportAccess: () => Promise.resolve({ reportAccess: mockFullReportAccess }),
 }));
 
 vi.mock('@/components/layout/PageMetaContext', () => ({

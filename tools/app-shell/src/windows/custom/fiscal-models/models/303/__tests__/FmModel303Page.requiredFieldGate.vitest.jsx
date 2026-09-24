@@ -91,11 +91,19 @@ const DECL_MISSING_TIPO = makeDecl({});
 const DECL_MISSING_IBAN = makeDecl({ tipo_declaracion: 'D' });
 // ETP-5393 Bug E — bank_iban is only required via the rectificativa path when box 111
 // (Rectificación - Importe) is ALSO non-zero (fm303Layouts.js's requiredWhen). This
-// declaration seeds a non-zero box 111 via `_precomputed.boxes` so it stays a valid
-// "missing IBAN via rectificativa" scenario under the new conditional rule.
+// declaration used to seed a non-zero box 111 directly via `_precomputed.boxes: { 111: 500 }`.
+// ETP-5431 pt.2 — box 111 is no longer a real stored value the mount-time `recomputeDerivedBoxes`
+// pass-through would respect: it unconditionally OVERWRITES whatever `_precomputed.boxes` carries
+// for box 111 with `computeBox111`'s formula result, so seeding it directly is silently discarded
+// (see `fm303Layouts.computeBox111.vitest.js` / `FmModel303Page.box111Autocomplete.vitest.jsx`
+// for the formula itself). To still land on a non-zero box 111 here, seed the UNDERLYING boxes
+// the formula reads instead — box 68 (`reg_anual`) -> box 69 = 1000 (nothing else feeds box69
+// in this fixture), box 70 (`a_deducir`) = 1500 -> box 71 = 1000 - 1500 = -500 (< 0). box69 is
+// positive and 70 - 69 = 500 (> 0), so `computeBox111` lands on the SAME 500 the old direct seed
+// used, keeping this fixture's expected value unchanged.
 const DECL_MISSING_IBAN_VIA_RECTIFICATIVA = makeDecl(
   { tipo_declaracion: 'I', rectificativa: true },
-  { _precomputed: { boxes: { 111: 500 } } },
+  { _precomputed: { boxes: [{ num: 68, value: 1000 }, { num: 70, value: 1500 }] } },
 );
 const DECL_COMPLETE = makeDecl({ tipo_declaracion: 'I' });
 

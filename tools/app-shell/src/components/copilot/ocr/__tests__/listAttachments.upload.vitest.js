@@ -79,7 +79,9 @@ describe('uploadAttachment', () => {
   });
 
   it('refuses incomplete parameters without hitting the network', async () => {
-    for (const missing of ['token', 'tableName', 'recordId']) {
+    // ETP-4576 — `token` is not a required parameter any more: the credential comes from the
+    // active scheme at request time, so a caller that has none is not an incomplete caller.
+    for (const missing of ['tableName', 'recordId']) {
       const args = { ...PARAMS, file: pdf(), [missing]: null };
       await expect(uploadAttachment(args)).resolves.toEqual({ ok: false, error: 'missing_params' });
     }

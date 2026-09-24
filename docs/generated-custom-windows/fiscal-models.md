@@ -35,15 +35,18 @@ debug contracts.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
-`FmListPage` calls `useFiscalAutoCompute` **four times** — once per (model × draft-vs-other)
-combination — because drafts and non-drafts need different refresh semantics:
+`FmListPage` calls `useFiscalAutoCompute` **six times** — once per (model × draft-vs-other-vs-
+submitted) combination — because drafts, non-draft/non-submitted declarations, and submitted-family
+declarations each need different refresh semantics:
 
 ```
 FmListPage
-  ├── useFiscalAutoCompute(draftDecls303, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(draftDecls349, { computeFn, checkModifiedFn, token, apiBaseUrl, pollIntervalMs=180_000 })
-  ├── useFiscalAutoCompute(otherDecls303, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
-  └── useFiscalAutoCompute(otherDecls349, { computeFn, token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(draftDecls303,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(draftDecls349,     { computeFn, checkModifiedFn,          token, apiBaseUrl, pollIntervalMs=180_000 })
+  ├── useFiscalAutoCompute(otherDecls303,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(otherDecls349,     { computeFn,                          token, apiBaseUrl })   ← no checkModifiedFn
+  ├── useFiscalAutoCompute(submittedDecls303, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
+  └── useFiscalAutoCompute(submittedDecls349, { computeFn, checkModifiedFn: neverModifiedFn, token, apiBaseUrl })   ← ETP-5438
         ├── On mount: calls computeFn for every decl in parallel
         │     result → computedMap[decl.id] = { boxes, summary, error, computedAt }
         │     null result → { boxes: null, summary: null, error: 'compute_failed', computedAt }  ← not "computing"
@@ -53,20 +56,151 @@ FmListPage
 
 - `draftDecls303`/`draftDecls349` = declarations with `status === 'draft'` — their underlying
   invoices can still change, so they get the full compute-on-mount + poll-for-changes treatment.
-- `otherDecls303`/`otherDecls349` (ETP-4755) = every non-draft declaration (ready/submitted/
-  submitted_ext/submitted_ack/skipped) — computed **once** on mount and never polled (omitting
-  `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the "Resultado" column
-  was permanently stuck on "—" for any declaration that had left draft, since the backend never
-  persists a computed result on the declaration record (`FiscalDeclCrudHandler#declToJson` has no
-  `result` field) — the same class of bug the "Incidencias" column had before it started fetching
-  real data. Both draft and non-draft instances call the exact same real endpoints, which recompute
-  from invoice data regardless of declaration status.
+- `otherDecls303`/`otherDecls349` (ETP-4755, narrowed by ETP-5438) = every non-draft,
+  **non-submitted-family** declaration (`ready`/`skipped`) — computed **once** on mount and never
+  polled (omitting `checkModifiedFn` makes the hook's polling effect a no-op). Without this, the
+  "Resultado" column was permanently stuck on "—" for any declaration that had left draft, since
+  the backend never persists a computed result on the declaration record
+  (`FiscalDeclCrudHandler#declToJson` has no `result` field) — the same class of bug the
+  "Incidencias" column had before it started fetching real data. Draft, non-submitted, and
+  submitted-family instances all call the exact same real endpoints, which recompute from invoice
+  data regardless of declaration status — which is exactly why the submitted-family bucket needs
+  its own, separate freeze (see below).
+- `submittedDecls303`/`submittedDecls349` (ETP-5438) = every declaration whose `status` is in the
+  submitted family (`submitted`/`submitted_ext`/`submitted_ack`) — carved out of the `other*`
+  buckets above so a presented declaration gets its one bootstrap compute and is then **frozen**:
+  see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" below for the full
+  rationale (`neverModifiedFn`, `getCachedFiscalCompute`, and the backend defense-in-depth).
 - `computeFn` = `computeBoxes303(decl, { token, apiBaseUrl })` → `GET /fiscal303/boxes?year=&period=`
   (303) or `compute349Operators(decl, { token, apiBaseUrl })` → `GET /fiscal349/operators?year=&period=`
   (349).
 - `checkModifiedFn` = `checkModified303`/`checkModified349` → `GET /fiscal{model}/modified?year=&period=&since=`.
 - `computedAtRef` tracks the last **successful** compute timestamp per declaration to bound the `since` query parameter. It is intentionally not updated on errors, so `sinceMs` stays at the last success and any subsequent invoice change still triggers a retry.
-- Precomputed data (`decl._precomputed`) is seeded from whichever map (draft or other) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
+- Precomputed data (`decl._precomputed`) is seeded from whichever map (draft, other, or submitted) matches the row's status, when it is opened, so the detail page loads instantly instead of redoing its own compute.
+
+## Freeze once presented — recalculation/re-presentation guard (ETP-5438)
+
+This is the primary deliverable of ETP-5438: once a Modelo 303 or Modelo 349 declaration reaches a
+**submitted-family** status (`submitted`, `submitted_ext`, `submitted_ack`), it must behave as a
+closed, immutable record — nothing in this window may silently recompute its boxes/operators from
+current invoice data, regenerate its file, or re-present it. Root cause: `computeBoxes303`
+(`GET /fiscal303/boxes`) and `compute349Operators` (`GET /fiscal349/operators`) always recompute
+from **whatever invoices exist right now**, regardless of who calls them or when — there was no
+concept of "this declaration is done" anywhere in the compute path, so an invoice added or removed
+after presentation silently changed what "Resultado" showed for an already-filed declaration
+("sigue tomando facturas aun presentada"). Fixed on both the frontend (freeze the UI) and the
+backend (reject the call), for **both** models — "en todos los modelos tiene que funcionar de la
+misma manera" (explicit product decision).
+
+**Trigger.** The same `SUBMITTED_STATUSES` set gates every layer, duplicated deliberately per
+language/file rather than shared (same tradeoff as `statusLabelKey` above — see "Duplicated,
+deliberately, in 4 places"): `{'submitted', 'submitted_ext', 'submitted_ack'}`. `submitted_ext` is
+included even though it can no longer be newly selected from `PresentModal` — a legacy declaration
+that already carries it is just as frozen as one presented through either currently-selectable path.
+
+### Frontend
+
+- **List page (`FmListPage.jsx`).** `submittedDecls303`/`submittedDecls349` are carved out of the
+  pre-existing `otherDecls303`/`otherDecls349` buckets (see "Auto-compute architecture" above) into
+  their own two `useFiscalAutoCompute` instances, passed `checkModifiedFn: neverModifiedFn` — a
+  function that always resolves `false`. This is the deliberate mechanism, not an oversight:
+  *omitting* `checkModifiedFn` (like `otherDecls303`/`349` do) makes the hook's mount effect skip
+  its cache-consult branch entirely and unconditionally recompute from live data on every mount —
+  which is exactly the ETP-5438 root cause, because `FmListPage` never truly unmounts (it stays
+  mounted so polling keeps running) but its `decls` array reference still changes on every
+  declarations refetch, e.g. right after presenting a *different* declaration — re-triggering a
+  fresh live recompute for every already-submitted one on the list. Passing `neverModifiedFn`
+  instead makes the hook trust its own `sessionStorage` cache: a never-before-computed submitted
+  declaration still gets exactly one bootstrap compute (so "Resultado" is never stuck on "—",
+  ETP-4755), and every mount after that first one reuses the cached result — network-free, so
+  nothing here can ever pick up an invoice added/removed after submission. The resulting
+  `computedMapSubmitted303`/`349` maps are unioned with `computedMapOther303`/`349` into
+  `computedMapOther303Merged`/`computedMapOther349Merged` — `getComputedForDecl` only needs "the
+  non-draft compute for this decl.id", it does not care which of the two hooks produced it.
+- **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` is a new export
+  that reads back the last payload this hook cached for one declaration, keyed
+  `fiscal_ac_v3_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
+  was ever cached this session. It exists so a detail page that opens with no `decl._precomputed`
+  handed down (a cold/direct navigation straight into a submitted declaration) can still show
+  something by reading whatever `FmListPage`'s own submitted-family bucket already computed and
+  cached, instead of falling back to a live `computeFn` call.
+- **Detail pages (`FmModel303Page.jsx` / `FmModel349Page.jsx`).** Both pages compute
+  `isSubmitted = SUBMITTED_STATUSES.includes(status)` and use it as the single gate for two
+  independent things:
+  - The mount-time auto-compute effect (the ETP-4755 "auto-compute on mount when the list didn't
+    hand us `_precomputed`" fix) now branches on `isSubmitted` **before** ever calling
+    `handleCompute()`: when true, it calls `getCachedFiscalCompute(decl.id)` instead and applies
+    the cached snapshot if one exists (via the same `applyComputeResult` helper "Calcular" uses on
+    303; `setLiveOperators`/`setLiveInvoices`/`setLiveRectifications`/`setLiveRectifSummary` on
+    349); if nothing was ever cached, the tabs simply show no data — there is no in-page way to
+    populate it, since "Calcular" is itself hidden once submitted (see below), matching the
+    frozen-once-presented intent.
+  - Every action that could mutate or regenerate a submitted declaration is wrapped in
+    `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
+    303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
+    the action bar reduces to just **Cancelar** and the status pill. `handleGenerate` on both pages
+    also re-checks `isSubmitted` at its own top (belt-and-braces, same double-check pattern already
+    used for `missingRequiredFields`) and toasts `fm.validation.already_submitted` if reached
+    anyway — the real defense-in-depth for a direct/malformed call is server-side (see below).
+
+### Backend (`com.etendoerp.go`) — defense-in-depth
+
+The frontend gates above are UI-only; a raw/direct call to NEO Headless (or a future frontend
+regression) is not stopped by any of them. Every entry point that could recompute or re-file an
+already-presented declaration has its own, independent, server-side guard:
+
+- **Compute/generate — `AbstractFiscalHandler#guardNotAlreadySubmitted(orgId, year, period,
+  model)`**, shared by both models. Looks up
+  `FiscalDeclCrudHandler#findLatestDeclarationStatus(clientId, orgId, model, year, period)` — the
+  status of the **most recent** declaration (highest `DECL_SEQ`) for that natural key, not just any
+  match, because a period can legitimately have more than one declaration (the rectificativa flow):
+  an older, already-submitted declaration for the same period must not block a fresh rectificativa
+  draft's own compute. If that latest declaration's status is in
+  `FiscalDeclCrudHandler.SUBMITTED_STATUSES`, it throws `AlreadySubmittedException`; no-op
+  (returns normally) when no declaration exists yet for the natural key. Both
+  `Fiscal303BoxesHandler#dispatch` (the `boxes` and `generate` entities) and
+  `Fiscal349BoxesHandler#dispatch` (the `operators` and `generate` entities) call it as the first
+  thing inside their `try`, and both catch `AlreadySubmittedException` specifically — before their
+  own generic `catch (Exception e)` — turning it into a clean `409 Conflict` instead of letting it
+  bubble up as a generic `500`.
+- **Re-presentation (PUT) — `FiscalDeclCrudHandler#rejectRepresentation`.** Blocks a
+  `PUT /fiscal{303,349}/declarations?id=` whose body sets `status` to a value in
+  `SUBMITTED_STATUSES` when the declaration's **current** status is already in
+  `SUBMITTED_STATUSES` — i.e. only a submitted-family → submitted-family transition is rejected.
+  A normal, first-time presentation (`draft`/`ready` → submitted-family) is unaffected, and so is
+  the separate "Reactivar declaración" transition back to `draft`, which
+  `rejectTelematicReactivation` already guards on its own, narrower terms (blocking reactivation
+  only for `submission_method === 'aeat_telematic'`). Deliberately model-agnostic: the same
+  `ETGO_Fiscal_Decl` table and PUT path serve both models, and "you cannot re-present an
+  already-presented declaration" is not specific to either one.
+- **AEAT telematic resubmission — `Fiscal303SubmissionSupport#rejectResubmissionOrMissingPresenter`
+  (Modelo 303 only, see below).** This guard predates ETP-5438 (it already blocked a naive
+  double-click/network-retry resubmission) but was narrower — `submitted_ack`-only. Widened under
+  this ticket, by explicit user decision ("la presentación telemática debería funcionar igual que
+  los otros casos"), to the full `SUBMITTED_STATUSES` family, matching every other guard in this
+  section. It fires only for a **production** (non-`testMode`) call — `ServValiDos` test-mode
+  validations never change declaration status, so re-validating an already-submitted declaration
+  stays allowed and harmless. On trip, it responds `409` with `ALREADY_SUBMITTED` and never
+  constructs `AEAT303SubmissionService` at all (a QA regression test asserts this explicitly). This
+  is a distinct, narrower concern from `guardNotAlreadySubmitted` above — idempotency of a real AEAT
+  filing action, not "must not silently recompute/regenerate" — which is why `Fiscal303BoxesHandler`
+  deliberately does **not** call `guardNotAlreadySubmitted` for its `submit` entity; the dedicated
+  guard here already covers it.
+- **Modelo 349 has no telematic submission path — a legitimate asymmetry, not a gap.** Unlike
+  Modelo 303 (`AeatSubmitFlow` → `AEAT303SubmissionService`), Modelo 349 only ever reaches a
+  submitted status through `PresentModal`'s two manual paths (`submitted`/`submitted_ack` via the
+  PUT path above) — there is no `AeatSubmitFlow`/`AEAT349SubmissionService` equivalent, no real AEAT
+  telematic filing call to guard, and so no `rejectResubmissionOrMissingPresenter` counterpart to
+  widen. `Fiscal349BoxesHandler#dispatch` has no `submit` entity at all (only `operators`,
+  `generate`, `validate-vies`, and the modified-check fallback) — 349's `operators`/`generate` are
+  already fully covered by the shared `guardNotAlreadySubmitted` above, which is model-agnostic and
+  needed no 349-specific work.
+
+Regression tests: `Fiscal303BoxesHandlerTest`/`Fiscal349BoxesHandlerTest` (the `AlreadySubmittedException`
+→ `409` path for `boxes`/`operators`/`generate`), `FiscalDeclCrudHandlerTest` (`rejectRepresentation`,
+`findLatestDeclarationStatus`'s "latest wins" semantics across a rectificativa's multiple
+declarations), and `Fiscal303SubmitHandlerTest` (the widened `SUBMITTED_STATUSES` resubmission
+guard, and the assertion that `AEAT303SubmissionService` is never constructed once it trips).
 
 ## Status lifecycle
 
@@ -208,7 +342,7 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — persists any pending `identChecks`/`manualOverrides` edit via the same `persistEditableFields()` helper Guardar uses, then triggers the actual box recompute via `handleCompute`; spinner while `computing`), a standalone **"Generar fichero 303"** button, and, only while the declaration is not yet submitted (`!isSubmitted`), a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. "Generar fichero 303" is always visible regardless of submission status — it is not gated the way "Registrar/Presentar" is. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 **Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -933,6 +1067,385 @@ so there is one source of truth instead of three independently-hand-copied check
 Covered by `fm303Layouts.bankIbanRequiredWhen.vitest.js` and a regression case reproducing the
 exact broken state (tipo `I` + rectificativa + box111=0 no longer blocks generation).
 
+**Bug E follow-up (ETP-5431) — Nota 3's exception, and which fields "los datos bancarios" means.**
+Two changes to the condition-B branch described above.
+
+*1. The cancel/modify-direct-debit exception (the actual bug).* Nota 3 of the AEAT record design
+(sheet `DP303DID`, cell `A38` of `doc/2026/DR303e26v101.xlsx` in the Classic module) states the
+box-111 obligation **with one exception**: the bank data must not be filled when the declaration
+marks *"Rectificativa - Como consecuencia de la presentación de la autoliquidación rectificativa
+solicito dar de baja/modificar la domiciliación efectuada"* — the `baja_domiciliacion` checkbox
+here, `Cancel_Modify_Debit` on the wire, position 440 of page 3. Neither layer honoured it: the UI
+demanded and showed the bank block, and Classic's
+`AEAT303Report2024.correctBankSectionIfBox111HasValues` wrote it into the file. Both now skip the
+whole block in that case. In `fm303Layouts.js` the condition-B branch is a single shared constant,
+`_BANK_RECTIFICATIVA_BRANCH` = `{ allOf: [rectificativa == true, _box111NonZero == true,
+_BANK_NOT_WAIVED] }`, used by `sectionVisibleWhen`, `_BANK_DVX_VW`, `_BANK_IBAN_REQUIRED_WHEN` and
+the requiredness constants alike, so visibility and requiredness cannot drift apart again.
+`isBankIbanRequired` (`fiscalModelsUtils.js`), the imperative mirror behind the generate/submit
+pre-flight guards, carries the same `!== true` test. Condition A (tipo `U`/`D`/`X`) is deliberately
+**not** affected: those types need an account by virtue of the type itself, which is outside Nota
+3's scope.
+
+`matchesVisibility` has no `not`/`notEquals` operator and this change deliberately does not add
+one. The negation is expressed with the existing `in` operator — `_BANK_NOT_WAIVED` is
+`{ field: 'baja_domiciliacion', in: [false, undefined, null] }` — which is safe because the value
+is a strict boolean in React state (`identification?.[f.id] ?? false`, `onToggle(boolean)`) and
+JSON-round-trips through `decl.manualData.identification` unchanged. Unlike `_box111NonZero`, no
+synthetic key is needed: `baja_domiciliacion` is a real form field already in `identification`.
+
+*2. Field selection by marca SEPA — a DESIGN DECISION, NOT A CITED AEAT RULE.* Which fields make up
+"los datos de cuenta bancaria" of Nota 3 is a team decision; `DR303e26v101.xlsx` conditions no
+field on the marca SEPA (Nota 2, `DP303DID!A30:B35`, only enumerates its values `0` Vacía, `1`
+Cuenta España, `2` Unión Europea SEPA, `3` Resto Países). An earlier version of ETP-5431 wrongly
+cited the AEAT virtual advisory service as authority for this table — do not document, comment or
+test it as normative. The adopted selection, and the reading it rests on (the record design points
+Nota 3 at exactly SWIFT-BIC, IBAN and marca SEPA, and at none of Banco/Dirección/Ciudad/Código
+País, which only route a rest-of-world transfer an IBAN alone cannot address):
+
+| marca SEPA | written / required under condition B | left blank |
+| --- | --- | --- |
+| `1` Cuenta España | `bank_iban` (pos 23), `bank_sepa` (194) | SWIFT-BIC (12), Banco (57), Dirección (127), Ciudad (162), Código País (192) |
+| `2` Unión Europea SEPA | + `bank_swift_bic` | Banco, Dirección, Ciudad, Código País |
+| `3` Resto Países | + `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais` | — |
+
+**Marca `0` (Vacía) is rejected** under condition B. A rectificativa with content in box 111 that
+is not cancelling its direct debit does have an account to declare, so "vacía" cannot be right.
+`AEAT303Report2024.checkIsDeclarationRMandatoryParams` throws a new module message,
+`AEAT303_sepa_mark_required_111` (`src-db/database/sourcedata/AD_MESSAGE.xml`). The existing
+`AEAT303_sepa_not_valid` is deliberately **not** reused: its text lists `0` among the allowed
+values, which would be actively misleading here. `sepaValuesAllowed` (which does admit `0`) is
+untouched — the narrowing applies only to this path.
+
+**Position 23 is not always an IBAN.** Under marca `3` it carries the *account number*; the record
+design has no separate account-number field, so the one field serves both roles. It is mandatory
+under every marca. No IBAN format validation exists on it anywhere (frontend or Classic) — only
+presence checks and whitespace stripping — and the one place that does read its format, the
+`isDomesticAccount` "starts with ES" test, is now scoped to marcas 1/2 so it cannot misfire on a
+rest-of-world account number and wrongly suppress the SWIFT-BIC that marca 3 requires. The rule as
+stated names both "País" and "Código País"; the form has a single 2-character ISO field
+(`bank_pais`, position 192) and the two collapse into it — there is no eighth field.
+
+**The file actively blanks what the marca does not call for** — it does not merely skip those
+positions. The model has one bank block, shared by the box 73 refund and by any refund arising
+from box 111, and boxes 73 and 111 are compatible, so two sets of bank data must never accumulate
+in it. `AEAT303Report2024.patchBankSection` writes `length` spaces over every unused position via
+a new `blankDidField`/`writeDidField` pair (`replaceDidField` keeps its "a blank value means
+nothing to write" contract, which cannot express this). Page width is preserved: the delete and
+the insert are both exactly `length` characters. **This deliberately overrides the ancestor
+writers** — a tipo `D` rectificativa with marca 1 and a non-zero box 111 now ends with the
+foreign-bank fields blank even though `AEAT303Report2021#generatePage3` had filled them. The
+blanking is **scoped to the Nota 3 case**; an ordinary refund with no box 111 never reaches
+`correctBankSectionIfBox111HasValues` at all.
+
+On the frontend, requiredness is `_BANK_SWIFT_REQUIRED_WHEN` (condition B ∧ marca ∈ {2,3}) and
+`_BANK_FOREIGN_DETAILS_REQUIRED_WHEN` (condition B ∧ marca = 3);
+`_BANK_FULL_BLOCK_REQUIRED_WHEN` now means the baseline branch itself and is what `bank_sepa`
+carries.
+
+**Fields the marca does not call for are hidden — and their values are deliberately NOT cleared.**
+`_BANK_SWIFT_VW` / `_BANK_FOREIGN_DETAILS_VW` gate visibility the same way requiredness is gated.
+No `onChange`/callout clears the hidden fields, and that is a decision, not an oversight: the
+backend blanking already guarantees the file is correct, so clearing would only destroy typed
+work. Switching marca 3 → 1 → 3 (by mistake, or to compare options) must bring the bank name,
+address, city and country back exactly as they were. Hiding achieves the same outcome without
+the loss — the user does not see them and cannot fill them in by mistake.
+
+**The marca restriction is scoped to the Nota 3 branch only — and the tipo branch steps aside
+inside it.** `_BANK_SWIFT_VW` is `anyOf: [_TIPO_DVX_OUTSIDE_NOTA3, _BANK_NOTA3_NEEDS_SWIFT]`, and
+the two branches are mutually exclusive by construction. A plain `D`/`V`/`X` refund with no box
+111 behaves **exactly as before** (nothing narrowed by the marca), because
+`AEAT303Report2021#generatePage3` — untouched by this ticket — still writes its whole bank block,
+so hiding a field there would send a value the user can no longer see. But a tipo `D` that *is*
+in the Nota 3 case falls through to the marca gate instead of being shown unconditionally by its
+tipo, because there the backend **does** blank. An earlier revision of this fix kept the tipo
+branch un-narrowed (`anyOf: [_TIPO_IS_DVX, …]`) and so only got half the problem right: tipo `D`
++ rectificativa + box 111 ≠ 0 + marca 1 showed SWIFT-BIC and the four foreign-bank fields on
+screen while the file blanked those very positions.
+
+Closing that needed "tipo D **and not** condition B", which looks like it requires a `not`
+operator the matcher does not have. It does not: **De Morgan**. `NOT (a AND b AND c)` is
+`(NOT a) OR (NOT b) OR (NOT c)`, and each negated clause is enumerable with the existing `in`
+operator — the same technique `_BANK_NOT_WAIVED` already used. Hence `_NOT_NOTA3`:
+
+```js
+const _NOT_NOTA3 = { anyOf: [
+  { field: 'rectificativa',      in: [false, undefined, null, '', 'N'] },
+  { field: '_box111NonZero',     in: [false, undefined, null] },
+  { field: 'baja_domiciliacion', in: [true, 'Y'] },   // positive: the waiver IS marked
+] };
+```
+
+The third clause is the exact complement of `_BANK_NOT_WAIVED` and enumerates the same two shapes
+`isCancelModifyDebitRequested` accepts. **No engine change was needed, and none was made.**
+
+Resulting matrix (`V` visible, `V*` visible and required, `—` hidden), verified end to end:
+
+| tipo | rectificativa | box 111 | flag | marca | IBAN | marca SEPA | SWIFT | Banco/Dir/Ciudad/País |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| D | no | — | — | any | `V*` | `V` | `V` | `V` |
+| D | sí | 0 | — | any | `V*` | `V` | `V` | `V` |
+| D | sí | ≠0 | marcado | any | `V*` | `V` | `V` | `V` |
+| D | sí | ≠0 | no | 1 | `V*` | `V*` | — | — |
+| D | sí | ≠0 | no | 2 | `V*` | `V*` | `V*` | — |
+| D | sí | ≠0 | no | 3 | `V*` | `V*` | `V*` | `V*` |
+| C | sí | ≠0 | no | 1/2/3 | `V*` | `V*` | per marca | per marca |
+| U | no | — | — | any | `V*` | — | — | — |
+| I | no | — | — | any | section hidden | | | |
+
+The `flag marcado` row keeps the section visible for tipo `D`: the waiver removes the
+*box-111-driven* obligation, not tipo `D`'s own need for an account to be refunded into. The
+backend agrees — `correctBankSectionIfBox111HasValues` returns early there, leaving the block the
+tipo gates wrote. Hiding it would strand a refund with no way to enter its IBAN.
+
+Classic mirrors the same table in `AEAT303Report2024`'s `sepaMarkRequiresSwiftBic` /
+`sepaMarkRequiresForeignBankDetails`, used by both the writer and the validators so screen and file
+demand the same set. There, the pre-existing `isDomesticAccount` carve-out (commit `2f11a90`,
+SWIFT-BIC suppressed for a `D`/`V` refund on a Spanish account) is now partly subsumed — marca `1`
+writes no SWIFT-BIC for any type — but its IBAN-prefix half still applies on top for marca 2, so
+both conditions are kept and ANDed.
+
+*3. The flag never reached the backend from Go at all (fixed here).* `baja_domiciliacion` travelled
+through `IDENT_PARAM_MAP`, which forwards a value verbatim — so a checked box arrived as
+`Cancel_Modify_Debit=true`, while every Java reader tests `StringUtils.equals("Y", …)`. Both
+`AEAT303Report2024#generatePage3` (which writes the mark at position 440 of page 3) and the new
+Nota 3 guard were therefore dead on the Go path: the mark was never written and the exception could
+never fire. `baja_domiciliacion` is now out of `IDENT_PARAM_MAP` and goes through the explicit
+Y-flag convention the other checkboxes already use (`sin_actividad`, `redeme`, `concurso`), via
+`isCancelModifyDebitRequested` — which also accepts the literal `'Y'` so any value already
+persisted in that shape keeps working. `_BANK_NOT_WAIVED` accepts `'N'`/`''` for the same reason.
+
+*4. `bank_sepa` is a select, not free text.* The field only ever admitted `0`/`1`/`2`/`3` but was
+a free-text input. It is now `type: 'select'` with `options[{value, labelKey}]`, the same shape
+`TIPO_DECLARACION_FIELD` uses and the same one `FmBoxes303`'s `renderIdentSelectField` renders:
+
+| value | labelKey | es_ES | en_US |
+| --- | --- | --- | --- |
+| `'1'` | `fm.ident.bank.sepa.spain` | Cuenta España | Spanish account |
+| `'2'` | `fm.ident.bank.sepa.eu_sepa` | Unión Europea SEPA | European Union SEPA |
+| `'3'` | `fm.ident.bank.sepa.rest_of_world` | Resto Países | Rest of the world |
+
+Labels are i18n keys in **both** `es_ES.json` and `en_US.json` (under `genericLabels`, beside the
+other `fm.ident.bank.*` keys). All three options are offered in every context — no dynamic option
+logic.
+
+**Marca `0` is not an option.** It means "Vacía", which is exactly what the leading placeholder
+option (`<option value="">`, always rendered by `renderIdentSelectField`) already expresses;
+declaring both would put two visually identical empty entries in the list with different
+behaviour. The placeholder is the only empty choice, and it behaves **exactly as the old empty
+text input did**: `applyMappedIdentParams`'s `if (v)` skips it, so no `SEPA` parameter is sent.
+
+**The emitted file is unchanged, byte for byte.** `AEAT303Report2023#generatePageDID0` substitutes
+`"0"` for a blank marca before writing the page (`if (StringUtils.isBlank(sepa)) { sepa = "0"; }`),
+so position 194 carries `"0"` with the placeholder selected, just as it did with an empty text
+input.
+
+Making the placeholder emit `SEPA=0` was considered and **rejected**: the REDEME + tipo `D`/`V`/`X`
+validators (`AEAT303Report2021#checkData`, `AEAT303Report2023#checkData`) reject a *blank* marca
+with `@AEAT303_sepa_empty@`, and a `"0"` sails past them — an untouched field would be filed as
+marca "Vacía" instead of raising the error it raises today.
+
+Under Nota 3 the marca must be 1/2/3, and leaving the placeholder selected is still rejected:
+the missing parameter resolves to `null`, which is not in `SEPA_MARKS_VALID_FOR_BOX_111`, so
+`checkIsDeclarationRMandatoryParams` throws `@AEAT303_sepa_mark_required_111@`
+(`Arrays.asList(...).contains(null)` is `false`, no NPE). The guard is reachable from the UI only
+via the placeholder now that `0` cannot be typed.
+
+This fix covers **both** Java readers, not just the Nota 3 guard. `generatePage3` writes the mark
+itself at position 440 of page 3, and it was reading the same never-matching value, so the mark
+was never written either — a declaration that requested the cancellation reached AEAT with
+position 440 blank. Both readers now go through `isCancelOrModifyDebitRequested`
+(`generatePage3` used to read `inputParams` directly while the guard resolves constant parameters
+too, so a constant-valued `Cancel_Modify_Debit` would have skipped the bank block while leaving
+the mark blank — a file stating the opposite of what it does).
+
+**Explicitly out of scope for ETP-5431 (recorded so it is not silently reopened):**
+- A plain `D`/`V`/`X` devolución with box 111 == 0 does **not** follow the marca-SEPA table above —
+  it keeps its pre-existing, tipo-only gating untouched (see `_NOT_NOTA3` and the matrix's first
+  three rows). The marca table applies exclusively to condition B (rectificativa ∧ box 111 ≠ 0 ∧
+  not waived).
+- No frontend validation was added for marca `0` outside the Nota 3 path — a plain devolución can
+  still leave `bank_sepa` on its placeholder with no error, exactly as before this ticket.
+- Nothing validates that a non-zero box 111 implies a negative box 71 (or vice versa); the two
+  boxes remain independently editable/computed, as they were before this ticket.
+- No `@etendosoftware` module version bump accompanied this change in either repo.
+
+### Box 111 autocompletion + boxes 109/70 non-negative (ETP-5431 pt.2)
+
+Two rules, both purely client-side (`schema_forge` only — no Classic/`com.etendoerp.go` change).
+
+**Rule A — casilla 111 (`rectificacion_importe`) is no longer user-editable.** It used to be a
+plain `editable: true` box that only fed the synthetic `_box111NonZero` flag driving the Nota 3
+gating above. It is now autocompleted, per a **CONFIRMED SPEC** (closed with the user/PM, unlike
+the Nota 3 field-selection calls elsewhere in this document, which are this team's own reading):
+
+```
+SI es autoliquidación rectificativa Y casilla_71 < 0 Y casilla_70 > 0:
+    casilla 111 = MIN(casilla_70, ABS(casilla_71))
+EN OTRO CASO:
+    casilla 111 = vacía
+```
+
+**This REPLACES an earlier draft of the same rule** that branched on the sign of casilla 69
+(positive / negative / exactly zero), with `box69 === 0` falling through to "111 queda vacía". That
+draft shipped with a confirmed bug: a real ServValiDos test submission was rejected (errors
+`35100`, `E030292`, `35068`) that, once an unrelated test-data issue was fixed, landed exactly on
+`box69 = 0` with `box70 = 43,52` — and AEAT's own official "Negativa/Saldo cero" example shows box
+111 must still carry the full box 70 value in that case, not go blank. The `MIN`/`ABS` formula
+above is algebraically equivalent to the old per-branch draft wherever it was correct, and fixes
+the one case where it wasn't — casilla 69 is no longer read at all, because it is already folded
+into casilla 71 via the official `71 = 69-70+109-112` formula, so re-branching on its sign was
+never necessary. Verified against 4 of AEAT's own published examples (Manual Práctico IVA, capítulo
+8, autoliquidación rectificativa).
+
+Implemented as `computeBox111({ isRectificativa, box70, box71 })` in `fm303Layouts.js`, right next
+to the `rectificacion_importe` row definition (`resultado_final` section, `bicolumn_resultado`
+rows) — which now carries neither `editable` nor `derivedValue`, just a plain `cells: [111]`,
+rendering exactly like the `resultado_69`/`resultado_declaracion` total rows above it.
+
+`isRectificativa` is the explicit guard the spec itself states ("SI es autoliquidación
+rectificativa Y...") — `recomputeDerivedBoxes` (`fiscalModelsUtils.js`) now takes an `identChecks`
+parameter and forwards `identChecks?.rectificativa === true`, mirroring the same flag
+`isBankIbanRequired`/`_BANK_RECTIFICATIVA_BRANCH` already gate on elsewhere in this window. Every
+production call site of `recomputeDerivedBoxes` (`FmModel303Page.jsx`'s `applyBoxChange`,
+`applyComputeResult`, and `FmListPage.jsx`'s list-row result recompute) was updated to pass its
+`identChecks`/`decl.manualData?.identification` through — a caller that omits it gets box 111
+forced blank rather than silently reusing a stale flag.
+
+**A 4th call site — `handleIdentChange` — was missed in that first pass and fixed separately
+(ETP-5431 pt.4).** There never was a dedicated `removeBox108FromLive` function to update: an
+earlier draft of `handleIdentChange` had one (it only deleted box 108 from `manualOverrides` when
+`motivo_rectificacion` stopped being `'D'`, with no `recomputeDerivedBoxes` call at all), but that
+helper was inlined directly into `handleIdentChange` once the box-108 and box-111 logic needed to
+share the same recomputed `baseBoxes`/`nextIdentChecks` values — so it no longer exists as a
+separate function to name. The gap this pt.4 fix closes: `handleIdentChange` fires on ANY
+identification-section edit, including ticking/unticking "Autoliquidación Rectificativa" itself —
+the one flag `computeBox111`'s formula reads directly — but it never called
+`recomputeDerivedBoxes`/`syncBox111Override` the way `applyBoxChange` and `applyComputeResult`
+already did. A user could check "Rectificativa" with box 70/71 already populated and see box 111
+stay at its previous (possibly stale or blank) value until some other box edit or a "Calcular"
+click happened to trigger a recompute. Fixed in `FmModel303Page.jsx`'s `handleIdentChange`
+(`FmModel303Page.jsx:283-300`): it now builds `nextIdentChecks` into a local first (not read back
+from `identChecks` React state, which `setIdentChecks` won't have applied yet), then recomputes
+via `recomputeDerivedBoxes(baseBoxes, nextIdentChecks)` and mirrors the result into
+`manualOverrides` via `syncBox111Override`, inline in the same handler — the box-108 cleanup
+(`motivo_rectificacion` leaving `'D'`) and the box-111 sync now share this one code path instead of
+being two independent, easy-to-desync branches.
+
+**A 5th gap — "Calcular" could persist the value it was about to replace (ETP-5431 pt.5).**
+`handleComputeClick` ("Calcular" in the action bar — see "Action bar" above) does two things: it
+recomputes the boxes (`handleCompute`, which recomputes box 111 and updates `manualOverrides` React
+state), and it persists any pending `identChecks`/`manualOverrides` edit (`persistEditableFields`,
+the same helper "Guardar" uses). The previous version launched both **in parallel** — `Promise.all`
+in spirit, if not in code — so `persistEditableFields`'s snapshot of `manualOverrides` almost always
+raced `handleCompute`'s `setManualOverrides` update and won, because a `setState` call only takes
+effect on React's *next* render, not synchronously inside the same tick. In practice this meant a
+"Calcular" click on a rectificativa declaration would recompute and display the correct, freshly
+autocompleted box 111 on screen, while silently persisting the STALE pre-recompute value to
+`manualData` — indistinguishable from a successful save until the next reload or the next
+`generate303File`/AEAT submission, both of which read box 111 from the persisted `manualOverrides`,
+not from what was on screen. Fixed by making `handleComputeClick` `await handleCompute()` first,
+then hand its freshly-synced return value straight to `persistEditableFields({
+manualOverridesOverride: nextManualOverrides })` — the persist reads the snapshot `handleCompute`
+just produced instead of re-reading `manualOverrides` off a state closure that the same-tick
+`setManualOverrides` call hasn't flowed into. The persist itself is still not awaited by the caller
+(fire-and-forget, same as before), so the UI stays exactly as responsive; only the ORDER — recompute
+completes, then snapshot — changed. See `FmModel303Page.calcularPersists.vitest.jsx`.
+
+**A 6th gap, the most serious of the three — the AEAT telematic submission never carried box
+overrides at all (ETP-5431, `AeatSubmitFlow`).** `AeatSubmitFlow.jsx`'s `handleSubmit` builds the
+`POST /fiscal303/submit` request params from `identChecks` (via `applyIdentParams`) and `liveBoxes`,
+but was never handed `manualOverrides` as a prop at all — so any manually-overridden box (111, 70,
+108, 109, …) reached "Generar fichero 303" (`generate303File`, which already read `manualOverrides`
+via `applyBoxParams`) but silently diverged from what the actual AEAT telematic filing received.
+This is functionally the most serious of the three sync gaps documented here: it is not a UI
+staleness bug that a reload or a re-save can correct — it means a REAL "Registrar/Presentar" →
+"Presentación telemática AEAT" submission could file a declaration with AEAT that numerically
+disagreed with the `.303` file the user had just reviewed, with no error or warning at any point.
+Fixed by exporting `applyBoxParams` from `fiscalModelsUtils.js` (previously private to that module)
+and threading a new `manualOverrides` prop from `FmModel303Page.jsx` into `AeatSubmitFlow`, which
+now calls `applyBoxParams(params, manualOverrides)` right alongside `applyIdentParams` — mirroring
+`generate303File`'s own mapping exactly, so the file the user downloads and the submission AEAT
+receives can no longer disagree on box values. See
+`models/303/__tests__/AeatSubmitFlow.vitest.jsx`.
+
+**All three sync gaps (pt.4/pt.5/pt.6 above) were found and confirmed empirically against the real
+AEAT test simulator (ServValiDos)** during ETP-5431 testing — not only via unit tests — the same
+simulator that surfaced the box69/box70 formula bug documented above. That real-submission
+confirmation is what gives the `AeatSubmitFlow` gap (pt.6) its severity: this was not a theoretical
+code-review finding, it was traced from an actual rejected/mismatched telematic test submission back
+to the missing `manualOverrides` prop.
+
+*Why this isn't routed through `FmBoxes303`'s existing `derivedValue`/`computeDerivedValue`
+mechanism* (used by box 87/107/`importe_devolucion` elsewhere in this doc): that mechanism is
+explicitly documented as "client-side display only; never feeds `manualData`/submission". Box 111
+can't be display-only, because (a) `withBox111NonZeroFlag` reads it via `getBoxValue(liveBoxes,
+111)` to drive the Nota 3 / bank-IBAN gating above, and (b) it's forwarded verbatim to AEAT as
+`RectifyingAmount` (`BOX_PARAM_MAP`). So `computeBox111` is instead consumed directly by
+`recomputeDerivedBoxes` (`fiscalModelsUtils.js`) — the single choke point both interactive typing
+(`applyBoxChange`) and the "Calcular" flow (`applyComputeResult`) already route every other
+derived box (45/46/64/66/69/71) through, so box 111 gets the same "always correct, both paths"
+guarantee for free. `fiscalModelsUtils.js` imports `computeBox111` from `fm303Layouts.js`
+(one-directional; `fm303Layouts.js` imports nothing back) — the formula still lives next to the
+field definition, it just has a different (array-writing) consumer than the display-only
+`derivedValue` rows.
+
+Because box 111 is no longer typed, `manualOverrides[111]` — the object `generate303File`'s
+`applyBoxParams` and "Guardar"'s `persistManualData` both read box 111 from — would otherwise go
+permanently stale/empty the moment autocompletion took over. `FmModel303Page.jsx` mirrors the
+freshly-derived value into `manualOverrides` via a small `syncBox111Override(overrides, boxArr)`
+helper, called from both `handleBoxChange` (typing any box that participates in 69/70/71) and
+`applyComputeResult` (now takes an extra `setManualOverrides` parameter, used by both the
+"Calcular" click and the precomputed-on-mount hydration).
+
+**Ordering dependency (box 70's clamp before box 111's formula).** Box 70 feeds `computeBox111`
+directly. [Review round 2 correction — the previous version of this note claimed every caller
+already clamped box 70/109 before calling `recomputeDerivedBoxes`, which was false on two real
+paths: `manualOverrides` hydrated from a declaration persisted before this rule existed, and
+`computeBoxes303`'s "Calcular" response, which can itself carry a negative box 70/109 in
+`res.boxes` with nothing upstream clamping it.] The clamp now lives inside
+`recomputeDerivedBoxes` itself (`clampNegativeBoxes`, applied to its own input as the very first
+step), so it is guaranteed by construction rather than by caller discipline — every caller (typed
+edits via `applyBoxChange`, the "Calcular" flow and initial hydration via `applyComputeResult`)
+shares this one call. `manualOverrides` is separately clamped at hydration
+(`clampNegativeOverrides`, `FmModel303Page.jsx`) because `applyBoxParams` reads box 70/109's AEAT
+param straight off that map, bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely.
+
+**Rule B — boxes 109 (`devoluciones_at`) and 70 (`a_deducir`) can never be negative.** Same
+existing mechanism boxes 111/77 already used (`NEGATIVE_NOT_ALLOWED_BOXES` in
+`fiscalModelsUtils.js`, now `{111, 77, 109, 70}`) — clamp to 0 + `fm.box.error.negative_not_allowed`
+toast in `FmModel303Page.jsx`'s `handleBoxChange`, `min="0"` on the input in `FmBoxes303.jsx`. No
+new mechanism was needed; adding the two box numbers to the Set was sufficient.
+
+**Tests invalidated by Rule A — rewritten in `d73efa31f`:** every test that used to drive Nota 3
+scenarios by directly typing into casilla 111's now-removed pencil editor was broken by this
+change and has since been rewritten (commit `d73efa31f`, "Rewrite box111 tests, add autocomplete
+coverage"):
+- `FmBoxes303.vitest.jsx` — "box 111: types -12, commits (blur), parent clamps to 0…"
+- `FmModel303Page.negativeBoxClamp.vitest.jsx` — both box111 clamp cases (negative -> 0, and
+  "accepts a positive value unchanged")
+- `FmModel303Page.requiredFieldGate.vitest.jsx` — one case that types into box 111 to reach the
+  bank-IBAN-required gate
+- `fm303Layouts.bankVisibilityReactivity.vitest.jsx` — both `datos_bancarios` reactivity cases
+  and all 6 "marca SEPA reactivity (ETP-5431)" cases (its shared `setBoxValue`/`renderInNota3`
+  helper drives Nota 3 exclusively by typing box 111 directly)
+
+Their replacements reach a non-zero box 111 through the formula (seeding boxes
+69/70/71-relevant values, or seeding `decl.boxes`/`liveBoxes` directly) instead of typing into the
+box.
+
+**Rule A, second correction (ETP-5431, confirmed AEAT ServValiDos rejection) — the `box69 === 0`
+draft above was replaced by the `MIN`/`ABS` formula.** Any pre-existing test that asserted the OLD
+per-branch behaviour at `box69 = 0` (empty box 111) had an outdated expectation — the correct
+result at `box69 = 0` is `box70` (via `MIN(box70, ABS(box71))`), not blank. These were identified
+and deliberately left untouched by the fix itself in a first pass (testing is a separate pipeline
+phase), then rewritten in commit `ea2d9d5a4` ("Rewrite box111 tests for MIN/ABS formula rewrite"):
+`fiscalModelsUtils.boxMerge.vitest.js`, `FmModel303Page.box111Autocomplete.vitest.jsx`,
+`FmModel303Page.negativeBoxClamp.vitest.jsx`, and `fm303Layouts.computeBox111.vitest.js` all now
+assert the `MIN`/`ABS` behaviour instead of the superseded per-branch one. The full suite passes
+(1656 vitest + 301 Node test-runner cases, 0 failures, verified in REVIEW) — the fix is fully
+verified, not pending.
+
 **Bug F — boxes [14][15], [25][26] and [40][41] always rendered blank instead of autocalculating.**
 `Fiscal303BoxesHandler.computeBoxes` never populated boxes 14/15 ("Modificación bases y cuotas"),
 25/26 ("Modificaciones bases y cuotas del recargo de equivalencia") or 40/41 ("Rectificación de
@@ -970,6 +1483,59 @@ other boxes, just not accumulated and re-queried with `ONLY_MEMO_AND_CORRECTIVE`
 - `fm303Layouts.js`'s `mod_bases`/`mod_recargo`/`regularizacion` rows gained comments documenting
   they are intentionally NOT `editable` (backend-computed) — no rendering change was needed since
   they already lacked the `editable` flag.
+
+### Editable-box/field input validation vs. the official AEAT spec (ETP-5438)
+
+An audit cross-referenced every EDITABLE casilla/field in the Modelo 303 window against the
+official AEAT "Diseño de registro" for Modelo 303 (v1.01, applies from ejercicio 2026 — the same
+spec `fm303Layouts.js`'s `BASE` layout is built from). The spec's own "Nota" footer on every page
+defines the field-type legend: `A` (Alfabético), `An` (Alfanumérico — letters/numbers/blanks,
+left-aligned), `Num` (Numérico **sin signo** — digits only, **no negative values**), `N` (Numérico
+**con signo** — negative allowed, a literal `N` marks a negative value). ETP-5393 Bug C (above) had
+already fixed this exact class of gap for boxes 111/77; the audit found it was incomplete.
+
+**Sign-guard gap — 4 more `Num` (unsigned) editable boxes had no negative guard.** Boxes 70
+("Resultados a ingresar de anteriores autoliquidaciones"), 78 ("Cuotas a compensar de periodos
+anteriores aplicadas"), 109 ("Devoluciones acordadas por la Agencia Tributaria") and 110 ("Cuotas
+a compensar pendientes de periodos anteriores") are all declared `Num` in the spec, exactly like
+111 and 77, but were left out of `NEGATIVE_NOT_ALLOWED_BOXES` (`fiscalModelsUtils.js`) and its
+backend mirror `NEGATIVE_NOT_ALLOWED_BOX_KEYS` (`FiscalDeclCrudHandler.java`). Widened into the
+SAME set/mechanism on both ends — no new plumbing:
+- **Frontend**: `NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110])`. `handleBoxChange`
+  (`FmModel303Page.jsx`) already floors any box in this set to `0` and shows the i18n toast — no
+  code change needed there, only the set. Box 78 also carries its own, unrelated relative clamp
+  (≤ box110, ETP-5338 pt.2) in the same function — the negative-not-allowed floor runs FIRST, on
+  the same `value` variable the relative clamp then reads, so a negative box110 commit floors to 0
+  before box78's ceiling is computed from it; box78 can never inherit a negative ceiling.
+- **Backend**: `NEGATIVE_NOT_ALLOWED_BOX_KEYS = Set.of("111", "77", "70", "78", "109", "110")` in
+  `FiscalDeclCrudHandler#rejectNegativeManualBoxes` — same 400-and-leave-record-untouched contract
+  as before.
+
+**Alphanumeric (`An`) fields had no length limit at all.** The 6 bank identification fields
+(`bank_iban`, `bank_swift_bic`, `bank_nombre`, `bank_direccion`, `bank_ciudad`, `bank_pais`) and
+`nro_justificante` (rectificativa/complementaria) were plain `<input type="text">` with no
+`maxLength`, despite the spec giving each a fixed record-slot width (IBAN 34, SWIFT-BIC 11, bank
+name 70, address 35, city 30, country code 2, nro_justificante 13). `fm303Layouts.js` now declares
+`maxLength` on each field (both the current-year rectificativa's `nro_justificante` and the
+pre-2023 `_COMPLEMENTARIA_RECTIF_OP` patch's copy); `FmBoxes303.jsx`'s two identification-section
+text-input render paths now forward `maxLength={f.maxLength}`. Backend mirror: a new
+`rejectOversizedIdentificationFields` guard in `FiscalDeclCrudHandler.handleDeclPut` (same
+400-and-leave-untouched contract, reading `manualData.identification` instead of
+`manualOverrides`) rejects a PUT whose value for any of these 7 keys exceeds its limit.
+
+**`bank_sepa` is also free text vs. the spec's 4-value enum — out of scope here, tracked
+separately.** "Devolución - Marca SEPA" is actually a single-digit `Num` field on the DID page
+restricted to `0`/`1`/`2`/`3` (spec's own "Nota 2: Devolución marca SEPA" table: 0 Vacía, 1 Cuenta
+España, 2 Unión Europea SEPA, 3 Resto Países), same audit finding as the two gaps above. An initial
+fix (converting `bank_sepa` to a `type: 'select'` with those 4 options plus a matching backend
+`rejectInvalidBankSepa` guard) was reverted from this ticket — it is being handled under a separate
+ticket instead, to avoid two tickets racing on the same field. Do not re-add it here.
+
+Regression tests: `FmModel303Page.negativeBoxClamp.vitest.jsx` (4 new boxes + the box78/box110
+interaction), `FmBoxes303.vitest.jsx` and `fm303Layouts.vitest.js` (`maxLength` DOM attributes /
+raw layout-data assertions for the 7 alphanumeric fields), and `FiscalDeclCrudHandlerTest.java`
+(the widened box111/77 set plus the new oversized-field guard, mirroring the existing 111/77 test
+style).
 
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
@@ -1613,7 +2179,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone, always-visible button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) and, unlike that button, not gated on submission status (`!isSubmitted`).
+The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
 ### PDF preview and file generation
 

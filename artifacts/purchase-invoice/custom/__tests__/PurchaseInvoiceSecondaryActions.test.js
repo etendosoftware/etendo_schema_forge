@@ -56,4 +56,18 @@ describe('PurchaseInvoiceSecondaryActions', () => {
     assert.match(sendToSifBlockMatch[0], /onSave=\{onSave\}/);
     assert.match(sendToSifBlockMatch[0], /isDirty=\{isDirty\}/);
   });
+
+  // ETP-5205 REVIEW finding: isDocumentReadOnly reaches DocumentSecondaryActions via
+  // {...props} (gates Clone), but SendToSifButton is a separate child that only receives
+  // explicitly-named props — it was silently dropped here, unlike sales-invoice's
+  // InvoiceTopbarExtra (which does forward it). SendToSifButton itself gates its own
+  // mount on isDocumentReadOnly (see SendToSifButton.jsx), so a missing forward meant a
+  // Solo Lectura user on a completed purchase invoice with pending SII/TBAI targets could
+  // still see and click "Enviar a SIF".
+  it('accepts and forwards isDocumentReadOnly to SendToSifButton (ETP-5205)', () => {
+    assert.match(src, /\{\s*data.*isDocumentReadOnly.*\}\s*=\s*props/);
+    const sendToSifBlockMatch = src.match(/<SendToSifButton\b[\s\S]*?\/>/);
+    assert.ok(sendToSifBlockMatch, 'expected a <SendToSifButton ... /> element in the source');
+    assert.match(sendToSifBlockMatch[0], /isDocumentReadOnly=\{isDocumentReadOnly\}/);
+  });
 });

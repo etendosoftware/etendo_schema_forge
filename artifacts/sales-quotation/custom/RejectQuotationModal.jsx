@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useUI } from '@/i18n';
 import CreateRejectReasonModal from './CreateRejectReasonModal';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /**
  * Reject confirmation for Sales Quotation in Under Evaluation (UE).
@@ -37,10 +38,13 @@ export default function RejectQuotationModal({
   const blurTimeoutRef = useRef(null);
 
   const entityUrl = `${apiBaseUrl}/quotation`;
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // The selector URL mirrors the one EntityForm builds for the rejectReason
   // field (see tools/app-shell/src/components/contract-ui/EntityForm.jsx:626).
@@ -49,7 +53,7 @@ export default function RejectQuotationModal({
   useEffect(() => {
     let cancelled = false;
     setLoadingReasons(true);
-    fetch(`${reasonsUrl}?limit=200&offset=0`, { headers })
+    apiFetch(`${reasonsUrl}?limit=200&offset=0`)
       .then((res) => (res.ok ? res.json() : null))
       .then((payload) => {
         if (cancelled) return;
@@ -69,7 +73,7 @@ export default function RejectQuotationModal({
         setLoadingReasons(false);
       });
     return () => { cancelled = true; };
-  }, [reasonsUrl, headers]);
+  }, [reasonsUrl, apiFetch]);
 
   const documentNo = data?.documentNo || '';
 
@@ -113,11 +117,11 @@ export default function RejectQuotationModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${entityUrl}/${quotationId}/action/rejectQuotation`,
         {
           method: 'POST',
-          headers,
+          
           body: JSON.stringify({ rejectReason: selected.id }),
         },
       );
@@ -148,7 +152,7 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="var(--status-info-bg)" strokeWidth="2"
+          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 5l10 10M15 5l-10 10" />
           </svg>
@@ -194,7 +198,7 @@ export default function RejectQuotationModal({
                 autoComplete="off"
               />
               <svg style={chevronIconStyle} viewBox="0 0 24 24" width="24" height="24"
-                   fill="none" stroke="var(--status-info-bg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                   fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
               {selected && !loading && (
@@ -277,7 +281,7 @@ export default function RejectQuotationModal({
           </button>
           <style>{`
             @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-            #reject-reason-search::placeholder { color: var(--status-info-fg); opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
+            #reject-reason-search::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; font-family: Inter, sans-serif; font-size: 14px; line-height: 24px; font-weight: 400; }
           `}</style>
         </div>
       </div>
@@ -369,7 +373,7 @@ const asteriskStyle = {
   color: 'hsl(var(--destructive))',
 };
 
-// Input matches Figma frame "Text Input": 335×40, border 1px hsl(var(--foreground)), radius 8.
+// Input matches Figma frame "Text Input": 335×40, border 1px hsl(var(--border-control)), radius 8.
 // Spec composes its inner layout as nested wraps (text wrap padding 0 8,
 // chevron wrap 28 wide padding 0 4 0 0, chevron 24×24). We collapse that
 // into explicit input padding so the visual placement of text and chevron
@@ -377,7 +381,7 @@ const asteriskStyle = {
 const inputStyle = {
   width: '100%', boxSizing: 'border-box', height: 40,
   fontFamily: 'Inter, sans-serif', fontSize: 14, lineHeight: '24px', color: 'hsl(var(--foreground))',
-  border: '1px solid hsl(var(--foreground))', borderRadius: 8,
+  border: '1px solid hsl(var(--border-control))', borderRadius: 8,
   padding: '8px 44px 8px 16px',
   background: 'hsl(var(--card))',
   boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
@@ -393,13 +397,13 @@ const chevronIconStyle = {
 const clearBtnStyle = {
   position: 'absolute', right: 40, top: '50%', transform: 'translateY(-50%)',
   width: 20, height: 20, borderRadius: '50%',
-  border: 'none', background: 'transparent', color: 'var(--status-info-bg)',
+  border: 'none', background: 'transparent', color: 'hsl(var(--icon-secondary))',
   cursor: 'pointer', fontSize: 16, lineHeight: 1,
 };
 
 const dropdownStyle = {
   position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 4, zIndex: 51,
-  background: 'hsl(var(--card))', border: '1px solid hsl(var(--card))', borderRadius: 8,
+  background: 'hsl(var(--card))', border: '1px solid hsl(var(--border-control))', borderRadius: 8,
   boxShadow: '0 4px 12px hsl(var(--foreground) / 0.08)',
   maxHeight: 220, overflowY: 'auto',
 };
@@ -409,7 +413,7 @@ const createOptionStyle = {
   padding: '8px 12px',
   fontFamily: 'Inter, sans-serif', fontSize: 14, fontWeight: 500, lineHeight: '24px',
   color: 'hsl(var(--foreground))', background: 'transparent',
-  border: 'none', borderBottom: '1px solid hsl(var(--card))',
+  border: 'none', borderBottom: '1px solid hsl(var(--border-subtle))',
   cursor: 'pointer',
 };
 
@@ -422,14 +426,17 @@ const optionStyle = {
 
 const noResultsStyle = {
   padding: '8px 12px',
-  fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'var(--status-info-bg)',
+  fontFamily: 'Inter, sans-serif', fontSize: 12, color: 'hsl(var(--muted-foreground))',
 };
 
 const errorStyle = {
   padding: '8px 20px',
   fontFamily: 'Inter, sans-serif', fontSize: 12,
-  color: 'hsl(var(--destructive))', background: 'hsl(var(--card))',
-  borderTop: '0.5px solid hsl(var(--destructive))',
+  // ETP-5378 QA follow-up — the error strip lost its tint to the same ETP-4554 mis-mapping:
+  // the Figma red wash became `--card`, the surface white, so the strip read as an ordinary
+  // row. Matches CreateRejectReasonModal, which this modal opens.
+  color: 'hsl(var(--destructive))', background: 'var(--status-destructive-bg)',
+  borderTop: '0.5px solid hsl(var(--destructive) / 0.35)',
 };
 
 const buttonsRowStyle = {
@@ -445,7 +452,7 @@ const btnSecondary = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: '1px solid hsl(var(--card))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
+  border: '1px solid hsl(var(--border-control))', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))',
   boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)',
 };
 
@@ -460,5 +467,12 @@ const btnPrimaryDisabled = {
   width: 191, height: 40,
   fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
-  border: 'none', background: 'hsl(var(--card))', color: 'hsl(var(--card))',
+  // ETP-5378 QA follow-up — the disabled fill is `border-control`, NOT `card`.
+  // ETP-4554 (commit 1538c6d1a) migrated this file off hex literals by replacing every
+  // the Figma grey with `hsl(var(--card))` — but that grey is a light neutral and `--card` is
+  // the pure white of the surface this button sits on. Since the label is `--card` too,
+  // background and text became the same colour and the button vanished — the user saw an empty
+  // gap next to "Cancelar". `--border-control` is the structural role closest to that grey
+  // and, unlike the literal it replaces, it also resolves per theme (light neutral / mid grey).
+  border: 'none', background: 'hsl(var(--border-control))', color: 'hsl(var(--card))',
 };

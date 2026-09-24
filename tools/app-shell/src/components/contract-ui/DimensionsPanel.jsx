@@ -127,33 +127,48 @@ export function DimensionGrid({ fields, data, onChange, onFieldSave, apiBaseUrl,
         const value = data?.[f.key] ?? '';
         const displayValue = data?.[`${f.key}$_identifier`] ?? '';
         const selectorUrl = apiBaseUrl ? `${apiBaseUrl}/${entityName}/selectors/${f.column}` : null;
+        // ETP-5133 — the dimensions grid packs 4 selectors per row (see the
+        // grid-template-columns above), so a long identifier (a Business
+        // Partner name, a Project description) routinely overflows the
+        // column. `title` gives every field a native hover tooltip with the
+        // FULL value regardless of which control renders it; `truncate` +
+        // `min-w-0` on the SelectorInput's trigger override the base
+        // component's `[&>span]:line-clamp-1` (see ui/select.jsx), which
+        // never actually clips here because a flex child's default
+        // `min-width: auto` stops it from shrinking below its own content
+        // width inside the trigger's flex row — it overflows the grid cell
+        // instead of ellipsizing.
+        const fullValue = displayValue || value || '';
         return (
-          <div key={f.key} className="space-y-1.5">
+          <div key={f.key} className="space-y-1.5 min-w-0">
             <label className="text-xs font-medium text-muted-foreground block">{label}</label>
             {readOnly ? (
               <input
-                className="flex h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                value={displayValue || value || ''}
+                className="flex h-8 w-full rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm truncate disabled:cursor-not-allowed disabled:opacity-50"
+                value={fullValue}
+                title={fullValue || undefined}
                 disabled
                 readOnly
               />
             ) : (
-              <SelectorInput
-                entityName={entityName}
-                field={f}
-                value={value}
-                displayValue={displayValue}
-                onChange={(val, lbl) => {
-                  onChange(f.key, val);
-                  onChange(`${f.key}$_identifier`, lbl ?? '');
-                  onFieldSave?.(f.key, val);
-                }}
-                catalogs={catalogs}
-                resolvedLabel=""
-                selectorUrl={selectorUrl}
-                token={token}
-                triggerClassName="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary"
-                data-testid="SelectorInput__DimensionsPanel" />
+              <div title={fullValue || undefined} className="min-w-0">
+                <SelectorInput
+                  entityName={entityName}
+                  field={f}
+                  value={value}
+                  displayValue={displayValue}
+                  onChange={(val, lbl) => {
+                    onChange(f.key, val);
+                    onChange(`${f.key}$_identifier`, lbl ?? '');
+                    onFieldSave?.(f.key, val);
+                  }}
+                  catalogs={catalogs}
+                  resolvedLabel=""
+                  selectorUrl={selectorUrl}
+                  token={token}
+                  triggerClassName="w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary truncate [&>span]:truncate [&>span]:min-w-0"
+                  data-testid="SelectorInput__DimensionsPanel" />
+              </div>
             )}
           </div>
         );

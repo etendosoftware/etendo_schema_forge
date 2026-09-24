@@ -7,12 +7,17 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
+// ETP-5395 Fix 3: FiscalConfigPage is now gated by useWindowAccess — default to 'full' so
+// this suite keeps exercising the window as before (mirrors financial-account's own
+// ETP-4658 test convention).
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(() => ({
     selectedOrg: { id: 'org-1', name: 'Test Org' },
     selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
     selectOrg: vi.fn(),
   })),
+  useWindowAccess: vi.fn(() => 'full'),
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -205,7 +210,7 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
 import FiscalConfigPage from '../FiscalConfigPage.jsx';
 import { useFiscalConfig } from '../useFiscalConfig.js';
 import { useFiscalTestMode } from '../useFiscalTestMode.js';
-import { useAuth } from '@/auth/AuthContext.jsx';
+import { useAuth, useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 
 // --- Helpers --------------------------------------------------------------
@@ -221,6 +226,36 @@ function renderPage(props = {}) {
 
 // --- Tests ----------------------------------------------------------------
 
+// ETP-5395 Fix 3 — before this fix, a 'none' tier still fired the sii/tbai/verifactu-config
+// fetches, got a real backend 403, and rendered it raw ("Failed to load ...: HTTP 403" + a
+// Retry button that can never help).
+describe('FiscalConfigPage — no access (ETP-5395 Fix 3)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useAuth).mockReturnValue({
+      selectedOrg: { id: 'org-1', name: 'Test Org' },
+      selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
+      selectOrg: vi.fn(),
+    });
+    vi.mocked(useWindowAccess).mockReturnValue('none');
+    vi.mocked(useFiscalConfig).mockReturnValue({
+      loading: false,
+      error: 'HTTP 403',
+      profile: null,
+      siiRecord: null,
+      tbaiRecord: null,
+      verifactuRecord: null,
+      refetch: vi.fn(),
+    });
+  });
+
+  it('renders WindowAccessGuard instead of the raw error box', () => {
+    renderPage();
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByText('fiscal.loadError')).not.toBeInTheDocument();
+  });
+});
+
 describe('FiscalConfigPage — loading state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -229,6 +264,7 @@ describe('FiscalConfigPage — loading state', () => {
       selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
       selectOrg: vi.fn(),
     });
+    vi.mocked(useWindowAccess).mockReturnValue('full');
     vi.mocked(useFiscalConfig).mockReturnValue({
       loading: true,
       error: null,

@@ -1,5 +1,6 @@
 import {
   AddressBookIcon,
+  ArrowsClockwiseIcon,
   BankIcon,
   BuildingIcon,
   InvoiceIcon,
@@ -27,6 +28,7 @@ import {
  */
 export const FIRST_STEPS_ICONS = {
   AddressBook: AddressBookIcon,
+  ArrowsClockwise: ArrowsClockwiseIcon,
   Bank: BankIcon,
   Building: BuildingIcon,
   Invoice: InvoiceIcon,

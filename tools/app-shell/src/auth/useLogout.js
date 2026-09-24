@@ -21,6 +21,6 @@ export function useLogout() {
   const logout = auth?.logout;
   return useCallback(() => {
     clearStoredDateRange();
-    (logout || notifyAmbientUnauthorized)();
+    return (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

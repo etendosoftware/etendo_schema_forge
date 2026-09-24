@@ -84,13 +84,15 @@
         "field": "posted",
         "trueKey": "postedStatus",
         "falseKey": "notPostedStatus",
-        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        "hintKeys": {
+          "D": "goodsMovementsPostedDisabledHint"
+        },
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending). hintKeys.D — ETP-5436: on M_Movement, code D means the cost engine has not calculated the cost of this movement's transactions yet (DocMovement#getDocumentConfirmation). See postedStatus.js resolveStatusPill for why this is per-window, not a global registry entry."
       }
     ]
   },
   "entities": {
     "header": {
-      "javaQualifier": "document-posting",
       "name": "movement",
       "javaQualifier": "goodsMovementsHeaderHandler",
       "fields": {
@@ -138,6 +140,22 @@
         },
         "processNow": {
           "visibility": "system"
+        },
+        "posted": {
+          "visibility": "readOnly",
+          "form": false,
+          "grid": true,
+          "type": "boolean",
+          "badge": true,
+          "badgeLabels": {
+            "true": { "en_US": "Posted", "es_ES": "Contabilizado" },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "reason": "ETP-5436 — declared as a field (not left as an implicit AD button action) so the post/unpost menuActions and the statusPills entry below have a real value to read; mirrors goods-receipt/goods-shipment."
         },
         "project": {
           "visibility": "editable",
@@ -346,8 +364,8 @@
       "type": "process",
       "entity": "movement",
       "decision": "Omit",
-      "description": "Posted hardcoded button. Not applicable to simplified UI.",
-      "impactIfOmitted": "Accounting posting handled through backend."
+      "description": "Posted hardcoded button (AD reference 28 on the Posted column) — not exposed as a raw process button. Superseded by the post/unpost menuActions above, which route through DocumentPostingService instead (ETP-5436).",
+      "impactIfOmitted": "Users post/unpost via the kebab and the bulk list actions, not a raw classic button."
     }
   },
   "discardPatterns": [

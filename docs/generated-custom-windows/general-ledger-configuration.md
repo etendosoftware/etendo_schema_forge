@@ -28,23 +28,26 @@ The current frontend is production-shaped but still backed by local mock data be
 
 ### General
 
-Three sections:
+Two sections (the former "Políticas contables" section, which held only the `Allow
+negative` toggle, was removed entirely — see below):
 
 1. **Identidad del esquema**
 2. **Calendario y moneda**
-3. **Políticas contables**
 
 Backed editable fields:
 
 - `Nombre del esquema` → `name`
-- `Criterio contable` → `accrual`
 - `Descripción` → `description`
 - `Moneda principal` → `currency`
-- `Allow negative` → direct binding of `Allownegative`
 
-Hidden-but-kept backend field:
+Hidden-but-kept backend fields:
 
 - `Esquema contable` / `gAAP` stays persisted in the ledger but is not user-editable in this custom surface.
+- `Criterio contable` / `accrual` (`IsAccrual`) is hidden and internally fixed to Devengo (accrual = true) — Etendo Go doesn't support Caja (cash-basis) for taxes. `decisions.json` marks it `system`-visibility, and `GeneralLedgerConfigurationHandler.applyGeneralChanges()` no longer accepts a client-supplied value for it, so it cannot be flipped away from Devengo through this window or through a raw NEO write (ETP-5372).
+- `Allow negative` / `Allownegative` — `decisions.json` marks `allowNegative` as
+  `system`-visibility and `GeneralLedgerConfigurationHandler.applyGeneralChanges()` no
+  longer accepts a client-supplied value for it; the checkbox was removed entirely from
+  the General tab (ETP-4947). The value is still reported on GET via `buildGeneral()`.
 
 Read-only fields sourced from the organization-level backend relation in the delivered implementation:
 
@@ -128,7 +131,7 @@ After the backend wiring lands, remember the Etendo step:
 
 1. Start the app and open `/general-ledger-configuration`.
 2. Confirm the tab order and labels match the Figma: `General`, `Valores por defecto`, `Dimensiones`, `Cuentas generales`.
-3. On **General**, verify the first row renders as 4 columns on wide screens: name, organization, accounting criteria. `gAAP` (Esquema contable) is intentionally not shown — it is set at schema creation time and is not editable from this form.
+3. On **General**, verify the first row renders as 2 columns on wide screens: name, organization. `gAAP` (Esquema contable) and `Criterio contable` (accrual) are intentionally not shown — `gAAP` is set at schema creation time, `Criterio contable` is fixed to Devengo (ETP-5372); neither is editable from this form.
 4. Confirm `Organización` and `Calendario fiscal` are read-only and show the muted `AD_OrgInfo` origin hint.
 5. Edit `Nombre del esquema` and confirm `Guardar cambios` enables.
 6. Clear a required field (`Nombre del esquema` or `Moneda principal`) and confirm inline required validation appears on save.

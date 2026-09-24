@@ -55,7 +55,7 @@ export function ProductAvatar({ name, id, imageUrl, imageId, neoBaseUrl, token, 
   const apiFetch = useApiFetch(neoBaseUrl);
 
   useEffect(() => {
-    if (src || !imageId || !neoBaseUrl || !token) return;
+    if (src || !imageId || !neoBaseUrl) return;
     let cancelled = false;
     apiFetch(`/image/${imageId}`)
       .then(r => r.ok ? r.blob() : null)
@@ -111,7 +111,7 @@ export function useProductImages({ open, selectorUrl, token }) {
   useEffect(() => {
     if (!open) return undefined;
     setImageMap({});
-    if (!imageUrl || !token) return undefined;
+    if (!imageUrl) return undefined;
     let cancelled = false;
     apiFetch('/product/product?_startRow=0&_endRow=500')
       .then(r => r.ok ? r.json() : null)
@@ -224,7 +224,7 @@ export function useProductSelectorFetch({
       if (abortRef.current) abortRef.current.abort();
       rawOffsetRef.current = 0;
     }
-    if (!selectorUrl || !token) { setResults([]); setLoading(false); return; }
+    if (!selectorUrl) { setResults([]); setLoading(false); return; }
     if (append) setLoadingMore(true);
     else setLoading(true);
 

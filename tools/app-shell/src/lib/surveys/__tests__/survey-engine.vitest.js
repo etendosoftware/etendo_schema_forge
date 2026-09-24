@@ -419,5 +419,49 @@ describe('selectNextSurvey', () => {
       const survey = selectNextSurvey({ isAdmin: false, now: NOW });
       expect(survey?.id).toBe('nps');
     });
+
+    // csat_onboarding became configurable via the same backend kill switch as part of this
+    // same ETP-4353 change (Survey Configuration backoffice window) — mirrors the nps cases
+    // above with the same three shapes (skip-and-fallthrough, skip-and-null, regression-enabled).
+    it('skips csat_onboarding whose isSurveyTypeEnabled() is false even when its own isEligible() would be true', () => {
+      // Both csat_onboarding and nps are locally eligible on the login source; disabling
+      // csat_onboarding via the remote config must skip it and fall through to nps.
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        onboardingCompleted: true,
+        onboardingShown: false,
+        onboardingCompletedAt: isoAgo(2 * MS_DAY),
+        firstLoginAt: new Date(NOW - 61 * MS_DAY).toISOString(),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { enabled: false } } });
+
+      const survey = selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' });
+      expect(survey?.id).toBe('nps');
+    });
+
+    it('returns null when the only otherwise-eligible survey is backend-disabled csat_onboarding', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        onboardingCompleted: true,
+        onboardingShown: false,
+        onboardingCompletedAt: isoAgo(2 * MS_DAY),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { enabled: false } } });
+
+      expect(selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' })).toBeNull();
+    });
+
+    it('regression guard: an enabled csat_onboarding with isEligible() === true is still selected', () => {
+      mockStorage.setItem(STORAGE_KEY, JSON.stringify({
+        onboardingCompleted: true,
+        onboardingShown: false,
+        onboardingCompletedAt: isoAgo(2 * MS_DAY),
+        counters: { invoicing: 0, order: 0 },
+      }));
+      setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { enabled: true } } });
+
+      const survey = selectNextSurvey({ isAdmin: true, now: NOW, source: 'login' });
+      expect(survey?.id).toBe('csat_onboarding');
+    });
   });
 });

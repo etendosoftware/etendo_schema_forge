@@ -167,6 +167,20 @@ function buildPisApiFetch(cfg = {}) {
   });
 }
 
+/**
+ * ETP-5434 — wraps buildApiFetch so a given action's fetch never settles (no resolve, no
+ * reject), letting a test observe the OTHER independent loading chains land on their own.
+ * The hung call is still recorded on the returned mock's `.mock.calls`.
+ */
+function buildHangingApiFetch({ hang = [], ...cfg } = {}) {
+  const base = buildApiFetch(cfg);
+  return vi.fn((path, opts) => (
+    hang.some(fragment => path.includes(fragment))
+      ? new Promise(() => {}) // deliberately never resolves
+      : base(path, opts)
+  ));
+}
+
 const defaults = {
   dir: 'in',
   specName: 'sales-invoice',
@@ -3417,6 +3431,148 @@ describe('NewPaymentEntryModal', () => {
 
       await waitFor(() => expect(screen.queryByTestId(WARNING)).not.toBeInTheDocument());
       expect(await screen.findByTestId('cp-pis-section')).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5434 — the modal's single `loading` flag used to gate the method/account selects AND
+  // Guardar/Confirmar behind the SLOWEST of three independent fetches (catalogs, credit sources,
+  // paymentPlan/scheduleId). Measured on a live sales invoice the catalogs landed at ~0.65s but
+  // the selects only appeared at 2.9s, because paymentPlan (which feeds neither select) was the
+  // long pole. The fix splits the wait into `fieldsLoading` (catalogs only — gates the two
+  // skeletons) and `scheduleResolving` (paymentPlan only — folded into `submitLocked` together
+  // with `fieldsLoading`, gating Guardar/Confirmar). These tests pin that split so it cannot
+  // silently regress back into one shared flag.
+  describe('split loading gates: fieldsLoading vs scheduleResolving (ETP-5434)', () => {
+    it('mounts the method and account selects with no skeleton while the paymentPlan lookup is still pending', async () => {
+      mockApiFetch = buildHangingApiFetch({ hang: ['paymentPlan'] });
+      renderModal({ scheduleId: undefined });
+
+      // Default catalogs (accounts[0].defaultPaymentMethod: 'Transfer') let seedMethodAndAccount
+      // pick a value for both fields, so each CreatableSearchSelect renders its "chip" state
+      // (field-<key>-chip) rather than the empty search input (field-<key>).
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+      expect(screen.queryByTestId('cp-method-select-skeleton')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('cp-account-select-skeleton')).not.toBeInTheDocument();
+    });
+
+    it('keeps Guardar/Confirmar disabled while the paymentPlan lookup is still pending, even though the catalogs already resolved', async () => {
+      mockApiFetch = buildHangingApiFetch({ hang: ['paymentPlan'] });
+      renderModal({ scheduleId: undefined });
+
+      // The catalogs land (fieldsLoading clears, selects mount)...
+      await screen.findByTestId('field-paymentMethod-chip');
+      // ...but scheduleResolving is still true, so submitLocked keeps both actions disabled:
+      // the backend rejects a registerPayment body with no scheduleId (PaymentActionHandlerSupport.validateBody).
+      expect(screen.getByTestId('cp-save-draft')).toBeDisabled();
+      expect(screen.getByTestId('cp-confirm')).toBeDisabled();
+    });
+
+    it('enables Guardar/Confirmar once an EMPTY paymentPlan resolves, and Guardar surfaces paymentRequestFailed without POSTing registerPayment (parity with the pre-ETP-5434 behavior)', async () => {
+      // Not an invented edge case: an invoice with no pending installment legitimately comes
+      // back with an empty plan. `scheduleResolving` must still clear (it means "the lookup
+      // finished", not "we got an id"), and submit's own !scheduleId guard is what surfaces the
+      // failure — exactly as it did before the split.
+      mockApiFetch = buildApiFetch({ plan: [] });
+      const { props } = renderModal({ scheduleId: undefined });
+
+      const saveDraft = screen.getByTestId('cp-save-draft');
+      await waitFor(() => expect(saveDraft).not.toBeDisabled());
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+
+      fireEvent.click(saveDraft);
+      await waitFor(() => expect(screen.getByText('paymentRequestFailed')).toBeInTheDocument());
+      expect(mockApiFetch.mock.calls.some(c => c[0].includes('registerPayment'))).toBe(false);
+      expect(props.onSaved).not.toHaveBeenCalled();
+    });
+
+    it('enables Guardar/Confirmar once the paymentPlan lookup rejects — the finally branch still runs, so nothing stays locked forever', async () => {
+      mockApiFetch = vi.fn(async (path) => {
+        if (path.includes('invoiceAccounts')) return jsonRes({ items: [{ id: 'acc-1', label: 'Main Account' }] });
+        if (path.includes('invoicePaymentMethods')) return jsonRes({ items: [{ id: 'm-1', label: 'Transfer' }] });
+        if (path.includes('invoiceCreditSources')) return jsonRes({ items: [] });
+        if (path.includes('paymentPlan')) return Promise.reject(new Error('network error'));
+        return jsonRes({});
+      });
+      renderModal({ scheduleId: undefined });
+
+      const saveDraft = screen.getByTestId('cp-save-draft');
+      await waitFor(() => expect(saveDraft).not.toBeDisabled());
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+    });
+
+    it('never calls paymentPlan when scheduleId is supplied as a prop, and enables Guardar/Confirmar as soon as the catalogs land', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal({ scheduleId: 'sched-from-history-popup' });
+
+      const saveDraft = screen.getByTestId('cp-save-draft');
+      await waitFor(() => expect(saveDraft).not.toBeDisabled());
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+      expect(mockApiFetch.mock.calls.some(c => c[0].includes('paymentPlan'))).toBe(false);
+    });
+
+    it('mounts the combos and lets Guardar enable via the schedule lookup even while invoiceCreditSources is still in flight', async () => {
+      // Credit sources gate nothing (usePaymentBalance re-seeds its lines whenever `sources`
+      // arrives) — this proves the schedule gate is independent of it, not just of the catalogs.
+      mockApiFetch = buildHangingApiFetch({ hang: ['invoiceCreditSources'] });
+      renderModal({ scheduleId: undefined });
+
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+
+      const saveDraft = screen.getByTestId('cp-save-draft');
+      await waitFor(() => expect(saveDraft).not.toBeDisabled());
+      expect(screen.getByTestId('cp-confirm')).not.toBeDisabled();
+    });
+
+    it('applies credit sources landing after the catalogs-driven seed without clobbering the already-picked method/account', async () => {
+      let releaseSources;
+      const base = buildApiFetch();
+      mockApiFetch = vi.fn(async (path, opts) => {
+        if (path.includes('invoiceCreditSources')) {
+          await new Promise(r => { releaseSources = r; });
+          return jsonRes({ items: [{ id: 's1', kind: 'credit', doc: 'AB-1', date: '2024-01-01', avail: 200 }] });
+        }
+        return base(path, opts);
+      });
+      renderModal();
+
+      // Seeded from the catalogs effect already; credit sources haven't landed yet.
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+      expect(screen.queryByText('cpCreditSectionTitle')).not.toBeInTheDocument();
+
+      await act(async () => { releaseSources(); });
+
+      expect(await screen.findByText('cpCreditSectionTitle')).toBeInTheDocument();
+      expect(screen.getByTestId('cp-credit-row-s1')).toBeInTheDocument();
+      // the later sources response must not have reset the earlier seed
+      expect(screen.getByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+    });
+
+    it('prefills method, account and amount in edit mode even while invoiceCreditSources never resolves', async () => {
+      mockApiFetch = buildHangingApiFetch({ hang: ['invoiceCreditSources'] });
+      renderModal({
+        payment: { id: 'pay-edit-1', paymentDate: '2024-05-10', paymentMethod: 'Transfer', accountId: 'acc-1', amount: 500 },
+      });
+
+      expect(await screen.findByTestId('field-paymentMethod-chip')).toHaveTextContent('Transfer');
+      expect(screen.getByTestId('field-account-chip')).toHaveTextContent('Main Account');
+      await waitFor(() => expect(screen.getByTestId('cp-amount-input')).toHaveValue('500,00'));
+    });
+
+    it('sends refreshVersion:false on the three read-only loading POSTs (invoiceAccounts, invoicePaymentMethods, invoiceCreditSources)', async () => {
+      mockApiFetch = buildApiFetch();
+      renderModal();
+
+      await waitFor(() => {
+        ['invoiceAccounts', 'invoicePaymentMethods', 'invoiceCreditSources'].forEach(action => {
+          const call = mockApiFetch.mock.calls.find(c => c[0].includes(action));
+          expect(call, `${action} must have been POSTed`).toBeTruthy();
+          expect(call[1]).toMatchObject({ refreshVersion: false });
+        });
+      });
     });
   });
 });

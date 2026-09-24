@@ -29,6 +29,9 @@
       "confirmModal": "AmortizationConfirmModal",
       "disableWhenEmpty": true
     },
+    "customComponents": {
+      "bulkActions": "AmortizationBulkActions"
+    },
     "menuActions": [
       {
         "key": "reactivate",

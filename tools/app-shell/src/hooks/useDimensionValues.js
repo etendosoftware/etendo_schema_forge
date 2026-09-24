@@ -25,7 +25,7 @@ export function useDimensionValues(dimensions, enabled = true) {
 
   useEffect(() => {
     const keys = dimKey ? dimKey.split(',') : [];
-    if (!enabled || !token || keys.length === 0) {
+    if (!enabled || keys.length === 0) {
       setOptionsByDim({});
       return undefined;
     }

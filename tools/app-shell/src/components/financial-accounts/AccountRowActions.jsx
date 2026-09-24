@@ -3,7 +3,7 @@
 //
 // Extracted from the retired AccountRow (ETP-4658) so the testids and the
 // sync-visibility rule have a single definition; the generic DataTable renders them
-// through a `col.render` synthetic column in AccountsHeaderTable.
+// inside its shared sticky `rowQuickActions` cell in AccountsHeaderTable.
 import { Pencil, RefreshCw } from 'lucide-react';
 import {
   Tooltip,
@@ -28,12 +28,13 @@ export function AccountRowActions({
 
   return (
     <TooltipProvider data-testid="TooltipProvider__acctactions">
-      {/* The named variant is the load-bearing one: DataTable marks its row as
-          `group/row` (DataTable.jsx:1201) and `group-hover:` does not match a named
-          group, so without it these actions stay invisible. The unnamed variant is kept
-          as insurance for a host that marks rows as a plain `group` — same reasoning as
-          in AccountsTable/accountColumns.jsx. */}
-      <div className="flex items-center justify-end gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-hover/row:opacity-100">
+      {/* DataTable owns the shared sticky-right cell and its hover background. This
+          container mirrors RowQuickActions' positioning inside that cell so Financial
+          Accounts gets the same viewport-edge alignment and instant reveal while
+          retaining its domain-specific Sync button and bank menu. The named group
+          variant is load-bearing; the unnamed one keeps compatibility with a plain
+          `group` host. */}
+      <div className="absolute right-0 inset-y-0 z-10 flex h-full flex-row items-center justify-center gap-0.5 px-3 opacity-0 group-hover:opacity-100 group-hover/row:opacity-100 focus-within:opacity-100">
         <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
           <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
             <button

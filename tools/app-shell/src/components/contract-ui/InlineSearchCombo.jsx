@@ -132,7 +132,8 @@ export function InlineSearchCombo({ field, value, options, onChange, onKeyDown, 
   // TYPED_SEARCH_DEBOUNCE_MS. They used to share one 300ms debounce, which made both wrong at
   // once: too slow to open, too eager while typing.
   const fetchServerResults = useCallback((q, offset = 0, { immediate = false } = {}) => {
-    if (!selectorUrl || !token) { setServerResults(null); setLoadingFirstPage(false); return; }
+    // ETP-4576 - no `!token` here: under the cookie scheme the client holds none.
+    if (!selectorUrl) { setServerResults(null); setLoadingFirstPage(false); return; }
     if (offset > 0 && (!hasMoreRef.current || fetchInFlightRef.current)) return;
     clearTimeout(fetchTimer.current);
     // ETP-4975 BUG-2 fix: offset===0 always starts a NEW search generation (typed, or via

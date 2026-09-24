@@ -90,10 +90,22 @@ describe('ImportLinesModal', () => {
     vi.restoreAllMocks();
   });
 
-  it('throws when linesEndpoint is missing', () => {
+  it('throws when both linesEndpoint and submitImport are missing', () => {
     expect(() => {
       renderModal({ linesEndpoint: undefined });
-    }).toThrow('linesEndpoint prop is required');
+    }).toThrow('linesEndpoint prop is required unless submitImport is provided');
+  });
+
+  it('does not throw when linesEndpoint is missing but submitImport is provided', () => {
+    expect(() => {
+      renderModal({ linesEndpoint: undefined, submitImport: vi.fn().mockResolvedValue({ ok: true, count: 0 }) });
+    }).not.toThrow();
+  });
+
+  it('does not throw when submitImport is missing but linesEndpoint is provided (existing 4-consumer contract)', () => {
+    expect(() => {
+      renderModal({ submitImport: undefined });
+    }).not.toThrow();
   });
 
   it('renders the modal with title', async () => {
@@ -119,11 +131,19 @@ describe('ImportLinesModal', () => {
   });
 
   it('calls onClose when clicking the backdrop overlay', () => {
-    const { props, container } = renderModal();
-    // The outermost div has onClick={onClose}
-    const backdrop = container.firstChild;
+    const { props } = renderModal();
+    // The modal is rendered via createPortal(..., document.body), so the
+    // backdrop is NOT inside RTL's own `container` div — it's a sibling
+    // appended directly to document.body. The outermost div has onClick={onClose}.
+    const backdrop = document.body.querySelector('.fixed.inset-0');
     fireEvent.click(backdrop);
     expect(props.onClose).toHaveBeenCalled();
+  });
+
+  it('renders its content as a direct child of document.body via createPortal, not inside the local RTL container', () => {
+    const { container } = renderModal();
+    expect(container.querySelector('.fixed.inset-0')).toBeNull();
+    expect(document.body.querySelector('.fixed.inset-0')).not.toBeNull();
   });
 
   it('shows loading state initially', () => {
@@ -402,38 +422,38 @@ describe('ImportLinesModal', () => {
 
     it('displays the quantity as negative when negativeQuantity is true', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded({ negativeQuantity: true });
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded({ negativeQuantity: true });
+      const qtyInput = document.body.querySelector('input[type="number"]');
       expect(qtyInput.value).toBe('-5');
     });
 
     it('keeps the quantity positive when negativeQuantity is false (default)', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded();
+      const qtyInput = document.body.querySelector('input[type="number"]');
       expect(qtyInput.value).toBe('5');
     });
 
     it('flips the min/max attributes to negative bounds when negativeQuantity is true', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded({ negativeQuantity: true });
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded({ negativeQuantity: true });
+      const qtyInput = document.body.querySelector('input[type="number"]');
       expect(qtyInput.min).toBe('-5');
       expect(qtyInput.max).toBe('-1');
     });
 
     it('keeps positive min/max bounds when negativeQuantity is false (default)', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded();
+      const qtyInput = document.body.querySelector('input[type="number"]');
       expect(qtyInput.min).toBe('1');
       expect(qtyInput.max).toBe('5');
     });
 
     it('clamps onChange to a positive magnitude internally, then re-displays it with the sign flipped', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded({ negativeQuantity: true });
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded({ negativeQuantity: true });
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '-3' } });
       expect(qtyInput.value).toBe('-3');
@@ -441,8 +461,8 @@ describe('ImportLinesModal', () => {
 
     it('does NOT clamp on change when typed above maxQty (free typing); reverts to the last committed value and shows qtyMaxAllowed on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded({ negativeQuantity: true });
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded({ negativeQuantity: true });
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '-100' } });
       // ETP-5178: typing is never clamped mid-edit, even past maxQty.
@@ -457,8 +477,8 @@ describe('ImportLinesModal', () => {
 
     it('does NOT snap a non-numeric input to 1 on change (free typing); reverts to the last committed value and shows qtyMustBePositive on blur', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded({ negativeQuantity: true });
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded({ negativeQuantity: true });
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: 'abc' } });
       // ETP-5178: no snap to 1 mid-edit.
@@ -511,8 +531,8 @@ describe('ImportLinesModal', () => {
 
     it('adds Tailwind classes to hide the native number-input spin buttons on the quantity input', async () => {
       defaultProps.fetchLines.mockResolvedValue([NEG_LINE]);
-      const { container } = await renderExpanded();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpanded();
+      const qtyInput = document.body.querySelector('input[type="number"]');
       expect(qtyInput.className).toContain('[appearance:textfield]');
       expect(qtyInput.className).toContain('[&::-webkit-outer-spin-button]:appearance-none');
       expect(qtyInput.className).toContain('[&::-webkit-inner-spin-button]:appearance-none');
@@ -539,8 +559,8 @@ describe('ImportLinesModal', () => {
     }
 
     it('never clamps mid-edit across multiple keystrokes, even typing past maxQty', async () => {
-      const { container } = await renderExpandedWithQtyLine();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '1' } });
       expect(qtyInput.value).toBe('1');
@@ -564,8 +584,8 @@ describe('ImportLinesModal', () => {
     });
 
     it('shows the qtyMaxAllowed toast (not qtyMustBePositive) and reverts when blurred above maxQty', async () => {
-      const { container } = await renderExpandedWithQtyLine();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '15' } });
       fireEvent.blur(qtyInput);
@@ -578,8 +598,8 @@ describe('ImportLinesModal', () => {
     it.each(['0', ''])(
       'shows the qtyMustBePositive toast (not qtyMaxAllowed) and reverts when blurred with %j',
       async (invalidValue) => {
-        const { container } = await renderExpandedWithQtyLine();
-        const qtyInput = container.querySelector('input[type="number"]');
+        await renderExpandedWithQtyLine();
+        const qtyInput = document.body.querySelector('input[type="number"]');
 
         fireEvent.change(qtyInput, { target: { value: invalidValue } });
         fireEvent.blur(qtyInput);
@@ -596,8 +616,8 @@ describe('ImportLinesModal', () => {
     // documents that intentional behavior (see the classifyQtyDraft doc comment
     // in ImportLinesModal.jsx) rather than assuming "negative" is always invalid.
     it('commits a typed negative draft as its positive magnitude even when negativeQuantity is false', async () => {
-      const { container } = await renderExpandedWithQtyLine();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: '-3' } });
       fireEvent.blur(qtyInput);
@@ -607,8 +627,8 @@ describe('ImportLinesModal', () => {
     });
 
     it('shows the qtyMustBePositive toast and reverts when blurred with a non-numeric draft', async () => {
-      const { container } = await renderExpandedWithQtyLine();
-      const qtyInput = container.querySelector('input[type="number"]');
+      await renderExpandedWithQtyLine();
+      const qtyInput = document.body.querySelector('input[type="number"]');
 
       fireEvent.change(qtyInput, { target: { value: 'abc' } });
       fireEvent.blur(qtyInput);
@@ -638,7 +658,7 @@ describe('ImportLinesModal', () => {
 
       it('commits a typed magnitude below maxQty on blur, displayed with the sign flipped', async () => {
         defaultProps.fetchLines.mockResolvedValue([NEG_QTY_LINE]);
-        const result = renderModal({ negativeQuantity: true });
+        renderModal({ negativeQuantity: true });
         await waitFor(() => {
           expect(defaultProps.fetchLines).toHaveBeenCalled();
           expect(screen.queryByText('loading')).not.toBeInTheDocument();
@@ -647,7 +667,7 @@ describe('ImportLinesModal', () => {
         fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
-        const qtyInput = result.container.querySelector('input[type="number"]');
+        const qtyInput = document.body.querySelector('input[type="number"]');
         fireEvent.change(qtyInput, { target: { value: '-3' } });
         fireEvent.blur(qtyInput);
 
@@ -657,7 +677,7 @@ describe('ImportLinesModal', () => {
 
       it('reverts to the committed value and shows qtyMaxAllowed when blurred above maxQty', async () => {
         defaultProps.fetchLines.mockResolvedValue([NEG_QTY_LINE]);
-        const result = renderModal({ negativeQuantity: true });
+        renderModal({ negativeQuantity: true });
         await waitFor(() => {
           expect(defaultProps.fetchLines).toHaveBeenCalled();
           expect(screen.queryByText('loading')).not.toBeInTheDocument();
@@ -666,7 +686,7 @@ describe('ImportLinesModal', () => {
         fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
         await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
 
-        const qtyInput = result.container.querySelector('input[type="number"]');
+        const qtyInput = document.body.querySelector('input[type="number"]');
         fireEvent.change(qtyInput, { target: { value: '-100' } });
         expect(qtyInput.value).toBe('-100'); // free typing — no clamp mid-edit
 
@@ -959,6 +979,178 @@ describe('ImportLinesModal', () => {
       fireEvent.click(screen.getByText(/importSelected/).closest('button'));
 
       await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to import'));
+    });
+  });
+
+  // ETP-5429 — six new opt-in props added while unifying the return-lines import
+  // popups (return-material-receipt / return-to-vendor-shipment) with this
+  // component. All default to the pre-existing behavior; these tests cover the
+  // branch that only fires when the caller opts in.
+  describe('submitImport prop (ETP-5429) — caller-provided batch submit replaces the per-line POST loop', () => {
+    async function renderExpandedAndSelectFirstLineWithSubmitImport(overrides = {}) {
+      defaultProps.fetchLines.mockImplementation(({ docId }) => Promise.resolve([
+        { id: `${docId}-line-1`, _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 },
+      ]));
+      const utils = renderModal({ linesEndpoint: undefined, ...overrides });
+      await waitFor(() => {
+        expect(defaultProps.fetchLines).toHaveBeenCalled();
+        expect(screen.queryByText('loading')).not.toBeInTheDocument();
+        expect(screen.getByText('INV-001')).toBeInTheDocument();
+      }, { timeout: 10000 });
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument(), { timeout: 10000 });
+      fireEvent.click(screen.getByText('Widget A').closest('div[style]'));
+      return utils;
+    }
+
+    it('calls submitImport (not fetch/linesEndpoint) with the selected lines, base, headers, invoiceId and sharedContext', async () => {
+      const submitImport = vi.fn().mockResolvedValue({ ok: true, count: 1 });
+      globalThis.fetch = vi.fn();
+
+      const { props } = await renderExpandedAndSelectFirstLineWithSubmitImport({ submitImport });
+      fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+
+      await waitFor(() => expect(props.onSuccess).toHaveBeenCalled());
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(submitImport).toHaveBeenCalledTimes(1);
+      const call = submitImport.mock.calls[0][0];
+      expect(call.base).toBe(defaultProps.base);
+      expect(call.headers).toBe(defaultProps.headers);
+      expect(call.invoiceId).toBe('inv-1');
+      expect(call.sharedContext).toEqual({});
+      expect(call.lines).toHaveLength(1);
+      expect(call.lines[0]).toEqual(expect.objectContaining({
+        docId: 'doc-1',
+        qty: 5,
+        line: expect.objectContaining({ id: 'doc-1-line-1' }),
+      }));
+    });
+
+    it('shows a success toast with the returned count and calls onSuccess when submitImport resolves ok', async () => {
+      const submitImport = vi.fn().mockResolvedValue({ ok: true, count: 7 });
+      const { props } = await renderExpandedAndSelectFirstLineWithSubmitImport({ submitImport });
+      fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+
+      await waitFor(() => expect(props.onSuccess).toHaveBeenCalled());
+      expect(toast.success).toHaveBeenCalledWith('importSuccess:{"count":7}');
+    });
+
+    it('shows an error toast and does NOT call onSuccess when submitImport resolves { ok: false }', async () => {
+      const submitImport = vi.fn().mockResolvedValue({ ok: false, error: 'quantity exceeds available stock' });
+      const { props } = await renderExpandedAndSelectFirstLineWithSubmitImport({ submitImport });
+      fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('quantity exceeds available stock'));
+      expect(props.onSuccess).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the generic failedToImportLines message when submitImport resolves { ok: false } without an error string', async () => {
+      const submitImport = vi.fn().mockResolvedValue({ ok: false });
+      const { props } = await renderExpandedAndSelectFirstLineWithSubmitImport({ submitImport });
+      fireEvent.click(screen.getByText(/importSelected/).closest('button'));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('failedToImportLines'));
+      expect(props.onSuccess).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('eagerLoadLines prop (ETP-5429)', () => {
+    it('eagerly calls fetchLines for every document before any expand, when eagerLoadLines is true (default)', async () => {
+      renderModal();
+      await waitFor(() => expect(defaultProps.fetchLines).toHaveBeenCalled());
+    });
+
+    it('does NOT call fetchLines until a document is explicitly expanded, when eagerLoadLines is false', async () => {
+      renderModal({ eagerLoadLines: false });
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      expect(defaultProps.fetchLines).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+      await waitFor(() => expect(defaultProps.fetchLines).toHaveBeenCalledWith(
+        expect.objectContaining({ docId: 'doc-1' }),
+      ));
+    });
+  });
+
+  describe('filterZeroQty prop (ETP-5429)', () => {
+    const ZERO_LINE = { id: 'line-zero', _productName: 'Zero Widget', _maxQty: 0, _alreadyImported: false, _unitPrice: 5, _lineNetAmount: 0 };
+    const POS_LINE = { id: 'line-pos', _productName: 'Pos Widget', _maxQty: 4, _alreadyImported: false, _unitPrice: 5, _lineNetAmount: 20 };
+
+    it('drops lines with _maxQty <= 0 after fetch when filterZeroQty is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([ZERO_LINE, POS_LINE]);
+      renderModal({ filterZeroQty: true, eagerLoadLines: false });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getByText('Pos Widget')).toBeInTheDocument());
+      expect(screen.queryByText('Zero Widget')).not.toBeInTheDocument();
+    });
+
+    it('keeps zero-qty lines when filterZeroQty is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([ZERO_LINE, POS_LINE]);
+      renderModal({ eagerLoadLines: false });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getByText('Pos Widget')).toBeInTheDocument());
+      expect(screen.getByText('Zero Widget')).toBeInTheDocument();
+    });
+  });
+
+  describe('autoSelectOnExpand prop (ETP-5429)', () => {
+    it('auto-selects every line of a document as soon as its on-demand lines finish loading, when true', async () => {
+      defaultProps.fetchLines.mockResolvedValue(LINE_ROWS);
+      renderModal({ autoSelectOnExpand: true, eagerLoadLines: false });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      // Both lines auto-selected -> footer shows the count.
+      await waitFor(() => expect(screen.getByText('selected:{"count":2}')).toBeInTheDocument());
+    });
+
+    it('does NOT auto-select lines on expand when false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue(LINE_ROWS);
+      renderModal({ eagerLoadLines: false });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getByText('Widget A')).toBeInTheDocument());
+      // No line selected -> the footer still shows the "nothing selected" prompt,
+      // not the `selected:{"count":N}` label autoSelectOnExpand would produce.
+      expect(screen.getByText('selectLinesToImport')).toBeInTheDocument();
+    });
+  });
+
+  describe('showAvailableQtyColumn + qtyColumnLabelKey props (ETP-5429)', () => {
+    const LINE = { id: 'line-1', _productName: 'Widget A', _maxQty: 5, _alreadyImported: false, _unitPrice: 10, _lineNetAmount: 50 };
+
+    it('shows only one qty-labeled header (the default "qty" key) when showAvailableQtyColumn is false (default)', async () => {
+      defaultProps.fetchLines.mockResolvedValue([LINE]);
+      renderModal({ eagerLoadLines: false });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getAllByText('qty')).toHaveLength(1));
+      expect(screen.queryByText('returnQty')).not.toBeInTheDocument();
+    });
+
+    it('shows both the available "qty" column and the qtyColumnLabelKey-labeled editable column when showAvailableQtyColumn is true', async () => {
+      defaultProps.fetchLines.mockResolvedValue([LINE]);
+      renderModal({ eagerLoadLines: false, showAvailableQtyColumn: true, qtyColumnLabelKey: 'returnQty' });
+
+      await waitFor(() => expect(screen.getByText('INV-001')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('INV-001').closest('div[style]'));
+
+      await waitFor(() => expect(screen.getByText('qty')).toBeInTheDocument());
+      expect(screen.getByText('returnQty')).toBeInTheDocument();
+      // The available-qty read-only cell shows the formatted _maxQty next to the editable input.
+      expect(screen.getByText('5,00')).toBeInTheDocument();
     });
   });
 });

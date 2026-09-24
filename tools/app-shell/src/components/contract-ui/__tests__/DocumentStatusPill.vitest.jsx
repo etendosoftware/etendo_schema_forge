@@ -122,4 +122,21 @@ describe('DocumentStatusPill', () => {
     expect(pill).toHaveAttribute('data-tone', 'neutral');
     expect(screen.queryByTestId('Icon__1e4f01')).toBeNull();
   });
+
+  it('renders hint as the title attribute when provided', () => {
+    render(
+      <DocumentStatusPill status="CO" enumLabels={{ CO: 'statusProcessed' }} hint="Some explanation" />,
+    );
+    expect(screen.getByTestId('document-status-pill')).toHaveAttribute('title', 'Some explanation');
+  });
+
+  it('omits the title attribute when hint is not provided (regression guard)', () => {
+    render(<DocumentStatusPill status="CO" enumLabels={{ CO: 'statusProcessed' }} />);
+    expect(screen.getByTestId('document-status-pill')).not.toHaveAttribute('title');
+  });
+
+  it('omits the title attribute when hint is an empty string', () => {
+    render(<DocumentStatusPill status="CO" enumLabels={{ CO: 'statusProcessed' }} hint="" />);
+    expect(screen.getByTestId('document-status-pill')).not.toHaveAttribute('title');
+  });
 });

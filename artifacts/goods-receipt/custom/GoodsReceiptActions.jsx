@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
 import ConfirmGoodsReceiptModal from './ConfirmGoodsReceiptModal';
 import { ConfirmResultModal } from '@/components/contract-ui';
@@ -26,6 +28,22 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const resultNavigatedRef = useRef(false);
 
+  // Quote inputs — mirrors BulkInvoiceFromReceipt.jsx's own quote (and GoodsShipmentActions'
+  // identical single-record wiring) exactly; see either for the full rationale. Only
+  // meaningful when the receipt has NO linked purchase order — createFromReceipt's linked-PO
+  // branch prices from the order via OrderLine.class in Core, and this button sends no line
+  // overrides, so a quote computed from just this receipt's own lines would risk disagreeing
+  // with what actually gets billed. `hasLinkedOrder` is derived from the same single-record
+  // enrichment `data` already carries.
+  const [selectedPriceListId, setSelectedPriceListId] = useState('');
+  const [lineDetails, setLineDetails] = useState(null);
+  const [pendingByLine, setPendingByLine] = useState(null);
+  const [orderLinePrices, setOrderLinePrices] = useState({});
+  const [tariffPrices, setTariffPrices] = useState({});
+  const [mainFetchPending, setMainFetchPending] = useState(false);
+  const [tariffFetchPending, setTariffFetchPending] = useState(false);
+  const hasLinkedOrder = Array.isArray(data?.linkedOrders) && data.linkedOrders.length > 0;
+
   const isCompleted = data?.documentStatus === 'CO';
   const isFullyInvoiced = (parseFloat(data?.invoiceStatus ?? 0)) >= 100;
   const isFullyReturned = (parseFloat(data?.returnStatus ?? 0)) >= 100;
@@ -40,10 +58,13 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     token,
     apiBaseUrl,
   });
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-5265 — when the receipt is already fully invoiced, Confirm skips the
   // intermediate "already invoiced" popup entirely and calls the document-action
@@ -122,11 +143,10 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `${base}/return-to-vendor-shipment/returnToVendorShipment/_/action/availableReceiptLines`,
           {
             method: 'POST',
-            headers,
             body: JSON.stringify({ receiptId: recordId, businessPartner: bpId }),
           },
         );
@@ -136,7 +156,7 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [wizardOpen, recordId, base, headers, data?.businessPartner]);
+  }, [wizardOpen, recordId, base, apiFetch, data?.businessPartner]);
 
   // ETP-5063 — when confirming the receipt created no related invoice, skip
   // the result modal and communicate success via an auto-dismissing toast
@@ -149,13 +169,142 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
     }
   }, [confirmedDocs, onRefresh, ui]);
 
+  // Fetches this receipt's pending-quantity map, which now ALSO carries each pending line's
+  // product and salesOrderLine (ETP-5410 follow-up — see
+  // CreateDraftInvoiceHandler#handlePendingLines), so this used to be two requests and is now
+  // one. Skipped entirely when a linked order exists (see hasLinkedOrder above).
+  useEffect(() => {
+    if (!showInvoiceConfirm || hasLinkedOrder || !recordId) {
+      setLineDetails(null);
+      setPendingByLine(null);
+      setOrderLinePrices({});
+      setMainFetchPending(false);
+      return;
+    }
+    let cancelled = false;
+    setMainFetchPending(true);
+    (async () => {
+      const pendingRes = await apiFetch(
+        `${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`, { baseUrl: '', token },
+      ).catch(() => null);
+      if (cancelled) return;
+
+      const pendingData = pendingRes?.ok ? (await pendingRes.json())?.response?.data || [] : [];
+      const details = {};
+      const pendingMap = {};
+      pendingData.forEach(item => {
+        details[item.lineId] = { product: item.product, salesOrderLine: item.salesOrderLine || null };
+        pendingMap[item.lineId] = Number(item.pendingQty) || 0;
+      });
+      setLineDetails(details);
+      setPendingByLine(pendingMap);
+
+      const orderLineIds = [...new Set(Object.values(details).map(d => d.salesOrderLine).filter(Boolean))];
+      const prices = {};
+      await Promise.all(orderLineIds.map(async (id) => {
+        try {
+          const res = await apiFetch(`${base}/purchase-order/lines/${id}`, { baseUrl: '', token });
+          if (res.ok) {
+            const ol = (await res.json())?.response?.data?.[0];
+            if (ol) prices[id] = Number(ol.unitPrice) || 0;
+          }
+        } catch { /* a line whose order-line price can't be resolved just contributes nothing */ }
+      }));
+      if (!cancelled) {
+        setOrderLinePrices(prices);
+        setMainFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showInvoiceConfirm, hasLinkedOrder, recordId, base, apiFetch, token]);
+
+  // Tariff prices for lines with no linked order line — reactive to the Tarifa selection.
+  useEffect(() => {
+    if (!lineDetails || !selectedPriceListId) { setTariffPrices({}); return; }
+    const products = [...new Set(
+      Object.values(lineDetails).filter(d => !d.salesOrderLine).map(d => d.product).filter(Boolean),
+    )];
+    if (products.length === 0) { setTariffPrices({}); return; }
+    let cancelled = false;
+    setTariffFetchPending(true);
+    (async () => {
+      try {
+        // ETP-5410 follow-up: a dedicated POST action that prices exactly these product ids,
+        // instead of the generic product-browse selector (up to 500 rows, filtered client-side)
+        // — see MultiDocumentInvoiceSupport#resolveProductPrices in com.etendoerp.go.
+        const res = await apiFetch(
+          `${base}/goods-receipt/goodsReceipt/${recordId}/action/productPrices`,
+          {
+            method: 'POST',
+            baseUrl: '',
+            token,
+            body: JSON.stringify({ productIds: products, priceListId: selectedPriceListId }),
+          },
+        );
+        if (!res.ok || cancelled) return;
+        const items = (await res.json())?.response?.data || [];
+        const prices = {};
+        items.forEach(item => {
+          if (item.productId) prices[item.productId] = Number(item.price) || 0;
+        });
+        if (!cancelled) setTariffPrices(prices);
+      } catch { /* products left unpriced just don't contribute to the quote */
+      } finally {
+        if (!cancelled) setTariffFetchPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [lineDetails, selectedPriceListId, recordId, base, apiFetch, token]);
+
+  const quoteAmount = useMemo(() => {
+    if (!lineDetails || !pendingByLine) return null;
+    let sum = 0;
+    let resolvedAny = false;
+    for (const [lineId, qty] of Object.entries(pendingByLine)) {
+      if (!qty) continue;
+      const detail = lineDetails[lineId];
+      if (!detail) continue;
+      const price = detail.salesOrderLine
+        ? orderLinePrices[detail.salesOrderLine]
+        : tariffPrices[detail.product];
+      if (price != null) {
+        sum += qty * price;
+        resolvedAny = true;
+      }
+    }
+    return resolvedAny ? sum : null;
+  }, [lineDetails, pendingByLine, orderLinePrices, tariffPrices]);
+
+  const cardAmountLabel = quoteAmount != null
+    ? formatCurrency(data?.['etgoCurrency$_identifier'] || data?.['currency$_identifier'] || '', quoteAmount)
+    : undefined;
+
+  // Whether any pending line still needs a Tarifa-sourced price we haven't fetched yet.
+  const needsTariffPricing = !!(lineDetails && pendingByLine
+    && Object.entries(pendingByLine).some(([lineId, qty]) => {
+      if (!qty) return false;
+      const detail = lineDetails[lineId];
+      return !!(detail && !detail.salesOrderLine);
+    }));
+  // ETP-5410 follow-up: this component used to fall straight through to the modal's own
+  // documentNo fallback while the quote was still resolving — the exact same "wrong value
+  // flashes, then gets replaced" glitch already fixed on the bulk toolbar actions
+  // (BulkInvoiceFromReceipt.jsx), just showing a document number instead of "N recibos".
+  // Unifies onto the same fix: cardAmountLoading shows a skeleton placeholder instead, so this
+  // and the bulk modal never disagree on what "the quote is still loading" looks like. Gated on
+  // hasLinkedOrder like the rest of the quote feature — when a linked order exists, the quote
+  // is never computed at all, so there is nothing to show a loading state for.
+  const quoteLoading = !hasLinkedOrder && (
+    mainFetchPending || (needsTariffPricing && (!selectedPriceListId || tariffFetchPending))
+  );
+
   const handleCreateInvoice = async (priceListId) => {
     if (creatingInvoice) return;
     setCreatingInvoice(true);
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/goods-receipt/goodsReceipt/${recordId}/action/createPurchaseInvoice`,
-        { method: 'POST', headers, body: JSON.stringify({ priceListId }) },
+        { method: 'POST', body: JSON.stringify({ priceListId }) },
       );
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -207,7 +356,10 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
           // Fix (not part of ETP-5260): was `var(--status-info-fg)` — a badge-text token,
           // not a button-background token — which rendered a saturated blue instead of
           // the dark gray used by the real `Confirmar` button. Same pattern as ETP-4781.
-          style={{ ...textBtn, border: '1px solid var(--status-info-border)', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+          // The `1px solid var(--status-info-border)` ring was a leftover from that same
+          // badge styling — the real `Confirmar` button (DraftModeConfirmButton) has no
+          // border at all, just the dark fill.
+          style={{ ...textBtn, border: 'none', background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
           onMouseEnter={e => { e.currentTarget.style.background = 'hsl(var(--primary) / 0.9)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'hsl(var(--primary))'; }}
@@ -229,7 +381,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         <ConfirmGoodsReceiptModal
           data={data}
           base={base}
-          headers={headers}
           recordId={recordId}
           onConfirmed={(docs) => { setShowConfirm(false); setConfirmedDocs(docs); }}
           onClose={() => setShowConfirm(false)}
@@ -240,12 +391,16 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         <CreateInvoiceConfirmModal
           data={data}
           loading={creatingInvoice}
+          pendingQtyUrl={`${base}/goods-receipt/goodsReceipt/${recordId}/action/pendingInvoiceLines`}
+          cardAmountLabel={cardAmountLabel}
+          cardAmountLoading={quoteLoading}
           showPriceListPicker
           isSOTrx={false}
           apiBaseUrl={apiBaseUrl}
           token={token}
           onConfirm={handleCreateInvoice}
           onClose={() => setShowInvoiceConfirm(false)}
+          onPriceListChange={setSelectedPriceListId}
         />
       )}
 
@@ -315,7 +470,6 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
         receiptData={data}
         lines={returnLines}
         base={base}
-        headers={headers}
         onSuccess={(result) => { setWizardOpen(false); setReturnedDoc(result); }}
         onError={(msg) => toast.error(msg)}
       />
@@ -331,7 +485,8 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 // CloneOrderModal — so it stays a window-owned child instead of being folded
 // into the shared component's generic `clone` config).
 
-export function CloneReceiptModal({ receiptId, data, base, headers, onClose, onCloned }) {
+export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) {
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -343,12 +498,12 @@ export function CloneReceiptModal({ receiptId, data, base, headers, onClose, onC
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=999`, { headers })
+    apiFetch(`${base}/goods-receipt/goodsReceiptLine?parentId=${receiptId}&_startRow=0&_endRow=999`)
       .then(r => r.ok ? r.json() : null)
       .then(json => { if (!cancelled) setLines(json?.response?.data ?? []); })
       .catch(() => { if (!cancelled) setLines([]); });
     return () => { cancelled = true; };
-  }, [receiptId, base, headers]);
+  }, [receiptId, base, apiFetch]);
 
   const statusMap = {
     DR: { label: ui('orderStatusDraft'), bg: 'var(--status-warning-bg)', color: 'var(--status-warning-fg)' },
@@ -362,7 +517,7 @@ export function CloneReceiptModal({ receiptId, data, base, headers, onClose, onC
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST', headers });
+      const res = await apiFetch(`${base}/goods-receipt/goodsReceipt/${receiptId}/action/cloneRecord`, { method: 'POST' });
       const json = await res.json();
       if (!res.ok) {
         setError(json?.response?.error?.message || ui('cloneReceiptError'));

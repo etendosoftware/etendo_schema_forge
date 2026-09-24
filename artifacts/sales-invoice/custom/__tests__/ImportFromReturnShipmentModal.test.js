@@ -2,7 +2,10 @@ import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadCustomModule } from '../../../_test-support/loadCustomModule.js';
+import {
+  loadCustomModule,
+  apiFetchToGlobalFetch,
+} from '../../../_test-support/loadCustomModule.js';
 import { orderLineApiKey } from '../../../_test-support/contractApiKey.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -14,6 +17,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // `realHelpers` so it cannot drift from production.
 const { helpers: realHelpers, source: src } = loadCustomModule(
   join(__dirname, '..', 'ImportFromReturnShipmentModal.jsx'),
+  // The prelude calls `moduleApiFetch` (imported from '@/auth/api.js', a
+  // binding the loader strips); the stub forwards to `globalThis.fetch`,
+  // which is what the mocks below install.
+  { moduleApiFetch: apiFetchToGlobalFetch },
 );
 
 // The invoice-line -> order-line FK key, read from the generated contract

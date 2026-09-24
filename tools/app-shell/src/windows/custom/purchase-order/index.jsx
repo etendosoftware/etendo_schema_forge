@@ -101,6 +101,15 @@ export default function PurchaseOrderWindow(props) {
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
 
+  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
+  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
+  // Checked once here, before either branch, so both list and detail are covered.
+  // ETP-5205 — moved up from below useOrderWindow: menuActions now needs this tier to
+  // gate itself, and useWindowAccess doesn't depend on anything useOrderWindow
+  // produces, so this reordering changes nothing else (hook order just needs to stay
+  // stable across renders, not match any particular sequence).
+  const windowAccessTier = useWindowAccess('181');
+
   const {
     refreshKey, setRefreshKey,
     renderPreview, rowQuickActions,
@@ -110,6 +119,7 @@ export default function PurchaseOrderWindow(props) {
   } = useOrderWindow({
     windowName, token, apiBaseUrl,
     specName: 'purchase-order',
+    windowReadOnly: windowAccessTier === 'read-only',
     manageLabelKeys: PO_MANAGE_LABELS,
     confirmLabelKey: 'poConfirmBtn',
     confirmedTitleKey: 'poConfirmedTitle',
@@ -131,10 +141,6 @@ export default function PurchaseOrderWindow(props) {
     apiBaseUrl, token, enabled: LINE_TAX_SIF_TRIGGER_ENABLED, recordId, windowCategory: 'purchases', specName: 'purchase-order',
   });
 
-  // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
-  // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.
-  // Checked once here, before either branch, so both list and detail are covered.
-  const windowAccessTier = useWindowAccess('181');
   // ETP-4520 — mirrors buildWindowAccessWiring's effectiveWindow: the hand-rolled
   // ListView below never picked up the read-only tier either, unlike GeneratedApp
   // (which already forces window.readOnly internally for the detail branch).

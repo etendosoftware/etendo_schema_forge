@@ -58,7 +58,6 @@ function ReturnToVendorLinesEmptyState({ data, onAddLine, recordId, token, apiBa
   const [showModal, setShowModal] = useState(false);
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -104,7 +103,6 @@ function ReturnToVendorLinesEmptyState({ data, onAddLine, recordId, token, apiBa
           targetId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); onRefresh?.(); }}
         />
@@ -122,7 +120,6 @@ const ReturnToVendorLineActions = forwardRef(function ReturnToVendorLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -165,7 +162,6 @@ const ReturnToVendorLineActions = forwardRef(function ReturnToVendorLineActions(
           targetId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowModal(false)}
           onSuccess={() => { setShowModal(false); onRefresh?.(); }}
         />,

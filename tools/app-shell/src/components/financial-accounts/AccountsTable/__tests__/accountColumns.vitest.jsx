@@ -42,6 +42,11 @@ const ACCOUNT = {
 
 const ui = (key) => key;
 
+const setMetrics = (element, scrollWidth, clientWidth) => {
+  Object.defineProperty(element, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: clientWidth });
+};
+
 /** Both variants are load-bearing: one per host. Dropping either breaks one of the two. */
 function expectBothGroupVariants(el) {
   const tokens = el.className.split(/\s+/).filter(Boolean);
@@ -57,6 +62,67 @@ describe('NameCell', () => {
     render(<NameCell account={ACCOUNT} ui={ui} />);
 
     expect(screen.getByText('BBVA Principal')).toBeInTheDocument();
+  });
+
+  it('reserves the avatar and connection badge while the name owns only the remaining width', () => {
+    const longName = 'Santander Corporate & Investment Banking International Enterprise Account';
+    render(
+      <NameCell
+        account={{ ...ACCOUNT, name: longName, bankConnected: false }}
+        ui={ui}
+      />,
+    );
+
+    const name = screen.getByTestId('account-row-name-acc-1');
+    const avatar = screen.getByTestId('account-row-avatar-acc-1');
+    const badge = screen.getByTestId('account-row-connection-badge-acc-1');
+    const nameAndBadge = name.parentElement;
+
+    expect(name).toHaveClass('truncate', 'min-w-0', 'flex-1');
+    expect(nameAndBadge).toHaveClass('w-fit', 'max-w-full', 'min-w-0');
+    expect(nameAndBadge).not.toHaveClass('w-full', 'flex-1');
+    expect(nameAndBadge?.parentElement).toHaveClass('min-w-0', 'flex-1');
+    expect(avatar).toHaveClass('shrink-0');
+    expect(badge).toHaveClass('shrink-0');
+  });
+
+  it('keeps a short disconnected account badge adjacent to its name', () => {
+    render(
+      <NameCell
+        account={{ ...ACCOUNT, name: 'Sabadell', bankConnected: false }}
+        ui={ui}
+      />,
+    );
+
+    const name = screen.getByTestId('account-row-name-acc-1');
+    const badge = screen.getByTestId('account-row-connection-badge-acc-1');
+    const nameAndBadge = name.parentElement;
+
+    expect(nameAndBadge).toHaveClass('w-fit', 'max-w-full');
+    expect(nameAndBadge).not.toHaveClass('w-full', 'flex-1');
+    expect(name.nextElementSibling).toBe(badge);
+  });
+
+  it('shows the complete account name in a tooltip only when it is clipped', () => {
+    const longName = 'Santander Corporate & Investment Banking International Enterprise Account';
+    const { unmount } = render(
+      <NameCell account={{ ...ACCOUNT, name: longName }} ui={ui} />,
+    );
+    const longNameCell = screen.getByTestId('account-row-name-acc-1');
+    setMetrics(longNameCell, 520, 180);
+
+    fireEvent.focus(longNameCell);
+
+    expect(screen.getByTestId('account-row-name-acc-1-tooltip')).toHaveTextContent(longName);
+    unmount();
+
+    render(<NameCell account={{ ...ACCOUNT, name: 'Caja' }} ui={ui} />);
+    const shortNameCell = screen.getByTestId('account-row-name-acc-1');
+    setMetrics(shortNameCell, 36, 180);
+
+    fireEvent.focus(shortNameCell);
+
+    expect(screen.queryByTestId('account-row-name-acc-1-tooltip')).not.toBeInTheDocument();
   });
 
   // ETP-4921 inverted this guard. NameCell used to open with a 44px drag-grip slot, but the

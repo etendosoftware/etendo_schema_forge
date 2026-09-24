@@ -106,6 +106,11 @@ export function DetailMoreActionsMenu({
       toast.success(msg);
       // ETP-4563 cache fix: post-action refresh must force a fresh network read
       // so the shared cache does not serve the pre-mutation record.
+      // ETP-5378 — invalidate the LIST cache too, not just this record. ETP-4563 (the note
+      // above) fixed the record read; the cached grid page was left holding the pre-action
+      // row, so Cancelar navigated back to a list that still showed the old status until the
+      // user hit refresh by hand. Same trio handleProcessSuccess already runs in useEntity.
+      hook.invalidateEntityCache?.();
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } catch (err) {
@@ -120,6 +125,11 @@ export function DetailMoreActionsMenu({
       toast.success(msg);
       // ETP-4563 cache fix: post-action refresh must force a fresh network read
       // so the shared cache does not serve the pre-mutation record.
+      // ETP-5378 — invalidate the LIST cache too, not just this record. ETP-4563 (the note
+      // above) fixed the record read; the cached grid page was left holding the pre-action
+      // row, so Cancelar navigated back to a list that still showed the old status until the
+      // user hit refresh by hand. Same trio handleProcessSuccess already runs in useEntity.
+      hook.invalidateEntityCache?.();
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } else {
@@ -217,7 +227,7 @@ export function DetailMoreActionsMenu({
               token={token}
               apiBaseUrl={apiBaseUrl}
               onClose={() => setShowMoreMenu(false)}
-              onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
               data-testid="CustomMenuContent__fa3275" />
           );
         })()}

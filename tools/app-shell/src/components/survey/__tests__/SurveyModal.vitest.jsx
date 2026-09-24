@@ -23,10 +23,23 @@ afterEach(() => {
   getRemoteCannedResponses.mockReturnValue(null);
 });
 
+// Mirrors the real `nps` survey's `canned` fallback list in surveys.js (score-banded,
+// no icons) — ETP-4353 Phase 2 generalized resolveCannedOptions so NPS now reads
+// survey.canned just like CSAT does, instead of an inline segment ternary. Without this
+// array the fixture would silently regress to zero chip options.
 const npsSurvey = {
   id: 'nps',
   type: 'nps',
   titleKey: 'surveyNpsTitle',
+  canned: [
+    { key: 'surveyChipSpeed', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipDesign', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipFeatures', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipSupport', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipPrice', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipDocs', minScore: 0, maxScore: 10 },
+    { key: 'surveyChipAI', minScore: 8, maxScore: 10 },
+  ],
 };
 
 const csatSurvey = {
@@ -192,6 +205,81 @@ describe('SurveyModal — NPS flow', () => {
     await user.click(screen.getByText('surveyNext').closest('button'));
 
     expect(screen.queryByText('surveyChipAI')).not.toBeInTheDocument();
+  });
+
+  it('shows all 6 base chips but not the AI chip for a detractor score (ETP-4353)', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByTestId('SurveyModal__nps-2'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+
+    for (const key of ['surveyChipSpeed', 'surveyChipDesign', 'surveyChipFeatures', 'surveyChipSupport', 'surveyChipPrice', 'surveyChipDocs']) {
+      expect(screen.getByText(key)).toBeInTheDocument();
+    }
+    expect(screen.queryByText('surveyChipAI')).not.toBeInTheDocument();
+  });
+
+  it('shows all 7 chips (6 base + AI) for a promoter score, including the 8 boundary (ETP-4353)', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByTestId('SurveyModal__nps-8'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+
+    for (const key of ['surveyChipSpeed', 'surveyChipDesign', 'surveyChipFeatures', 'surveyChipSupport', 'surveyChipPrice', 'surveyChipDocs', 'surveyChipAI']) {
+      expect(screen.getByText(key)).toBeInTheDocument();
+    }
+  });
+
+  it('renders NPS chips as plain text via ChipGroup, with no icon and no CannedResponseGrid (ETP-4353)', async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+
+    const chip = screen.getByText('surveyChipSpeed');
+    // ChipGroup buttons render only the plain label — no separate icon span like
+    // CannedResponseGrid's aria-hidden icon element.
+    expect(chip.textContent).toBe('surveyChipSpeed');
+    expect(chip.querySelector('span[aria-hidden="true"]')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('CannedResponseGrid__91aeca')).not.toBeInTheDocument();
+  });
+
+  it('sources NPS chips from backend-configured canned responses when available, still filtered by score band and rendered without icons (ETP-4353)', async () => {
+    getRemoteCannedResponses.mockReturnValue([
+      { icon: '🚀', text: 'Config remota siempre visible', minScore: 0, maxScore: 10 },
+      { icon: '✨', text: 'Config remota solo promotores', minScore: 8, maxScore: 10 },
+    ]);
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-9'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+
+    expect(getRemoteCannedResponses).toHaveBeenCalledWith('nps', 'es_ES');
+    expect(screen.getByText('Config remota siempre visible')).toBeInTheDocument();
+    expect(screen.getByText('Config remota solo promotores')).toBeInTheDocument();
+    // Falls back away from the hardcoded fallback list entirely when remote data exists.
+    expect(screen.queryByText('surveyChipSpeed')).not.toBeInTheDocument();
+    expect(screen.queryByText('surveyChipAI')).not.toBeInTheDocument();
+    // Still ChipGroup (no icon, no CannedResponseGrid).
+    const chip = screen.getByText('Config remota siempre visible');
+    expect(chip.querySelector('span[aria-hidden="true"]')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('CannedResponseGrid__91aeca')).not.toBeInTheDocument();
+  });
+
+  it('filters backend-configured NPS chips by score band for a detractor score (ETP-4353)', async () => {
+    getRemoteCannedResponses.mockReturnValue([
+      { icon: '🚀', text: 'Config remota siempre visible', minScore: 0, maxScore: 10 },
+      { icon: '✨', text: 'Config remota solo promotores', minScore: 8, maxScore: 10 },
+    ]);
+    const user = userEvent.setup();
+    setup();
+
+    await user.click(screen.getByTestId('SurveyModal__nps-2'));
+    await user.click(screen.getByText('surveyNext').closest('button'));
+
+    expect(screen.getByText('Config remota siempre visible')).toBeInTheDocument();
+    expect(screen.queryByText('Config remota solo promotores')).not.toBeInTheDocument();
   });
 
   it('submits followup: calls onRespond with score/feedback/tags, then onClose after the timer', async () => {

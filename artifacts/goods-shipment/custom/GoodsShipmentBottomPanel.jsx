@@ -21,10 +21,6 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
 
   const handleImportOrderClick = async () => {
     if (onSave) {
@@ -86,7 +82,6 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowOrderModal(false)}
           onSuccess={() => { setShowOrderModal(false); onRefresh?.(); }}
         />,
@@ -97,7 +92,6 @@ function ShipmentLinesEmptyState({ data, recordId, apiBaseUrl, token, onAddLine,
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowInvoiceModal(false)}
           onSuccess={() => { setShowInvoiceModal(false); onRefresh?.(); }}
         />,
@@ -117,10 +111,6 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
   const isDraft = data?.documentStatus === 'DR';
   const bpId = data?.businessPartner;
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(
-    () => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }),
-    [token],
-  );
 
   useEffect(() => {
     if (!forceOpen) return;
@@ -150,7 +140,6 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowOrderModal(false)}
           onSuccess={() => { setShowOrderModal(false); onRefresh?.(); }}
         />,
@@ -161,7 +150,6 @@ const ShipmentLineActions = forwardRef(function ShipmentLineActions(
           invoiceId={recordId}
           bpId={bpId}
           base={base}
-          headers={headers}
           onClose={() => setShowInvoiceModal(false)}
           onSuccess={() => { setShowInvoiceModal(false); onRefresh?.(); }}
         />,

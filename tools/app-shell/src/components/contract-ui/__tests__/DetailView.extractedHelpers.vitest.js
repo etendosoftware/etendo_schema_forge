@@ -599,15 +599,15 @@ describe('renderNotesField', () => {
     const handleChangeWithCallout = vi.fn();
     const handleNotesSave = vi.fn();
     const setNotesFocused = vi.fn();
-    const el = renderNotesField(
-      true,
-      { notes: 'hello' },
-      'notes',
+    const el = renderNotesField({
+      notesFocused: true,
+      data: { notes: 'hello' },
+      notesField: 'notes',
       handleChangeWithCallout,
       handleNotesSave,
       setNotesFocused,
       ui,
-    );
+    });
     expect(el.type).toBe('textarea');
     expect(el.props.value).toBe('hello');
     expect(el.props.placeholder).toBe('description');
@@ -624,21 +624,21 @@ describe('renderNotesField', () => {
   });
 
   it('defaults the textarea value to empty string when the field is missing', () => {
-    const el = renderNotesField(true, {}, 'notes', vi.fn(), vi.fn(), vi.fn(), ui);
+    const el = renderNotesField({ notesFocused: true, data: {}, notesField: 'notes', handleChangeWithCallout: vi.fn(), handleNotesSave: vi.fn(), setNotesFocused: vi.fn(), ui });
     expect(el.props.value).toBe('');
   });
 
   it('renders a clickable div showing the value when notesFocused is false', () => {
     const setNotesFocused = vi.fn();
-    const el = renderNotesField(
-      false,
-      { notes: 'shown text' },
-      'notes',
-      vi.fn(),
-      vi.fn(),
+    const el = renderNotesField({
+      notesFocused: false,
+      data: { notes: 'shown text' },
+      notesField: 'notes',
+      handleChangeWithCallout: vi.fn(),
+      handleNotesSave: vi.fn(),
       setNotesFocused,
       ui,
-    );
+    });
     expect(el.type).toBe('div');
     expect(el.props.role).toBe('textbox');
     expect(el.props.children).toBe('shown text');
@@ -651,7 +651,7 @@ describe('renderNotesField', () => {
   });
 
   it('renders a placeholder span inside the div when the value is empty', () => {
-    const el = renderNotesField(false, {}, 'notes', vi.fn(), vi.fn(), vi.fn(), ui);
+    const el = renderNotesField({ notesFocused: false, data: {}, notesField: 'notes', handleChangeWithCallout: vi.fn(), handleNotesSave: vi.fn(), setNotesFocused: vi.fn(), ui });
     expect(el.type).toBe('div');
     const child = el.props.children;
     expect(child.type).toBe('span');
@@ -1229,6 +1229,16 @@ describe('shouldShowInlineDeleteSelectionBar', () => {
   it('is falsy when delete is explicitly disabled', () => {
     const api = { crud: { lines: { delete: false } } };
     expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines')).toBeFalsy();
+  });
+
+  it('is falsy when the window is read-only, even for inlineEditable with delete allowed (ETP-5205)', () => {
+    const api = { crud: { lines: { delete: true } } };
+    expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines', true)).toBeFalsy();
+  });
+
+  it('is truthy when isDocumentReadOnly is false/absent, matching prior behavior (ETP-5205 regression)', () => {
+    const api = { crud: { lines: { delete: true } } };
+    expect(shouldShowInlineDeleteSelectionBar('inlineEditable', api, 'lines', false)).toBeTruthy();
   });
 });
 

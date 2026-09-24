@@ -53,6 +53,13 @@ export function ProductPurchasePriceCell({ row }) {
   return <PriceText value={toNumberOrNull(row?.eTGOPurchasePrice)} data-testid="PriceText__fed565" />;
 }
 
+// ETP-5446 — eTGOCost (EM_ETGO_Cost, ETGO_PRODUCT_COST) is the STA/AVA
+// M_Costing row of the product currently in force, refreshed synchronously like the prices. An empty
+// value means the product has no cost recorded, so it renders as a dash, not 0.
+export function ProductCostCell({ row }) {
+  return <PriceText value={toNumberOrNull(row?.eTGOCost)} data-testid="PriceText__fed565" />;
+}
+
 export function ProductStockCell({ row }) {
   const stock = toNumberOrNull(row?.eTGOStock);
   if (stock === null) return <span className="text-muted-foreground text-sm">—</span>;

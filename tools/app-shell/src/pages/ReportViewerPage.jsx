@@ -14,6 +14,7 @@ import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { fetchMyReportAccess } from '@/lib/rolesApi.js';
 // Etendo context path prefix (e.g. "/etendo" in production, "" in local dev where
 // Vite proxies /sws/* directly). Same logic as auth/api.js detectBaseUrl().
 function getEtendoBase() {
@@ -48,6 +49,25 @@ const REPORT_CATEGORY_WINDOW_IDS = {
   finance: 'D647D118F5014D00AF47A636B2CD0DD3',
   inventory: '6346B88619F948F9A42224BDB0B239FA',
 };
+
+// ETP-5402 QA follow-up — the report ids ReportAccessCatalog.java actually covers, one array per
+// REPORT_CATEGORY_WINDOW_IDS key (a category absent from that map has no per-report catalog
+// entries either, and stays permissive/ungated exactly as it does today). Used to (a) let a role
+// through the category gate below via a real per-report grant even without the coarse window
+// grant (e.g. Sales holds `aging-receivable` but not the Financial Reports window), and (b)
+// filter the gallery down to only the reports the caller actually has a tier for. Mirrors the
+// backend's own `ReportAccessCatalog.ROWS` catalog (com.etendoerp.go) — keep both in sync if a
+// report row is ever added, removed, or moved between categories.
+const REPORT_CATEGORY_REPORT_IDS = {
+  finance: [
+    'tax-report', 'aging-receivable', 'aging-payable', 'balance-sheet', 'profit-loss',
+    'report-general-ledger', 'report-journal-entries', 'report-trial-balance',
+  ],
+  inventory: ['inventory-stock-report'],
+};
+
+/** Flattened union of every REPORT_CATEGORY_REPORT_IDS id, for the category-agnostic filter below. */
+const ALL_CATALOG_REPORT_IDS = new Set(Object.values(REPORT_CATEGORY_REPORT_IDS).flat());
 
 // Static skeleton placeholders shown while a report renders — fixed-length, never reordered.
 const SKELETON_COLUMN_WIDTHS = [40, 15, 15, 15, 15, 15].map((w, i) => ({ id: i, w }));
@@ -2043,6 +2063,19 @@ export default function ReportViewerPage() {
   const categoryFilter = searchParams.get('category');
   const reportId = searchParams.get('report');
 
+  // ETP-5402 QA follow-up — the caller's own per-report tiers (id -> 'full'|'read-only', a
+  // missing key means no access), fetched once on mount. `null` means "not resolved yet" —
+  // treated as "no report-level access proven yet" everywhere below, the same fail-closed
+  // convention `useWindowAccess` already uses while its own map is still loading.
+  const [reportAccess, setReportAccess] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMyReportAccess()
+      .then((res) => { if (!cancelled) setReportAccess(res?.reportAccess ?? {}); })
+      .catch(() => { if (!cancelled) setReportAccess({}); });
+    return () => { cancelled = true; };
+  }, []);
+
   // ETP-5116 — computed before the effect below so the effect can short-circuit
   // the catalog fetch (and any other gated side effect added later) whenever
   // the selected category's access is denied, instead of only blocking the
@@ -2054,9 +2087,20 @@ export default function ReportViewerPage() {
   // useWindowAccess fails closed to 'none' while windowAccess is still loading,
   // so an authorized user briefly sees the guard too until it resolves, then
   // the effect below re-fires once categoryAccessDenied flips to false.
+  //
+  // ETP-5402 QA follow-up — a role can also pass this gate via a real per-report grant even
+  // without the coarse category window (e.g. Sales holds `aging-receivable` but not the
+  // Financial Reports window): `hasAccessibleReportInCategory` checks REPORT_CATEGORY_REPORT_IDS
+  // against the fetched `reportAccess` map. Both checks fail closed while their own data is
+  // still loading, so `categoryAccessDenied` briefly stays true (same transient guard flash the
+  // window-only version already had) until whichever resolves last flips it.
   const categoryWindowId = REPORT_CATEGORY_WINDOW_IDS[categoryFilter] ?? null;
   const categoryWindowAccessTier = useWindowAccess(categoryWindowId);
-  const categoryAccessDenied = Boolean(categoryWindowId) && categoryWindowAccessTier === 'none';
+  const categoryReportIds = REPORT_CATEGORY_REPORT_IDS[categoryFilter] ?? null;
+  const hasAccessibleReportInCategory = Boolean(categoryReportIds) && Boolean(reportAccess)
+    && categoryReportIds.some((id) => reportAccess[id] !== undefined);
+  const categoryAccessDenied = Boolean(categoryWindowId) && categoryWindowAccessTier === 'none'
+    && !hasAccessibleReportInCategory;
 
   useEffect(() => {
     if (categoryAccessDenied) {
@@ -2076,7 +2120,20 @@ export default function ReportViewerPage() {
       .finally(() => setLoading(false));
   }, [categoryAccessDenied]);
 
-  const selectedReport = reportId ? reports.find(r => r.id === reportId) : null;
+  // ETP-5402 QA follow-up — the real per-report filter: a catalog row (one whose id appears in
+  // ANY REPORT_CATEGORY_REPORT_IDS list, regardless of the current `categoryFilter` — this page
+  // also renders every category mixed together with no `?category=` at all) only shows when the
+  // caller's own `reportAccess` map has an entry for it. A non-catalog row (e.g. "purchases",
+  // deliberately ungated per ETP-5116's own decision — see REPORT_CATEGORY_WINDOW_IDS above)
+  // always passes through unfiltered. While `reportAccess` is still loading (`null`), every row
+  // passes through unfiltered too — the same transient "not gated yet" window the category-level
+  // guard above already has, not a new behavior.
+  const visibleReports = useMemo(() => {
+    if (!reportAccess) return reports;
+    return reports.filter((r) => !ALL_CATALOG_REPORT_IDS.has(r.id) || reportAccess[r.id] !== undefined);
+  }, [reports, reportAccess]);
+
+  const selectedReport = reportId ? visibleReports.find(r => r.id === reportId) : null;
 
   const selectReport = (report) => {
     const params = new URLSearchParams(searchParams);
@@ -2123,7 +2180,7 @@ export default function ReportViewerPage() {
 
   return (
     <ReportList
-      reports={reports}
+      reports={visibleReports}
       loading={loading}
       searchQuery={searchQuery}
       setSearchQuery={setSearchQuery}

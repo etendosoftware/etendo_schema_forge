@@ -118,11 +118,37 @@ describe('getMissingRequiredFields', () => {
   // for the dedicated coverage of that flag/requiredWhen shape. Here we just set it directly to
   // keep these pre-existing scenarios intact. ETP-5393 follow-up — the same box-111 path now
   // makes ALL 7 bank fields required, not just bank_iban.
-  it('reports the FULL bank block when rectificativa is checked AND box 111 is non-zero, even for a tipo not in U/D/X', () => {
+  // ETP-5431 — "the FULL bank block" is no longer one fixed set. Inside the Nota 3 case the
+  // marca SEPA decides which fields are demanded, mirroring AEAT303Report2024#patchBankSection
+  // so the screen demands exactly what the file will carry. With no marca chosen yet, only the
+  // two fields that every marca needs are reported: position 23 and the marca itself.
+  it('with no marca chosen, reports only bank_iban and bank_sepa for a rectificativa with non-zero box 111', () => {
     const missing = getMissingRequiredFields(2026, 'T2', {
       tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true,
     });
-    expect(missing.map(f => f.id).sort()).toEqual([...ALL_BANK_FIELD_IDS].sort());
+    expect(missing.map(f => f.id).sort()).toEqual(['bank_iban', 'bank_sepa']);
+  });
+
+  it.each([
+    ['1', ['bank_iban']],
+    ['2', ['bank_iban', 'bank_swift_bic']],
+    ['3', ['bank_ciudad', 'bank_direccion', 'bank_iban', 'bank_nombre', 'bank_pais', 'bank_swift_bic']],
+  ])('marca %s demands exactly the fields that marca calls for', (marca, expected) => {
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true, bank_sepa: marca,
+    });
+    expect(missing.map(f => f.id).sort()).toEqual([...expected].sort());
+  });
+
+  // Nota 3's exception: nothing at all is demanded once the taxpayer asks to cancel/modify
+  // the existing direct debit — the section is not even visible.
+  it('demands no bank field when the cancel/modify-direct-debit flag is marked', () => {
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      tipo_declaracion: 'I', rectificativa: true, _box111NonZero: true,
+      bank_sepa: '3', baja_domiciliacion: true,
+    });
+    const missingIds = missing.map(f => f.id);
+    ALL_BANK_FIELD_IDS.forEach(id => expect(missingIds).not.toContain(id));
   });
 
   it('does NOT report any bank field when rectificativa is checked but box 111 is zero (ETP-5393 Bug E)', () => {
@@ -144,8 +170,14 @@ describe('getMissingRequiredFields', () => {
     // rectificativa=true makes datos_bancarios visible without needing tipo_declaracion
     // set, so both required fields can be simultaneously blank — box 111 non-zero is what
     // makes the bank block required via the rectificativa path (ETP-5393 Bug E + follow-up).
-    const missing = getMissingRequiredFields(2026, 'T2', { rectificativa: true, _box111NonZero: true });
-    expect(missing.map(f => f.id).sort()).toEqual([...ALL_BANK_FIELD_IDS, 'tipo_declaracion'].sort());
+    // ETP-5431 — marca 3 is supplied so the whole block is in play, which is what makes this a
+    // "multiple missing fields" case at all. bank_sepa itself is filled (it holds the marca).
+    const missing = getMissingRequiredFields(2026, 'T2', {
+      rectificativa: true, _box111NonZero: true, bank_sepa: '3',
+    });
+    expect(missing.map(f => f.id).sort()).toEqual(
+      [...ALL_BANK_FIELD_IDS.filter(id => id !== 'bank_sepa'), 'tipo_declaracion'].sort(),
+    );
   });
 
   it('does not report bank_iban as filled by whitespace/empty-string values', () => {

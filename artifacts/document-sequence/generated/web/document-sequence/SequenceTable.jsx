@@ -3,7 +3,7 @@ import { DataTable, InlineLinesPanel } from '@/components/contract-ui';
 
 // @sf-generated-start columns:sequence
 const columns = [
-  { key: 'name', column: 'Name', type: 'enum', label: 'Name', enumLabels: { 'Purchase Order': 'documentSequencePurchaseOrder', 'Standard Order': 'documentSequenceSalesOrder', 'AR Invoice': 'documentSequenceSalesInvoice', 'Factura Rectificativa (Ventas)': 'documentSequenceSalesCorrectiveInvoice', 'Factura Rectificativa (Compras)': 'documentSequencePurchaseCorrectiveInvoice' }, required: true },
+  { key: 'name', column: 'Name', type: 'enum', label: 'Name', enumLabels: { 'Purchase Order': 'documentSequencePurchaseOrder', 'Standard Order': 'documentSequenceSalesOrder', 'AR Invoice': 'documentSequenceSalesInvoice', 'Factura Rectificativa (Ventas)': 'documentSequenceSalesCorrectiveInvoice', 'AP Invoice': 'documentSequencePurchaseInvoice', 'Factura Rectificativa (Compras)': 'documentSequencePurchaseCorrectiveInvoice' }, required: true },
   { key: 'description', column: 'Description', type: 'string', label: 'Description', maxLength: 255 },
   { key: 'prefix', column: 'Prefix', type: 'string', label: 'Prefix', maxLength: 10 },
   { key: 'startingNo', column: 'StartNo', type: 'number', label: 'Starting No.', required: true },

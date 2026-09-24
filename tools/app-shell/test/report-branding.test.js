@@ -30,14 +30,16 @@ function response({ ok = true, contentType = 'image/png', bytes = [1, 2, 3] } = 
 
 describe('document report branding', () => {
   it('embeds the organization image returned by the authenticated NEO endpoint', async () => {
+    // ETP-5460: hydrateDocumentBranding takes the session's forwardHeaders
+    // (a Cookie, never a Bearer token) — see report-branding.js.
     const result = await hydrateDocumentBranding(
       { org_name: 'Acme', org_logo_id: 'img-1' },
       {
-        authToken: 'token',
+        authHeaders: { Cookie: '__Host-go_session=token' },
         etendoBase: 'http://etendo.test/etendo',
         fetchImpl: async (url, options) => {
           assert.equal(url, 'http://etendo.test/etendo/sws/neo/image/img-1');
-          assert.equal(options.headers.Authorization, 'Bearer token');
+          assert.equal(options.headers.Cookie, '__Host-go_session=token');
           return response({ contentType: 'image/svg+xml', bytes: [60, 115, 118, 103, 62] });
         },
       },
@@ -49,7 +51,7 @@ describe('document report branding', () => {
   it('keeps the report printable when branding is unavailable', async () => {
     const header = { org_name: 'Acme', org_logo_id: 'missing' };
     const result = await hydrateDocumentBranding(header, {
-      authToken: 'token',
+      authHeaders: { Cookie: '__Host-go_session=token' },
       fetchImpl: async () => response({ ok: false }),
     });
     assert.deepEqual(result, header);
@@ -57,13 +59,17 @@ describe('document report branding', () => {
 });
 
 describe('report-api.js source — consumes the shared module, never a local copy', () => {
-  it('imports hydrateDocumentBranding (alongside resolveCompanyLogoDataUrl) from the published package', () => {
-    // ETP-5013 follow-up added resolveCompanyLogoDataUrl to the same import —
-    // see report-api-branding-org-lookup.test.js for the dedicated coverage
-    // of that addition; this assertion just needs to keep matching reality.
+  it('resolves hydrateDocumentBranding (alongside resolveCompanyLogoDataUrl) via loadReportCli, not a static import', () => {
+    // ETP-5460: every report-* module (including this one) is now resolved
+    // through loadReportCli() instead of a static `import ... from
+    // '@etendosoftware/schema-forge-cli/src/...'` — see report-cli.js /
+    // design id 455. ETP-5013 follow-up added resolveCompanyLogoDataUrl to
+    // the same destructure — see report-api-branding-org-lookup.test.js for
+    // the dedicated coverage of that addition; this assertion just needs to
+    // keep matching reality.
     assert.match(
       REPORT_API_SRC,
-      /import \{ hydrateDocumentBranding, resolveCompanyLogoDataUrl \} from '@etendosoftware\/schema-forge-cli\/src\/report-branding\.js'/,
+      /const \{ hydrateDocumentBranding, resolveCompanyLogoDataUrl \} = await loadReportCli\('report-branding'\);/,
     );
   });
 

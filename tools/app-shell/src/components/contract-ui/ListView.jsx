@@ -795,6 +795,17 @@ export function ListView({
   // (read-only) detail, so viewing is preserved. Complements DetailView's own gate.
   const windowReadOnly = api?.window?.readOnly === true || windowProp?.readOnly === true;
 
+  // ETP-5205 fix: `bulkActions`/`selectionBarRightActions` are the BULK analog of
+  // DetailView's `menuActions` (custom, host-declared actions — e.g. matched-purchase-invoices'
+  // Post/Unpost, Contacts' own delete loop), not generic CRUD. DetailView's own
+  // `menuActionsReadOnly` (line ~1578) deliberately gates those on the RUNTIME Solo-Lectura
+  // tier only, not decisions.json's static `window.readOnly` — a window can be declared
+  // read-only for generic CRUD while still sanctioning its own custom actions regardless of
+  // that flag. Reusing the conflated `windowReadOnly` here silently hid matched-purchase-invoices'
+  // Post/Unpost bulk button even under full access, since that window's decisions.json sets
+  // `window.readOnly: true` for an unrelated reason (no generic create/edit/delete).
+  const customActionsReadOnly = windowProp?.readOnly === true;
+
   const effectiveRowQuickActions = useMemo(() => {
     if (!quickActionsEnabled) return rowQuickActions;
     const merged = {
@@ -1105,7 +1116,7 @@ export function ListView({
                     this one sit directly on the pill background and only highlight
                     on hover. Nothing is hidden behind a menu — just narrower and
                     borderless. */}
-                {!(listViewOptions?.hidePrint ?? hidePrint) && (
+                {!windowReadOnly && !(listViewOptions?.hidePrint ?? hidePrint) && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1117,7 +1128,7 @@ export function ListView({
                     {printButtonIcon(isPrinting, selectionBarSize)}
                   </Button>
                 )}
-                {onCloneRow && (
+                {onCloneRow && !windowReadOnly && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1155,8 +1166,8 @@ export function ListView({
                     <Trash2 className={iconSizeClass(selectionBarSize)} data-testid="Trash2__620cbc" />
                   </Button>
                 )}
-                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList })}
-                {selectionBarRightActions && selectionBarRightActions({
+                {bulkActions && bulkActions({ selectedRows, clearSelection, token, apiBaseUrl, windowName, api, refresh: refreshList, windowReadOnly: customActionsReadOnly })}
+                {!customActionsReadOnly && selectionBarRightActions && selectionBarRightActions({
                   selectedRows,
                   clearSelection,
                   token,

@@ -21,7 +21,7 @@ const DESCRIPTION_FIELD_SHAPES = [
   { key: 'description', column: 'Description', type: 'textarea', section: 'principal', span: 3, rows: 3 },
 ];
 
-export default function ProductCategoryCustomForm({ entity, data, token, apiBaseUrl, catalogs, api, onChange, onFieldBlur, displayLogic, section }) {
+export default function ProductCategoryCustomForm({ entity, data, token, apiBaseUrl, catalogs, api, onChange, onFieldBlur, displayLogic, section, readOnly }) {
   const ui = useUI();
   const t = useLabel();
   // NOTE: this guard used to sit ABOVE the two hooks. A conditional return before a
@@ -60,6 +60,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             api={api}
             token={token}
             apiBaseUrl={apiBaseUrl}
+            readOnly={readOnly}
             data-testid="EntityForm__473ce6" />
         </div>
         <div className="w-[325px] shrink-0">
@@ -75,6 +76,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             api={api}
             token={token}
             apiBaseUrl={apiBaseUrl}
+            readOnly={readOnly}
             data-testid="EntityForm__473ce6" />
         </div>
         <div className="w-fit pb-1">
@@ -90,6 +92,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
             api={api}
             token={token}
             apiBaseUrl={apiBaseUrl}
+            readOnly={readOnly}
             data-testid="EntityForm__473ce6" />
         </div>
       </div>
@@ -107,6 +110,7 @@ export default function ProductCategoryCustomForm({ entity, data, token, apiBase
           api={api}
           token={token}
           apiBaseUrl={apiBaseUrl}
+          readOnly={readOnly}
           data-testid="EntityForm__473ce6" />
       </div>
     </div>

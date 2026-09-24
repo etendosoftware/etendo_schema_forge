@@ -129,4 +129,14 @@ describe('ReturnWindowShell', () => {
     assert.match(src, /\{deleteDialog\}/);
   });
 
+  // ETP-5408: both return windows now pass a `draftMode`, so the generic Save Draft
+  // (outline) + Confirm pair renders. `hasExternalPrimaryAction` (ETP-4933) demoted
+  // Save while the windows had their own Confirm in topbarRight; re-adding it would
+  // signal a bespoke Confirm creeping back. Comments are stripped so the explanatory
+  // note in the source does not count as usage.
+  it('no longer passes hasExternalPrimaryAction to the Page', () => {
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(code, /hasExternalPrimaryAction/);
+  });
+
 });

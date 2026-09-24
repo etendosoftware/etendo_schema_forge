@@ -163,7 +163,7 @@ export function useQuickPurchaseData(apiBaseUrl) {
   useEffect(() => {
     let cancelled = false;
 
-    if (!token || !poPath) {
+    if (!poPath) {
       setError('No API connection — authentication required');
       setLoading(false);
       return;

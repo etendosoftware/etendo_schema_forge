@@ -53,6 +53,7 @@ const mockHook = {
   handleSaveAndProcess: vi.fn().mockResolvedValue({}),
   fetchById: vi.fn().mockResolvedValue({}),
   fetchChildren: vi.fn(),
+  invalidateEntityCache: vi.fn(),
   refreshChildren: vi.fn(),
   isSaving: false,
   primeSaved: vi.fn(),
@@ -265,5 +266,121 @@ describe('DetailView — documentAction menu branch cache refresh (ETP-4563)', (
     await user.click(screen.getByTestId('action-more'));
 
     await waitFor(() => expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true }));
+  });
+});
+
+/**
+ * ETP-5378 — the LIST half of the kebab's post-action refresh.
+ *
+ * The reported case: a Completed-but-unposted Sales Invoice is posted from the
+ * form's "⋮" menu and the user leaves with Cancelar. Cancelar only runs
+ * `navigate('/'+windowName)`, so the grid re-mounted onto the cached list page,
+ * which still held the pre-action row — "Sin contabilizar" until a manual
+ * refresh. ETP-4563 had fixed the RECORD read (the form was right); nobody had
+ * dropped the cached LIST. `useEntity.handleProcessSuccess` always ran the full
+ * trio (invalidateEntityCache → fetchById → refresh); the three kebab paths now
+ * do too.
+ *
+ * Order matters: invalidating AFTER the refetch has been issued lets the stale
+ * response repopulate the cache that was just cleared, so each test pins the
+ * sequence, not just the presence of the call.
+ */
+describe('DetailView — stale grid rows after a kebab action (ETP-5378)', () => {
+  beforeEach(() => {
+    docExecuteMock.mockClear();
+    docExecuteMock.mockResolvedValue({});
+    neoExecuteMock.mockClear();
+    neoExecuteMock.mockResolvedValue({ success: true });
+    toast.success.mockClear();
+    toast.error.mockClear();
+    mockHook.fetchById.mockClear();
+    mockHook.invalidateEntityCache.mockClear();
+    setCurrentRecord(undefined);
+  });
+
+  // Compared on the LAST invocation of each spy so an unrelated mount-driven
+  // refetch cannot flip a first-vs-first comparison; the property under test —
+  // "invalidate the list, THEN re-read the record" — holds on the last pair.
+  const lastCall = (mockFn) => mockFn.mock.invocationCallOrder.at(-1);
+
+  function expectInvalidatedBeforeRefetch() {
+    expect(mockHook.invalidateEntityCache).toHaveBeenCalled();
+    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(lastCall(mockHook.invalidateEntityCache)).toBeLessThan(lastCall(mockHook.fetchById));
+  }
+
+  it('a completed document must not leave a stale row in the grid', async () => {
+    const user = userEvent.setup();
+    renderDetailView({ menuActions: [{ key: 'complete', label: 'Complete', documentAction: 'CO' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    mockHook.fetchById.mockClear();
+    mockHook.invalidateEntityCache.mockClear();
+    await user.click(screen.getByTestId('menu-action-complete'));
+
+    await waitFor(() => expect(mockHook.invalidateEntityCache).toHaveBeenCalled());
+    expectInvalidatedBeforeRefetch();
+  });
+
+  it('a posted document must not leave a stale row in the grid', async () => {
+    // The reported flow: `post` is a neoAction (POST /action/post), not a
+    // documentAction — a different branch from the one above, with the same bug.
+    const user = userEvent.setup();
+    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    mockHook.fetchById.mockClear();
+    mockHook.invalidateEntityCache.mockClear();
+    await user.click(screen.getByTestId('menu-action-post'));
+
+    await waitFor(() => expect(neoExecuteMock).toHaveBeenCalledWith('123', 'post'));
+    expectInvalidatedBeforeRefetch();
+  });
+
+  it('a custom kebab action must not leave a stale row in the grid', async () => {
+    // customMenuContent is rendered twice — a hidden probe (its onRefresh is a
+    // no-op) and the open-menu instance that wires the real handler — so this
+    // asserts on the hook calls rather than on a DOM node.
+    const user = userEvent.setup();
+    const CustomMenuContent = ({ onRefresh }) => {
+      useEffect(() => { onRefresh(); }, [onRefresh]);
+      return <div>custom</div>;
+    };
+    renderDetailView({ customMenuContent: CustomMenuContent });
+
+    mockHook.fetchById.mockClear();
+    mockHook.invalidateEntityCache.mockClear();
+    await user.click(screen.getByTestId('action-more'));
+
+    await waitFor(() => expect(mockHook.invalidateEntityCache).toHaveBeenCalled());
+    expectInvalidatedBeforeRefetch();
+  });
+
+  it('keeps the cached grid page when the document action fails', async () => {
+    // Nothing changed on the server, so dropping the list cache would only buy a
+    // pointless refetch — and it would mask a failed action as a refreshed one.
+    const user = userEvent.setup();
+    docExecuteMock.mockRejectedValueOnce(new Error('Document is locked'));
+    renderDetailView({ menuActions: [{ key: 'complete', label: 'Complete', documentAction: 'CO' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    mockHook.invalidateEntityCache.mockClear();
+    await user.click(screen.getByTestId('menu-action-complete'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Document is locked'));
+    expect(mockHook.invalidateEntityCache).not.toHaveBeenCalled();
+  });
+
+  it('keeps the cached grid page when the neo action is refused', async () => {
+    const user = userEvent.setup();
+    neoExecuteMock.mockResolvedValue({ success: false, message: 'Period closed' });
+    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    mockHook.invalidateEntityCache.mockClear();
+    await user.click(screen.getByTestId('menu-action-post'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Period closed'));
+    expect(mockHook.invalidateEntityCache).not.toHaveBeenCalled();
   });
 });

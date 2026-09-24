@@ -345,7 +345,8 @@ function npsQ2Copy(segment, ui) {
   return ui('surveyNpsQ2Promoter');
 }
 
-function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedback, tags, setTags, onDismiss, ui }) {
+function NPSSurveyContent({ survey, phase, setPhase, score, setScore, feedback, setFeedback, tags, setTags, onDismiss, ui }) {
+  const { locale } = useLocaleSwitch();
 
   if (phase === 'thanks') {
     return (
@@ -359,9 +360,11 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
   if (phase === 'followup') {
     const segment = npsSegment(score);
     const q2 = npsQ2Copy(segment, ui);
-    const chipOptions = segment === 'promoter'
-      ? [ui('surveyChipSpeed'), ui('surveyChipDesign'), ui('surveyChipFeatures'), ui('surveyChipSupport'), ui('surveyChipPrice'), ui('surveyChipDocs'), ui('surveyChipAI')]
-      : [ui('surveyChipSpeed'), ui('surveyChipDesign'), ui('surveyChipFeatures'), ui('surveyChipSupport'), ui('surveyChipPrice'), ui('surveyChipDocs')];
+    // Same resolver CSAT uses (backend-configured canned responses, falling back to the
+    // hardcoded survey.canned list in surveys.js) — filtered by the score band, then stripped
+    // down to plain labels since ChipGroup renders plain-string pills (no icon), unlike CSAT's
+    // icon+label CannedResponseGrid.
+    const chipOptions = resolveCannedOptions(survey, locale, ui, score).map(({ label }) => label);
     return (
       <>
         <div style={{ font: font(17, 700, 24), color: T.fg1, letterSpacing: '-0.005em', marginBottom: 2 }}>{q2}</div>
@@ -428,19 +431,24 @@ function NPSSurveyContent({ phase, setPhase, score, setScore, feedback, setFeedb
 // Prefers canned responses configured in the backoffice "Survey Configuration" window
 // (already resolved to plain, language-specific text — no ui() lookup needed) over the
 // hardcoded locale-key list in surveys.js, which only serves as an offline/unreachable-
-// backend fallback. Remote entries carry a { minScore, maxScore } band (configurable per
-// phrase in the backoffice) — filtered against the score the user actually picked, so e.g.
-// a 1-star and a 3-star CSAT response can surface different phrases. The hardcoded fallback
-// list has no ranges and keeps showing unconditionally within the followup phase (offline
-// degradation only, not expected to need this granularity).
+// backend fallback. Both sources carry an optional { minScore, maxScore } band — filtered
+// against the score the user actually picked, so e.g. a 1-star and a 3-star CSAT response (or
+// a detractor vs. promoter NPS response) can surface different phrases. Remote entries always
+// carry a range (configurable per phrase in the backoffice); the hardcoded fallback list only
+// declares one where the original inline logic needed it (NPS's promoter-only AI chip) — an
+// entry with no minScore/maxScore always matches, same as CSAT's fallback list always did
+// before this became a shared range filter.
+// Shared by both NPSSurveyContent (ChipGroup, plain-string options, icon dropped) and
+// CSATSurveyContent (CannedResponseGrid, icon+label options) — the score-band filtering and
+// remote/fallback precedence are identical for both; only the rendering differs downstream.
 function resolveCannedOptions(survey, locale, ui, score) {
   const remote = getRemoteCannedResponses(survey.id, locale);
-  if (remote) {
-    return remote
-      .filter(({ minScore, maxScore }) => score >= minScore && score <= maxScore)
-      .map(({ icon, text }) => ({ icon, label: text }));
-  }
-  return (survey.canned ?? []).map(({ icon, key }) => ({ icon, label: ui(key) }));
+  const options = remote
+    ? remote.map(({ icon, text, minScore, maxScore }) => ({ icon, label: text, minScore, maxScore }))
+    : (survey.canned ?? []).map(({ icon, key, minScore, maxScore }) => ({ icon, label: ui(key), minScore, maxScore }));
+  return options.filter(({ minScore, maxScore }) =>
+    (minScore == null || score >= minScore) && (maxScore == null || score <= maxScore)
+  );
 }
 
 function CSATSurveyContent({ survey, phase, setPhase, score, setScore, feedback, setFeedback, onDismiss, ui }) {
@@ -610,6 +618,7 @@ export function SurveyModal({ survey, open, onScoreSelected, onRespond, onDismis
         <div style={{ padding: '12px 20px 20px' }}>
           {isNps ? (
             <NPSSurveyContent
+              survey={survey}
               phase={phase}
               setPhase={handleSetPhase}
               score={score}

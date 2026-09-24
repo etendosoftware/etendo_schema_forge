@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../helpers/auth.js';
+import { openAccountRowMenu } from '../helpers/financial-account-helpers.js';
 
 /**
  * Financial Accounts — real delete (ETP-4871), mocked.
@@ -227,24 +228,22 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
   // Confirmed live and fixed by adding `overflow-visible` to the `_rowActions` column's
   // `cellClass` in AccountsHeaderTable.jsx (commit 23343b3c2, PR #1496).
   test('offers "Eliminar cuenta" on every row, deletable or not', async ({ page }) => {
-    // The kebab trigger sits behind `opacity-0 group-hover:opacity-100` — hover the row first,
-    // same as the existing financial-accounts-page.mocked.spec.js row-actions coverage.
-    await page.getByTestId('row-acc-1').hover();
-    await page.getByTestId('account-row-menu-trigger-acc-1').click();
+    // The kebab trigger sits behind `opacity-0 group-hover:opacity-100` and inside DataTable's
+    // sticky quick-actions cell — openAccountRowMenu() pre-scrolls the table to its right edge
+    // so the sticky cell's resting position is already visible (see its own doc comment).
+    await openAccountRowMenu(page, 'acc-1');
     await expect(page.getByTestId('account-row-menu-delete-acc-1')).toBeVisible();
     await page.keyboard.press('Escape');
 
     // acc-2 is the NON-deletable fixture — the one that used to have no item at all.
-    await page.getByTestId('row-acc-2').hover();
-    await page.getByTestId('account-row-menu-trigger-acc-2').click();
+    await openAccountRowMenu(page, 'acc-2');
     await expect(page.getByTestId('account-row-menu-delete-acc-2')).toBeVisible();
   });
 
   // Same row-kebab-obscured-by-eTGOPendingCount issue as the test above — fixed (commit
   // 23343b3c2, PR #1496).
   test('confirming the delete removes the row and shows a success toast', async ({ page }) => {
-    await page.getByTestId('row-acc-1').hover();
-    await page.getByTestId('account-row-menu-trigger-acc-1').click();
+    await openAccountRowMenu(page, 'acc-1');
     await page.getByTestId('account-row-menu-delete-acc-1').click();
 
     const dialog = page.getByTestId('delete-account-dialog');
@@ -260,8 +259,7 @@ test.describe('Financial Accounts — row kebab delete (ETP-4871)', () => {
   // Same row-kebab-obscured-by-eTGOPendingCount issue as the two tests above — fixed (commit
   // 23343b3c2, PR #1496).
   test('cancel dismisses the dialog without deleting', async ({ page }) => {
-    await page.getByTestId('row-acc-1').hover();
-    await page.getByTestId('account-row-menu-trigger-acc-1').click();
+    await openAccountRowMenu(page, 'acc-1');
     await page.getByTestId('account-row-menu-delete-acc-1').click();
 
     const dialog = page.getByTestId('delete-account-dialog');
@@ -286,8 +284,7 @@ test.describe('Financial Accounts — delete rejected with 409 (ETP-4871)', () =
   // Same row-kebab-obscured-by-eTGOPendingCount issue as this spec's other 3 tests above —
   // fixed (commit 23343b3c2, PR #1496).
   test('shows the backend message verbatim and keeps the dialog open and the row in place', async ({ page }) => {
-    await page.getByTestId('row-acc-1').hover();
-    await page.getByTestId('account-row-menu-trigger-acc-1').click();
+    await openAccountRowMenu(page, 'acc-1');
     await page.getByTestId('account-row-menu-delete-acc-1').click();
 
     const dialog = page.getByTestId('delete-account-dialog');

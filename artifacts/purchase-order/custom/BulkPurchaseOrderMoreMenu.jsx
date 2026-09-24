@@ -22,6 +22,9 @@
 // the same in-place list refetch instead of a full page reload.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -32,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
@@ -44,11 +48,11 @@ const orderCriteria = (orderId) => encodeURIComponent(JSON.stringify([
 // No checkDraftPurchaseInvoice endpoint exists, so we query the
 // purchase-invoice header entity filtered by the originating order — same
 // pattern used in PurchaseOrderActions.jsx for the single-record flow.
-async function hasDraftPurchaseInvoice(orderId, apiBaseUrl, headers) {
+async function hasDraftPurchaseInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/purchase-invoice/header?criteria=${orderCriteria(orderId)}&_limit=50`,
-      { headers },
+      {},
     );
     if (!res.ok) return false;
     const invoices = (await res.json())?.response?.data ?? [];
@@ -58,11 +62,11 @@ async function hasDraftPurchaseInvoice(orderId, apiBaseUrl, headers) {
   }
 }
 
-async function hasDraftGoodsReceipt(orderId, apiBaseUrl, headers) {
+async function hasDraftGoodsReceipt(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(
+    const res = await moduleApiFetch(
       `${buildBase(apiBaseUrl)}/goods-receipt/goodsReceipt?criteria=${orderCriteria(orderId)}&_limit=50`,
-      { headers },
+      {},
     );
     if (!res.ok) return false;
     const receipts = (await res.json())?.response?.data ?? [];
@@ -73,10 +77,6 @@ async function hasDraftGoodsReceipt(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
   const isInvoice = action === 'createPurchaseInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -93,16 +93,16 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
       // proceed; the backend handler then rejects with "no pending lines" for
       // fully-fulfilled orders, which we surface as the row failure message.
       const alreadyHasDraft = isInvoice
-        ? await hasDraftPurchaseInvoice(row.id, apiBaseUrl, headers)
-        : await hasDraftGoodsReceipt(row.id, apiBaseUrl, headers);
+        ? await hasDraftPurchaseInvoice(row.id, apiBaseUrl)
+        : await hasDraftGoodsReceipt(row.id, apiBaseUrl);
       if (alreadyHasDraft) {
         const messageKey = isInvoice ? 'poBulkOrderHasDraftInvoice' : 'poBulkOrderHasDraftReceipt';
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({}),
       });
       if (!res.ok) {
@@ -129,11 +129,11 @@ async function runBulkPurchaseOrderAction({ rows, action, apiBaseUrl, token, ui 
   return { ok, failed };
 }
 
-export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
+export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
-  if (!selectedRows || selectedRows.length === 0) return null;
+  if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
 
   const handleSelect = (action) => async () => {
     if (running) return;
@@ -159,20 +159,31 @@ export default function BulkPurchaseOrderMoreMenu({ selectedRows, clearSelection
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" title={ui('more')} disabled={running}>
-          <MoreVertical className="h-4 w-4" />
+    <DropdownMenu data-testid="DropdownMenu__c24331">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__c24331">
+        <Button
+          variant="ghost"
+          size="icon"
+          title={ui('more')}
+          disabled={running}
+          data-testid="Button__c24331">
+          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__c24331" />
           <span className="sr-only">{ui('more')}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={handleSelect('createPurchaseInvoice')} disabled={running}>
-          <Receipt className="h-4 w-4" />
+      <DropdownMenuContent align="start" data-testid="DropdownMenuContent__c24331">
+        <DropdownMenuItem
+          onSelect={handleSelect('createPurchaseInvoice')}
+          disabled={running}
+          data-testid="DropdownMenuItem__c24331">
+          <Receipt className="h-4 w-4" data-testid="Receipt__c24331" />
           {ui('poBulkCreateInvoices')} ({selectedRows.length})
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleSelect('createGoodsReceipt')} disabled={running}>
-          <Truck className="h-4 w-4" />
+        <DropdownMenuItem
+          onSelect={handleSelect('createGoodsReceipt')}
+          disabled={running}
+          data-testid="DropdownMenuItem__c24331">
+          <Truck className="h-4 w-4" data-testid="Truck__c24331" />
           {ui('poBulkCreateReceipts')} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>

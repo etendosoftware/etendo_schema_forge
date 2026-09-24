@@ -78,7 +78,7 @@ function DemoTrialIndicator({ ui }) {
         'flex min-h-[46px] w-full flex-wrap items-center justify-start gap-x-4 gap-y-2 border-b px-6 py-2 text-sm',
         expired
           ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
-          : 'border-status-success-border bg-status-success text-status-success-foreground'
+          : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
       )}
       aria-label={label}
       title={environment.trialExpiresAt || undefined}
@@ -89,7 +89,7 @@ function DemoTrialIndicator({ ui }) {
           'rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide',
           expired
             ? 'border-status-danger-border bg-status-danger text-status-danger-foreground'
-            : 'border-status-success-border bg-status-success text-status-success-foreground'
+            : 'border-status-warning-border bg-status-warning text-status-warning-foreground'
         )}>
           {ui('environmentDemo')}
         </span>
@@ -99,14 +99,14 @@ function DemoTrialIndicator({ ui }) {
         <div
           className={cn(
             'h-2 min-w-20 flex-1 overflow-hidden rounded-full',
-            expired ? 'bg-status-danger-border' : 'bg-status-success-border'
+            expired ? 'bg-status-danger-border' : 'bg-status-warning-border'
           )}
           aria-hidden="true"
         >
           <div
             className={cn(
               'h-full rounded-full',
-              expired ? 'bg-status-danger-foreground' : 'bg-status-success-foreground'
+              expired ? 'bg-status-danger-foreground' : 'bg-status-warning-foreground'
             )}
             style={{ width: `${progress}%` }}
           />
@@ -120,6 +120,27 @@ function DemoTrialIndicator({ ui }) {
       >
         {ui('upgradeGoToPayment')}
       </button>
+      {/* ETP-5364 — the two caveats a user has to read BEFORE paying: this environment never
+          talks to Hacienda, and going productive carries over only contacts and products. They
+          sit next to the button rather than inside the upgrade flow because by then the
+          decision is already made. No link on "crear un entorno productivo": the button
+          immediately to its left is that link, and two controls with one destination 8px apart
+          read as a mistake. `flex-1` with a min width keeps the block on the same row when
+          there is space and wraps it onto a second line of the same (already `flex-wrap`) bar
+          when there is not.
+
+          TWO KEYS, TWO PARAGRAPHS — not one string with a `\n`. The caveats are independent
+          sentences and each gets its own line, so the break is structural and a translator
+          cannot drop it by losing an escape inside a JSON string. */}
+      <div
+        className="min-w-[16rem] flex-1 text-xs leading-snug"
+        data-testid="topbar-demo-fiscal-notice"
+      >
+        <p data-testid="topbar-demo-fiscal-notice-tax">{ui('environmentDemoFiscalNotice')}</p>
+        <p data-testid="topbar-demo-fiscal-notice-migration">
+          {ui('environmentDemoMigrationNotice')}
+        </p>
+      </div>
     </div>
   );
 }

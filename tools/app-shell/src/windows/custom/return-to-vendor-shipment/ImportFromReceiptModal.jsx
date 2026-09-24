@@ -1,60 +1,54 @@
+import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { apiFetch } from '@/auth/api.js';
-import ImportReturnLinesModal from '@/components/import-return-lines/ImportReturnLinesModal';
+import { enrichReturnLine, getReturnDocDisplay, submitReturnImportBatch } from '@/windows/custom/shared/importReturnLinesHelpers.js';
 
 const ACTION_BASE = (base) =>
   `${base}/return-to-vendor-shipment/returnToVendorShipment/_/action`;
+const IMPORT_ACTION_URL = (base, targetId) =>
+  `${base}/return-to-vendor-shipment/returnToVendorShipment/${targetId}/action/importReceiptLines`;
 
-const RECEIPT_CONFIG = {
-  // `headers` is kept in the signature — callers outside this file (ImportReturnLinesModal)
-  // still pass it — but it is now dead: apiFetch supplies the auth headers itself.
-  fetchSourceDocs: async (base, bpId, headers) => {
-    const res = await apiFetch(`${ACTION_BASE(base)}/availableReceipts`, {
-      method: 'POST',
-      baseUrl: '',
-      body: JSON.stringify({ businessPartner: bpId }),
-    });
-    if (!res.ok) return [];
-    return (await res.json())?.response?.data || [];
-  },
-  fetchSourceLines: async (base, docId, headers) => {
-    const res = await apiFetch(`${ACTION_BASE(base)}/availableReceiptLines`, {
-      method: 'POST',
-      baseUrl: '',
-      body: JSON.stringify({ receiptId: docId }),
-    });
-    if (!res.ok) return [];
-    return (await res.json())?.response?.data || [];
-  },
-  importActionUrl: (base, targetId) =>
-    `${base}/return-to-vendor-shipment/returnToVendorShipment/${targetId}/action/importReceiptLines`,
-  titleKey: 'importFromReceipt',
-  searchPlaceholderKey: 'searchReceipt',
-  noDocsKey: 'noCompletedReceiptsForThisVendor',
-  noDocsMatchSearchKey: 'noReceiptsMatchYourSearch',
-  successToastKey: 'linesImportedFromReceipt',
-  dateField: 'movementDate',
-  showAmount: false,
-  qtyStep: 1,
+const fetchDocuments = async ({ base, bpId }) => {
+  const res = await apiFetch(`${ACTION_BASE(base)}/availableReceipts`, {
+    baseUrl: '', method: 'POST', body: JSON.stringify({ businessPartner: bpId }),
+  });
+  const documents = res.ok ? (await res.json())?.response?.data || [] : [];
+  return { documents, sharedContext: {} };
 };
 
-export default function ImportFromReceiptModal({ bpId, ...props }) {
-  const config = {
-    ...RECEIPT_CONFIG,
-    fetchSourceLines: async (base, docId, headers) => {
-      const res = await apiFetch(`${ACTION_BASE(base)}/availableReceiptLines`, {
-        method: 'POST',
-        baseUrl: '',
-        body: JSON.stringify({ receiptId: docId, businessPartner: bpId }),
-      });
-      if (!res.ok) return [];
-      return (await res.json())?.response?.data || [];
-    },
-  };
+// receiptId AND businessPartner are both sent — a receipt can be shared across
+// vendors, so the line list must stay scoped to the vendor of the return being built.
+const fetchLines = async ({ base, docId, bpId }) => {
+  const res = await apiFetch(`${ACTION_BASE(base)}/availableReceiptLines`, {
+    baseUrl: '', method: 'POST', body: JSON.stringify({ receiptId: docId, businessPartner: bpId }),
+  });
+  if (!res.ok) return [];
+  const raw = (await res.json())?.response?.data || [];
+  return raw.map(enrichReturnLine);
+};
+
+const submitImport = (args) => submitReturnImportBatch({ ...args, actionUrl: IMPORT_ACTION_URL });
+
+export default function ImportFromReceiptModal({ targetId, bpId, ...props }) {
   return (
-    <ImportReturnLinesModal
-      bpId={bpId}
+    <ImportLinesModal
       {...props}
-      config={config}
-      data-testid="ImportReturnLinesModal__ebdfa3" />
+      bpId={bpId}
+      invoiceId={targetId}
+      titleKey="importFromReceipt"
+      searchPlaceholderKey="searchReceipt"
+      emptyMessageKey="noCompletedReceiptsForThisVendor"
+      noSearchResultsKey="noReceiptsMatchYourSearch"
+      successMessageKey="linesImportedFromReceipt"
+      fetchDocuments={fetchDocuments}
+      fetchLines={({ base, docId }) => fetchLines({ base, docId, bpId })}
+      getDocDisplay={getReturnDocDisplay}
+      submitImport={submitImport}
+      showPriceColumns={false}
+      filterZeroQty
+      autoSelectOnExpand
+      eagerLoadLines={false}
+      showAvailableQtyColumn
+      qtyColumnLabelKey="returnQty"
+      data-testid="ImportLinesModal__ebdfa3" />
   );
 }

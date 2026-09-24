@@ -211,9 +211,23 @@ describe('BulkDocumentAction — preUnpostActions prop (ETP-5302)', () => {
     const start = src.indexOf('const runRow');
     const runRow = src.slice(start, src.indexOf('Promise.allSettled', start));
     const pre = runRow.indexOf('runPreUnpost');
-    const exec = runRow.indexOf('await execute(row.id, selectedAction)');
+    // ETP-5414 — `execute` now receives `wireActionName` (the resolved wire name), not the
+    // raw `selectedAction` (the dropdown's INTENT value) — see the `neoActionName` describe
+    // block below for why the two can differ.
+    const exec = runRow.indexOf('await execute(row.id, wireActionName)');
     assert.ok(pre > -1 && exec > -1, 'runRow must contain both steps');
     assert.ok(pre < exec, 'the pre-unpost must be awaited before the document action');
+  });
+
+  // ETP-5414 — `wireActionName` is the escape hatch that lets a caller's dropdown `value`
+  // (the user's intent) diverge from the actual NEO action name `execute()` calls. Every
+  // existing caller relies on the fallback (`?? selectedAction`), so this is a source-level
+  // guard that the fallback expression itself is still there, verbatim.
+  it('resolves wireActionName from the selected action\'s neoActionName, defaulting to selectedAction itself', () => {
+    assert.match(
+      src,
+      /const wireActionName = actions\.find\(\(a\) => a\.value === selectedAction\)\?\.neoActionName \?\? selectedAction;/,
+    );
   });
 });
 
@@ -259,7 +273,12 @@ describe('bulk unpost call sites (ETP-5302)', () => {
   const read = (window) =>
     readFileSync(join(__dirname, '..', '..', '..', 'windows', 'custom', window, 'index.jsx'), 'utf8');
 
-  for (const window of ['goods-shipment', 'goods-receipt']) {
+  // ETP-5378 QA follow-up (SEL-05/SEL-06) added the two return windows to this list. They
+  // belong here for the same reason the two goods windows do: their row-hover kebab already
+  // exposed "Descontabilizar" (via buildDocumentRowQuickActionsPostMenu({ includeUnpost: true })
+  // in ReturnWindowShell), so the selection bar lacking it was a grid-vs-selection asymmetry
+  // — a posted row showed the action on hover and offered nothing at all once ticked.
+  for (const window of ['goods-shipment', 'goods-receipt', 'return-material-receipt', 'return-to-vendor-shipment']) {
     it(`${window} mounts a third BulkDocumentAction wired to the shared unpost helpers`, () => {
       const source = read(window);
       assert.match(source, /import BulkDocumentAction, \{[^}]*buildUnpostActions[^}]*unpostRowFilter[^}]*\}/);

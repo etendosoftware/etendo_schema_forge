@@ -26,7 +26,9 @@ const CREATE_PERIODS_PROCESS = {
       required: true,
       options: [
         { value: 'JANUARY', label: 'January - December' },
+        { value: 'APRIL', label: 'April - March' },
         { value: 'JULY', label: 'July - June' },
+        { value: 'OCTOBER', label: 'October - September' },
       ],
     },
     {

@@ -87,6 +87,19 @@ vi.mock('../../../menu.json', () => ({
           { name: 'both-ids-precedence', label: 'Both Ids', windowId: '803', obuiappProcessId: '804' },
         ],
       },
+      {
+        // ETP-5402 — `reportId` identity-resolution fixture (the 4th `??` branch in
+        // `buildMenuWindowIndex`'s rawId resolution): a report row has no `windowId`/
+        // `obuiappProcessId`/`processId` of its own, only a `reportId` matching the
+        // backend's `reports`/`reportsMatrix` row id ("tax-report" etc., never an AD id).
+        group: 'Reports',
+        // hidden: true matches every real report menu.json entry (ETP-5402 bug: a report
+        // never gets its own top-level sidebar link, but that must NOT exclude it from
+        // reportsMatrix — see resolveMatrixRow's `excludeHidden` param). This fixture
+        // omitting `hidden` originally masked the bug entirely — every test below passed
+        // against a fixture that didn't match production menu.json.
+        items: [{ name: 'tax-report', label: 'Tax Report', reportId: 'tax-report', hidden: true }],
+      },
     ],
   },
 }));
@@ -196,6 +209,21 @@ describe('buildMenuWindowIndex', () => {
     // '804' (the obuiappProcessId on that same item) must NOT get its own index slot —
     // windowId ('803') won the `??` chain, so '804' was never used as the identity key.
     expect(index.has('804')).toBe(false);
+  });
+
+  // ETP-5402 — a report row's own stable id (e.g. "tax-report") is a 4th identity key,
+  // NOT an AD windowId/obuiappProcessId/processId — see the production JSDoc for why a
+  // shared anchor id (the 6 financial-family report rows all share ONE AD_Window_ID)
+  // would have collided in this same index Map.
+  it('indexes an item by reportId when it sets no windowId/obuiappProcessId/processId at all', () => {
+    const index = buildMenuWindowIndex();
+    expect(index.get('tax-report')).toEqual({
+      group: 'Reports',
+      label: 'Tax Report',
+      groupOrder: 7,
+      itemOrder: 0,
+      hidden: true,
+    });
   });
 });
 
@@ -395,6 +423,42 @@ describe('useRolesOverviewData', () => {
     const row = getResult().matrix[0].rows[0];
     expect(row.access['r-admin']).toBe('full');
     expect(row.access['r-fin']).toBeUndefined();
+  });
+
+  // ETP-5402 — `reportsMatrix` (the Informes subsection) is adapted through the exact same
+  // `adaptCategoryMatrix` machinery as `matrix`, just reading `category.reports` instead of
+  // `category.windows` — see `adaptReportsMatrix`'s own JSDoc.
+  it('adapts reportsMatrix.categories[].reports[] the same way matrix.categories[].windows[] is adapted', async () => {
+    fetchRolesOverview.mockResolvedValue({
+      roles: [{ id: 'r-fin', name: 'Finance' }],
+      matrix: { categories: [] },
+      reportsMatrix: {
+        categories: [
+          {
+            // Deliberately a WRONG raw category name ("Finance" is the real backend value,
+            // but here anything works) — the mocked menu.json's "Reports" group (reportId:
+            // "tax-report") is expected to win via `menuIndex`, same as every other
+            // category-correction test above for `matrix`.
+            name: 'WrongBucket',
+            reports: [
+              { id: 'tax-report', name: 'raw tax report name', access: { 'r-fin': 'full' } },
+            ],
+          },
+        ],
+      },
+    });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().reportsMatrix).toEqual([
+      { category: 'Reports', rows: [{ windowId: 'tax-report', windowName: 'Tax Report', access: { 'r-fin': 'full' } }] },
+    ]);
+  });
+
+  it('treats a missing reportsMatrix as an empty array rather than crashing', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [], matrix: { categories: [] } });
+    const { getResult, waitFor } = await renderHook();
+    await waitFor(() => expect(getResult().loading).toBe(false));
+    expect(getResult().reportsMatrix).toEqual([]);
   });
 });
 

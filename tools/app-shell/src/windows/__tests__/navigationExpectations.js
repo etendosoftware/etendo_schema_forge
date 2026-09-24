@@ -28,7 +28,13 @@ const exceptions = {
   // (menu.json). Distinct capability name from `isAdminOrClientAdmin` below,
   // so it does not participate in the accessWindowId admin bypass or in the
   // `roles`/`acct-process-monitor` capability-sibling set.
-  'first-steps': { capability: 'isOwner' },
+  //
+  // ETP-5364 — ALSO the only entry declaring `hideWhenFirstStepsDismissed`, the fourth menu
+  // axis: a user preference rather than a permission, so it is not part of
+  // `navigationPermissions()` (which models grants). A caller filtering the catalog has to pass
+  // `false` as `filterMenuGroupsByAccess`'s 5th argument to mean "not dismissed"; omitting it
+  // fails closed and drops this entry, deliberately — see registry.vitest.jsx.
+  'first-steps': { capability: 'isOwner', hideWhenFirstStepsDismissed: true },
   authorize: {},
   roles: { capability: 'isAdminOrClientAdmin' },
   'api-keys': { capability: 'isAdminOrClientAdmin', flag: 'public-api-keys' },
@@ -72,7 +78,18 @@ export const optionalNavigation = [
 // exclusions. App Store is classified above, not permanently hidden.
 // ETP-5196 — smart-scan moved here (hidden: true in menu.json); its runtime
 // access gate lives in SmartScanPage.jsx's own content gate, unaffected by this.
-export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan'.split(' ');
+// ETP-5402 — the 9 Informes-subsection report rows the real report-viewer gallery shows
+// (tax-report, both aging schedules, inventory-stock-report, and the 5 financial-family
+// reports resolved via the "Informes financieros" pseudo-window — balance-sheet,
+// profit-loss, report-general-ledger, report-journal-entries, report-trial-balance), each
+// `hidden: true` and carrying a `reportId` (not windowId/obuiappProcessId/processId/
+// accessWindowId) — a grant-only identity key SideMenu's own filterMenuGroupsByAccess
+// never reads at all. Their real access gate is server-side (SFRolesOverview/
+// SFSystemRoleTemplates -> ReportAccessCatalog); `reportId` exists purely so the
+// "Configuración > Roles" and "Roles del usuario" matrices can resolve a category/label
+// override for them (same convention as match-rule/fiscal-calendar above, no live
+// sidebar link either).
+export const hiddenNavigation = 'business-partner deal activity lead hr employee absence report-viewer-purchases warehouse-storage-bins project time-tracking document match-rule fiscal-calendar open-close-period-control recurring-invoice oauth2-clients smart-scan tax-report aging-receivable aging-payable inventory-stock-report balance-sheet profit-loss report-general-ledger report-journal-entries report-trial-balance'.split(' ');
 
 export const navigationProfiles = [
   { label: 'default', apps: [], marketplace: false, proof: false },

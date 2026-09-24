@@ -247,3 +247,31 @@ describe('AttachmentsTab', () => {
   });
 });
 
+describe('AttachmentsTab — respects isDocumentReadOnly (ETP-5205)', () => {
+  beforeEach(() => {
+    hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
+  });
+
+  it('disables the upload dropzone when isDocumentReadOnly is true', () => {
+    render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
+    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeTruthy();
+  });
+
+  it('does NOT disable the upload dropzone when isDocumentReadOnly is false/absent', () => {
+    render(<AttachmentsTab {...baseProps} />);
+    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
+  });
+
+  it('hides per-row delete and delete-all when isDocumentReadOnly is true, but download stays available', () => {
+    render(<AttachmentsTab {...baseProps} isDocumentReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('regression: shows per-row delete and delete-all when isDocumentReadOnly is false/absent', () => {
+    render(<AttachmentsTab {...baseProps} />);
+    expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
+    expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
+  });
+});
+

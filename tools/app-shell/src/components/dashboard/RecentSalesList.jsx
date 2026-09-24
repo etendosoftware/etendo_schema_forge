@@ -69,9 +69,15 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                   })}
                   className="hover:bg-[hsl(var(--muted))] transition-colors"
                   style={{
-                    display: 'flex',
-                    flexDirection: 'row',
+                    display: 'grid',
+                    // ETP-5367 — fixed-column layout: the client-name column is the only
+                    // flexible track (minmax(0, 1fr) lets it shrink below content size so
+                    // the ellipsis below can actually engage); document-number and amount
+                    // are fixed-width tracks so they always land at the same horizontal
+                    // position regardless of client-name length or digit count.
+                    gridTemplateColumns: 'minmax(0, 1fr) 96px 112px 28px',
                     alignItems: 'center',
+                    columnGap: '8px',
                     padding: '4px 8px',
                     width: '100%',
                     height: '32px',
@@ -84,15 +90,15 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'flex-start',
-                      padding: '0px 16px 0px 8px',
+                      padding: '0px 0px 0px 8px',
                       height: '24px',
                       borderRadius: '0px',
-                      flex: 1,
                       minWidth: 0,
                     }}
                   >
                     <span
                       style={{
+                        display: 'block',
                         height: '24px',
                         fontFamily: 'Inter',
                         fontStyle: 'normal',
@@ -114,10 +120,10 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                       display: 'flex',
                       flexDirection: 'row',
                       alignItems: 'flex-start',
-                      padding: '0px 8px 0px 0px',
+                      justifyContent: 'flex-start',
                       height: '24px',
                       borderRadius: '0px',
-                      flexShrink: 0,
+                      minWidth: 0,
                     }}
                   >
                     <div
@@ -129,6 +135,7 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                         height: '24px',
                         background: 'hsl(var(--muted))',
                         borderRadius: '360px',
+                        maxWidth: '100%',
                       }}
                     >
                       <div
@@ -139,10 +146,12 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                           padding: '0px 2px',
                           height: '16px',
                           borderRadius: '0px',
+                          minWidth: 0,
                         }}
                       >
                         <span
                           style={{
+                            display: 'block',
                             height: '16px',
                             fontFamily: 'Inter',
                             fontStyle: 'normal',
@@ -151,6 +160,8 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                             lineHeight: '16px',
                             color: 'hsl(var(--muted-foreground))',
                             whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
                           }}
                         >
                           {docNum || inv.documentNo || '—'}
@@ -163,10 +174,10 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                       display: 'flex',
                       flexDirection: 'row',
                       alignItems: 'flex-start',
-                      padding: '0px 8px 0px 0px',
+                      justifyContent: 'flex-end',
                       height: '24px',
                       borderRadius: '0px',
-                      flexShrink: 0,
+                      minWidth: 0,
                     }}
                   >
                     <div
@@ -180,10 +191,12 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                         height: '24px',
                         border: '1px solid hsl(var(--border-control))',
                         borderRadius: '360px',
+                        maxWidth: '100%',
                       }}
                     >
                       <span
                         style={{
+                          display: 'block',
                           height: '24px',
                           fontFamily: 'Inter',
                           fontStyle: 'normal',
@@ -192,6 +205,8 @@ export function RecentSalesList({ invoices = [], currencyLabel = '', canCreateSa
                           lineHeight: '24px',
                           color: 'hsl(var(--muted-foreground))',
                           whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                         }}
                       >
                         {formatDashboardAmount(inv.amount, currencyLabel, numberLocale)}

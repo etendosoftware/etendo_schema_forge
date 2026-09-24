@@ -10,10 +10,13 @@ import { buildRectifiableInvoicesPayload } from '../helpers/rectifiable-invoices
  *     is NOT a supported action for this window and stays hidden for both
  *     statuses — ETP-5316 fixed it showing up for CO rows only)
  *   - Preview panel: row click opens GenericPreviewModal, shows documentNo, closes
- *   - DR detail: ConfirmWithCreditButton renders "Confirmar", Print button absent
- *     on Draft (ETP-4714 / ETP-5124 — decisions.json hidePrintWhen gates on
- *     documentStatus !== CO), modal opens on click, Cancel dismisses it,
- *     Confirm fires documentAction POST
+ *   - DR detail: "Confirmar" is the GENERIC draftMode Confirm (`action-save`, with
+ *     the Check icon) next to the generic Save draft (`action-save-draft`) — ETP-5408;
+ *     it stays disabled until the lines request resolves with >=1 line
+ *     (draftMode.disableWhenEmpty). Print button absent on Draft (ETP-4714 /
+ *     ETP-5124 — decisions.json hidePrintWhen gates on documentStatus !== CO),
+ *     clicking Confirm opens ConfirmInOutModal (via the window's CONFIRM_EVENT),
+ *     Cancel dismisses it, Confirm fires documentAction POST
  *   - CO detail (no invoice): "Crear factura de devolución" button visible,
  *     Print button now VISIBLE on Completed (ETP-5124 —
  *     hidePrintWhen changed from an unconditional true to a conditional gate,
@@ -91,6 +94,20 @@ const ROWS = [
   },
 ];
 
+// ETP-5408: one line under the DR record so the generic draftMode Confirm
+// (disableWhenEmpty) is enabled. Keyed by the `?parentId=` the lines fetch sends.
+const LINES_BY_PARENT = {
+  'ret-001': [
+    {
+      id: 'ret-001-line-1',
+      lineNo: 10,
+      product: 'prod-001',
+      'product$_identifier': 'Test Product',
+      movementQuantity: 1,
+    },
+  ],
+};
+
 // ETP-5381: candidates returned by the `rectifiableInvoices` action. Field names mirror
 // ReturnShipmentUtils#runInvoiceQuery exactly (id, documentNo, invoiceDate, grandTotalAmount,
 // currency, businessPartner) plus the `suggested` flag added in
@@ -145,11 +162,17 @@ async function installReturnReceiptMocks(page, { suggestedInvoiceIds = [], state
   // the generic `/sws/**` stub from login() and never returned the
   // synthetic `CO`/invoice data the confirm flow needs. See
   // docs/e2e-testing-guide.md for the full write-up.
+  // ETP-5408: the Borrador Confirm is the generic draftMode one with
+  // `disableWhenEmpty: true` — it reads `hook.children` (THIS request), not the header's
+  // linesCount, so the DR record must come back with at least one line or Confirm stays
+  // disabled forever. Other records keep an empty lines tab.
   const linesHandler = async (route) => {
+    const parentId = new URL(route.request().url()).searchParams.get('parentId');
+    const data = LINES_BY_PARENT[parentId] ?? [];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+      body: JSON.stringify({ response: { data, totalRows: data.length } }),
     });
   };
   await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine/**', linesHandler);
@@ -336,6 +359,8 @@ test.describe('return-material-receipt — list and preview', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('return-material-receipt — DR form actions', () => {
+  // ETP-5408: Borrador renders the GENERIC draftMode Save draft + Confirm pair — the same
+  // buttons goods-receipt / invoices / orders render — not a bespoke Confirm.
   // ETP-5381: no suggestion — this models a standalone return whose chain the backend could
   // not walk, so the picker opens with nothing preselected and the user MUST choose.
   let state;
@@ -351,9 +376,19 @@ test.describe('return-material-receipt — DR form actions', () => {
     await page.goto('/return-material-receipt/ret-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // --- "Confirmar" / processReceipt button is visible ---
-    const confirmBtn = page.getByTestId('action-confirm-with-credit');
+    // --- "Confirmar" is the generic draftMode Confirm, with its Check icon (ETP-5408) ---
+    const confirmBtn = page.getByTestId('detail-view').getByTestId('action-save');
     await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
+    await expect(confirmBtn.getByTestId('Check__fa3275')).toBeVisible();
+    await expect(confirmBtn).toHaveText(/confirmar|confirm/i);
+    // Enabled only once the lines request resolved with the mocked line (disableWhenEmpty).
+    await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+    // Save is the generic Save draft (outline) button with its Save icon.
+    const saveDraftBtn = page.getByTestId('detail-view').getByTestId('action-save-draft');
+    await expect(saveDraftBtn).toBeVisible();
+    await expect(saveDraftBtn.getByTestId('Save__fa3275')).toBeVisible();
+    // Regression guard: the bespoke topbarRight Confirm is gone for good.
+    await expect(page.getByTestId('action-confirm-with-credit')).toHaveCount(0);
 
     // --- Print button must NOT be rendered on a Draft document (ETP-4714 / ETP-5124) ---
     // decisions.json's window.hidePrintWhen is now a conditional gate

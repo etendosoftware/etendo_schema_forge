@@ -1,8 +1,8 @@
 {
   "version": "0.3.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-09-16T13:26:33.418Z",
-  "checksum": "cc45f703fc922c30",
+  "updatedAt": "2026-09-22T18:53:05.134Z",
+  "checksum": "111319b99662cbdc",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -30,6 +30,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {
@@ -479,7 +488,14 @@
             }
           }
         ],
-        "javaQualifier": "returnToVendorShipmentHeaderHandler"
+        "javaQualifier": "returnToVendorShipmentHeaderHandler",
+        "draftMode": {
+          "enabled": true,
+          "processField": "documentAction",
+          "processValue": "CO",
+          "label": "Confirmar",
+          "disableWhenEmpty": true
+        }
       },
       "returnToVendorShipmentLine": {
         "tableName": "M_InOutLine",
@@ -704,6 +720,15 @@
           "visibleWhenFieldFalse": "posted",
           "successKey": "documentPosted",
           "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
         }
       ],
       "processOverrides": {

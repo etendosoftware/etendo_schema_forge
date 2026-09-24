@@ -23,7 +23,6 @@ export function useConfirmWithCredit({
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
   const status = data?.documentStatus;
   const currency = data?.['currency$_identifier'] || '';
-  const confirmDisabled = typeof data?.linesCount === 'number' && data.linesCount === 0;
   // ETP-5381: trust the backend flag. ReturnShipmentUtils computes it over every non-voided
   // invoice of the return document, which is the same predicate the server-side duplicate guard
   // uses — so the button and the guard can never disagree. The previous client-side override
@@ -93,7 +92,7 @@ export function useConfirmWithCredit({
 
   return {
     ui,
-    status, currency, confirmDisabled, hasReturnInvoice,
+    status, currency, hasReturnInvoice,
     headers, base,
     showModal, setShowModal,
     creatingInvoice, result, setResult,

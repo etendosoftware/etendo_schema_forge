@@ -12,7 +12,9 @@ import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
  * "Configuración > Roles" overview page (ETP-4513, redesigned by ETP-4907 to match
  * a new reference layout): 5 role summary cards (icon, name, user-count badge, window
  * count) followed by a full window x role access matrix grouped by category, each cell
- * tri-state (full access / read-only / no access). Data comes from
+ * tri-state (full access / read-only / no access). ETP-5402 adds an "Informes" (reports)
+ * subsection nested inside each relevant category's block of `RolesAccessMatrix` — see
+ * that component's own JSDoc. Data comes from
  * `useRolesOverviewData()` (`./roles/useRolesOverviewData.js`), which calls the real
  * `GET /sws/neo/rolesoverview` (`lib/rolesApi.js`'s `fetchRolesOverview()`, unchanged
  * since ETP-4513) and adapts its response into this page's card/matrix shape. This is a
@@ -28,7 +30,7 @@ import RolesAccessMatrix from './roles/RolesAccessMatrix.jsx';
 export default function RolesOverviewPage() {
   const ui = useUI();
   const tMenu = useMenuLabel();
-  const { loading, error, cards, matrix, reload } = useRolesOverviewData();
+  const { loading, error, cards, matrix, reportsMatrix, reload } = useRolesOverviewData();
 
   useSetPageMeta({
     title: ui('rolesPageTitle'),
@@ -36,7 +38,23 @@ export default function RolesOverviewPage() {
   });
 
   return (
-    <div className="h-full overflow-y-auto space-y-6 p-6" data-testid="RolesOverviewPage">
+    <div className="h-full overflow-y-auto px-6 pb-6" data-testid="RolesOverviewPage">
+      {/* ETP-5402 split-out sticky-header fix — `pt-6` moved from the scroll container
+          above (was `p-6`) onto this NON-scrolling-container child instead. `position:
+          sticky` computes its offset against the nearest scrolling ancestor's PADDING
+          edge, but `overflow: auto` clips at that same ancestor's BORDER edge — so a
+          `padding-top` living on the scroll container itself opens a gap between "where
+          the browser clips" and "where sticky pins to", and that gap scrolls WITH the
+          content (CSS overflow spec: a scroll container's own padding is part of its
+          scrollable overflow region). The result: whatever row is mid-scroll bleeds
+          through in that gap, over/under the "stuck" `<thead>`, at every scroll position
+          — looking exactly like the header reordering below a body row, though the
+          header's `top: 0` offset is geometrically correct the whole time (verified via
+          `getBoundingClientRect()` live). `UserRolesTab.jsx`'s own scroll ancestor (a
+          `DetailView.jsx` column) has zero top padding, which is why its sticky `<thead>`
+          never showed this. Moving the top padding onto scrolled CONTENT instead of the
+          scroll container's own box removes the gap entirely. */}
+      <div className="pt-6 space-y-6">
       {(() => {
         if (loading) {
           return (
@@ -92,11 +110,13 @@ export default function RolesOverviewPage() {
             <RolesAccessMatrix
               cards={cards}
               matrix={matrix}
+              reportsMatrix={reportsMatrix}
               iconFor={(role) => ROLE_ICONS[resolveRoleKind(role)]}
               data-testid="RolesAccessMatrix__67e3bc" />
           </div>
         );
       })()}
+      </div>
     </div>
   );
 }

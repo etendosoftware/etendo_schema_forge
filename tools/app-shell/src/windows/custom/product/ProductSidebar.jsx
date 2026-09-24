@@ -533,7 +533,7 @@ export default function ProductSidebar({ recordId, data, token, apiBaseUrl }) {
   const [chartTrigger, setChartTrigger] = useState({ open: false, warehouse: null });
 
   useEffect(() => {
-    if (!recordId || !token) return;
+    if (!recordId) return;
 
     apiFetch(`/stock?parentId=${recordId}&_startRow=0&_endRow=200`)
       .then(r => (r.ok ? r.json() : null))

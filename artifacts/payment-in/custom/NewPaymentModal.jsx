@@ -5,6 +5,7 @@ import { DateField } from '@/components/ui/date-field';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 function fmtDate(raw) {
   if (!raw) return '-';
@@ -23,7 +24,12 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   const navigate = useNavigate();
   const ui = useUI();
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   const [mode, setMode] = useState('credit'); // 'credit' | 'invoice'
   const [saving, setSaving] = useState(false);
@@ -53,7 +59,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-in/finPayment/selectors/paymentMethod?_startRow=0&_endRow=100`, { headers });
+        const res = await apiFetch(`${base}/payment-in/finPayment/selectors/paymentMethod?_startRow=0&_endRow=100`);
         if (res.ok) {
           const json = await res.json();
           const items = json.items || json?.response?.data || [];
@@ -62,7 +68,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       } catch { /* silent */ }
       finally { setLoadingPaymentMethods(false); }
     })();
-  }, [base, headers]);
+  }, [base, apiFetch]);
 
   // Fetch accounts, filtered by payment method when one is selected
   useEffect(() => {
@@ -71,7 +77,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
     (async () => {
       try {
         const methodParam = paymentMethodId ? `&Fin_Paymentmethod_ID=${encodeURIComponent(paymentMethodId)}` : '';
-        const res = await fetch(`${base}/payment-in/finPayment/selectors/account?_startRow=0&_endRow=50${methodParam}`, { headers });
+        const res = await apiFetch(`${base}/payment-in/finPayment/selectors/account?_startRow=0&_endRow=50${methodParam}`);
         if (res.ok) {
           const json = await res.json();
           const items = json.items || json?.response?.data || [];
@@ -82,13 +88,13 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       } catch { /* silent */ }
       finally { setLoadingAccounts(false); }
     })();
-  }, [base, headers, paymentMethodId]);
+  }, [base, apiFetch, paymentMethodId]);
 
   // Fetch customers (BPs)
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-in/finPayment/selectors/C_Bpartner_ID?_startRow=0&_endRow=100`, { headers });
+        const res = await apiFetch(`${base}/payment-in/finPayment/selectors/C_Bpartner_ID?_startRow=0&_endRow=100`);
         if (res.ok) {
           const json = await res.json();
           const items = json.items || json?.response?.data || [];
@@ -97,7 +103,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       } catch { /* silent */ }
       finally { setLoadingCustomers(false); }
     })();
-  }, [base, headers]);
+  }, [base, apiFetch]);
 
   // Fetch pending invoices when customer changes
   useEffect(() => {
@@ -106,7 +112,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
     setLoadingInvoices(true);
     (async () => {
       try {
-        const res = await fetch(`${base}/sales-invoice/header?businessPartner=${customerId}&_startRow=0&_endRow=100`, { headers });
+        const res = await apiFetch(`${base}/sales-invoice/header?businessPartner=${customerId}&_startRow=0&_endRow=100`);
         if (res.ok && !cancelled) {
           const all = (await res.json())?.response?.data || [];
           const pending = all.filter(inv => inv.documentStatus === 'CO' && Number.parseFloat(inv.outstandingAmount) > 0);
@@ -116,7 +122,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       finally { if (!cancelled) setLoadingInvoices(false); }
     })();
     return () => { cancelled = true; };
-  }, [customerId, base, headers]);
+  }, [customerId, base, apiFetch]);
 
   // When invoice is selected, set amount to outstanding
   useEffect(() => {
@@ -136,7 +142,7 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
     setSaving(true);
     try {
       // Find the first pending schedule for this invoice
-      const schedRes = await fetch(`${base}/sales-invoice/paymentPlan?parentId=${invoiceId}&_startRow=0&_endRow=10`, { headers });
+      const schedRes = await apiFetch(`${base}/sales-invoice/paymentPlan?parentId=${invoiceId}&_startRow=0&_endRow=10`);
       let scheduleId = '';
       if (schedRes.ok) {
         const scheds = (await schedRes.json())?.response?.data || [];
@@ -144,8 +150,8 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
         scheduleId = pending?.finPaymentScheduleID || pending?.id || '';
       }
 
-      const res = await fetch(`${base}/sales-invoice/header/${invoiceId}/action/registerPayment`, {
-        method: 'POST', headers,
+      const res = await apiFetch(`${base}/sales-invoice/header/${invoiceId}/action/registerPayment`, {
+        method: 'POST', 
         body: JSON.stringify({
           scheduleId,
           actual_payment: String(amount),
@@ -184,8 +190,8 @@ export default function NewPaymentModal({ token, apiBaseUrl, windowName, onClose
       };
       if (description.trim()) body.description = description.trim();
 
-      const res = await fetch(`${base}/payment-in/finPayment`, {
-        method: 'POST', headers, body: JSON.stringify(body),
+      const res = await apiFetch(`${base}/payment-in/finPayment`, {
+        method: 'POST', body: JSON.stringify(body),
       });
       const resJson = await res.json().catch(() => null);
       if (!res.ok) throw new Error(resJson?.response?.message || resJson?.message || `Failed (${res.status})`);

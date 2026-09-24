@@ -60,7 +60,7 @@ export function useNeoResource({ path, deps = [], mapPayload, timeoutMs = DEFAUL
   const [error, setError] = useState(null);
 
   const load = useCallback(async () => {
-    if (!token || !path) return;
+    if (!path) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     setLoading(true);

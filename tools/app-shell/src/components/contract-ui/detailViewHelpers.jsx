@@ -100,6 +100,30 @@ export function withHeaderRefreshOnChildWrite(secondaryHooks, hook) {
   });
 }
 
+/**
+ * `onSaved` for a secondary tab's `customAddModal` (e.g. Contacts' address form).
+ *
+ * That modal persists its row with its own raw fetch, bypassing `handleAddChild`/
+ * `handleUpdateChild` entirely — the only places that mark BOTH the child collection
+ * cache (`invalidateChildrenCache`, ETP-5366) AND the PARENT entity's own list cache
+ * (`invalidateEntityCache`) stale. Without the latter, the window's grid kept serving
+ * its pre-save cached page (e.g. a rolled-up "Dirección" list column) for up to
+ * `recordStaleTime` after the user navigated back to it (ETP-5366 follow-up).
+ *
+ * `secondaryHooks[idx]` is the same `useEntity(entity, ...)` instance as the main
+ * `hook` (identical first `entity` arg), so invalidating through either reaches the
+ * same cache key.
+ */
+export function buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState }) {
+  return () => {
+    const parent = hook.selected ?? hook.editing;
+    secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
+    secondaryHooks[idx]?.invalidateEntityCache?.();
+    secondaryHooks[idx]?.handleSelect(parent);
+    setCustomModalState({ key: null, rowId: null });
+  };
+}
+
 export function sidePanelWrapperCls(hasSidePanel, linesLayout) {
   // Stack the side panel below the content on narrow viewports (e.g. when the
   // devtools console is open) and only place it beside the content once there
@@ -1042,8 +1066,12 @@ export function getSecondaryTabEntityKey(secondaryTabs, index) {
   return (secondaryTabs[index]?.isFormTab || secondaryTabs[index]?.Panel) ? null : (secondaryTabs[index]?.key ?? null);
 }
 
-export function renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui) {
-  return notesFocused ? (
+// ETP-5205: `readOnly` here is DetailView's `windowReadOnly` (static decisions.json
+// `api.window.readOnly` OR the runtime Solo-Lectura tier), NOT `isDocumentReadOnly` —
+// notes are documented to stay editable past document completion, so they must not
+// lock on `isDocumentReadOnly`'s extra `getDocumentReadOnly` (completion-lock) component.
+export function renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly }) {
+  return notesFocused && !readOnly ? (
       <textarea
           value={data[notesField] || ''}
           onChange={(e) => handleChangeWithCallout(notesField, e.target.value)}
@@ -1060,8 +1088,8 @@ export function renderNotesField(notesFocused, data, notesField, handleChangeWit
       <div
           tabIndex={0}
           role="textbox"
-          onClick={() => setNotesFocused(true)}
-          onFocus={() => setNotesFocused(true)}
+          onClick={() => !readOnly && setNotesFocused(true)}
+          onFocus={() => !readOnly && setNotesFocused(true)}
           className="w-full text-xs px-2 py-0.5 cursor-text min-h-[1.5rem] whitespace-pre-wrap break-words text-foreground/80"
       >
         {data[notesField] || <span className="text-muted-foreground/40">{ui('description')}</span>}
@@ -1280,8 +1308,8 @@ export function isInitialChildrenLoading(hook) {
   return hook.childrenLoading && hook.children.length === 0;
 }
 
-export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) {
-  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true);
+export function shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) {
+  return linesLayout === 'inlineEditable' && (api?.crud?.[detailEntity]?.delete ?? true) && !isDocumentReadOnly;
 }
 
 /**

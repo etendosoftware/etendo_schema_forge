@@ -508,8 +508,8 @@ test.describe('Goods Shipment — Crear Factura button gating and invoice creati
     // 4. Click "Crear Factura" → opens CreateInvoiceConfirmModal
     await createInvoiceBtn.click();
 
-    // 5. Modal title "Gestionar documentos" appears
-    await expect(page.getByText('Gestionar documentos')).toBeVisible({ timeout: 8_000 });
+    // 5. Modal title "Generar factura" appears (ETP-5410 follow-up: was "Gestionar documentos")
+    await expect(page.getByText('Generar factura')).toBeVisible({ timeout: 8_000 });
 
     // 6-7. ETP-5381 (commit a84798d2a) removed the "Generar documentos (opcional)" heading
     //      and the "Crear factura" checkbox card from CreateInvoiceConfirmModal: the button

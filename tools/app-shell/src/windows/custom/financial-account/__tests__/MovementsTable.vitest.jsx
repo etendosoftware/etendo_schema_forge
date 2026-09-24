@@ -79,9 +79,12 @@ vi.mock('@/components/forms/fields', () => ({
 vi.mock('@/components/financial-accounts/contractColumns', () => ({
   getContractGridColumns: () => [
     { name: 'documentNo', label: 'Doc' },
+    { name: 'businessPartner', label: 'Contact' },
+    { name: 'description', label: 'Description' },
     // Its registry entry declares header `parts`, so this is the column that exercises the
     // multi-segment header branch (ETP-4921).
     { name: 'transactionType', label: 'Type' },
+    { name: 'gLItem', label: 'Accounting account' },
     { name: 'reference', label: 'Reference' }, // no registry entry → fallback cell
   ],
   // Same panel fields as the real financial-account contract, in `seq` order: the
@@ -118,6 +121,11 @@ const baseMovement = (over = {}) => ({
   dimensions: {},
   ...over,
 });
+
+const setMetrics = (element, scrollWidth, clientWidth) => {
+  Object.defineProperty(element, 'scrollWidth', { configurable: true, value: scrollWidth });
+  Object.defineProperty(element, 'clientWidth', { configurable: true, value: clientWidth });
+};
 
 // The table is CONTROLLED since the sort state moved up to the tab (whose toolbar hosts the
 // "Ordenar por" popover). This harness supplies that state with the same hook the tab uses, so
@@ -177,6 +185,72 @@ describe('MovementsTable — payment link', () => {
     expect(docCell.tagName).toBe('SPAN');
     fireEvent.click(docCell);
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('MovementsTable — truncated-value tooltips', () => {
+  const longValues = {
+    documentNo: 'PAYMENT-DOCUMENT-2026-000000000000001',
+    businessPartner: 'International Business Partner With A Deliberately Long Legal Name',
+    description: 'Invoice settlement with a description that is wider than the movement column',
+    transactionType: 'Incoming payment generated from a very long transaction type label',
+    gLItem: '100000000-Share capital and other long accounting account information',
+    reference: 'REFERENCE-WITH-A-LONG-VALUE-THAT-USES-THE-CONTRACT-FALLBACK',
+  };
+
+  const movementWithText = (over = {}) => baseMovement({
+    documentNo: longValues.documentNo,
+    contact: longValues.businessPartner,
+    description: longValues.description,
+    typeLabel: longValues.transactionType,
+    glItem: longValues.gLItem,
+    reference: longValues.reference,
+    ...over,
+  });
+
+  it('uses a bounded table and reveals every clipped textual value in its own tooltip', () => {
+    renderTable({ movements: [movementWithText()] });
+
+    expect(document.querySelector('table')).toHaveClass('table-fixed', 'min-w-[1280px]');
+
+    for (const [field, value] of Object.entries(longValues)) {
+      const cellText = screen.getByTestId(`movement-cell-m1-${field}`);
+      expect(cellText).toHaveClass('truncate');
+      setMetrics(cellText, 640, 120);
+
+      fireEvent.focus(cellText);
+      expect(screen.getByTestId(`movement-cell-m1-${field}-tooltip`)).toHaveTextContent(value);
+      fireEvent.blur(cellText);
+      expect(screen.queryByTestId(`movement-cell-m1-${field}-tooltip`)).not.toBeInTheDocument();
+    }
+  });
+
+  it('keeps tooltips closed when each textual value fits in its cell', () => {
+    renderTable({ movements: [movementWithText({
+      documentNo: 'PAY-1',
+      contact: 'ACME',
+      description: 'Rent',
+      typeLabel: 'Payment',
+      glItem: 'Capital',
+      reference: 'REF-1',
+    })] });
+
+    for (const field of Object.keys(longValues)) {
+      const cellText = screen.getByTestId(`movement-cell-m1-${field}`);
+      setMetrics(cellText, 60, 160);
+      fireEvent.focus(cellText);
+      expect(screen.queryByTestId(`movement-cell-m1-${field}-tooltip`)).not.toBeInTheDocument();
+    }
+  });
+
+  it('keeps payment navigation active when the linked document text is truncated', () => {
+    renderTable({ movements: [movementWithText({ paymentId: 'pay-long', paymentIsReceipt: 'Y' })] });
+    const documentText = screen.getByTestId('movement-cell-m1-documentNo');
+    setMetrics(documentText, 640, 120);
+
+    fireEvent.click(documentText);
+
+    expect(navigate).toHaveBeenCalledWith('/payment-in/pay-long');
   });
 });
 

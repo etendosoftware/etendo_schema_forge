@@ -3,6 +3,7 @@ import { useRecordRefreshSignal } from '@/windows/custom/shared/useRecordRefresh
 import { useUI } from '@/i18n';
 import { formatAmount } from '@/lib/formatAmount.js';
 import PaymentDraftBanner from './PaymentDraftBanner';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 /* eslint-disable react/prop-types */
 
@@ -120,18 +121,22 @@ function DatosSection({ data, ui }) {
 // it either. Renamed the remaining two to match Classic's wording.
 const DET_COLS = '1.8fr 1fr 1fr';
 
-function LineasSection({ data, token, apiBaseUrl, ui }) {
+function LineasSection({ data, apiBaseUrl, ui }) {
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
   const [lines, setLines] = useState(null);
   const refreshSignal = useRecordRefreshSignal(data?.id);
 
   useEffect(() => {
-    if (!data?.id || !token || !apiBaseUrl) return;
+    if (!data?.id || !apiBaseUrl) return;
     const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-    const headers = { Authorization: `Bearer ${token}` };
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${base}/payment-out/lines?parentId=${data.id}&_startRow=0&_endRow=200`, { headers });
+        const res = await apiFetch(`${base}/payment-out/lines?parentId=${data.id}&_startRow=0&_endRow=200`);
         if (!res.ok || cancelled) { if (!cancelled) setLines([]); return; }
         const rows = (await res.json())?.response?.data || [];
         if (!cancelled) setLines(rows);
@@ -142,7 +147,7 @@ function LineasSection({ data, token, apiBaseUrl, ui }) {
   // is edited, and `Updated` is not a NEO field on this entity, so nothing in the payload
   // moves for this effect to react to. Without it the panel kept showing the amounts from
   // before the save until the whole window was reloaded.
-  }, [data?.id, refreshSignal, token, apiBaseUrl]);
+  }, [data?.id, refreshSignal, apiBaseUrl, apiFetch]);
 
   // Line amounts are stored in the payment's own currency (see fmtAmt).
   const currency = data?.['currency$_identifier'];
@@ -215,7 +220,7 @@ export default function PaymentOutBottomPanel({ data, token, apiBaseUrl }) {
       <PaymentDraftBanner data={data} />
       <DatosSection data={data} ui={ui} />
       <div style={{ margin: '0 20px', borderTop: '1px solid var(--status-neutral-border)' }} />
-      <LineasSection data={data} token={token} apiBaseUrl={apiBaseUrl} ui={ui} />
+      <LineasSection data={data} apiBaseUrl={apiBaseUrl} ui={ui} />
     </div>
   );
 }

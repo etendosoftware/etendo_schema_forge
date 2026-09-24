@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { authHeaders } from '@/auth/api.js';
+import { buildWriteHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
 import { AmbiguousWindowError, UnknownWindowError, assertInternalPath, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
@@ -56,7 +56,11 @@ export function resolveWindowPath(reference, index) {
  */
 export function withRecordSegment(path, recordId) {
   if (recordId === undefined || recordId === null || recordId === '') return path;
-  const base = String(path).replace(/\/+$/, '').replace(/\/new$/, '');
+  // The trailing slashes come off in a loop, not with `/\/+$/`: an anchored `+` retries from
+  // every start position, which is super-linear on a long run of slashes (javascript:S5852).
+  let trimmed = String(path);
+  while (trimmed.endsWith('/')) trimmed = trimmed.slice(0, -1);
+  const base = trimmed.replace(/\/new$/, '');
   return `${base}/${encodeURIComponent(String(recordId))}`;
 }
 
@@ -202,7 +206,9 @@ function messageText(message) {
     .join('');
 }
 
-export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
+// No `token` prop: under the cookie session (ETP-4576) the client holds none, and the
+// request credential is resolved per request from the active scheme instead.
+export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
   const navigate = useNavigate();
   const menuLabel = useMenuLabel();
   // filterMenuGroupsByAccess() returns a fresh array on every AppLayout
@@ -349,11 +355,19 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/ai/chat',
-    headers: {
-      ...authHeaders(token),
+    // The chat POST is an unsafe method, so it needs the ACTIVE scheme's write proof:
+    // `Authorization` under `bearer`, `X-Go-CSRF` under the `__Host-` cookie session.
+    // `authHeaders()` is the read-side helper and sends neither under `cookie`, which is
+    // what left the BFF with no credential at all (ETP-4576).
+    //
+    // Resolved per request rather than captured once: the CSRF proof arrives with the
+    // session, and a memo that ran during the boot window would freeze it as absent for
+    // the lifetime of the transport.
+    headers: () => ({
+      ...buildWriteHeaders(),
       'x-opencode-session': opencodeSessionRef.current,
-    },
-  }), [token]);
+    }),
+  }), []);
   const [input, setInput] = useState('');
   const handlePageHelpFinish = useCallback(({ message }) => {
     if (!pageHelpPendingRef.current) return;
@@ -414,18 +428,20 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
     text: messageText(message),
   })).filter(message => message.text || message.role === 'user'), [chat.messages]);
 
+  // ETP-4576: no `token` in this gate. Under the cookie session the client holds none, so
+  // gating on it would swallow every message silently. authHeaders() already resolves the
+  // active scheme, and an unauthenticated request surfaces through the chat's error path.
   const sendMessage = useCallback(async (text) => {
     const value = text?.trim();
-    if (!value || !token) return;
+    if (!value) return;
     setInput('');
     await chat.sendMessage({ text: value });
-  }, [chat, token]);
+  }, [chat]);
 
   const requestPageHelp = useCallback(async () => {
-    if (!token) {
-      setPageHelpError('No hay una sesión disponible para analizar esta pantalla.');
-      return;
-    }
+    // ETP-4576: the missing-session case is no longer detectable from a token the client does
+    // not hold. A request without a session fails and lands in the catch below, which already
+    // reports it — gating here just made page help a no-op for every authenticated user.
     if (pageHelpChat.status !== 'ready') return;
     pageHelpPendingRef.current = true;
     setPageHelpActive(true);
@@ -448,7 +464,7 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
       setPageHelpActive(false);
       setPageHelpError(error instanceof Error ? error.message : 'No se pudo analizar esta pantalla.');
     }
-  }, [pageHelpChat, token]);
+  }, [pageHelpChat]);
 
   const showPageHelp = useCallback(() => {
     const suggestion = pageHelpSuggestion.trim();

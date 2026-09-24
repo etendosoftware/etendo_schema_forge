@@ -67,3 +67,23 @@ export async function fetchRolesOverview() {
 export async function fetchTemplateRoles() {
   return fetchNeoWebhookJson(`${NEO_BASE}/systemroletemplates`, 'SFSystemRoleTemplates', rolesFallback);
 }
+
+// ETP-5402 QA follow-up — `data.reportAccess` present (even `{}`) is a valid response; only a
+// missing key means the shape genuinely didn't match.
+const reportAccessFallback = (data) => (data.reportAccess ? data : null);
+
+/**
+ * Fetches the CURRENT caller's own Informes-subsection report access from
+ * `GET /sws/neo/myreportaccess` (ETP-5402 QA follow-up, `SFMyReportAccess` in `com.etendoerp.go`).
+ *
+ * Unlike `fetchRolesOverview()` (a cross-role aggregate gated to admin/client-admin callers
+ * only), this mirrors `SFWindowAccessMap`'s "current role, proactive, open to any authenticated
+ * role" shape — see `SFMyReportAccess.java`'s class javadoc for the full rationale. A report id
+ * absent from the map means "no access" (tier `none`), same "missing key means none" convention
+ * `windowAccess` already uses.
+ *
+ * @returns {Promise<{reportAccess: Record<string, 'full' | 'read-only'>}>}
+ */
+export async function fetchMyReportAccess() {
+  return fetchNeoWebhookJson(`${NEO_BASE}/myreportaccess`, 'SFMyReportAccess', reportAccessFallback);
+}

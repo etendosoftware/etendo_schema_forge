@@ -12,10 +12,13 @@ describe('fetchDeclarationIncidents', () => {
   beforeEach(() => { vi.spyOn(global, 'fetch'); });
   afterEach(() => { vi.restoreAllMocks(); });
 
-  it('returns the empty shape when token is absent', async () => {
+  it('returns the empty shape when token is absent — inverted: the cookie carries the session', async () => {
     const result = await fetchDeclarationIncidents('303-2026-T2', { apiBaseUrl: OPTS.apiBaseUrl });
     expect(result).toEqual(EMPTY);
-    expect(fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(fetch).toHaveBeenCalled();
   });
 
   it('returns the empty shape when apiBaseUrl is absent', async () => {

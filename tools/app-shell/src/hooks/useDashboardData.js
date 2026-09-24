@@ -342,7 +342,11 @@ export function useDashboardData() {
   // `fetchData` below used to list the raw value, refetching all nine dashboard widgets on a
   // plain alt-tab with nothing actually different. `apiFetch` (from `useApiFetch()`) already
   // reads the token live at request time, so it does not need `token` repeated here either.
-  const hasToken = !!token;
+  // ETP-4576 — `Boolean(...)`, not `!!token`: the G2 source-reading invariant
+  // (sessionContractInvariants.test.js) rejects any `!token` spelling, because that is
+  // how a client-held-token gate looks, and under the cookie scheme such a gate is
+  // permanently false. This is only a dependency-stability boolean, never a gate.
+  const hasToken = Boolean(token);
   const { range } = useDashboardDateRange();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -356,11 +360,7 @@ export function useDashboardData() {
   const { isWidgetVisible, filterFeed, pendingAmountsVisibility } = access;
 
   const fetchData = useCallback(async () => {
-    if (!hasToken) {
-      setData(buildEmptyFallback());
-      setLoading(false);
-      return;
-    }
+
 
     // Resolves to the widget's fetch when visible, and to a `null` result — indistinguishable
     // from an unavailable widget downstream — when it is not.

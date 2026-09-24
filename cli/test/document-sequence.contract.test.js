@@ -1,9 +1,9 @@
 /**
  * Per-window structural tests for the document-sequence window (ETP-5285).
  *
- * The window shows a FIXED set of five product-defined document series, provisioned by
- * the onboarding dataset. A user must not be able to add a sixth or remove one of the
- * five, and must not be able to rename one — renaming drops the row out of
+ * The window shows a FIXED set of six product-defined document series, provisioned by
+ * the onboarding dataset. A user must not be able to add a seventh or remove one of the
+ * six, and must not be able to rename one — renaming drops the row out of
  * `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` (which matches on `AD_Sequence.Name`)
  * and makes it unreachable, silently and permanently.
  *
@@ -17,7 +17,7 @@
  * What is explicitly NOT tested here (already covered elsewhere):
  *   - contract.json validity            → cli/test/contract-all.test.js
  *   - registry / index.jsx / mockData   → cli/test/wiring-completeness.test.js
- *   - the five-name allowlist itself    → DocumentSequenceHandlerTest (com.etendoerp.go)
+ *   - the six-name allowlist itself     → DocumentSequenceHandlerTest (com.etendoerp.go)
  *   - the corrective data-fix           → cli/test/data-fixes-r38-*.test.js
  */
 
@@ -44,7 +44,7 @@ describe('document-sequence — the set of series is fixed (no create, no delete
     assert.deepEqual(
       decisions.entities.sequence.methods,
       ['GET', 'GETBYID', 'PUT', 'PATCH'],
-      'the five series are provisioned by the dataset; the window edits them, never adds one',
+      'the six series are provisioned by the dataset; the window edits them, never adds one',
     );
   });
 
@@ -56,13 +56,13 @@ describe('document-sequence — the set of series is fixed (no create, no delete
   });
 
   it('refuses DELETE at the API level', () => {
-    // Deleting one of the five orphans C_DocType.DocNoSequence_ID and breaks the
+    // Deleting one of the six orphans C_DocType.DocNoSequence_ID and breaks the
     // numbering of every document of that type.
     assert.equal(crud.delete, false);
     assert.ok(!crud.methods.includes('DELETE'));
   });
 
-  it('still allows reading and editing the five series', () => {
+  it('still allows reading and editing the six series', () => {
     assert.equal(crud.get, true);
     assert.equal(crud.getById, true);
     assert.equal(crud.put, true);
@@ -118,11 +118,16 @@ describe('document-sequence — the series name is read-only and displayed trans
     assert.equal(name.visibility, 'readOnly');
   });
 
-  it('maps all five canonical AD names to key-shaped i18n keys', () => {
+  it('maps all six canonical AD names to key-shaped i18n keys', () => {
     // `resolveEnumLabelKey` passes a key-shaped `name` through verbatim; anything else
     // is re-derived as `<column><Value>` and would silently miss the locale entry.
+    //
+    // These values are `AD_Sequence.Name`, so they must stay byte-identical to
+    // `DocumentSequenceHandler.VISIBLE_SEQUENCE_NAMES` — the handler filters the list on
+    // exactly this string and a mismatch hides the row with no error anywhere. ETP-5364
+    // added the sixth, 'AP Invoice'.
     const KEY_SHAPED = /^[a-z][a-zA-Z0-9]*$/;
-    assert.equal(name.enumValues.length, 5);
+    assert.equal(name.enumValues.length, 6);
     for (const { value, name: key } of name.enumValues) {
       assert.ok(value.length > 0);
       assert.match(key, KEY_SHAPED, `${key} is not key-shaped`);
@@ -132,6 +137,7 @@ describe('document-sequence — the series name is read-only and displayed trans
       'Standard Order',
       'AR Invoice',
       'Factura Rectificativa (Ventas)',
+      'AP Invoice',
       'Factura Rectificativa (Compras)',
     ]);
   });

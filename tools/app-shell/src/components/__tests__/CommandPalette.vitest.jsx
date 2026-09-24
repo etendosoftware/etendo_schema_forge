@@ -16,6 +16,7 @@ vi.mock('@/lib/flags', () => ({
   useFeatureFlag: (...args) => mockUseFeatureFlag(...args),
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
   PUBLIC_API_KEYS: 'public-api-keys',
+  PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }));
 

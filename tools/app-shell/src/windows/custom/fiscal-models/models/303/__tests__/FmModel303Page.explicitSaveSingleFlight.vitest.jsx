@@ -38,13 +38,22 @@
 //   2. No two PUTs OVERLAP — a request made while one is in flight issues no PUT of its own until
 //      the first settles.
 //   3. A queued save that has become INELIGIBLE for a reason `handlePresent` itself cannot flush
-//      away (the session ending — token/apiBaseUrl going falsy — while a PUT is open) is DROPPED,
-//      never replayed onto a record whose content no longer matches what would be filed. This
-//      used to also cover "the declaration got filed while a save was queued behind an in-flight
-//      Guardar" — but that was the ETP-5338 pt.4 bug ("processing a rectificativa un-checks the
-//      checkbox"): `handlePresent` now `await`s `persistEditableFields()` BEFORE transitioning
-//      status, so a save queued at filing time is flushed first, not dropped. (1) and (3) must
-//      both be asserted or a later change will "fix" one by breaking the other.
+//      away (`apiBaseUrl` going falsy — there is nowhere left to send it — while a PUT is open)
+//      is DROPPED, never replayed onto a record whose content no longer matches what would be
+//      filed. This used to also cover "the declaration got filed while a save was queued behind
+//      an in-flight Guardar" — but that was the ETP-5338 pt.4 bug ("processing a rectificativa
+//      un-checks the checkbox"): `handlePresent` now `await`s `persistEditableFields()` BEFORE
+//      transitioning status, so a save queued at filing time is flushed first, not dropped.
+//      (1) and (3) must both be asserted or a later change will "fix" one by breaking the other.
+//
+//      ETP-4576 narrowed what counts as ineligible: `token` is NOT part of it any more. Under
+//      the cookie session `useAuth()` holds no token at all, so "the token went falsy" is the
+//      steady state rather than a session ending, and dropping on it discarded every save on
+//      the whole scheme. The credential now travels with the request (`apiFetch` resolves it
+//      from the active scheme), so a falsy `token` says nothing about whether the save can
+//      still succeed. The pair of tests below asserts BOTH halves of that split — token falsy
+//      still flushes, apiBaseUrl falsy still drops — because collapsing them back into one
+//      rule is exactly the regression.
 //   4. The in-flight guard can never get STUCK — a failed save must not silence the write path
 //      for the rest of the session, which is a worse outcome than the duplicate write the guard
 //      removes. Exercised across BOTH callers (a failed Guardar must not block a later Calcular
@@ -500,11 +509,25 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
     expect(nifOf(putCalls()[0])).toBe('B');
   });
 
-  // The same eligibility gate, reached the other way: the session ends (`token` goes falsy)
-  // while a PUT is open. The queued snapshot still holds the token it was scheduled with, so
-  // without the re-check the replay would issue a PUT doomed to 401 — which
-  // `persistManualData` does not detect and reports as a plain `{ ok: false }`.
-  it('drops a queued save when the token goes falsy while a PUT is open', async () => {
+  // ETP-4576 — the inverse of the test below, and the one that has to be asserted POSITIVELY.
+  //
+  // This used to read "drops a queued save when the token goes falsy while a PUT is open": the
+  // eligibility gate was `!isSubmitted && !!token && !!apiBaseUrl`, on the theory that a token
+  // going falsy meant the session had ended and the replay would be a PUT doomed to 401.
+  //
+  // Under the cookie session that theory is inverted. `useAuth()` never holds a token, so a
+  // falsy `token` is not a session ending — it is every render, for every user, all the time.
+  // A gate that drops on it drops EVERY queued save on that scheme, and does it silently: the
+  // PUT never goes out, `persistManualData` is never called, `lastManualDataResultRef` keeps
+  // its optimistic `{ ok: true }`, and the user gets the "Registro guardado" toast over edits
+  // that were thrown away. The credential is not the component's to hold any more — `apiFetch`
+  // resolves it from the active scheme at request time — so `token` carries no information
+  // about whether the save can succeed and must not gate it.
+  //
+  // Asserted here with the token going falsy MID-FLIGHT rather than absent from the start,
+  // because that is the shape the old gate was written against: it is the exact scenario that
+  // must now flush instead of drop.
+  it('still flushes a queued save when the token goes falsy while a PUT is open', async () => {
     const server = installServer();
     const { rerender } = renderPage();
 
@@ -530,9 +553,18 @@ describe('FmModel303Page — single-flight explicit-save write path (ETP-5255 / 
 
     await server.settleNextPut();
 
-    expect(putCalls()).toHaveLength(1);
+    // The queued edit reaches the wire — and carries 'B', the value that was pending when the
+    // token disappeared, not a stale one.
+    expect(putCalls()).toHaveLength(2);
+    expect(nifOf(putCalls()[1])).toBe('B');
+    // Still strictly serialized: the replay opens exactly one PUT, it does not overlap.
+    expect(server.openPutCount).toBe(1);
   });
 
+  // The half of the old gate that SURVIVES ETP-4576, kept next to its inverse on purpose. Losing
+  // `apiBaseUrl` is not a credential question at all — there is no longer an address to send the
+  // PUT to — so the replay must still be dropped rather than aimed at a relative URL. If a future
+  // change makes this one flush too, the eligibility gate has been deleted rather than narrowed.
   it('drops a queued save when apiBaseUrl goes falsy while a PUT is open', async () => {
     const server = installServer();
     const { rerender } = renderPage();

@@ -236,6 +236,28 @@ describe('useOrderWindow', () => {
     });
   });
 
+  it('returns an empty menuActions list when windowReadOnly is true, regardless of status/manage/reactivate eligibility (ETP-5205)', () => {
+    const { result } = renderOrderHook({ showReactivate: true, windowReadOnly: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-ro-1', hasLinkedDocuments: false, needsPrimaryDoc: true },
+      status: 'CO',
+    });
+
+    expect(actions).toEqual([]);
+  });
+
+  it('regression: menuActions still returns entries when windowReadOnly is false/absent', () => {
+    const { result } = renderOrderHook({ showReactivate: true });
+
+    const actions = result.current.rowQuickActions.menuActions({
+      row: { id: 'so-ro-2', hasLinkedDocuments: false },
+      status: 'CO',
+    });
+
+    expect(actions.find((a) => a.key === 'reactivate')).toBeDefined();
+  });
+
   // ETP-4717 — this hook builds rowQuickActions by hand (bypassing the
   // generated contract's rowQuickActions.actions.email.visibleWhen), so the
   // gate must be asserted here directly. Regression: without it, the Grid

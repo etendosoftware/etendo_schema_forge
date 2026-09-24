@@ -59,6 +59,26 @@ async function installUserCreateMocks(page) {
 }
 
 test.describe('Company User Invitations — ETP-4894', () => {
+
+  // ETP-5202's session guard asks `GET /sws/neo/session` who is signed in, and fails SAFE: any
+  // answer that is not a 401 means "somebody is signed in", so it shows the "otra sesión abierta"
+  // screen INSTEAD of the login step. Unmocked, that request hits the preview server, which
+  // answers the SPA shell (or a 404) — never a 401 — so the guard always ends in CONFLICT.
+  //
+  // These specs were passing only because their assertions beat the probe: the login step renders
+  // first and is replaced when the probe resolves. That is a race, and it lost on a slower run.
+  // Declaring "nobody is signed in" is what the flow under test actually assumes, so it is stated
+  // here rather than left to timing. `login()` registers its own route later and still wins, so
+  // the one test that signs an admin in is unaffected.
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/sws/neo/session', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'unauthenticated' }),
+      });
+    });
+  });
   test('admin creates a user and gets a single actionable "invitation sent" toast (ETP-4830)', async ({
     page,
   }) => {
@@ -112,7 +132,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
       });
     });
 
-    await page.route('**/sws/go/login', async (route) => {
+    await page.route('**/sws/go/session', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -328,7 +348,7 @@ test.describe('Company User Invitations — ETP-4894', () => {
         }),
       });
     });
-    await page.route('**/sws/go/login', async (route) => {
+    await page.route('**/sws/go/session', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -271,7 +271,9 @@ export function useTaxSifLineRowActions({ apiBaseUrl, token, enabled = true, rec
     // case referentially stable so the common mount path does not schedule a spare render.
     setTaxById((prev) => (Object.keys(prev).length === 0 ? prev : {}));
     setInvoiceOrgId(null);
-    if (!enabled || !apiBaseUrl || !token || !recordId) return undefined;
+    // ETP-4576 — develop's guard also required `token`; under the cookie scheme the client
+    // holds none, so that condition is permanently false and the effect never runs.
+    if (!enabled || !apiBaseUrl || !recordId) return undefined;
     let cancelled = false;
 
     async function loadTaxCatalog() {

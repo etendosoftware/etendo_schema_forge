@@ -6,6 +6,7 @@ import './not-posted-documents.css';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { translateBackendError } from '@/lib/backendErrors.js';
 
 function formatDate(raw) {
   if (!raw) return '';
@@ -248,7 +249,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
-        toast.error(json?.message || res.statusText || ui('postingFailed'));
+        const rawMessage = json?.message || res.statusText;
+        toast.error(rawMessage ? translateBackendError(rawMessage, ui) : ui('postingFailed'));
       }
     } catch (e) {
       toast.error(ui('postingFailed'));

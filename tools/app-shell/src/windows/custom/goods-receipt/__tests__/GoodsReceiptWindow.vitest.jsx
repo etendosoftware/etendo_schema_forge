@@ -142,6 +142,15 @@ vi.mock('@generated/goods-receipt/custom/GoodsReceiptBottomPanel', () => ({ defa
 vi.mock('../GoodsReceiptPreview.jsx', () => ({ default: () => null }));
 vi.mock('../RelatedDocuments.jsx', () => ({ default: () => null }));
 
+// Mirrors goods-shipment/__tests__/index.vitest.jsx's mock of BulkInvoiceFromShipment: this
+// window's tests exercise the `bulkActions` slot with partial/no props (the generated-app mock
+// above renders `<BulkActions />` with zero props for every test, not just the ones that target
+// the bulk toolbar), so the real component — which calls hooks and reads `selectedRows` — must
+// not run for real here.
+vi.mock('@generated/goods-receipt/custom/BulkInvoiceFromReceipt', () => ({
+  default: () => <div data-testid="bulk-invoice-receipt" />,
+}));
+
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null,
 }));
@@ -417,6 +426,14 @@ describe('GoodsReceiptWindow', () => {
     expect(screen.getByTestId('bulk-actions-slot')).toBeInTheDocument();
   });
 
+  // Bulk "Crear factura" action, mirroring the goods-shipment window: BulkInvoiceFromReceipt
+  // must render as a child of GoodsReceiptBulkAction, alongside Procesar/Contabilizar/
+  // Descontabilizar/Copy-link, not replace any of them.
+  it('renders BulkInvoiceFromReceipt inside the bulk-actions slot', () => {
+    render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
+    expect(screen.getByTestId('bulk-invoice-receipt')).toBeInTheDocument();
+  });
+
   // ── hideMoreMenu ────────────────────────────────────────────────────────────
 
   it('hideMoreMenu hides the kebab menu when the document is not confirmed (CO)', () => {
@@ -481,10 +498,13 @@ describe('GoodsReceiptWindow', () => {
     expect(actions).toEqual([{ key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' }]);
   });
 
-  it('does not offer the post row-kebab menu action for an already-posted row', () => {
+  // ETP-5378 — used to expect [], which is exactly the defect: with Post as the
+  // kebab's only entry, a posted row lost the kebab altogether, even though this
+  // window's decisions.json (and menuActionsForForm) have always offered Unpost.
+  it('offers Unpost instead of Post for an already-posted row', () => {
     render(<GoodsReceiptWindow {...DEFAULT_PROPS} />);
     const actions = lastRowQuickActions.menuActions({ row: { processed: 'Y', posted: 'Y' } });
-    expect(actions).toEqual([]);
+    expect(actions).toEqual([{ key: 'unpost', labelKey: 'unpost', neoAction: 'unpost', successKey: 'documentUnposted', destructive: true }]);
   });
 
   it('does not offer the post row-kebab menu action for a not-yet-processed row', () => {

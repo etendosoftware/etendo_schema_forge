@@ -131,7 +131,12 @@ describe('useWidget', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('does not fetch when token is missing', () => {
+  // ETP-4576: inverted on purpose. Under the cookie session the client holds no token,
+  // so an empty one is the NORMAL state, not a reason to stay silent - the `__Host-`
+  // cookie carries the credential and the browser attaches it on its own. A reinstated
+  // `!token` guard here would silently blank every widget for cookie-session users, which
+  // is exactly the regression this now guards against.
+  it('still fetches when no token is held, since the cookie carries the credential', () => {
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ({ response: { data: [] } }),
@@ -139,6 +144,6 @@ describe('useWidget', () => {
 
     renderHook(() => useWidget('my-widget', { token: '', apiBaseUrl: 'http://localhost' }));
 
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 });

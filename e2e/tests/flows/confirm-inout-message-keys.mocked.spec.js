@@ -45,6 +45,14 @@ const ROW = {
   sourceShipments: [{ id: 'ship-5316', documentNo: 'ALB/05316' }],
 };
 
+const LINE = {
+  id: 'ret-keys-001-line-1',
+  lineNo: 10,
+  product: 'prod-001',
+  'product$_identifier': 'Test Product',
+  movementQuantity: 0,
+};
+
 /**
  * Header + line mocks for return-material-receipt, plus a documentAction POST that answers the
  * given 400 body.
@@ -58,11 +66,14 @@ const ROW = {
  * Must be called AFTER login() — Playwright matches routes in reverse registration order.
  */
 async function installMocks(page, errorBody) {
+  // ETP-5408: the Borrador Confirm is the generic draftMode one with `disableWhenEmpty` —
+  // it reads THIS request (hook.children), not the header's linesCount, so the record must
+  // come back with at least one line or the button never enables.
   const linesHandler = async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+      body: JSON.stringify({ response: { data: [LINE], totalRows: 1 } }),
     });
   };
   await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine/**', linesHandler);
@@ -116,8 +127,11 @@ async function openConfirmModal(page) {
 
   // Generous: on a cold `make dev` this is the first request for the whole
   // return-material-receipt module graph, and Vite compiles it on demand.
-  const confirmBtn = page.getByTestId('action-confirm-with-credit');
+  // ETP-5408: "Confirmar" is the generic draftMode Confirm (`action-save`); its onConfirm
+  // dispatches the window's CONFIRM_EVENT and ConfirmWithCreditButton opens the modal.
+  const confirmBtn = page.getByTestId('detail-view').getByTestId('action-save');
   await expect(confirmBtn).toBeVisible({ timeout: 30_000 });
+  await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
   await confirmBtn.click();
 
   const modal = page.getByTestId('confirm-inout-modal');

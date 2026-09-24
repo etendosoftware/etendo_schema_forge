@@ -119,7 +119,7 @@ import { requestTransition } from '@/lib/unsavedChanges.js';
 // wherever it happens.
 import { useLineSaveConflict } from './useLineSaveConflict.js';
 import {
-  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
+  CollapsibleSection, SecondaryPanelTab, hasRecordForRoute, isLoadingRecordForRoute, isRecordUnavailableForRoute, WINDOW_DELETE_ACTIONS, WINDOW_DELETE_CONFIRM_MODALS, WINDOW_HIDE_STATUS_PILL_FOR, applyCalloutFieldUpdates, applyLocalChildRowUpdate, applyOneComboEntry, applyProductCalloutPriceAdjustments, applyProductCurrencyConversion, applySelectedItemMappings, buildHeaderFormData, buildBalanceFooterGridTotals, buildInitialTabs, buildLineRowClickHandler, buildRowValueCoercer, buildCustomAddModalOnSaved, calculateLineNetAmount, calculateNetUnitPrice, canDeleteSelectedLine, collectRowFieldValues, computeBalanceGate, customTabKey, deriveTaxRateFromGross, dispatchProcessAction, evalDisplayLogicRaw, getAddLineMenuActions, getAddLineWrapperClassName, getChildSaveButtonLabel, getCustomLinesTabClassName, getDetailContentClassName, getDocsRowClassName, getButtonClass, getDocumentIds, getDocumentReadOnly, getFullBreadcrumb, getInlineEditableShrinkClassName, getLineMenuActionsRef, getLinesContainerClassName, getLinesToolbarClassName, getNotesRowClassName, getOnAddToFavorites, getOthersTabClassName, getRecordTitle, getSaveBtnCls, getSaveButtonLabel, getSecondaryEditRowHandler, getSecondaryLinesTableRef, getSecondaryTabContentClassName, getSecondaryTabEntityKey, getSidebarSlideClassName, getSqBtnSize, getTabsBarClassName, getTabsBarStyle, getWindowTitle, hasUnsavedEdits, isCustomPrimaryTabActive, isDetailBulkBarVisible, isInitialChildrenLoading, makeCloseDialogHandler, maybeSaveBeforeProcess, mergeLineEdits, mergeSelectorAuxFields, mergeSelectorContextFields, normalizePatchFieldValues, parseBackendErrorMessage, preserveGridReadOnlyValues, pushOthers, renderDetailBulkActionBar, renderEmbeddedStatusPill, renderExtraActionButtons, renderNotesField, renderPrimaryTabButtons, renderProcessConfirmModal, renderTotalsBlock, resolveAddLineLabel, resolveCanAddLines, resolveDetailRows, resolveHeaderContent, resolveProcessLabel, resolveSidebarContent, resolveStatusPrefix, resolveTaxIdentifier, runAddLineAction, pruneInheritedParentKeys, runPrimaryAddLineFlow, runSecondaryAddLineFlow, secondaryTabEmptyState, shouldShowDetailFormSidebar, shouldShowInlineDeleteSelectionBar, shouldShowSecondaryDetailSidebar, sidePanelWrapperCls, useNewRouteEditingReset, withHeaderRefreshOnChildWrite,
 } from './detailViewHelpers.jsx';
 
 // Re-exported for the suites that import these from 'DetailView.jsx'.
@@ -991,7 +991,7 @@ export function canShowAddLineArea(hook, isDocumentReadOnly, allEntryFields, Det
 
 async function executeDetailProcessImpl(process, paramValues, explicitRows, {
   selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui,
-  setSelectedChildRows, setExecutingDetailProcess,
+  setSelectedChildRows, setExecutingDetailProcess, apiFetch: request = apiFetch,
 }) {
   const rows = explicitRows || selectedChildRows;
   const fieldValues = {};
@@ -1005,7 +1005,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
       rows.map(row => {
         const url = api?.crud?.[detailEntity]?.detailUrl?.replace('{id}', row.id)
           || `${apiBaseUrl}/${detailEntity}/${row.id}`;
-        return apiFetch(`${url}/action/${process.columnName ?? process.name}`, {
+        return request(`${url}/action/${process.columnName ?? process.name}`, {
           method: 'POST',
           body: JSON.stringify({ fieldValues }),
           token, baseUrl: '',
@@ -1908,7 +1908,7 @@ export function DetailView({
     if (recordId === 'new') return;
     const docCurrencyId = hook.selected?.currency;
     const orderDate = hook.selected?.[documentDateField];
-    if (!docCurrencyId || !orderDate || !apiBaseUrl || !token) {
+    if (!docCurrencyId || !orderDate || !apiBaseUrl) {
       return;
     }
 
@@ -2306,7 +2306,7 @@ export function DetailView({
     // order date, revert the dropdown to the previous value and surface an error.
     // Skipped when the new currency equals the org currency (no rate needed) and when
     // there is no previous currency yet (initial set, e.g. defaults).
-    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl && token) {
+    if (field === 'currency' && previousCurrency && previousCurrency !== value && apiBaseUrl) {
       const orderDate = hook.selected?.[documentDateField] ?? hook.editing?.[documentDateField];
       if (orderDate) {
         const neoBase = apiBaseUrl.replace(/\/[^/]+$/, '');
@@ -2391,7 +2391,7 @@ export function DetailView({
   // not in the failure path of the bug that motivated the ref). If a line callout is ever
   // seen acting on stale header values, thread pendingEditingRef.current through here too.
   const handleLineFieldChange = useCallback(async (field, value, rowValues, applyUpdates) => {
-    if (!field || (value == null || value === '') || !token || !apiBaseUrl || !detailEntity) return;
+    if (!field || (value == null || value === '') || !apiBaseUrl || !detailEntity) return;
     if (field.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(field)) return;
 
     // These fields are computed client-side — no callout needed.
@@ -2507,7 +2507,7 @@ export function DetailView({
 
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
-    if (!currentId || isNew || !notesField) return;
+    if (!currentId || isNew || !notesField || windowReadOnly) return; // ETP-5205: excludes only the completion lock, notes still respect the static/tier flags
     if (value !== undefined && value.length > 255) {
       toast.error(ui('notesMaxLengthExceeded'));
       return;
@@ -2527,7 +2527,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
+  }, [data?.id, recordId, isNew, notesField, windowReadOnly, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   // Guard that controls whether "+ Add Lines" is shown.
   // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
@@ -2689,7 +2689,11 @@ export function DetailView({
   const [paramDialogProcess, setParamDialogProcess] = useState(null);
   const [detailParamDialogProcess, setDetailParamDialogProcess] = useState(null);
   const [executingDetailProcess, setExecutingDetailProcess] = useState(false);
-  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess };
+  // ETP-4576 — hands down the hook's apiFetch, not the module-level one this file also
+  // imports. The two read the CSRF proof from different places, and only the hook's is
+  // reliably populated here: the module one sent this POST with no proof and the backend
+  // answered 403, which is what stopped every document confirm.
+  const detailProcessDeps = { selectedChildRows, api, detailEntity, apiBaseUrl, token, hook, ui, setSelectedChildRows, setExecutingDetailProcess, apiFetch };
 
   const othersRef = useRef(null);
 
@@ -2806,7 +2810,7 @@ export function DetailView({
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          api={api}
+          api={api} isDocumentReadOnly={isDocumentReadOnly}
           isActive={isActive}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
@@ -2888,10 +2892,10 @@ export function DetailView({
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={hook.handleProcess}
-        onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+        onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
         onSave={() => hook.handleSave({ silent: true })}
         isDirty={isDirty}
-        saveGate={saveGate}
+        saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
         data-testid={testId} />
     );
   })();
@@ -2930,7 +2934,7 @@ export function DetailView({
                   api={api}
                   onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
-                  onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+                  onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                   data-testid="TopbarExtraComponent__fa3275" />
               );
             })()}
@@ -3214,6 +3218,8 @@ export function DetailView({
                   onAddChild: hook.handleAddChild,
                   onRefresh: (parentId = data?.id || recordId) => {
                     if (!parentId) return;
+                    // ETP-5378 — a line write can change the header column the grid shows.
+                    hook.invalidateEntityCache?.();
                     hook.fetchChildren?.(parentId, { force: true });
                     hook.fetchById?.(parentId, { force: true });
                   },
@@ -3428,6 +3434,7 @@ export function DetailView({
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
+                                  hook.invalidateEntityCache?.();
                                   hook.fetchChildren?.(data?.id || recordId, { force: true });
                                   hook.fetchById?.(data?.id || recordId, { force: true });
                                 }}
@@ -3633,6 +3640,7 @@ export function DetailView({
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
+                                          hook.invalidateEntityCache?.();
                                           hook.fetchChildren?.(data?.id || recordId, { force: true });
                                           hook.fetchById?.(data?.id || recordId, { force: true });
                                         }}
@@ -3643,7 +3651,7 @@ export function DetailView({
                                     )}
                                     {/* Selection toolbar — portaled to document.body, TRUE
                               viewport-fixed (ETP-4972), not anchored to this wrapper. */}
-                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
+                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) && (
                                       <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}
@@ -3844,7 +3852,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4038,7 +4046,7 @@ export function DetailView({
                           data={data}
                           token={token}
                           apiBaseUrl={apiBaseUrl}
-                          api={api}
+                          api={api} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
                           summary={summary}
                           notesField={notesField}
                           onFieldChange={handleChangeWithCallout}
@@ -4101,7 +4109,7 @@ export function DetailView({
                                         data={data}
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
-                                        api={api}
+                                        api={api} isDocumentReadOnly={isDocumentReadOnly}
                                         layout="chips"
                                         docsRefreshSignal={docsRefreshSignal}
                                         {...(ct.props || {})}
@@ -4115,7 +4123,7 @@ export function DetailView({
                               <div className={getNotesRowClassName(embedded)}>
                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
                                 <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
-                                  {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui)}
+                                  {renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly: windowReadOnly })}
                                 </div>
                               </div>
                             )}
@@ -4322,22 +4330,12 @@ export function DetailView({
             key={st.key}
             open={customModalState.key === st.key}
             onClose={() => setCustomModalState({ key: null, rowId: null })}
-            onSaved={() => {
-              const parent = hook.selected ?? hook.editing;
-              // ETP-5366: this modal persists the row with its own raw fetch, so it never went
-              // through handleAddChild and nothing marked the cached child collection stale. The
-              // handleSelect below ends in a NON-forced fetchChildren, which for the next 30s
-              // (recordStaleTime) resolves from the cache with the very same array instance — a
-              // no-op setChildren, so the tab kept showing the pre-save rows and its count until
-              // the user left the record and came back. Dropping the entry first is what makes
-              // that fetch reach the network. Same shape as handleAddChild's own invalidate, and
-              // as the ETP-5278 fix for extraActions' onRefresh.
-              secondaryHooks[idx]?.invalidateChildrenCache?.(parent?.id);
-              secondaryHooks[idx]?.handleSelect(parent);
-              setCustomModalState({ key: null, rowId: null });
-            }}
+            onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
             onParentRefresh={() => {
-              if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
+              if (!parentRecordId) return;
+              // ETP-5378 — the modal just wrote the parent; the cached list holds the old row.
+              hook.invalidateEntityCache?.();
+              hook.fetchById(parentRecordId, { force: true });
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

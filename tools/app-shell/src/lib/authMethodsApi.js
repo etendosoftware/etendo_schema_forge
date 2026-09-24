@@ -4,15 +4,22 @@
  * Reading them needs nothing new: `fetchAccount` (GET /sws/go/me) already returns the account, and
  * the server now includes an `authMethods` object in it. Only the removal call lives here.
  *
- * It follows the shape of `@etendosoftware/etendo-go-core/onboarding/api` — an injected `fetchImpl`,
- * an explicit base URL and the platform token — so that when the core package next ships it can move
- * there beside its siblings without any caller changing. It is here rather than there only because
- * the core repo is a separate change.
+ * ETP-4576 — the removal goes through `apiFetch`, not an injected `fetchImpl` plus a hand-built
+ * header bag. It used to mirror the core package's `(fetchImpl, baseUrl, token)` shape so it could
+ * move there unchanged, and that shape is exactly what broke it: the "token" was fed to
+ * `buildAuthHeaders`, which puts whatever it receives into `X-Go-CSRF`. Under the cookie session
+ * `sf_platform_token` is purged, so the argument was null, the POST went out with no proof of
+ * intent, and removing a sign-in method was refused — while the GET that renders the same screen
+ * kept working, because the browser attaches the session cookie on its own and reads need no proof.
+ * `apiFetch` decides the credential from the active scheme, so there is nothing left here to get
+ * wrong.
+ *
+ * The core subpath, never the `@/auth/api.js` barrel: the barrel re-exports `.jsx` and this module
+ * is imported by plain `node --test` suites (see docs/request-policy.md).
  */
 
-import { buildAuthHeaders, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
-
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
+import { AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 
 /**
  * Codes the removal endpoint answers with, mapped to UI dictionary keys.
@@ -61,30 +68,6 @@ function buildRemovalError(payload) {
 }
 
 
-/** Reads the platform token the account endpoints authenticate with. */
-export function readPlatformToken() {
-  if (typeof window === 'undefined') return null;
-  return window.localStorage?.getItem(PLATFORM_TOKEN_KEY) || null;
-}
-
-/**
- * Stores a rotated platform token.
- *
- * Removing a method rotates the session server-side (`removeAuthMethod` generates a fresh token and
- * writes it through `updateSessionToken`), so the token the browser holds stops working the instant
- * the call succeeds. Dropping the new one leaves the user authenticated in appearance only: the
- * screen redraws correctly and the very next request answers 401. That is what happened before this
- * existed, and it is silent — there is no error at the moment of the act.
- *
- * This is deliberately NOT what a password change does: that one discards the token on purpose and
- * signs the user out, because the credential they authenticated with is the one that just changed.
- * Removing one of several methods leaves the others valid, so the session should survive.
- */
-export function writePlatformToken(token) {
-  if (typeof window === 'undefined' || !token) return;
-  window.localStorage?.setItem(PLATFORM_TOKEN_KEY, token);
-}
-
 /**
  * Removes one sign-in method from the account.
  *
@@ -92,20 +75,21 @@ export function writePlatformToken(token) {
  * transaction, so a client must never gate the call on its own arithmetic — the `removable` list
  * from /me is for enabling a button, not for authorising the act.
  *
- * @param {Function} fetchImpl fetch implementation to use
- * @param {string} baseUrl API base URL
- * @param {string} token platform session token
+ * ETP-4576 — the removal rotates the session SERVER-SIDE, and under the cookie scheme the rotated
+ * session arrives as a `Set-Cookie` the browser installs on its own. Nothing is persisted here and
+ * nothing needs to be: the previous code stored the rotated token out of the body into
+ * `sf_platform_token`, a key `purgeLegacyAuthStorage` deletes, so it was writing a credential into
+ * storage that the migration exists to empty.
+ *
  * @param {string} method `password`, or the provider id of an identity
  * @param {string} [currentPassword] required only when removing the password
- * @returns {Promise<object>} the response, including the rotated token and the updated authMethods
+ * @param {string} [baseUrl] API base URL; defaults to the ambient session's
+ * @returns {Promise<object>} the response, including the updated authMethods
  */
-export async function removeAuthMethod(fetchImpl, baseUrl, token, method, currentPassword) {
-  const response = await fetchImpl(`${baseUrl}/sws/go/auth-methods/remove`, {
+export async function removeAuthMethod(method, currentPassword, baseUrl) {
+  const response = await apiFetch('/sws/go/auth-methods/remove', {
     method: 'POST',
-    // buildAuthHeaders is the core package's own header policy. Spelling the header out here
-    // would both duplicate that decision and trip the auth-header guardrail, which allows exactly
-    // one module to define it.
-    headers: { ...buildAuthHeaders(token), 'Content-Type': 'application/json' },
+    ...(baseUrl !== undefined ? { baseUrl } : {}),
     body: JSON.stringify(
       currentPassword ? { method, currentPassword } : { method }
     ),

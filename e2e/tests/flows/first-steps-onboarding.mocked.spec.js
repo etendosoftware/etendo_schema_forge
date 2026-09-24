@@ -5,10 +5,14 @@ import { login } from '../helpers/auth.js';
  * ETP-5190 — post-signup First Steps onboarding window (mocked).
  *
  * Covers the browser half of the feature end to end:
- *   1. the page itself — landing at 1/7, one row open at a time (but any row openable, in any
- *      order), checking off the five writable steps, and the all-set state at 7/7;
+ *   1. the page itself — landing at 1/7 when the backend has not exposed transfer, one row open
+ *      at a time (but any row openable, in any order), checking off the six writable steps, and
+ *      7/7;
  *   2. the dashboard gate — a never-seen account is bounced to /first-steps exactly once,
- *      and an already-seen (or unreadable) state is not bounced at all.
+ *      and an already-seen (or unreadable) state is not bounced at all;
+ *   3. ETP-5364 — "Finalizar configuración inicial" at full completion removes the sidebar entry, the
+ *      removal survives a reload (it is persisted, not local), Inicio stays reachable
+ *      throughout, and the page still offers the way back.
  *
  * There is deliberately NO integration counterpart: the backend half of the endpoint does
  * not compile yet (it needs an entity regeneration), so both endpoints are route-mocked
@@ -21,8 +25,8 @@ import { login } from '../helpers/auth.js';
  * here), and this spec is the one that needs to override it with a real, mutable store.
  */
 
-const STEP_IDS = ['create-account', 'company-data', 'fiscal-config', 'products',
-  'contacts', 'invoice-sequence', 'team'];
+const STEP_IDS = ['create-account', 'company-data', 'fiscal-config', 'products', 'contacts',
+  'invoice-sequence', 'team'];
 const TOGGLEABLE = ['company-data', 'fiscal-config', 'products', 'contacts',
   'invoice-sequence', 'team'];
 const ALWAYS_DONE = ['create-account'];
@@ -33,8 +37,9 @@ const ALWAYS_DONE = ['create-account'];
  * @param {import('@playwright/test').Page} page
  * @param {object|null} [initial] the stored `firstSteps` object, or `null` for a never-saved account
  */
-async function installFirstStepsMock(page, initial = null) {
+async function installFirstStepsMock(page, initial = null, transferStatus = null) {
   const state = { value: initial };
+  const transfer = { status: transferStatus, products: {}, contacts: {} };
   /** every POSTed `firstSteps` body, in order */
   const writes = [];
 
@@ -58,7 +63,29 @@ async function installFirstStepsMock(page, initial = null) {
     await route.fallback();
   });
 
-  return { writes, state };
+  if (transferStatus !== null) {
+    await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+      status: 200, contentType: 'application/json', body: JSON.stringify(transfer),
+    }));
+  }
+
+  return { writes, state, transfer };
+}
+
+/**
+ * Keep baseline checklist tests on the flag-off contract. `login()` installs a broad
+ * successful `/sws/**` fallback; without this explicit 404, the newly added
+ * `/sws/go/demo-data-transfer` endpoint appears enabled and inserts the productive-only
+ * transfer row. The real backend uses 404 to mean the `demo-data-transfer` flag is off.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function installDemoDataTransferDisabledMock(page) {
+  await page.route('**/sws/go/demo-data-transfer', (route) => route.fulfill({
+    status: 404,
+    contentType: 'application/json',
+    body: JSON.stringify({ status: 'error' }),
+  }));
 }
 
 const progress = (page) => page.getByTestId('first-steps-progress');
@@ -67,7 +94,7 @@ const progress = (page) => page.getByTestId('first-steps-progress');
  * Opens the sidebar, which starts COLLAPSED.
  *
  * Collapsed, `SideMenu` renders group icons only: the `menu-item-*` links live in a Radix
- * popover that mounts on hover, and the `x/7` badge is replaced by a different element
+ * popover that mounts on hover, and the `x/8` badge is replaced by a different element
  * (`menu-first-steps-progress-collapsed`, just the outstanding count — `3/7` does not fit in a
  * 40px tile). So neither `menu-first-steps-progress` nor `menu-item-first-steps` is in the DOM
  * until this runs. Same helper as `window-visibility-etp4249.mocked.spec.js`, kept local for
@@ -100,9 +127,11 @@ async function waitForCopyTranslated(page) {
  * dashboard), and Playwright matches routes in reverse registration order. This is the
  * documented override hook — a spec that needs an unseen account provides its own route.
  */
-async function setupFirstSteps(page, initial = null) {
+async function setupFirstSteps(page, initial = null, transferStatus = null) {
   await login(page);
-  const mock = await installFirstStepsMock(page, initial);
+  await installDemoDataTransferDisabledMock(page);
+  // Transfer-enabled coverage opts in; all baseline checklist tests retain the flag-off 404.
+  const mock = await installFirstStepsMock(page, initial, transferStatus);
   return mock;
 }
 
@@ -131,7 +160,7 @@ test.describe('First Steps page — completion run', () => {
     await waitForCopyTranslated(page);
   });
 
-  test('lands at 1/7 with the always-done step already ticked', async ({ page }) => {
+  test('lands at 1/7 when the backend does not expose the transfer row', async ({ page }) => {
     await expect(progress(page)).toContainText('1/7');
 
     for (const id of STEP_IDS) {
@@ -140,6 +169,7 @@ test.describe('First Steps page — completion run', () => {
     for (const id of ALWAYS_DONE) {
       await expect(page.getByTestId(`first-steps-done-${id}`)).toBeVisible();
     }
+    await expect(page.getByTestId('first-steps-step-demo-data-transfer')).toHaveCount(0);
     for (const id of TOGGLEABLE) {
       await expect(page.getByTestId(`first-steps-done-${id}`)).toHaveCount(0);
     }
@@ -194,8 +224,41 @@ test.describe('First Steps page — completion run', () => {
 
   test('sends the fiscal step to the Fiscal Configuration window', async ({ page }) => {
     await page.getByTestId('first-steps-title-fiscal-config').click();
+    // ETP-5364: the row asks whether the tenant reports to a SIF at all before it offers the
+    // window. "Yes" is what puts the Configure button on screen.
+    await page.getByTestId('first-steps-gate-yes-fiscal-config').click();
     await page.getByTestId('first-steps-configure-fiscal-config').click();
     await expect(page).toHaveURL(/\/fiscal-config/);
+  });
+
+  test('completes the fiscal step outright when the tenant reports to no SIF', async ({ page }) => {
+    // ETP-5364 — "No" is not a dismissal: a tenant that reports to no invoicing system has
+    // nothing to configure, so the answer IS the completed state and it persists like any
+    // other tick.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
+
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+    await expect(progress(page)).toContainText('2/7');
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toHaveCount(0);
+    expect(mock.writes.at(-1).completed).toContain('fiscal-config');
+  });
+
+  test('asks the fiscal question again after the step is unticked', async ({ page }) => {
+    // The answer is deliberately not persisted — only the step's completed flag is. Unticking
+    // is therefore the escape hatch for someone who answered wrongly.
+    await page.getByTestId('first-steps-title-fiscal-config').click();
+    await page.getByTestId('first-steps-gate-no-fiscal-config').click();
+    await expect(page.getByTestId('first-steps-done-fiscal-config')).toBeVisible();
+
+    const row = page.getByTestId('first-steps-step-fiscal-config');
+    await row.locator('label:has([data-testid="first-steps-toggle-fiscal-config"])').click();
+
+    await expect(page.getByTestId('first-steps-gate-fiscal-config')).toBeVisible();
+    await expect(page.getByTestId('first-steps-configure-fiscal-config')).toHaveCount(0);
   });
 
   test('locks a completed step controls, and unlocks them when it is unticked', async ({ page }) => {
@@ -220,7 +283,7 @@ test.describe('First Steps page — completion run', () => {
     await expect(page.getByTestId('first-steps-configure-company-data')).toBeEnabled();
   });
 
-  test('walks 1/7 -> 7/7 as the writable steps are checked off, one row open at a time', async ({ page }) => {
+  test('walks 1/7 -> 7/7 as writable steps are checked off, one row open at a time', async ({ page }) => {
     const expected = [
       { done: 'company-data', progress: '2/7', next: 'fiscal-config' },
       { done: 'fiscal-config', progress: '3/7', next: 'products' },
@@ -247,7 +310,7 @@ test.describe('First Steps page — completion run', () => {
     }
   });
 
-  test('persists only the five writable ids, and the final state is the full set', async ({ page }) => {
+  test('persists only the six writable ids, and the final state is the full set', async ({ page }) => {
     for (const id of TOGGLEABLE) await completeStep(page, id);
     await expect(progress(page)).toContainText('7/7');
 
@@ -256,6 +319,7 @@ test.describe('First Steps page — completion run', () => {
       for (const id of ALWAYS_DONE) {
         expect(body.completed, JSON.stringify(body)).not.toContain(id);
       }
+      expect(body.completed, JSON.stringify(body)).not.toContain('demo-data-transfer');
     }
     expect(mock.writes.at(-1).completed.slice().sort()).toEqual(TOGGLEABLE.slice().sort());
   });
@@ -331,15 +395,52 @@ test.describe('First Steps page — completion run', () => {
   });
 });
 
+test.describe('First Steps transfer and plan gates', () => {
+  test('the server controls transfer completion and the final action', async ({ page }) => {
+    const mock = await setupFirstSteps(page,
+      { v: 1, seen: true, dismissed: false, completed: TOGGLEABLE }, 'RUNNING');
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('7/8');
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-data-transfer-progress')).toBeVisible();
+    await expect(page.getByTestId('first-steps-toggle-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
+    expect(mock.writes).toHaveLength(0);
+
+    mock.transfer.status = 'COMPLETED';
+    await page.reload();
+    await expect(progress(page)).toContainText('8/8');
+    await expect(page.getByTestId('first-steps-done-demo-data-transfer')).toBeVisible();
+    await expect(page.getByTestId('first-steps-finish-setup')).toBeVisible();
+    expect(mock.writes).toHaveLength(0);
+  });
+
+  test('a trial sees five steps and no transfer row', async ({ page }) => {
+    await setupFirstSteps(page);
+    await page.route('**/sws/go/environments', (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ environments: [{
+        clientId: 'e2e-mock-client', clientName: 'Trial', plan: 'free',
+      }] }),
+    }));
+    await page.goto('/first-steps');
+    await expect(progress(page)).toContainText('1/5');
+    await expect(page.getByTestId('first-steps-step-demo-data-transfer')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-step-fiscal-config')).toHaveCount(0);
+    await expect(page.getByTestId('first-steps-step-invoice-sequence')).toHaveCount(0);
+  });
+});
+
 test.describe('First Steps page — degraded backend', () => {
   test('still renders the list when the state cannot be read', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     await page.route('**/sws/go/onboarding/first-steps**', (route) => route.fulfill({
       status: 500, contentType: 'application/json', body: JSON.stringify({ status: 'error' }),
     }));
     await page.goto('/first-steps');
 
-    // Degrades to "nothing completed" rather than a blank page or a permanent spinner.
+    // Degrades to no user-completed steps; only account creation counts as completed.
     await expect(page.getByTestId('first-steps-page')).toBeVisible();
     await expect(progress(page)).toContainText('1/7');
     for (const id of STEP_IDS) {
@@ -392,6 +493,7 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 
   test('does not bounce when the state cannot be read — `seen` is unknown, not false', async ({ page }) => {
     await login(page);
+    await installDemoDataTransferDisabledMock(page);
     const counter = { posts: 0 };
     await page.route('**/sws/go/onboarding/first-steps**', (route) => {
       if (route.request().method() === 'POST') counter.posts += 1;
@@ -407,5 +509,96 @@ test.describe('Dashboard gate — the one-time redirect', () => {
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByTestId('first-steps-page')).toHaveCount(0);
     expect(counter.posts).toBe(0);
+  });
+});
+
+test.describe('Finalizar configuración inicial — ETP-5364', () => {
+  test('is offered only at 7/7, and removes the sidebar entry when pressed', async ({ page }) => {
+    const mock = await setupFirstSteps(page, null);
+    await page.goto('/first-steps');
+    await waitForCopyTranslated(page);
+
+    // Below 7/7 the button does not exist: closing the checklist is the end of the run, not
+    // an escape hatch from it.
+    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
+
+    for (const id of TOGGLEABLE) await completeStep(page, id);
+    await expect(progress(page)).toContainText('7/7');
+
+    // Still there at 7/7 — completing the list does NOT dismiss on its own.
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
+
+    await page.getByTestId('first-steps-finish-setup').click();
+
+    await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
+    // And it is a real write, not a local flag.
+    await expect.poll(() => mock.state.value?.dismissed).toBe(true);
+    // The rest of the state rides along — a POST carrying only `dismissed` would wipe it.
+    expect(mock.state.value.completed).toEqual(
+      expect.arrayContaining(TOGGLEABLE.filter((id) => !ALWAYS_DONE.includes(id))),
+    );
+  });
+
+  test('stays hidden after a reload, because the state is on the account', async ({ page }) => {
+    await setupFirstSteps(page, { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
+
+    await page.goto('/dashboard');
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
+  });
+
+  // The ticket's other acceptance criterion: the dashboard must never become unreachable
+  // because of the First Steps state, in either direction. Two tests rather than one, because
+  // `setupFirstSteps` logs in — calling it twice in a single test would re-run login().
+  test('keeps Inicio reachable mid-checklist', async ({ page }) => {
+    await setupFirstSteps(page, { v: 1, seen: true, completed: ['company-data'] });
+    await page.goto('/first-steps');
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
+    await page.getByTestId('menu-item-dashboard').click();
+    await expect(page).toHaveURL(/\/dashboard/);
+  });
+
+  test('keeps Inicio reachable once the checklist is dismissed', async ({ page }) => {
+    await setupFirstSteps(page, { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
+    await page.goto('/first-steps');
+    await expandSidebar(page);
+    // The checklist entry is gone; Inicio is a different menu.json group and is not.
+    await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
+    await page.getByTestId('menu-item-dashboard').click();
+    await expect(page).toHaveURL(/\/dashboard/);
+  });
+
+  test('does not bounce a dismissed account that never spent the redirect', async ({ page }) => {
+    // `seen: false` + `dismissed: true` is the real shape for a user who opened /first-steps
+    // from the sidebar and closed it there. Without the gate's extra clause the very next
+    // dashboard visit would drag them back onto the page they just put away.
+    const mock = await setupFirstSteps(page,
+      { v: 1, seen: false, dismissed: true, completed: TOGGLEABLE });
+
+    await page.goto('/dashboard');
+    await page.waitForTimeout(1_500);
+
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId('first-steps-page')).toHaveCount(0);
+    expect(mock.writes.length).toBe(0);
+  });
+
+  test('brings the entry back from the page, which stays routable', async ({ page }) => {
+    // Hiding a menu entry with no way back is a trap. The page is still reachable by URL and
+    // carries the undo.
+    const mock = await setupFirstSteps(page,
+      { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
+
+    await page.goto('/first-steps');
+    await expect(page.getByTestId('first-steps-dismissed-notice')).toBeVisible();
+    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
+
+    await page.getByTestId('first-steps-reopen').click();
+
+    await expect.poll(() => mock.state.value?.dismissed).toBe(false);
+    await expandSidebar(page);
+    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
   });
 });

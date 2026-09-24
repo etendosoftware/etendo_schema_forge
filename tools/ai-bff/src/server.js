@@ -16,12 +16,89 @@ export function hasConfiguredSecret(value) {
   return Boolean(value && !['null', 'undefined'].includes(value.trim().toLowerCase()));
 }
 
-export function mcpClientOptions(authorization) {
+/** Session cookie issued by Etendo Go; the `__Host-` prefix is part of the name. */
+const SESSION_COOKIE = '__Host-go_session';
+/** Header carrying the session-bound CSRF proof on unsafe methods. */
+const CSRF_HEADER = 'x-go-csrf';
+
+/**
+ * The credential the browser actually sent, in whichever scheme the backend issued.
+ *
+ * ETP-4576 moved the SPA to a `__Host-` cookie session, and under that scheme the client
+ * holds no token at all — `authHeaders()` deliberately sends nothing and lets the cookie
+ * travel on its own. Gating on `Authorization: Bearer` therefore rejects every browser
+ * conversation with a 401 that reads like an expired login. Both schemes coexist while
+ * the migration lands, so this reads whichever one is present rather than picking one.
+ *
+ * Returns `null` when no credential of either scheme is present — the only case that is
+ * genuinely unauthenticated. Everything else is forwarded as-is and judged by Etendo Go:
+ * this process proxies a credential, it is not a second authority on it. In particular a
+ * missing CSRF proof is NOT rejected here, so the caller gets the backend's own 403
+ * instead of a lookalike invented one header earlier.
+ *
+ * @param {Record<string, string|undefined>} headers incoming request headers (lower-cased by Node)
+ * @returns {{authorization?: string, cookie?: string, csrfToken?: string, origin?: string, referer?: string}|null}
+ */
+export function sessionCredentials(headers = {}) {
+  const authorization = headers.authorization;
+  if (authorization?.startsWith('Bearer ')) {
+    return { authorization };
+  }
+  const cookie = sessionCookieOnly(headers.cookie);
+  if (cookie) {
+    return {
+      cookie,
+      csrfToken: headers[CSRF_HEADER],
+      origin: headers.origin,
+      referer: headers.referer,
+    };
+  }
+  return null;
+}
+
+/**
+ * The session cookie alone, or `null` when the jar does not carry one.
+ *
+ * Deliberately NOT the whole `Cookie` header. `ETENDO_MCP_URL` is configuration, so
+ * forwarding the jar verbatim would hand every unrelated cookie the browser happens to
+ * hold — another app's session on a shared host, an analytics id — to whatever that
+ * variable points at. Only the credential this request needs travels.
+ */
+function sessionCookieOnly(cookieHeader) {
+  if (!cookieHeader) return null;
+  const match = cookieHeader
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(`${SESSION_COOKIE}=`));
+  return match || null;
+}
+
+/**
+ * Build the headers that carry the caller's credential through to Etendo Go's MCP endpoint.
+ *
+ * `Origin` (and `Referer` behind it) is the one that is easy to drop and expensive to debug:
+ * `GoSessionSecurity.isOriginAllowed()` fails closed on unsafe methods, so a cookie session
+ * that arrives without it is rejected with 403 "CSRF validation failed" — a different symptom
+ * from the 401 this function exists to fix, which makes it read like an unrelated second bug.
+ * Both are forwarded verbatim rather than reconstructed, because the backend compares the
+ * origin exactly and derives its own fallback from `Referer`.
+ */
+function mcpAuthHeaders({ authorization, cookie, csrfToken, origin, referer } = {}) {
+  const headers = {};
+  if (authorization) headers.Authorization = authorization;
+  if (cookie) headers.Cookie = cookie;
+  if (csrfToken) headers['X-Go-CSRF'] = csrfToken;
+  if (origin) headers.Origin = origin;
+  if (referer) headers.Referer = referer;
+  return headers;
+}
+
+export function mcpClientOptions(credentials) {
   return {
     transport: {
       type: 'http',
       url: mcpUrl,
-      headers: { Authorization: authorization },
+      headers: mcpAuthHeaders(credentials),
     },
     // Etendo Go currently implements the legacy initialize handshake, not
     // the optional stateless server/discover probe from newer MCP clients.
@@ -168,9 +245,9 @@ export async function handleChat(req, res) {
     return json(res, 503, { error: 'OPENCODE_API_KEY is not configured' });
   }
 
-  const authorization = req.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) {
-    return json(res, 401, { error: 'A user session Bearer token is required' });
+  const credentials = sessionCredentials(req.headers);
+  if (!credentials) {
+    return json(res, 401, { error: 'A user session is required' });
   }
 
   const body = await readBody(req);
@@ -182,7 +259,7 @@ export async function handleChat(req, res) {
     // Page help already includes the sanitized DOM in the user message. It
     // must not wait for or depend on the Etendo MCP endpoint.
     if (!isPageHelpRequest) {
-      mcpClient = await createMCPClient(mcpClientOptions(authorization));
+      mcpClient = await createMCPClient(mcpClientOptions(credentials));
     }
     const provider = createOpenAICompatible(opencodeProviderOptions(opencodeSession));
     const tools = isPageHelpRequest ? {} : {

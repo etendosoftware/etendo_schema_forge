@@ -5,12 +5,19 @@
  * process. The hook reads its session through `useApiFetch`, which reads it with the
  * core's `useAuthOptional` — so per `docs/request-policy.md` the test supplies a SESSION
  * (a stable object from the mocked core module), never a `token` prop.
+ *
+ * ETP-5364 added `dismissed` to the stored object. Every POST here replaces the whole state,
+ * so a body assertion that omits it is asserting a state the hook cannot send — which is why
+ * the pre-existing `toggleStep`/`markSeen` expectations below carry `dismissed: false`.
  */
 import { renderHook, act, waitFor } from '@testing-library/react';
 
 // One stable object per test — a fresh object each render would make `useApiFetch`'s memo
 // churn and could refire the GET on every commit.
-const SESSION = Object.freeze({ token: 'test-token' });
+// ETP-4576 — carries `isAuthenticated` as the real context always does. The hook gates on it,
+// not on the token: under the cookie scheme the client holds none, so a `!token` gate would be
+// permanently false and the GET would never be issued. A double that omits it is not a session.
+const SESSION = Object.freeze({ token: 'test-token', isAuthenticated: true });
 const authState = vi.hoisted(() => ({ value: null }));
 
 vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => ({
@@ -104,8 +111,21 @@ describe('normalizeFirstStepsState', () => {
     expect(normalizeFirstStepsState(null, ALLOWED)).toEqual({
       v: FIRST_STEPS_STATE_VERSION,
       seen: false,
+      dismissed: false,
       completed: [],
     });
+  });
+
+  it('reads a pre-ETP-5364 payload (no `dismissed` key) as not dismissed', () => {
+    // The flag HIDES a menu entry, so the only safe default for state written before it
+    // existed is "still visible". Every stored state on the instance predates ETP-5364.
+    expect(normalizeFirstStepsState({ seen: true, completed: [] }, ALLOWED).dismissed).toBe(false);
+  });
+
+  it('treats a non-boolean `dismissed` as false', () => {
+    expect(normalizeFirstStepsState({ dismissed: 'true' }, ALLOWED).dismissed).toBe(false);
+    expect(normalizeFirstStepsState({ dismissed: 1 }, ALLOWED).dismissed).toBe(false);
+    expect(normalizeFirstStepsState({ dismissed: true }, ALLOWED).dismissed).toBe(true);
   });
 
   it('treats a non-boolean `seen` as false', () => {
@@ -234,7 +254,7 @@ describe('useFirstSteps — toggleStep', () => {
     expect(outcome).toBe(true);
     expect(result.current.completed).toEqual(['products']);
     expect(postBodies()).toEqual([
-      { v: FIRST_STEPS_STATE_VERSION, seen: false, completed: ['products'] },
+      { v: FIRST_STEPS_STATE_VERSION, seen: false, dismissed: false, completed: ['products'] },
     ]);
   });
 
@@ -269,7 +289,7 @@ describe('useFirstSteps — toggleStep', () => {
     await act(async () => { await result.current.toggleStep('contacts'); });
 
     expect(postBodies().at(-1)).toEqual({
-      v: FIRST_STEPS_STATE_VERSION, seen: true, completed: ['contacts'],
+      v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: ['contacts'],
     });
   });
 
@@ -371,7 +391,7 @@ describe('useFirstSteps — markSeen', () => {
     expect(outcome).toBe(true);
     expect(result.current.seen).toBe(true);
     expect(postBodies()).toEqual([
-      { v: FIRST_STEPS_STATE_VERSION, seen: true, completed: [] },
+      { v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: [] },
     ]);
   });
 
@@ -437,7 +457,100 @@ describe('useFirstSteps — markSeen', () => {
     await act(async () => { await result.current.markSeen(); });
 
     expect(postBodies().at(-1)).toEqual({
-      v: FIRST_STEPS_STATE_VERSION, seen: true, completed: ['products'],
+      v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: ['products'],
     });
+  });
+});
+
+describe('useFirstSteps — setDismissed (ETP-5364)', () => {
+  it('is `undefined` until the GET answers, then a real boolean', () => {
+    // THE REGRESSION GUARD for the flash. `filterMenuGroupsByAccess` reveals the menu entry only
+    // on an exact `false`, so an initial `false` here is what made a dismissed user watch the
+    // entry render and then disappear on every reload. Asserted before the load settles.
+    const view = renderHook(() => useFirstSteps({ allowedIds: ALLOWED }));
+    expect(view.result.current.dismissed).toBeUndefined();
+    expect(view.result.current.loading).toBe(true);
+  });
+
+  it('resolves a failed load to a real `false`, not to unknown', async () => {
+    // "We could not ask" is a different signal from "we have not asked yet": leaving it
+    // `undefined` would hide the onboarding entry for the rest of the session over a blip.
+    stubEndpoint({ getResponse: httpError(500) });
+    const view = await renderLoaded();
+    expect(view.result.current.dismissed).toBe(false);
+    expect(view.result.current.error).toBe('load');
+  });
+
+  it('persists the whole state with `dismissed: true`', async () => {
+    const view = await renderLoaded();
+    expect(view.result.current.dismissed).toBe(false);
+
+    await act(async () => {
+      expect(await view.result.current.setDismissed(true)).toBe(true);
+    });
+
+    expect(view.result.current.dismissed).toBe(true);
+    // The POST replaces the stored object, so it must carry `seen` and `completed` too —
+    // sending `{ dismissed }` alone would silently reset the rest of the checklist.
+    expect(postBodies()).toEqual([
+      { v: FIRST_STEPS_STATE_VERSION, seen: false, dismissed: true, completed: [] },
+    ]);
+  });
+
+  it('keeps the completed steps it was holding', async () => {
+    stubEndpoint({
+      getPayload: { status: 'success', firstSteps: { v: 1, seen: true, completed: ['products'] } },
+    });
+    const view = await renderLoaded();
+
+    await act(async () => { await view.result.current.setDismissed(true); });
+
+    expect(postBodies()).toEqual([
+      { v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: true, completed: ['products'] },
+    ]);
+  });
+
+  it('rolls back and reports failure when the POST fails', async () => {
+    // The optimistic flip is the whole UX here: without the rollback the sidebar entry would
+    // stay gone for the rest of the session and come back on the next login.
+    stubEndpoint({ postResponse: httpError(500) });
+    const view = await renderLoaded();
+
+    await act(async () => {
+      expect(await view.result.current.setDismissed(true)).toBe(false);
+    });
+
+    expect(view.result.current.dismissed).toBe(false);
+    expect(view.result.current.error).toBe('save');
+  });
+
+  it('brings the checklist back with `dismissed: false`', async () => {
+    stubEndpoint({
+      getPayload: { status: 'success', firstSteps: { v: 1, seen: true, dismissed: true, completed: [] } },
+    });
+    const view = await renderLoaded();
+    expect(view.result.current.dismissed).toBe(true);
+
+    await act(async () => {
+      expect(await view.result.current.setDismissed(false)).toBe(true);
+    });
+
+    expect(view.result.current.dismissed).toBe(false);
+    expect(postBodies()).toEqual([
+      { v: FIRST_STEPS_STATE_VERSION, seen: true, dismissed: false, completed: [] },
+    ]);
+  });
+
+  it('writes nothing when the value is already what was asked for', async () => {
+    // A second click on "Finalizar configuración inicial" must not cost a request, and must
+    // not be able to flip the flag back by being read as a toggle.
+    const view = await renderLoaded();
+
+    await act(async () => {
+      expect(await view.result.current.setDismissed(false)).toBe(true);
+    });
+
+    expect(postBodies()).toEqual([]);
+    expect(view.result.current.dismissed).toBe(false);
   });
 });

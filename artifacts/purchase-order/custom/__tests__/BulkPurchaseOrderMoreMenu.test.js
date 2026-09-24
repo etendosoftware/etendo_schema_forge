@@ -126,8 +126,10 @@ describe('BulkPurchaseOrderMoreMenu source', () => {
     assert.match(src, /body:\s*JSON\.stringify\(\{\}\)/);
   });
 
-  it('uses Bearer token authorization on requests', () => {
-    assert.match(src, /Authorization:\s*`Bearer \$\{token\}`/);
+  it('through apiFetch, never a hand-built credential header', () => {
+    // module-level helpers cannot hold a hook, so they use the module apiFetch under an alias
+    assert.match(src, /\b(?:module)?[aA]piFetch\(/);
+    assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
   it('renders i18n labels for each menu item via useUI', () => {
@@ -145,5 +147,19 @@ describe('BulkPurchaseOrderMoreMenu source', () => {
     assert.match(src, /failed\s*=/);
     assert.match(src, /documentNo:\s*row\.documentNo/);
     assert.match(src, /message:\s*o\.reason\?\.message/);
+  });
+
+  it('accepts windowReadOnly in its props', () => {
+    assert.match(src, /export default function BulkPurchaseOrderMoreMenu\(\{[^}]*\bwindowReadOnly\b[^}]*\}\)/);
+  });
+
+  it('the early-return guard checks windowReadOnly (ETP-5205)', () => {
+    // Two loose, independent checks — same style this file's own pre-existing
+    // "returns null when no rows selected" coverage above already uses, not one
+    // brittle exact-line regex a harmless reformat could break.
+    assert.match(src, /\bwindowReadOnly\b/);
+    const guardLine = src.split('\n').find((line) => line.includes('selectedRows.length === 0'));
+    assert.ok(guardLine, 'expected to locate the early-return guard line');
+    assert.match(guardLine, /windowReadOnly/);
   });
 });

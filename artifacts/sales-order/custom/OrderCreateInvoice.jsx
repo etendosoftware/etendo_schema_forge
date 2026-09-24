@@ -12,14 +12,14 @@ import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
-// ETP-5024: headers built locally here (instead of the shared `buildHeaders()`
-// helper — see docs/request-policy.md) were missing `Accept-Language`. The backend
-// (NeoAuthenticator.applyRequestLanguage / NeoLanguage.applyToContext) silently
-// falls back to AD_User.AD_Language when that header is absent, so the "business
-// partner is on hold" refusal from documentAction/CO always rendered in English in
-// this modal, even though the same AD_MESSAGE already has a correct Spanish
-// AD_MESSAGE_TRL and the inline banner (useCallout.js) shows it translated fine.
-import { buildHeaders } from '@/auth/api.js';
+// ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
+// `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
+// back to AD_User.AD_Language, so the "business partner is on hold" refusal from
+// documentAction/CO rendered in English even though the AD_MESSAGE_TRL was right. ETP-5024
+// fixed it with the shared `buildHeaders()`; every request here now goes through `apiFetch`
+// instead, which owns that header along with the credential and the CSRF proof, so there is
+// no longer any header-building in this file to get wrong.
+import { useApiFetch } from '@/auth/useApiFetch.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -62,7 +62,13 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   const isCompleted = status === 'CO';
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => (buildHeaders(token)), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -124,9 +130,9 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       try {
         // listInvoices finds ALL invoices via line items (works even when C_Invoice.C_Order_ID is null)
         const [shipRes, linesRes, invRes] = await Promise.all([
-          fetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`, { headers }),
-          fetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`, { headers }),
+          apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', recordId)}&_limit=50`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${recordId}&_startRow=0&_endRow=999`),
+          apiFetch(`${apiBaseUrl}/header/${recordId}/action/listInvoices`),
         ]);
         if (cancelled) return;
 
@@ -144,7 +150,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, headers, apiBaseUrl, refreshKey]);
+  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey]);
 
   // ETP-5063 — a confirm that created neither a shipment nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -194,7 +200,6 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       orderId={recordId}
       data={data}
       apiBaseUrl={apiBaseUrl}
-      headers={headers}
       onSave={onSave}
       onRefresh={onRefresh}
       onClose={() => setShowConfirm(false)}
@@ -293,7 +298,6 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           orderId={recordId}
           data={data}
           base={base}
-          headers={headers}
           currency={currency}
           derived={derived}
           onClose={() => setShowActions(false)}
@@ -324,7 +328,8 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
 // ── ConfirmModal ───────────────────────────────────────────────────────────────
 
-export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onConfirmed, onSave, onRefresh }) {
+export function ConfirmModal({ orderId, data, apiBaseUrl, onClose, onConfirmed, onSave, onRefresh }) {
+  const apiFetch = useApiFetch('');
   const ui       = useUI();
   const [createShipment,  setCreateShipment]  = useState(false);
   const [createInvoice,   setCreateInvoice]   = useState(false);
@@ -342,8 +347,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     (async () => {
       try {
         const [recRes, linesRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/header/${orderId}`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
+          apiFetch(`${apiBaseUrl}/header/${orderId}`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
         ]);
         if (cancelled) return;
         if (recRes.ok) {
@@ -357,7 +362,7 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
       } catch { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [orderId, apiBaseUrl, headers]);
+  }, [orderId, apiBaseUrl, apiFetch]);
 
   // ETP-4468 — the in-memory `data` prop (which already reflects any unsaved
   // header edit the user made before clicking Confirm) must win over the
@@ -425,9 +430,9 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     // If this fails the order is still in DR, so the rest of the flow makes no sense.
     if (!orderConfirmed) {
       try {
-        const processRes = await fetch(
+        const processRes = await apiFetch(
           `${apiBaseUrl}/header/${orderId}/action/documentAction`,
-          { method: 'POST', headers, body: JSON.stringify({ docAction: 'CO' }) },
+          { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
         );
         if (!processRes.ok) {
           const e = await processRes.json().catch(() => null);
@@ -452,8 +457,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     let currentShipment = null;
     if (createShipment && !shipmentResult) {
       try {
-        const res = await fetch(`${apiBaseUrl}/header/${orderId}/action/createShipment`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/createShipment`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(ui('soOrderConfirmedShipmentError') + translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
@@ -471,8 +476,8 @@ export function ConfirmModal({ orderId, data, apiBaseUrl, headers, onClose, onCo
     let currentInvoice = null;
     if (createInvoice && !invoiceResult) {
       try {
-        const res = await fetch(`${apiBaseUrl}/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${apiBaseUrl}/header/${orderId}/action/createDraftInvoice`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           // ETP-5381: was the only branch here not running the backend message through
@@ -716,7 +721,8 @@ function SoCheckboxCard({ checked, onChange, icon, title, subtitle, disabled, im
 
 // ── CreateDocsModal (CO orders — create docs without re-confirming) ───────────
 
-export function CreateDocsModal({ orderId, data, base, headers, currency, derived, onClose, onCreated }) {
+export function CreateDocsModal({ orderId, data, base, currency, derived, onClose, onCreated }) {
+  const apiFetch = useApiFetch('');
   const ui = useUI();
   const {
     needsShip, needsInvoice,
@@ -764,8 +770,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       const result = {};
 
       if (shipWanted) {
-        const res = await fetch(`${base}/sales-order/header/${orderId}/action/createShipment`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${base}/sales-order/header/${orderId}/action/createShipment`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(translateBackendError(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`, ui));
@@ -776,8 +782,8 @@ export function CreateDocsModal({ orderId, data, base, headers, currency, derive
       }
 
       if (invoiceWanted) {
-        const res = await fetch(`${base}/sales-order/header/${orderId}/action/createDraftInvoice`,
-          { method: 'POST', headers, body: JSON.stringify({}) });
+        const res = await apiFetch(`${base}/sales-order/header/${orderId}/action/createDraftInvoice`,
+          { method: 'POST', body: JSON.stringify({}) });
         if (!res.ok) {
           const e = await res.json().catch(() => null);
           throw new Error(e?.error?.message || e?.response?.message || e?.message || `Error (${res.status})`);
@@ -932,7 +938,13 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const [fetched, setFetched] = useState(null);
 
   const base    = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => (buildHeaders(token)), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   useEffect(() => {
     if (!orderId) return;
@@ -940,9 +952,9 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
     (async () => {
       try {
         const [shipRes, linesRes, invRes] = await Promise.all([
-          fetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`, { headers }),
-          fetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`, { headers }),
-          fetch(`${apiBaseUrl}/header/${orderId}/action/listInvoices`, { headers }),
+          apiFetch(`${base}/goods-shipment/goodsShipment?criteria=${CRITERIA('salesOrder', orderId)}&_limit=50`),
+          apiFetch(`${apiBaseUrl}/lines?parentId=${orderId}&_startRow=0&_endRow=999`),
+          apiFetch(`${apiBaseUrl}/header/${orderId}/action/listInvoices`),
         ]);
         if (cancelled) return;
         const shipments  = shipRes.ok  ? ((await shipRes.json())?.response?.data  ?? []) : [];
@@ -954,7 +966,7 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       }
     })();
     return () => { cancelled = true; };
-  }, [orderId, base, headers, apiBaseUrl]);
+  }, [orderId, base, apiFetch, apiBaseUrl]);
 
   // ETP-5295 — every hook below (including the close-effect) must run unconditionally, in the same
   // order, on every render. The derivation is guarded against `fetched` being null (loading state)
@@ -1025,7 +1037,6 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
       orderId={orderId}
       data={data}
       base={base}
-      headers={headers}
       currency={data?.['currency$_identifier'] || ''}
       derived={derived}
       onClose={onClose}

@@ -47,7 +47,7 @@ to implement the OAuth2 \`client_credentials\` exchange themselves.
 ### 3. Make your first request
 
 \`\`\`bash
-curl https://app.etendo.software/api/v1/product \\
+curl https://app.etendo.ai/api/v1/product \\
   -H 'Authorization: Bearer <client-id>:<client-secret>' \\
   -H 'Accept: application/json'
 \`\`\`

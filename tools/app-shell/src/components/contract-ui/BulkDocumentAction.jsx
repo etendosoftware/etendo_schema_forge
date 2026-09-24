@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog.jsx';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select.jsx';
 import { Label } from '@/components/ui/label.jsx';
-import { FileCheck } from 'lucide-react';
+import { FileCheck, Loader2 } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
 import { useNeoAction } from '@/hooks/useNeoAction';
@@ -20,8 +20,13 @@ export const buildInOutActions = (rows) => {
 // purchase-invoice/sales-invoice/goods-receipt/goods-shipment. Mirrors the same
 // posted/processed gate as the row-kebab and form-view Post menu action: a
 // document must be processed (completed) and not yet posted.
-const isRowPosted = (row) => row.posted === 'Y' || row.posted === true;
-const isRowProcessed = (row) => row.processed === 'Y' || row.processed === true;
+// ETP-5414 — exported (were private consts) so a per-row consumer (the row kebab's
+// declarative `post` menuAction, e.g. amortización's `index.jsx`) can reuse the EXACT same
+// posted/processed predicates instead of a third hand-copied definition — this repo already
+// had this pair written twice (here and, before this export, nowhere else — the row kebab
+// would have been the third).
+export const isRowPosted = (row) => row.posted === 'Y' || row.posted === true;
+export const isRowProcessed = (row) => row.processed === 'Y' || row.processed === true;
 
 export const buildPostActions = (rows) =>
   (rows.some((row) => !isRowPosted(row) && isRowProcessed(row)) ? [{ value: 'post', labelKey: 'post' }] : []);
@@ -75,6 +80,13 @@ export default function BulkDocumentAction({
   // unposting there would be a gratuitous accounting reversal, while an invoice's does
   // block RE while Posted='Y' (C_INVOICE_POST) — which is exactly the bug this closes.
   preUnpostActions = [],
+  // ETP-5414 — row identifier used to label a row in the ok/omitted/failed toast.
+  // Defaults to the DocAction-window convention (`documentNo`, falling back to `id`).
+  // A window with no `documentNo` at all (e.g. amortization, whose readable identifier
+  // is `name`) passes its own `rowLabel={(row) => row.name || row.id}` instead of
+  // patching this default for every caller.
+  rowLabel = (row) => row.documentNo || row.id,
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   const docAction = useDocumentAction({ apiBaseUrl, entity, token });
@@ -118,7 +130,7 @@ export default function BulkDocumentAction({
     return out;
   }, [selectedRows, buildActions]);
 
-  if (selectedRows.length === 0 || actions.length === 0) return null;
+  if (selectedRows.length === 0 || actions.length === 0 || windowReadOnly) return null;
 
   const handleOpen = () => {
     setSelectedAction(actions[0].value);
@@ -136,16 +148,44 @@ export default function BulkDocumentAction({
     let rowsToProcess = selectedRows;
     const omitted = [];
     if (rowFilter) {
+      // ETP-5414 — `rowFilter` MAY be async (return a Promise). Every row's gate is
+      // evaluated in PARALLEL (`Promise.all`), not one row's `await` after another: with a
+      // large selection a serial per-row round-trip (e.g. amortization's lines fetch) would
+      // chain N network round-trips before the user sees anything. `Promise.resolve` on a
+      // plain sync return value is a no-op, so every existing sync rowFilter (post/unpost,
+      // reactivate, matched-invoice) is unaffected — `Promise.all` over already-resolved
+      // values settles on the same microtask turn as before.
+      // No concurrency cap here deliberately: the action-execution fan-out below
+      // (`Promise.allSettled(rowsToProcess.map(runRow))`) already runs uncapped, so capping
+      // only the gate would be inconsistent with the rest of this component.
+      const results = await Promise.all(
+        selectedRows.map((row) => Promise.resolve(rowFilter(row, selectedAction, ui))),
+      );
       rowsToProcess = [];
-      for (const row of selectedRows) {
-        const result = rowFilter(row, selectedAction, ui);
+      // Classify in selection order (not resolution order) so `omitted` reads the same list
+      // the user selected, regardless of which row's fetch happened to resolve first.
+      selectedRows.forEach((row, i) => {
+        const result = results[i];
         if (result === true || result == null) {
           rowsToProcess.push(row);
         } else {
-          omitted.push({ documentNo: row.documentNo || row.id, message: result });
+          omitted.push({ documentNo: rowLabel(row), message: result });
         }
-      }
+      });
     }
+
+    // ETP-5414 — the dropdown's `value` (the user's INTENT, e.g. 'confirm' / 'reactivate')
+    // is not always the wire action name the NEO endpoint expects. Amortization's confirm
+    // and reactivate are two different user intents that hit the exact same button/process
+    // (`columnName: 'Processed'`) — the PL/pgSQL process itself decides which direction to
+    // run in by reading the record's CURRENT state, not by anything the request sends. So
+    // `value: 'confirm'`/`value: 'reactivate'` (needed for the Select and for `rowFilter` to
+    // tell the two intents apart) cannot ALSO be the URL segment — neither name is a real
+    // button columnName, so either 404s. `neoActionName` is the escape hatch: an OPTIONAL
+    // per-action override of the wire name, defaulting to `value` so every existing caller
+    // (post/unpost, CO/RE, matched-invoice) — whose `value` already IS the real action name —
+    // is unaffected.
+    const wireActionName = actions.find((a) => a.value === selectedAction)?.neoActionName ?? selectedAction;
 
     // ETP-5302 — each row runs the same two-step sequence the detail kebab runs for an
     // action flagged `preUnpost`: reverse the accounting first, then the document action.
@@ -164,7 +204,7 @@ export default function BulkDocumentAction({
       if (!pre.success) {
         throw new Error(translateBackendError(pre.message, ui) || ui('actionFailed'));
       }
-      await execute(row.id, selectedAction);
+      await execute(row.id, wireActionName);
       return row;
     };
 
@@ -173,7 +213,7 @@ export default function BulkDocumentAction({
       .map((o, i) => ({ o, row: rowsToProcess[i] }))
       .filter(({ o }) => o.status === 'rejected')
       .map(({ o, row }) => ({
-        documentNo: row.documentNo || row.id,
+        documentNo: rowLabel(row),
         message: o.reason?.message || 'Unknown error',
         // ETP-5316 — the AD_MESSAGE keys behind `message`, so useBulkActionToast's single-record
         // path can translate a core document-action failure by identity instead of by prose.
@@ -281,6 +321,16 @@ export default function BulkDocumentAction({
                   document actions, and "Completado" is the name of a document STATE, so
                   the confirm button read as if it would mark the documents completed.
                   A separate key from `done`, which RecordCreateModal still uses. */}
+              {/* ETP-5414 review — `running` already covers the whole handleDone span
+                  (rowFilter gate + action execution), and both buttons were already
+                  disabled while it's true, but nothing signalled that visually: the dialog
+                  looked frozen instead of busy, especially now the gate can take a moment
+                  on a large selection. Reuses the existing `running` state and the repo's
+                  established Loader2/animate-spin pattern (DataTable.jsx, CreatableSearchSelect.jsx)
+                  rather than adding a new loading state or spinner. */}
+              {running && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" data-testid="Loader2__90fe6a" />
+              )}
               {ui('accept')}
             </Button>
           </DialogFooter>

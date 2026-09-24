@@ -197,6 +197,38 @@ describe('FmModel303Page — Guardar button (ETP-5338 pivot)', () => {
     expect(nifOf(putCalls()[0])).toBe('NEVER-SAVED');
   });
 
+  /**
+   * ETP-4576 — the cookie session, and the reason `persistEditableFields` must NOT gate on
+   * `!token`.
+   *
+   * Under the cookie scheme `useAuth()` holds no token at all, so this render — `token`
+   * undefined, everything else normal — is the ordinary case for every user, not an edge case.
+   * The gate used to read `if (!hasPending || !token || !apiBaseUrl) return { ok: true }`, and
+   * the `{ ok: true }` is what makes the failure so bad: `handleSave` reads that `ok` and shows
+   * `toast.success` ("Registro guardado"). The user pressed Guardar, was told it saved, and the
+   * identification/box edits were dropped without a single request going out.
+   *
+   * So the assertion that matters is the PUT — a success toast alone would have "passed" against
+   * the broken code. The credential is no longer this component's to check: `apiFetch` resolves
+   * it from the active scheme when the request is actually made.
+   */
+  it('flushes the edit and toasts success with no token held (cookie session)', async () => {
+    installImmediateServer();
+    render(<FmModel303Page decl={BASE_DECL} token={undefined} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);
+
+    editNif('COOKIE-SESSION-EDIT');
+    expect(putCalls()).toHaveLength(0);
+
+    await act(async () => { clickSave(); await Promise.resolve(); await Promise.resolve(); });
+
+    // The write genuinely went out — this is the assertion the old `!token` gate failed.
+    expect(putCalls()).toHaveLength(1);
+    expect(nifOf(putCalls()[0])).toBe('COOKIE-SESSION-EDIT');
+    // And the success it reports is now an earned one rather than the gate's optimistic default.
+    expect(toast.success).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('no-ops the network call (but still confirms success) when there is no pending edit', async () => {
     installImmediateServer();
     render(<FmModel303Page decl={BASE_DECL} token={TOKEN} apiBaseUrl={API_BASE_URL} onBack={vi.fn()} onStatusChange={vi.fn()} />);

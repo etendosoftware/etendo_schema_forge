@@ -34,16 +34,32 @@ describe('AssetsSidebar', () => {
       <AssetsSidebar
         data={{
           assetValue: 10000,
-          residualAssetValue: 2000,
+          depreciationAmt: 8000,
+          depreciatedValue: 1500,
+          previouslyDepreciatedAmt: 500,
           depreciatedPlan: 8000,
           etgoAmortizationStatus: 75,
         }}
       />,
     );
     expect(screen.getByText('USD 10000')).toBeInTheDocument();
-    expect(screen.getByText('USD 2000')).toBeInTheDocument();
+    // pendingToDepreciate = depreciationAmt - (depreciatedValue + previouslyDepreciatedAmt) = 8000 - 2000 = 6000
+    expect(screen.getByText('USD 6000')).toBeInTheDocument();
     expect(screen.getByText('USD 8000')).toBeInTheDocument();
     expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('computes pendingToDepreciate as depreciationAmt minus accumulated depreciation', () => {
+    render(
+      <AssetsSidebar
+        data={{
+          depreciationAmt: 10000,
+          depreciatedValue: 5000,
+          previouslyDepreciatedAmt: 0,
+        }}
+      />,
+    );
+    expect(screen.getByText('USD 5000')).toBeInTheDocument();
   });
 
   it('shows "still in progress" subtitle when pct < 100', () => {
@@ -71,7 +87,7 @@ describe('AssetsSidebar', () => {
   it('renders all metric labels via i18n keys', () => {
     render(<AssetsSidebar data={{ assetValue: 1 }} />);
     expect(screen.getByText('assetsCurrentValue')).toBeInTheDocument();
-    expect(screen.getByText('assetsResidualValueLabel')).toBeInTheDocument();
+    expect(screen.getByText('assetsPendingDepreciationLabel')).toBeInTheDocument();
     expect(screen.getByText('assetsPlannedDepreciation')).toBeInTheDocument();
     expect(screen.getByText('assetsDepreciated')).toBeInTheDocument();
   });

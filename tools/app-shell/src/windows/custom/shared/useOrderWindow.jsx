@@ -37,6 +37,7 @@ export function useOrderWindow({
   ManageDocsLauncher,
   setCloneTargets,
   showReactivate = false,
+  windowReadOnly = false,
   // ETP-4372 — per-window PDF hook + localized document label so the row-hover
   // envelope opens SendDocumentModal WITH a PDF preview (see useRowEmailModal).
   usePdf,
@@ -102,6 +103,7 @@ export function useOrderWindow({
     onEmail: onRowEmail,
     onDelete: requestDelete,
     menuActions: ({ row, status }) => {
+      if (windowReadOnly) return [];
       // ETP-5295 — the manage item's visibility AND its label come from the backend
       // annotations `needsPrimaryDoc` / `needsInvoiceDoc`, NOT from the list's
       // `DeliveryStatus` / `InvoiceStatus` percent columns this used to read. Those percents
@@ -177,7 +179,7 @@ export function useOrderWindow({
     onMenuActionExecuted: (action) => {
       if (action.documentAction) setRefreshKey(k => k + 1);
     },
-  }), [navigate, windowName, requestDelete, ui, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail]);
+  }), [navigate, windowName, requestDelete, ui, manageLabelKeys, confirmLabelKey, setCloneTargets, showReactivate, onRowEmail, windowReadOnly]);
 
   const confirmPortal = confirmRow && !confirmedDocs ? createPortal(
     <ConfirmModal

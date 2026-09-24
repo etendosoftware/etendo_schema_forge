@@ -178,6 +178,69 @@ describe('useInvoiceWindow', () => {
       });
     });
 
+    // ETP-5378 — Reactivate joins Post in the row kebab, so the grid finally matches the
+    // form-view kebab that decisions.json -> window.menuActions already describes. The
+    // matrix below IS the acceptance criteria of the ticket.
+    describe('menuActions (ETP-5378 — Reactivate joins Post)', () => {
+      const REACTIVATE = {
+        key: 'reactivate',
+        labelKey: 'reactivate',
+        documentAction: 'RE',
+        successKey: 'reactivated',
+        preUnpost: true,
+      };
+      const POST = { key: 'post', labelKey: 'post', neoAction: 'post', successKey: 'documentPosted' };
+      // ETP-5378 — an invoice has no confirm popup: its form-view Confirm is DetailView's
+      // draftMode button firing this same docAction, so the row entry is that action.
+      const CONFIRM = {
+        key: 'confirm',
+        labelKey: 'confirm',
+        documentAction: 'CO',
+        successKey: 'documentConfirmed',
+      };
+      const build = () => buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
+
+      it('completed and NOT posted -> Reactivate AND Post, in that order', () => {
+        const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'N' } });
+        assert.deepEqual(actions, [REACTIVATE, POST]);
+      });
+
+      it('completed and posted -> Reactivate only (never Post)', () => {
+        const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
+        assert.deepEqual(actions, [REACTIVATE]);
+      });
+
+      it('draft -> Confirm only, never Reactivate or Post', () => {
+        const actions = build().menuActions({ row: { documentStatus: 'DR', processed: false, posted: 'N' } });
+        assert.deepEqual(actions, [CONFIRM]);
+      });
+
+      it('a posting-error status (posted="i") still counts as not posted, so Post stays offered', () => {
+        const actions = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'i' } });
+        assert.deepEqual(actions, [REACTIVATE, POST]);
+      });
+
+      it('carries preUnpost so reactivating a posted invoice reverses its accounting first', () => {
+        const [reactivate] = build().menuActions({ row: { documentStatus: 'CO', processed: true, posted: 'Y' } });
+        assert.equal(reactivate.preUnpost, true);
+        assert.equal(reactivate.documentAction, 'RE');
+      });
+
+      it('exposes documentStatus as the statusField so RowQuickActions can resolve the status', () => {
+        assert.equal(build().statusField, 'documentStatus');
+      });
+
+      it('never offers Confirm outside draft — the three states do not overlap', () => {
+        for (const row of [
+          { documentStatus: 'CO', processed: true, posted: 'N' },
+          { documentStatus: 'CO', processed: true, posted: 'Y' },
+          { documentStatus: 'VO', processed: true, posted: 'Y' },
+        ]) {
+          assert.ok(!build().menuActions({ row }).some(a => a.key === 'confirm'));
+        }
+      });
+    });
+
     describe('onMenuActionExecuted / onRefresh (ETP-5209)', () => {
       it('calls the onRefresh option when a neoAction menu action completes', () => {
         let refreshCalls = 0;
@@ -200,6 +263,17 @@ describe('useInvoiceWindow', () => {
       it('does not throw when onRefresh is not provided (optional chaining)', () => {
         const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {});
         assert.doesNotThrow(() => result.onMenuActionExecuted({ neoAction: 'post' }));
+      });
+
+      // ETP-5378 — reactivate is a documentAction, not a neoAction; the old
+      // `if (!action.neoAction) return` guard dropped its toast and its refresh.
+      it('calls onRefresh for a documentAction menu action too (ETP-5378)', () => {
+        let refreshCalls = 0;
+        const result = buildInvoiceRowQuickActions(() => {}, 'x', () => {}, () => {}, () => {}, {
+          onRefresh: () => { refreshCalls += 1; },
+        });
+        result.onMenuActionExecuted({ documentAction: 'RE', successKey: 'reactivated' }, { success: true });
+        assert.equal(refreshCalls, 1);
       });
     });
   });

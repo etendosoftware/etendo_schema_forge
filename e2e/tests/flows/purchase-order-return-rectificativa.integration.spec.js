@@ -277,7 +277,10 @@ test.describe('Purchase Order → Return to Vendor → Rectificative Invoice (in
     });
 
     await test.step('Confirm the return with rectificative invoice generation', async () => {
-      const confirmReturnBtn = page.getByTestId('action-confirm-with-credit');
+      // ETP-5408: "Confirmar" is the generic draftMode Confirm (`action-save`), like every
+      // other document window; it opens the same ConfirmInOutModal through the window's
+      // CONFIRM_EVENT. Disabled until the lines load — the toPass retry absorbs that.
+      const confirmReturnBtn = page.getByTestId('action-save');
       const returnConfirmModal = page.getByTestId('confirm-inout-modal');
 
       await expect(async () => {

@@ -19,16 +19,20 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
+// Mutable so the demo-banner tests can move the tenant off the trial. The DEFAULT is the
+// active-trial environment every other test in this file renders against, unchanged.
+const DEMO_TRIAL_ENV = {
+  clientId: 'demo-client',
+  plan: 'free',
+  trialStartedAt: '2026-09-10T00:00:00Z',
+  trialExpiresAt: '2026-09-24T00:00:00Z',
+  trialDaysRemaining: 7,
+};
+const environmentRef = vi.hoisted(() => ({ current: null }));
 vi.mock('@/hooks/useEnvironmentSwitch.js', () => ({
   useEnvironmentSwitch: () => ({
     currentClientId: 'demo-client',
-    environments: [{
-      clientId: 'demo-client',
-      plan: 'free',
-      trialStartedAt: '2026-09-10T00:00:00Z',
-      trialExpiresAt: '2026-09-24T00:00:00Z',
-      trialDaysRemaining: 7,
-    }],
+    environments: [environmentRef.current],
   }),
 }));
 
@@ -60,6 +64,10 @@ vi.mock('@/hooks/useVectorSearchContracts.js', () => ({
 import TopBar from '../TopBar.jsx';
 
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
+
+beforeEach(() => {
+  environmentRef.current = DEMO_TRIAL_ENV;
+});
 
 describe('TopBar title', () => {
   it('shows the active demo trial prominently above the global header', () => {
@@ -159,5 +167,88 @@ describe('TopBar title', () => {
     expect(input).toHaveValue('lentejas');
     document.removeEventListener('schema-forge:vector-search-selection', recordSelection);
     window.history.pushState({}, '', '/');
+  });
+});
+
+describe('TopBar demo banner — fiscal notice and colour (ETP-5364)', () => {
+  const banner = () => screen.getByTestId('topbar-demo-trial-indicator');
+
+  it('carries both caveats, after the payment button', () => {
+    // The two things a user has to know BEFORE paying: this environment never talks to
+    // Hacienda, and going productive carries over only contacts and products. Inside the
+    // upgrade flow would be too late — the decision is already made by then.
+    render(<TopBar title="Inicio" />);
+    const notice = screen.getByTestId('topbar-demo-fiscal-notice');
+    expect(notice).toHaveTextContent('environmentDemoFiscalNotice');
+    expect(notice).toHaveTextContent('environmentDemoMigrationNotice');
+
+    const ids = [...banner().querySelectorAll('[data-testid]')].map((n) => n.dataset.testid);
+    expect(ids.indexOf('topbar-demo-fiscal-notice'))
+      .toBeGreaterThan(ids.indexOf('topbar-go-to-payment'));
+  });
+
+  it('puts the migration caveat on its own line, below the fiscal one', () => {
+    // Two block elements rather than one string with a `\n`: the break is structural, so a
+    // translator cannot drop it by losing an escape inside a JSON string.
+    render(<TopBar title="Inicio" />);
+    const tax = screen.getByTestId('topbar-demo-fiscal-notice-tax');
+    const migration = screen.getByTestId('topbar-demo-fiscal-notice-migration');
+
+    expect(tax.tagName).toBe('P');
+    expect(migration.tagName).toBe('P');
+    expect(tax.nextElementSibling).toBe(migration);
+    // Neither sentence carries the other's text, so each line stands on its own.
+    expect(tax).not.toHaveTextContent('environmentDemoMigrationNotice');
+    expect(migration).not.toHaveTextContent('environmentDemoFiscalNotice');
+  });
+
+  it('draws no second link to the upgrade flow inside the notice', () => {
+    // "crear un entorno productivo" stays plain prose: the payment button immediately to its
+    // left is that link, and two controls with one destination 8px apart read as a mistake.
+    render(<TopBar title="Inicio" />);
+    const notice = screen.getByTestId('topbar-demo-fiscal-notice');
+    expect(notice.querySelector('a, button')).toBeNull();
+  });
+
+  it('wraps onto a second line instead of squeezing the rest of the bar', () => {
+    // The bar is `flex-wrap`; the notice takes the leftover width with a floor, so a narrow
+    // viewport moves it to its own line rather than crushing the days label and the button.
+    render(<TopBar title="Inicio" />);
+    const notice = screen.getByTestId('topbar-demo-fiscal-notice');
+    expect(notice.className).toMatch(/flex-1/);
+    expect(notice.className).toMatch(/min-w-/);
+    expect(banner().className).toMatch(/flex-wrap/);
+  });
+
+  it('is amber, not green', () => {
+    // `status-warning` is the only orange trio the core preset defines (bg/foreground/border,
+    // light and dark), so the colour change is a token swap and dark mode comes with it.
+    render(<TopBar title="Inicio" />);
+    expect(banner().className).toMatch(/bg-status-warning/);
+    expect(banner().className).toMatch(/border-status-warning-border/);
+    expect(banner().className).not.toMatch(/status-success/);
+  });
+
+  it('shows nothing at all on a productive environment', () => {
+    // The banner is the gate: it never renders outside a trial, which is why the notice needs
+    // no plan check of its own.
+    environmentRef.current = { ...DEMO_TRIAL_ENV, plan: 'productive' };
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('topbar-demo-trial-indicator')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-demo-fiscal-notice')).not.toBeInTheDocument();
+  });
+
+  it('shows nothing when the backend sent no trial metadata', () => {
+    environmentRef.current = { clientId: 'demo-client', plan: 'free' };
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('topbar-demo-fiscal-notice')).not.toBeInTheDocument();
+  });
+
+  it('keeps the caveat on an expired trial, when it matters most', () => {
+    environmentRef.current = { ...DEMO_TRIAL_ENV, trialDaysRemaining: 0 };
+    render(<TopBar title="Inicio" />);
+    expect(screen.getByTestId('topbar-demo-fiscal-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar-demo-trial-indicator'))
+      .toHaveTextContent('environmentDemoExpired');
   });
 });

@@ -8,10 +8,15 @@
  *   - renders the "Delete selected" button when rows are selected, and wires
  *     its onClick to requestBulkDelete(selectedRows);
  *   - the two opt-outs (windowReadOnly, listViewOptions.hideBulkDelete) hide the
- *     button; merely supplying selectionBarRightActions does NOT (a host that
- *     wants to suppress the generic action must opt out explicitly — see the
- *     ETP-4656 review fix, inferring it from that prop's mere presence was
- *     fragile since selectionBarRightActions can be used for unrelated things);
+ *     button; windowReadOnly also hides a host's own selectionBarRightActions
+ *     (ETP-5205), but listViewOptions.hideBulkDelete does not (it only opts
+ *     the GENERIC action out — a host's own selectionBarRightActions is
+ *     unrelated and keeps rendering, see the contacts-style opt-out test
+ *     below); merely supplying selectionBarRightActions does NOT infer an
+ *     opt-out on its own (a host that wants to suppress the generic action
+ *     must opt out explicitly — see the ETP-4656 review fix, inferring it
+ *     from that prop's mere presence was fragile since selectionBarRightActions
+ *     can be used for unrelated things);
  *   - the onSuccess callback passed to the hook correctly drives
  *     clearSelection / setSelectedRows / deselectTrigger+deselectRowIds and
  *     triggers hook.refresh() for all three outcomes.
@@ -184,6 +189,49 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
     expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
   });
 
+  it('opt-out: also hides selectionBarRightActions under the RUNTIME read-only tier (ETP-5205)', () => {
+    // The runtime Solo-Lectura tier flows through the `window` prop (effectiveWindow, set by
+    // each generated Page component), NOT api.window.readOnly (see the next test) — same
+    // channel DetailView's menuActionsReadOnly reads.
+    const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
+    render(
+      <ListView
+        {...defaultProps}
+        selectionBarRightActions={selectionBarRightActions}
+        window={{ readOnly: true }}
+      />
+    );
+    selectRows();
+    expect(screen.queryByTestId('host-own-action')).not.toBeInTheDocument();
+  });
+
+  it('regression (ETP-5205): does NOT hide bulkActions/selectionBarRightActions from a window ' +
+    'declared readOnly in decisions.json (api.window.readOnly) alone — that flag means "no generic ' +
+    'CRUD", not "no custom actions", and is orthogonal to the runtime Solo-Lectura tier. ' +
+    'matched-purchase-invoices sets window.readOnly:true for exactly this reason yet must still ' +
+    'offer its Post/Unpost bulkActions under full access — conflating the two hid the button.', () => {
+    const bulkActions = ({ windowReadOnly }) => (
+      <button data-testid="host-bulk-action">{windowReadOnly ? 'hidden-by-flag' : 'Procesar'}</button>
+    );
+    const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
+    render(
+      <ListView
+        {...defaultProps}
+        bulkActions={bulkActions}
+        selectionBarRightActions={selectionBarRightActions}
+        api={{ window: { readOnly: true }, crud: {} }}
+      />
+    );
+    selectRows();
+    // The generic "Delete selected" button DOES stay gated by api.window.readOnly (unrelated,
+    // pre-existing behavior, unaffected by this fix).
+    expect(screen.queryByTestId('bulk-delete-selected')).not.toBeInTheDocument();
+    // But custom bulkActions/selectionBarRightActions must render — and bulkActions must receive
+    // windowReadOnly: false, not true.
+    expect(screen.getByTestId('host-bulk-action')).toHaveTextContent('Procesar');
+    expect(screen.getByTestId('host-own-action')).toBeInTheDocument();
+  });
+
   it('does NOT infer an opt-out from the host supplying selectionBarRightActions alone (must opt out explicitly)', () => {
     const selectionBarRightActions = () => <button data-testid="host-own-action">Host action</button>;
     render(<ListView {...defaultProps} selectionBarRightActions={selectionBarRightActions} />);
@@ -273,6 +321,40 @@ describe('ListView — bulk delete wiring (ETP-4656)', () => {
       // No deselect bump — deselectTrigger stays at its initial value.
       expect(capturedDeselect.trigger).toBe(0);
     });
+  });
+});
+
+describe('ListView — bulk-toolbar Clone button respects windowReadOnly (ETP-5205)', () => {
+  const defaultProps = {
+    entity: 'testEntity',
+    Table: SelectableCapturingTable,
+    entityLabel: 'Test Entity',
+    windowName: 'test-entity',
+    token: 'fake-token',
+    apiBaseUrl: 'http://localhost/api',
+    onCloneRow: vi.fn(),
+  };
+
+  function selectRows() {
+    fireEvent.click(screen.getByTestId('trigger-select'));
+  }
+
+  it('shows the Clone button when onCloneRow is provided and the window is NOT read-only', () => {
+    render(<ListView {...defaultProps} />);
+    selectRows();
+    expect(screen.queryByTitle('cloneOrderBtn')).toBeInTheDocument();
+  });
+
+  it('hides the Clone button when the window is read-only, even though onCloneRow is provided', () => {
+    render(<ListView {...defaultProps} api={{ window: { readOnly: true }, crud: {} }} />);
+    selectRows();
+    expect(screen.queryByTitle('cloneOrderBtn')).not.toBeInTheDocument();
+  });
+
+  it('hides the bulk-toolbar Print button when the window is read-only', () => {
+    render(<ListView {...defaultProps} api={{ window: { readOnly: true }, crud: {} }} />);
+    selectRows();
+    expect(screen.queryByTitle('print')).not.toBeInTheDocument();
   });
 });
 

@@ -6,9 +6,10 @@ import { login } from '../helpers/auth.js';
  *
  * Validates ETP-4478's unified Calendar window: the Finance menu shows only
  * "Calendar" (Fiscal Calendar / Periods retired), the Accounting + Periods
- * secondary tabs render on a year detail, expanding a period reveals its
- * documents, Abrir/Cerrar Periodo hits the mocked action endpoint, and
- * Cerrar Año stays disabled until every period is Closed/Permanently Closed.
+ * secondary tabs render on a year detail, Abrir/Cerrar Periodo hits the
+ * mocked action endpoint (global to the whole period, not per document type
+ * — that per-document-type breakdown was removed in ETP-4948), and Cerrar
+ * Año stays disabled until every period is Closed/Permanently Closed.
  *
  * Mock mode only: installs window-specific routes on top of the generic
  * /sws/** mock that login() seeds, so it does not need a backend.
@@ -18,7 +19,7 @@ import { login } from '../helpers/auth.js';
  * specs, since `schema_forge_core`'s populate/push mechanism assumes 1 spec =
  * 1 AD window — see GH #35 / ETP-4481):
  * - `fiscal-calendar` — `year` (list/detail) + closeYear/undoCloseYear actions
- * - `open-close-period-control` — `periodControl`/`documents` (Periods tab)
+ * - `open-close-period-control` — `periodControl` (Periods tab)
  * - `end-year-close` — `accounting` (Accounting tab)
  * `tools/app-shell/src/windows/custom/calendar/index.jsx` rewrites the
  * calendar-route `apiBaseUrl` to each of these per panel.
@@ -27,10 +28,10 @@ import { login } from '../helpers/auth.js';
  * - `fiscal-calendar/year` list+detail goes through the standard entity CRUD
  *   path (NeoCrudHandler), which wraps as `{ response: { data: ... } }` —
  *   same shape as row-quick-actions.mocked.spec.js's reference pattern.
- * - `open-close-period-control/periodControl` and `.../documents` are read
- *   by PeriodsExpandablePanel.jsx via `body?.response?.data` (it matches
+ * - `open-close-period-control/periodControl` is read by
+ *   PeriodsExpandablePanel.jsx via `body?.response?.data` (it matches
  *   useEntity.js's fallback so a genuinely flat array still works too) —
- *   so these mocks must wrap rows as `{ response: { data: [...] } }`.
+ *   so this mock must wrap rows as `{ response: { data: [...] } }`.
  * - `end-year-close/accounting` is the one endpoint read as a flat
  *   `{ data: [...] }` body, via AccountingPanel.jsx's own `body.data` read.
  */
@@ -39,7 +40,6 @@ const YEAR_ROW = { id: 'year-001', fiscalYear: '2027', description: 'FY2027', 'c
 
 const PERIOD_OPEN = { id: 'period-001', name: 'Jan-2027', status: 'O', periodNo: 1 };
 const PERIOD_CLOSED = { id: 'period-002', name: 'Feb-2027', status: 'C', periodNo: 2 };
-const DOCUMENT_ROW = { id: 'doc-001', documentCategory: 'API', periodStatus: 'O' };
 const ACCOUNTING_ROW = { id: 'fact-001', account: '20000000', debit: '100.00', credit: '0.00', description: 'Year close' };
 
 async function installYearMock(page) {
@@ -87,20 +87,6 @@ async function installPeriodControlMock(page, periods) {
   });
 }
 
-async function installDocumentsMock(page) {
-  await page.route('**/sws/neo/open-close-period-control/documents{/**,}**', async (route) => {
-    const req = route.request();
-    if (req.method() === 'GET') {
-      await route.fulfill({
-        status: 200, contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [DOCUMENT_ROW] } }),
-      });
-      return;
-    }
-    route.fallback();
-  });
-}
-
 /**
  * Also drives useYearCloseStatus.js: a year is "closed" iff this endpoint returns at least one
  * row, so the Cerrar Año guard tests must pass an empty array to keep the year "not closed" —
@@ -132,7 +118,6 @@ test.describe('Calendar — year detail', () => {
     await login(page);
     await installYearMock(page);
     await installPeriodControlMock(page, [PERIOD_OPEN, PERIOD_CLOSED]);
-    await installDocumentsMock(page);
     await installAccountingMock(page);
     await page.goto('/calendar/year-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
@@ -150,17 +135,6 @@ test.describe('Calendar — year detail', () => {
 
     await page.getByTestId('tab-accounting').click();
     await expect(page.getByTestId('accounting-account-fact-001')).toBeVisible();
-  });
-
-  test('expanding a period reveals its documents', async ({ page }) => {
-    await page.getByTestId('tab-periods').click();
-    await expect(page.getByTestId('period-name-period-001')).toBeVisible();
-
-    // The document's category code ('API') is rendered translated (e.g. "AP factura"), not
-    // verbatim — assert on the stable per-row testid instead of the raw code text.
-    await expect(page.getByTestId('document-select-doc-001')).not.toBeVisible();
-    await page.getByTestId('period-row-expand-period-001').click();
-    await expect(page.getByTestId('document-select-doc-001')).toBeVisible();
   });
 
   test('Abrir/Cerrar Periodo hits the mocked openClose endpoint', async ({ page }) => {
@@ -187,7 +161,6 @@ test.describe('Calendar — Cerrar Año guard', () => {
     await login(page);
     await installYearMock(page);
     await installPeriodControlMock(page, [PERIOD_OPEN, PERIOD_CLOSED]);
-    await installDocumentsMock(page);
     // Empty accounting rows → useYearCloseStatus resolves "not closed" → menuActions offers
     // "closeYear" (not "undoCloseYear").
     await installAccountingMock(page, []);
@@ -206,7 +179,6 @@ test.describe('Calendar — Cerrar Año guard', () => {
       { ...PERIOD_CLOSED, id: 'period-003', name: 'Mar-2027' },
       { ...PERIOD_CLOSED, id: 'period-004', name: 'Apr-2027', status: 'P' },
     ]);
-    await installDocumentsMock(page);
     await installAccountingMock(page, []);
     await page.goto('/calendar/year-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

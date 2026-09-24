@@ -259,13 +259,15 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
     });
 
     it('gates saveDisabled and confirmDisabled on missingRequired', () => {
+      // ETP-5434: `loading` was split into `fieldsLoading` (catalogs) and `scheduleResolving`
+      // (paymentPlan), folded together into the derived `submitLocked` that both gates now read.
       assert.match(
         src,
-        /const saveDisabled = saving \|\| loading \|\| missingRequired;/,
+        /const saveDisabled = saving \|\| submitLocked \|\| missingRequired;/,
       );
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
+        /const confirmDisabled = saving \|\| submitLocked \|\| missingRequired \|\| !balance\.canConfirm[\s\S]*?;/,
       );
     });
 
@@ -274,7 +276,9 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       // the disabled-state wiring now lives on the extracted buttons, and the parent wires
       // the same submit('draft') / submit('confirm') callbacks in as props.
       assert.match(src, /data-testid="cp-save-draft" onClick=\{onSaveDraft\} disabled=\{saveDisabled\}/);
-      assert.match(src, /data-testid="cp-confirm" onClick=\{onConfirm\} disabled=\{confirmDisabled \|\| loading\}/);
+      // ETP-5434: the button's own `|| loading` OR was removed — `submitLocked` is now folded
+      // into `confirmDisabled` itself (computePaymentModalState), so the button just reads it.
+      assert.match(src, /data-testid="cp-confirm" onClick=\{onConfirm\} disabled=\{confirmDisabled\}/);
       assert.match(src, /onSaveDraft=\{\(\) => submit\('draft'\)\}/);
       assert.match(src, /onConfirm=\{\(\) => submit\('confirm'\)\}/);
     });
@@ -522,10 +526,10 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       );
       // ETP-4891 wrapped the expression and appended `|| psd2Blocked` (a transfer aimed at an
       // account whose PSD2 connection is inactive), so the whole chain is matched across lines
-      // rather than pinned to one.
+      // rather than pinned to one. ETP-5434 then folded the split `loading` into `submitLocked`.
       assert.match(
         src,
-        /const confirmDisabled = saving \|\| missingRequired \|\| !balance\.canConfirm \|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
+        /const confirmDisabled = saving \|\| submitLocked \|\| missingRequired \|\| !balance\.canConfirm\s*\|\| !!pisPolling\s*\|\| !pisReady \|\| psd2Blocked;/,
       );
     });
 
@@ -563,6 +567,66 @@ describe('NewPaymentEntryModal (step 2 — Nuevo cobro/pago)', () => {
       assert.match(src, /data-testid=\{`\$\{testid\}-slot`\}/);
       assert.match(src, /minHeight: FIELD_ERROR_LINE_HEIGHT/);
       assert.match(src, /\{error && <p role="alert" style=\{fieldErrorStyle\} data-testid=\{testid\}>\{error\}<\/p>\}/);
+    });
+  });
+
+  // ETP-5434: `refreshVersion: false` opts a POST out of the core's post-mutation version-refresh
+  // GET (0.7-1.9s in production) that exists to keep the optimistic-lock token fresh after a
+  // mutation. It is safe ONLY for the loading effect's three genuinely read-only actions
+  // (invoiceAccounts, invoicePaymentMethods, invoiceCreditSources — confirmed read-only in
+  // PaymentActionHandlerSupport.routeQuery). Copying it onto any action that DOES mutate
+  // (registerPayment, pisPaymentStatus, cancelPisPayment, retryPisPayment, or the second
+  // PIS-accounts `post` helper) would reintroduce a stale optimistic-lock token bug (ETP-5255)
+  // — this is the guardrail against that regression.
+  describe('refreshVersion:false stays scoped to the read-only loading POSTs (ETP-5434)', () => {
+    it('is used to fetch invoiceAccounts, invoicePaymentMethods and invoiceCreditSources', () => {
+      assert.match(src, /post\('invoiceAccounts'\)/);
+      assert.match(src, /post\('invoicePaymentMethods'\)/);
+      assert.match(src, /post\('invoiceCreditSources', creditSourcesBody\)/);
+    });
+
+    it('appears exactly ONCE in the whole file as a real value (i.e. outside the explanatory comment above it) — on the shared read-only post() helper', () => {
+      // NOTE: the comment directly above the post() helper also says the literal phrase
+      // "refreshVersion: false" in prose (explaining what the flag does) — a bare
+      // /refreshVersion:\s*false/ count would see 2 and always fail. Requiring the trailing
+      // `}` (closing the fetch options object) is what isolates the real, executable one: the
+      // comment's occurrence is immediately followed by a backtick, never a brace.
+      const occurrences = src.match(/refreshVersion:\s*false\s*\}/g) || [];
+      assert.equal(
+        occurrences.length, 1,
+        'refreshVersion: false must appear exactly once as a real options value — any further occurrence means it leaked onto a mutating action',
+      );
+
+      const helperIdx = src.indexOf("const post = (action, body = '{}') => apiFetch(");
+      // NOT src.indexOf('refreshVersion: false') — that phrase's FIRST occurrence is the
+      // explanatory comment sitting directly above this helper, which would report itself
+      // as "before" the helper and false-fail this assertion. The trailing `}` (the real,
+      // executable one, matched exactly like above) is what disambiguates the two.
+      const flagIdx = src.indexOf('refreshVersion: false }');
+      assert.ok(helperIdx > -1, 'the shared read-only post() helper must exist');
+      assert.ok(flagIdx > -1 && flagIdx > helperIdx && flagIdx < helperIdx + 300,
+        'refreshVersion: false must sit inside the shared read-only post() helper');
+    });
+
+    it('does NOT appear on any of the mutating action calls in this file', () => {
+      // Each mutating call site is inspected in isolation (its own `action/<name>` slice) so this
+      // guardrail pinpoints exactly which one regressed, instead of a single file-wide assertion.
+      for (const action of ['registerPayment', 'pisPaymentStatus', 'cancelPisPayment', 'retryPisPayment']) {
+        const callIdx = src.indexOf(`action/${action}\``);
+        assert.ok(callIdx > -1, `the ${action} call site must exist`);
+        const callSnippet = src.slice(callIdx, callIdx + 250);
+        assert.doesNotMatch(
+          callSnippet, /refreshVersion/,
+          `${action} mutates state and must never carry refreshVersion — it would reintroduce a stale optimistic-lock token (ETP-5255)`,
+        );
+      }
+    });
+
+    it('does NOT appear on the second (PIS-accounts) post() helper either — untouched by ETP-5434', () => {
+      const pisHelperIdx = src.indexOf('const post = (action) => apiFetch(');
+      assert.ok(pisHelperIdx > -1, 'the PIS-accounts post() helper must exist');
+      const pisHelperSnippet = src.slice(pisHelperIdx, pisHelperIdx + 200);
+      assert.doesNotMatch(pisHelperSnippet, /refreshVersion/);
     });
   });
 });

@@ -1,15 +1,14 @@
 import * as Sentry from '@sentry/react';
 
-export const SENTRY_ENV_MAP = {
-  'go.staging.etendo.cloud': 'staging',
-  'go.experimental.etendo.cloud': 'experimental',
-  'go.etendo.cloud': 'production',
-};
-
 export const DEFAULT_SENTRY_SEND_DEFAULT_PII = false;
 
-export function resolveSentryEnvironment(hostname) {
-  return SENTRY_ENV_MAP[hostname] ?? 'development';
+/**
+ * The deploy workflow injects VITE_APP_ENV from its target, so the environment
+ * does not depend on the domain the bundle is served from.
+ */
+export function resolveSentryEnvironment(env = import.meta.env) {
+  const value = env?.VITE_APP_ENV;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'development';
 }
 
 export function resolveSentrySendDefaultPii(
@@ -56,7 +55,6 @@ export function resolveSentryRelease(
 
 export function createSentryProvider({
   dsn,
-  hostname = globalThis.window?.location?.hostname,
   enabled = Boolean(dsn),
   sentry = Sentry,
   env = import.meta.env,
@@ -77,7 +75,7 @@ export function createSentryProvider({
 
       sentry.init({
         dsn,
-        environment: resolveSentryEnvironment(hostname),
+        environment: resolveSentryEnvironment(resolvedEnv),
         release,
         integrations: [sentry.browserTracingIntegration()],
         tracesSampleRate: 0.1,

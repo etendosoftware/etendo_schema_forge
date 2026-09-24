@@ -31,7 +31,7 @@ const PILL_STYLE = {
 
 const LABEL_STYLE = { padding: '0 4px' };
 
-export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix }) {
+export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix, hint }) {
   const dictionary = useLocale();
   if (status == null) return null;
 
@@ -45,6 +45,7 @@ export default function DocumentStatusPill({ status, label, enumLabels, tone: to
       data-testid="document-status-pill"
       data-status={status}
       data-tone={tone}
+      title={hint || undefined}
       style={{ ...PILL_STYLE, background: palette.background, color: palette.color }}
     >
       {Icon ? <Icon

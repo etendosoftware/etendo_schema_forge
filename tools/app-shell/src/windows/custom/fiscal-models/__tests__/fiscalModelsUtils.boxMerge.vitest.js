@@ -12,6 +12,7 @@ import {
   applyOverrides,
   recomputeDerivedBoxes,
   getBoxValue,
+  clampNegativeOverrides,
 } from '../fiscalModelsUtils.js';
 
 // ── toBoxArray ────────────────────────────────────────────────────────────────
@@ -188,6 +189,108 @@ describe('recomputeDerivedBoxes', () => {
     [45, 46, 64, 66, 69, 71].forEach(num => {
       expect(result.find(b => b.num === num).value).toBe(0);
     });
+  });
+
+  // ETP-5431 [B1 fix, review round 2] — Alex (REVIEW) rejected the original delivery because
+  // the NEGATIVE_NOT_ALLOWED_BOXES clamp only ran inside FmModel303Page.jsx's `handleBoxChange`
+  // (interactive typing), never inside `recomputeDerivedBoxes` itself — so a negative box70/109
+  // that arrived any OTHER way (a "Calcular" response's `res.boxes`, or a `manualOverrides` map
+  // hydrated from a declaration persisted before this rule existed) reached `computeBox111`
+  // unclamped and could produce a negative box111, which is itself in NEGATIVE_NOT_ALLOWED_BOXES
+  // and gets forwarded verbatim to AEAT as `RectifyingAmount`. The fix folds the clamp into
+  // `recomputeDerivedBoxes` itself (its very first step, on its own input) so it is guaranteed
+  // by construction for every caller, not by caller discipline. These tests call
+  // `recomputeDerivedBoxes` directly with an unclamped negative box70/109 — exactly what a
+  // caller that skipped `handleBoxChange` would hand it — to pin that guarantee at the unit
+  // level, independent of the FmModel303Page integration coverage in
+  // FmModel303Page.negativeBoxClamp.vitest.jsx.
+  describe('negative-not-allowed clamp (ETP-5431 B1 fix)', () => {
+    // ETP-5431 (0d196b0c4 rewrite) — `computeBox111` no longer reads box69 or returns box70
+    // "verbatim" on a negative-box69 branch; the new formula (`MIN(box70, ABS(box71))`) requires
+    // box70 > 0 as an explicit gate. Clamping a negative box70 to 0 therefore makes box111 come
+    // out EMPTY (not "0"), because 0 fails the `box70 > 0` gate — same net effect (box111 can
+    // never be negative), reached through the new formula's own guard instead of the clamp
+    // coincidentally producing a 0 that used to flow through the old per-sign branch. Also passes
+    // `identChecks: { rectificativa: true }` now — without it box111 is unconditionally null
+    // regardless of the clamp, which would prove nothing about ordering either way.
+    it('clamps an unclamped negative box70 to 0, so box111 can never derive from a negative box70', () => {
+      // box27 = -500 drives box69 negative (box46=box64=box66=box69=-500 with default box65=100),
+      // so box71 = -500 - box70 stays negative regardless of the clamp outcome; box70 = -300 is
+      // handed in RAW, as if it arrived straight from a backend response or a hydrated
+      // manualOverrides — never through handleBoxChange's own clamp.
+      const result = recomputeDerivedBoxes(
+        [{ num: 27, value: -500 }, { num: 70, value: -300 }],
+        { rectificativa: true },
+      );
+      expect(result.find(b => b.num === 70).value).toBe(0); // clamped in place.
+      expect(result.find(b => b.num === 71).value).toBe(-500); // -500 - 0 (clamped, not -300).
+      // box70 (clamped to 0) fails computeBox111's own `box70 > 0` gate -> box111 stays absent,
+      // by construction — clamping BEFORE the formula runs is what guarantees this.
+      expect(result.find(b => b.num === 111)).toBeUndefined();
+    });
+
+    it('clamps an unclamped negative box109 to 0 (feeds box71, not computeBox111 directly)', () => {
+      const result = recomputeDerivedBoxes([{ num: 27, value: 1000 }, { num: 109, value: -20 }]);
+      expect(result.find(b => b.num === 109).value).toBe(0); // clamped in place.
+      expect(result.find(b => b.num === 71).value).toBe(1000); // 1000 - 0 (109) + 0 (clamped, not -20).
+    });
+
+    it('clamps an unclamped negative box77 the same way as boxes 70/109', () => {
+      const result = recomputeDerivedBoxes([{ num: 27, value: 1000 }, { num: 77, value: -15 }]);
+      expect(result.find(b => b.num === 77).value).toBe(0);
+      expect(result.find(b => b.num === 69).value).toBe(1000); // 1000 + 0 (clamped, not -15).
+    });
+
+    it('does not touch a negative value on a box outside NEGATIVE_NOT_ALLOWED_BOXES (e.g. box9)', () => {
+      const result = recomputeDerivedBoxes([{ num: 9, value: -21 }, { num: 27, value: 1000 }]);
+      expect(result.find(b => b.num === 9).value).toBe(-21);
+    });
+
+    it('leaves an already-non-negative box70/109 untouched', () => {
+      const result = recomputeDerivedBoxes([{ num: 27, value: 1000 }, { num: 70, value: 300 }, { num: 109, value: 20 }]);
+      expect(result.find(b => b.num === 70).value).toBe(300);
+      expect(result.find(b => b.num === 109).value).toBe(20);
+    });
+  });
+});
+
+// ── clampNegativeOverrides ──────────────────────────────────────────────────────
+// ETP-5431 [B1 fix, review round 2] — the `manualOverrides` counterpart to
+// `recomputeDerivedBoxes`'s own clamp. `recomputeDerivedBoxes` alone is enough to keep box111
+// non-negative, but it does NOT fix a stale negative box70/109 sitting directly in the
+// `manualOverrides` map: `applyBoxParams` (fiscalModelsUtils.js) reads box 70/109's AEAT param
+// straight off that map (`ComplementaryAmt`/`ReturnsPendingSettlement`), bypassing
+// `liveBoxes`/`recomputeDerivedBoxes` entirely. `FmModel303Page.jsx` calls this once, at
+// `manualOverrides`' initial hydration from `decl.manualData.manualOverrides`.
+describe('clampNegativeOverrides', () => {
+  it('clamps a negative NEGATIVE_NOT_ALLOWED_BOXES entry to 0', () => {
+    const result = clampNegativeOverrides({ 70: -100, 109: -5 });
+    expect(result).toEqual({ 70: 0, 109: 0 });
+  });
+
+  it('leaves a non-negative NEGATIVE_NOT_ALLOWED_BOXES entry untouched', () => {
+    const result = clampNegativeOverrides({ 70: 100 });
+    expect(result).toEqual({ 70: 100 });
+  });
+
+  it('does not touch a negative value on a box outside NEGATIVE_NOT_ALLOWED_BOXES', () => {
+    const result = clampNegativeOverrides({ 27: -500 });
+    expect(result).toEqual({ 27: -500 });
+  });
+
+  it('returns the SAME reference when nothing needed clamping (no unnecessary re-render)', () => {
+    const input = { 27: -500, 70: 100 };
+    expect(clampNegativeOverrides(input)).toBe(input);
+  });
+
+  it('handles null/undefined by returning an empty object', () => {
+    expect(clampNegativeOverrides(null)).toEqual({});
+    expect(clampNegativeOverrides(undefined)).toEqual({});
+  });
+
+  it('leaves an empty object as an empty object', () => {
+    const input = {};
+    expect(clampNegativeOverrides(input)).toBe(input);
   });
 });
 

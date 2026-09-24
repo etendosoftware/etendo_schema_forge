@@ -106,7 +106,8 @@ describe('useConversionRate', () => {
       ['fromCode', { fromCode: '' }],
       ['toCode', { toCode: '' }],
       ['apiBaseUrl', { apiBaseUrl: undefined }],
-      ['token', { token: undefined }],
+      // ETP-4576 — `token` is no longer one of these: under the cookie scheme the client holds
+      // none, so treating it as a required argument skipped the lookup for every user.
       ['date', { date: '' }],
     ])('returns null/false and does not fetch when %s is missing', async (_name, override) => {
       const { result } = renderHook(() =>

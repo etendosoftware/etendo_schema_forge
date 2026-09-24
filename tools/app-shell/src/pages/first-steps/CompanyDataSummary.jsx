@@ -26,13 +26,14 @@ const FIELDS = [
 ];
 
 export default function CompanyDataSummary({ ui }) {
-  const token = useAuthOptional()?.token ?? null;
+  const isAuthenticated = useAuthOptional()?.isAuthenticated ?? false;
   const apiFetch = useApiFetch(getApiBase());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) return undefined;
+    // Wait for the authenticated session: a premature 401 would log the user out.
+    if (!isAuthenticated) return undefined;
     let cancelled = false;
     setLoading(true);
     apiFetch(ENDPOINT)
@@ -43,7 +44,7 @@ export default function CompanyDataSummary({ ui }) {
       .catch(() => { if (!cancelled) setData(null); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token, apiFetch]);
+  }, [isAuthenticated, apiFetch]);
 
   if (loading || !data) return null;
 

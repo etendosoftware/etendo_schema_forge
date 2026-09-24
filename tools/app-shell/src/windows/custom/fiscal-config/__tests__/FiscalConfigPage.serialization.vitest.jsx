@@ -34,12 +34,17 @@ const saveOutcome = { sii: 'ok', tbai: 'ok' };
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
+// ETP-5395 Fix 3: FiscalConfigPage is now gated by useWindowAccess — default to 'full' so
+// this suite keeps exercising the window as before (mirrors financial-account's own
+// ETP-4658 test convention).
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: vi.fn(() => ({
     selectedOrg: { id: 'org-1', name: 'Test Org' },
     selectedRole: { orgList: [{ id: 'org-1', name: 'Test Org' }] },
     selectOrg: vi.fn(),
   })),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 vi.mock('react-router-dom', () => ({ useNavigate: vi.fn(() => vi.fn()) }));

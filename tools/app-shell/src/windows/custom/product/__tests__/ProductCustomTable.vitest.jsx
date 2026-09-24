@@ -19,6 +19,7 @@ vi.mock('@/components/contract-ui', () => ({
 vi.mock('../ProductListCells', () => ({
   ProductSalePriceCell: () => null,
   ProductPurchasePriceCell: () => null,
+  ProductCostCell: () => null,
   ProductStockCell: () => null,
 }));
 
@@ -34,6 +35,8 @@ describe('ProductCustomTable — stored computed column config (ETP-4603)', () =
   const cases = [
     { key: 'salePrice', backendKey: 'eTGOSalePrice' },
     { key: 'purchasePrice', backendKey: 'eTGOPurchasePrice' },
+    // ETP-5446 — Cost (EM_ETGO_Cost, stored computed, synchronous refresh).
+    { key: 'productCost', backendKey: 'eTGOCost' },
     { key: 'stock', backendKey: 'eTGOStock' },
   ];
 
@@ -76,10 +79,26 @@ describe('ProductCustomTable — stored computed column config (ETP-4603)', () =
     expect(cols.find((c) => c.key === 'purchasePrice').computed).toBeUndefined();
   });
 
+  it('the cost column does NOT carry computed metadata (synchronous refresh, ETP-5446)', () => {
+    const col = getColumns().find((c) => c.key === 'productCost');
+    expect(col.computed).toBeUndefined();
+  });
+
+  it('places the cost column right after the purchase price column (ETP-5446)', () => {
+    const keys = getColumns().map((c) => c.key);
+    expect(keys.indexOf('productCost')).toBe(keys.indexOf('purchasePrice') + 1);
+  });
+
+  it('does not reuse the costing entity field name "cost" as the display key (F19, ETP-5446)', () => {
+    const keys = getColumns().map((c) => c.key);
+    expect(keys).not.toContain('cost');
+  });
+
   it('exposes per-locale labels for the numeric columns (filter picker localization)', () => {
     const cols = getColumns();
     expect(cols.find((c) => c.key === 'salePrice').labels).toEqual({ en_US: 'Sales', es_ES: 'Venta' });
     expect(cols.find((c) => c.key === 'purchasePrice').labels).toEqual({ en_US: 'Purchase', es_ES: 'Compra' });
+    expect(cols.find((c) => c.key === 'productCost').labels).toEqual({ en_US: 'Cost', es_ES: 'Costo' });
     expect(cols.find((c) => c.key === 'stock').labels).toEqual({ en_US: 'Stock', es_ES: 'Stock' });
   });
 });

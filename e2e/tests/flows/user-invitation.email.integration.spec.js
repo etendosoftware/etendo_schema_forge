@@ -398,8 +398,13 @@ async function acceptExistingInvitation(browser, inviteLink, email, password, {
     });
     const landingTestId = landingButton === 'stay-in-current' ? 'action-stay-in-current' : 'action-go-to-app';
     await page.getByTestId(landingTestId).click();
-    await page.waitForURL('**/dashboard', { timeout: 60_000 });
-    await expect(page).toHaveURL(/\/dashboard/);
+    // Accepts EITHER landing. Entering the company is a hard reload into `/`, and a brand-new
+    // member is exactly who the dashboard spends its one-time First Steps redirect on, so which
+    // of the two renders first is a race the app never promised to settle one way. This wait
+    // only has to see that the entry navigation happened at all; the convergence loop right
+    // below is what proves the invited user actually reaches the app.
+    await page.waitForURL(/\/(dashboard|first-steps)/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/\/(dashboard|first-steps)/);
 
     // ETP-5190 — an invited user is a NEW account, so the dashboard spends its one-time First
     // Steps redirect on this very first visit, and it does so LATE: the gate only fires once the

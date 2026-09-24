@@ -39,7 +39,7 @@ export function toIsoDate(value) {
  * client-side and embed it in the header body.
  */
 async function findBpLocation({ token, apiBaseUrl, bpId }) {
-  if (!apiBaseUrl || !token || !bpId) return null;
+  if (!apiBaseUrl || !bpId) return null;
   const contactsBase = apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
   const where = encodeURIComponent(`businessPartner.id = '${bpId}' and active = true`);
   const url = `${contactsBase}/locationAddress?_neoWhere=${where}&limit=1`;
@@ -65,7 +65,7 @@ async function findBpLocation({ token, apiBaseUrl, bpId }) {
  * the popup — by the time we trigger it the user is already in the loop.
  */
 export async function findBp({ token, apiBaseUrl, taxId, name }) {
-  if (!apiBaseUrl || !token) return null;
+  if (!apiBaseUrl) return null;
   // apiBaseUrl points at the host spec (e.g. /sws/neo/purchase-invoice).
   // The contacts spec lives at the sibling /sws/neo/contacts; derive it the
   // same way ContactCreatePopup does so we hit a real endpoint, not the
@@ -109,7 +109,7 @@ export async function findBp({ token, apiBaseUrl, taxId, name }) {
  */
 async function runProductSimSearch({ token, lines }) {
   const productHints = lines.map(l => String(l?.description ?? '').trim());
-  if (!token || productHints.length === 0) return [];
+  if (productHints.length === 0) return [];
   return simSearch({
     token,
     entityName: 'Product',
@@ -145,7 +145,7 @@ export function buildTaxSearchTerm(line) {
 
 export async function findTax({ token, value, extracted }) {
   const term = String(value ?? extracted?.tax_label ?? '').trim();
-  if (!token || !term) return null;
+  if (!term) return null;
   const matches = await simSearch({
     token,
     entityName: 'FinancialMgmtTaxRate',
@@ -171,7 +171,7 @@ export async function findTax({ token, value, extracted }) {
  * in the catalog before we accept the match).
  */
 export async function resolveTaxesForLines({ token, lines }) {
-  if (!token || !Array.isArray(lines) || lines.length === 0) return [];
+  if (!Array.isArray(lines) || lines.length === 0) return [];
   const terms = lines.map(buildTaxSearchTerm);
   if (terms.every(t => !t)) return Array(lines.length).fill(null);
   // simSearch returns one slot per requested item; empty terms produce no match.

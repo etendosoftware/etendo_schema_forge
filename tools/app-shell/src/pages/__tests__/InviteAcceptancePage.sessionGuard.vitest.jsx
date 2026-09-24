@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, configure } from '@testing-library/
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import enUS from '@/locales/en_US.json';
+import { AuthProvider, createMemoryAuthStorage } from '@etendosoftware/app-shell-core/auth';
 import InviteAcceptancePage from '../InviteAcceptancePage.jsx';
 
 /**
@@ -91,7 +92,10 @@ function installFetch({ resolve: resolveResponse, session, accept, login }) {
     if (String(url).includes('/sws/go/company-invitations/resolve')) {
       return resolveResponse;
     }
-    if (String(url).includes('/sws/go/login')) {
+    // ETP-4576 — LoginStep's `loginAccount` POSTs to /sws/go/session now; signing in creates a
+    // backend-managed session instead of minting a token from GET /sws/go/login. Matched on the
+    // `go` path so it cannot be confused with the guard's own /sws/neo/session identity call.
+    if (String(url).includes('/sws/go/session') || String(url).includes('/sws/go/login')) {
       return login ? login() : jsonFail(404);
     }
     if (String(url).includes('/sws/go/company-invitations/accept')) {
@@ -142,14 +146,24 @@ function watchForTestId(testId) {
   };
 }
 
-function renderPage(initialEntry = '/invite?token=valid-token-123') {
-  return render(
+/**
+ * Rendered WITHOUT an auth context by default, which is what makes the guard ask the network:
+ * with nothing above it the page cannot know whether somebody is signed in, so it has to find
+ * out. Pass `signedOut` for the cases that model a fresh browser — in the app this route sits
+ * inside AppShellRuntime's AuthProvider (runtime-routes.jsx), which has already resolved the
+ * session restore, and a settled 'anonymous' is an answer the page is entitled to trust.
+ */
+function renderPage(initialEntry = '/invite?token=valid-token-123', { signedOut = false } = {}) {
+  const page = (
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route path="/invite" element={<InviteAcceptancePage />} />
       </Routes>
     </MemoryRouter>
   );
+  return render(signedOut
+    ? <AuthProvider restoreSession={null} storage={createMemoryAuthStorage()}>{page}</AuthProvider>
+    : page);
 }
 
 describe('InviteAcceptancePage — ETP-5202 session guard', () => {
@@ -168,7 +182,7 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
   it('does not prompt when no session is stored', async () => {
     const { calls } = installFetch({ resolve: jsonOk(registrationBranch) });
 
-    renderPage('/invite?token=fresh-browser');
+    renderPage('/invite?token=fresh-browser', { signedOut: true });
 
     await waitFor(() => {
       expect(screen.getByTestId('invite-new-account')).toBeInTheDocument();
@@ -185,7 +199,7 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
     installFetch({ resolve: jsonOk(registrationBranch) });
     const checking = watchForTestId('invite-session-checking');
 
-    renderPage('/invite?token=fresh-browser-no-flicker');
+    renderPage('/invite?token=fresh-browser-no-flicker', { signedOut: true });
 
     await waitFor(() => {
       expect(screen.getByTestId('invite-new-account')).toBeInTheDocument();
@@ -410,52 +424,45 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
     expect(conflict.textContent).not.toContain('{currentUser}');
     expect(conflict).toHaveTextContent(LABELS.inviteSessionConflictLogoutUnknown);
     expect(conflict).not.toHaveTextContent(OTHER_EMAIL);
-    // Both tokens were tried before giving up.
-    expect(sessionCalls(calls)).toHaveLength(2);
+    // ETP-4576 — ONE request, not the two develop made. It used to try the tenant token and
+    // then the platform one, because either localStorage key could carry the session. There is
+    // no client-held token to try any more: the request carries whatever the active scheme
+    // supplies, so a single unanswerable identity is the whole of "cannot resolve".
+    expect(sessionCalls(calls)).toHaveLength(1);
   });
 
-  // 5 — A tenant JWT is not always present (expired, or a platform-only session); the
-  // platform token is the documented fallback.
-  it('falls back to the platform token when no tenant token is stored', async () => {
-    const { calls } = installFetch({
-      resolve: jsonOk(existingBranch),
-      session: (bearer) => (bearer === 'platform-jwt'
-        ? jsonOk({ accountEmail: OTHER_EMAIL })
-        : jsonFail(401)),
-    });
-    globalThis.localStorage.setItem('sf_platform_token', 'platform-jwt');
-
-    renderPage('/invite?token=platform-only');
-
-    await screen.findByTestId('invite-session-conflict');
-
-    const sessionRequests = sessionCalls(calls);
-    expect(sessionRequests).toHaveLength(1);
-    expect(sessionRequests[0].options.headers.Authorization).toBe('Bearer platform-jwt');
-  });
-
-  // 5b — A session that never went through the environment switch holds the SAME value under
-  // both keys, so the fallback would ask the identical question twice. Pinned because the
-  // guarding condition reads like a redundant equality check and invites being "simplified"
-  // back to `readAccountEmail(authToken) || readAccountEmail(platformToken)`, which silently
-  // doubles the request on the most common shape of session.
-  it('asks once when both storage keys hold the same token', async () => {
+  // 5 — ETP-4576 replaces develop's two cases here ("falls back to the platform token when no
+  // tenant token is stored" and "asks once when both storage keys hold the same token"). Both
+  // pinned the same vanished mechanism: the identity used to be read from `sf_auth_token` with
+  // `sf_platform_token` as a fallback, so one case proved the fallback fired and the other
+  // proved it did not fire twice when the two keys happened to match.
+  //
+  // Neither key is written any more, so a `readAccountEmail(authToken) || readAccountEmail(
+  // platformToken)` shape cannot be reintroduced — there is nothing to pass it. What replaces
+  // them is the property that outlived both: the guard asks exactly ONCE, through the session,
+  // and reads no credential out of storage on the way. Left as a behavioural case rather than a
+  // source-reading one because the failure it guards is a duplicated REQUEST, which the source
+  // does not show.
+  it('asks the session exactly once, with no token read from storage', async () => {
     const { calls } = installFetch({
       resolve: jsonOk(existingBranch),
       session: () => jsonOk({ accountEmail: OTHER_EMAIL }),
     });
-    globalThis.localStorage.setItem('sf_auth_token', 'same-jwt');
-    globalThis.localStorage.setItem('sf_platform_token', 'same-jwt');
+    // Present, and deliberately ignored: a stale key left by a pre-cookie session must not
+    // become an identity the guard trusts, nor a second question it asks.
+    globalThis.localStorage.setItem('sf_auth_token', 'stale-jwt');
+    globalThis.localStorage.setItem('sf_platform_token', 'stale-platform');
 
-    renderPage('/invite?token=duplicate-token');
+    renderPage('/invite?token=single-question');
 
-    // The outcome must be unchanged by the de-duplication: still a conflict, still named.
+    // The outcome is unchanged by any of this: still a conflict, still named.
     const conflict = await screen.findByTestId('invite-session-conflict');
     expect(conflict).toHaveTextContent(OTHER_EMAIL);
 
     const sessionRequests = sessionCalls(calls);
     expect(sessionRequests).toHaveLength(1);
-    expect(sessionRequests[0].options.headers.Authorization).toBe('Bearer same-jwt');
+    expect(sessionRequests[0].options.headers.Authorization).not.toBe('Bearer stale-jwt');
+    expect(sessionRequests[0].options.headers.Authorization).not.toBe('Bearer stale-platform');
   });
 
   // 6 — Closing the previous session must happen BEFORE anything else and must reload back

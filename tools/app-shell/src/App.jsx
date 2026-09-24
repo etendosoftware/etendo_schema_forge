@@ -19,13 +19,13 @@ import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from 
 import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
-import { RoleChangedBanner } from './components/RoleChangedBanner.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
+import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
@@ -100,9 +100,23 @@ function looksLikeWindowAccessPayload(value) {
 // headroom (10x+ over "a few hundred ms") while being far too short to meaningfully
 // outlive a real permission change relative to how far apart real triggers actually fire.
 const MENU_ACCESS_CACHE_TTL_MS = 3_000;
+// ETP-5403 — the 3s success TTL above, sized for a benign refresh burst, is far too
+// short to also govern the FAILURE outcome: every refresh trigger (bootstrap, tab
+// focus/visibility, the 5-min poll) across every open tab would re-attempt the fetch
+// as soon as it lapses, turning a sustained /sws/neo/listmenu outage into a
+// thundering-herd retry storm against an already-degraded backend (~20x/min per
+// session vs. ~1/min before ETP-5395 shrank the shared TTL). The failure outcome gets
+// its own, much longer TTL — back near the pre-ETP-5395 baseline — so retries stay
+// throttled for as long as the outage lasts, independent of the success-path cadence.
+const MENU_ACCESS_FAILURE_TTL_MS = 60_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
-const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;
+// [ETP-5395] This only guards against a request that never answers, so it must sit far
+// above real latency: a timed-out race fails OPEN (the full, unfiltered sidebar). At 1s,
+// production (app.etendo.ai) answered SFListMenu correctly for a Purchasing role but a bit
+// later than that, and every load showed every menu entry. 10s stays well under the test
+// timeout above and well over any healthy answer.
+const MENU_ACCESS_FETCH_TIMEOUT_MS = 10_000;
 let menuAccessCache = null; // { value, expiresAt } | null
 let menuAccessInFlight = null;
 
@@ -113,23 +127,29 @@ async function fetchMenuAccess() {
   if (menuAccessInFlight) {
     return menuAccessInFlight;
   }
-  menuAccessInFlight = (async () => {
+  const request = (async () => {
     let value;
+    let ttl;
     try {
       const tree = await fetchMenuTree();
       const ids = collectAllowedIds(tree?.tree);
       value = Object.fromEntries([...ids].map((id) => [id, true]));
+      ttl = MENU_ACCESS_CACHE_TTL_MS;
     } catch {
       // ETP-5375 — NOT `{}`: an unresolved fetch must stay distinguishable from a
       // resolved-but-empty allow set (see MENU_ACCESS_UNREACHABLE's own comment).
       value = { [MENU_ACCESS_UNREACHABLE]: true };
+      ttl = MENU_ACCESS_FAILURE_TTL_MS; // ETP-5403 — see comment above the constant.
     }
-    menuAccessCache = { value, expiresAt: Date.now() + MENU_ACCESS_CACHE_TTL_MS };
+    menuAccessCache = { value, expiresAt: Date.now() + ttl };
     return value;
   })().finally(() => {
-    menuAccessInFlight = null;
+    // Only clear our own slot: a request abandoned by the timeout below may settle after a
+    // newer one took its place.
+    if (menuAccessInFlight === request) menuAccessInFlight = null;
   });
-  return menuAccessInFlight;
+  menuAccessInFlight = request;
+  return request;
 }
 
 async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
@@ -138,7 +158,15 @@ async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
     timeoutId = setTimeout(() => {
       // ETP-5375 — same reason as the catch branch above: a timed-out race must not be
       // reported as a confirmed-empty allow set.
-      resolve({ [MENU_ACCESS_UNREACHABLE]: true });
+      const unreachable = { [MENU_ACCESS_UNREACHABLE]: true };
+      // [ETP-5395] Treat the timeout as the failure it is: cache it for the failure TTL and
+      // drop the stuck request, or every later load (focus, the 5-min poll) joins it and waits
+      // the full timeout again. If the stuck request does answer later, its result still
+      // replaces this cache entry.
+      // Callers arriving while a request is pending join it, so the pending one is the stuck one.
+      menuAccessInFlight = null;
+      menuAccessCache = { value: unreachable, expiresAt: Date.now() + MENU_ACCESS_FAILURE_TTL_MS };
+      resolve(unreachable);
     }, MENU_ACCESS_FETCH_TIMEOUT_MS);
   });
   try {
@@ -156,6 +184,23 @@ async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
 export function __resetMenuAccessCacheForTest() {
   menuAccessCache = null;
   menuAccessInFlight = null;
+}
+
+// ETP-5443 follow-up — `NeoResponse.error()` (com.etendoerp.go) nests the human-readable
+// text under `error.message` on this path (the server-side `ensureTopLevelMessage`
+// normalization is not applied here); mirrors menuTree.js's own defensive `data?.error ||
+// data?.message` handling for a string `error`, and falls back to a top-level `message`
+// for forward compatibility. Used only to recover the `EnvironmentAccessPolicy.Decision`
+// name from a 402 — see lib/environmentAccessGate.js.
+async function readNeoErrorMessage(res) {
+  try {
+    const data = await res.json();
+    if (typeof data?.error === 'string') return data.error;
+    if (data?.error && typeof data.error === 'object') return data.error.message || '';
+    return data?.message || '';
+  } catch {
+    return '';
+  }
 }
 
 export async function fetchWindowAccess(session) {
@@ -181,7 +226,26 @@ export async function fetchWindowAccess(session) {
       token: session?.token ?? null,
       on401: 'ignore',
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // ETP-5443 follow-up — a 402 here means the WHOLE environment's commercial access
+      // was cut off (demo trial expired / subscription grace elapsed — see
+      // lib/environmentAccessGate.js), not "this role has no access". Record the decision
+      // so AppLayout can show the real reason instead of the generic empty-access screen
+      // that folding this into `null` (below, unchanged) used to produce. For a 402 with a
+      // recognized decision text, record it; for any other resolved non-ok response (401,
+      // differently-worded 402, 500, etc.), clear any previously-recorded decision — this is
+      // the only place a demo/subscription block can be detected, so a resolved response that
+      // is not a recognized 402 means access is not currently known to be blocked. NOTE: a
+      // thrown/rejected apiFetch (DNS, connection refused, abort) never reaches here; it lands
+      // in the outer catch below, which deliberately leaves the decision untouched so a
+      // transient network failure does not replace the last server-confirmed block with a
+      // misleading "your role has no access" screen.
+      setEnvironmentAccessDecision(
+        res.status === 402 ? parseEnvironmentAccessDecision(await readNeoErrorMessage(res)) : null
+      );
+      return null;
+    }
+    setEnvironmentAccessDecision(null);
     const data = await res.json();
     // Webhook responses in this app are inconsistent about wrapping the
     // payload — some (the `?name=`-style POST webhooks, e.g. SFListMenu) nest
@@ -218,6 +282,7 @@ export async function fetchWindowAccess(session) {
     const menuAccess = await resolveMenuAccessWithoutBlocking(menuAccessPromise);
     return { ...payload, menuAccess };
   } catch {
+    // Deliberately NOT clearing the decision on network errors — the last server-confirmed block must survive transient failures.
     return null;
   }
 }
@@ -432,11 +497,6 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
-        {/* ETP-5189 — notifies the active user their role/permissions changed elsewhere.
-            Mounted here (not inside AppLayout) so it is visible regardless of which
-            window is open when the change lands; see RoleChangedBanner.jsx's own
-            doc comment for why it's a fixed overlay rather than a layout-flow element. */}
-        <RoleChangedBanner data-testid="RoleChangedBanner__ecaf3f" />
         <LocaleChangeConfirmDialog
           open={pendingLocale !== null}
           onConfirm={() => applyLocaleAndReload(pendingLocale)}

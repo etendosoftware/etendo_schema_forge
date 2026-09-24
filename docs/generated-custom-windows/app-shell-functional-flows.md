@@ -85,6 +85,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Failure or edge behavior:**
   - `?embedded=1` removes shell chrome and left-margin spacing while still rendering the current route content.
   - Hidden groups/items from `menu.json` are filtered out of the visible menu.
+  - **First Steps dismissal axis (ETP-5364):** a **fourth axis of `filterMenuGroupsByAccess`**, alongside the three access axes below. An item declaring `"hideWhenFirstStepsDismissed": true` (only `menu.json`'s `first-steps` entry) is revealed only when the account's checklist state is an exact `dismissed: false`; the empty group is then dropped by the same rule that drops any group whose items were all filtered out. It is a user PREFERENCE, not a grant — it hides nothing else and authorizes nothing — but it is decided here rather than in `SideMenu` for the same reason the access axes are: an entry must be decided once, before the menu paints. It is set only by the user pressing **"Finalizar configuración inicial"**, which `FirstStepsPage` offers once every visible step is complete (`data-testid="first-steps-finish-setup"`); completing the checklist does **not** set it on its own. The flag lives next to `seen`/`completed` in `ETGO_ACCOUNT.FIRST_STEPS`, so it survives logout and a new device, and `EtendoGoJwtServlet.sanitizeFirstSteps` defaults it to `false` — every state stored before ETP-5364 has no such key.
+    - **Fails closed, and `dismissed` is TRI-STATE** (`undefined` until the GET answers). This is not incidental: the first implementation filtered the group inside `SideMenu` and failed OPEN on the unknown state, so a dismissed user watched the entry render and then disappear on every reload and every locale change. `undefined` costs nothing here because the same item also declares `"capability": "isOwner"`, which already fails closed — the two gates lift together. A FAILED checklist GET resolves to a real `false` (entry shown), because "could not ask" is a different signal from "not asked yet".
+    - **`AppLayout` mounts `FirstStepsProvider` above the `allowedIds` gate** so the checklist GET starts alongside SFListMenu. Below it the request could not even start until the sidebar was already painting, which made the flash unavoidable rather than a race.
+    - Reversible without a settings screen: `/first-steps` stays routable, and when `dismissed` is true the page renders a banner (`first-steps-dismissed-notice`) whose button (`first-steps-reopen`) writes `dismissed: false` and brings the entry back.
+    - **`Home`/`dashboard` is a different `menu.json` group with no capability, flag or dismissal gate on it**, so the dashboard is reachable at every point of the checklist — mid-progress, complete, or dismissed. `DashboardPage`'s one-time post-signup redirect also skips a dismissed account: that user may never have spent `seen` (they reached `/first-steps` from the sidebar), so without the extra clause their next dashboard visit would bounce them back onto the page they just put away.
   - The visible menu has three independent access axes: `AppLayout` passes `allowedIds` from `useRoleMenu()`, `capabilities` from `useCapabilitiesSafe()`, and `windowAccess` from `useWindowAccessSafe()` to `registry.js`'s `filterMenuGroupsByAccess()`. The latter two maps come from `SFWindowAccessMap` through the auth context. An item must pass every axis it declares; groups left empty are dropped except `Favorites`. Items declaring none of these gates (such as dashboard or ungated custom/SDK pages) stay visible.
   - **Menu-tree axis:** `useRoleMenu()` (`tools/app-shell/src/hooks/useRoleMenu.js`) fetches `SFListMenu`'s role-pruned tree once per authenticated session, on mount and whenever `authRevision` bumps, and reduces it to an allowed-id `Set` via `collectAllowedIds()` (`tools/app-shell/src/lib/menuTree.js`). An item carrying `windowId`/`processId`/`obuiappProcessId` survives this axis if at least one of its declared IDs is in that set; an item carrying none is unaffected by this axis alone. See section 7b for how a menu-tree-only grant/revocation (no window/capability change) now also bumps `authRevision` via the `menuAccess` diff, so this axis re-fetches promptly instead of only on a full reload.
   - **Capability axis:** an item declaring `capability` is hidden unless `capabilities[item.capability] === true`. For example, the Roles entry requires `isAdminOrClientAdmin`. A missing or not-yet-loaded capability fails closed.
@@ -147,12 +152,116 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Automated evidence:**
   - `tools/app-shell/src/lib/__tests__/neoBaseUrl.vitest.js` — the three helpers across root / context-path / `VITE_API_BASE` / `VITE_MOCK` deployments, plus the assertion that `getSpecBaseUrl` equals what `WindowLoader` builds for the same window.
   - `tools/app-shell/src/pages/first-steps/__tests__/FirstStepsImportButton.vitest.jsx` — pins the base the checklist hands `useWindowImportDialog`, per step spec.
+  - ETP-5364 (`dismissed`): `tools/app-shell/src/windows/__tests__/registry.vitest.jsx` (the axis itself — shown on `false`, hidden on `true`, hidden on `undefined` and when the argument is omitted, independent of the capability axis, `Home` never touched), `tools/app-shell/src/layout/__tests__/AppLayout.vitest.jsx` (the 5th argument is threaded, and an unknown state does not put the entry on screen), `.../first-steps/__tests__/useFirstSteps.vitest.jsx` (the tri-state, persistence, optimistic rollback, no-op on an unchanged value), `.../FirstStepsContext.vitest.jsx` (pass-through and the inert default), `tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx` (the button, the banner and the way back), `.../SideMenu/__tests__/SideMenu.firstStepsBadge.vitest.jsx` (that this component does NOT re-decide it), `tools/app-shell/src/pages/__tests__/DashboardPage.firstStepsGate.vitest.jsx` (a dismissed account is not redirected), `e2e/tests/flows/first-steps-onboarding.mocked.spec.js`, and `etendo_core/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletFirstStepsTest.java` (server-side sanitization and the absent-key default).
   - `tools/app-shell/src/components/copilot/ocr/ingest/__tests__/useBatch.vitest.jsx` — the batch URL keeps the context path whatever the caller passes, and both entry points reach the same endpoint.
 - **Manual verification path:**
   1. On a deployment served under a context path, open Primeros pasos → "Carga masiva de productos" and import a file.
   2. In the Network tab, confirm the POST goes to `<context>/sws/neo/batch` and not to `/batch`.
   3. Import the same file again and confirm the rows come back as Omitidas — that is the duplicate pre-check, which uses the same base.
   4. Repeat both from the Productos window and confirm the two flows issue identical URLs.
+
+#### 3.2 The demo/trial banner (`DemoTrialIndicator`, ETP-5364)
+
+- **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx`, above the global header.
+- **When it renders:** only when the current environment is **not** productive
+  (`isProductiveEnvironment`) **and** the backend supplied `trialDaysRemaining` as an integer.
+  Anything else — a productive tenant, a missing environment, no trial metadata — renders
+  nothing. That gate is why the content below needs no plan check of its own.
+- **What it holds, left to right:** the `Demo` pill, the days-remaining label, the trial progress
+  bar, the **Ir al pago** button (→ `/upgrade`), and the fiscal caveat.
+- **The two caveats.** Two `genericLabels` keys, rendered as two `<p>` — one line each:
+  - `environmentDemoFiscalNotice` — *"En este entorno de pruebas no se harán conexiones con
+    Hacienda, para ello deberá crear un entorno productivo."*
+  - `environmentDemoMigrationNotice` — *"Los datos distintos a contactos y productos, no se
+    migrarán al entorno productivo."*
+
+  Notes that are load-bearing:
+  - **Two keys, not one string with a `\n`.** The sentences are independent and each owns a
+    line, so the break is structural markup rather than an escape a translator can silently drop
+    inside a JSON string.
+  - They sit in the banner rather than inside the upgrade flow because both facts have to be
+    known **before** paying, and they stay on an expired trial, which is exactly when someone is
+    about to.
+  - **"crear un entorno productivo" is plain prose, not a link.** The Ir al pago button
+    immediately to its left is that link; two controls with one destination, 8px apart, read as a
+    mistake rather than as emphasis.
+  - Layout: the pair lives in one `flex-1 min-w-[16rem]` block inside the already-`flex-wrap`
+    bar, so it takes the leftover width when there is room and drops to a second line of the same
+    bar when there is not — it never squeezes the days label or the button.
+- **Colour.** The non-expired state is amber: `status-warning` (`bg`/`foreground`/`border`), the
+  only orange trio the core Tailwind preset defines, which brings its dark-mode values with it.
+  Changing it was a token swap, not new CSS.
+  - ⚠️ **The expired state's classes do not exist.** `status-danger` is defined **nowhere** — not
+    in `@etendosoftware/app-shell-core`'s Tailwind preset (which has `success`, `warning`, `info`
+    and `neutral`) and not in any stylesheet; the red family is called `destructive`. So
+    `bg-status-danger`, `text-status-danger-foreground`, `border-status-danger-border`,
+    `bg-status-danger-border` and `bg-status-danger-foreground` all generate no CSS and the
+    expired banner renders with no background, border or text colour of its own. This is
+    pre-existing and `TopBar.jsx` is the only file in the repo that uses those class names. Left
+    as found: red-vs-amber is a design decision, not a rename.
+- **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
+  — both caveats' presence and their position after the button, that they are two sibling `<p>`
+  neither of which carries the other's text, that no second link is drawn, the wrap classes, the
+  amber token, and the three states that render nothing or keep the caveats.
+- **Manual verification path:**
+  1. On a trial tenant, confirm the bar is amber and the two caveats read to the right of Ir al
+     pago, on two separate lines.
+  2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
+  3. On a productive tenant, confirm the whole bar is gone.
+
+#### 3.3 What a First Steps row can do (ETP-5364)
+
+- **Why it has its own section:** the checklist is a declarative catalogue. Anything a row does
+  that is not "show a description and a button" is a FIELD in
+  `tools/app-shell/src/pages/first-steps/firstStepsConfig.js`, never an `if` in
+  `FirstStepsPage`. The catalogue declares each row and its action type; the page implements
+  each action type. The catalogue's header is the contract; this is the functional summary.
+- **Plan and progress.** A trial tenant sees five steps and starts at 1/5 because account
+  creation is always complete. A productive tenant sees eight steps, including three
+  productive-only rows: fiscal configuration, demo data transfer, and invoice numbering.
+  Progress includes the transfer row only when its server-owned status is `COMPLETED`,
+  `SKIPPED`, or `NOT_REQUESTED`. A `RUNNING` or `FAILED` transfer keeps that row incomplete;
+  the number of completed steps depends on the returned status. The provider waits for the
+  initial transfer response before exposing progress to the page and sidebar.
+- **Demo data transfer (`action: 'dataTransfer'`).** This productive-only row reports the
+  persisted transfer job for products and contacts. It is not a checkbox, and its id is not
+  written to `ETGO_ACCOUNT.FIRST_STEPS.completed`. The row shows progress while the job runs,
+  result counts when it completes, and a retry button if it fails. Closing the page does not
+  cancel the job; reopening the page reads its latest server status.
+- **Gated row (`gateQuestionKey`).** The row asks a yes/no question that REPLACES its description
+  and its action until it is answered. The only one today is **Configuración fiscal** (a
+  `productiveOnly` row, so a trial tenant never sees it): *"¿Debe informar las facturas a algún
+  Sistema de Facturación (SIF), como SII, Verifactu o TicketBai?"*
+  - **Sí** reveals the ordinary body — the description, the Configure button to `/fiscal-config`,
+    the time estimate. It persists nothing: the user still has to do the step.
+  - **No** marks the step completed, because for a tenant that reports to no SIF the answer IS
+    the outcome. It goes through the same `toggleStep` the checkbox uses, so there is exactly one
+    way a step becomes done and exactly one thing that persists.
+  - **The answer itself is never stored.** The only durable state is the step's own completed
+    flag in `ETGO_ACCOUNT.FIRST_STEPS`. Un-ticking the step therefore brings the question back —
+    which is precisely the escape hatch a user who answered wrongly needs, at the cost of no new
+    backend field. The in-memory "said yes" flag is cleared on every successful toggle of that
+    step, so a yes → tick → un-tick round trip re-asks rather than landing back on the button.
+- **Row destination.** **Invita a tu equipo** navigates to `/user` (Usuarios), not `/roles`.
+  Inviting someone is creating a USER; the role window is where permissions are shaped
+  afterwards, and landing there first made the step read as a different, later job.
+- **Automated evidence:**
+  - `tools/app-shell/src/pages/first-steps/__tests__/firstStepsConfig.vitest.js` —
+    plan-dependent totals, transfer completion, `isStepGated` across answered/completed, that
+    only `fiscal-config` declares a gate, and that the team row points at `/user`.
+  - `tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx` — the gate's yes / no /
+    failed-write / re-ask-after-untick paths.
+  - `e2e/tests/flows/first-steps-onboarding.mocked.spec.js` — the gate in a real browser
+    (Sí → navigation, No → completion persisted, un-tick → asked again).
+- **Manual verification path:**
+  1. On a productive tenant, open Primeros pasos → "Configuración fiscal" and confirm it opens
+     with the SIF question instead of the Configurar button.
+  2. Answer **Sí** and confirm the Configurar button appears and reaches `/fiscal-config`.
+  3. Answer **No** instead and confirm the step ticks; reload and confirm it is still ticked.
+  4. Un-tick it and confirm the question comes back rather than the Configurar button.
+  5. On a productive tenant, inspect demo data transfer while it runs, after completion, and
+     after a failed job; confirm the row shows progress, result counts, and retry respectively.
+     Reload after completion and confirm the completed row and progress count remain in place.
 
 ### 4. Entity list/detail data flow
 
@@ -286,6 +395,72 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   6. Confirm "Fiscal Monitor", "Fiscal Models", and "Not Posted Documents" appear in the matrix with cells that track their proxy's access (SII Monitor / Tax Report / the proxy process, respectively) rather than always showing full access.
   7. Pick a role with no access to the SII Monitor window and confirm "Fiscal Monitor" is also absent from that role's real sidebar (not just shown as "none" in the matrix) — this is the sidebar-visibility side effect, not only an admin-matrix display change.
 
+### 6d. Informes subsection (ETP-5402, same `/roles` page)
+
+Nested inside `RolesAccessMatrix` (6c above) — not a separate top-level section, and not a
+separate page — the Informes subsection surfaces the exact 9 reports the real `report-viewer`
+gallery shows (`tax-report`, both aging schedules, `inventory-stock-report`, and 5 financial
+reports resolved via the "Informes financieros" pseudo-window — `balance-sheet`, `profit-loss`,
+`report-general-ledger`, `report-journal-entries`, `report-trial-balance`) that were previously
+entirely absent from both the roles-overview listing and the roles-overview matrix. **Corrected
+2026-09-21** after live QA against a running environment: an earlier revision of this section
+wrongly listed 6 "financial-family" rows tied to the Financial Account window that are not
+actual gallery cards, while missing these 5 real ones.
+
+- **What it renders:** inside each real category block from 6c (e.g. "Finance"), right after that
+  category's own window rows, a small uppercase "Informes" sub-header row followed by that
+  category's report rows — rendered ONLY when the category has at least one report row (a
+  category with real window rows but zero report rows never shows the sub-header). A category
+  present ONLY in the Informes data (none exist today, but not assumed to stay that way) still
+  gets its own full category block. Each report row is a normal tri-state `AccessTierPill` row,
+  identical in shape to a window row.
+- **Data source:** the SAME single fetch as 6b/6c — `useRolesOverviewData()` now also returns
+  `reportsMatrix` (adapted from the backend's new `reportsMatrix.categories[].reports[]`, via
+  `adaptCategoryMatrix()`'s shared bucketing/sorting/menu.json-resolution machinery — the exact
+  same code path `adaptMatrix()` uses for real windows, parameterized on `itemsKey: 'reports'`
+  instead of `'windows'`). No separate request.
+- **Category/label resolution — a 4th `menu.json` identity key (`reportId`):** a report row's
+  stable id (`tax-report`, `balance-sheet`, ...) has no AD windowId/obuiappProcessId/processId
+  of its own to key off — and using one of its RELATED entities' ids would collide, since the 5
+  financial-family rows all share the SAME anchor `AD_Window_ID` ("Informes financieros" pseudo-
+  window) but must resolve to 5 distinct rows. `buildMenuWindowIndex()`'s identity resolution
+  gained a 4th `??` branch, `item.reportId`, which is always unique per Informes row and never
+  collides with a real AD id. All 9 report rows have a corresponding `menu.json` entry (`hidden:
+  true`, `group` set to the same hardcoded category the backend uses — `Finance`/`Inventory`).
+- **Row keying:** `${category}::${reportId}--informes` (via `reportRowKey()` in
+  `RolesAccessMatrix.jsx`) — the `--informes` suffix keeps a report row's key distinct from any
+  window row in the same category, even though in practice a report id and a window id never
+  collide (different id-spaces entirely).
+- **`UserRolesTab.jsx` (the User window's own permission-preview matrix) gets the same
+  treatment**, sharing the SAME `menu.json` `reportId` entries: `activeWindowIds` (its
+  union-of-every-role's-reachable-ids set) now also folds in each role's `reports[]` ids, and
+  `cellValue()` falls back to `role.reports` when `role.windows` has no match for a given row id.
+  Since a report id has NO `SFListMenu`/AD-tree fallback at all (unlike a window id, which still
+  degrades to an "uncategorized" bucket with its raw AD name), a report row can ONLY ever resolve
+  through `menuIndex` — this is exactly why every report id needs its own `menu.json` entry; one
+  missing would silently vanish from this tab's matrix with no error.
+- **Failure or edge behavior:** a category with real windows but no accessible report rows never
+  shows the Informes sub-header (not an empty one). Passing no `reportsMatrix` prop at all to
+  `RolesAccessMatrix` (backward compatibility) renders nothing extra — no crash, no empty
+  sub-header anywhere.
+- **Automated evidence:** `RolesAccessMatrix.vitest.jsx`'s "Informes subsection (ETP-5402)"
+  suite (sub-header nesting, zero-report-category suppression, missing-prop backward
+  compatibility, independent per-role cells, a report-only category block);
+  `useRolesOverviewData.vitest.js` (the `reportId` menuIndex branch, `reportsMatrix` adaptation,
+  missing-`reportsMatrix` safety); `UserRolesTab.vitest.jsx`'s "Informes subsection (ETP-5402)"
+  suite (a report row renders via its `reportId` menu.json entry despite zero AD windows,
+  `cellValue` falls back to `role.reports`, an ungranted report never renders at all).
+- **Manual verification path:**
+  1. Open `/roles` as an admin/client-admin and confirm an "Informes" sub-header appears inside
+     the Finance category, below its window rows, with report rows for whichever reports the
+     Finance role/template actually has access to.
+  2. Confirm a category with no accessible report rows (e.g. Sales, Purchasing) shows no Informes
+     sub-header at all.
+  3. Open the User window's "Roles del usuario" tab for a user with the Finance role/template
+     selected and confirm the same report rows appear there too, with matching tiers.
+  4. Confirm `tax-report` shows `"full"` (never a read-only pill) for any role holding it — the
+     classic `AD_Process_Access` grant is binary by design.
+
 ### 7. PWA update and recovery behavior
 
 - **User goal / entry point:** Keep the SPA fresh after deploys and avoid stale cached assets during environment entry.
@@ -307,31 +482,26 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   3. Navigate to another route or refocus the tab and confirm the app reloads onto the new assets.
   4. Re-enter an environment from `/onboarding` and confirm the browser reaches `/dashboard` without serving stale cached shell assets.
 
-### 7b. Role/permission change notification (ETP-5189)
+### 7b. Role/permission change refresh (ETP-5189; visible banner removed in ETP-5423)
 
-- **User goal / entry point:** Learn that an administrator changed my role/permissions while I have an active session, and reload to apply them.
+- **User goal / entry point:** None — there is no user-facing notification. When an administrator changes a user's role/permissions while their session is active, the app self-heals silently in the background; the user simply finds their menu/access already up to date on the next natural re-render.
 - **Main path behavior:**
-  - `AuthContext.jsx` (`@etendosoftware/app-shell-core`, ETP-5195) already silently refreshes the session on mount, on tab focus/`visibilitychange`, and on a fixed 5-minute poll. Every refresh re-fetches `windowAccess`/`capabilities` (`SFWindowAccessMap`) through the host's `fetchWindowAccess` callback and diffs them; a real diff bumps `authRevision` and swaps the object references, which every consumer that reads them (`useWindowAccessSafe()`, `useCapabilitiesSafe()`, `useRoleMenu()` via `authRevision`) picks up live, with no reload — this already self-heals a template-role composition change or an Admin promote/demote for window/capability access.
-  - **ETP-5189 addition — `menuAccess`:** `fetchWindowAccess()` (`App.jsx`) now also calls `fetchMenuAccess()`, which flattens the role-filtered menu tree (`fetchMenuTree()` + `collectAllowedIds()`, `lib/menuTree.js` — the same `SFListMenu` source `useRoleMenu()` reads) into a `{id: true}` map and merges it into the payload as `menuAccess`. `AuthContext.jsx`'s diff now compares `menuAccess` the same way as the other two maps, so a menu-item-only or process-only grant/revocation (one that never touches a window/capability tier) also bumps `authRevision` — closing a gap where such a change previously left the sidebar permanently stale.
-  - `useRoleChangeNotice()` (`tools/app-shell/src/hooks/useRoleChangeNotice.js`) tracks the `windowAccess`/`capabilities`/`menuAccess` object references (not raw `authRevision`, which also bumps on a same-role pure token rotation) and flags `true` only on a genuine post-login change — the first settle after login/reload is captured as a silent baseline, never shown as a change.
-  - `RoleChangedBanner` (`tools/app-shell/src/components/RoleChangedBanner.jsx`) renders a fixed, top-of-viewport, non-dismissible `InfoBanner` (`tone: warning`) when that hook flags `true`, with a "Reload now" button (`window.location.reload()`). Mounted as a sibling of `ServiceWorkerManager`/`SurveyManager` inside `<AppShellRuntime>` (`App.jsx`) — i.e. inside the runtime's internal `AuthProvider` but outside `AppLayout`'s own layout box — so it is visible regardless of which window is open, and a fixed overlay rather than a document-flow element so it does not push `AppLayout`'s `h-screen`-style chrome down.
-  - The reload button is an explicit, user-triggered fallback/reassurance, not the only fix: the underlying access maps are already correct in the background (ETP-5195's own mechanism) by the time the banner is visible — reloading just makes every surface (menu labels, open forms) pick up the fresh state immediately instead of waiting for their own next re-render trigger.
+  - `AuthContext.jsx` (`@etendosoftware/app-shell-core`, ETP-5195) silently refreshes the session on mount, on tab focus/`visibilitychange`, and on a fixed 5-minute poll. Every refresh re-fetches `windowAccess`/`capabilities` (`SFWindowAccessMap`) through the host's `fetchWindowAccess` callback and diffs them; a real diff bumps `authRevision` and swaps the object references, which every consumer that reads them (`useWindowAccessSafe()`, `useCapabilitiesSafe()`, `useRoleMenu()` via `authRevision`) picks up live, with no reload — this self-heals a template-role composition change or an Admin promote/demote for window/capability access.
+  - **ETP-5189 addition — `menuAccess`:** `fetchWindowAccess()` (`App.jsx`) also calls `fetchMenuAccess()`, which flattens the role-filtered menu tree (`fetchMenuTree()` + `collectAllowedIds()`, `lib/menuTree.js` — the same `SFListMenu` source `useRoleMenu()` reads) into a `{id: true}` map and merges it into the payload as `menuAccess`. `AuthContext.jsx`'s diff compares `menuAccess` the same way as the other two maps, so a menu-item-only or process-only grant/revocation (one that never touches a window/capability tier) also bumps `authRevision` — closing a gap where such a change previously left the sidebar permanently stale.
+  - **ETP-5423 removal:** ETP-5189 originally shipped a visible companion to this silent refresh — `useRoleChangeNotice()` and a `RoleChangedBanner` component that flagged a genuine post-login access change and rendered a non-dismissible "Reload now" banner. That hook/component pair (and its tests) were removed in ETP-5423: the functional analyst determined they were pure dead-weight on top of ETP-5195's own silent refresh (the underlying access maps are already correct in the background by the time any notification could render — a reload was never the fix, just a reassurance UI). The refresh mechanism above is unchanged; there is simply no visible artifact of it firing anymore.
 - **Failure or edge behavior:**
   - A failed `SFWindowAccessMap` or `SFListMenu` fetch inside `fetchWindowAccess()` fails the whole call closed (returns `null`), resetting `windowAccess`/`capabilities`/`menuAccess` together rather than diffing a half-fetched result — this can look like a real access change (all three maps going to `{}`) and is a pre-existing tradeoff shared with ETP-5195's own `windowAccess`/`capabilities` handling, not a new regression.
-  - The banner is deliberately **not dismissible** without reloading (no close button) — the ticket's own acceptance criteria require that the user cannot keep silently navigating on stale permissions.
-  - A same-role token rotation (no metadata or access change) never shows the banner — the hook keys off object-reference changes to the three access maps, which a pure rotation does not touch.
-  - **Known gap, out of scope for this iteration:** a change that revokes access to a specific field-level or record-level rule (not a window/process/menu-tree grant) does not participate in this diff and will not trigger the banner.
+  - **Known gap, unchanged by ETP-5423:** a change that revokes access to a specific field-level or record-level rule (not a window/process/menu-tree grant) does not participate in this diff, so it will not bump `authRevision` and will not be picked up by `WindowAccessGuard`/`useRoleMenu` until the user's next full login.
 - **Automated evidence:**
   - Core (`schema_forge_core`): `AuthContext.jsx`/`sessionController.js` `menuAccess` diff coverage lives alongside the existing ETP-5195 refresh-contract tests in `packages/app-shell-core/src/auth/__tests__/`.
-  - Functional: `tools/app-shell/src/__tests__/App.vitest.jsx` covers `fetchWindowAccess()`'s merged `menuAccess` payload and its fail-closed behavior; hook/component-level tests for `useRoleChangeNotice`/`RoleChangedBanner` live under `tools/app-shell/src/hooks/__tests__/` and `tools/app-shell/src/components/__tests__/`.
+  - Functional: `tools/app-shell/src/__tests__/App.vitest.jsx` covers `fetchWindowAccess()`'s merged `menuAccess` payload and its fail-closed behavior.
 - **Manual verification path:**
   1. Sign in as user A with a template role that has Sales Order access; keep the session open on any page.
   2. As an admin (different session), reassign user A's template-role composition to remove Sales Order access.
-  3. Within 5 minutes (or trigger sooner by refocusing user A's tab), confirm the banner appears with a "Reload now" button, and that the sidebar/`WindowAccessGuard` already reflect the reduced access even before clicking it.
-  4. Click "Reload now" and confirm Sales Order is no longer reachable.
-  5. Repeat steps 1-4 with an Admin promote/demote instead of a template-composition change.
-  6. As an admin, revoke a single process grant or menu-tree entry for user A without changing any window/capability tier; confirm the banner still appears (this is the `menuAccess` gap this ticket closes) and the sidebar entry disappears after reload.
-  7. Confirm that an unrelated silent refresh (e.g. a plain alt-tab with no role change) never shows the banner.
+  3. Within 5 minutes (or trigger sooner by refocusing user A's tab), confirm the sidebar/`WindowAccessGuard` already reflect the reduced access — silently, with no banner or reload prompt of any kind.
+  4. Repeat steps 1-3 with an Admin promote/demote instead of a template-composition change.
+  5. As an admin, revoke a single process grant or menu-tree entry for user A without changing any window/capability tier; confirm the sidebar entry disappears silently on the next refresh (this is the `menuAccess` gap ETP-5189 closed).
+  6. Confirm that no notification of any kind ever appears — the refresh is, and is meant to be, fully silent.
 
 ## DocumentTotalsPanel — real-time totals and discount breakdown
 

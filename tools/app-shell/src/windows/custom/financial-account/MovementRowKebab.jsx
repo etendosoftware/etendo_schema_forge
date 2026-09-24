@@ -60,7 +60,7 @@ async function callTransactionAction(apiFetch, url, token) {
  *
  * @param {{ movement: object, onReload?: () => void, onEdit?: (m: object) => void }} props
  */
-export function MovementRowKebab({ movement, onReload, onEdit }) {
+export function MovementRowKebab({ movement, onReload, onEdit, windowReadOnly }) {
   const ui = useUI();
   const { token } = useAuth();
   const apiFetch = useApiFetch(getApiBase());
@@ -71,6 +71,12 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
   const [unposting, setUnposting] = useState(false);
   // Destructive-action confirmation ('reactivate' | 'delete' | null).
   const [confirm, setConfirm] = useState(null);
+
+  // ETP-5205 — after every hook (Rules of Hooks: an early return before this point
+  // would skip hooks conditionally). Every one of this kebab's 6 items is a
+  // mutation (Edit/Process/Post/Unpost/Reactivate/Delete), so hiding the whole
+  // trigger is correct here, not just gating individual items.
+  if (windowReadOnly) return null;
 
   const isPosted = movement.posted === 'Y';
   const isProcessed = Boolean(movement.processed);
@@ -192,7 +198,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         toast.success(ui('documentPosted'));
         onReload?.();
       } else {
-        toast.error(message || ui('financeAccountMovementsRowPostError'));
+        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowPostError'));
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowPostError'));
@@ -210,7 +216,7 @@ export function MovementRowKebab({ movement, onReload, onEdit }) {
         toast.success(ui('documentUnposted'));
         onReload?.();
       } else {
-        toast.error(message || ui('financeAccountMovementsRowUnpostError'));
+        toast.error(message ? translateBackendError(message, ui) : ui('financeAccountMovementsRowUnpostError'));
       }
     } catch {
       toast.error(ui('financeAccountMovementsRowUnpostError'));

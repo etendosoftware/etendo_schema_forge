@@ -205,12 +205,14 @@ describe('resolveTaxesForLines', () => {
     assert.equal(fetched, false, 'no terms → no network call');
   });
 
-  it('returns empty array when token or lines are missing', async () => {
+  // ETP-4576 — no longer "token or lines": under the cookie scheme the client holds no
+  // token, so gating on one would skip the lookup for every authenticated user. Only the
+  // absence of lines short-circuits now.
+  it('returns empty array when lines are missing', async () => {
     let fetched = false;
     globalThis.fetch = async () => { fetched = true; return { ok: true, json: async () => ({}) }; };
-    assert.deepEqual(await resolveTaxesForLines({ token: null, lines: [{ tax_rate: 21 }] }), []);
-    assert.deepEqual(await resolveTaxesForLines({ token: 'tok', lines: [] }), []);
-    assert.deepEqual(await resolveTaxesForLines({ token: 'tok' }), []);
+    assert.deepEqual(await resolveTaxesForLines({ lines: [] }), []);
+    assert.deepEqual(await resolveTaxesForLines({}), []);
     assert.equal(fetched, false);
   });
 

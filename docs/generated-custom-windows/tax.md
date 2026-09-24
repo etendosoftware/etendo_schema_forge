@@ -10,7 +10,7 @@ Users should be able to review and update tax definitions by setting a tax name,
 
 From the current generated form and decisions, the visible window allows a user to:
 - name the tax rate record
-- set the Tax Category the rate belongs to (editable, `C_TaxCategory_ID`)
+- view the Tax Category the rate belongs to (read-only, `C_TaxCategory_ID`)
 - enter the rate as a numeric percentage value
 - choose whether the tax applies to both flows, sales only, or purchases only
 - set a valid-from date
@@ -53,7 +53,7 @@ No dependent selector behavior, automatic defaulting between these fields, statu
 1. Open `/tax` from the `System` menu and confirm the list view loads.
 2. Confirm the list renders the rate as a colored percentage tag (`+N %` green for positive rates, `0 %` neutral/gray for zero, `-N %` red for negative/withholding rates) and `Applicable To` as `Sales` / `Purchase` tags.
 3. For a tax whose applicability is `Both`, confirm the list shows both tags together instead of a raw code.
-4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Tax Category` (editable selector), `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`. Confirm `Active` is NOT shown, and confirm `Tax Category` can be changed and saved.
+4. Open `/tax/<recordId>` and confirm the form exposes `Name`, `Tax Category` (read-only), `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, and `Base Amount`. Confirm `Active` is NOT shown, and confirm `Tax Category` cannot be edited (same as the other standard tax fields).
 4a. In the list view, confirm `Tax Category` appears as a grid column right after `Name`.
 4b. Open the funnel/advanced filter and confirm `Applicable To` is offered as a filterable field (in addition to `Name`); apply a filter and confirm it narrows the list correctly.
 4c. Open the "Ordenar por" (sort) control and confirm `Applicable To` is offered; click the `Applicable To` column header and confirm the list re-sorts by scope.
@@ -161,8 +161,8 @@ The Taxes header now exposes the SIF (Sistemas de Información de Facturación) 
 
 Two independent bugs fixed in `artifacts/tax/decisions.json`, both under `entities.tax.fields`:
 
-**1. `taxCategory` (`C_TaxCategory_ID`) was `visibility: "discarded"` with no `reason`** — every other discarded field in this entity carries one, so this was an oversight, not a deliberate scope cut. Jira asked for it to be visible and editable. AD inspection (`ad_column`: `isupdateable='Y'`, empty `readonlylogic`) shows `C_TaxCategory_ID` is just as AD-editable as `Name`/`Rate`/`SOPOType` — all three of which this window nonetheless keeps `readOnly` by deliberate product design (this window is a locked-down reference view over Classic tax config; only the newer SIF-override columns are genuinely `editable`). The first pass classified it **`readOnly`** to match that established sibling pattern rather than take the ticket literally — **product review (Irina) confirmed the literal ticket wording wins here: `taxCategory` is `visibility: "editable"`.** See the follow-up note below for the final state and the callout/validation check that change required.
-   - Set to `visibility: "editable"`, `grid: true`, `form: true`, `section: "principal"`, `seq: 4` (between `salesPurchaseType` and `validFromDate`; `validFromDate`/`docTaxAmount`/`baseAmount` seqs bumped by one).
+**1. `taxCategory` (`C_TaxCategory_ID`) was `visibility: "discarded"` with no `reason`** — every other discarded field in this entity carries one, so this was an oversight, not a deliberate scope cut. Jira asked for it to be visible and editable. AD inspection (`ad_column`: `isupdateable='Y'`, empty `readonlylogic`) shows `C_TaxCategory_ID` is just as AD-editable as `Name`/`Rate`/`SOPOType` — all three of which this window nonetheless keeps `readOnly` by deliberate product design (this window is a locked-down reference view over Classic tax config; only the newer SIF-override columns are genuinely `editable`). The first pass classified it **`readOnly`** to match that established sibling pattern rather than take the ticket literally — A later product review switched it to `editable` per the literal ticket wording; **QA then rejected that and it is `readOnly` again** — see "Tax Category back to read-only — ETP-5382 QA correction" below for the final state.
+   - Set to `visibility: "readOnly"` (final state), `grid: true`, `form: true`, `section: "principal"`, `seq: 4` (between `salesPurchaseType` and `validFromDate`; `validFromDate`/`docTaxAmount`/`baseAmount` seqs bumped by one).
    - Added a `labelOverrides` entry (`C_TaxCategory_ID`: "Categoría de impuesto" / "Tax Category") — the raw AD element translation is "Grupo de impuesto" (es_ES), which doesn't match the terminology Jira/product asked for.
    - In the generated grid, the column lands right after `Name` (grid column order follows the raw AD `AD_Field.seqno`, not the decisions.json `seq`, which only orders the detail/form section) — this matches Classic's own field order.
 
@@ -172,7 +172,9 @@ Two independent bugs fixed in `artifacts/tax/decisions.json`, both under `entiti
 
 Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1` (DB extraction still ran under the hood; `SKIP_EXTRACT` did not skip the `[F1a]` field-extraction step for this pipeline version). Contract-integrity check: `draftMode` is `false` for this window (no completion flow), so the "editable header fields must have `readOnlyLogic`" rule does not apply here; no field regressed. `push-to-neo` was **not** run as part of this change — pending Review/QA before deployment.
 
-### Follow-up — `taxCategory` corrected to `editable` per literal ticket wording
+### Follow-up — `taxCategory` corrected to `editable` per literal ticket wording (superseded)
+
+> Superseded by the QA correction below: `taxCategory` is `readOnly` again.
 
 Product review confirmed the ticket's literal wording ("debe estar visible y editable") takes priority over the sibling-consistency heuristic used in the first pass: `entities.tax.fields.taxCategory.visibility` is `"editable"` (not `"readOnly"`); `grid`, `form`, `section`, `seq`, and the `labelOverrides` entry are unchanged.
 
@@ -208,6 +210,14 @@ Product review confirmed the ticket's literal wording ("debe estar visible y edi
 }
 ```
 
-Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1`. `TaxTable.jsx`'s `applicableTo` column now carries `backendFilterKey: 'salesPurchaseType'`. Contract-integrity re-check unchanged (`draftMode: false`, `taxCategory` still `editable`/no readOnlyLogic). `sf-validate-pipeline --scope=tax`: 0 violations. Not pushed to NEO yet as of this write-up.
+Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1`. `TaxTable.jsx`'s `applicableTo` column now carries `backendFilterKey: 'salesPurchaseType'`. Contract-integrity re-check unchanged (`draftMode: false`, `taxCategory` still `editable`/no readOnlyLogic at that point — later reverted to `readOnly`, see below). `sf-validate-pipeline --scope=tax`: 0 violations. Not pushed to NEO yet as of this write-up.
 
 **Sorting has the identical root cause and is presumed still broken — deliberately NOT fixed here.** `resolveBackendSort()` (`gridQuery.js`) reads a `col.backendSortKey` override, but unlike `backendFilterKey`, **no `schema_forge_core` generator (`resolve-curated.js`/`generate-contract.js`/`generate-frontend.js`) passes a decisions.json `backendSortKey` through onto the generated column** — it exists only as a literal hand-written property on custom components (e.g. `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`). So `_sortBy=applicableTo` is still sent for this column, and — unlike the filter path's silent-drop guard — `DefaultJsonDataService` passes `_sortBy` straight into `queryService.setOrderBy(...)`, an HQL order-by build with no equivalent "unknown property → drop silently" guard; an unresolvable order-by property is expected to surface as a query error rather than fail silently, though this has not been reproduced live. This is being fixed at the generator level in `schema_forge_core` (symmetric `backendSortKey` pass-through) by a Schema Forge Developer; once published and this repo bumps its dependency, add `"backendSortKey": "salesPurchaseType"` to this same field and regenerate. Do not attempt to work around this in `decisions.json` in the meantime.
+
+## Tax Category back to read-only — ETP-5382 QA correction
+
+QA rejected the `editable` classification: the ticket was mis-specified, and product (the ticket reporter) confirmed that `Tax Category` must **not** be editable — like every other standard tax field of this window (`Name`, `Rate`, `Applicable To`, `Valid From`, `Doc Tax Amount`, `Base Amount`). Only the SIF override columns and the Accounting tab GL accounts stay editable. The filter/sort fix on `Applicable To` passed QA and is unchanged.
+
+- `entities.tax.fields.taxCategory.visibility` is back to `"readOnly"`; `grid`, `form`, `section`, `seq` and the `labelOverrides` entry are unchanged, so the field is still shown in both the grid and the form.
+- Regenerated via `make regen ONLY=tax SKIP_EXTRACT=1 PUSH_TO_NEO=1`. `TaxForm.jsx`'s `taxCategory` entry carries `readOnly: true` again, and `taxCategory` is back in the `summary` array of `TaxPage.jsx` (the `summaryFields` default is every `readOnly` field). `contract.json` reports `visibility: "readOnly"` for the field; NEO spec `tax` pushed (76 fields updated, 0 errors) — run `./gradlew export.database` to persist it.
+- `sf-validate-pipeline --scope=tax`: OK, 0 violations.

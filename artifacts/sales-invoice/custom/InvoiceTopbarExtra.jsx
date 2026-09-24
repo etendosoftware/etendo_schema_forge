@@ -7,6 +7,7 @@ import { useInvoicePdf } from '@/windows/custom/shared/useInvoicePdf.js';
 import { resolveInvoicePaymentBadge } from '@/windows/custom/shared/invoicePaymentBadge.js';
 import { getArSubtype } from './invoiceSubtype';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { TruncatedText } from '@/components/ui/truncated-text';
 
 function fmt(val, curr) {
@@ -45,7 +46,7 @@ const BADGE_STYLES = {
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, isDocumentReadOnly }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -61,10 +62,13 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   useEffect(() => { dataRef.current = data; }, [data]);
 
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
-  const headers = useMemo(() => ({
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  }), [token]);
+  // ETP-4576 - the credential belongs to apiFetch, not to the component: it picks the
+  // active scheme's headers, and the CSRF proof on every unsafe method.
+  // Empty base ON PURPOSE: every URL below is already absolute, and several address a
+  // DIFFERENT spec than this window's. resolveApiUrl only skips the prefix when the path
+  // starts with that same base, so a configured base turns a cross-spec call into
+  // /sws/neo/<this>/sws/neo/<other>/... and a 404.
+  const apiFetch = useApiFetch('');
 
   // ETP-4372 — source the same client-rendered PDF the InvoicePreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
@@ -91,9 +95,9 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
   const fetchInstallments = useCallback(async () => {
     if (!recordId || !base) { setInstallmentsLoading(false); return; }
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${base}/sales-invoice/paymentPlan?parentId=${recordId}&_startRow=0&_endRow=50`,
-        { headers },
+        {},
       );
       if (res.ok) {
         const json = await res.json();
@@ -101,7 +105,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
       }
     } catch { /* silent */ }
     finally { setInstallmentsLoading(false); }
-  }, [recordId, base, headers]);
+  }, [recordId, base, apiFetch]);
 
   useEffect(() => { fetchInstallments(); }, [fetchInstallments]);
 
@@ -153,9 +157,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
     setShipmentCreating(true);
     try {
       const base = (apiBaseUrl || '').replace(/\/[^/]+$/, '');
-      const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-      const res = await fetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
-        method: 'POST', headers, body: JSON.stringify({}),
+      const res = await apiFetch(`${base}/sales-invoice/header/${recordId}/action/createShipment`, {
+        method: 'POST', body: JSON.stringify({}),
       });
       const json = await res.json();
       const shipmentData = json?.response?.data;
@@ -280,7 +283,10 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')}
-          <TruncatedText text={fmt(outstandingAbs, currency)} className="w-[72px] shrink-0 text-left" />
+          <TruncatedText
+            text={fmt(outstandingAbs, currency)}
+            className="w-[72px] shrink-0 text-left"
+            data-testid="TruncatedText__329004" />
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal
@@ -290,7 +296,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
             apiBaseUrl={apiBaseUrl}
             onClose={() => setShowPaymentsModal(false)}
             onPaymentAdded={fetchInstallments}
-          />
+            data-testid="InvoicePaymentHistoryModal__329004" />
         )}
       </>
     );
@@ -376,7 +382,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
         onSave={onSave}
         isDirty={isDirty}
-      />
+        isDocumentReadOnly={isDocumentReadOnly}
+        data-testid="SendToSifButton__329004" />
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
@@ -387,7 +394,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentsModal(false)}
           onPaymentAdded={fetchInstallments}
-        />
+          data-testid="InvoicePaymentHistoryModal__329004" />
       )}
 
       {/* Send Invoice modal */}
@@ -404,7 +411,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
-        />
+          data-testid="SendDocumentModal__329004" />
       )}
 
       {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}

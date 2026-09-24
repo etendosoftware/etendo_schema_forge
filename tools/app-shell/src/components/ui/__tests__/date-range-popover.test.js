@@ -60,6 +60,43 @@ describe('DateRangePopoverContent — Aplicar button hover contrast (ETP-4771)',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Bug: disabled Aplicar button (Personalizado date range, no from/to selected
+// yet) still painted the ETP-4771 brand-yellow hover background on :hover.
+//
+// Root cause: `hover:bg-accent-highlight hover:text-accent-highlight-foreground`
+// is unconditional — it has no `disabled:` guard, and the button lacked
+// `disabled:pointer-events-none`. A disabled HTML button still matches the
+// CSS `:hover` pseudo-class whenever the cursor is physically over it UNLESS
+// `pointer-events: none` removes it from hit-testing; without that guard the
+// unconditional hover classes above still applied their color/background
+// while `disabled:opacity-40` only dims the (now wrong) result.
+//
+// Fix: add `disabled:pointer-events-none` alongside the existing
+// `disabled:cursor-not-allowed disabled:opacity-40` — this does not touch the
+// ETP-4771 fix above (enabled-state hover keeps using the highlight tokens),
+// it only stops the disabled button from being hit-tested for :hover at all.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('DateRangePopoverContent — Aplicar button disabled state blocks hover repaint', () => {
+  it('pairs disabled:pointer-events-none with the other disabled: modifiers (the fix)', () => {
+    const className = applyButtonMatch[1];
+    assert.match(
+      className,
+      /disabled:pointer-events-none\b/,
+      'Aplicar button must include disabled:pointer-events-none — without it, a disabled button ' +
+        'still matches CSS :hover and repaints with hover:bg-accent-highlight (bright yellow) even ' +
+        'though it is inert, because pointer-events is the only thing that removes a disabled ' +
+        'element from hover hit-testing.',
+    );
+  });
+
+  it('keeps disabled:opacity-40 so the disabled visual (dimmed) state is unchanged', () => {
+    const className = applyButtonMatch[1];
+    assert.match(className, /disabled:opacity-40\b/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // ETP-4771 Case 2 — CalendarWithPicker must reuse the shared month/year-picker
 // chrome (HeaderRow, PickerTabs, PickerGrid) from date-picker-chrome.jsx
 // instead of reimplementing the header/nav/tabs/grid markup locally.

@@ -153,7 +153,7 @@ describe('resolveStatusPill', () => {
   it('the posting-status domain wins over trueKey/falseKey for a domain code', () => {
     const badge = { key: 'posted', trueKey: 'postedTrue', falseKey: 'postedFalse' };
     const pill = resolveStatusPill(badge, 'i', ui);
-    assert.deepEqual(pill, { status: 'i', label: 'postedStatusInvalidAccount', tone: 'destructive' });
+    assert.deepEqual(pill, { status: 'i', label: 'postedStatusInvalidAccount', tone: 'destructive', hint: undefined });
   });
 
   it("falls back to trueKey/success for 'Y'", () => {
@@ -191,5 +191,41 @@ describe('resolveStatusPill', () => {
     // Not 'Y'/'N'/true/false/'true'/'false' -> isTrue is false -> falseKey branch.
     const pill = resolveStatusPill(badge, 'weird', ui);
     assert.deepEqual(pill, { status: 'N', label: 'b', tone: 'warning' });
+  });
+
+  describe('hintKeys (ETP-5436)', () => {
+    it('attaches a hint when the resolved code matches an entry in badge.hintKeys', () => {
+      const badge = { key: 'posted', trueKey: 'x', falseKey: 'y', hintKeys: { D: 'goodsMovementsPostedDisabledHint' } };
+      const pill = resolveStatusPill(badge, 'D', ui);
+      assert.deepEqual(pill, {
+        status: 'D',
+        label: 'postedStatusDocumentDisabled',
+        tone: 'neutral',
+        hint: 'goodsMovementsPostedDisabledHint',
+      });
+    });
+
+    it('does not attach a hint when the resolved code has no matching hintKeys entry', () => {
+      const badge = { key: 'posted', trueKey: 'x', falseKey: 'y', hintKeys: { D: 'goodsMovementsPostedDisabledHint' } };
+      const pill = resolveStatusPill(badge, 'i', ui); // 'i' is not in hintKeys
+      assert.equal(pill.hint, undefined);
+    });
+
+    it('does not attach a hint for a plain Y/N value even when hintKeys is declared', () => {
+      const badge = { key: 'posted', trueKey: 'postedTrue', falseKey: 'postedFalse', hintKeys: { D: 'someKey' } };
+      assert.deepEqual(resolveStatusPill(badge, 'Y', ui), { status: 'Y', label: 'postedTrue', tone: 'success' });
+      assert.deepEqual(resolveStatusPill(badge, 'N', ui), { status: 'N', label: 'postedFalse', tone: 'warning' });
+    });
+
+    it('a badge with no hintKeys at all behaves exactly as before (regression guard)', () => {
+      const badge = { key: 'posted', trueKey: 'x', falseKey: 'y' };
+      const pill = resolveStatusPill(badge, 'p', ui);
+      assert.deepEqual(pill, {
+        status: 'p',
+        label: 'postedStatusPeriodClosed',
+        tone: 'destructive',
+        hint: undefined,
+      });
+    });
   });
 });

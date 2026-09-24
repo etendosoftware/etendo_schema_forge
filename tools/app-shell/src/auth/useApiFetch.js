@@ -23,6 +23,13 @@ import { useLogout } from '@/auth/useLogout.js';
  */
 export function useApiFetch(baseUrl) {
   const auth = useAuthOptional();
+  // ETP-4576 x ETP-5195 — this slot is the TOKEN getter, not the CSRF one. It used to be the
+  // proof, and this wrapper kept passing the proof after the core moved the slot: the core then
+  // read a csrfToken (null under bearer) as the session's bearer, found it different from the
+  // live one the ambient session reports, and aborted EVERY request from this hook as belonging
+  // to a superseded session. The proof is no longer injected at all — api.js reads it from
+  // ./sessionCredentials.js, whose single writer is AuthProvider — so under the cookie scheme
+  // this getter simply returns null and the `__Host-` session travels on its own.
   const token = auth?.token ?? null;
   // ETP-5195 — no `?? null` here: `createApiFetch`'s 4th arg distinguishes `null` ("opt out
   // of ambient inheritance entirely") from `undefined` ("inherit whatever scope is

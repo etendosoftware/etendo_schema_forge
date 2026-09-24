@@ -11,7 +11,7 @@
  *
  * Harness mirrors DetailView.windowReadOnly.vitest.jsx.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const navigateMock = vi.fn();
@@ -175,5 +175,31 @@ describe('DetailView — window.readOnly footer Save gate (ETP-5075)', () => {
   it('still hides the footer Save button via hideSaveStatuses independently of windowReadOnly (existing behavior)', () => {
     renderDetailView({ api: {}, hideSaveStatuses: ['DR'] });
     expect(screen.queryByTestId('action-save')).toBeNull();
+  });
+});
+
+describe('DetailView — notes field respects read-only (ETP-5205)', () => {
+  beforeEach(() => {
+    navigateMock.mockClear();
+    currentHook = makeHook(
+      { id: '123', documentNo: 'CR-001', status: 'DR', documentStatus: 'DR', processed: false, description: 'Existing note' },
+      { isDirtyHeader: true },
+    );
+  });
+
+  it('does not mount an editable textarea on click when the window is read-only', () => {
+    const { container } = renderDetailView({ api: { window: { readOnly: true } }, notesField: 'description' });
+
+    fireEvent.click(container.querySelector('[data-testid="notes-textarea"] [role="textbox"]'));
+
+    expect(container.querySelector('[data-testid="notes-textarea"] textarea')).toBeNull();
+  });
+
+  it('regression: DOES mount an editable textarea on click when the window is NOT read-only', () => {
+    const { container } = renderDetailView({ api: {}, notesField: 'description' });
+
+    fireEvent.click(container.querySelector('[data-testid="notes-textarea"] [role="textbox"]'));
+
+    expect(container.querySelector('[data-testid="notes-textarea"] textarea')).not.toBeNull();
   });
 });

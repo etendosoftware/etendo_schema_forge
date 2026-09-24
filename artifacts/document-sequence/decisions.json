@@ -56,6 +56,10 @@
               "name": "documentSequenceSalesCorrectiveInvoice"
             },
             {
+              "value": "AP Invoice",
+              "name": "documentSequencePurchaseInvoice"
+            },
+            {
               "value": "Factura Rectificativa (Compras)",
               "name": "documentSequencePurchaseCorrectiveInvoice"
             }

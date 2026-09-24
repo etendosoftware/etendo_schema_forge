@@ -194,10 +194,13 @@ describe('useMainAttachment', () => {
       expect(fetchMainAttachment).not.toHaveBeenCalled();
     });
 
-    it('is a no-op when token is missing', async () => {
+    // ETP-4576: inverted on purpose. A null token is the normal cookie-session state, so
+    // it must NOT suppress the lookup - the `__Host-` cookie is the credential. Gating on
+    // it would leave every record showing no attachment at all, with no error to explain it.
+    it('still looks the attachment up when no token is held', async () => {
       renderHook(() => useMainAttachment({ ...BASE_PARAMS, token: null }));
       await act(async () => { await Promise.resolve(); });
-      expect(fetchMainAttachment).not.toHaveBeenCalled();
+      expect(fetchMainAttachment).toHaveBeenCalledTimes(1);
     });
 
     it('storeFile is a no-op when inactive', async () => {

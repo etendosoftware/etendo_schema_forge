@@ -53,6 +53,23 @@ export function invalidateFiscalComputeCache(declId) {
   }
 }
 
+/**
+ * Reads back the last compute payload this hook cached for ONE declaration, without issuing a
+ * network call — `null` when nothing is cached (never computed this session, or evicted).
+ *
+ * ETP-5438: lets a caller that must NEVER auto-recompute a submitted-family declaration (e.g.
+ * `FmModel349Page.jsx`'s mount effect) still show something when it opens with no
+ * `decl._precomputed` handed down (a cold/direct navigation) — it reads whatever
+ * `FmListPage.jsx`'s own submitted-family bucket already computed and cached this session,
+ * instead of falling back to a fresh live `computeFn` call, which would silently pick up any
+ * invoice added/removed after the declaration was presented.
+ */
+export function getCachedFiscalCompute(declId) {
+  if (declId == null) return null;
+  const cached = readCache(sessionCacheKey(declId));
+  return cached ? cached.result : null;
+}
+
 function readCache(key) {
   try {
     const raw = sessionStorage.getItem(key);

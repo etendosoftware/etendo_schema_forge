@@ -62,8 +62,36 @@ describe('PhysicalInventoryWindow custom wrapper', () => {
     assert.match(src, /!data\?\.id/);
   });
 
-  it('hideMenuActions hides menu when processed', () => {
-    assert.match(src, /data\?\.processed\s*===\s*true/);
-    assert.match(src, /data\?\.processed\s*===\s*'Y'/);
+  describe('hideMenuActions behavior (ETP-5360 regression)', () => {
+    // Extract the real function body from source and evaluate it, so the
+    // assertions below exercise actual behavior rather than matching text.
+    const fnMatch = src.match(/function hideMenuActions\(\{ data \}\) \{[\s\S]*?\n\}/);
+
+    it('is defined as a single-statement predicate in source', () => {
+      assert.ok(fnMatch, 'hideMenuActions function source not found');
+    });
+
+    // eslint-disable-next-line no-new-func
+    const hideMenuActions = new Function(`return (${fnMatch[0]});`)();
+
+    it('keeps the kebab reachable for a processed record (boolean true) — the exact ETP-5360 regression', () => {
+      assert.equal(hideMenuActions({ data: { id: '123', processed: true } }), false);
+    });
+
+    it('keeps the kebab reachable for a processed record (ADempiere string "Y")', () => {
+      assert.equal(hideMenuActions({ data: { id: '123', processed: 'Y' } }), false);
+    });
+
+    it('keeps the kebab reachable for a draft (unprocessed) record', () => {
+      assert.equal(hideMenuActions({ data: { id: '123', processed: false } }), false);
+    });
+
+    it('hides the kebab when there is no record id yet', () => {
+      assert.equal(hideMenuActions({ data: {} }), true);
+    });
+
+    it('hides the kebab when data is undefined', () => {
+      assert.equal(hideMenuActions({ data: undefined }), true);
+    });
   });
 });

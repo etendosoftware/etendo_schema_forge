@@ -16,6 +16,11 @@ export function buildPurchaseOrderPdfLabels(ui) {
     documentSection: ui('purchaseOrderPdfSection'),
     date:            ui('orderPdfDate'),
     colQty:          ui('orderPdfColQty'),
+    // ETP-5300 (Lea's QA comment) — shared DOCUMENT_TEMPLATE defaults to
+    // "Cliente" (buildDocumentPdfLabels), but `customerName` here is the
+    // business partner on a PURCHASE order, i.e. the vendor, not a customer.
+    customerSection: ui('purchaseOrderPdfCustomerSection'),
+    customer:        ui('purchaseOrderPdfCustomer'),
   });
 }
 

@@ -214,20 +214,32 @@ describe('FmModel349Page — Calcular button', () => {
     });
   });
 
-  it('hides the Calcular button for a submitted status, while Cancelar and Generar fichero 349 remain', () => {
+  // ETP-5438 — "Generar fichero 349" is now ALSO hidden once submitted (it used to stay
+  // visible/functional regardless of status — see the removed "is visible and functional when
+  // the declaration is already submitted" test below, replaced by a "hides..." one in the
+  // "standalone Generar fichero button" describe block). Only Cancelar remains.
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted status, while Cancelar remains', () => {
     render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
     expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
     expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
-    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
   });
 
-  it('hides the Calcular button for a submitted_ack status, while Cancelar and Generar fichero 349 remain', () => {
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted_ack status, while Cancelar remains', () => {
     render(<FmModel349Page decl={makeDecl({ status: 'submitted_ack' })} {...defaultProps} />);
     const btns = Array.from(document.querySelectorAll('button'));
     expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
     expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
-    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
+  });
+
+  it('hides the Calcular and Generar fichero 349 buttons for a submitted_ext status, while Cancelar remains', () => {
+    render(<FmModel349Page decl={makeDecl({ status: 'submitted_ext' })} {...defaultProps} />);
+    const btns = Array.from(document.querySelectorAll('button'));
+    expect(btns.some(b => b.textContent.includes('fm.action.compute'))).toBe(false);
+    expect(btns.some(b => b.textContent.includes('fm.action.cancel'))).toBe(true);
+    expect(btns.some(b => b.textContent.includes('fm.action.gen349'))).toBe(false);
   });
 });
 
@@ -334,13 +346,15 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
     expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
   });
 
-  it('is visible and functional when the declaration is already submitted', () => {
+  // ETP-5438 — previously "is visible and functional when the declaration is already
+  // submitted": a presented declaration must never be re-generated, matching the
+  // "Calcular"/"Registrar-Presentar" `!isSubmitted` gate this button now shares.
+  it('is hidden once the declaration is already submitted', () => {
     const { container } = render(<FmModel349Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
     const btns = Array.from(container.querySelectorAll('button'));
     const genBtn = btns.find(b => b.textContent.includes('fm.action.gen349'));
-    expect(genBtn).toBeTruthy();
-    fireEvent.click(genBtn);
-    expect(screen.getByTestId('FileGenModal-mock')).toBeTruthy();
+    expect(genBtn).toBeUndefined();
+    expect(screen.queryByTestId('FileGenModal-mock')).toBeNull();
   });
 
   it('is visible and functional when the declaration is not submitted (pending)', () => {

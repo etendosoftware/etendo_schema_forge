@@ -132,4 +132,54 @@ describe('RolesAccessMatrix', () => {
       ]);
     });
   });
+
+  describe('Informes subsection (ETP-5402)', () => {
+    const REPORTS_MATRIX = [
+      {
+        category: 'Commercial',
+        rows: [
+          { windowId: 'tax-report', windowName: 'Tax Report', access: { admin: 'full', inventory: 'none' } },
+        ],
+      },
+    ];
+
+    it('renders an "Informes" sub-header + report rows nested after a category\'s window rows, not a separate top-level section', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} reportsMatrix={REPORTS_MATRIX} />);
+      expect(screen.getByTestId('RolesAccessMatrix__informesHeader-Commercial').textContent).toBe(
+        'rolesMatrixInformesHeader',
+      );
+      const reportKey = `${buildRowKey('Commercial', 'tax-report')}--informes`;
+      expect(screen.getByTestId(`RolesAccessMatrix__row-${reportKey}`)).toBeTruthy();
+      // No 2nd, separate "Commercial" category header — the Informes rows live inside the
+      // SAME category block as the real windows, per the ticket's own design choice.
+      expect(screen.getAllByTestId('RolesAccessMatrix__category-Commercial')).toHaveLength(1);
+    });
+
+    it('never renders the Informes sub-header for a category with zero report rows', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} reportsMatrix={REPORTS_MATRIX} />);
+      expect(screen.queryByTestId('RolesAccessMatrix__informesHeader-Inventory')).not.toBeInTheDocument();
+    });
+
+    it('renders nothing extra when reportsMatrix is omitted (backward compatible with the pre-ETP-5402 prop contract)', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} />);
+      expect(screen.queryByTestId('RolesAccessMatrix__informesHeader-Commercial')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('RolesAccessMatrix__informesHeader-Inventory')).not.toBeInTheDocument();
+    });
+
+    it('gives a report row its own independent per-role tier cells, keyed distinctly from any window row', () => {
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} reportsMatrix={REPORTS_MATRIX} />);
+      const reportKey = `${buildRowKey('Commercial', 'tax-report')}--informes`;
+      expect(screen.getByTestId(`RolesAccessMatrix__cell-${reportKey}-admin`).textContent).toBe('✓');
+      expect(screen.getByTestId(`RolesAccessMatrix__cell-${reportKey}-inventory`).textContent).toBe('—');
+    });
+
+    it('adds a whole new category block for a report-only category absent from the real window matrix', () => {
+      const reportOnlyMatrix = [
+        { category: 'Reports Only', rows: [{ windowId: 'tax-report', windowName: 'Tax Report', access: {} }] },
+      ];
+      render(<RolesAccessMatrix cards={CARDS} matrix={MATRIX} reportsMatrix={reportOnlyMatrix} />);
+      expect(screen.getByTestId('RolesAccessMatrix__category-Reports Only')).toBeTruthy();
+      expect(screen.getByTestId('RolesAccessMatrix__informesHeader-Reports Only')).toBeTruthy();
+    });
+  });
 });

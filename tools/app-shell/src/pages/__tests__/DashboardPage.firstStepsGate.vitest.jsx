@@ -98,10 +98,12 @@ vi.mock('@/pages/first-steps/FirstStepsContext.jsx', () => ({
     return {
       completed: [],
       seen: gate.scenario.seen || optimisticSeen,
+      dismissed: gate.scenario.dismissed === true,
       loading: gate.scenario.loading,
       error: gate.scenario.error,
       toggleStep: async () => true,
       markSeen,
+      setDismissed: async () => true,
     };
   },
 }));
@@ -223,5 +225,36 @@ describe('DashboardPage — First Steps gate (ETP-5190)', () => {
     expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
     await new Promise((r) => setTimeout(r, 0));
     expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+});
+
+describe('DashboardPage — a dismissed checklist is never forced back on (ETP-5364)', () => {
+  it('renders the dashboard for an unseen account that dismissed the checklist', async () => {
+    // NOT covered by `seen`. A user who opened /first-steps from the sidebar and pressed
+    // "Finalizar configuración inicial" there has never spent the one-time redirect, so `seen`
+    // is still false — without this clause their very next dashboard visit would bounce them
+    // onto the page the button just promised to put away.
+    setScenario({ loading: false, error: null, seen: false, dismissed: true });
+    render(<DashboardPage />);
+
+    expect(screen.getByTestId('dashboard-rendered')).toBeInTheDocument();
+    expect(screen.queryByTestId('navigate-stub')).not.toBeInTheDocument();
+  });
+
+  it('records no visit for a dismissed account', async () => {
+    setScenario({ loading: false, error: null, seen: false, dismissed: true });
+    render(<DashboardPage />);
+
+    await new Promise((r) => setTimeout(r, 0));
+    expect(gate.markSeen).not.toHaveBeenCalled();
+  });
+
+  it('still redirects an unseen account that has NOT dismissed it', async () => {
+    // The guard above must not swallow the normal post-signup redirect.
+    setScenario(LOADED_UNSEEN);
+    render(<DashboardPage />);
+
+    expect(screen.getByTestId('navigate-stub')).toHaveAttribute('data-to', '/first-steps');
+    await waitFor(() => expect(gate.markSeen).toHaveBeenCalledTimes(1));
   });
 });

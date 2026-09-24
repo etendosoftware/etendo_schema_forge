@@ -407,31 +407,31 @@ export function AutoMatchSuggestionModal({
 
         {/* ── Body ──────────────────────────────────────────────────────── */}
         <div className="flex flex-col" style={{ height: 'calc(703px - 48px - 68px - 64px)', overflow: 'hidden' }}>
-          {/* Column headers */}
+          {/* Column headers — mirrors GroupRow's box model (w-8 checkbox sidebar as a sibling of
+              the two flex-1 columns, not nested in the first one) so the divider between the two
+              title blocks lands exactly above the divider between the two row columns. */}
           <div className="flex flex-row px-5 pb-0 pt-3">
+            {/* Select-all sits in a w-8 box so its center lines up with the per-row checkbox
+                sidebar. Shows a dash whenever there is any selection (same control as the rows). */}
+            <div className="flex w-8 flex-none items-center justify-center">
+              <SelectBox
+                dash={checked.size > 0}
+                onClick={toggleAll}
+                testId="automatch-select-all"
+                ariaLabel={ui('financeReconcileColSelect')}
+                data-testid="SelectBox__a89979" />
+            </div>
             {/* Left header */}
-            <div className="flex flex-1 items-center">
-              {/* Select-all sits in a w-8 box so its center lines up with the per-row checkbox
-                  sidebar. Shows a dash whenever there is any selection (same control as the rows). */}
-              <div className="flex w-8 flex-none items-center justify-center">
-                <SelectBox
-                  dash={checked.size > 0}
-                  onClick={toggleAll}
-                  testId="automatch-select-all"
-                  ariaLabel={ui('financeReconcileColSelect')}
-                  data-testid="SelectBox__a89979" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
-                  {ui('financeReconcileAutomatchColStatement')}
-                </span>
-                <span className="rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
-                  {groups.length}
-                </span>
-              </div>
+            <div className="flex min-w-0 flex-1 items-center gap-2 pl-3">
+              <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
+                {ui('financeReconcileAutomatchColStatement')}
+              </span>
+              <span className="rounded-lg border border-[hsl(var(--border-control))] bg-[hsl(var(--muted))] px-1.5 py-0.5 text-xs text-[hsl(var(--muted-foreground))]">
+                {groups.length}
+              </span>
             </div>
             {/* Right header */}
-            <div className="flex flex-1 items-center pl-3">
+            <div className="flex min-w-0 flex-1 items-center pl-3">
               <span className="text-base font-semibold leading-6 text-[hsl(var(--foreground))]">
                 {ui('financeReconcileAutomatchColOps')}
               </span>

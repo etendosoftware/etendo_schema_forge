@@ -217,9 +217,17 @@ export function createReportHelpers({ numberFormat } = {}) {
   // Report row VALUE translation (ETP-5013). `translatedName` already comes
   // translated from SQL (Journal Entries' `document_type` = COALESCE(trl name
   // from a real `ad_ref_list_trl` JOIN, base ad_ref_list name, raw c_doctype
-  // name, 'Journal')) — this helper's only remaining job is the MMR/MMS return
-  // split, since `IsReturn` has no equivalent code in ad_ref_list and can't
-  // come from that JOIN. See RETURN_LABELS' docstring (report-i18n.js).
+  // name, 'Journal')). Two independent overlays apply on top of it, in this
+  // ORDER (ETP-5356 — synced from schema_forge_core's report-html-helpers.js):
+  //   1. The MMR/MMS return split (RETURN_LABELS) — `IsReturn` has no
+  //      equivalent code in ad_ref_list, so it can't come from the JOIN.
+  //   2. DOC_TYPE_LABEL_OVERRIDES — an unconditional per-docbasetype relabel
+  //      (ETP-5128/ETP-5356), now covering MMR/MMS themselves (regular,
+  //      non-return case) alongside MXI/ARI/API/MMI/APP/GLJ/ARR.
+  // The return check MUST run first: DOC_TYPE_LABEL_OVERRIDES now has entries
+  // for MMR/MMS too, so checking overrides first would always win and the
+  // return-variant labels would never be reachable.
+  // See RETURN_LABELS' and DOC_TYPE_LABEL_OVERRIDES' docstrings (report-i18n.js).
   function translateDocType(docbasetype, isreturn, translatedName, locale) {
     if (isreturn === 'Y' && (docbasetype === 'MMR' || docbasetype === 'MMS')) {
       var dict = RETURN_LABELS[locale] || RETURN_LABELS.en_US;

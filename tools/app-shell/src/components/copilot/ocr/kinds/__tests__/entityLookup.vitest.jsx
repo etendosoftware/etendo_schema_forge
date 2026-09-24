@@ -139,12 +139,15 @@ describe('useEntitySearch', () => {
     limit: 20,
   };
 
-  it('does nothing when open/endpoint/token are falsy', () => {
+  it('does nothing when open/endpoint/token are falsy — inverted: the cookie carries the session', () => {
     renderHook(() => useEntitySearch({ ...baseParams, open: false }));
     renderHook(() => useEntitySearch({ ...baseParams, endpoint: '' }));
     renderHook(() => useEntitySearch({ ...baseParams, token: '' }));
     act(() => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS + 10));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // ETP-4576 — inverted on purpose: under the cookie scheme the client holds no token,
+    // so the request MUST still go out. The old expectation encoded the guard that made
+    // this call silently disappear for every authenticated user.
+    expect(globalThis.fetch).toHaveBeenCalled();
   });
 
   it('fetches after the debounce and sets items from json.response.data', async () => {

@@ -1,48 +1,51 @@
-import ImportReturnLinesModal from '@/components/import-return-lines/ImportReturnLinesModal';
+import ImportLinesModal from '@/components/contract-ui/ImportLinesModal';
 import { apiFetch } from '@/auth/api.js';
+import { enrichReturnLine, getReturnDocDisplay, submitReturnImportBatch } from '@/windows/custom/shared/importReturnLinesHelpers.js';
 
 const ACTION_BASE = (base) =>
   `${base}/return-material-receipt/returnMaterialReceipt/_/action`;
+const IMPORT_ACTION_URL = (base, targetId) =>
+  `${base}/return-material-receipt/returnMaterialReceipt/${targetId}/action/importShipmentLines`;
 
-const SHIPMENT_CONFIG = {
-  // `headers` is kept for signature compatibility with the caller
-  // (ImportReturnLinesModal builds and passes it) but is no longer used here —
-  // apiFetch derives the auth headers from the ambient session.
-  fetchSourceDocs: async (base, bpId, headers) => {
-    const res = await apiFetch(`${ACTION_BASE(base)}/availableShipments`, {
-      baseUrl: '',
-      method: 'POST',
-      body: JSON.stringify({ businessPartner: bpId }),
-    });
-    if (!res.ok) return [];
-    return (await res.json())?.response?.data || [];
-  },
-  fetchSourceLines: async (base, docId, headers) => {
-    const res = await apiFetch(`${ACTION_BASE(base)}/availableShipmentLines`, {
-      baseUrl: '',
-      method: 'POST',
-      body: JSON.stringify({ shipmentId: docId }),
-    });
-    if (!res.ok) return [];
-    return (await res.json())?.response?.data || [];
-  },
-  importActionUrl: (base, targetId) =>
-    `${base}/return-material-receipt/returnMaterialReceipt/${targetId}/action/importShipmentLines`,
-  titleKey: 'importFromShipment',
-  searchPlaceholderKey: 'searchShipment',
-  noDocsKey: 'noCompletedShipmentsForThisCustomer',
-  noDocsMatchSearchKey: 'noShipmentsMatchYourSearch',
-  successToastKey: 'linesImportedFromShipment',
-  dateField: 'movementDate',
-  showAmount: false,
-  qtyStep: 1,
+const fetchDocuments = async ({ base, bpId }) => {
+  const res = await apiFetch(`${ACTION_BASE(base)}/availableShipments`, {
+    baseUrl: '', method: 'POST', body: JSON.stringify({ businessPartner: bpId }),
+  });
+  const documents = res.ok ? (await res.json())?.response?.data || [] : [];
+  return { documents, sharedContext: {} };
 };
 
-export default function ImportFromShipmentModal(props) {
+const fetchLines = async ({ base, docId }) => {
+  const res = await apiFetch(`${ACTION_BASE(base)}/availableShipmentLines`, {
+    baseUrl: '', method: 'POST', body: JSON.stringify({ shipmentId: docId }),
+  });
+  if (!res.ok) return [];
+  const raw = (await res.json())?.response?.data || [];
+  return raw.map(enrichReturnLine);
+};
+
+const submitImport = (args) => submitReturnImportBatch({ ...args, actionUrl: IMPORT_ACTION_URL });
+
+export default function ImportFromShipmentModal({ targetId, ...props }) {
   return (
-    <ImportReturnLinesModal
+    <ImportLinesModal
       {...props}
-      config={SHIPMENT_CONFIG}
-      data-testid="ImportReturnLinesModal__7efa65" />
+      invoiceId={targetId}
+      titleKey="importFromShipment"
+      searchPlaceholderKey="searchShipment"
+      emptyMessageKey="noCompletedShipmentsForThisCustomer"
+      noSearchResultsKey="noShipmentsMatchYourSearch"
+      successMessageKey="linesImportedFromShipment"
+      fetchDocuments={fetchDocuments}
+      fetchLines={fetchLines}
+      getDocDisplay={getReturnDocDisplay}
+      submitImport={submitImport}
+      showPriceColumns={false}
+      filterZeroQty
+      autoSelectOnExpand
+      eagerLoadLines={false}
+      showAvailableQtyColumn
+      qtyColumnLabelKey="returnQty"
+      data-testid="ImportLinesModal__7efa65" />
   );
 }

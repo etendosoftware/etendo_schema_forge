@@ -71,7 +71,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     apiBaseUrl,
   });
 
-  const canAttach = !!(recordId && tableName && token && docTypeId);
+  const canAttach = !!(recordId && tableName && docTypeId);
 
   const handleFile = (picked) => {
     if (!picked || isBusy || !canAttach) return;

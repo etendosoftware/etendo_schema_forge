@@ -28,23 +28,11 @@ function renderTab(overrides = {}) {
   return { setGeneralField };
 }
 
-describe('GeneralTab — allow negative toggle', () => {
-  it('shows the "allow negative" toggle OFF when allowNegative is false', () => {
-    renderTab({ general: { allowNegative: false } });
-    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).not.toBeChecked();
-  });
-
-  it('shows the toggle ON when allowNegative is true', () => {
-    renderTab({ general: { allowNegative: true } });
-    expect(screen.getByTestId('glc-toggle-allow-negative-switch')).toBeChecked();
-  });
-
-  it('writes the raw value directly when the toggle is turned ON', async () => {
-    const user = userEvent.setup();
-    const { setGeneralField } = renderTab({ general: { allowNegative: false } });
-    await user.click(screen.getByTestId('glc-toggle-allow-negative-switch'));
-    // Toggle ON ⇒ AllowNegative = true (direct binding, no inversion).
-    expect(setGeneralField).toHaveBeenCalledWith('allowNegative', true);
+describe('GeneralTab — allow negative checkbox removed (ETP-4947)', () => {
+  it('renders no "Políticas contables" section and no allow-negative toggle', () => {
+    renderTab();
+    expect(screen.queryByTestId('glc-section-policies')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('glc-toggle-allow-negative')).not.toBeInTheDocument();
   });
 });
 
@@ -73,5 +61,23 @@ describe('GeneralTab — backed editable fields', () => {
     const nameInput = within(screen.getByTestId('glc-field-name')).getByRole('textbox');
     await user.type(nameInput, 'X');
     expect(setGeneralField).toHaveBeenCalledWith('name', expect.stringContaining('X'));
+  });
+});
+
+describe('GeneralTab — accrual is hidden and internally fixed to Devengo (ETP-5372)', () => {
+  it('does not render a "Criterio contable" field regardless of the accrual value', () => {
+    renderTab({ general: { accrual: true } });
+    expect(screen.queryByTestId('glc-field-accrual')).not.toBeInTheDocument();
+
+    renderTab({ general: { accrual: false } });
+    expect(screen.queryByTestId('glc-field-accrual')).not.toBeInTheDocument();
+  });
+
+  it('never calls setGeneralField with "accrual"', async () => {
+    const user = userEvent.setup();
+    const { setGeneralField } = renderTab();
+    const nameInput = within(screen.getByTestId('glc-field-name')).getByRole('textbox');
+    await user.type(nameInput, 'X');
+    expect(setGeneralField).not.toHaveBeenCalledWith('accrual', expect.anything());
   });
 });

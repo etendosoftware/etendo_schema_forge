@@ -244,12 +244,41 @@ describe('FinancialAccountDetail — access tier gate (ETP-4658)', () => {
     expect(windowAccessCalls.at(0)).toEqual([WINDOW_ID]);
   });
 
-  it('renders the window for the read-only tier (only "none" is gated)', () => {
+  it('renders the window for the read-only tier — "none" still blocks entirely, "read-only" mounts read-only', () => {
     currentWindowAccessTier = 'read-only';
     render(<FinancialAccountDetail recordId="acc-1" />);
 
     expect(screen.getByTestId('tab-movements')).toBeInTheDocument();
     expect(screen.queryByTestId('window-access-guard')).not.toBeInTheDocument();
+  });
+
+  it('hides the Edit and AutoMatch buttons when the tier is read-only (ETP-5205)', () => {
+    currentWindowAccessTier = 'read-only';
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.queryByTestId('financial-account-edit')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('financial-account-automatch')).not.toBeInTheDocument();
+  });
+
+  it('the Edit modal never mounts open under read-only, even via the ?edit=true deep-link (ETP-5205)', () => {
+    currentWindowAccessTier = 'read-only';
+    currentSearchParams = new URLSearchParams('edit=true');
+    render(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('the AutoMatch modal never mounts open under read-only, even once suggestions land (ETP-5205)', () => {
+    currentWindowAccessTier = 'read-only';
+    currentSearchParams = new URLSearchParams('tab=reconciliation');
+    currentAutoMatchLoading = true;
+    const { rerender } = render(<FinancialAccountDetail recordId="acc-1" />);
+
+    currentAutoMatchGroups = [{ groupKey: 'g1' }];
+    currentAutoMatchLoading = false;
+    rerender(<FinancialAccountDetail recordId="acc-1" />);
+
+    expect(screen.getByTestId('automatch-modal')).toHaveAttribute('data-open', 'false');
   });
 });
 

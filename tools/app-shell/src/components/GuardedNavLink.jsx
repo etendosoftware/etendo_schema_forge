@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { requestNavigation } from '@/lib/unsavedChanges.js';
 
@@ -11,15 +12,24 @@ import { requestNavigation } from '@/lib/unsavedChanges.js';
  * Everything else routes through the navigation gate, which navigates straight away when no form
  * is dirty. See the navigation-guard section of `lib/unsavedChanges.js` for why the interception
  * is here rather than in a react-router blocker.
+ *
+ * `forwardRef` is required, not cosmetic: a Radix `asChild` trigger (Tooltip, Popover, …) that
+ * clones this as its single child needs a real DOM ref to anchor its floating content. A plain
+ * function component silently drops that ref (React warns "Function components cannot be given
+ * refs" and the ref never resolves), so the trigger still opens but the floating content has
+ * nothing to position against and never becomes visible. This is why the collapsed sidebar's
+ * single-item icons (Home, First Steps, Connect AI agent, and any module reduced to one visible
+ * item by role filtering, e.g. Contacts) rendered no hover tooltip at all.
  */
 // @data-testid-ignore — this is a pass-through wrapper: every caller supplies its own
 // `data-testid` through `...rest`, and the codemod appends its generated attribute AFTER the
 // spread, where it silently wins over the caller's. Adding one here makes every consumer's testid
 // unreachable (it breaks this component's own suite and SideMenu's).
-export function GuardedNavLink({ to, onClick, ...rest }) {
+export const GuardedNavLink = forwardRef(function GuardedNavLink({ to, onClick, ...rest }, ref) {
   const navigate = useNavigate();
   return (
     <NavLink
+      ref={ref}
       // Placed BEFORE {...rest} on purpose: this is a fallback, not an override. Every caller
       // passes its own testid (SideMenu's nav entries, and GuardedNavLink.vitest.jsx queries by
       // "link"), and the codemod's default placement after the spread would have silently replaced
@@ -39,6 +49,6 @@ export function GuardedNavLink({ to, onClick, ...rest }) {
       }}
     />
   );
-}
+});
 
 export default GuardedNavLink;

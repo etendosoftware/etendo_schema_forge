@@ -1,8 +1,7 @@
 {
-  "version": "0.8.0",
-  "generatedAt": "2026-06-28T15:34:57.400Z",
-  "updatedAt": "2026-07-21T12:35:18.509Z",
-  "checksum": "46ac01d9fae4b6af",
+  "version": "0.9.0",
+  "generatedAt": "2026-09-22T13:50:52.147Z",
+  "checksum": "04c23c3673ef8af1",
   "frontendContract": {
     "window": {
       "id": "125",
@@ -170,50 +169,6 @@
               "required": true,
               "maxLength": 22
             }
-          },
-          {
-            "name": "allowNegative",
-            "apiKey": "allowNegative",
-            "column": "Allownegative",
-            "label": "Allow negative",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": true,
-            "grid": false,
-            "form": true,
-            "sourceRequired": true,
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            },
-            "defaultValue": "N",
-            "section": "policies",
-            "validation": {
-              "required": true,
-              "maxLength": 1
-            }
-          },
-          {
-            "name": "accrual",
-            "apiKey": "accrual",
-            "column": "IsAccrual",
-            "label": "Accrual",
-            "type": "boolean",
-            "tsType": "boolean",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
-            },
-            "defaultValue": "Y",
-            "section": "identity",
-            "validation": {
-              "maxLength": 1
-            }
           }
         ],
         "searchableFields": [],
@@ -230,20 +185,6 @@
             "derivation": {
               "type": "computed",
               "source": "OT"
-            }
-          },
-          {
-            "name": "allowNegative",
-            "derivation": {
-              "type": "computed",
-              "source": "N"
-            }
-          },
-          {
-            "name": "accrual",
-            "derivation": {
-              "type": "computed",
-              "source": "Y"
             }
           }
         ],
@@ -1760,7 +1701,7 @@
             "apiKey": "allowNegative",
             "column": "Allownegative",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "system",
             "required": true
           },
           {
@@ -1768,7 +1709,7 @@
             "apiKey": "accrual",
             "column": "IsAccrual",
             "type": "boolean",
-            "visibility": "editable",
+            "visibility": "system",
             "required": false
           },
           {
@@ -3685,22 +3626,6 @@
         "description": "Default value for 'sequenceNumber' in Dimensiones should be a string"
       },
       {
-        "id": "t-default-value-type-General-accrual",
-        "category": "default-value-type",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Default value for 'accrual' in General should be a string"
-      },
-      {
-        "id": "t-default-value-type-General-allowNegative",
-        "category": "default-value-type",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Default value for 'allowNegative' in General should be a string"
-      },
-      {
         "id": "t-default-value-type-General-gAAP",
         "category": "default-value-type",
         "entity": "General",
@@ -4139,22 +4064,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should be present in Dimensiones"
-      },
-      {
-        "id": "t-field-presence-General-accrual",
-        "category": "field-presence",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Field 'accrual' should be present in General"
-      },
-      {
-        "id": "t-field-presence-General-allowNegative",
-        "category": "field-presence",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should be present in General"
       },
       {
         "id": "t-field-presence-General-currency",
@@ -4707,22 +4616,6 @@
         "field": "type",
         "runner": "node",
         "description": "Field 'type' should have type 'string' in Dimensiones"
-      },
-      {
-        "id": "t-field-type-General-accrual",
-        "category": "field-type",
-        "entity": "General",
-        "field": "accrual",
-        "runner": "node",
-        "description": "Field 'accrual' should have type 'boolean' in General"
-      },
-      {
-        "id": "t-field-type-General-allowNegative",
-        "category": "field-type",
-        "entity": "General",
-        "field": "allowNegative",
-        "runner": "node",
-        "description": "Field 'allowNegative' should have type 'boolean' in General"
       },
       {
         "id": "t-field-type-General-currency",
@@ -5956,12 +5849,28 @@
         "description": "System field 'updatedBy' should exist in backend but not frontend for Dimensiones"
       },
       {
+        "id": "t-system-field-General-accrual",
+        "category": "system-field",
+        "entity": "General",
+        "field": "accrual",
+        "runner": "node",
+        "description": "System field 'accrual' should exist in backend but not frontend for General"
+      },
+      {
         "id": "t-system-field-General-active",
         "category": "system-field",
         "entity": "General",
         "field": "active",
         "runner": "node",
         "description": "System field 'active' should exist in backend but not frontend for General"
+      },
+      {
+        "id": "t-system-field-General-allowNegative",
+        "category": "system-field",
+        "entity": "General",
+        "field": "allowNegative",
+        "runner": "node",
+        "description": "System field 'allowNegative' should exist in backend but not frontend for General"
       },
       {
         "id": "t-system-field-General-assetPositive",
@@ -6513,24 +6422,24 @@
       }
     ],
     "summary": {
-      "total": 365,
+      "total": 361,
       "byCategory": {
         "action-endpoint": 1,
         "crud-flags": 4,
-        "default-value-type": 6,
+        "default-value-type": 4,
         "displaylogic-evaluable": 14,
         "displaylogic-valid": 14,
-        "field-presence": 71,
-        "field-type": 71,
+        "field-presence": 69,
+        "field-type": 69,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 33,
         "selector-endpoint": 56,
-        "system-field": 87,
+        "system-field": 89,
         "visibility": 4
       },
       "byRunner": {
-        "node": 365,
+        "node": 361,
         "junit": 0
       }
     }

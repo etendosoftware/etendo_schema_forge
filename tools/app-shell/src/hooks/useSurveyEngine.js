@@ -54,7 +54,7 @@ export function useSurveyEngine() {
   }, [isAuthenticated, checkAndShowSurvey]);
 
   useEffect(() => {
-    if (!isAuthenticated || !token) return;
+    if (!isAuthenticated) return;
     loadRemoteSurveyConfig({ apiBaseUrl: getApiBase(), token });
   }, [isAuthenticated, token]);
 

@@ -23,7 +23,13 @@ describe('InvoiceTopbarExtra', () => {
   // DetailView (via SalesInvoiceTopbar) down to SendToSifButton/SifSendingModal,
   // so "Enviar a SIF" can flush pending header edits before sending.
   it('accepts onSave and isDirty props', () => {
-    assert.match(src, /\{\s*data.*onSave.*isDirty\s*\}/);
+    // ETP-5205: isDocumentReadOnly now trails isDirty in the destructure, so the
+    // closing brace no longer follows isDirty immediately.
+    assert.match(src, /\{\s*data.*onSave.*isDirty.*\}/);
+  });
+
+  it('accepts and forwards isDocumentReadOnly to SendToSifButton (ETP-5205)', () => {
+    assert.match(src, /isDocumentReadOnly/);
   });
 
   // ── Data fetching ──────────────────────────────────────────────────────────
