@@ -21845,6 +21845,7 @@
     "fm.type.ordinary": "Ordinaria",
     "fm.type.complementary": "Complementaria",
     "fm.type.rectificative": "Rectificativa",
+    "fm.type.substitutive": "Sustitutiva",
     "fm.result.I": "A ingresar",
     "fm.result.C": "A compensar/devolver",
     "fm.result.N": "Sin resultado",

@@ -6,6 +6,9 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}));
 vi.mock('../fiscal-models.css', () => ({}));
 vi.mock('@/components/related-documents/helpers.js', () => ({
   neoBase: (u) => u,
@@ -140,6 +143,25 @@ describe('PresentModal', () => {
     fireEvent.click(modalBody);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  // ETP-5456 — PresentModal never asks for the "Identificador de la declaración
+  // anterior" (FormerStatement), under ANY circumstances: that flow only marks the
+  // declaration as presented, it does not perform a real telematic submission — so
+  // there is no AEAT-facing identifier to capture here. The field lives exclusively
+  // in FileGenModal, gated on `substitutive` (see FmOverlays.vitest.jsx's FileGenModal
+  // describe block). PresentModal does not even accept a `substitutive` prop.
+  it('never renders the former-declaration identifier field, on any presentation path', () => {
+    const { container } = render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(document.body.textContent).not.toContain('fm.filegen.former_statement');
+    expect(container.querySelectorAll('input[type="text"]').length).toBe(0);
+    // Click through every available path and re-check — a conditional field gated
+    // on path selection would still show up once a path is selected.
+    const pathCards = container.querySelectorAll('[style*="cursor: pointer"]');
+    pathCards.forEach(card => {
+      fireEvent.click(card);
+      expect(document.body.textContent).not.toContain('fm.filegen.former_statement');
+    });
+  });
 });
 
 // ── PresentModal — two-column redesign (ETP-5229 item #10) ─────────────────────
@@ -229,28 +251,51 @@ describe('PresentModal — two-column layout', () => {
 
 // ── FileGenModal ──────────────────────────────────────────────────────────────
 // Mirrors the classic "Parámetros de entrada del generador de declaraciones" popup
-// (OBTL_TaxReportLauncher) for Modelo 349 — 8 fields total: FileName, Contact, Phone
-// (text), Substitutive (checkbox), FormerStatement, RepresentativeTaxId (text),
-// Navarra, Guipuzcoa (checkbox) — rendered in that exact order, matching classic's
-// `OBTL_Tax_Report_Parameter.sequenceNumber` ordering (10/10/20/30/40/80/90/100).
+// (OBTL_TaxReportLauncher) for Modelo 349. ETP-5456: Substitutive (30) moved OUT of
+// this modal into the declaration form itself (`FmModel349Page.jsx`'s
+// `SubstitutiveSection`) — the modal now only reads it via the `substitutive` prop to
+// decide whether to ask for FormerStatement (40), the AEAT "Identificador de la
+// declaración anterior". Fields when NOT substitutive: FileName, Contact, Phone
+// (text), RepresentativeTaxId (text), Navarra, Guipuzcoa (checkbox) — 6 inputs. When
+// substitutive: FormerStatement is inserted between Phone and RepresentativeTaxId —
+// 7 inputs. Order still matches classic's `OBTL_Tax_Report_Parameter.sequenceNumber`
+// (10/10/20/40/80/90/100).
 
 describe('FileGenModal', () => {
-  const decl = { id: '1', model: '303', year: 2026, period: 'T2', phone: '', contact: '' };
+  // contactFallback/phoneFallback simulate Fiscal349BoxesHandler#computeOperators'
+  // server-resolved fallback (logged-in user's name / org phone) — present so these
+  // baseline tests aren't blocked by the missingContact/missingPhone validation
+  // (covered in its own describe block below).
+  const decl = {
+    id: '1', model: '303', year: 2026, period: 'T2', phone: '', contact: '',
+    contactFallback: 'Fallback User', phoneFallback: '600000000',
+  };
 
-  // Text inputs render in DOM order: FileName, Contact, Phone, FormerStatement,
-  // RepresentativeTaxId. Checkboxes (mocked as <input type="checkbox">) render
-  // interleaved: Substitutive (after Phone), Navarra, Guipuzcoa (after RepresentativeTaxId).
+  // Text inputs render in DOM order: FileName, Contact, Phone, [FormerStatement —
+  // only when substitutive], RepresentativeTaxId. Checkboxes (mocked as
+  // <input type="checkbox">): Navarra, Guipuzcoa (after RepresentativeTaxId).
   function getFields(container) {
     const all = Array.from(container.querySelectorAll('input'));
     return {
-      fileName:           all[0],
-      contact:            all[1],
-      phone:              all[2],
-      substitutive:       all[3],
-      formerStatement:    all[4],
-      representativeTaxId: all[5],
-      navarra:            all[6],
-      guipuzcoa:          all[7],
+      fileName:            all[0],
+      contact:             all[1],
+      phone:               all[2],
+      representativeTaxId: all[3],
+      navarra:             all[4],
+      guipuzcoa:           all[5],
+    };
+  }
+
+  function getFieldsSubstitutive(container) {
+    const all = Array.from(container.querySelectorAll('input'));
+    return {
+      fileName:            all[0],
+      contact:             all[1],
+      phone:               all[2],
+      formerStatement:     all[3],
+      representativeTaxId: all[4],
+      navarra:             all[5],
+      guipuzcoa:           all[6],
     };
   }
 
@@ -266,25 +311,43 @@ describe('FileGenModal', () => {
     expect(document.body.textContent).toContain('T2');
   });
 
-  it('renders all 8 fields (5 text inputs + 3 checkboxes)', () => {
+  it('renders 6 fields (4 text inputs + 2 checkboxes) when the declaration is not substitutive', () => {
     const { container } = render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
     const inputs = container.querySelectorAll('input');
-    expect(inputs.length).toBe(8);
-    const { fileName, substitutive, navarra, guipuzcoa } = getFields(container);
+    expect(inputs.length).toBe(6);
+    const { fileName, navarra, guipuzcoa } = getFields(container);
     expect(fileName.type).toBe('text');
-    expect(substitutive.type).toBe('checkbox');
     expect(navarra.type).toBe('checkbox');
     expect(guipuzcoa.type).toBe('checkbox');
   });
 
-  it('renders every field label via its i18n key, in classic OBTL_Tax_Report_Parameter order', () => {
+  it('renders 7 fields (5 text inputs + 2 checkboxes), adding FormerStatement, when substitutive is true', () => {
+    const { container } = render(<FileGenModal decl={decl} substitutive onConfirm={vi.fn()} onClose={vi.fn()} />);
+    const inputs = container.querySelectorAll('input');
+    expect(inputs.length).toBe(7);
+    expect(getFieldsSubstitutive(container).formerStatement.type).toBe('text');
+  });
+
+  it('never renders the Substitutive checkbox itself — it lives on the declaration form, not this modal', () => {
+    const { container } = render(<FileGenModal decl={decl} substitutive onConfirm={vi.fn()} onClose={vi.fn()} />);
+    // The substitutive label text is never rendered from THIS component, in either mode.
+    expect(document.body.textContent).not.toContain('fm.filegen.substitutive');
+    // 7 inputs total (5 text + navarra + guipuzcoa) — no 3rd checkbox slipped in.
+    expect(container.querySelectorAll('input[type="checkbox"]').length).toBe(2);
+  });
+
+  it('does not render the FormerStatement field/label when not substitutive', () => {
     render(<FileGenModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(document.body.textContent).not.toContain('fm.filegen.former_statement');
+  });
+
+  it('renders every field label via its i18n key, in classic OBTL_Tax_Report_Parameter order (substitutive)', () => {
+    render(<FileGenModal decl={decl} substitutive onConfirm={vi.fn()} onClose={vi.fn()} />);
     const text = document.body.textContent;
     const keys = [
       'fm.filegen.filename',
       'fm.filegen.contact_name',
       'fm.filegen.contact_phone',
-      'fm.filegen.substitutive',
       'fm.filegen.former_statement',
       'fm.filegen.representative_nif',
       'fm.filegen.navarra',
@@ -304,9 +367,7 @@ describe('FileGenModal', () => {
     expect(f.fileName.value).toBe('');
     expect(f.contact.value).toBe('');
     expect(f.phone.value).toBe('');
-    expect(f.formerStatement.value).toBe('');
     expect(f.representativeTaxId.value).toBe('');
-    expect(f.substitutive.checked).toBe(false);
     expect(f.navarra.checked).toBe(false);
     expect(f.guipuzcoa.checked).toBe(false);
   });
@@ -318,14 +379,14 @@ describe('FileGenModal', () => {
     expect(f.contact.value).toBe('Juan García');
     expect(f.phone.value).toBe('612345678');
     expect(f.fileName.value).toBe('');
-    expect(f.formerStatement.value).toBe('');
     expect(f.representativeTaxId.value).toBe('');
   });
 
-  it('calls onConfirm with the complete 8-key payload when nothing is touched (all defaults)', () => {
+  it('calls onConfirm with the 7-key payload (no substitutive key) when nothing is touched (all defaults)', () => {
     // fileName/formerStatement/representativeTaxId go through `field.trim() || undefined`
     // (same pattern as FileGenModal303) — an untouched (empty) field yields `undefined`,
-    // never the raw empty string.
+    // never the raw empty string. `substitutive` is no longer echoed back in the payload —
+    // the caller (FmModel349Page) already knows it from the persisted form state.
     const onConfirm = vi.fn();
     const onClose = vi.fn();
     render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
@@ -333,19 +394,18 @@ describe('FileGenModal', () => {
       .find(b => b.textContent.includes('fm.filegen.generate'));
     fireEvent.click(generateBtn);
     expect(onConfirm).toHaveBeenCalledWith({
-      fileName: undefined, phone: '', contact: '', substitutive: false,
+      fileName: undefined, phone: '', contact: '',
       formerStatement: undefined, representativeTaxId: undefined, navarra: false, guipuzcoa: false,
     });
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('whitespace-only fileName/formerStatement/representativeTaxId are trimmed to undefined in onConfirm', () => {
+  it('whitespace-only fileName/representativeTaxId are trimmed to undefined in onConfirm', () => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
     const { container } = render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
     const f = getFields(container);
     fireEvent.change(f.fileName, { target: { value: '   ' } });
-    fireEvent.change(f.formerStatement, { target: { value: '   ' } });
     fireEvent.change(f.representativeTaxId, { target: { value: '   ' } });
     const generateBtn = Array.from(container.querySelectorAll('button'))
       .find(b => b.textContent.includes('fm.filegen.generate'));
@@ -353,22 +413,20 @@ describe('FileGenModal', () => {
     expect(onConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         fileName: undefined,
-        formerStatement: undefined,
         representativeTaxId: undefined,
       }),
     );
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onConfirm with the complete 8-key payload when every field is filled/checked', () => {
+  it('calls onConfirm with the complete 7-key payload when every field is filled/checked (substitutive)', () => {
     const onConfirm = vi.fn();
     const onClose = vi.fn();
-    const { container } = render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
-    const f = getFields(container);
+    const { container } = render(<FileGenModal decl={decl} substitutive onConfirm={onConfirm} onClose={onClose} />);
+    const f = getFieldsSubstitutive(container);
     fireEvent.change(f.fileName, { target: { value: 'my_349_file' } });
     fireEvent.change(f.contact, { target: { value: 'Test Contact' } });
     fireEvent.change(f.phone, { target: { value: '987654321' } });
-    fireEvent.click(f.substitutive);
     fireEvent.change(f.formerStatement, { target: { value: '1234567890123' } });
     fireEvent.change(f.representativeTaxId, { target: { value: 'X1234567L' } });
     fireEvent.click(f.navarra);
@@ -380,7 +438,6 @@ describe('FileGenModal', () => {
       fileName: 'my_349_file',
       phone: '987654321',
       contact: 'Test Contact',
-      substitutive: true,
       formerStatement: '1234567890123',
       representativeTaxId: 'X1234567L',
       navarra: true,
@@ -397,6 +454,85 @@ describe('FileGenModal', () => {
       .find(b => b.textContent.includes('fm.action.cancel'));
     fireEvent.click(cancelBtn);
     expect(onClose).toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+});
+
+// ── FileGenModal — required-field validation (ETP-5456) ────────────────────────
+// Contact/Phone were always required (with a server-resolved fallback); FormerStatement
+// is required only while `substitutive` is true. A missing field blocks the modal (no
+// onConfirm, no onClose) with ONE combined toast listing every missing label.
+
+describe('FileGenModal — required-field validation (ETP-5456)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function clickGenerate(container) {
+    const btn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.filegen.generate'));
+    fireEvent.click(btn);
+  }
+
+  it('blocks with a toast and does not call onConfirm/onClose when former statement is missing while substitutive', async () => {
+    const { toast } = await import('sonner');
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = { id: '1', model: '349', year: 2026, period: 'T2', contactFallback: 'X', phoneFallback: 'Y' };
+    const { container } = render(<FileGenModal decl={decl} substitutive onConfirm={onConfirm} onClose={onClose} />);
+    clickGenerate(container);
+    expect(toast.error).toHaveBeenCalled();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does NOT require former statement — and does not block — when substitutive is false', async () => {
+    const { toast } = await import('sonner');
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = { id: '1', model: '349', year: 2026, period: 'T2', contactFallback: 'X', phoneFallback: 'Y' };
+    const { container } = render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
+    clickGenerate(container);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onConfirm).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('blocks when contact/phone are blank and neither fallback resolves, listing both missing labels in one toast', async () => {
+    const { toast } = await import('sonner');
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = { id: '1', model: '349', year: 2026, period: 'T2' }; // no contactFallback/phoneFallback
+    const { container } = render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
+    clickGenerate(container);
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not block when contact/phone are blank but their server-resolved fallback is present', async () => {
+    const { toast } = await import('sonner');
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = {
+      id: '1', model: '349', year: 2026, period: 'T2',
+      contactFallback: 'Fallback User', phoneFallback: '600000000',
+    };
+    const { container } = render(<FileGenModal decl={decl} onConfirm={onConfirm} onClose={onClose} />);
+    clickGenerate(container);
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ phone: '', contact: '' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('combines all three missing fields (contact, phone, former statement) into a single toast, not three', async () => {
+    const { toast } = await import('sonner');
+    const onConfirm = vi.fn();
+    const onClose = vi.fn();
+    const decl = { id: '1', model: '349', year: 2026, period: 'T2' };
+    const { container } = render(<FileGenModal decl={decl} substitutive onConfirm={onConfirm} onClose={onClose} />);
+    clickGenerate(container);
+    expect(toast.error).toHaveBeenCalledTimes(1);
     expect(onConfirm).not.toHaveBeenCalled();
   });
 });

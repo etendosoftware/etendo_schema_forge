@@ -21609,6 +21609,7 @@
     "fm.type.ordinary": "Ordinary",
     "fm.type.complementary": "Complementary",
     "fm.type.rectificative": "Rectificative",
+    "fm.type.substitutive": "Substitutive",
     "fm.result.I": "To pay",
     "fm.result.C": "To offset/refund",
     "fm.result.N": "No result",

@@ -11,7 +11,7 @@ import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
-import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
+import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData } from '../../fiscalModelsUtils.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
@@ -661,8 +661,37 @@ function DetailTabContent({
   );
 }
 
+// ETP-5456 (349 substitutiva, layout follow-up) — declaration-level "Sustitutiva" flag,
+// rendered inline next to the "Todas las claves" key filter (Operadores tab toolbar) rather
+// than as its own full-width banner: a substitute filing is a decision about the DECLARATION,
+// not a one-off parameter typed at file-generation time, so it belongs on the form and is
+// persisted (`manualData.identification.sustitutiva`) the same way 303's `rectificativa` is —
+// see `identChecks` state in the main component below, which mirrors 303's naming/shape.
+//
+// The former-declaration identifier text field does NOT live here anymore — it moved back into
+// FileGenModal / PresentModal (FmOverlays.jsx), captured fresh each time a file is generated or
+// the declaration is presented, gated on THIS checkbox's persisted value. Only the yes/no
+// decision is a durable property of the declaration; the identifier itself is not persisted
+// (see the modals' own comments).
+function SubstitutiveSection({ identChecks, onChange, isSubmitted, t }) {
+  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+  return (
+    <label
+      className="fm-349-substitutive-inline"
+      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'hsl(var(--foreground))', cursor: isSubmitted ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+    >
+      <CheckboxField
+        checked={sustitutiva}
+        disabled={isSubmitted}
+        onToggle={val => onChange('sustitutiva', val)}
+        data-testid="FmModel349Page__sustitutiva" />
+      {t('fm.filegen.substitutive')}
+    </label>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────
-export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
+export default function FmModel349Page({ decl, onBack, onStatusChange, onManualDataSaved, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   const { locale: appLocale } = useLocaleSwitch();
@@ -688,13 +717,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const [liveInvoices,  setLiveInvoices]  = useState(decl._precomputed?.invoices  ?? null);
   const [liveRectifications, setLiveRectifications] = useState(decl._precomputed?.rectifications ?? null);
   const [liveRectifSummary, setLiveRectifSummary] = useState(decl._precomputed?.rectificativeSummary ?? null);
+  // ETP-5456 — read-only fallback values `Fiscal349BoxesHandler#computeOperators` exposes
+  // (`contactFallback`/`phoneFallback`, mirroring exactly what a blank field falls back to at
+  // generation time: the logged-in AD_User's name / the org's resolved phone). FileGenModal uses
+  // these to decide whether an empty "Persona de contacto"/"Teléfono de contacto" would actually
+  // resolve to something, same `live* ?? decl._precomputed? ?? decl.*` pattern as every other
+  // computed field on this page.
+  const [liveContactFallback, setLiveContactFallback] = useState(decl._precomputed?.contactFallback ?? null);
+  const [livePhoneFallback,   setLivePhoneFallback]   = useState(decl._precomputed?.phoneFallback   ?? null);
   const [viesBannerDismissed, setViesBannerDismissed] = useState(false);
+  // ETP-5456 — persisted `manualData.identification` for the "Sustitutiva" flag + its former-
+  // declaration identifier, mirroring 303's `identChecks` (same shape convention:
+  // `manualData.identification`, hydrated once from `decl.manualData` and flushed explicitly by
+  // "Guardar" — no debounce/autosave, see `handleSave` below). 349 has no box-override state to
+  // race against, so this skips 303's `useRecordWriteQueue` machinery entirely.
+  const [identChecks, setIdentChecks] = useState(decl.manualData?.identification ?? {});
+  const hasPendingEditRef = useRef(false);
+  const [isSavingManualData, setIsSavingManualData] = useState(false);
 
   React.useEffect(() => {
     if (decl._precomputed?.operators) setLiveOperators(decl._precomputed.operators);
     if (decl._precomputed?.invoices)  setLiveInvoices(decl._precomputed.invoices);
     if (decl._precomputed?.rectifications) setLiveRectifications(decl._precomputed.rectifications);
     if (decl._precomputed?.rectificativeSummary) setLiveRectifSummary(decl._precomputed.rectificativeSummary);
+    if (decl._precomputed?.contactFallback != null) setLiveContactFallback(decl._precomputed.contactFallback);
+    if (decl._precomputed?.phoneFallback   != null) setLivePhoneFallback(decl._precomputed.phoneFallback);
   }, [decl._precomputed]);
   // ETP-5027 — `{ nif, key, tab }` the Origen link narrowed a tab to (null = show
   // everything). ONE state serves both destinations: the link sets it and switches to
@@ -732,6 +779,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     : null;
   const periodLabel = monthName ? `${decl.year} / ${monthName}` : `${decl.year} ${decl.period}`;
 
+  // ETP-5456 — derived from `identChecks`, not `decl.manualData` directly, so an unsaved
+  // edit is reflected immediately (same precedent as 303's `identChecks.rectificativa`).
+  const sustitutiva = identChecks?.sustitutiva === true || identChecks?.sustitutiva === 'Y';
+
   const blocking     = decl.incidents?.blocking ?? 0;
   const warning      = decl.incidents?.warning  ?? 0;
   // ETP-5027 — both counters are DISTINCT counts, not row counts (see
@@ -754,27 +805,36 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
-  // ETP-5338 pt.5 — 349's "Guardar", added for cross-model consistency once the requirement
-  // became "every fiscal-models declaration gets a Guardar button", not "only where an
-  // existing autosave can be piggybacked on" (303's original scope). Re-investigated with that
-  // wider bar in mind — grepped this file for every `useState`/write path — and 349 genuinely
-  // has NO locally-edited, persistable declaration data:
-  //   - `keyFilter`/`searchQuery`/`selected`/`activeTab`/`viesBannerDismissed` are ephemeral
-  //     view/session state (filters, tab selection, a dismissed banner) — not declaration data,
-  //     and not something a "Guardar" on THIS document should persist even if it could.
-  //   - `liveOperators`/`liveInvoices`/`liveRectifications`/`liveRectifSummary` are read-only
-  //     server-computed snapshots (`compute349Operators`), never locally edited.
-  //   - VIES validation (`handleValidateVies`) already persists its result server-side the
-  //     instant it runs — see the "conclusive AND persisted, nothing to do" comment on that
-  //     flow — so there is no staged, unsaved VIES state either.
-  // A "real" Guardar that flushes nothing would be indistinguishable from a fake one, and
-  // giving it its own PUT with no payload would be a lie in the other direction — implying a
-  // save mechanism exists here that doesn't. This is therefore a deliberate no-op confirmation:
-  // there is nothing pending, so clicking it always "succeeds" immediately (no network call,
-  // no loading state). If 349 ever grows real locally-edited declaration fields, this is the
-  // handler to wire an actual flush into.
-  function handleSave() {
-    toast.success(t('recordSaved') ?? 'Registro guardado');
+  // ETP-5456 — 349 now has real locally-edited, persistable declaration data (the "Sustitutiva"
+  // section's `identChecks`, see its own comment above), so the former deliberate no-op
+  // confirmation (ETP-5338 pt.5) is replaced with an actual flush — this is the handler that
+  // comment pointed at. Mirrors 303's `persistEditableFields`/`handleSave` split, simplified:
+  // 349 has no box-override state and no background recompute racing against this write, so
+  // there is no need for 303's `useRecordWriteQueue`/`waitUntilManualDataIdle` machinery — a
+  // single explicit PUT per click is enough.
+  function handleIdentChange(id, value) {
+    hasPendingEditRef.current = true;
+    setIdentChecks(prev => ({ ...prev, [id]: value }));
+  }
+
+  async function handleSave() {
+    if (!hasPendingEditRef.current || !apiBaseUrl) {
+      toast.success(t('recordSaved') ?? 'Registro guardado');
+      return;
+    }
+    setIsSavingManualData(true);
+    const result = await persistManualData(decl.id, { identification: identChecks }, { token, apiBaseUrl });
+    setIsSavingManualData(false);
+    if (result.ok) {
+      hasPendingEditRef.current = false;
+      // ETP-5338 Bug A precedent (303) — push the just-saved manualData into FmListPage's own
+      // cached `decls` entry so the "Tipo" column and a re-opened declaration both see it
+      // without a full page reload.
+      onManualDataSaved?.(decl.id, { identification: identChecks });
+      toast.success(t('recordSaved') ?? 'Registro guardado');
+    } else {
+      toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
+    }
   }
 
   // Manual "Presentación con Acuse de recibo" path: persist the uploaded
@@ -800,6 +860,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       if (res?.invoices)  setLiveInvoices(res.invoices);
       if (res?.rectifications) setLiveRectifications(res.rectifications);
       if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
+      if (res?.contactFallback != null) setLiveContactFallback(res.contactFallback);
+      if (res?.phoneFallback   != null) setLivePhoneFallback(res.phoneFallback);
     } finally {
       setComputing(false);
     }
@@ -878,14 +940,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       if (cached?.invoices) setLiveInvoices(cached.invoices);
       if (cached?.rectifications) setLiveRectifications(cached.rectifications);
       if (cached?.rectificativeSummary) setLiveRectifSummary(cached.rectificativeSummary);
+      if (cached?.contactFallback != null) setLiveContactFallback(cached.contactFallback);
+      if (cached?.phoneFallback   != null) setLivePhoneFallback(cached.phoneFallback);
       return;
     }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
 
+  // ETP-5456 — `substitutive` is the persisted `identChecks` value (the checkbox lives on the
+  // form, next to the key filter — see SubstitutiveSection). `formerStatement` comes back from
+  // FileGenModal's own payload: the identifier is captured fresh at generation time, not
+  // persisted with the declaration (see FmOverlays.jsx's FileGenModal comment).
   async function handleGenerate({
-    phone, contact, fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+    phone, contact, fileName, formerStatement, representativeTaxId, navarra, guipuzcoa,
   } = {}) {
     // ETP-5438 — the button that opens FileGenModal is itself hidden once submitted, so this
     // is a belt-and-braces second check (same double-check pattern FmModel303Page.jsx already
@@ -897,8 +965,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     }
     setGenerating(true);
     const result = await generate349File(decl, {
-      token, apiBaseUrl, phone, contact,
-      fileName, substitutive, formerStatement, representativeTaxId, navarra, guipuzcoa,
+      token, apiBaseUrl, phone, contact, fileName,
+      substitutive: sustitutiva,
+      formerStatement,
+      representativeTaxId, navarra, guipuzcoa,
     });
     setGenerating(false);
     if (!result.ok) {
@@ -1051,12 +1121,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           <button
             className="fm-btn"
             onClick={handleSave}
+            disabled={isSavingManualData}
             title={t('fm.action.save') ?? 'Guardar'}
             aria-label={t('fm.action.save') ?? 'Guardar'}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
             data-testid="FmModel349Page__save"
           >
-            <Save size={16} strokeWidth={1.75} data-testid="Save__save" />
+            {isSavingManualData
+              ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+              : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
             {t('fm.action.save') ?? 'Guardar'}
           </button>
         )}
@@ -1206,6 +1279,24 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                 onChange={setKeyFilter}
                 t={t}
                 data-testid="KeyFilterDropdown__346dd5" />
+              {/* ETP-5456 (layout follow-up) — "Sustitutiva" moved here, right next to the key
+                  filter it now shares a toolbar row with, per the design's placement. The
+                  separator matches the one the toolbar already uses elsewhere (.fm-toolbar__sep)
+                  so the checkbox reads as its own grouped control rather than crowding the
+                  dropdown. Same `!isSubmitted || sustitutiva` visibility this section always had
+                  (still shown, read-only via `isSubmitted`, once a substitute declaration has
+                  been presented). */}
+              {(!isSubmitted || sustitutiva) && (
+                <>
+                  <span className="fm-toolbar__sep" aria-hidden="true" />
+                  <SubstitutiveSection
+                    identChecks={identChecks}
+                    onChange={handleIdentChange}
+                    isSubmitted={isSubmitted}
+                    t={t}
+                    data-testid="SubstitutiveSection__346dd5" />
+                </>
+              )}
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
                 <Search
@@ -1354,7 +1445,11 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       )}
       {showFilegen && (
         <FileGenModal
-          decl={decl}
+          // ETP-5456 — contactFallback/phoneFallback are added on top of `decl` here (never
+          // persisted with it) so FileGenModal can validate against the live-computed fallback,
+          // not just whatever came down on the initial `decl` prop.
+          decl={{ ...decl, contactFallback: liveContactFallback, phoneFallback: livePhoneFallback }}
+          substitutive={sustitutiva}
           onConfirm={(payload) => handleGenerate(payload)}
           onClose={() => setShowFilegen(false)}
           data-testid="FileGenModal__346dd5" />

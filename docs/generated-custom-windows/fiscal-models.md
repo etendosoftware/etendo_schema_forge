@@ -2464,23 +2464,89 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
 ### PDF preview and file generation
 
 - `use349Pdf` hook renders a Modelo 349 draft PDF via Handlebars + `renderPdf`. Declarant NIF and org name are read from `_precomputed.orgNif` / `_precomputed.orgName`. The object URL is revoked on unmount to avoid memory leaks.
-- File generation (`generate349File`) prompts for the 8 input fields the classic "Parámetros de entrada del generador de declaraciones" popup (`OBTL_TaxReportLauncher`) exposes for Modelo 349, via `FileGenModal`, before calling `POST /fiscal349/generate`. All 8 are sent in the POST body (`application/x-www-form-urlencoded`), never as query params, to avoid PII in server access logs. Field order in the modal — and each field's `OBTL_Tax_Report_Parameter.sequenceNumber` in classic — is:
+- File generation (`generate349File`) prompts for the input fields the classic "Parámetros de entrada del generador de declaraciones" popup (`OBTL_TaxReportLauncher`) exposes for Modelo 349, via `FileGenModal`, before calling `POST /fiscal349/generate`. All fields are sent in the POST body (`application/x-www-form-urlencoded`), never as query params, to avoid PII in server access logs. Field order in the modal — and each field's `OBTL_Tax_Report_Parameter.sequenceNumber` in classic — is:
 
   | Order | Param | Classic label | Type | Client behavior when blank |
   |------:|-------|----------------|:----:|------------------------------|
   | 10 | `fileName` | Nombre del Fichero | TEXT | omitted from the body → backend computes `349_<period>_<year>` (`resolveFileName`) |
-  | 10 | `contact` | Persona de contacto | TEXT | omitted from the body → backend falls back to the current user's display name (`applyContactParams`) |
-  | 20 | `phone` | Teléfono de contacto | TEXT | omitted from the body → backend falls back to `AD_OrgInformation`'s phone for the org (`applyContactParams`) |
-  | 30 | `substitutive` | Sustitutiva | CHECK | never omitted — see below |
-  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | omitted from the body → backend leaves the `FormerStatement` key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
-  | 80 | `representativeTaxId` | NIF del representante legal | TEXT | same as `formerStatement` — key omitted from `inputParams`, no fallback |
+  | 10 | `contact` | Persona de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
+  | 20 | `phone` | Teléfono de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
+  | 30 | `substitutive` | Sustitutiva | CHECK | **not asked in this modal since ETP-5456** — read from the declaration form's persisted checkbox, see below |
+  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | rendered **only when `substitutive` is true**; blocked client-side when blank in that case — see below |
+  | 80 | `representativeTaxId` | NIF del representante legal | TEXT | omitted from the body → backend leaves the key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
   | 90 | `navarra` | — | CHECK | never omitted — see below |
   | 100 | `guipuzcoa` | — | CHECK | never omitted — see below |
 
   `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
 
-  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted checkbox (`FmModel349Page`'s `sustitutiva`), not from a field inside this modal — see below. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
   - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
+
+### 349 sustitutivas (ETP-5456)
+
+Before this ticket, "Sustitutiva" was a one-off checkbox inside `FileGenModal`, reset every time
+the modal reopened — a declaration had no durable memory of whether it was a substitute filing.
+ETP-5456 makes it a real property of the declaration, mirroring how Modelo 303's "Autoliquidación
+rectificativa" already works, and closes two related gaps (contact/phone fallback visibility, a
+sessionStorage cache-key bump) discovered while doing so.
+
+1. **"Sustitutiva" checkbox moved to the form.** It now lives in `FmModel349Page.jsx`'s
+   `SubstitutiveSection`, rendered inline in the Operadores tab toolbar next to the "Todas las
+   claves" key filter (not as its own banner). It is **persisted**, not ephemeral: stored under
+   `manualData.identification.sustitutiva`, the exact same `manualData.identification` shape and
+   PUT mechanism 303's `rectificativa` already uses. `FmModel349Page`'s `handleSave` — previously a
+   deliberate no-op confirmation (ETP-5338 pt.5, since 349 had no locally-edited persistable data
+   at all) — now does a real `persistManualData` PUT when there is a pending edit, and pushes the
+   saved value back into `FmListPage`'s cached row via `onManualDataSaved` (same precedent as
+   303's Bug A fix) so the list's "Tipo" column and a re-opened declaration both see it without a
+   full reload.
+
+2. **"Identificador declaración anterior" field moved into the "Generar fichero" modal**, gated on
+   the persisted checkbox above (passed into `FileGenModal` as the `substitutive` prop — read-only
+   from the modal's point of view). The field only renders, and is only required, while
+   `substitutive` is true. It is **not persisted** — it's a one-off value AEAT needs at generation
+   time, not a durable property of the declaration, so it is asked again on every regeneration.
+   It is **not** requested in `PresentModal` ("Registrar/Presentar") — that flow only marks the
+   declaration as presented locally; it never performs a real telematic presentation, so there is
+   no AEAT identifier to capture there.
+
+3. **List "Tipo" column** (`FmListPage.jsx`) now shows "Sustitutiva" (`fm.type.substitutive`) when
+   `manualData.identification.sustitutiva` is `true`/`'Y'`, alongside the pre-existing 303
+   "Rectificativa" check. The two flags are mutually exclusive by construction — only 303 ever sets
+   `rectificativa`, only 349 ever sets `sustitutiva` — so both can be checked in the same
+   expression without a `decl.model` guard.
+
+4. **Contact/phone fallback validation.** `Fiscal349BoxesHandler#computeOperators` now also
+   returns `contactFallback` (the logged-in `AD_User`'s display name, via the new
+   `resolveCurrentUserContactName()` helper) and `phoneFallback` (the org's resolved phone, via the
+   pre-existing `resolveOrgPhone`) — the **exact same values** `applyContactParams` falls back to
+   server-side when `Contact`/`Phone` are left blank at generation time, extracted into one shared
+   helper so the two call sites can never drift. `FmModel349Page` reads these off the compute
+   payload (`liveContactFallback`/`livePhoneFallback`, same `live* ?? decl._precomputed?` pattern
+   as every other computed field on this page) and passes them into `FileGenModal` on the `decl`
+   prop. The modal blocks submission — with a single combined toast, same
+   `missingRequiredFieldsToast` pattern as 303 — when a field is blank **and** its fallback is also
+   empty; if either resolves to something, the field is allowed to stay blank, matching exactly
+   what generation itself does.
+
+5. **sessionStorage cache-key bump.** `useFiscalAutoCompute.js`'s `sessionCacheKey()` moved from
+   `fiscal_ac_v3_` to `fiscal_ac_v4_` because `computeOperators`'s response shape changed
+   (`contactFallback`/`phoneFallback` added) without the cache version reflecting it — a cached v3
+   payload doesn't carry those fields, and an unbumped key would have silently served a payload
+   `FileGenModal`'s fallback check couldn't read.
+
+6. **Deployment trap worth knowing about (already resolved, no code fix needed).** After bumping
+   the cache key, a live deployment briefly kept showing the contact/phone block even for users who
+   should have had a working fallback. Root cause: the very first write under the new `v4` key
+   landed during the race window between the frontend having already reloaded with the new code and
+   the backend still finishing its Tomcat recompile/restart — so a "photo" taken *before* the
+   backend exposed `contactFallback`/`phoneFallback` got cached under the *new* key, and because
+   `sessionStorage` survives an ordinary reload (F5) and is only cleared by closing the tab, it kept
+   serving that stale snapshot indefinitely. No further code change was needed — closing the tab and
+   opening a new one cleared it. **Takeaway for future deploys that pair a cache-key bump with a
+   backend payload-shape change:** a plain reload is not enough to prove the fix landed if the
+   backend was still restarting when the first request under the new key went out; verify with a
+   fresh tab (or an explicit `sessionStorage.clear()`) rather than trusting an F5 during rollout.
 
 ### Generate error banner (`genError`)
 

@@ -1016,18 +1016,24 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
                 <td><span className="fm-period">{decl.period}</span></td>
-                {/* ETP-5338 pt.3 — "Tipo" must reflect AEAT's rectificativa flag, which the
-                    user sets on the 303 detail page's "Autoliquidación Rectificativa" checkbox
-                    (`identChecks.rectificativa`, persisted as
-                    `manualData.identification.rectificativa`). `decl.type` (DECL_TYPE, ord/com)
-                    is a genuine but DIFFERENT AEAT concept (ordinaria/complementaria) that no UI
-                    flow currently sets to "com" — every declaration is created with DECL_TYPE=O,
-                    so deriving "Tipo" from it always showed "Ordinaria". 349 declarations have no
-                    rectificativa checkbox, so this correctly falls back to "Ordinaria" for them. */}
+                {/* ETP-5338 pt.3 / ETP-5456 — "Tipo" must reflect AEAT's rectificativa (303) and
+                    sustitutiva (349) flags, which the user sets on each model's own detail page
+                    ("Autoliquidación Rectificativa" / "Sustitutiva" checkboxes), both persisted
+                    under the same `manualData.identification` shape
+                    (`identChecks.rectificativa` / `identChecks.sustitutiva`). `decl.type`
+                    (DECL_TYPE, ord/com) is a genuine but DIFFERENT AEAT concept
+                    (ordinaria/complementaria) that no UI flow currently sets to "com" — every
+                    declaration is created with DECL_TYPE=O, so deriving "Tipo" from it always
+                    showed "Ordinaria". The two flags are mutually exclusive by construction (only
+                    303 exposes `rectificativa`, only 349 exposes `sustitutiva`), so checking both
+                    is safe without a `decl.model` guard. */}
                 <td>
                   {decl.manualData?.identification?.rectificativa
                     ? t('fm.type.rectificative')
-                    : t('fm.type.ordinary')}
+                    : (decl.manualData?.identification?.sustitutiva === true
+                        || decl.manualData?.identification?.sustitutiva === 'Y')
+                      ? t('fm.type.substitutive')
+                      : t('fm.type.ordinary')}
                 </td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />

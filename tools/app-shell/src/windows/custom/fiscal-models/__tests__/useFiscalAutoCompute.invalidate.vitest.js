@@ -15,7 +15,7 @@ import useFiscalAutoCompute, { invalidateFiscalComputeCache } from '../useFiscal
 
 const DECL = { id: '349-2026-T1', model: '349', year: 2026, period: 'T1' };
 const DECL_LIST = [DECL];
-const CACHE_KEY = `fiscal_ac_v3_${DECL.id}`;
+const CACHE_KEY = `fiscal_ac_v4_${DECL.id}`;
 
 // Pre-validation payload: the NIF is `pending`. This is what sits in sessionStorage
 // at the moment the user presses "Validar VIES".
@@ -84,12 +84,12 @@ describe('invalidateFiscalComputeCache — the stale-repaint hazard it exists to
 describe('invalidateFiscalComputeCache — mechanics', () => {
   it('removes exactly the entry for the given declaration', () => {
     seedCache();
-    sessionStorage.setItem('fiscal_ac_v3_other-decl', JSON.stringify({ result: STALE, computedAt: 1 }));
+    sessionStorage.setItem('fiscal_ac_v4_other-decl', JSON.stringify({ result: STALE, computedAt: 1 }));
 
     invalidateFiscalComputeCache(DECL.id);
 
     expect(sessionStorage.getItem(CACHE_KEY)).toBeNull();
-    expect(sessionStorage.getItem('fiscal_ac_v3_other-decl')).not.toBeNull();
+    expect(sessionStorage.getItem('fiscal_ac_v4_other-decl')).not.toBeNull();
   });
 
   it('is a no-op for a null/undefined id instead of clearing anything', () => {

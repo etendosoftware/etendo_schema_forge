@@ -77,7 +77,7 @@ const defaultProps = {
 // Same cache key format as useFiscalAutoCompute.js's own sessionCacheKey() — not exported,
 // so mirrored here (the "v3" suffix bump reflects that module's own comment: 349's compute
 // payload gained per-operator `vies` and per-invoice `key`).
-const cacheKeyFor = (declId) => `fiscal_ac_v3_${declId}`;
+const cacheKeyFor = (declId) => `fiscal_ac_v4_${declId}`;
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -384,7 +384,14 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
     await waitFor(() => expect(genBtn().disabled).toBe(false));
   });
 
-  it('threads the full 8-key onConfirm payload from FileGenModal into generate349File unmodified', async () => {
+  // ETP-5456 — `substitutive` is no longer read from FileGenModal's onConfirm payload
+  // (the mock below still sends `substitutive: true` in its payload — mirroring a stale
+  // caller — precisely to prove handleGenerate does NOT thread it through anymore).
+  // `sustitutiva` now comes exclusively from the persisted form state
+  // (`identChecks.sustitutiva`, set via SubstitutiveSection), which for a fresh `makeDecl()`
+  // with no `manualData` is false — so the real call to generate349File must carry
+  // `substitutive: false`, ignoring the payload's stale `true`.
+  it('threads the FileGenModal payload into generate349File, deriving substitutive from the persisted form state (not the payload)', async () => {
     const { generate349File } = await import('../../../fiscalModelsUtils.js');
     generate349File.mockResolvedValue({ ok: true });
 
@@ -404,7 +411,7 @@ describe('FmModel349Page — standalone Generar fichero button', () => {
         fileName: 'my_349_file',
         phone: '600111222',
         contact: 'Jane Doe',
-        substitutive: true,
+        substitutive: false,
         formerStatement: '1234567890123',
         representativeTaxId: 'X1234567L',
         navarra: true,

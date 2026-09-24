@@ -86,6 +86,9 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
               setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}) } });
             }
           }}
+          onManualDataSaved={(id, manualData) => {
+            setDeclManualDataPatch({ id, patch: { manualData } });
+          }}
           data-testid="FmModel349Page__ca1112" />
       )}
       {debugMode && <FmDebugPanel view={view} setView={setView} data-testid="FmDebugPanel__ca1112" />}
