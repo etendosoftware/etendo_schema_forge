@@ -15,20 +15,29 @@
  * Per Stripe's zero-decimal currency list: https://docs.stripe.com/currencies#zero-decimal-currencies
  */
 const ZERO_DECIMAL_CURRENCIES = new Set([
-  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+  'BIF', 'CLP', 'DJF', 'GNF', 'JPY', 'KMF', 'KRW', 'MGA', 'PYG', 'RWF', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
 ]);
+
+// Stripe retains two-digit API amounts for these currencies for backward compatibility, although
+// fractional currency units cannot be charged. Normalize by 100, then render with zero decimals.
+const TWO_DIGIT_API_WHOLE_UNIT_CURRENCIES = new Set(['ISK', 'UGX']);
 
 /**
  * Converts Stripe's `amountMinor` (always an integer, in the currency's smallest unit) into the
- * decimal amount `formatCurrency` expects to display. Never hand `amountMinor` to `formatCurrency`
- * directly — see {@link ZERO_DECIMAL_CURRENCIES} for why the divisor is not always 100.
+ * decimal amount `formatCurrency` expects to display, along with its display precision. Never
+ * hand `amountMinor` to `formatCurrency` directly — Stripe has zero-decimal currencies and two
+ * backward-compatible two-digit API currencies (ISK/UGX) that display as whole units.
  *
  * @param {string} currencyCode ISO 4217 code, e.g. from the same payload's `currency` field
  * @param {number|null|undefined} amountMinor
- * @returns {number|null}
+ * @returns {{ amount: number, fractionDigits: number }|null}
  */
 export function minorUnitsToAmount(currencyCode, amountMinor) {
   if (amountMinor == null || !Number.isFinite(amountMinor)) return null;
-  const exponent = ZERO_DECIMAL_CURRENCIES.has(String(currencyCode).toUpperCase()) ? 0 : 2;
-  return amountMinor / 10 ** exponent;
+  const code = String(currencyCode).toUpperCase();
+  if (ZERO_DECIMAL_CURRENCIES.has(code)) return { amount: amountMinor, fractionDigits: 0 };
+  if (TWO_DIGIT_API_WHOLE_UNIT_CURRENCIES.has(code)) {
+    return { amount: amountMinor / 100, fractionDigits: 0 };
+  }
+  return { amount: amountMinor / 100, fractionDigits: 2 };
 }
