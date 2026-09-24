@@ -27,7 +27,7 @@ export function useLogout() {
     // inside the Mixpanel SDK and can leak into events fired by the NEXT
     // login in this same browser (see providers/mixpanel.js). Fire-and-forget
     // so a slow/failed provider never blocks the actual logout.
-    void reset();
+    void reset(); // NOSONAR -- intentional fire-and-forget, same pattern as health-events.js's void track()/group() calls.
     return (logout || notifyAmbientUnauthorized)();
   }, [logout]);
 }

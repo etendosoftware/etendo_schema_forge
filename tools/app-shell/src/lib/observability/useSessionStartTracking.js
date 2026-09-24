@@ -21,6 +21,6 @@ export function useSessionStartTracking() {
   useEffect(() => {
     if (fired.current) return;
     fired.current = true;
-    void trackSessionStarted({ username, clientId });
+    void trackSessionStarted({ username, clientId }); // NOSONAR -- intentional fire-and-forget, same pattern as health-events.js's void track()/group() calls.
   }, [username, clientId]);
 }
