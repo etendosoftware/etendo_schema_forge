@@ -8,7 +8,7 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
 
 /**
  * Static + parse validation for the R37 corrective data-fix
- * (20260918T120000Z__R37-tenant-subscription-backfill.sql, ETP-5046, gap B2).
+ * (20260924T150000Z__R37-tenant-subscription-backfill.sql, ETP-5046, gap B2).
  *
  * Gives every already-onboarded tenant that carries the legacy AD_Preference plan marker
  * (ETGO_TenantPlan='productive') exactly ONE open ETGO_SUBSCRIPTION row on the grandfathered
@@ -33,12 +33,14 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIX_FILE = '20260918T120000Z__R37-tenant-subscription-backfill.sql';
+const FIX_FILE = '20260924T150000Z__R37-tenant-subscription-backfill.sql';
 const FIX_PATH = join(__dirname, '..', 'src', 'data-fixes', 'sql', FIX_FILE);
 const FIX_ID = basename(FIX_FILE, '.sql');
 
 /** The newest fix that already existed in this checkout when R37 was authored. */
-const PREVIOUS_FIX_ID = '20260911T120000Z__R35-verifactu-doctype-fields-corrected';
+// The newest fix already in develop when ETP-5046 merged. The strict watermark in run.js skips a
+// fix dated at or before it on every tenant that has processed it, so this one must stay later.
+const PREVIOUS_FIX_ID = '20260922T130000Z__R39-document-sequence-clear-descriptions';
 
 /**
  * The marker an author leaves in @report while the manual pre-check is still outstanding.
@@ -139,7 +141,7 @@ describe('R37 data-fix — header metadata', () => {
   it('has a filename timestamp strictly after the last pre-existing fix in this checkout', () => {
     const ts = parseFixTimestamp(FIX_ID);
     assert.ok(ts instanceof Date);
-    assert.equal(ts.toISOString(), '2026-09-18T12:00:00.000Z');
+    assert.equal(ts.toISOString(), '2026-09-24T15:00:00.000Z');
     assert.ok(ts.getTime() > parseFixTimestamp(PREVIOUS_FIX_ID).getTime());
   });
 });

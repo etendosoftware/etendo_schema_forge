@@ -108,7 +108,7 @@ const FIXES_WITH_REPORT = new Set([
   // saying whether the Stripe ids were copied from a checkout request or deliberately left NULL.
   // It is therefore the one @report in the catalog that is NEVER empty on an APPLIED row — the
   // attestation branch is driven by ad_client, which always matches the target tenant.
-  '20260918T120000Z__R37-tenant-subscription-backfill',
+  '20260924T150000Z__R37-tenant-subscription-backfill',
   // R38 (ETP-5352) backfills AD_ORG.AD_LEGALENTITY_ORG_ID, but only on organizations that
   // finished provisioning (isready='Y'). Its @report lists the legal-entity orgs left
   // untouched because isready='N' — an org whose alta never completed is missing far more

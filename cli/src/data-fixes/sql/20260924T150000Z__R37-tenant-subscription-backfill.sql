@@ -4,6 +4,17 @@
 -- @type: sql
 -- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no open subscription, copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire that tenant's now-stale ETGO_TenantPlan preference in the SAME transaction (ETP-5046)
 
+-- Why this file is dated 2026-09-24 (READ BEFORE RE-DATING IT)
+-- --------------------------------------------------------------------------------------------
+-- It was authored as 20260918T120000Z. While ETP-5046 waited to merge, develop shipped fixes up
+-- to 20260922T130000Z, and one of them (R38-org-legalentity-pointer) carries that EXACT same
+-- timestamp. run.js skips every fix at or before a tenant's watermark (strict `<=`, no
+-- look-back), so on any environment that had already processed those develop fixes this file
+-- would have been skipped silently -- no ledger row, no error, every paying tenant left on the
+-- preference. It was renamed before it reached any shared environment (sql/README.md rule 3
+-- forbids renaming an APPLIED fix, not an unapplied one). Keep it strictly newer than every fix
+-- already merged when it lands.
+
 -- Context (ETP-5046, gap B1 "Tenant subscription")
 -- --------------------------------------------------------------------------------------------
 -- Before the subscription model existed, the ONLY record that a tenant had been provisioned
@@ -149,8 +160,8 @@
 -- file name (the UTC timestamp prefix makes lexical order == chronological order) and applies, per
 -- tenant, only fixes strictly newer than that tenant's watermark -- the newest timestamp among its
 -- PROCESSED ledger rows. So for any single tenant:
---   * within one run, R31 (2026-09-01) is always visited before R37 (2026-09-18);
---   * once R37 is PROCESSED the watermark is >= 2026-09-18T12:00:00Z, so R31 is skipped on every
+--   * within one run, R31 (2026-09-01) is always visited before R37 (2026-09-24);
+--   * once R37 is PROCESSED the watermark is >= 2026-09-24T15:00:00Z, so R31 is skipped on every
 --     later run -- including the case where R31 itself FAILED, because the watermark is a date,
 --     not a per-fix flag.
 -- R31 can therefore never execute against a tenant whose preference this fix has already retired.
