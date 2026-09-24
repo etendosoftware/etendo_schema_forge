@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 
 /**
  * ETP-5443. `SubscriptionSection` draws the account's Stripe-backed subscription (plan, amount,
@@ -125,11 +126,14 @@ describe('SubscriptionSection', () => {
       // `EnvironmentAccessPolicy` projection already uses.
       expect(screen.getByTestId('SubscriptionSection__status')).toHaveTextContent('subscriptionCurrent');
 
-      // Formatting is locale-driven (ETP-4314) — only assert the amount rendered and carries
-      // the value's digits, not an exact separator/symbol placement.
       const amount = screen.getByTestId('SubscriptionSection__amount');
-      expect(amount).not.toBeEmptyDOMElement();
-      expect(amount.textContent).toMatch(/29/);
+      // Stripe sends 2900 EUR minor units. Assert the exact canonical formatter output so
+      // accidentally passing the `{ amount, fractionDigits }` conversion object itself to the
+      // formatter cannot regress to rendering an object representation or a wrong value.
+      expect(amount.textContent).toBe(formatCurrency('eur', 29, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }));
 
       expect(screen.getByTestId('SubscriptionSection__renewsOn')).toBeInTheDocument();
       expect(screen.queryByTestId('SubscriptionSection__cancelsOn')).not.toBeInTheDocument();

@@ -5,6 +5,8 @@ import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { getApiBase } from './useNeoResource.js';
 import { sortEnvironments } from '../lib/environmentPresentation.js';
 
+export const ENVIRONMENT_LIST_REFRESH_EVENT = 'etendo:refresh-environments';
+
 /**
  * Lists the environments the signed-in account owns and switches between them.
  *
@@ -68,8 +70,8 @@ export function useEnvironmentSwitch({
     // environment list would come back empty for every authenticated user.
     // `isAuthenticated` above is the gate; `sortEnvironments` is kept.
     let cancelled = false;
-    setLoading(true);
-    (async () => {
+    const refreshEnvironments = async () => {
+      setLoading(true);
       try {
         const envs = await fetchEnvironments(fetch, getApiBase());
         if (!cancelled) setEnvironments(sortEnvironments(envs));
@@ -78,8 +80,13 @@ export function useEnvironmentSwitch({
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    void refreshEnvironments();
+    window.addEventListener(ENVIRONMENT_LIST_REFRESH_EVENT, refreshEnvironments);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ENVIRONMENT_LIST_REFRESH_EVENT, refreshEnvironments);
+    };
   }, [enabled, isAuthenticated]);
 
   const switchTo = useCallback(async (env) => {
