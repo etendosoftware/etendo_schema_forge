@@ -57,6 +57,7 @@ export default function AttachmentsTab({
   isNew,
   onSaveHeader,
   onGoToSavedRecord,
+  isDocumentReadOnly,
 }) {
   const ui = useUI();
   const saveBeforeAttach = !!config.saveBeforeAttach;
@@ -149,21 +150,23 @@ export default function AttachmentsTab({
     }
   };
 
+  const onDeleteAll = !isDocumentReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
+
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
       <UploadDropzone
         onFiles={handleUpload}
         config={effectiveConfig}
-        disabled={!recordId || isSavingBeforeAttach}
+        disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
         data-testid="UploadDropzone__281340" />
       <AttachmentsTable
         items={items}
         loading={loading}
         uploadingFiles={uploadingFiles}
         onDownload={download}
-        onDelete={setDeletingAttachment}
+        onDelete={isDocumentReadOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
-        onDeleteAll={items.length > 0 ? () => setConfirmDeleteAll(true) : undefined}
+        onDeleteAll={onDeleteAll}
         formatBytes={formatBytes}
         data-testid="AttachmentsTable__281340" />
       <ConfirmDeleteDialog

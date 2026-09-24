@@ -222,8 +222,11 @@ test.describe('Printable downloads — purchase flow (integration)', () => {
 
     await test.step('Confirm the return (DR → CO)', async () => {
       const returnModal = page.getByTestId('confirm-inout-modal');
+      // ETP-5408: "Confirmar" is the generic draftMode Confirm (`action-save`), the same
+      // button the receipt above uses; it stays disabled until the lines load, which the
+      // toPass retry absorbs.
       await expect(async () => {
-        await page.getByTestId('action-confirm-with-credit').click({ timeout: 3_000 });
+        await page.getByTestId('action-save').click({ timeout: 3_000 });
         await expect(returnModal).toBeVisible({ timeout: 5_000 });
       }).toPass({ timeout: 15_000 });
 

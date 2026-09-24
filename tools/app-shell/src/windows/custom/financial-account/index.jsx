@@ -104,7 +104,7 @@ const LINE_CSV_COLUMNS = [
  * the Sonar limit (javascript:S3776) — its three visibility conditions were a quarter of the score.
  * Markup, conditions and test ids are unchanged; the inline handlers became props.
  */
-function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit, onAutoMatch, onExport }) {
+function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit, onAutoMatch, onExport, windowReadOnly }) {
   return (
           <div className="flex items-center gap-2">
         {/* Reconciliation is the one tab whose toolbar gets no refresh button of its own:
@@ -118,18 +118,20 @@ function DetailToolbarActions({ activeTab, isCashAccount, ui, onRefresh, onEdit,
             label={ui('refresh')}
             data-testid="RefreshButton__f7dbb3" />
         ) : null}
-        <button
-          type="button"
-          data-testid="financial-account-edit"
-          onClick={onEdit}
-          className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
-        >
-          <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
-          <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
-        </button>
+        {!windowReadOnly && (
+          <button
+            type="button"
+            data-testid="financial-account-edit"
+            onClick={onEdit}
+            className="inline-flex h-10 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-3 text-sm font-medium leading-6 text-[hsl(var(--foreground))] shadow-[0_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--muted))]"
+          >
+            <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__f7dbb3" />
+            <span className="px-1">{ui('financeAccountsMenuEdit')}</span>
+          </button>
+        )}
         {/* Automatch is bank-only (ETP-4795): a cash account's Reconciliation tab is the
             cash-close screen, which has nothing to automatch against. */}
-        {activeTab === 'reconciliation' && !isCashAccount ? (
+        {!windowReadOnly && activeTab === 'reconciliation' && !isCashAccount ? (
           <button
             type="button"
             data-testid="financial-account-automatch"
@@ -438,10 +440,13 @@ export function FinancialAccountDetail({ recordId }) {
   // never picked up the ETP-4520 access-tier guard despite the contract carrying a
   // real window.id. Checked here, after every other hook, so hook order stays stable
   // across renders regardless of the tier (mirrors custom/sales-invoice/index.jsx).
-  // Only the "none" tier is gated — propagating "read-only" would require threading
-  // it through every mutation hook in this window (useAccountMutations,
-  // useReconciliation, PSD2 actions, ...), out of scope here.
+  // ETP-5205 v6 — the "read-only" tier is now also propagated (see windowReadOnly
+  // below), threaded into DetailToolbarActions, MovementsTab, and their respective
+  // modal render conditions. Reconciliation/Imported Statements/Cash Close are NOT
+  // yet covered — same gap, not yet fixed there; do not assume this window is fully
+  // closed out by this change alone.
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
+  const windowReadOnly = windowAccessTier === 'read-only';
   if (windowAccessTier === 'none') {
     return <WindowAccessGuard windowId="94EAA455D2644E04AB25D93BE5157B6D" data-testid="WindowAccessGuard__financial-account" />;
   }
@@ -486,6 +491,7 @@ export function FinancialAccountDetail({ recordId }) {
             onEdit={() => setEditOpen(true)}
             onAutoMatch={() => setAutoMatchOpen(true)}
             onExport={handleExport}
+            windowReadOnly={windowReadOnly}
             data-testid="DetailToolbarActions__f7dbb3" />
         </div>
 
@@ -507,6 +513,7 @@ export function FinancialAccountDetail({ recordId }) {
               highlightTxnId={highlightTxnId}
               txnUnbounded={txnUnbounded}
               autoOpenNewMovement={autoOpenNewMovement}
+              windowReadOnly={windowReadOnly}
               data-testid="MovementsTab__f7dbb3" />
           )}
           {/* ETP-4795: a cash drawer is closed, not reconciled against a bank statement, so
@@ -550,7 +557,7 @@ export function FinancialAccountDetail({ recordId }) {
         groups={autoMatchGroups}
         kpis={autoMatchKpis}
         currency={account?.currencyIso ?? 'EUR'}
-        open={autoMatchOpen && !isCashAccount}
+        open={autoMatchOpen && !isCashAccount && !windowReadOnly}
         onClose={() => setAutoMatchOpen(false)}
         onSuccess={handleAutoMatchSuccess}
         // Same shape ReconciliationTab hands the split panel — the modal names the accounting
@@ -560,7 +567,7 @@ export function FinancialAccountDetail({ recordId }) {
           : null}
         data-testid="AutoMatchSuggestionModal__f7dbb3" />
       <EditAccountModal
-        open={editOpen}
+        open={editOpen && !windowReadOnly}
         account={account}
         onClose={() => setEditOpen(false)}
         // The SAME full reload the header's refresh button performs, not just the account. Editing

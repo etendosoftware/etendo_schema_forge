@@ -106,6 +106,8 @@ number — every downward correction above was a Step-3.5 question that should h
 | 2026-09-10 | §1 `third-party-sdk-integration` (Generation & backend) | 3 pts | Same estimate. No row existed for putting a third-party Java SDK on Etendo's classpath (ConfigCat here; Stripe and jsreport are prior instances). Above `webhook-config` because the Etendo `WEB-INF/lib` classpath and shading compatibility are involved, not just configuration. | ⏳ awaiting first actual |
 | 2026-09-10 | §2 `external-service-dependency` risk | +30% | Same estimate. Deliberately kept **distinct from `new-pattern-no-precedent`**: the cost is the failure-mode design (never block/never fail, bounded timeout, cached last-known-good), per-environment credentials and container egress — all of which survive into the second and third integration, when the no-precedent factor no longer applies. | ⏳ awaiting first actual |
 
+| 2026-09-21 | §1 `unify-duplicate-component` (UI — windows & views) | 8 pts | ETP-5178 follow-up: Isaias Battaglia found 3 files (`ImportReturnLinesModal.jsx`, `ReturnWizard.jsx`, `PurchaseReturnWizard.jsx`) that independently reimplement the exact onChange-clamp quantity-input bug ETP-5178 fixed in `ImportLinesModal.jsx`, none reusing it. The table had no row for "consolidate N drifted duplicates" — closest neighbours (`refactor-extract` 2, `multi-variant-window-framework` 5) both undersell the cost of reconciling differing domain models (plain "available qty" vs. "delivered vs. to-return" dual-column) across pre-existing call sites. | ⏳ awaiting first actual |
+
 > _Append a row each time Step 3.6 fires. Graduate confirmed rows into a dated calibration entry above._
 
 ---

@@ -11,6 +11,7 @@ import {
   BoxIcon,
   ProductSalePriceCell,
   ProductPurchasePriceCell,
+  ProductCostCell,
   ProductStockCell,
 } from '../ProductListCells.jsx';
 
@@ -131,6 +132,76 @@ describe('ProductPurchasePriceCell', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ProductCostCell — reads row.eTGOCost (ETP-5446), NOT bold, same PriceText
+// path as the price cells (formatCurrency, dash when empty)
+// ---------------------------------------------------------------------------
+
+describe('ProductCostCell', () => {
+  it('renders eTGOCost formatted with two decimals and euro sign', () => {
+    render(<ProductCostCell row={{ eTGOCost: 4.5 }} />);
+    expect(screen.getByText('4,50 €')).toBeInTheDocument();
+  });
+
+  it('formats an integer value to two decimals', () => {
+    render(<ProductCostCell row={{ eTGOCost: 15 }} />);
+    expect(screen.getByText('15,00 €')).toBeInTheDocument();
+  });
+
+  it('coerces a numeric string to a number and formats it', () => {
+    render(<ProductCostCell row={{ eTGOCost: '12.5' }} />);
+    expect(screen.getByText('12,50 €')).toBeInTheDocument();
+  });
+
+  it('groups thousands and uses the Spanish decimal separator (formatCurrency path)', () => {
+    render(<ProductCostCell row={{ eTGOCost: 1234.5 }} />);
+    expect(screen.getByText('1.234,50 €')).toBeInTheDocument();
+    expect(screen.queryByText('1234.50 €')).not.toBeInTheDocument();
+  });
+
+  it('renders a zero cost as 0,00 €, not as the empty dash', () => {
+    render(<ProductCostCell row={{ eTGOCost: 0 }} />);
+    expect(screen.getByText('0,00 €')).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+  });
+
+  it('does NOT apply font-semibold (normal weight, like the purchase price)', () => {
+    const { container } = render(<ProductCostCell row={{ eTGOCost: 3 }} />);
+    expect(screen.getByText('3,00 €')).toBeInTheDocument();
+    expect(container.querySelector('span.font-semibold')).not.toBeInTheDocument();
+  });
+
+  it('reads eTGOCost only — ignores the price fields on the same row', () => {
+    render(<ProductCostCell row={{ eTGOSalePrice: 10, eTGOPurchasePrice: 6 }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders dash when eTGOCost is null', () => {
+    render(<ProductCostCell row={{ eTGOCost: null }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders dash when eTGOCost is undefined (field absent)', () => {
+    render(<ProductCostCell row={{}} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders dash when eTGOCost is a blank string', () => {
+    render(<ProductCostCell row={{ eTGOCost: '' }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders dash when eTGOCost is non-numeric (coerces to null)', () => {
+    render(<ProductCostCell row={{ eTGOCost: 'abc' }} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('renders dash when row is null', () => {
+    render(<ProductCostCell row={null} />);
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // ProductStockCell — reads row.eTGOStock
 // ---------------------------------------------------------------------------
 
@@ -195,11 +266,12 @@ describe('no network access (stored computed columns)', () => {
     vi.restoreAllMocks();
   });
 
-  it('does not call fetch when rendering the price and stock cells with data', () => {
+  it('does not call fetch when rendering the price, cost and stock cells with data', () => {
     render(
       <>
         <ProductSalePriceCell row={{ eTGOSalePrice: 10, eTGOPurchasePrice: 6, eTGOStock: 3 }} />
         <ProductPurchasePriceCell row={{ eTGOSalePrice: 10, eTGOPurchasePrice: 6, eTGOStock: 3 }} />
+        <ProductCostCell row={{ eTGOCost: 4, eTGOStock: 3 }} />
         <ProductStockCell row={{ eTGOSalePrice: 10, eTGOPurchasePrice: 6, eTGOStock: 3 }} />
       </>,
     );
@@ -211,6 +283,7 @@ describe('no network access (stored computed columns)', () => {
       <>
         <ProductSalePriceCell row={{}} />
         <ProductPurchasePriceCell row={{}} />
+        <ProductCostCell row={{}} />
         <ProductStockCell row={{}} />
       </>,
     );

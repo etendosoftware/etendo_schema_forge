@@ -6,7 +6,7 @@ import { getPendingSifTargets, getSifBodyKey } from './sifSending.js';
 import { resolveInvoiceOrgId } from './resolveInvoiceOrgId.js';
 import SifSendingModal from './SifSendingModal.jsx';
 
-export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty }) {
+export default function SendToSifButton({ data, recordId, apiBaseUrl, status, onSave, isDirty, isDocumentReadOnly }) {
   const ui = useUI();
   const [modalOpen, setModalOpen] = useState(false);
   const [sentSuccessfully, setSentSuccessfully] = useState(false);
@@ -26,7 +26,7 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status, on
   const pendingTargets = getPendingSifTargets(specName, profile, data, territory, tbaiRecord);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
 
-  if (status !== 'CO' || !hasPendingTargets) return null;
+  if (status !== 'CO' || !hasPendingTargets || isDocumentReadOnly) return null;
 
   return (
     <>

@@ -285,3 +285,28 @@ describe('MovementsToolbar', () => {
     expect(trigger).not.toHaveTextContent(/\d/);
   });
 });
+
+describe('MovementsToolbar — respects windowReadOnly (ETP-5205)', () => {
+  it('hides the new-movement split button when windowReadOnly is true', () => {
+    render(
+      <MovementsToolbar
+        filters={defaultFilters}
+        onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
+        windowReadOnly
+      />,
+    );
+    expect(screen.queryByTestId('new-movement-button')).not.toBeInTheDocument();
+  });
+
+  it('regression: shows the new-movement split button when windowReadOnly is false/absent', () => {
+    render(
+      <MovementsToolbar
+        filters={defaultFilters}
+        onFiltersChange={() => () => {}}
+        onAdvancedFilterChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('new-movement-button')).toBeInTheDocument();
+  });
+});

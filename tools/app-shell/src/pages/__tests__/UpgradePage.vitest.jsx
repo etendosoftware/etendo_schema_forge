@@ -123,7 +123,8 @@ function successStream({ success = true, clientName = 'Acme Productive' } = {}) 
  * poll attempt reject/error). `onboarding` feeds the NDJSON stream behind
  * `/sws/go/onboarding`, defaulting to a successful run.
  */
-function installFetch({ environments = [], purchases = [], checkout = {}, statuses = ['paid'], onboarding } = {}) {
+function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
+  purchaseDataTransferEnabled, checkout = {}, statuses = ['paid'], onboarding } = {}) {
   const requests = [];
   let statusCallIndex = 0;
   globalThis.fetch = vi.fn(async (url, init = {}) => {
@@ -139,7 +140,9 @@ function installFetch({ environments = [], purchases = [], checkout = {}, status
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
-        return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive' });
+        return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive',
+          ...(purchaseDataTransfer === undefined ? {} : { dataTransfer: purchaseDataTransfer }),
+          ...(purchaseDataTransferEnabled === undefined ? {} : { dataTransferEnabled: purchaseDataTransferEnabled }) });
       }
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
       return jsonResponse({
@@ -299,6 +302,7 @@ describe('UpgradePage — hosted checkout', () => {
       clientName: 'Acme Trial',
       upgradeAction: 'create-productive',
       language: 'es_ES',
+      dataTransfer: { products: true, contacts: true },
     });
     expect(JSON.stringify(requests[0].body)).not.toMatch(/card|paymentToken|mock-paid|priceId|amount/i);
   });
@@ -599,6 +603,117 @@ describe('UpgradePage — checkout funnel tracking', () => {
     );
   });
 
+  it('recovers the transfer choice from the purchase when browser storage is empty', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransfer: { products: false, contacts: true },
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: false, contacts: true });
+  });
+
+  it('does not invent a transfer choice when neither purchase nor browser stores one', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: false,
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
+  it('uses the purchase choice over a stale browser choice, including explicit all-false', async () => {
+    setupCheckoutReturn({ tenantName: 'Stale Browser Name' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: true }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransfer: { products: false, contacts: false },
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: false, contacts: false });
+  });
+
+  it('preserves an explicit browser choice for an older flag-off purchase', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: false }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: false,
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: true, contacts: false });
+  });
+
+  it('provisions a legacy flag-on purchase without a recorded selection and shows a warning', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: true }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: true,
+      statuses: ['paid'],
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    expect(screen.getByTestId('upgrade-transfer-selection-warning'))
+      .toHaveTextContent('upgradeDataTransferSelectionMissing');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
+  it('lets activity resume finish without transfer when the recorded selection is missing', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [{ purchaseId: 'purchase-1', status: 'PAID', clientName: 'Acme Productive',
+        dataTransferEnabled: true }],
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+
+    await screen.findByTestId('upgrade-success');
+    expect(screen.getByTestId('upgrade-transfer-selection-warning'))
+      .toHaveTextContent('upgradeDataTransferSelectionMissing');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
   it('resumes a paid purchase from billing activity without starting checkout', async () => {
     const user = userEvent.setup();
     const requests = installFetch({
@@ -746,6 +861,7 @@ describe('UpgradePage — clientName resolution on submit (upgrade clientName bu
       clientName: 'Acme Second Co',
       upgradeAction: 'create-productive',
       language: 'es_ES',
+      dataTransfer: { products: true, contacts: true },
     });
     expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBe('Acme Second Co');
   });
