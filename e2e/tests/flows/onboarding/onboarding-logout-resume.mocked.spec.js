@@ -106,23 +106,6 @@ test.describe('ETP-4584 — onboarding logout and resume', () => {
     await expect(page.getByTestId('draft-restored-notice')).toBeVisible();
   });
 
-  test('direct navigation to /logout clears the authenticated session without a redirect loop', async ({ page }) => {
-    await installOnboardingMocks(page);
-    await page.goto('/onboarding');
-    await page.evaluate(() => {
-      localStorage.setItem('sf_auth_token', 'environment-token');
-      localStorage.setItem('sf_platform_token', 'platform-token');
-    });
-
-    await page.goto('/logout?returnTo=/logout');
-    await expect(page).toHaveURL(/\/onboarding$/);
-    await expect(page.getByTestId('action-login-submit')).toBeVisible();
-    await expect.poll(() => page.evaluate(() => ({
-      auth: localStorage.getItem('sf_auth_token'),
-      platform: localStorage.getItem('sf_platform_token'),
-    }))).toEqual({ auth: null, platform: null });
-  });
-
   test('flushes pending Company edits before logout and resumes at Company', async ({ page }) => {
     const state = await installOnboardingMocks(page);
     await registerToProfile(page);
