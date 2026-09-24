@@ -138,7 +138,7 @@ function successStream({ success = true, clientName = 'Acme Productive', clientI
  * `/sws/go/onboarding`, defaulting to a successful run.
  */
 function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
-  purchaseDataTransferEnabled, checkout = {}, statuses = ['paid'], onboarding,
+  purchaseDataTransferEnabled, purchaseProjection, checkoutError, checkout = {}, statuses = ['paid'], onboarding,
   offer = { code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' },
   sessionEnvironment } = {}) {
   const requests = [];
@@ -169,16 +169,22 @@ function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
+        if (typeof purchaseProjection === 'function') return purchaseProjection();
+        if (purchaseProjection) return jsonResponse(purchaseProjection);
         return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive',
           ...(purchaseDataTransfer === undefined ? {} : { dataTransfer: purchaseDataTransfer }),
           ...(purchaseDataTransferEnabled === undefined ? {} : { dataTransferEnabled: purchaseDataTransferEnabled }) });
       }
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
+      if (checkoutError) return jsonResponse(checkoutError, { ok: false, status: 409 });
       return jsonResponse({
         requestId: 'upgrade-request-1',
         checkoutUrl: 'https://checkout.stripe.test/session-1',
         ...checkout,
       });
+    }
+    if (target.includes('/sws/go/onboarding/first-steps')) {
+      return jsonResponse({ firstSteps: { seen: false, completed: [] } });
     }
     // Status polling hits `/checkout/sessions/:requestId` — checked before the
     // session-creation route below, since that path is a substring of this one.
@@ -742,6 +748,53 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(succeeded).toEqual({ upgradeAction: 'create-productive', durationMs: expect.any(Number) });
     expect(succeeded.durationMs).toBeGreaterThanOrEqual(0);
     expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([]);
+  });
+
+  it('resolves the created environment from the purchase when the onboarding stream omits clientId', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive', upgradeAction: 'create-productive' });
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ === 0
+        ? [{ clientName: EXISTING_TENANT, clientId: 'TRIAL-1', plan: 'demo' }]
+        : [{ clientName: 'Acme Productive', clientId: 'FROM-PURCHASE', plan: 'productive' }] }),
+      statuses: ['paid'],
+      purchaseProjection: { purchaseId: 'upgrade-request-1', createdClientId: 'FROM-PURCHASE' },
+      onboarding: () => successStream({ clientId: '' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/billing/purchases/upgrade-request-1', expect.objectContaining({ headers: expect.any(Object) })
+    );
+    expect(environmentReads).toBeGreaterThan(1);
+  });
+
+  it('waits for a PROVISIONED purchase to sync, then lets the user retry environment discovery', async () => {
+    const user = userEvent.setup();
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ <= 5
+        ? [{ clientName: EXISTING_TENANT, clientId: 'TRIAL-1', plan: 'demo' }]
+        : [{ clientName: 'Ready Environment', clientId: 'READY-CLIENT', plan: 'productive' }] }),
+      checkoutError: { purchaseId: 'purchase-provisioning', status: 'PROVISIONED',
+        clientName: 'Ready Environment' },
+      purchaseProjection: { purchaseId: 'purchase-provisioning', status: 'PROVISIONED',
+        clientName: 'Ready Environment', createdClientId: 'READY-CLIENT' },
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await screen.findByTestId('upgrade-environment-sync-pending');
+    expect(globalThis.fetch.mock.calls.some(([url]) => String(url)
+      .includes('/sws/go/billing/purchases/purchase-provisioning')),
+    JSON.stringify(globalThis.fetch.mock.calls.map(([url, init]) => [String(url), init?.method]))).toBe(true);
+
+    await user.click(screen.getByTestId('upgrade-environment-sync-retry'));
+    await screen.findByTestId('upgrade-success');
+    expect(globalThis.fetch.mock.calls.some(([url, init]) => String(url) === '/sws/go/onboarding'
+      && init?.method === 'POST')).toBe(false);
   });
 
   it('recovers the environment name from the durable purchase when session storage is empty', async () => {
