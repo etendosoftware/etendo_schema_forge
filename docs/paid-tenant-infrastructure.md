@@ -96,10 +96,13 @@ Two consequences follow, and neither is hypothetical:
    Stripe; the browser also carries the toggles through the redirect for the onboarding request.
    The browser does not collect or send card details. In Vite development, upgrade API calls
    remain same-origin (`/sws/...`) for the Vite proxy to forward to Etendo.
-10. **The backend creates hosted Stripe Checkout.** The configured Stripe Price is the source of
-    the amount, currency and billing interval returned by `GET /sws/go/billing/offers` for the
-    plan preview. Checkout uses the same server-configured Price ID. Stripe owns card entry and
-    payment; the Etendo GO page redirects to the returned hosted URL.
+10. **The backend creates hosted Stripe Checkout.** The browser names a plan by `planKey`, read
+    from `GET /sws/go/plans` (ETP-5046); the backend resolves that plan's Stripe Price, validates
+    it, and uses it as the single line item. The plan list quotes the amount, currency and
+    interval derived from that same Price, so the preview is the charge. While no plan carries a
+    provider price, the legacy price fallback sells `legacy-productive` at the configured
+    `etendo.go.checkout.price.id` instead. Stripe owns card entry and payment; the Etendo GO page
+    redirects to the returned hosted URL.
 11. **Stripe returns the browser to Etendo GO.** A successful return includes the durable
     checkout request ID. The page asks the backend for payment status and begins provisioning
     only after the backend confirms payment. A cancelled return clears the pending browser state
@@ -387,11 +390,19 @@ visible sync retry; it does not trigger another payment or provisioning run.
 
 ## 3.3 Stripe offer and payment
 
-The backend reads the configured recurring Stripe Price using its server-side secret key and
-projects that same Price's `unit_amount`, `currency`, and recurring interval from
-`GET /sws/go/billing/offers`. Checkout submits the configured Price ID as its single line item.
-The projection rejects unavailable, inactive, non-recurring, or unsupported interval prices
-rather than displaying a locally maintained fallback that could disagree with checkout.
+What is sold comes from the Subscription Plan Catalog (`ETGO_PLAN`, ETP-5046). Each plan carries a
+Stripe Price id; its display price, currency and interval are derived from that Price when the plan
+is saved, never typed. `GET /sws/go/plans` lists the priced plans and checkout submits the chosen
+plan's Price ID as its single line item, re-validating it against Stripe first. While no plan
+carries a price, the **legacy price fallback** lists and sells `legacy-productive` at the
+configured `etendo.go.checkout.price.id`; the first priced plan retires it with no redeploy (design:
+`com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6–§6.2).
+
+`GET /sws/go/billing/offers` still projects the **configured** Price (`unit_amount`, `currency`,
+recurring interval), not the plan catalog. The upgrade page quotes the plan catalog and uses the
+offer only while that lookup is in flight or has failed. Both projections reject unavailable,
+inactive, non-recurring, or unsupported interval prices rather than displaying a locally
+maintained fallback that could disagree with checkout.
 
 The browser formats Stripe's integer `amountMinor` using the returned currency, including
 zero-decimal and compatibility currencies, then displays the returned interval. If the offer
@@ -730,8 +741,9 @@ rare unexplained mismatch instead of an obvious failure.
 Stripe Checkout and the signed webhook are part of the current flow, not a future gateway
 integration. The webhook is the payment authority; a browser redirect cannot mark a purchase as
 paid. Billing records retain the request ID, account, target name, selected demo source, payment
-status, and the created client ID. The Stripe Price lookup that feeds the UI preview reads the
-same configured Price ID used as the hosted Checkout line item.
+status, the created client ID, the plan and the Stripe Price ID actually charged — a reopened
+checkout charges that stored Price, never the plan's current one. The plan list that feeds the UI
+preview is derived from the same Price the hosted Checkout line item uses.
 
 The purchase ID is also the idempotency and recovery key. A paid retry reuses that ID, and a
 conditional provisioning claim fences concurrent requests. On a failed or abandoned provisioning

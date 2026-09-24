@@ -13,8 +13,9 @@ It never uses live keys and never sends raw card data to Etendo.
 
 ## 1. What is being tested
 
-The browser sends an authenticated intent to Etendo Go. The backend chooses the configured Price,
-creates a hosted Checkout Session at Stripe, and returns a redirect URL. Stripe handles the card
+The browser sends an authenticated intent to Etendo Go, naming a plan by key. The backend resolves
+that plan's Stripe Price (or, under the legacy price fallback, the configured one), creates a hosted
+Checkout Session at Stripe, and returns a redirect URL. Stripe handles the card
 form. Stripe then delivers `checkout.session.completed`, which the backend verifies and correlates
 back to the originating account so onboarding can resume.
 
@@ -23,8 +24,12 @@ All of it is implemented on this branch:
 - `POST <base>/sws/go/checkout/sessions` creates a hosted session.
 - `POST <base>/sws/go/billing/purchases` creates the purchase boundary and reopens the existing
   hosted session correlation when an unpaid `CREATING` or `CREATED` purchase is retried.
-  It takes a `planKey` naming a row in the Subscription Plan Catalog (ETP-5046). A key that names
-  no active plan is rejected `400 PLAN_NOT_AVAILABLE` without revealing which keys exist.
+- `GET  <base>/sws/go/plans` lists the purchasable plans (`planKey`, name, description, display
+  price, currency, interval — never a provider price id).
+- Both checkout writes above take a `planKey` naming a row in the Subscription Plan Catalog
+  (ETP-5046). A key that names no active plan is rejected `400 PLAN_NOT_AVAILABLE` without
+  revealing which keys exist; an active plan other than `legacy-productive` with no provider price
+  answers `503 CHECKOUT_NOT_CONFIGURED`.
   **Legacy price fallback:** while no active plan carries a provider price and
   `etendo.go.checkout.price.id` is set, `GET /sws/go/plans` lists only `legacy-productive`
   (quoted from that Stripe price) and a request naming `legacy-productive` — or no plan — is sold
@@ -39,7 +44,8 @@ All of it is implemented on this branch:
   the stored grace state (ETP-5443).
 - `POST <base>/sws/go/billing/subscription/portal` opens a Stripe Customer Portal session for the
   account's stored customer (ETP-5443).
-- Server-side Price ID and subscription/payment mode configuration.
+- Server-side pricing: the plan's Stripe Price, validated on every checkout; the charged price id
+  is stored on the purchase and on the subscription it opens.
 - Paid onboarding resume: the `requestId` is passed back as `paymentToken` on the onboarding call.
 
 ### Payment state is durable (ETP-5045)
@@ -163,12 +169,30 @@ re-test for replay protection.
 | `customer.subscription.updated`, `status` `canceled` | `EXPIRED` | cleared |
 | `customer.subscription.deleted` | `EXPIRED` | cleared |
 
-These are `AD_Preference` rows scoped to the tenant's `Client`, not columns on
-`ETGO_CHECKOUT_REQUEST`: `ETGO_SubscriptionStatus`, `ETGO_SubscriptionDueAt`, and
-`ETGO_SubscriptionEventAt` (the out-of-order-delivery watermark, see below). Read them back
-through the classic **Preference** window as System Administrator (filter by `Attribute` and
-the tenant's client), or call `TenantEnvironmentLifecycleService.resolve(clientId)` /
-`readSubscriptionState(clientId)` in a debugger — there is no dedicated SQL table to query.
+**Where the outcome is stored depends on the tenant (ETP-5046).**
+
+- **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
+  older one once the R37 backfill has run: the event writes the row. `CURRENT` → `STATUS = active`,
+  `PAST_DUE` → `past_due`, `EXPIRED` → `canceled` (the row stays open, `END_DATE` null, and the
+  tenant reads as `free` immediately), and the due date goes to `CURRENT_PERIOD_END` (cleared → null).
+  Query it directly:
+
+  ```sql
+  select status, current_period_end, provider_price_id, end_date
+    from etgo_subscription
+   where environment_client_id = '<clientId>' and isactive = 'Y' and end_date is null;
+  ```
+
+- **Tenant with no open row** (a pre-ETP-5046 tenant R37 has not reached): the
+  `AD_Preference` projection, as ETP-5443 shipped it — `ETGO_SubscriptionStatus` and
+  `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
+
+`ETGO_SubscriptionEventAt` (the out-of-order-delivery watermark, see below) stays an
+`AD_Preference` for **both** kinds of tenant. Read preferences through the classic **Preference**
+window as System Administrator (filter by `Attribute` and the tenant's client), or call
+`TenantEnvironmentLifecycleService.resolve(clientId)` / `readSubscriptionState(clientId)` in a
+debugger — both read the same store the event wrote to. The expected results in §7 name the
+preference values; for a tenant with a row, read them through the mapping above.
 
 **The grace anchor is the end of the paid period, never the moment the charge failed — and each
 event reads it from a different field, on purpose.** `invoice.payment_failed` reads
@@ -333,8 +357,17 @@ Configuration resolves in this order (`ConfigPropertyReader`):
 | `etendo.go.checkout.webhook.secret` | `ETGO_CHECKOUT_WEBHOOK_SECRET` | webhook (offline **and** Stripe) |
 | `etendo.go.checkout.secret.key` | `ETGO_CHECKOUT_SECRET_KEY` | creating sessions |
 | `etendo.go.checkout.price.id` | `ETGO_CHECKOUT_PRICE_ID` | legacy price fallback only — used while no `ETGO_PLAN` row carries a provider price (ETP-5046) |
-| `etendo.go.checkout.mode` | `ETGO_CHECKOUT_MODE` | optional, default `subscription` |
+| `etendo.go.checkout.mode` | `ETGO_CHECKOUT_MODE` | optional, default `subscription`; validates only the legacy fallback price's recurrence — a plan's checkout mode derives from its Stripe price interval |
 | `etendo.go.checkout.api.base.url` | `ETGO_CHECKOUT_API_BASE_URL` | optional, default `https://api.stripe.com` |
+| `etendo.go.checkout.connect.timeout.ms` | `ETGO_CHECKOUT_CONNECT_TIMEOUT_MS` | optional, default `10000`; checkout sessions and plan price derivation (`HttpUrlConnectionStripeApiClient`) |
+| `etendo.go.checkout.read.timeout.ms` | `ETGO_CHECKOUT_READ_TIMEOUT_MS` | optional, default `20000`; same client |
+
+**What is for sale.** With only the properties above and no `ETGO_PLAN` row carrying a provider
+price, checkout sells `legacy-productive` at `etendo.go.checkout.price.id` — enough for every
+recipe in this guide. To test the plan catalog instead, create a plan in the Classic **Plans**
+window with a Test Mode **Provider Price ID** (active, recurring, `interval_count = 1`); its display
+price is derived from Stripe on save, and from the next request on the fallback is retired. Full
+procedure: `com.etendoerp.go/docs/plans/2026-09-18-etp-5046-plan-and-subscription-design.md` §6.2.
 
 ### Use `Openbravo.properties`, not environment variables
 
@@ -566,9 +599,10 @@ post_event "$(printf '{"id":"evt_%s","created":%s,"type":"customer.subscription.
 Check the outcome the same way as §1: `select event_id, event_type, event_result, failure_reason,
 request_id, etgo_checkout_request_id from etgo_billing_event order by received_at desc;` — expect
 `request_id` and `etgo_checkout_request_id` **empty** on every one of these rows (see "Correlation
-is different from the checkout path" above), and the stored projection changed by reading the
-**Preference** window for `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` /
-`ETGO_SubscriptionEventAt` on the tenant's client.
+is different from the checkout path" above), and the stored state changed — the tenant's open
+`etgo_subscription` row when it has one, otherwise the **Preference** window for
+`ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` — plus `ETGO_SubscriptionEventAt` on the
+tenant's client (see "Where the outcome is stored" in §1).
 
 ## 5. Stripe Test Mode
 
@@ -708,6 +742,13 @@ sets it from the `invoice.payment_failed` event regardless of what the subscript
 reports — check the AD_Preference projection (`status`/`recover` above), not
 `stripe subscriptions retrieve`'s `status` field, to confirm the lifecycle actually moved.
 
+> **Known gap since ETP-5046.** `tools/stripe-subscription-past-due.sh` polls and reports only the
+> `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` **preferences**. A tenant purchased since
+> ETP-5046 (or backfilled by R37) has an open `etgo_subscription` row, and the webhook writes the
+> row instead — so for that tenant `fail` / `recover` time out on the preference and print a failed
+> RESULT even though the event was `APPLIED`. Check the row with the query in §1 ("Where the outcome
+> is stored") until the script learns to read it.
+
 `fail` and `recover` **mutate the Stripe Test Mode account** (a human runs them, not an agent, per
 this repo's automation guardrails); `status` never mutates anything. Both refuse to run against a
 live-mode key or a live-mode object.
@@ -719,20 +760,26 @@ curl -i -X POST "$ETENDO_BASE_URL/sws/go/checkout/sessions" \
   -H "Authorization: Bearer $ETENDO_SESSION_TOKEN" \
   -H "Content-Type: application/json" \
   -H "Origin: http://localhost:3100" \
-  -d '{"clientName":"Stripe Sandbox Tenant","language":"en_US","countryCode":"AR"}'
+  -d '{"clientName":"Stripe Sandbox Tenant","language":"en_US","countryCode":"AR","planKey":"<planKey from GET /sws/go/plans>"}'
 ```
+
+Omit `planKey` to buy under the legacy price fallback (§3 "What is for sale"); once a priced plan
+exists that answers `400 PLAN_NOT_AVAILABLE`.
 
 ```json
 {
   "requestId": "<server-generated-id>",
   "checkoutUrl": "https://checkout.stripe.com/c/pay/...",
-  "mode": "subscription"
+  "mode": "subscription",
+  "priceId": "price_..."
 }
 ```
 
 Open `checkoutUrl` in the browser. The request carries no card number, CVC, amount, currency or
-Price ID. A missing secret, Price ID or webhook secret fails closed with `503
-CHECKOUT_NOT_CONFIGURED`; the client must not fall back to a mock card form.
+Price ID; the `priceId` in the answer is the one the server chose (a known leftover,
+`com.etendoerp.go/docs/open-and-notable-topics.md` §4.8). A missing secret key or webhook secret
+fails closed with `503 CHECKOUT_NOT_CONFIGURED`, and so does an active plan with no provider price;
+the client must not fall back to a mock card form.
 
 #### Account email binding
 
@@ -812,7 +859,7 @@ and the resulting tenant/payment state in Etendo.
 | ID | Scenario | How to run | Expected result | Priority |
 | --- | --- | --- | --- | --- |
 | SF-STRIPE-LOCAL-01 | Valid token and configured sandbox | `make test-stripe-local` | Returns hosted Checkout URL; no card fields in request | P0 |
-| SF-STRIPE-LOCAL-02 | Missing secret/Price/webhook configuration | unset a property, redeploy | `503 CHECKOUT_NOT_CONFIGURED` | P0 |
+| SF-STRIPE-LOCAL-02 | Missing secret/webhook configuration, or nothing for sale | unset a property, redeploy | secret key or webhook secret missing → `503 CHECKOUT_NOT_CONFIGURED`; no priced plan **and** no `etendo.go.checkout.price.id` → `GET /sws/go/plans` empty and checkout `400 PLAN_NOT_AVAILABLE` | P0 |
 | SF-STRIPE-LOCAL-03 | Successful `4242` payment | Test Mode (§5) | Stripe accepts payment and emits webhook | P0 |
 | SF-STRIPE-LOCAL-04 | Declined `4000...0002` payment | Test Mode (§5) | Checkout declines; tenant remains unprovisioned | P0 |
 | SF-STRIPE-LOCAL-05 | Invalid webhook signature | `tools/stripe-webhook-simulate.sh --invalid-signature` | `400 INVALID_CHECKOUT_SIGNATURE`; no side effect, **no `etgo_billing_event` row** | P0 |
@@ -841,9 +888,16 @@ reachable endpoint answers `400`, not `404`, to an unsigned POST.
 
 ### `CHECKOUT_NOT_CONFIGURED`
 
-`isConfigured()` requires secret key, Price ID **and** webhook secret. Most often the values were
-exported into a shell that did not start the JVM — put them in `Openbravo.properties` and redeploy
-(§3).
+`isConfigured()` requires the secret key **and** the webhook secret (since ETP-5046 it no longer
+checks a price). The other cause is a plan the request named that is active but has no **Provider
+Price ID** yet. Most often the values were exported into a shell that did not start the JVM — put
+them in `Openbravo.properties` and redeploy (§3).
+
+### `PLAN_NOT_AVAILABLE`
+
+The `planKey` names no active plan, or names `legacy-productive` (or is absent) while the legacy
+price fallback is inactive — i.e. a priced plan exists, or no `etendo.go.checkout.price.id` is set.
+Reload `GET /sws/go/plans` and send one of its keys.
 
 ### Checkout succeeded but status stays `pending`
 
@@ -877,7 +931,8 @@ Expected once the projection is already `PAST_DUE` with a due date on file: a la
 past_due/unpaid `customer.subscription.updated` **keeps** that stored due date rather than
 recomputing one from the new payload's `current_period_start`. Only `invoice.payment_failed`
 (or the first past_due transition out of a non-`PAST_DUE` state) sets a new due date. Read the
-current `ETGO_SubscriptionDueAt` from the **Preference** window before assuming the event was
+current due date (the open `etgo_subscription` row's `current_period_end`, or
+`ETGO_SubscriptionDueAt` from the **Preference** window for a tenant without one) before assuming the event was
 dropped — it likely applied, and left the anchor exactly where it already was (§1 §3.1 of the
 design doc).
 
@@ -933,6 +988,7 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
   the Classic **Billing Event** window or the **Checkout Request** child tab.
 - Etendo tenant/payment state before and after each scenario.
 - For subscription lifecycle scenarios (§1, §4, §7 SF-STRIPE-LOCAL-10..20): the `etgo_billing_event`
-  row per event id (`event_result`, `failure_reason`), and the **Preference** window rows for
-  `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` / `ETGO_SubscriptionEventAt` on the
-  affected client, before and after.
+  row per event id (`event_result`, `failure_reason`), and the stored state on the affected client,
+  before and after — its open `etgo_subscription` row (`status`, `current_period_end`) when it has
+  one, otherwise the **Preference** rows `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` — plus
+  `ETGO_SubscriptionEventAt`.

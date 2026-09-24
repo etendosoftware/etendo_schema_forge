@@ -11,6 +11,26 @@ sort equal to chronological execution order. The `fix_id` is the file name
 without `.sql`. Known onboarding-gap fixes carry their `Rn` label in `@id`,
 e.g. `20260611T143000Z__R3-periodcontrol.sql`.
 
+### Choosing the timestamp — the watermark trap
+
+The timestamp is not a label, it decides whether the fix runs at all. Per tenant, `../run.js`
+applies only fixes **strictly newer** than the newest fix that tenant has already processed
+(`APPLIED`, `MANUALLY_FIXED` or `SKIPPED_NOT_NEEDED`); anything at or before that watermark is
+skipped with no ledger row, no error and no report line. So:
+
+- **Use a timestamp later than the newest `.sql` in the target branch, and unique.** Sharing a
+  stamp with an existing fix is enough to be skipped wherever that fix already ran.
+- **Re-check it when the branch lands late.** A fix that waits on a branch while newer fixes merge
+  to `develop` is dead on arrival on every environment that ran them. Re-date it before merging;
+  renaming is allowed while the fix is unapplied (rule 3 below forbids it only once applied).
+  ETP-5046's `R37-tenant-subscription-backfill` was authored as `20260918T120000Z` — the same stamp
+  as `R38-org-legalentity-pointer` — and had to be re-dated to `20260924T150000Z`.
+
+`cli/test/data-fixes-catalog-ordering.test.js` fails the build when two fixes share a timestamp
+prefix (seven already-applied pairs are frozen by exact file name; do not extend that allowlist,
+re-date the new file). It cannot detect a fix dated before the newest fix an environment has
+already processed — that check is the author's.
+
 ## File format
 
 ```sql
