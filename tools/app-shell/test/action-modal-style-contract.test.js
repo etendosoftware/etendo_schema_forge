@@ -38,12 +38,6 @@ const MODALS = [
     primary: 'btnPrimary',
     primaryDisabled: 'btnPrimaryDisabled',
     cancel: 'btnSecondary',
-    // The unselected OptionCard icon still paints itself with `--muted`, a background
-    // token, so it is invisible. It sits in the radio-card SELECTION palette, which
-    // ETP-5398 deliberately left alone (changing a selection affordance is a design
-    // decision the ticket does not make). Reported for follow-up; delete this allowance
-    // when that lands.
-    allowsMutedAsText: true,
   },
   {
     name: 'SendToEvaluationModal',
@@ -162,7 +156,8 @@ describe('ETP-5398 — action modal style contract', () => {
       });
 
       it('never uses a background token as a text colour', () => {
-        if (modal.allowsMutedAsText) return;
+        // `--muted` as a `background` is correct (the option-card icon tile uses it that
+        // way); as a `color` it paints text in the colour of a surface.
         assert.doesNotMatch(code, /color:\s*'hsl\(var\(--muted\)\)'/);
       });
     });
@@ -216,6 +211,43 @@ describe('ETP-5398 — action modal style contract', () => {
 
     it('spreads the summary columns instead of letting them hug the left edge', () => {
       assert.match(code.match(/summaryCell:\s*\{[^}]*\}/s)?.[0] ?? '', /flex:\s*'1 1 0'/);
+    });
+
+    it('wraps a long summary value instead of ellipsizing it away', () => {
+      // The design frame shows a long partner name running onto a second line and the
+      // strip growing to fit; an ellipsis would hide data the frame deliberately shows.
+      const value = code.match(/summaryValue:\s*\{[^}]*\}/s)?.[0] ?? '';
+      assert.match(value, /overflowWrap:\s*'anywhere'/);
+      assert.doesNotMatch(value, /textOverflow|whiteSpace/);
+    });
+  });
+
+  // ETP-5398 — the radio cards in QuotationConfirmModal. Selection is a NEUTRAL
+  // affordance, not a status: the cards used to paint their selected border, their icon
+  // and their title with the `--status-info-*` family, which is the same blue the ticket
+  // removed from the buttons and which reads saturated in dark theme.
+  describe('QuotationConfirmModal option cards', () => {
+    const code = readCode(join('artifacts', 'sales-quotation', 'custom', 'QuotationConfirmModal.jsx'));
+
+    it('marks the selected card with the foreground role, never a status token', () => {
+      assert.match(code, /border:\s*'2px solid hsl\(var\(--foreground\)\)'/);
+      assert.doesNotMatch(code, /--status-info-/);
+    });
+
+    it('gives the unselected card and radio a visible control border', () => {
+      assert.match(code, /border:\s*'1px solid hsl\(var\(--border-control\)\)'/);
+      assert.match(code, /border:\s*'1\.5px solid hsl\(var\(--border-control\)\)'/);
+    });
+
+    it('uses --muted as the icon tile background and --foreground as the icon colour', () => {
+      const tile = declarationOf(code, 'optionIconBoxStyle');
+      assert.match(tile, /background:\s*'hsl\(var\(--muted\)\)'/);
+      assert.match(tile, /color:\s*'hsl\(var\(--foreground\)\)'/);
+    });
+
+    it('lays the two options out side by side, each taking half the row', () => {
+      assert.match(declarationOf(code, 'optionsRowStyle'), /flexDirection:\s*'row'/);
+      assert.match(declarationOf(code, 'OPTION_CARD_BASE'), /flex:\s*'1 1 0'/);
     });
   });
 });

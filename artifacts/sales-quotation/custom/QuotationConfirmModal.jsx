@@ -220,10 +220,6 @@ export default function QuotationConfirmModal({
     }
   };
 
-  const primaryLabel = selected === 'order'
-    ? ui('sqConfirmActionOrder')
-    : ui('soConfirmActionInvoice');
-
   const handleGoToDoc = () => {
     if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
     // ETP-5378 — this modal now also opens from the LIST row kebab, whose path is
@@ -314,53 +310,59 @@ export default function QuotationConfirmModal({
         {/* ETP-5398 — the title is the ACTION, not the document reference. The document
             number moved into the summary strip below, alongside the contact and amounts. */}
         <div style={headerStyle}>
-          <span style={MODAL_STYLES.title}>{ui('confirm')}</span>
+          <span style={MODAL_STYLES.title}>{ui('sqConfirmSaleTitle')}</span>
           <button type="button" onClick={onClose} aria-label={ui('cancel')} style={MODAL_STYLES.closeBtn}>
             &times;
           </button>
         </div>
 
-        <div style={{ padding: '20px 20px 0' }}>
+        <div style={bodyStyle}>
           <ActionModalSummary items={summaryItems} />
-        </div>
 
-        {/* Options */}
-        <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
-            {ui('sqWhatToDo')}
+          <div style={optionsBlockStyle}>
+            <div style={questionStyle}>{ui('sqWhatToDo')}</div>
+            {/* ETP-5398 — the two choices sit SIDE BY SIDE, each one a column: icon and
+                radio on the top row, then the title, then the description. Stacked full
+                width they read as a list of settings rather than as one either/or pick. */}
+            <div style={optionsRowStyle}>
+              <OptionCard
+                testId="confirm-option-order"
+                selected={selected === 'order'}
+                onClick={() => setSelected('order')}
+                icon={<ClipboardList size={20} />}
+                title={ui('sqCreateOrder')}
+                badge={ui('soRecommended')}
+                subtitle={ui('sqCreateOrderDesc')}
+              />
+              <OptionCard
+                testId="confirm-option-invoice"
+                selected={selected === 'invoice'}
+                onClick={() => setSelected('invoice')}
+                icon={<FileText size={20} />}
+                title={ui('soInvoiceDirectly')}
+                subtitle={ui('sqInvoiceDirectlyDesc')}
+              />
+            </div>
           </div>
-          <OptionCard
-            testId="confirm-option-order"
-            selected={selected === 'order'}
-            onClick={() => setSelected('order')}
-            icon={<ClipboardList size={16} />}
-            title={ui('sqCreateOrder')}
-            badge={ui('soRecommended')}
-            subtitle={ui('sqCreateOrderDesc')}
-          />
-          <OptionCard
-            testId="confirm-option-invoice"
-            selected={selected === 'invoice'}
-            onClick={() => setSelected('invoice')}
-            icon={<FileText size={16} />}
-            title={ui('soInvoiceDirectly')}
-            subtitle={ui('sqInvoiceDirectlyDesc')}
-          />
         </div>
 
         {/* Error */}
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
           </div>
         )}
 
-        {/* Footer is space-between: Cancelar anchors left, the primary right. */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '20px' }}>
+        {/* Footer is space-between: Cancelar anchors left, the primary right. No padding
+            on top: the body's own 20px bottom padding is the gap to the option cards. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0 20px 20px' }}>
           <button type="button" onClick={onClose} disabled={loading}
             style={{ ...btnSecondary, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
+          {/* The label is the generic "Continuar": which document gets created is the
+              option card the user just picked, and repeating it on the button made the
+              two read as two different decisions. The arrow leads the label, per frame. */}
           <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading}
             style={loading ? btnPrimaryDisabled : btnPrimary}>
             {loading && (
@@ -369,7 +371,8 @@ export default function QuotationConfirmModal({
                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
               </svg>
             )}
-            {loading ? ui('soProcessing') : primaryLabel}
+            {!loading && <span aria-hidden="true">→</span>}
+            {loading ? ui('soProcessing') : ui('continue')}
           </button>
         </div>
         {/* Outside the footer on purpose: it is a flex child there, and under
@@ -387,53 +390,50 @@ function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled,
     <div
       data-testid={testId}
       onClick={disabled ? undefined : onClick}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-        border: selected ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
-        borderRadius: 8, padding: selected ? '11px 13px' : '12px 14px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
+      style={optionCardStyle(selected, disabled)}
     >
-      <div style={{
-        width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        color: selected ? 'var(--status-info-fg)' : 'hsl(var(--muted))',
-      }}>
-        {icon}
+      <div style={optionTopRowStyle}>
+        <div style={optionIconBoxStyle}>{icon}</div>
+        <OptionRadio selected={selected} />
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: selected ? 'var(--status-info-border)' : 'hsl(var(--foreground))' }}>
-            {title}
-          </span>
-          {badge && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-              background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
-              letterSpacing: '0.3px',
-            }}>
-              {badge}
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
-          {subtitle}
-        </div>
+      <div style={optionTitleRowStyle}>
+        <span style={optionTitleStyle}>{title}</span>
+        {badge && <span style={optionBadgeStyle}>{badge}</span>}
       </div>
-      <div style={{
-        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-        border: selected ? 'none' : '1.5px solid hsl(var(--border-subtle))',
-        background: selected ? 'var(--status-info-fg)' : 'hsl(var(--card))',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))' }} />}
-      </div>
+      <div style={optionSubtitleStyle}>{subtitle}</div>
     </div>
   );
+}
+
+/**
+ * ETP-5398 — selection is expressed by the NEUTRAL palette, not by the status-info blue
+ * the card used to paint its border, its icon and even its title with. `--status-info-*`
+ * is banner messaging; a picked option is not a status, and in dark theme that family
+ * reads as a saturated blue against the very buttons this ticket just turned black.
+ *
+ * Split in two returns rather than a chain of ternaries inside one object: the selected
+ * card carries a 2px border, so its padding drops by 1px to keep both cards the same
+ * outer size and stop the row from twitching as the user switches option.
+ */
+function optionCardStyle(selected, disabled) {
+  const base = {
+    ...OPTION_CARD_BASE,
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  };
+  if (selected) return { ...base, border: '2px solid hsl(var(--foreground))', padding: '15px' };
+  return { ...base, border: '1px solid hsl(var(--border-control))', padding: '16px' };
+}
+
+function OptionRadio({ selected }) {
+  if (selected) {
+    return (
+      <span style={{ ...OPTION_RADIO_BASE, border: '1.5px solid hsl(var(--foreground))' }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'hsl(var(--foreground))' }} />
+      </span>
+    );
+  }
+  return <span style={{ ...OPTION_RADIO_BASE, border: '1.5px solid hsl(var(--border-control))' }} />;
 }
 
 /* ── Shared styles ─────────────────────────────────────────────── */
@@ -444,10 +444,11 @@ const overlayStyle = {
   backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
-// ETP-5398 — widened from 480: the summary strip carries five columns now, and the
-// contact name is the one that overflows first. Widths stay per-modal, not normalised.
+// ETP-5398 — widened from 480: the summary strip carries five columns AND the two option
+// cards now sit side by side, so the frame needs room for both. Widths stay per-modal,
+// not normalised (SendToEvaluationModal has no option row and stays at 620).
 const cardStyle = {
-  width: 620, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+  width: 720, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 8, backgroundColor: 'hsl(var(--card))',
   boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))',
 };
@@ -456,6 +457,75 @@ const cardStyle = {
 const headerStyle = {
   display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   gap: 20, padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))',
+};
+
+const bodyStyle = {
+  display: 'flex', flexDirection: 'column', gap: 20, padding: '20px',
+};
+
+const optionsBlockStyle = {
+  display: 'flex', flexDirection: 'column', gap: 10,
+};
+
+const questionStyle = {
+  fontFamily: 'Inter, sans-serif', fontSize: '14px', fontWeight: 500, lineHeight: '20px',
+  color: 'hsl(var(--foreground))',
+};
+
+// `alignItems: stretch` is what keeps the shorter card as tall as the longer one, so the
+// two radios stay on the same line whatever the description length.
+const optionsRowStyle = {
+  display: 'flex', flexDirection: 'row', alignItems: 'stretch', gap: 12,
+};
+
+const OPTION_CARD_BASE = {
+  boxSizing: 'border-box',
+  flex: '1 1 0', minWidth: 0,
+  display: 'flex', flexDirection: 'column', gap: 6,
+  borderRadius: 12,
+  background: 'hsl(var(--card))',
+  transition: 'border-color 0.15s',
+};
+
+const optionTopRowStyle = {
+  display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  gap: 8, marginBottom: 6,
+};
+
+// `--muted` is a BACKGROUND token, which is exactly what this tile is. The icon on top of
+// it takes `--foreground`; the card used to do the reverse and paint the icon itself with
+// `--muted`, which made it invisible against the card.
+const optionIconBoxStyle = {
+  width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'hsl(var(--muted))', color: 'hsl(var(--foreground))',
+};
+
+const OPTION_RADIO_BASE = {
+  boxSizing: 'border-box',
+  width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: 'hsl(var(--card))',
+};
+
+const optionTitleRowStyle = {
+  display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+};
+
+const optionTitleStyle = {
+  fontFamily: 'Inter, sans-serif', fontSize: '15px', fontWeight: 600, lineHeight: '20px',
+  color: 'hsl(var(--foreground))',
+};
+
+const optionBadgeStyle = {
+  fontFamily: 'Inter, sans-serif', fontSize: '11px', fontWeight: 500, lineHeight: '16px',
+  padding: '2px 8px', borderRadius: 99,
+  background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
+};
+
+const optionSubtitleStyle = {
+  fontFamily: 'Inter, sans-serif', fontSize: '13px', fontWeight: 400, lineHeight: '18px',
+  color: 'hsl(var(--muted-foreground))',
 };
 
 // ETP-5398 — buttons come from MODAL_STYLES, the canonical action-modal palette. The

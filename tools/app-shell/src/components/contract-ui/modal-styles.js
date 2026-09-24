@@ -225,17 +225,18 @@ export const MODAL_STYLES = {
     color: 'hsl(var(--muted-foreground))',
   },
 
-  // Truncates rather than wraps: the Figma frame itself overflows on a long partner name
-  // such as "Distribuciones Iberia S.A.".
+  // Wraps rather than truncates. The design frame itself shows a long partner name
+  // ("Distribuciones Iberia S.A.") running onto a second line and the strip growing to
+  // fit, so an ellipsis here would hide data the frame deliberately shows. `anywhere`
+  // rather than `break-word` so a single unbroken token (a long document number) still
+  // folds instead of pushing the column past its share of the strip.
   summaryValue: {
     fontFamily: 'Inter, sans-serif',
     fontSize: '16px',
     fontWeight: 500,
     lineHeight: '24px',
     color: 'hsl(var(--foreground))',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    overflowWrap: 'anywhere',
   },
 
   // ETP-5398 — the informational banner. It is an ACCENT surface, not a status message:
