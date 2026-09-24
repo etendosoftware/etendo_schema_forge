@@ -1252,7 +1252,7 @@ export default function UpgradePage() {
               </div>
               {isDemoOrigin && demoEnvironments.length > 0 && (
                 <div className="space-y-1.5" data-testid="upgrade-source-demo-field">
-                  <Label htmlFor="upgrade-source-demo-select">{ui('upgradeDemoSelectionLabel')}</Label>
+                  <Label htmlFor="upgrade-source-demo-select" data-testid="Label__58bad7">{ui('upgradeDemoSelectionLabel')}</Label>
                   <select
                     id="upgrade-source-demo-select"
                     className="w-full rounded-md border bg-background p-2"

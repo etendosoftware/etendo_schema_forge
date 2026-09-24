@@ -84,7 +84,7 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     { path: 'login', public: true, element: (
         <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
       ) },
-    { path: 'logout', public: true, element: <RuntimeLogoutRoute /> },
+    { path: 'logout', public: true, element: <RuntimeLogoutRoute data-testid="RuntimeLogoutRoute__e8c60d" /> },
     { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
