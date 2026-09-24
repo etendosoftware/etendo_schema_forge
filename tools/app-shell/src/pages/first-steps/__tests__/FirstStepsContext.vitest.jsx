@@ -102,6 +102,23 @@ describe('FirstStepsProvider', () => {
     expect(screen.getByTestId('badge')).toHaveTextContent(`1/${PRODUCTIVE_TOTAL}`);
   });
 
+  it.each(['COMPLETED', 'SKIPPED', 'NOT_REQUESTED'])(
+    'counts the server-owned transfer when its status is %s', (status) => {
+      transferHook.value = { ...FLAG_OFF_TRANSFER, available: true, status };
+      render(<FirstStepsProvider><Badge /></FirstStepsProvider>);
+      expect(screen.getByTestId('badge')).toHaveTextContent('2/8');
+    },
+  );
+
+  it('holds the provider in loading while transfer status is unresolved', () => {
+    transferHook.value = { ...FLAG_OFF_TRANSFER, status: 'LOADING', loading: true };
+    function Loading() {
+      return <span data-testid="loading">{String(useFirstStepsState().loading)}</span>;
+    }
+    render(<FirstStepsProvider><Loading /></FirstStepsProvider>);
+    expect(screen.getByTestId('loading')).toHaveTextContent('true');
+  });
+
   it('serves both consumers from ONE hook instance', () => {
     // REGRESSION GUARD for the bug this provider exists to fix: the badge and the page each
     // used to call `useFirstSteps` themselves, so ticking a step on the page left the badge
@@ -142,17 +159,19 @@ describe('the plan the provider hands down', () => {
   it('gives a productive tenant every step', () => {
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     expect(screen.getByTestId('steps')).toHaveTextContent('false|productive|7|');
+    expect(screen.getByTestId('steps')).not.toHaveTextContent('demo-data-transfer');
     expect(screen.getByTestId('steps')).toHaveTextContent('invoice-sequence');
     expect(screen.getByTestId('steps')).toHaveTextContent('fiscal-config');
   });
 
-  it('gives a trial tenant five steps, without the two gated ones', () => {
+  it('gives a trial tenant five steps, without the productive-only ones', () => {
     tenantPlan.plan = 'free';
     render(<FirstStepsProvider><Steps /></FirstStepsProvider>);
     const rendered = screen.getByTestId('steps').textContent;
     expect(rendered).toContain('false|free|5|');
     expect(rendered).not.toContain('invoice-sequence');
     expect(rendered).not.toContain('fiscal-config');
+    expect(rendered).not.toContain('demo-data-transfer');
   });
 
   it('narrows the write allowlist to what a trial can tick', () => {
@@ -171,7 +190,7 @@ describe('the plan the provider hands down', () => {
 
   it('does not count a completed step the plan hides', () => {
     // A tenant that finished everything while productive and is then reported free must not
-    // render 7/5. The count follows the visible list, not the stored ids.
+    // render more than 5/5. The count follows the visible list, not the stored ids.
     tenantPlan.plan = 'free';
     hook.completed = ['company-data', 'fiscal-config', 'products', 'contacts',
       'invoice-sequence', 'team'];

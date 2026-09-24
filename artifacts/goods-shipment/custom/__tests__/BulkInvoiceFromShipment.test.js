@@ -151,7 +151,7 @@ describe('BulkInvoiceFromShipment', () => {
       assert.match(src, /<CreateInvoiceConfirmModal[\s\S]*?showPriceListPicker[\s\S]*?isSOTrx/);
     });
 
-    it('passes a computed cardAmountLabel (real quote when resolvable, "N shipments" fallback otherwise)', () => {
+    it('passes a computed cardAmountLabel (real quote when resolvable, shipment-count fallback otherwise)', () => {
       assert.match(src, /cardAmountLabel=\{cardAmountLabel\}/);
     });
 
@@ -220,10 +220,33 @@ describe('BulkInvoiceFromShipment', () => {
       assert.match(src, /invoiceableRows\[0\]\?\.\['etgoCurrency\$_identifier'\]/);
     });
 
-    it('falls back to the "N shipments" label once loading has settled and no quote could be resolved', () => {
+    // The ETP-5410 anti-flash guard lives in the ORDER of this ternary: quoteLoading wins
+    // first (-> undefined, so the modal shows its skeleton placeholder), only then a resolved
+    // quote, and the count label last. That ordering stays pinned here. It is checked with two
+    // narrow assertions instead of one multiline regex because ETP-5378 inserted an
+    // explanatory comment between the formatCurrency arm and the fallback arm — a regex that
+    // assumes those two lines are adjacent breaks whenever someone edits the prose, which is
+    // not a behavioural regression and trains readers to delete comments.
+    it('gates the label behind quoteLoading first, then a resolved quote, then the count fallback', () => {
       assert.match(
         src,
-        /const cardAmountLabel = quoteLoading\s*\n\s*\?\s*undefined\s*\n\s*:\s*\(quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)\s*\n\s*:\s*`\$\{invoiceableCount\} \$\{ui\('shipment'\)\}/,
+        /const cardAmountLabel = quoteLoading\s*\n\s*\?\s*undefined\s*\n\s*:\s*\(quoteAmount != null\s*\n\s*\?\s*formatCurrency\(currencyCode, quoteAmount\)/,
+      );
+      // Both indices are asserted present BEFORE they are compared. `indexOf` returns -1 for a
+      // missing needle, so a bare `a < b` would pass vacuously the moment the quote arm is
+      // renamed away (-1 < anything) — i.e. the guard would go green exactly when the thing it
+      // guards disappeared.
+      const quoteArm = src.indexOf('formatCurrency(currencyCode, quoteAmount)');
+      const countArm = src.indexOf("ui(invoiceableCount === 1 ? 'shipmentCount_one' : 'shipmentCount_plural'");
+      assert.ok(quoteArm >= 0, 'the resolved-quote arm must exist for the ordering check to mean anything');
+      assert.ok(countArm >= 0, 'the count-label arm must exist for the ordering check to mean anything');
+      assert.ok(quoteArm < countArm, 'the count label must be the LAST arm, after the resolved-quote arm');
+    });
+
+    it('falls back to the shipment count label once loading has settled and no quote could be resolved', () => {
+      assert.match(
+        src,
+        /:\s*ui\(invoiceableCount === 1 \? 'shipmentCount_one' : 'shipmentCount_plural',\s*\n\s*\{ count: invoiceableCount \}\)\);/,
       );
     });
 
@@ -344,6 +367,66 @@ describe('BulkInvoiceFromShipment', () => {
 
     it('does not refetch on a plain cancel/close of the confirm modal (nothing changed server-side)', () => {
       assert.match(src, /onClose=\{\(\)\s*=>\s*setShowModal\(false\)\}/);
+    });
+  });
+
+  // ETP-5378 QA follow-up — two defects in one small label. Sales read `ui('shipment')`
+  // ("envio") while Purchases read `ui('receipt')` ("albaran") for the SAME kind of document,
+  // so the two windows disagreed on what to call it; and the count was pluralised by
+  // appending a literal 's' to the noun, i.e. English grammar on a Spanish word, which
+  // rendered "2 albarans". The count and the noun now both live in the locale.
+  //
+  // WHY THIS WINDOW HAS ITS OWN KEY PAIR, AND WHY THAT IS NOT DUPLICATION:
+  // `shipmentCount_*` and `receiptCount_*` exist as two pairs ONLY because ENGLISH needs two
+  // nouns (shipment / receipt). In Spanish both windows deliberately render the SAME word,
+  // "albaran" — that identity is the actual QA requirement, since the reported defect was the
+  // two windows naming one document differently. So the pairs are not interchangeable here
+  // (this file must read the shipment pair) and they are not collapsible either; the locale
+  // spec asserts the Spanish string equality that makes the split safe.
+  describe('ETP-5378 — the count label is a locale-owned plural, on this window\'s own key pair', () => {
+    it('selects shipmentCount_one for exactly one document and shipmentCount_plural otherwise', () => {
+      assert.match(
+        src,
+        /ui\(invoiceableCount === 1 \? 'shipmentCount_one' : 'shipmentCount_plural'/,
+      );
+    });
+
+    it('passes { count: invoiceableCount } so the locale string owns where the number goes', () => {
+      assert.match(src, /'shipmentCount_plural',\s*\n\s*\{ count: invoiceableCount \}\)/);
+    });
+
+    it('reads the shipment pair, never the sibling window\'s receipt pair', () => {
+      assert.doesNotMatch(code, /receiptCount_(one|plural)/);
+    });
+
+    // Run against `code` (comments stripped), not `src`: the source's own explanatory note
+    // quotes the defect verbatim — `${count !== 1 ? 's' : ''}` — so a raw-text negative regex
+    // would fail on ACCURATE prose and teach the next reader to delete the explanation.
+    it('never pluralises by appending a literal "s" to the noun (the "2 albarans" defect)', () => {
+      assert.doesNotMatch(code, /\?\s*'s'\s*:/);
+    });
+
+    it('no longer reads the single-use bare-noun shipment / receipt labels', () => {
+      // Anchored on the closing quote+paren so the guard cannot fire on the LEGITIMATE
+      // `ui('shipmentCount_one')` call — a guard that rejects correct code is worse than none.
+      // Proven against a literal sample rather than trusted by inspection.
+      const bareShipment = /ui\('shipment'\)/;
+      const bareReceipt = /ui\('receipt'\)/;
+      assert.doesNotMatch(
+        "ui('shipmentCount_one') ui('receiptCount_plural')",
+        bareShipment,
+        'the bare-noun guard must not match the count keys',
+      );
+      assert.doesNotMatch(
+        "ui('shipmentCount_one') ui('receiptCount_plural')",
+        bareReceipt,
+        'the bare-noun guard must not match the count keys',
+      );
+      // ...and it still catches the real thing it was written for.
+      assert.match("ui('shipment')", bareShipment, 'the guard must still detect the bare noun');
+
+      assert.doesNotMatch(code, bareShipment);
+      assert.doesNotMatch(code, bareReceipt);
     });
   });
 });

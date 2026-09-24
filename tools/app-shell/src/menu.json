@@ -566,12 +566,14 @@
         {
           "name": "quick-sales-order",
           "label": "Quick Sales Order",
-          "favname": "Quick Sales Order"
+          "favname": "Quick Sales Order",
+          "featureFlag": "proof-of-concept-menu"
         },
         {
           "name": "quick-purchase-order",
           "label": "Quick Purchase Order",
-          "favname": "Quick Purchase Order"
+          "favname": "Quick Purchase Order",
+          "featureFlag": "proof-of-concept-menu"
         }
       ]
     },

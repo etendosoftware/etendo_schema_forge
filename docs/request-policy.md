@@ -71,6 +71,7 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 | `baseUrl: ''` | the URL is already complete, or points outside the base (`buildCreateUrl` returns a sibling path from the app root) |
 | `token` | a plain module was handed a specific token by its caller |
 | `credentials` | overrides the default `'include'` |
+| `refreshVersion: false` | the call is a POST to an action endpoint (`/{spec}/{entity}/{id}/action/<name>`) that is a query in disguise — verified to NOT mutate the record it addresses. Skips the post-action re-read described below. Default `true`. See [Action endpoints re-read the record afterward](#action-endpoints-re-read-the-record-afterward-refreshversion-etp-5434) before setting this — the warning there is the important part |
 
 ## Updates carry a concurrency token (ETP-5073)
 
@@ -167,6 +168,34 @@ than the convenience of not retyping.
 
 An explicit value always wins over the remembered one. Reserve it for a caller that genuinely
 holds a token from elsewhere; a copy of the record you just read is what the store already has.
+
+### Action endpoints re-read the record afterward (`refreshVersion`, ETP-5434)
+
+A process action (`docAction: 'CO'`, etc.) mutates the row server-side, so the `updated` token
+this client holds for it is stale the moment the action succeeds — and the action's own response
+carries the process result, not the record, so there is nothing to harvest from it. `apiFetch`
+compensates: on a successful POST to `/{spec}/{entity}/{id}/action/<name>`, it fires a GET of
+that same record and **awaits it before resolving**, so the version cache is correct again by the
+time the caller's promise settles.
+
+`refreshVersion: false` skips that GET. **Only set it on an action verified to leave the record's
+`updated` unchanged** — i.e. an action endpoint that is really a query dressed up as a POST.
+Today that is exactly three call sites behind one modal ("Añadir cobro"): `invoiceAccounts`,
+`invoicePaymentMethods`, `invoiceCreditSources`.
+
+**Setting it on an action that DOES mutate the record silently reintroduces ETP-5255.** Nothing
+fails at the call site — the flag does not and cannot verify the assumption for you. The failure
+surfaces later, on the *next* `PATCH`/`PUT` of that record: it is refused with 409
+`stale_record`, shown to the user as "somebody else edited this record" when the editor was the
+action they themselves just ran, and it is not recoverable by retrying — only by reloading.
+
+The re-read is not free, which is the other half of the trade-off: measured in production, it
+costs **0.7–1.9s per call**. `refreshVersion: false` is how a verified-non-mutating action avoids
+paying that cost, not a shortcut to reach for when unsure.
+
+Separately, concurrent re-reads for the same record are now deduplicated in the core regardless
+of this flag: several actions firing against the same record at once share one GET instead of
+each racing its own.
 
 ## 401 and logout
 
