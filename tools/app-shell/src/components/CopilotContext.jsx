@@ -18,7 +18,7 @@ export function CopilotProvider({ children, menuGroups }) {
   const legacy = useCopilotChat({ token });
   const open = useCallback(() => setIsOpen(true), []);
   const agentEnabled = useFeatureFlag(WEBMCP_AGENT_CHAT);
-  const ai = useAiCopilotChat({ token, onOpenCopilot: open, menuGroups });
+  const ai = useAiCopilotChat({ onOpenCopilot: open, menuGroups });
   const state = useMemo(() => {
     if (!agentEnabled) return legacy.state;
     return {

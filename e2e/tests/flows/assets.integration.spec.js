@@ -133,9 +133,22 @@ function parseCurrency(text) {
 }
 
 /** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
- *  editing state: Valor del activo / Valor residual in the form must equal
- *  Valor actual / Valor residual del activo in the sidebar. Run after each
- *  financial-field change and after creating the amortization. */
+ *  editing state: Valor del activo in the form must equal Valor actual in the
+ *  sidebar. Run after each financial-field change and after creating the
+ *  amortization.
+ *
+ *  "Pendiente de Amortizar" is NOT a mirror of the form's "Valor residual"
+ *  field (ETP-5414 — that was the bug being fixed: the card used to read
+ *  `residualAssetValue` directly, so it froze at whatever that independently
+ *  editable field held, even mid-schedule). AssetsSidebar.jsx now computes it
+ *  as `depreciationAmt − (depreciatedValue + previouslyDepreciatedAmt)` — Valor
+ *  a Amortizar minus the accumulated amortized amount, the same accumulator
+ *  the DB trigger `ETGO_A_ASSET_AMORT_STATUS_TRG` uses for the amortization
+ *  percentage. `previouslyDepreciatedAmt` has no form field (`form: false` in
+ *  the contract, default "0") and `depreciatedValue` only moves once a line is
+ *  CONFIRMED (never just created) — every call site in this spec runs before
+ *  any confirmation, so both stay 0 and the expected value collapses to
+ *  `depreciationAmt` alone. */
 async function verifySidebarSync(page) {
   // Scope to the sidebar's card container (no testids in the app): the
   // "Resumen de amortización" heading → its card grid is the next sibling.
@@ -154,8 +167,8 @@ async function verifySidebarSync(page) {
   // shows "2.000,00" in both, saves 2000 to A_ASSET.assetvalueamt, and survives a reload.
   const formAsset = parseCurrency(await page.getByTestId('field-assetValue').inputValue());
   expect(parseCurrency(await sidebarValue('Valor actual'))).toBeCloseTo(formAsset, 2);
-  const formResidual = parseCurrency(await page.getByTestId('field-residualAssetValue').inputValue());
-  expect(parseCurrency(await sidebarValue('Valor residual del activo'))).toBeCloseTo(formResidual, 2);
+  const formDepreciationAmt = parseCurrency(await page.getByTestId('field-depreciationAmt').inputValue());
+  expect(parseCurrency(await sidebarValue('Pendiente de Amortizar'))).toBeCloseTo(formDepreciationAmt, 2);
 }
 
 /** Set a field's value and retry until the form is actually dirty (save enabled).

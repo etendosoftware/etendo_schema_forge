@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, navigateTo } from '../helpers/auth.js';
+import { login, navigateTo, MOCK_ORG_ID } from '../helpers/auth.js';
 import { t } from '../helpers/i18n.js';
 
 // ── NEO API response envelope ─────────────────────────────────────────────────
@@ -92,6 +92,33 @@ async function openActionsMenu(page) {
 test.describe('Fiscal Config — no org selected', () => {
   test('shows the no-org message when session has no selected organisation', async ({ page }) => {
     await login(page);
+    // ETP-4576 — the shared stub restores a session that HAS an organisation, which is what
+    // every other spec needs. This case is about the opposite, so it overrides the restore
+    // with an org-less session; registered after login(), so it wins (Playwright is LIFO).
+    //
+    // Org-less, NOT role-less: the session must still carry `roleList` plus a matching
+    // `environment.roleId`, because `mapRestoredSession` resolves `selectedRole` by looking the
+    // roleId up in the list, and `AuthContext.loadAccess()` short-circuits to an EMPTY access
+    // snapshot — no network call — when there is no `selectedRole`. `useRoleMenu` reads that
+    // empty `menuAccess` as a confirmed zero-access role (ETP-5375), and `AppLayout` then
+    // renders the blocking no-access screen INSTEAD of the page, so `fiscal.noOrg` can never
+    // appear. Dropping either field again re-breaks this test in a way that looks like flake.
+    // Omitting only `orgId` is what makes `selectedOrg` null, which is the condition under test.
+    await page.route('**/sws/go/session', (route) => (route.request().method() === 'GET'
+      ? route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: { name: 'admin' },
+          environment: { clientId: 'e2e-mock-client', roleId: 'e2e-mock-role' },
+          roleList: [{
+            id: 'e2e-mock-role',
+            name: 'Administrator',
+            orgList: [{ id: MOCK_ORG_ID, name: 'E2E Org' }],
+          }],
+        }),
+      })
+      : route.fallback()));
     await navigateTo(page, 'fiscal-config');
     await expect(page.getByText(t('fiscal.noOrg'))).toBeVisible();
   });

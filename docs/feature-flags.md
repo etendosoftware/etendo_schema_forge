@@ -515,6 +515,39 @@ fields (so it would silently drop `paymentToken`) and starts reading the
 response body without checking the status (so a 402 would surface as a generic
 "no result" failure instead of a payment error).
 
+## Demo data transfer (`demo-data-transfer`, backend-only)
+
+The ETP-5364 demo-to-productive data transfer is gated OFF by a flag evaluated **only** in
+`com.etendoerp.go` (`DemoDataTransferFlag`, see that repo's
+`docs/feature-flags-and-tenant-upgrade.md`). Like `bp-portal-link`, it has **no key in
+`flag-keys.js`, and none must be added** — a browser key would be a second evaluator on a different
+control plane and targeting key (ETP-4966).
+
+The browser follows the backend instead: `useDemoDataTransfer` reports `available: true` only when
+`GET /sws/go/demo-data-transfer` answers 2xx. With the flag off that endpoint is a 404, so
+`available` stays false and `demoDataTransferStep.js` never splices the row into the First Steps
+catalogue — same rows and same `x/TOTAL` as before ETP-5364. Any other failure before a first
+successful read is treated the same way: an unknown answer hides the row.
+
+`UpgradePage` sends the selected products and contacts in the billing purchase request (and the
+legacy checkout-session request). A purchase with a recorded selection returns it as
+`dataTransfer: { products, contacts }`; resume uses that server-owned selection rather than the
+current state of the checkboxes. The purchase projection also reports `dataTransferEnabled`.
+When it is true and the purchase has no saved selection, the page shows a warning and continues
+provisioning without a transfer request; it cannot reconstruct the choice from browser state.
+The durable transfer then remains `NOT_REQUESTED` and requires operator recovery if the buyer
+expected data to move. With the flag off, resume may
+use an explicitly saved browser choice or one made in the current checkout form. It never defaults
+a missing choice to both options. The checkout selection is ignored by the durable job and the
+selection on `POST /sws/go/onboarding` continues to drive ETP-5421's synchronous
+`OnboardingDataTransferService`. With the flag on, Go records the immutable checkout selection
+before contacting the payment provider, skips the synchronous copy, and starts the durable job
+only after onboarding commits. The product copy reuses system UOMs, copies client UOM EDI codes,
+and resolves the target tax category; a missing category fails the job with a named reason so it
+can be repaired and retried. The job also rejects a source and destination with the same tenant
+ID. Owned paths, specs and remaining work are in
+[`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
+
 ## Proof of Concept menu (`proof-of-concept-menu`)
 
 This is a frontend-only, temporary reveal for the internal **Proof of Concept**

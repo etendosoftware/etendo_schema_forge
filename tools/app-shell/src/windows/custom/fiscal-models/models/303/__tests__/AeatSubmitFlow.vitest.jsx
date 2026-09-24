@@ -271,6 +271,65 @@ describe('AeatSubmitFlow — submit request shape', () => {
   });
 });
 
+// ETP-5431 (`9fb1a8dbb`, Fix 3) — before this fix, `AeatSubmitFlow` did not receive
+// `manualOverrides` as a prop AT ALL, so `handleSubmit` never forwarded ANY manually-overridden
+// box (111, 70, 108, 109, ...) to `POST /fiscal303/submit` — while `generate303File`
+// ("Generar fichero 303", `fiscalModelsUtils.js`) already called the exact same
+// `applyBoxParams(params, manualOverrides)` helper. The same declaration, generated as a file and
+// loaded by hand into AEAT's own ServValiDos simulator, passed clean; presented from this
+// component's "Registrar/Presentar" button, AEAT rejected it with real errors (35068, 35100,
+// E030292) — confirmed empirically by the user. `handleSubmit` now calls the exact same
+// `applyBoxParams` helper on `manualOverrides` (mirroring `generate303File`), and this file's
+// pre-existing "submit request shape"/IBAN-guard tests above (which never pass `manualOverrides`
+// at all) keep passing unchanged precisely because the `if (manualOverrides)` guard mirrors
+// `generate303File`'s own — a missing/falsy `manualOverrides` never touches the params, so the
+// positive case below was the one gap left uncovered.
+describe('AeatSubmitFlow — forwards manualOverrides to AEAT (ETP-5431 Fix 3, parity with generate303File)', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('appends BOX_PARAM_MAP params (e.g. RectifyingAmount for box 111) when manualOverrides carries values', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ manualOverrides: { 111: 2.10, 70: 43.52 } });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const [path] = stableApiFetch.mock.calls[0];
+    const params = new URLSearchParams(path.split('?')[1]);
+    expect(params.get('RectifyingAmount')).toBe('2.1');
+    expect(params.get('ComplementaryAmt')).toBe('43.52');
+  });
+
+  it('does NOT append any BOX_PARAM_MAP param when manualOverrides is null/absent (same guard as generate303File)', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    // `renderFlow`'s own defaults omit `manualOverrides` entirely — this is the exact fixture
+    // the pre-existing "submit request shape" test above already exercises, made explicit here
+    // as the negative case for this fix.
+    renderFlow();
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const [path] = stableApiFetch.mock.calls[0];
+    const params = new URLSearchParams(path.split('?')[1]);
+    expect(params.has('RectifyingAmount')).toBe(false);
+    expect(params.has('ComplementaryAmt')).toBe(false);
+  });
+
+  it('skips a manualOverrides entry whose value is null, but still forwards the other present ones', async () => {
+    stableApiFetch.mockReturnValueOnce(jsonResponse({ status: 'SUCCESS' }));
+    renderFlow({ manualOverrides: { 111: null, 78: 500 } });
+
+    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
+
+    await waitFor(() => expect(stableApiFetch).toHaveBeenCalledTimes(1));
+    const [path] = stableApiFetch.mock.calls[0];
+    const params = new URLSearchParams(path.split('?')[1]);
+    expect(params.has('RectifyingAmount')).toBe(false);
+    expect(params.get('PreviousPeriodAmtApplied')).toBe('500');
+  });
+});
+
 describe('AeatSubmitFlow — IBAN pre-flight guard (ETP-4456, submit-flow parity with generate303File)', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 

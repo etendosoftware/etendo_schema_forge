@@ -95,7 +95,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
 
   const renderDocument = useCallback(async (docId) => {
     // Design A when this window has a client-side builder.
-    if (hasClientPdf(windowName) && docId && token) {
+    if (hasClientPdf(windowName) && docId) {
       console.info(`[print-drawer] ${docId}: client-rendered PDF (same template as preview/email)`);
       setLoading(true);
       setError(null);
@@ -113,7 +113,7 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       setLoading(false);
       return;
     }
-    if (!reportId || !docId || !token) return;
+    if (!reportId || !docId) return;
     console.info(`[print-drawer] ${docId}: rendering the ${reportId} artifact (separate design)`);
     setLoading(true);
     setError(null);
@@ -289,7 +289,9 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
  */
 export async function printDocuments(windowName, documents, token, translate = (key) => key, apiBaseUrl = null) {
   const reportId = `print-${windowName}`;
-  if (!reportId || !token || !documents || documents.length === 0) return;
+  // ETP-4576: no `token` in this guard. Under the cookie session the caller holds none, so
+  // gating on it would skip every print silently — apiFetch carries the credential.
+  if (!reportId || !documents || documents.length === 0) return;
 
   const normalizedDocuments = documents.map((doc) => (
     doc && typeof doc === 'object'

@@ -42,7 +42,7 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     });
   });
 
-  await page.route('**/sws/go/register', async route => {
+  await page.route('**/sws/go/session/register', async route => {
     const body = route.request().postDataJSON();
     expect(body).toMatchObject({
       name: 'QA Onboarding User',
@@ -101,12 +101,14 @@ async function installOnboardingMocks(page, { invalidDocumentType = false, expec
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ draft: null }) });
   });
 
-  await page.route('**/sws/go/login?userId=USER_1', async route => {
+  await page.route('**/sws/go/session/environment', async route => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
+      // ETP-4576 — entering an environment updates the backend-managed session and reports
+      // `status`; it no longer mints a token for the client to hold.
       body: JSON.stringify({
-        token: 'env-token',
+        status: 'success',
         roleList: [{
           id: 'ROLE_1',
           name: 'Admin',
@@ -214,6 +216,152 @@ test.describe('Onboarding with mocked Schema Forge backend boundary', () => {
     await completeOnboardingForm(page, 'qa-onboarding-negative');
 
     await expect(page.getByText(/todavía no está listo para facturar/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page).not.toHaveURL(/dashboard/);
+  });
+});
+
+/**
+ * Readiness-probe auth contract (ETP-5443 follow-up, bug A).
+ *
+ * `onboarding/onboardingReadiness.js`'s three probes (`/sws/neo/session`,
+ * `/sws/neo/sales-invoice/header/defaults`, the `C_PaymentTerm_ID` selector) run right after
+ * `loginEnvironment()` under the cookie session, authenticating with `credentials: 'include'`
+ * and NO bearer token at all (see that file's own doc comment on `fetchJson`) — they are a
+ * plain global `fetch`, not `apiFetch`, so there is nothing that could put an `Authorization`
+ * header on them. Before this was fixed, entering an environment sent these three requests
+ * with neither a token nor a cookie, all three came back 401, and the onboarding wizard never
+ * reached the dashboard — it landed on this SAME "not ready to invoice" error screen the
+ * existing invalid-document-type test above asserts, but for the wrong reason (a broken auth
+ * contract instead of a genuine data gap), and with no way for the user to tell the two apart.
+ *
+ * This suite pins the auth contract directly (no Authorization header) instead of re-deriving
+ * it from copy, and separately guards that a broken probe is caught LOUDLY (fails the test)
+ * rather than passed over.
+ */
+/**
+ * `SetupProgressStep`'s success path does a HARD `window.location.href` navigation into the
+ * app (not a client-side route change), so unlike every other test in this file — which never
+ * gets past that point — reaching the dashboard needs the post-redirect app boot to also
+ * resolve a session. None of `installOnboardingMocks`' routes cover that (no other test needs
+ * it), so this fills the gap: `GET /sws/go/session` WITH a `csrfToken` (this reproduces bug A's
+ * real context — the cookie scheme, ADR-0001 — not just the bearer path the registration mocks
+ * above already exercise), full window/menu access so the dashboard itself isn't gated by an
+ * unrelated concern, and the first-steps gate answering "already seen".
+ */
+async function installDashboardEntryMocks(page) {
+  // Stateful on purpose: `GET /sws/go/session` must 401 until the environment login below
+  // actually succeeds, or the app "restores" a session on the very FIRST `/onboarding` page
+  // load and redirects away before registration ever runs. Flipped by watching the response
+  // to `installOnboardingMocks`' own `/sws/go/session/environment` route rather than
+  // re-registering that URL here — Playwright tries the LATER-registered route first, so a
+  // second route for the same pattern would shadow (not observe) the original.
+  let sessionEstablished = false;
+  page.on('response', (response) => {
+    if (response.request().method() === 'POST' && response.url().includes('/sws/go/session/environment')) {
+      sessionEstablished = true;
+    }
+  });
+
+  await page.route('**/sws/go/session', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    if (!sessionEstablished) {
+      return route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'No active session' } }),
+      });
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        account: { name: 'QA Admin', email: 'qa@example.com' },
+        environment: { clientId: 'CLIENT_1', roleId: 'ROLE_1', orgId: 'ORG_1' },
+        roleList: [{ id: 'ROLE_1', name: 'Admin', orgList: [{ id: 'ORG_1', name: 'QA Mock Org' }] }],
+        csrfToken: 'e2e-onboarding-csrf',
+      }),
+    });
+  });
+  await page.route('**/sws/neo/windowaccessmap', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ windowAccess: {}, capabilities: {} }),
+    });
+  });
+  // Fails open by design (see login()'s own identical convention in auth.js) — aborting
+  // reproduces "webhook unreachable", which useRoleMenu() resolves to `null` (don't filter),
+  // rather than risk a wrong-shaped 200 collapsing to a confirmed empty Set (NoAccessScreen).
+  await page.route('**/sws/neo/listmenu', (route) => route.abort());
+  await page.route('**/sws/neo/myreportaccess', (route) => route.abort());
+  await page.route('**/sws/neo/dashboard/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: [] } }),
+    });
+  });
+  await page.route('**/sws/go/onboarding/first-steps**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: route.request().method() === 'GET'
+        ? JSON.stringify({ status: 'success', firstSteps: { v: 1, seen: true, completed: [] } })
+        : JSON.stringify({ status: 'success' }),
+    });
+  });
+}
+
+test.describe('Onboarding readiness — auth contract (ETP-5443 follow-up)', () => {
+  test('the three readiness probes carry no Authorization header, and the flow reaches the dashboard', async ({ page }) => {
+    await installOnboardingMocks(page);
+    await installDashboardEntryMocks(page);
+
+    const captured = { session: [], defaults: [], paymentTerms: [] };
+    page.on('request', (request) => {
+      const url = request.url();
+      if (url.includes('/sws/neo/session')) captured.session.push(request.headers());
+      else if (url.includes('/sws/neo/sales-invoice/header/defaults')) captured.defaults.push(request.headers());
+      else if (url.includes('/sws/neo/sales-invoice/header/selectors/C_PaymentTerm_ID')) captured.paymentTerms.push(request.headers());
+    });
+
+    await completeOnboardingForm(page, 'qa-onboarding-cookie-readiness');
+
+    // The retry/back pair (SetupProgressStep.jsx) only renders on a readiness (or onboarding)
+    // failure — its ABSENCE, together with actually reaching the dashboard, is the positive
+    // signal that all three probes succeeded. Checked with testids, not translated copy — see
+    // the negative test below for why matching copy here would be the wrong guard.
+    await expect(page.getByTestId('Button__retry')).toHaveCount(0);
+    await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 });
+
+    for (const [label, requests] of Object.entries(captured)) {
+      expect(requests.length, `${label} probe was never sent`).toBeGreaterThan(0);
+      for (const headers of requests) {
+        expect(headers.authorization, `${label} probe carried an Authorization header`).toBeUndefined();
+      }
+    }
+  });
+
+  test('a 401 on the session probe is a loud, visible failure — not a silent pass', async ({ page }) => {
+    await installOnboardingMocks(page);
+    // Registered after installOnboardingMocks' own `/sws/neo/session` route, so Playwright
+    // tries this one first (reverse registration order) and it wins.
+    await page.route('**/sws/neo/session', async (route) => {
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'unauthorized' }),
+      });
+    });
+
+    await completeOnboardingForm(page, 'qa-onboarding-cookie-readiness-401');
+
+    // This is the guard the ETP-5443 follow-up asked for: reproducing bug A must make the
+    // test fail loudly rather than pass because SOME element rendered. A test that only
+    // asserted "some error text is visible" would pass identically for an unrelated data gap
+    // (see the invalid-document-type test above) — the retry/back pair plus staying off the
+    // dashboard is what actually distinguishes "a probe failed" from "onboarding succeeded".
+    await expect(page.getByTestId('Button__retry')).toBeVisible({ timeout: 10_000 });
     await expect(page).not.toHaveURL(/dashboard/);
   });
 });

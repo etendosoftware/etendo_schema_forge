@@ -38,6 +38,25 @@ const BACKEND_ERROR_MAP = {
   'Usable Life - Years field cannot be empty, zero or negative.': 'backendError.amortizationUsableLifeYearsRequired',
   'Currency field cannot be empty': 'backendError.amortizationCurrencyRequired',
   'Annual Depreciation field cannot be empty, zero or negative.': 'backendError.amortizationAnnualDepreciationRequired',
+  // AmortizationConfirmGuard.java (com.etendoerp.go — ETP-5414), server-side gate on the
+  // /amortization "Processed" action. a_amortization_process (PL/pgSQL) never validates a
+  // document's lines itself — no lines / missing % / non-positive amount — so this guard blocks
+  // those cases before the process runs, closing the hole for any consumer that isn't this UI
+  // (MCP, a script, a raw curl). Reuses the SAME three keys `validateConfirmEligibility`
+  // (artifacts/amortization/custom/AmortizationBulkActions.jsx) already ships for the identical
+  // checks, so the failure reads identically whether it was caught client-side (no round-trip)
+  // or here (the safety net for everyone else). AD_MESSAGE VALUEs:
+  // ETGO_AmortizationNoLines / ETGO_AmortizationLineMissingPercentage /
+  // ETGO_AmortizationLineInvalidAmount.
+  'Has no amortization lines.': 'amortizationBulkNoLines',
+  'There are lines with a missing amortization percentage.': 'amortizationErrorLinePercentageMissing',
+  'There are lines with a zero or negative amount.': 'amortizationErrorLineAmountInvalid',
+  // Same guard, unconditional block on a direct PATCH/PUT write to `processed` (AD_MESSAGE
+  // ETGO_AmortizationProcessedDirectUpdateBlocked): that path skips a_amortization_process
+  // entirely — no TotalAmortization recompute, no linked-asset DepreciatedValue recompute — so
+  // it is rejected outright rather than validated. No client-side equivalent exists (the UI
+  // never PATCHes `processed` directly), hence a new key instead of reusing one.
+  'Processed cannot be updated directly.': 'amortizationProcessedDirectUpdateBlocked',
   // PSD2 PIS bank transfer (com.etendoerp.psd2.bank.integration AD_MESSAGE
   // 0629302ABBB04612BEF87B7EB64E7A8E), raised by GenerateBankPayment when the connected provider does
   // not offer the chosen payment template — e.g. a Salt Edge sandbox provider that supports SEPA but
@@ -278,6 +297,11 @@ const BACKEND_ERROR_MAP = {
   // this one reaches the toast untranslated regardless of session locale.
   'This user is the tenant owner — only the owner can modify this account':
     'backendError.cannotModifyOwnerAccount',
+  // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
+  // 403 for a spec/window/report the current role cannot access, regardless of session locale
+  // (ETP-5205). Read-only-role users hit this whenever a control that should have been disabled
+  // client-side is clicked anyway and the backend's own gate is what actually stops them.
+  'Access denied to spec for current role': 'backendError.accessDeniedToSpec',
 };
 
 // ETP-5316 — MATCHING BY AD_MESSAGE KEY, the third mechanism (the other two are the exact-match

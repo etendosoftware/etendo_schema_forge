@@ -618,6 +618,108 @@
           ]
         }
       ]
+    },
+    {
+      "id": "demo-data-transfer",
+      "description": "After an account buys a productive environment, copy the products and contacts it chose at checkout from its demo tenant into the new productive tenant, as a durable server-side job whose progress and retry are shown as a First Steps row (ETP-5364). Gated OFF by default in ETP-5443: with the flag off the durable job does not start, its two endpoints answer 404 and the First Steps catalogue is the pre-ETP-5364 one. The pre-existing synchronous onboarding transfer remains active with the flag off.",
+      "owner": "sebastianbarrozo",
+      "jira": "ETP-5364",
+      "created": "2026-09-22",
+      "flag": {
+        "key": "demo-data-transfer",
+        "defaultValue": false,
+        "ttl": "2026-12-31",
+        "ttlNote": "PLACEHOLDER, not a commitment: revisit the removal target after the transfer has run against a real demo with prices, costs and client-scoped UOMs. Revisit the date when the flag is first switched on anywhere.",
+        "symbols": [
+          "demo-data-transfer",
+          "FLAG_DEMO_DATA_TRANSFER",
+          "ETGO_FLAG_DEMO_DATA_TRANSFER",
+          "etendo.go.flags.demo-data-transfer",
+          "DemoDataTransferFlag",
+          "DemoDataTransferService",
+          "demoDataTransferService",
+          "recordDemoDataTransferSelection",
+          "startDemoDataTransferBestEffort",
+          "handleDemoDataTransfer",
+          "useDemoDataTransfer",
+          "demoDataTransferStep",
+          "demoDataTransfer",
+          "DataTransferAction",
+          "firstStepsDemoDataTransfer"
+        ],
+        "$symbolsComment": "Backend-only flag: evaluated by com.etendoerp.go alone through DemoDataTransferFlag.isEnabled(), the single gate every backend toggle point calls. There is NO key in flag-keys.js and none must be added: the browser learns the flag from GET /sws/go/demo-data-transfer answering 404 (off) or 2xx (on), which is what useDemoDataTransfer exposes as `available`. A browser key would be a second evaluator on a different control plane and targeting key, the ETP-4966 shape (docs/feature-flags.md, GoFeatureFlags javadoc). The page/hook/servlet names are listed because FirstStepsPage.jsx, FirstStepsContext.jsx, firstStepsConfig.js and EtendoGoJwtServlet.java reference the feature by them, not by the key. `firstStepsDemoDataTransfer` is the i18n prefix of the keys this feature adds to en_US, es_ES and es_AR."
+      },
+      "paths": {
+        "frontend": [
+          "tools/app-shell/src/pages/first-steps/demoDataTransferStep.js",
+          "tools/app-shell/src/pages/first-steps/useDemoDataTransfer.js"
+        ],
+        "backend": [
+          "src/com/etendoerp/go/payment/DemoDataTransferFlag.java",
+          "src/com/etendoerp/go/payment/DemoDataTransferService.java",
+          "src/com/etendoerp/go/payment/DemoDataTransferReflection.java"
+        ]
+      },
+      "$pathsComment": "Owned code only. Shared toggle points, NOT owned: EtendoGoJwtServlet.java (two route conditions, the recordDemoDataTransferSelection guard, startDemoDataTransferBestEffort and the two handlers), GoFeatureFlags.java (the FLAG_DEMO_DATA_TRANSFER constant, framework path), firstStepsConfig.js (the optional transfer argument threaded through the catalogue helpers), FirstStepsContext.jsx, FirstStepsPage.jsx (DataTransferAction and the row wiring), firstStepsIcons.js and the three locale files. UpgradePage.jsx / lib/upgrade/api.js now send the `dataTransfer` selection with billing purchase creation as well as the legacy checkout-session request. These shared checkout paths remain ungated: with the flag off the server does not record a durable job selection, while an explicit copy on POST /onboarding drives ETP-5421's synchronous OnboardingDataTransferService. With the flag on the backend records the checkout choice before contacting the provider and runs only the durable job after onboarding commits. A resumed paid purchase uses its recorded selection; a flag-on purchase missing that selection continues onboarding without transfer, shows a warning, and needs operator recovery for the missing data. The other ETP-5364 changes (R39 data-fixes, the demo banner notice, the fiscal step gate, TopBar, the team link) are not part of this feature and are not gated.",
+      "deferredItems": [
+        {
+          "id": "executor-never-shut-down",
+          "kind": "open",
+          "note": "The worker ExecutorService (now created lazily on first submission, ETP-5443) is never shut down — EtendoGoJwtServlet overrides no destroy(), and nothing else holds the service. Its thread is a daemon, so it does not block JVM exit, but a Tomcat context reload leaves the old thread and its classloader alive. AND THEREFORE each redeploy with the flag on leaks one thread and one webapp classloader until the JVM restarts; with the flag off no executor is ever created, so nothing leaks today.",
+          "refs": [
+            "DemoDataTransferService#executor",
+            "EtendoGoJwtServlet — no destroy() override"
+          ]
+        }
+      ],
+      "$fixedInGatingComment": "Fixed while gating (ETP-5443), because each was a small, local change with no effect while the flag is off: (1) the checkout selection preference key was ETGO_DemoDataTransferSelection.<uuid>, 67 characters against AD_PREFERENCE.ATTRIBUTE VARCHAR(60) — now ETGO_DDTSelection.<uuid>, 54, pinned by DemoDataTransferServiceTest#keepsTheSelectionPreferenceKeyWithinTheAttributeColumn; (2) the executor was built in the service constructor and therefore at servlet init — now lazy, pinned by #createsNoWorkerThreadUntilWorkIsSubmitted; (3) completeCommittedOnboarding started the transfer inside the recordProvisioned try, so a transfer failure was logged as 'checkout request could not be closed' and skipped nothing but misled the reader — the start now has its own best-effort method and message (startDemoDataTransferBestEffort).",
+      "testSpecs": {
+        "unit": [
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/first-steps/__tests__/demoDataTransferStep.vitest.js"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/first-steps/__tests__/useDemoDataTransfer.vitest.jsx"
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/first-steps/__tests__/FirstStepsContext.vitest.jsx",
+            "note": "Shared spec; carries the flag-off absence and flag-on splice cases for this feature."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/src/pages/__tests__/FirstStepsPage.vitest.jsx",
+            "note": "Shared spec; the transfer suite runs with available: true, the rest of the file on the flag-off catalogue."
+          },
+          {
+            "root": "frontend",
+            "path": "tools/app-shell/test/demo-data-transfer-product-import-fields.test.js"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/DemoDataTransferServiceTest.java"
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/payment/DemoDataTransferFlagTest.java",
+            "note": "Present in Go; covers default-off and configured-on flag evaluation."
+          },
+          {
+            "root": "backend",
+            "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletDemoDataTransferFlagTest.java",
+            "note": "Present in Go; 12 passing tests cover route gating, selection recording and projection, and flag-dependent onboarding paths."
+          }
+        ],
+        "e2e": [
+          {
+            "root": "frontend",
+            "path": "e2e/tests/flows/first-steps-demo-data-transfer.mocked.spec.js",
+            "note": "Covers RUNNING progress, FAILED retry, and row absence with the flag off."
+          }
+        ]
+      }
     }
   ]
 }

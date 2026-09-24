@@ -1,9 +1,12 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { useUI, useLocale, useMenuLabel } from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import { useRowDelete } from '@/hooks/useRowDelete';
+import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useWindowAccess } from '@/auth/AuthContext.jsx';
 import { useRowEmailModal } from '../shared/useRowEmailModal.jsx';
 import { useQuotationPdf } from '../shared/useQuotationPdf.js';
 import GeneratedApp from '@generated/sales-quotation/generated/web/sales-quotation/index.jsx';
@@ -13,10 +16,17 @@ import { CreateContactContext } from '@/components/contract-ui/CreateContactCont
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import LinesEmptyState from '@/components/contract-ui/LinesEmptyState.jsx';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
+import BulkDocumentAction, { buildInOutActions } from '@/components/contract-ui/BulkDocumentAction';
 import QuotationPreview from '../shared/QuotationPreview.jsx';
 import { useSavedPreviewRecord } from '../shared/useSavedPreviewRecord.js';
 import { SEND_VISIBLE_WHEN_NOT_DRAFT } from '../shared/sendActionVisibility.js';
 import QuotationSecondaryActions from '@generated/sales-quotation/custom/QuotationSecondaryActions';
+// ETP-5378 — row-hover "Confirmar": reuses the SAME two modals
+// QuotationTopbarActions dispatches to from the form (sales-quotation:open-confirm-modal),
+// rather than inventing a third flow. See openConfirm below for why.
+import SendToEvaluationModal from '@generated/sales-quotation/custom/SendToEvaluationModal';
+import QuotationConfirmModal from '@generated/sales-quotation/custom/QuotationConfirmModal';
+import RejectQuotationModal from '@generated/sales-quotation/custom/RejectQuotationModal';
 
 const draftModeWithModal = {
   enabled: true,
@@ -91,12 +101,45 @@ function CustomQuotationTable(props) {
   );
 }
 
-function SalesQuotationBulkActions({ selectedRows, windowName }) {
+/**
+ * ETP-5378 QA follow-up (SEL-08) — a Borrador quotation could be confirmed from the row kebab
+ * but the selection bar offered only copy-link / print / clone / delete, unlike Pedido de Venta,
+ * whose bar has "Procesar". This window simply never mounted a `BulkDocumentAction`.
+ *
+ * Reuses the generic component rather than driving `SendToEvaluationModal`: that modal is a
+ * per-document summary (total, line count, no-lines guard), which has no meaning for N selected
+ * records. Quotation and Order are BOTH rows of `C_Order` and both resolve DocAction to the same
+ * classic process 104 (see each window's `contract.json` apiPrediction), so the wire call is
+ * identical to the one Pedido's bar already performs — only the entity segment differs.
+ *
+ * `buildInOutActions` (not the component's default) on purpose: it offers CO when a draft is
+ * selected and never offers RE. Reactivating a quotation is a different flow with its own
+ * modal, and the bar must not smuggle it in.
+ */
+const quotationBulkRowFilter = (row, action, ui) => {
+  // Without this, a mixed selection (one Borrador + one Cerrado) would run CO against BOTH,
+  // because buildInOutActions fires on ANY draft present. QA flagged that union behaviour as a
+  // minor observation on the return windows; there is no reason to reproduce it here.
+  if (action !== 'CO') return true;
+  if ((row.documentStatus || row.docStatus) !== 'DR') return ui('bulkRowNotDraft');
+  return true;
+};
+
+function SalesQuotationBulkActions(props) {
   return (
-    <CopyLinkButton
-      selectedRows={selectedRows}
-      windowName={windowName}
-      data-testid="CopyLinkButton__bc8637" />
+    <>
+      <BulkDocumentAction
+        {...props}
+        entity="quotation"
+        buildActions={buildInOutActions}
+        rowFilter={quotationBulkRowFilter}
+        labelKey="process"
+        data-testid="BulkDocumentAction__bc8637" />
+      <CopyLinkButton
+        selectedRows={props.selectedRows}
+        windowName={props.windowName}
+        data-testid="CopyLinkButton__bc8637" />
+    </>
   );
 }
 
@@ -104,8 +147,119 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
   const [cloneTargets, setCloneTargets] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const navigate = useNavigate();
+  const ui = useUI();
   const tMenu = useMenuLabel();
   const { effectiveRecord, clearSavedRecord } = useSavedPreviewRecord();
+
+  // ETP-5205 — this wrapper's own rowMenuActions (row-kebab Confirmar/Rechazar,
+  // ETP-5378 below) is a custom override GeneratedApp merely forwards; GeneratedApp's
+  // own generic read-only handling doesn't reach into an externally-supplied
+  // callback like this one, so the tier is fetched independently here, same
+  // pattern as purchase-order/sales-order's own hardcoded-window-id calls.
+  const windowAccessTier = useWindowAccess('6CB5B67ED33F47DFA334079D3EA2340E');
+
+  // ETP-5378 — row-hover "Confirmar". `apiBaseUrl` is already spec-scoped
+  // (matches SendToEvaluationModal/QuotationConfirmModal's own `${apiBaseUrl}/quotation`
+  // convention — no `.replace()` stripping needed here, unlike useRowConfirmAction's
+  // generic `/${specName}/${entityName}` shape).
+  const apiFetch = useApiFetch(apiBaseUrl);
+  const [confirmRow, setConfirmRow] = useState(null);
+  const confirmInFlightRef = useRef(false);
+  const [rejectRow, setRejectRow] = useState(null);
+
+  // The grid row carries `grandTotalAmount` (a real column) but not
+  // `summedLineAmount`/`businessPartner$_identifier`'s freshest value — and
+  // QuotationConfirmModal, unlike SendToEvaluationModal, lets its `data` prop
+  // permanently WIN over its own internal refetch (ETP-4468 — "data" reflects an
+  // unsaved form edit there, which must never be overwritten by a stale fetch).
+  // From the list there is no unsaved edit to protect, so refetching the full
+  // record FIRST and handing that in as `data` avoids the summary line silently
+  // showing the grand total as its own subtotal.
+  const openQuotationConfirm = useCallback(async ({ row }) => {
+    if (confirmInFlightRef.current || !row?.id) return;
+    confirmInFlightRef.current = true;
+    const toastId = toast.loading(ui('processing'));
+    try {
+      const res = await apiFetch(`/quotation/${row.id}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.response?.message || body?.message || `Error (${res.status})`);
+      }
+      const payload = await res.json();
+      const record = payload?.response?.data?.[0] ?? payload;
+      toast.dismiss(toastId);
+      setConfirmRow(record);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err?.message || ui('networkError'));
+    } finally {
+      confirmInFlightRef.current = false;
+    }
+  }, [apiFetch, ui]);
+
+  // Composes with the form's own reject entry (customMenuActions) rather than
+  // replacing it, so the row kebab keeps whatever it already rendered and only
+  // gains Confirmar. Statuses outside DR/CO/UE offer nothing: those are exactly
+  // the ones QuotationTopbarActions' own handler() does not react to either — the
+  // form's button stays visible-but-inert there (a separate, pre-existing gap,
+  // not one to paper over here by inventing a third flow this ticket never asked
+  // for).
+  // ETP-5378 — customMenuActions' own "reject" entry dispatches a DOM event
+  // (sales-quotation:open-reject-modal) that only QuotationTopbarActions listens
+  // for, and that component is mounted ONLY in form view — so the same entry,
+  // reused verbatim for the row kebab, fired the event and nothing happened:
+  // reported live, "cuando le doy a rechazar no hace nada" in the grid, versus
+  // the popup that opens fine from the record. Rather than fork a second
+  // "reject" descriptor, this keeps customMenuActions' own label/icon/visible
+  // untouched and only swaps the row kebab's onClick to open RejectQuotationModal
+  // directly against THIS row — no event indirection needed once there's a
+  // real row to open it against.
+  const rowMenuActions = useCallback(({ row, status }) => (
+    windowAccessTier === 'read-only' ? [] : [
+      ...(row?.documentStatus === 'DR' || row?.documentStatus === 'CO' || row?.documentStatus === 'UE'
+        ? [{ key: 'confirm', label: ui('confirm'), onClick: openQuotationConfirm }]
+        : []),
+      ...customMenuActions({ status }).map((action) => (
+        action.key === 'reject' ? { ...action, onClick: () => setRejectRow(row) } : action
+      )),
+    ]
+  ), [ui, openQuotationConfirm, windowAccessTier]);
+
+  const closeQuotationConfirm = useCallback(() => setConfirmRow(null), []);
+  const closeReject = useCallback(() => setRejectRow(null), []);
+
+  const confirmPortal = confirmRow && createPortal(
+    confirmRow.documentStatus === 'DR' ? (
+      <SendToEvaluationModal
+        quotationId={confirmRow.id}
+        data={confirmRow}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        onClose={closeQuotationConfirm}
+        data-testid="RowSendToEvaluationModal__bc8637" />
+    ) : (
+      <QuotationConfirmModal
+        quotationId={confirmRow.id}
+        data={confirmRow}
+        token={token}
+        apiBaseUrl={apiBaseUrl}
+        onClose={closeQuotationConfirm}
+        onRefresh={() => setRefreshKey(k => k + 1)}
+        data-testid="RowQuotationConfirmModal__bc8637" />
+    ),
+    document.body,
+  );
+
+  const rejectPortal = rejectRow && createPortal(
+    <RejectQuotationModal
+      quotationId={rejectRow.id}
+      data={rejectRow}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      onClose={closeReject}
+      data-testid="RowRejectQuotationModal__bc8637" />,
+    document.body,
+  );
 
   // ETP-4372 — row-hover email envelope opens SendDocumentModal with a PDF preview.
   const { onEmail: onRowEmail, emailModalPortal } = useRowEmailModal({
@@ -153,8 +307,10 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
     onClone:  (row) => setCloneTargets([row]),
     onEmail:  onRowEmail,
     onDelete: requestDelete,
-    menuActions: customMenuActions,
-  }), [navigate, windowName, requestDelete, onRowEmail]);
+    // ETP-5378 — rowMenuActions composes Confirmar with the form-shared "reject"
+    // entry (customMenuActions); see its own doc comment above.
+    menuActions: rowMenuActions,
+  }), [navigate, windowName, requestDelete, onRowEmail, rowMenuActions]);
 
   if (recordId) {
     return (
@@ -207,6 +363,8 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         document.body,
       )}
       {emailModalPortal}
+      {confirmPortal}
+      {rejectPortal}
     </>
   );
 }

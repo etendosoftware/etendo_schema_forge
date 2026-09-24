@@ -255,7 +255,8 @@ export default function InventoryPage({ windowName, recordId, ...props }) {
         bottomSection={PhysicalInventoryBottomPanel}
         customMenuContent={InventoryMenuContent}
         menuActions={({ data, status }) => [
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  }
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}

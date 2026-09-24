@@ -9,12 +9,10 @@
  *
  * The handlers used to be reachable through the page's `AccountsTable` props. They now
  * reach the cells through the `cellCtx` the slot builds: `eTGOPendingCount` renders through
- * the `reconcilePill` entry of ACCOUNT_CELL_TYPES (a contract column since the
- * `virtualFields[]` declaration), `_rowActions` is the one hand-appended column. Both are
- * handed to the generic DataTable, so this suite stubs it with a renderer that calls
- * `col.render` for
- * every row — the real `ReconcilePill` / `AccountRowActions` then drive the handlers
- * exactly as they do in the browser.
+ * the `reconcilePill` entry of ACCOUNT_CELL_TYPES. AccountRowActions reaches the same
+ * DataTable through `rowQuickActions.render`, so this suite's stub invokes both the contract
+ * cell renderers and that custom shared-cell renderer for every row — the real
+ * `ReconcilePill` / `AccountRowActions` then drive the handlers exactly as in the browser.
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -127,8 +125,10 @@ vi.mock('@/windows/custom/financial-account/FundsTransferModal.jsx', () => ({
 }));
 
 // See the sibling suite for why DataTable is stubbed rather than rendered for real.
+import { QuickActionsCell } from './testUtils/dataTableStubQuickActionsCell.jsx';
+
 vi.mock('@/components/contract-ui', () => ({
-  DataTable: ({ columns, data, onNavigate }) => (
+  DataTable: ({ columns, data, onNavigate, rowQuickActions }) => (
     <div data-testid="data-table">
       {(data ?? []).map((row) => (
         <div key={row.id} data-testid={`row-${row.id}`} role="presentation" onClick={() => onNavigate?.(row)}>
@@ -137,6 +137,7 @@ vi.mock('@/components/contract-ui', () => ({
               {col.render ? col.render(row) : null}
             </span>
           ))}
+          <QuickActionsCell row={row} rowQuickActions={rowQuickActions} />
         </div>
       ))}
     </div>

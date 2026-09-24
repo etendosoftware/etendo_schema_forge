@@ -262,12 +262,18 @@ function DashboardContent({ apiBaseUrl }) {
  * device, a cleared browser or a second session must not replay the redirect, and a user who
  * has already been sent there must never be bounced again.
  *
- * Four states deliberately do NOT redirect:
+ * Five states deliberately do NOT redirect:
  *   - still loading — redirecting on the default `seen: false` would flash the dashboard away
  *     from every user on every visit before the real state arrives;
  *   - the GET failed — `seen` is then unknown, and assuming "not seen" would bounce a user who
  *     had already dismissed the page;
  *   - `seen` is true — the normal steady state;
+ *   - ETP-5364 — `dismissed` is true: the user pressed "Finalizar configuración inicial" and the
+ *     checklist is gone from the menu, so bouncing them onto the page they just put away would
+ *     undo the one thing that button promises. This is NOT covered by `seen`: a user who
+ *     reached /first-steps from the menu and dismissed it there has never spent the redirect,
+ *     so `seen` is still false and only this clause stops it firing on their next dashboard
+ *     visit;
  *   - ETP-5395 — the current user is not the account Owner (`capabilities.isOwner !== true`,
  *     fail-closed like every other capability read through `useCapabilitiesSafe()`): "Primeros
  *     pasos" is Owner-only, so a non-owner must never be sent there, and `seen` stays
@@ -275,7 +281,7 @@ function DashboardContent({ apiBaseUrl }) {
  *     never fires for a non-owner either.
  */
 function useFirstStepsRedirect() {
-  const { seen, loading, error, markSeen } = useFirstStepsState();
+  const { seen, dismissed, loading, error, markSeen } = useFirstStepsState();
   const capabilities = useCapabilitiesSafe();
   const isOwner = capabilities.isOwner === true;
   // Latched, because `markSeen` optimistically flips `seen` to true in the very same commit
@@ -283,7 +289,7 @@ function useFirstStepsRedirect() {
   // one render later, and whether the user still ended up on /first-steps would come down to
   // effect ordering. Once the decision is taken it stays taken until this page unmounts.
   const [redirecting, setRedirecting] = useState(false);
-  const mustRedirect = isOwner && !loading && !error && !seen;
+  const mustRedirect = isOwner && !loading && !error && !seen && !dismissed;
   useEffect(() => {
     if (!mustRedirect || redirecting) return;
     setRedirecting(true);

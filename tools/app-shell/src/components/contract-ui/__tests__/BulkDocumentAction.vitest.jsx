@@ -339,6 +339,29 @@ describe('BulkDocumentAction', () => {
     expect(screen.getByText('documentAction')).toBeInTheDocument();
   });
 
+  // ETP-5414 review — the "Aceptar" button now shows a Loader2/animate-spin icon for the
+  // whole `running` span (the rowFilter gate + the action execution), reusing the existing
+  // `running` state rather than adding a new one. Holds the action promise open so the
+  // mid-flight state is actually observable, then lets it settle.
+  it('shows the Loader2 spinner only while running (idle → mid-flight → settled)', async () => {
+    let resolveExecute;
+    mockDocExecute.mockImplementationOnce(() => new Promise((resolve) => { resolveExecute = resolve; }));
+    const rows = [{ id: '1', documentStatus: 'DR' }];
+    const refresh = vi.fn();
+    render(
+      <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" refresh={refresh} />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    expect(screen.queryByTestId('Loader2__90fe6a')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+    await waitFor(() => expect(screen.getByTestId('Loader2__90fe6a')).toBeInTheDocument());
+
+    await act(async () => { resolveExecute({}); });
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.queryByTestId('Loader2__90fe6a')).not.toBeInTheDocument();
+  });
+
   // ETP-5302 — the footer confirms with "Aceptar" (`accept`), never "Completado"
   // (`done`): the dialog operates on document ACTIONS, and "Completado" is the name
   // of a document STATUS, so the old label read as a promise to complete the
@@ -379,6 +402,37 @@ describe('BulkDocumentAction', () => {
       <BulkDocumentAction selectedRows={rows} clearSelection={vi.fn()} token="tok" apiBaseUrl="/api" />,
     );
     expect(screen.getByText(/bulkCompletion/)).toBeInTheDocument();
+  });
+});
+
+describe('BulkDocumentAction — respects windowReadOnly (ETP-5205)', () => {
+  const rows = [{ id: 'r1', documentStatus: 'DR' }];
+
+  it('renders the bulk-action button when the window is NOT read-only', () => {
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="test-window"
+      />
+    );
+    expect(screen.getByRole('button', { name: /bulkCompletion/i })).toBeInTheDocument();
+  });
+
+  it('renders nothing when the window IS read-only, even with eligible selected rows', () => {
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="test-window"
+        windowReadOnly
+      />
+    );
+    expect(screen.queryByRole('button', { name: /bulkCompletion/i })).not.toBeInTheDocument();
   });
 });
 
@@ -537,6 +591,110 @@ describe('BulkDocumentAction — supplies ui() to rowFilter itself (ETP-5209)', 
     // BulkDocumentAction.jsx's `failed.length === 0 && omitted.length === 0`
     // branch) — same pattern as the actionMode failure test above.
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+});
+
+// ETP-5414 review — the rowFilter gate moved from a serial `for...await` loop to
+// `Promise.all(selectedRows.map(...))`, followed by classifying results back into
+// `omitted`/`rowsToProcess` in SELECTION order (not resolution order). These tests prove
+// both halves of that change through the real component, not by reading source.
+describe('BulkDocumentAction — rowFilter gate runs in PARALLEL, not serially (ETP-5414)', () => {
+  const STORAGE_KEY = 'bulkActionResult';
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    Object.defineProperty(window, 'location', {
+      value: { reload: vi.fn() },
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  it('starts every row\'s rowFilter before any of them resolves', async () => {
+    const started = [];
+    const deferred = {};
+    const rowFilter = vi.fn((row) => {
+      started.push(row.id);
+      return new Promise((resolve) => { deferred[row.id] = resolve; });
+    });
+    const rows = [
+      { id: 'row-a', documentStatus: 'DR' },
+      { id: 'row-b', documentStatus: 'DR' },
+    ];
+    const refresh = vi.fn();
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        rowFilter={rowFilter}
+        refresh={refresh}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    // A serial (`for...await`) gate would only invoke row-b's rowFilter AFTER row-a's
+    // promise resolves — which never happens here. Seeing BOTH ids, with neither deferred
+    // resolved yet, proves the gate started both together (`Promise.all` over the map),
+    // not one after another.
+    await waitFor(() => expect(started).toEqual(['row-a', 'row-b']));
+    expect(deferred['row-a']).toBeInstanceOf(Function);
+    expect(deferred['row-b']).toBeInstanceOf(Function);
+
+    await act(async () => {
+      deferred['row-a'](true);
+      deferred['row-b'](true);
+    });
+
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(mockDocExecute).toHaveBeenCalledTimes(2);
+  });
+
+  it('omitted preserves SELECTION order even when the underlying promises resolve out of order', async () => {
+    const deferred = {};
+    const rowFilter = vi.fn((row) => new Promise((resolve) => { deferred[row.id] = resolve; }));
+    const rows = [
+      { id: 'row-1', documentNo: 'DOC-1', documentStatus: 'DR' },
+      { id: 'row-2', documentNo: 'DOC-2', documentStatus: 'DR' },
+      { id: 'row-3', documentNo: 'DOC-3', documentStatus: 'DR' },
+    ];
+    const clearSelection = vi.fn();
+    // Fallback path (no `refresh`): the full `omitted` array (with order) is only
+    // readable from the persisted record — the in-place toast shows counts only.
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={clearSelection}
+        token="tok"
+        apiBaseUrl="/api"
+        rowFilter={rowFilter}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(rowFilter).toHaveBeenCalledTimes(3));
+
+    // Resolve OUT of selection order: row-3 (omitted) first, row-2 (allowed) next, row-1
+    // (omitted, and FIRST in selection order) LAST.
+    await act(async () => { deferred['row-3']('blockedThree'); });
+    await act(async () => { deferred['row-2'](true); });
+    await act(async () => { deferred['row-1']('blockedOne'); });
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    const { omitted } = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    // Selection order (row-1 then row-3) — NOT resolution order (row-3 resolved first).
+    expect(omitted).toEqual([
+      { documentNo: 'DOC-1', message: 'blockedOne' },
+      { documentNo: 'DOC-3', message: 'blockedThree' },
+    ]);
+
+    await waitFor(() => {
+      expect(clearSelection).toHaveBeenCalled();
+      expect(window.location.reload).toHaveBeenCalled();
+    }, { timeout: 3000 });
   });
 });
 
@@ -873,6 +1031,86 @@ describe('BulkDocumentAction — refreshes the list in place instead of reloadin
       expect(clearSelection).toHaveBeenCalled();
       expect(reloadSpy).toHaveBeenCalled();
     }, { timeout: 3000 });
+  });
+});
+
+// ETP-5414 — `neoActionName` decouples the dropdown's `value` (the user's INTENT — what
+// `rowFilter` and the Select branch on) from the wire action name `execute()` actually
+// calls. Amortization needs this because 'confirm' and 'reactivate' are two distinct
+// intents that both hit the same real NEO action ('Processed'); every pre-existing caller
+// (post/unpost, CO/RE, matched-invoice's post) never sets `neoActionName`, so `value` and
+// the wire name must stay identical for them — that fallback is the regression this guards.
+describe('BulkDocumentAction — neoActionName wire-name override (ETP-5414)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockNeoExecute.mockReset();
+    mockNeoExecute.mockResolvedValue({ success: true });
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+  });
+
+  it('falls back to the action\'s own `value` as the wire name when neoActionName is not set — proves every existing caller (post/unpost, CO/RE, matched-invoice) is unaffected', async () => {
+    const rows = [{ id: 'row-1' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="matched-purchase-invoices"
+        actionMode="neoAction"
+        buildActions={() => [{ value: 'post', labelKey: 'post' }]}
+        refresh={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledWith('row-1', 'post'));
+  });
+
+  it('calls execute with neoActionName (the wire name), NOT the dropdown value, when the action declares an override', async () => {
+    const rows = [{ id: 'row-1' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="amortization"
+        actionMode="neoAction"
+        buildActions={() => [{ value: 'confirm', neoActionName: 'Processed', labelKey: 'confirm' }]}
+        refresh={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledWith('row-1', 'Processed'));
+    expect(mockNeoExecute).not.toHaveBeenCalledWith('row-1', 'confirm');
+  });
+
+  it('still calls `rowFilter` with the dropdown value ("confirm"), never the neoActionName override', async () => {
+    const rowFilter = vi.fn(() => true);
+    const rows = [{ id: 'row-1' }];
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="amortization"
+        actionMode="neoAction"
+        buildActions={() => [{ value: 'confirm', neoActionName: 'Processed', labelKey: 'confirm' }]}
+        rowFilter={rowFilter}
+        refresh={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(rowFilter).toHaveBeenCalled());
+    const [, action] = rowFilter.mock.calls[0];
+    expect(action).toBe('confirm');
   });
 });
 

@@ -51,14 +51,13 @@ describe('AppIframeHost', () => {
     });
   });
 
-  it('shows error when token is missing', () => {
+  // ETP-4576 — there is no "missing token" state left to show. Under the cookie scheme no
+  // client ever holds one, so the old screen turned the app host into a permanent error for
+  // every authenticated user. What matters now is that it renders and asks for its app.
+  it('renders and requests the app when no token is held', async () => {
     render(<AppIframeHost appUrl="https://app.test" appId="myapp" token="" />);
-    expect(screen.getByText(/missing etendo session token/i)).toBeInTheDocument();
-  });
-
-  it('shows error when token is undefined', () => {
-    render(<AppIframeHost appUrl="https://app.test" appId="myapp" token={undefined} />);
-    expect(screen.getByText(/missing etendo session token/i)).toBeInTheDocument();
+    expect(screen.queryByText(/missing etendo session token/i)).not.toBeInTheDocument();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
   });
 
   it('shows error when fetch fails with non-ok status', async () => {

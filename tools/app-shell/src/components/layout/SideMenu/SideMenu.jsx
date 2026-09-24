@@ -374,9 +374,14 @@ function ExpandedGroupSection({
 /**
  * ETP-5190 — `x/7` progress on the First Steps entry.
  *
- * Only ever an ADDITION to the label: the entry itself is never hidden and never disabled,
- * whatever the count says, because the checklist has to stay reachable after the one-time
- * dashboard redirect has been spent (and after every step is done, to un-tick one).
+ * Only ever an ADDITION to the label: this badge never hides or disables the entry, whatever the
+ * count says, because the checklist has to stay reachable after the one-time dashboard redirect
+ * has been spent (and after every step is done, to un-tick one). The ONE thing that removes the
+ * entry is ETP-5364's explicit `dismissed` flag — a deliberate act by the user, never a
+ * consequence of the count reaching its total. That removal is NOT done here: like every other
+ * menu axis it is an item-level predicate in `filterMenuGroupsByAccess`
+ * (`"hideWhenFirstStepsDismissed"` in menu.json), applied before `SideMenu` is handed its groups.
+ * Filtering it in this component instead is what made the entry flash in and out on reload.
  *
  * Renders nothing while the state is loading, when it failed to load, or when the sidebar is
  * rendered outside a `FirstStepsProvider` (bare component tests) — a badge that flashed `1/7`
@@ -599,7 +604,13 @@ export default function SideMenu({
   const featureFlagValues = useMemo(() => ({
     [ACCT_PROCESS_MONITOR]: showAcctProcessMonitor,
     [PUBLIC_API_KEYS]: showPublicApiKeys,
-  }), [showAcctProcessMonitor, showPublicApiKeys]);
+    // ETP-5436 — an item can now ALSO declare featureFlag: PROOF_OF_CONCEPT_MENU (e.g.
+    // quick-sales-order/quick-purchase-order in menu.json), so CommandPalette's generic
+    // item-level filter hides them from search when the flag is off. This map must agree
+    // with showProofOfConceptMenu's group-level gate above, or an item inside an unlocked
+    // group would still be filtered out here as if the flag were unset.
+    [PROOF_OF_CONCEPT_MENU]: showProofOfConceptMenu,
+  }), [showAcctProcessMonitor, showPublicApiKeys, showProofOfConceptMenu]);
 
   // Applied to Favorites TOO. Favorites are rebuilt from the user's own saved list rather than
   // from menuGroups, so returning early for that group let a favourited flag-gated item stay

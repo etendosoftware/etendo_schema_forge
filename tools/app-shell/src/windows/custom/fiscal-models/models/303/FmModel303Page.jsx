@@ -20,7 +20,9 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
+  clampNegativeOverrides,
 } from '../../fiscalModelsUtils.js';
+import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -42,16 +44,26 @@ function statusLabelKey(status) {
 // fiscalModelsUtils.js (ETP-5272 pt.6) — shared with FmListPage.jsx so the
 // override-merge + derived-box formula lives in exactly one place.
 
-function removeBox108FromLive(prev) {
-  if (prev == null) return prev;
-  return recomputeDerivedBoxes(toBoxArray(prev).filter(b => b.num !== 108));
-}
-
-function applyBoxChange(prev, boxNum, value, fallbackBoxes) {
+function applyBoxChange(prev, boxNum, value, fallbackBoxes, identChecks) {
   const base = prev != null ? toBoxArray(prev) : toBoxArray(fallbackBoxes);
   const filtered = base.filter(b => b.num !== boxNum);
   const updated = value != null ? [...filtered, { num: boxNum, value }] : filtered;
-  return recomputeDerivedBoxes(updated);
+  return recomputeDerivedBoxes(updated, identChecks);
+}
+
+// ETP-5431 pt.2 — mirrors box 111's freshly-`recomputeDerivedBoxes`-derived value into
+// `manualOverrides`, the object `generate303File`/"Guardar" actually read box 111 from (see
+// `applyComputeResult`'s doc comment above). Box 111 is no longer typed by the user, so this is
+// the only place `manualOverrides[111]` gets set now — every `boxArr` this function is handed
+// has already gone through `recomputeDerivedBoxes`, so it never needs to compute the formula
+// itself, only mirror what's already there.
+function syncBox111Override(overrides, boxArr) {
+  const box111 = getBoxValue(boxArr, 111);
+  if (overrides[111] === box111) return overrides;
+  const next = { ...overrides };
+  if (box111 != null) next[111] = box111;
+  else delete next[111];
+  return next;
 }
 
 function parseBoxInput(rawValue) {
@@ -63,10 +75,28 @@ function parseBoxInput(rawValue) {
   return isNaN(numVal) ? null : roundEur(numVal);
 }
 
-function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources) {
-  if (!res) return;
-  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides));
+// ETP-5431 pt.2 — `setManualOverrides` is optional (kept backward-compatible for any other
+// caller) but MUST be passed whenever this is a real "recompute" call (handleCompute, the
+// precomputed-on-mount hydration below): box 111 is no longer user-typed, so
+// `manualOverrides[111]` never gets set any other way. Without this, `manualOverrides` — the
+// exact object `generate303File`'s `applyBoxParams` and "Guardar"'s `persistManualData` both
+// read box 111 from (BOX_PARAM_MAP -> AEAT's `RectifyingAmount`) — would silently drop a visibly
+// non-empty box 111 from the generated file / saved declaration. See `syncBox111Override` below.
+//
+// ETP-5431 pt.5 — returns the freshly-synced overrides object (or the untouched input when
+// `res` is falsy) so a caller that must persist manualData AFTER this recompute
+// (`handleComputeClick` below) has a synchronous value to snapshot, instead of reading the
+// `manualOverrides` React state back out of its own stale closure (a `setState` call here
+// only takes effect on the NEXT render — awaiting this function's promise does not make that
+// render happen). Computed straight off the `manualOverrides` param (the same source
+// `mergedBoxes` itself was derived from just above) rather than re-read via a `prev =>`
+// updater, so the return value and what actually lands in state can never disagree.
+function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks) {
+  if (!res) return manualOverrides;
+  const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides), identChecks);
   setLiveBoxes(mergedBoxes);
+  const syncedOverrides = syncBox111Override(manualOverrides, mergedBoxes);
+  if (setManualOverrides) setManualOverrides(syncedOverrides);
   // ETP-5272 pt.6 (cont.) — two independent reasons `res.summary` can't be trusted as-is,
   // both because the GET /fiscal303/boxes backend computes purely from invoice data (no
   // declaration-id/manualData input at all, so it never sees manualOverrides):
@@ -94,10 +124,11 @@ function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, 
     result: Number.isFinite(resultDerived) ? resultDerived : (res.summary?.result ?? 0),
   });
   if (res.sources) setLiveSources(res.sources);
+  return syncedOverrides;
 }
 
 function fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch) {
-  if (!token || !apiBaseUrl) return;
+  if (!apiBaseUrl) return;
   apiFetch(`${neoBase(apiBaseUrl)}/session`, { baseUrl: '' })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
@@ -213,6 +244,11 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const { selectedOrg } = useAuth();
   const apiFetch = useApiFetch(apiBaseUrl);
   const [status, setStatus] = useState(decl.status);
+  // Computed from `status` state (not `decl.status`) so it tracks a same-session
+  // presentation without a remount. Declared early — before the mount-time
+  // auto-compute effect below, which reads it (ETP-5438) — and reused at the
+  // action-bar gates further down. Mirrors FmModel349Page.jsx's identical hoist.
+  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
@@ -241,16 +277,44 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
    * `handleCancel` can clear it as part of discarding those edits.
    */
   const hasPendingManualDataEditRef = useRef(false);
+  // ETP-5431 pt.4 — box 111's formula (`computeBox111` via `recomputeDerivedBoxes`) reads
+  // `identChecks.rectificativa` directly, so ANY ident-checks edit (not just a box edit) can
+  // change what box 111 should be — most visibly, ticking/unticking "Autoliquidación
+  // Rectificativa" itself. `handleBoxChange`, `applyComputeResult` (both "Calcular" and the
+  // mount-time hydration) already recompute + `syncBox111Override` on every call; this was the
+  // 4th call site that changes identChecks but never did. `nextIdentChecks` is computed into a
+  // local first (not read back from `identChecks` state, which `setIdentChecks` won't have
+  // applied yet by the time the recompute below runs) and reused for both the state update and
+  // the recompute so they agree on the exact same value.
   const handleIdentChange = (id, value) => {
     hasPendingManualDataEditRef.current = true;
-    setIdentChecks(prev => ({ ...prev, [id]: value }));
+    const nextIdentChecks = { ...identChecks, [id]: value };
+    setIdentChecks(nextIdentChecks);
+
+    const fallback = decl._precomputed?.boxes ?? decl.boxes;
+    const currentBoxes = liveBoxes ?? fallback;
     if (id === 'motivo_rectificacion' && value !== 'D') {
       setManualOverrides(prev => { const n = { ...prev }; delete n[108]; return n; });
-      setLiveBoxes(removeBox108FromLive);
     }
+    if (currentBoxes == null) return;
+    const baseBoxes = (id === 'motivo_rectificacion' && value !== 'D')
+      ? toBoxArray(currentBoxes).filter(b => b.num !== 108)
+      : currentBoxes;
+    const recomputed = recomputeDerivedBoxes(baseBoxes, nextIdentChecks);
+    setManualOverrides(prev => syncBox111Override(prev, recomputed));
+    setLiveBoxes(recomputed);
   };
   const [liveBoxes,      setLiveBoxes]      = useState(decl._precomputed?.boxes   ?? null);
-  const [manualOverrides, setManualOverrides] = useState(decl.manualData?.manualOverrides ?? {});
+  // ETP-5431 [B1 fix, review round 2] — `clampNegativeOverrides` here, not just
+  // `recomputeDerivedBoxes` on `liveBoxes`: a declaration persisted before this rule existed can
+  // carry e.g. `manualOverrides[70] = -100`, and `applyBoxParams` (fiscalModelsUtils.js) reads
+  // box 70/109/77's AEAT param straight off THIS map, bypassing `liveBoxes` entirely. Clamping
+  // once here (silently — this is a hydration, not a reaction to a user edit, so no toast) is
+  // enough: every later write to `manualOverrides` already stores an already-clamped value
+  // (`handleBoxChange` clamps before storing; `syncBox111Override` only ever writes an
+  // already-clamped box 111).
+  const [manualOverrides, setManualOverrides] = useState(
+    () => clampNegativeOverrides(decl.manualData?.manualOverrides ?? {}));
   // ETP-5338 (Guardar) — drives the Save/Loader2 icon swap and disables the button while a
   // flush is in flight, same convention as the shared `saveActions.jsx` Save buttons.
   const [isSavingManualData, setIsSavingManualData] = useState(false);
@@ -347,6 +411,18 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // AEAT303Report engine hard-rejects a negative value for either at file-generation
     // time. Clamp to 0 here (same "make the invalid state structurally impossible"
     // approach as the box78/box110 clamp below) instead of letting it reach submission.
+    //
+    // ETP-5431 [B1 fix, review round 2] — this clamp is NOT redundant with the structural one
+    // `recomputeDerivedBoxes` now does on every boxArr (fiscalModelsUtils.js). The two serve
+    // different jobs: this one is the interactive-input layer — it owns the user-facing toast,
+    // and it keeps the RAW value that gets stored into `manualOverrides[boxNum]` below
+    // non-negative (that map is read directly by `applyBoxParams` for AEAT submission,
+    // bypassing `liveBoxes`/`recomputeDerivedBoxes` entirely — see `clampNegativeOverrides`'s
+    // doc comment). `recomputeDerivedBoxes`'s clamp is silent by design (a hydration or a
+    // "Calcular" response is not a reaction to something the user just typed, so it must not
+    // toast) and exists precisely so a value that reaches it WITHOUT going through this
+    // interactive path (hydration, "Calcular") is still guaranteed non-negative. Removing either
+    // one reopens a gap the other doesn't cover.
     if (value != null && value < 0 && NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum)) {
       value = 0;
       toast.error(t('fm.box.error.negative_not_allowed', { box: boxNum }) ??
@@ -372,26 +448,39 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       : rawNextBox78;
     const box78WasClamped = nextBox78 !== rawNextBox78;
 
+    // ETP-5431 pt.2 — computed once, up front, instead of inside `setLiveBoxes`'s updater: box
+    // 111's freshly-derived value (see `recomputeDerivedBoxes`) has to be mirrored into
+    // `manualOverrides` too (via `syncBox111Override`, see its doc comment), and both state
+    // updates need the SAME final array. `currentBoxes` (already computed above, straight off
+    // the `liveBoxes` closure) is equivalent to the `prev` the old `setLiveBoxes(prev => ...)`
+    // updater read — nothing else touches `liveBoxes` state between here and that call — so this
+    // is not a behavior change for box78/69/71, only a relocation of where the same computation
+    // happens.
+    const applied = applyBoxChange(currentBoxes, boxNum, value, fallback, identChecks);
+    const finalBoxes = !box78WasClamped
+      ? applied
+      // applyBoxChange already ran recomputeDerivedBoxes once, but it did so against the
+      // un-clamped box78 (e.g. 900 before being pinned down to box110's 500) — box69/71 (and,
+      // transitively, box111) in `applied` are derived from that transiently-invalid value.
+      // Splice in the corrected box78 and recompute a SECOND time so 69/71/111 all reflect the
+      // final, clamped figure instead of a materially wrong one that would otherwise only
+      // self-heal on the next edit.
+      : recomputeDerivedBoxes(applied.map(b => (b.num === 78 ? { ...b, value: nextBox78 } : b)), identChecks);
+
     setManualOverrides(prev => {
-      const next = { ...prev, [boxNum]: value };
+      let next = { ...prev, [boxNum]: value };
       // Pin the clamped box78 value into the overrides too — otherwise a later recompute
       // (handleCompute/"Calcular" -> applyComputeResult -> applyOverrides) would re-merge the
       // un-clamped manual override and resurrect box78 > box110.
       if (box78WasClamped) next[78] = nextBox78;
+      // Box 111 is no longer user-typed (ETP-5431 pt.2) — mirror the derived value so
+      // generate303File/"Guardar" (which read box 111 off `manualOverrides`, not `liveBoxes`)
+      // stay in sync with what the screen shows.
+      next = syncBox111Override(next, finalBoxes);
       return next;
     });
     setLiveSummary(null);
-    setLiveBoxes(prev => {
-      const applied = applyBoxChange(prev, boxNum, value, fallback);
-      if (!box78WasClamped) return applied;
-      // applyBoxChange already ran recomputeDerivedBoxes once, but it did so against the
-      // un-clamped box78 (e.g. 900 before being pinned down to box110's 500) — box69/71 in
-      // `applied` are derived from that transiently-invalid value. Splice in the corrected
-      // box78 and recompute a SECOND time so 69/71 reflect the final, clamped figure instead
-      // of a materially wrong one that would otherwise only self-heal on the next edit.
-      const corrected = applied.map(b => (b.num === 78 ? { ...b, value: nextBox78 } : b));
-      return recomputeDerivedBoxes(corrected);
-    });
+    setLiveBoxes(finalBoxes);
   }
 
   const [liveSummary, setLiveSummary] = useState(decl._precomputed?.summary ?? null);
@@ -421,7 +510,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   useEffect(() => {
     // No token/apiBaseUrl means demo/mock mode — keep the mocked `decl.incidents` as-is instead
     // of overwriting it with the all-zero empty shape `fetchDeclarationIncidents` would return.
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
     refreshIncidents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id, token, apiBaseUrl]);
@@ -431,11 +520,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // AUTOMATICALLY (not from a user click) whenever the list didn't hand this page any
   // precomputed data. That automatic call must never persist editable-field edits — see
   // `handleComputeClick`'s comment for why the two are kept deliberately separate.
+  //
+  // ETP-5431 pt.5 — returns `applyComputeResult`'s freshly-synced `manualOverrides` (or
+  // `undefined` when there was nothing to recompute, e.g. `decl` isn't ready yet) so
+  // `handleComputeClick` can hand it straight to `persistEditableFields` without reading
+  // `manualOverrides` back out of React state — see `applyComputeResult`'s own doc comment.
   async function handleCompute() {
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
     } finally {
       setComputing(false);
     }
@@ -449,17 +543,32 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // edits, via the exact same `persistEditableFields` "Guardar" uses rather than a second
   // hand-rolled copy.
   //
-  // The recompute and the persist run independently: `handleCompute` owns its own `computing`
-  // spinner and is unaffected by how long the save takes, and a save failure must not stop the
-  // KPIs/boxes from refreshing (the user asked for a recompute; a slow save is not their
-  // problem). The save's only feedback here is a toast on failure — no success toast, so a
-  // "Calcular" click that also happens to persist doesn't stack a second, confusing "guardado"
-  // message on top of the compute's own visual feedback (the refreshed KPI/box values).
-  function handleComputeClick() {
-    persistEditableFields().then(({ ok }) => {
+  // The recompute and the persist run independently in the sense that a slow/failed save must
+  // never stop the KPIs/boxes from refreshing (the user asked for a recompute; a save's latency
+  // is not their problem), and the save's own toast is fire-and-forget from `handleComputeClick`'s
+  // point of view — the "Calcular" spinner (`computing`, owned entirely by `handleCompute`) is
+  // never held up waiting for the save to settle. The save's only feedback here is a toast on
+  // failure — no success toast, so a "Calcular" click that also happens to persist doesn't stack
+  // a second, confusing "guardado" message on top of the compute's own visual feedback (the
+  // refreshed KPI/box values).
+  //
+  // ETP-5431 pt.5 fix — but the OPERATIONS themselves are no longer launched in parallel: the
+  // previous version called `persistEditableFields()` (which snapshots `manualOverrides` from
+  // React state) and `handleCompute()` (which recomputes box 111 and updates that very state)
+  // at the same time, so the snapshot almost always raced the recompute and persisted the
+  // PRE-recompute value. Awaiting `handleCompute()` first — and handing its freshly-synced
+  // `manualOverrides` straight to `persistEditableFields` (instead of letting it re-read
+  // `manualOverrides` off a state closure that a same-tick `setManualOverrides` call hasn't
+  // flowed into yet) — guarantees the save always persists the just-recomputed value. The save
+  // itself is still NOT awaited by the caller (`onClick={handleComputeClick}` doesn't block on
+  // the returned promise, and `computing`/the spinner already resolved by the time it fires), so
+  // the UI stays exactly as responsive as before — only the ORDER of recompute-then-snapshot
+  // changed, not the fire-and-forget nature of the persist.
+  async function handleComputeClick() {
+    const nextManualOverrides = await handleCompute();
+    persistEditableFields({ manualOverridesOverride: nextManualOverrides }).then(({ ok }) => {
       if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
     });
-    return handleCompute();
   }
 
   // Auto-compute on mount when the list didn't hand us any precomputed data
@@ -480,16 +589,39 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // initial state above and the user's saved manual edits are invisible until they
     // manually re-run "Calcular". No new network call: this reuses the payload we already have.
     if (decl._precomputed?.boxes != null) {
-      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks);
       return;
     }
     if (liveBoxes != null) return;
-    if (!token || !apiBaseUrl) return;
+    if (!apiBaseUrl) return;
+    // ETP-5438 — once `isSubmitted`, never issue a live recompute here: `computeBoxes303`
+    // (= `GET /fiscal303/boxes`) always recomputes from whatever invoices exist RIGHT NOW,
+    // regardless of who calls it or when — see FmModel349Page.jsx's identical fix and
+    // comment for the full rationale (same bug class, "en todos los modelos tiene que
+    // funcionar de la misma manera" — every model must freeze once presented). Falls back
+    // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+    // submitted-family bucket already populated this session, instead of a live compute.
+    // (`!token` is deliberately NOT part of this gate — see the ETP-4576 comment above.)
+    if (isSubmitted) {
+      const cached = getCachedFiscalCompute(decl.id);
+      if (cached?.boxes != null) {
+        applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      }
+      return;
+    }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
 
   async function handleGenerate({ filename } = {}) {
+    // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
+    // this is a belt-and-braces second check (same double-check pattern already used below
+    // for missingRequiredFields), not the primary gate. The real defense-in-depth against a
+    // direct/malformed API call is server-side, in Fiscal303BoxesHandler#dispatch.
+    if (isSubmitted) {
+      toast.error(t('fm.validation.already_submitted') ?? 'Esta declaración ya ha sido presentada.');
+      return;
+    }
     // ETP-5187 — required-field pre-flight (see `missingRequiredFields` above). Must run before
     // any other guard/state change below: an unset `tipo_declaracion` (or, when visible, a blank
     // `bank_iban`) must never reach the backend, which used to silently default a missing
@@ -565,9 +697,25 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // the user's one unambiguous "save" action), `handleComputeClick` only toasts on failure (its
   // own success signal is the recomputed KPIs/boxes, not a second "saved" toast layered on top of
   // "Calcular").
-  async function persistEditableFields() {
+  //
+  // ETP-5431 pt.5 — `manualOverridesOverride` (optional) lets `handleComputeClick` hand in the
+  // value `applyComputeResult` just computed instead of falling back to `manualOverrides` React
+  // state. That state is captured in THIS function's own closure at the render that created it —
+  // a `setManualOverrides` call earlier in the same tick (as `handleCompute` does) has not been
+  // applied to a new render yet, so reading `manualOverrides` here would still see the
+  // PRE-recompute value even after `await handleCompute()` resolves. Every other caller
+  // (`handleSave`, `handlePresent`) omits it and keeps reading `manualOverrides` off state, which
+  // is correct for them — they never race a same-tick recompute.
+  async function persistEditableFields({ manualOverridesOverride } = {}) {
     if (isSubmitted) return { ok: true };
-    if (!hasPendingManualDataEditRef.current || !token || !apiBaseUrl) return { ok: true };
+    // ETP-4576 — `!token` is deliberately NOT part of this gate. Under the cookie session
+    // `useAuth()` holds no token, so including it made `persistEditableFields` return `{ ok: true }`
+    // without saving anything: the user pressed Guardar, got the success toast the `ok` drives, and
+    // their manual identification/box edits were silently discarded. Under bearer the gate was
+    // redundant anyway — the header builder omits the credential when none is held. What genuinely
+    // blocks a save is having nothing pending or no base URL to send it to.
+    if (!hasPendingManualDataEditRef.current || !apiBaseUrl) return { ok: true };
+    const manualOverridesToPersist = manualOverridesOverride ?? manualOverrides;
     setIsSavingManualData(true);
     let ok = true;
     try {
@@ -588,7 +736,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       await waitUntilManualDataIdle(decl.id);
       manualDataLatest.current = {
         id: decl.id,
-        manualData: { identification: identChecks, manualOverrides },
+        manualData: { identification: identChecks, manualOverrides: manualOverridesToPersist },
         token,
         apiBaseUrl,
       };
@@ -606,7 +754,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         // status changes. Without this, reopening the declaration from the list (without a full
         // page reload) would show the pre-save value again: `FmListPage` never refetches on its
         // own, and there is otherwise no mechanism that updates its cache for a manualData save.
-        onManualDataSaved?.(decl.id, { identification: identChecks, manualOverrides });
+        onManualDataSaved?.(decl.id, { identification: identChecks, manualOverrides: manualOverridesToPersist });
       }
     } finally {
       setIsSavingManualData(false);
@@ -715,7 +863,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const blocking = incidents?.blocking ?? 0;
   const warning = incidents?.warning ?? 0;
   const incidentCount = blocking + warning;
-  const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
 
   // ETP-5187 — `decl._hasDuplicatePeriod` is set by FmListPage.jsx when this declaration is a
   // 2nd/Nth one for the same (model, year, period): another declaration already exists for that
@@ -753,9 +900,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // click that scheduled it. There is no more background debounce effect here: identChecks/
   // manualOverrides are local-only state now, flushed exclusively by an explicit "Guardar" or
   // "Calcular" click (see `persistEditableFields`).
+  // ETP-4576 — `token` is not a dependency: the body stopped reading it when the eligibility
+  // check dropped the credential, and leaving it listed reads as though a token change still
+  // re-evaluates eligibility. It does not, and under the cookie session there is no token to
+  // change.
   useEffect(() => {
-    isManualDataEligible.current = !isSubmitted && !!token && !!apiBaseUrl;
-  }, [isSubmitted, token, apiBaseUrl]);
+    isManualDataEligible.current = !isSubmitted && Boolean(apiBaseUrl);
+  }, [isSubmitted, apiBaseUrl]);
 
   const fileBlocked = blocking > 0;
   // Derive KPI card values from liveBoxes so manual overrides (box 42, 43, etc.)
@@ -894,30 +1045,39 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           </button>
         )}
 
-        <button
-          className="fm-btn"
-          onClick={() => {
-            // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
-            // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
-            if (missingRequiredFields.length > 0) {
-              missingRequiredFieldsToast(
-                'fm.validation.missing_required_generate',
-                "Completá {fields} antes de generar el fichero.",
-              );
-              return;
-            }
-            setShowFilegen(true);
-          }}
-          disabled={generating}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
-        >
-          <Download
-            size={16}
-            strokeWidth={1.75}
-            style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-            data-testid="Download__4f6c0d" />
-          {t('fm.action.gen303') ?? 'Generar fichero 303'}
-        </button>
+        {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
+            re-generated, matching "Calcular"/"Registrar-Presentar"'s existing `!isSubmitted`
+            gate above. Previously always visible regardless of status — that behavior was
+            only ever DESCRIBED in docs/generated-custom-windows/fiscal-models.md, never
+            justified as a deliberate product decision there, and the 349 page had the
+            identical gap; fixed for full cross-model parity ("en todos los modelos tiene que
+            funcionar de la misma manera"). */}
+        {!isSubmitted && (
+          <button
+            className="fm-btn"
+            onClick={() => {
+              // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
+              // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
+              if (missingRequiredFields.length > 0) {
+                missingRequiredFieldsToast(
+                  'fm.validation.missing_required_generate',
+                  "Completá {fields} antes de generar el fichero.",
+                );
+                return;
+              }
+              setShowFilegen(true);
+            }}
+            disabled={generating}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', border: '1px solid hsl(var(--border-control))', padding: '9px 12px', fontSize: 14 }}
+          >
+            <Download
+              size={16}
+              strokeWidth={1.75}
+              style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+              data-testid="Download__4f6c0d" />
+            {t('fm.action.gen303') ?? 'Generar fichero 303'}
+          </button>
+        )}
 
         {!isSubmitted && (
           <button
@@ -1150,6 +1310,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           orgIdent={orgIdent}
           identChecks={identChecks}
           liveBoxes={liveBoxes}
+          manualOverrides={manualOverrides}
           summary={summary}
           token={token}
           apiBaseUrl={apiBaseUrl}

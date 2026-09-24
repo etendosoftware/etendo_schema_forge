@@ -23,6 +23,9 @@
 // full-reload handoff survives only as a fallback for hosts outside that slot.
 
 import { useState } from 'react';
+// ETP-4576 - module-level helpers cannot hold a hook, so they take the module-level
+// apiFetch: same credential, same CSRF proof, resolved from the published session.
+import { apiFetch as moduleApiFetch } from '@/auth/api.js';
 import { MoreVertical, Receipt, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import {
@@ -33,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu.jsx';
 import { useUI } from '@/i18n';
 import { trackDocumentCreated } from '@/lib/observability/health-events.js';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { showBulkActionToast, persistBulkActionResult } from '@/hooks/useBulkActionToast';
 const COMPLETED = 'CO';
 const DRAFT = 'DR';
@@ -41,9 +45,9 @@ const DRAFT = 'DR';
 // { exists, count, id?, documentNo? } for a single sales-order ID. On a network
 // error the check fails open (lets the create call proceed) — matching the
 // "fail-open" pattern in OrderCreateInvoice.jsx.
-async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
+async function hasDraftInvoice(orderId, apiBaseUrl) {
   try {
-    const res = await fetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`, { headers });
+    const res = await moduleApiFetch(`${apiBaseUrl}/header/${orderId}/action/checkDraftInvoice`);
     if (!res.ok) return false;
     const data = (await res.json())?.response?.data;
     return Boolean(data?.exists);
@@ -55,13 +59,13 @@ async function hasDraftInvoice(orderId, apiBaseUrl, headers) {
 // No checkDraftShipment endpoint exists yet, so we query the goods-shipment
 // entity directly filtered by salesOrder — same pattern used in
 // OrderCreateInvoice.jsx for the single-record flow.
-async function hasDraftShipment(orderId, apiBaseUrl, headers) {
+async function hasDraftShipment(orderId, apiBaseUrl) {
   try {
     const base = apiBaseUrl.replace(/\/[^/]+$/, '');
     const criteria = encodeURIComponent(JSON.stringify([
       { fieldName: 'salesOrder', operator: 'equals', value: orderId },
     ]));
-    const res = await fetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`, { headers });
+    const res = await moduleApiFetch(`${base}/goods-shipment/goodsShipment?criteria=${criteria}&_limit=50`);
     if (!res.ok) return false;
     const shipments = (await res.json())?.response?.data ?? [];
     return shipments.some((s) => s.documentStatus === DRAFT);
@@ -71,10 +75,6 @@ async function hasDraftShipment(orderId, apiBaseUrl, headers) {
 }
 
 async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    'Content-Type': 'application/json',
-  };
   const isInvoice = action === 'createDraftInvoice';
 
   const outcomes = await Promise.allSettled(
@@ -91,16 +91,16 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
       // proceed; the backend handler then rejects with "no pending lines" for
       // fully-fulfilled orders, which we surface as the row failure message.
       const alreadyHasDraft = isInvoice
-        ? await hasDraftInvoice(row.id, apiBaseUrl, headers)
-        : await hasDraftShipment(row.id, apiBaseUrl, headers);
+        ? await hasDraftInvoice(row.id, apiBaseUrl)
+        : await hasDraftShipment(row.id, apiBaseUrl);
       if (alreadyHasDraft) {
         const messageKey = isInvoice ? 'soBulkOrderHasDraftInvoice' : 'soBulkOrderHasDraftShipment';
         throw new Error(ui(messageKey).replace('{documentNo}', row.documentNo || row.id));
       }
 
-      const res = await fetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
+      const res = await moduleApiFetch(`${apiBaseUrl}/header/${row.id}/action/${action}`, {
         method: 'POST',
-        headers,
+        
         body: JSON.stringify({}),
       });
       if (!res.ok) {
@@ -127,11 +127,11 @@ async function runBulkOrderAction({ rows, action, apiBaseUrl, token, ui }) {
   return { ok, failed };
 }
 
-export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh }) {
+export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token, apiBaseUrl, refresh, windowReadOnly }) {
   const ui = useUI();
   const [running, setRunning] = useState(false);
 
-  if (!selectedRows || selectedRows.length === 0) return null;
+  if (!selectedRows || selectedRows.length === 0 || windowReadOnly) return null;
 
   const handleSelect = (action) => async () => {
     if (running) return;
@@ -157,20 +157,31 @@ export default function BulkOrderMoreMenu({ selectedRows, clearSelection, token,
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" title={ui('more')} disabled={running}>
-          <MoreVertical className="h-4 w-4" />
+    <DropdownMenu data-testid="DropdownMenu__3f1293">
+      <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__3f1293">
+        <Button
+          variant="ghost"
+          size="icon"
+          title={ui('more')}
+          disabled={running}
+          data-testid="Button__3f1293">
+          <MoreVertical className="h-4 w-4" data-testid="MoreVertical__3f1293" />
           <span className="sr-only">{ui('more')}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={handleSelect('createDraftInvoice')} disabled={running}>
-          <Receipt className="h-4 w-4" />
+      <DropdownMenuContent align="start" data-testid="DropdownMenuContent__3f1293">
+        <DropdownMenuItem
+          onSelect={handleSelect('createDraftInvoice')}
+          disabled={running}
+          data-testid="DropdownMenuItem__3f1293">
+          <Receipt className="h-4 w-4" data-testid="Receipt__3f1293" />
           {ui('soBulkCreateInvoices')} ({selectedRows.length})
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleSelect('createShipment')} disabled={running}>
-          <Truck className="h-4 w-4" />
+        <DropdownMenuItem
+          onSelect={handleSelect('createShipment')}
+          disabled={running}
+          data-testid="DropdownMenuItem__3f1293">
+          <Truck className="h-4 w-4" data-testid="Truck__3f1293" />
           {ui('soBulkCreateShipments')} ({selectedRows.length})
         </DropdownMenuItem>
       </DropdownMenuContent>

@@ -1229,3 +1229,57 @@ Two things specific to this window:
   matched against real AD records, so writing `Seville` in an English template would name a place
   the database does not have. Neither do the person names, which are proper nouns. `oBTIKTaxIDKey`
   needs none either — `NIF` is the same word in both, and its alias list accepts several spellings.
+
+## ETP-5366 — Location modal save no longer left the LIST GRID's derived location column stale
+
+**Follow-up to "ETP-4564 — Shared cache lifecycle and invalidation" above.** That section's
+invalidation list doesn't mention the Location tab's `customAddModal` (`LocationEditorModal`,
+see "Reactive behavior and dependencies" and the Location-tab description near the top of this
+file) because it isn't one of the Contacts-specific `useContactsCacheInvalidation` call sites —
+it goes through the generic `customAddModal` `onSaved` wiring in `detailViewHelpers.jsx` /
+`DetailView.jsx` (shared by every window that declares a `customAddModal` secondary tab, not
+Contacts-specific code), and that wiring under-invalidated until this fix.
+
+**Root cause.** `LocationEditorModal` persists an address with its own raw `fetch`, bypassing
+`useEntity`'s `handleAddChild`/`handleUpdateChild` entirely, so nothing marked either cache
+stale on save automatically. A prior fix (ETP-5278) added an explicit
+`invalidateChildrenCache(parent?.id)` call to the modal's `onSaved` handler, which correctly
+refreshed the Dirección tab's own row list. It did not invalidate the `businessPartner` list
+cache, so the custom list's derived location column (**"The custom list enriches each row with
+customer/vendor type badges and a derived location column..."**, above) kept showing the
+pre-save address for up to the record `staleTime` (30s — ETP-4564's table) after the user
+navigated back to `/contacts`, regardless of exit path (Cancel, browser back, etc.).
+
+**Fix.** The `onSaved` handler was extracted into `buildCustomAddModalOnSaved({ secondaryHooks,
+idx, hook, setCustomModalState })` (`tools/app-shell/src/components/contract-ui/
+detailViewHelpers.jsx`) and now also calls `secondaryHooks[idx]?.invalidateEntityCache?.()`
+alongside the pre-existing `invalidateChildrenCache?.(parent?.id)`. `secondaryHooks[idx]` here
+is a `useEntity(entity, childEntity, ...)` instance built with the **same** primary `entity` arg
+(`businessPartner`) as the header's own hook — only `childEntity` differs (`locationAddress`) —
+so `invalidateEntityCache()` called on it clears the very same `businessPartner` list-cache key
+the grid reads from, not a separate one.
+
+**Generic root fix, not Contacts-only.** The broader defect this shares a root cause with —
+`useEntity.js`'s `handleAddChild`/`handleUpdateChild`/`handleDeleteChild` invalidating only the
+children cache, never the parent entity's own list cache — was fixed directly in
+`tools/app-shell/src/hooks/useEntity.js` and applies to every window with a lines/child tab (a
+rolled-up field or a computed header total staying stale in the grid after any child write, not
+just Contacts' address rollup). That part of the fix is generic, cross-window behavior and is
+documented at the code level in `useEntity.js` rather than per window. This section only covers
+the one path specific to Contacts that needed its own explicit fix: `LocationEditorModal`'s save
+bypasses `useEntity` mutations altogether via its raw fetch, so the generic `handleAddChild` fix
+alone does not reach it — `buildCustomAddModalOnSaved`'s own extra `invalidateEntityCache()` call
+is what closes the gap for this window's Location tab.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('123')` → `'none' | 'read-only' |
+'full'`) must hide every mutating control in a window the Solo Lectura role can see. This window's
+generated core (list + detail, via `BusinessPartnerPage.jsx`) already gates itself — no custom
+wrapper overrides `window`, so it inherits the tier correctly for free. The one gap this ticket
+found: Contacts' own bespoke bulk-delete affordance (`selectionBarRightActions`, its ONLY
+bulk-delete path — the generic one is opted out via `listViewOptions.hideBulkDelete: true`)
+rendered unconditionally in the shared `ListView.jsx`, regardless of `windowReadOnly`. Fixed at the
+shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
+future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
+ETP-5205 commit history for the fix and its test).

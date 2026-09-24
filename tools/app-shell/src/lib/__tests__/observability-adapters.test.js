@@ -17,11 +17,13 @@ import {
 } from '../sentry.js';
 
 describe('sentry observability adapter', () => {
-  it('preserves hostname to environment mapping', () => {
-    assert.equal(resolveSentryEnvironment('go.staging.etendo.cloud'), 'staging');
-    assert.equal(resolveSentryEnvironment('go.experimental.etendo.cloud'), 'experimental');
-    assert.equal(resolveSentryEnvironment('go.etendo.cloud'), 'production');
-    assert.equal(resolveSentryEnvironment('localhost'), 'development');
+  it('takes the environment from the build-injected VITE_APP_ENV', () => {
+    assert.equal(resolveSentryEnvironment({ VITE_APP_ENV: 'staging' }), 'staging');
+    assert.equal(resolveSentryEnvironment({ VITE_APP_ENV: 'experimental' }), 'experimental');
+    assert.equal(resolveSentryEnvironment({ VITE_APP_ENV: ' production ' }), 'production');
+    assert.equal(resolveSentryEnvironment({ VITE_APP_ENV: '' }), 'development');
+    assert.equal(resolveSentryEnvironment({}), 'development');
+    assert.equal(resolveSentryEnvironment(undefined), 'development');
   });
 
   it('initializes Sentry with tracing, release metadata, and privacy-safe PII defaults', () => {
@@ -37,9 +39,9 @@ describe('sentry observability adapter', () => {
 
     const provider = createSentryProvider({
       dsn: 'dsn-123',
-      hostname: 'go.staging.etendo.cloud',
       sentry: fakeSentry,
       env: {
+        VITE_APP_ENV: 'staging',
         VITE_SENTRY_RELEASE: 'release-from-env',
       },
     });
@@ -90,28 +92,33 @@ describe('sentry observability adapter', () => {
 });
 
 describe('AWS RUM observability adapter', () => {
-  it('preserves hostname-gated RUM config mapping', () => {
-    const env = {
-      VITE_RUM_APP_MONITOR_ID_STAGING: 'staging-monitor',
-      VITE_RUM_IDENTITY_POOL_ID_STAGING: 'staging-pool',
-      VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: 'experimental-monitor',
-      VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: 'experimental-pool',
-      VITE_RUM_APP_MONITOR_ID_PROD: 'prod-monitor',
-      VITE_RUM_IDENTITY_POOL_ID_PROD: 'prod-pool',
-    };
+  it('takes the RUM config from the build-injected IDs', () => {
+    assert.deepEqual(
+      resolveRumConfig({
+        VITE_RUM_APP_MONITOR_ID: 'monitor',
+        VITE_RUM_IDENTITY_POOL_ID: 'pool',
+      }),
+      { appMonitorId: 'monitor', identityPoolId: 'pool' }
+    );
+    assert.deepEqual(resolveRumConfig({}), {
+      appMonitorId: undefined,
+      identityPoolId: undefined,
+    });
+  });
 
-    assert.deepEqual(resolveRumConfig('go.staging.etendo.cloud', env), {
-      appMonitorId: 'staging-monitor',
-      identityPoolId: 'staging-pool',
+  it('stays disabled when the build did not inject RUM IDs', () => {
+    const provider = createRumProvider({
+      env: {},
+      AwsRumCtor: class {
+        constructor() {
+          throw new Error('must not be constructed');
+        }
+      },
+      logger: { warn() {} },
     });
-    assert.deepEqual(resolveRumConfig('go.experimental.etendo.cloud', env), {
-      appMonitorId: 'experimental-monitor',
-      identityPoolId: 'experimental-pool',
-    });
-    assert.deepEqual(resolveRumConfig('go.etendo.cloud', env), {
-      appMonitorId: 'prod-monitor',
-      identityPoolId: 'prod-pool',
-    });
+    provider.init();
+
+    assert.equal(provider.enabled, false);
   });
 
   it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', () => {
@@ -123,10 +130,9 @@ describe('AWS RUM observability adapter', () => {
     }
 
     const provider = createRumProvider({
-      hostname: 'go.experimental.etendo.cloud',
       env: {
-        VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL: 'monitor-id',
-        VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL: 'pool-id',
+        VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+        VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
         VITE_RUM_SESSION_SAMPLE_RATE: '0.25',
       },
       AwsRumCtor: FakeAwsRum,
@@ -160,10 +166,9 @@ describe('AWS RUM observability adapter', () => {
     }
 
     const provider = createRumProvider({
-      hostname: 'go.staging.etendo.cloud',
       env: {
-        VITE_RUM_APP_MONITOR_ID_STAGING: 'monitor-id',
-        VITE_RUM_IDENTITY_POOL_ID_STAGING: 'pool-id',
+        VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+        VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
       AwsRumCtor: BrokenAwsRum,
       logger: {
@@ -236,8 +241,8 @@ describe('browser observability config', () => {
     const config = buildBrowserObservabilityConfig({
       env: {
         VITE_SENTRY_DSN: 'dsn-123',
-        VITE_RUM_APP_MONITOR_ID_STAGING: 'monitor-id',
-        VITE_RUM_IDENTITY_POOL_ID_STAGING: 'pool-id',
+        VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+        VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
       location: { hostname: 'go.staging.etendo.cloud' },
       logger: { warn() {} },
