@@ -36,7 +36,7 @@ vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuthOptional: () => SESSION,
 }));
 
-import { useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
+import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '../useEnvironmentSwitch.js';
 
 const ACME = {
   clientId: 'CLIENT-ACME',
@@ -78,6 +78,27 @@ describe('useEnvironmentSwitch', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('refetches and publishes the canonical environment list when provisioning announces a refresh', async () => {
+    const newlyProvisioned = {
+      clientId: 'CREATED-CLIENT',
+      clientName: 'Acme Productive',
+      adminUserId: 'USER-2',
+      adminUserName: 'acme.productive.admin',
+      plan: 'productive',
+    };
+    fetchEnvironments
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([newlyProvisioned]);
+    const { result } = renderHook(() => useEnvironmentSwitch({ enabled: true }));
+
+    await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      window.dispatchEvent(new Event(ENVIRONMENT_LIST_REFRESH_EVENT));
+    });
+    await waitFor(() => expect(fetchEnvironments).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.environments).toEqual([newlyProvisioned]));
   });
 
   describe('switchTo', () => {
