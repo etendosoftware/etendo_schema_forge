@@ -140,7 +140,7 @@ Nota de arquitectura previa a todo lo demás: la UI de onboarding (`OnboardingPa
   4. En el próximo login, `restoreOnboardingDraft` pide `GET /sws/go/onboarding/draft`, mapea `draft.step` (1|2) al paso correspondiente, mergea en `defaultForm`, muestra un banner "borrador restaurado", y salta directo a ese paso.
   5. Logout **durante aprovisionamiento activo** (`setup-progress`) usa un guard de ref montado, para que un stream que termina después del logout no pueda crear una sesión nueva ni redirigir.
   6. Un guardado de borrador fallido muestra un warning localizado, pero el usuario igual llega a Login (fail-open, nunca atrapa al usuario).
-- **Variantes / errores observables:** navegación directa a `/logout?returnTo=/logout` limpia sesión y redirige seguro a `/onboarding` sin loop (`isSafeLocalReturnTo` rechaza `/onboarding`/`/login` como destinos inseguros).
+- **Observed variant:** direct navigation to `/logout?returnTo=/logout` clears the session and replaces the URL with `/login`; request-supplied `returnTo` values are ignored in favor of the route's configured safe destination.
 - **Resultado esperado:** El usuario puede cerrar sesión en cualquier momento del registro y retomarlo exactamente donde quedó.
 - **Reglas / permisos implicados:** Whitelist de campos persistibles; cap de tamaño.
 - **Datos / entidades tocadas:** `ETGO_ACCOUNT` (JSON del borrador, campos whitelisteados, máx 4000 chars).

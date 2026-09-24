@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
-import { Navigate } from 'react-router-dom';
-import { LogoutRoute } from '@etendosoftware/app-shell-core/auth';
+import { useEffect, useRef } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useLogout } from './auth/useLogout.js';
 import WindowLoader from './windows/WindowLoader.jsx';
 import PreviewPage from './preview/PreviewPage.jsx';
@@ -40,7 +40,20 @@ const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</
 
 function RuntimeLogoutRoute() {
   const logout = useLogout();
-  return <LogoutRoute cleanup={logout} safeDestination="/login" data-testid="LogoutRoute__e8c60d" />;
+  const navigate = useNavigate();
+  const hasRunRef = useRef(false);
+
+  useEffect(() => {
+    if (hasRunRef.current) return;
+    hasRunRef.current = true;
+
+    Promise.resolve()
+      .then(() => logout())
+      .catch(() => undefined)
+      .finally(() => navigate('/login', { replace: true }));
+  }, [logout, navigate]);
+
+  return null;
 }
 
 function lazyRoute(path, Component, extraProps = {}) {

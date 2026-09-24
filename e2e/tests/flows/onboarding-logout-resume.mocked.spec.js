@@ -18,17 +18,40 @@ function json(route, body, status = 200) {
 }
 
 async function installOnboardingMocks(page, { failDraftSave = false, holdProvisioning = false } = {}) {
-  const state = { draft: null, events: [], releaseProvisioning: null };
+  const state = { draft: null, events: [], releaseProvisioning: null, sessionActive: false };
+  const session = {
+    account: ACCOUNT,
+    environment: { clientId: 'e2e-resume-client', roleId: 'e2e-resume-role', orgId: 'e2e-resume-org' },
+    roleList: [{
+      id: 'e2e-resume-role',
+      name: 'Administrator',
+      orgList: [{ id: 'e2e-resume-org', name: 'E2E Org' }],
+    }],
+  };
 
   // ETP-4798: /me carries the email-confirmation state. This account is already confirmed, which
   // is what keeps the resume flow reaching setup-progress — an unconfirmed one is gated there.
   await page.route('**/sws/go/me', route =>
     json(route, { ...ACCOUNT, emailVerified: true, emailVerificationPending: false }));
-  await page.route('**/sws/go/session/register', route => json(route, { token: PLATFORM_TOKEN, account: ACCOUNT }));
-  // ETP-4576 — logging in creates a SESSION; the endpoint moved with it. Non-POST falls
-  // through so the GET that restores the session keeps reaching the shared stub.
+  await page.route('**/sws/go/session/register', route => {
+    state.sessionActive = true;
+    return json(route, { ...session, token: PLATFORM_TOKEN });
+  });
+  // ETP-4576 — restore, create, and revoke the mocked session at the same boundary.
   await page.route('**/sws/go/session', route => {
-    if (route.request().method() === 'POST') return json(route, { token: PLATFORM_TOKEN, account: ACCOUNT });
+    if (route.request().method() === 'POST') {
+      state.sessionActive = true;
+      return json(route, { ...session, token: PLATFORM_TOKEN });
+    }
+    if (route.request().method() === 'DELETE') {
+      state.sessionActive = false;
+      return route.fulfill({ status: 204, body: '' });
+    }
+    if (route.request().method() === 'GET') {
+      return state.sessionActive
+        ? json(route, session)
+        : json(route, { error: { message: 'No active session' } }, 401);
+    }
     return route.fallback();
   });
   await page.route('**/sws/go/environments', route => json(route, { environments: [] }));
