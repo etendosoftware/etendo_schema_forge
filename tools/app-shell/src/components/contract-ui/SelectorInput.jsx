@@ -143,8 +143,8 @@ export function SelectorInput({
   const hasValue = value && baseOptions.some(opt => opt.id === value);
 
   const defaultTriggerClass = compact
-    ? 'w-full h-8 text-sm bg-card focus:ring-2 focus:ring-primary'
-    : 'focus:ring-2 focus:ring-primary';
+    ? 'w-full h-8 text-sm text-text-primary bg-card focus:ring-2 focus:ring-primary'
+    : 'text-text-primary focus:ring-2 focus:ring-primary';
 
   // Radix shows the placeholder when the controlled value is EITHER '' or undefined
   // (see @radix-ui/react-select shouldShowPlaceholder). We MUST use '' — never

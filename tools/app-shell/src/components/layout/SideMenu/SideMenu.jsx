@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { Button } from '@/components/ui/button.jsx';
+import { TruncatedText } from '@/components/ui/truncated-text';
 import { UserAvatarButton } from '@/components/UserAvatarButton.jsx';
 import {
   PanelLeftOpen,
@@ -699,9 +700,10 @@ export default function SideMenu({
                     alt="Etendo"
                     className="h-8 w-8 shrink-0 rounded-full"
                   />
-                  <span className="flex-1 text-left text-sm font-semibold text-foreground truncate">
-                    {selectedOrg?.name || ui('yourCompany')}
-                  </span>
+                  <TruncatedText
+                    text={selectedOrg?.name || ui('yourCompany')}
+                    className="flex-1 text-left text-sm font-semibold text-foreground"
+                    data-testid="company-switcher-name" />
                   {/* Guarded on having resolved the environment, not on a flag: a session that
                       cannot list environments (no platform token) has no plan to report, and
                       environmentPlanLabelKey would otherwise label it "Demo" from a missing value
@@ -739,9 +741,11 @@ export default function SideMenu({
                           alt=""
                           className="h-5 w-5 mr-2 rounded-full"
                         />
-                        <span className="flex-1 truncate">
-                          {env.clientName || env.orgName || ui('yourCompany')}
-                        </span>
+                        {/* pointer-events-auto: the current company's row is `disabled`, which sets
+                            pointer-events-none on the item and would swallow the hover. */}
+                        <TruncatedText
+                          text={env.clientName || env.orgName || ui('yourCompany')}
+                          className="flex-1 pointer-events-auto" />
                         <span className={cn(
                           'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
                           env.plan === 'productive'
@@ -777,9 +781,9 @@ export default function SideMenu({
                       alt=""
                       className="h-5 w-5 mr-2 rounded-full"
                     />
-                    <span className="flex-1 truncate">
-                      {selectedOrg?.name || ui('yourCompany')}
-                    </span>
+                    <TruncatedText
+                      text={selectedOrg?.name || ui('yourCompany')}
+                      className="flex-1 pointer-events-auto" />
                   </DropdownMenuItem>)
                 )}
               </DropdownMenuContent>
