@@ -13,4 +13,5 @@ export const group = observability.group;
 export const groupSet = observability.groupSet;
 export const captureException = observability.captureException;
 export const flush = observability.flush;
+export const reset = observability.reset;
 export const setContext = observability.setContext;

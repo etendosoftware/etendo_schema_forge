@@ -131,6 +131,17 @@ vi.mock('@/lib/flags/useAccountIdentity.js', () => ({
   useAccountIdentity: vi.fn(),
 }));
 
+// ETP-4210 — AppLayout now also mounts useSessionStartTracking() right after
+// useAccountIdentity(), to fire the Health Score "session_started" event once
+// per authenticated mount. That hook calls useAuth() internally too, so it
+// needs the same treatment as the hooks above or these AuthProvider-less
+// renders throw. What AppLayout owes the feature is that it MOUNTS the hook —
+// asserted below — not that the hook's own tracking logic works; that belongs
+// to src/lib/observability/__tests__/useSessionStartTracking.vitest.js.
+vi.mock('@/lib/observability/useSessionStartTracking.js', () => ({
+  useSessionStartTracking: vi.fn(),
+}));
+
 // ETP-5402 QA follow-up — AppLayout now fires its own fetchMyReportAccess() call (not routed
 // through useAuth()/AuthContext, unlike capabilities/windowAccess above) to feed
 // filterMenuGroupsByAccess's report-access fallback. Left unmocked, the real (unmocked) fetch
@@ -229,6 +240,7 @@ vi.mock('@/components/webmcp/WebMcpEtendoGoTools.jsx', () => ({
 
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { useEnvironmentAccessGate } from '@/hooks/useEnvironmentAccessGate.js';
 import { buildMenuGroups } from '@/windows/registry.js';
@@ -255,6 +267,13 @@ describe('AppLayout — normal mode', () => {
     // The hook has to run inside the authenticated shell: until it resolves,
     // flags target the ERP admin username, which the backend never sees.
     expect(useAccountIdentity).toHaveBeenCalled();
+  });
+
+  it('mounts the session-start-tracking hook, so the Health Score Login dimension can resolve', () => {
+    render(<AppLayout {...defaultProps} />);
+    // ETP-4210 — the hook has to run inside the authenticated shell on every
+    // mount; that's what makes it fire on a regular login, not just onboarding.
+    expect(useSessionStartTracking).toHaveBeenCalled();
   });
 
   it('renders SideMenu when not embedded', () => {
