@@ -258,11 +258,16 @@ WHERE c.ad_client_id = :client_id
 -- 'active' here would silently turn a past-due or expired tenant back into a paying one. The row
 -- therefore carries the preference state over:
 --     CURRENT  -> 'active'      PAST_DUE -> 'past_due'      EXPIRED -> 'canceled'
---     absent, blank or any other value -> 'active'
--- The last line mirrors the reader's own fallback: without a status preference the tenant reads
--- as LEGACY_ENTITLEMENT (entitled), and a row status the reader maps back to CURRENT is the
--- closest entitled value the STATUS check constraint allows. 'canceled' keeps end_date NULL, the
--- decided ETP-5046 behaviour for a canceled subscription (free immediately, row stays open).
+--     NONE     -> 'canceled'
+--     absent, blank or any other value (LEGACY_ENTITLEMENT included) -> 'active'
+-- The principle is that the backfill PRESERVES the tenant's current effective access, never
+-- improves it. NONE locks a tenant out (EnvironmentAccessPolicy answers SUBSCRIPTION_REQUIRED),
+-- and 'canceled' -- read back as EXPIRED -- is the row status that produces the same decision;
+-- 'active' would silently re-open a locked-out tenant. The last line mirrors the reader's own
+-- fallback: without a status preference the tenant reads as LEGACY_ENTITLEMENT (entitled), and a
+-- row status the reader maps back to CURRENT is the closest entitled value the STATUS check
+-- constraint allows. 'canceled' keeps end_date NULL, the decided ETP-5046 behaviour for a
+-- canceled subscription (free immediately, row stays open).
 --
 -- current_period_end comes from ETGO_SubscriptionDueAt; current_period_start stays NULL, so
 -- ETGO_SUB_PERIOD_CHK (end >= start, either side NULL passes) can never reject the insert. The
@@ -298,6 +303,7 @@ SELECT
   CASE st.status_value
     WHEN 'PAST_DUE' THEN 'past_due'
     WHEN 'EXPIRED' THEN 'canceled'
+    WHEN 'NONE' THEN 'canceled'
     ELSE 'active'
   END,
   COALESCE(cr.paid_at, c.created, now()),

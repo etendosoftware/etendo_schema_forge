@@ -285,7 +285,7 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
     // row exists it wins over the preference projection.
     assert.match(
       normApply,
-      /CASE st\.status_value WHEN 'PAST_DUE' THEN 'past_due' WHEN 'EXPIRED' THEN 'canceled' ELSE 'active' END,/,
+      /CASE st\.status_value WHEN 'PAST_DUE' THEN 'past_due' WHEN 'EXPIRED' THEN 'canceled' WHEN 'NONE' THEN 'canceled' ELSE 'active' END,/,
     );
     assert.doesNotMatch(normApply, /c\.ad_client_id, \(SELECT p\.etgo_plan_id[^)]*\), 'active',/);
   });
