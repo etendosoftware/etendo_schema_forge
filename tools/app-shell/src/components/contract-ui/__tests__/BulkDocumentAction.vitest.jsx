@@ -405,6 +405,37 @@ describe('BulkDocumentAction', () => {
   });
 });
 
+describe('BulkDocumentAction — respects windowReadOnly (ETP-5205)', () => {
+  const rows = [{ id: 'r1', documentStatus: 'DR' }];
+
+  it('renders the bulk-action button when the window is NOT read-only', () => {
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="test-window"
+      />
+    );
+    expect(screen.getByRole('button', { name: /bulkCompletion/i })).toBeInTheDocument();
+  });
+
+  it('renders nothing when the window IS read-only, even with eligible selected rows', () => {
+    render(
+      <BulkDocumentAction
+        selectedRows={rows}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="test-window"
+        windowReadOnly
+      />
+    );
+    expect(screen.queryByRole('button', { name: /bulkCompletion/i })).not.toBeInTheDocument();
+  });
+});
+
 // ETP-5302 — the built-in (no `buildActions` prop) action list, asserted through
 // a REAL render of the dialog rather than on the useMemo's return value, because
 // what regressed is what the user reads in the dropdown. The mocked `useUI` (top

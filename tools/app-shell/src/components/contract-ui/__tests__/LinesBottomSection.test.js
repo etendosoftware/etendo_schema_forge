@@ -17,7 +17,7 @@ describe('LinesBottomSection', () => {
       'recordId', 'data', 'token', 'apiBaseUrl', 'api',
       'notesField', 'onFieldChange', 'notesFocused', 'setNotesFocused',
       'lines', 'pendingLine', 'editingLine', 'lineConfig',
-      'totalDiscountPct', 'onTotalDiscountChange',
+      'totalDiscountPct', 'onTotalDiscountChange', 'windowReadOnly',
       'relatedDocuments', 'showTotals', 'notesExtra',
     ]) {
       assert.match(src, new RegExp(`\\b${prop}\\b`), `missing prop: ${prop}`);
@@ -60,7 +60,10 @@ describe('LinesBottomSection', () => {
 
   it('shows notes as a textarea when notesFocused, plain text otherwise', () => {
     assert.match(src, /<textarea/);
-    assert.match(src, /notesFocused\s*\?/);
+    // ETP-5205: the ternary requires !windowReadOnly (static + tier, NOT document status)
+    // — see the dedicated test below. NOT !isReadOnly, which also folds in documentStatus
+    // !== 'DR' and would wrongly lock notes on a completed document or a brand-new record.
+    assert.match(src, /notesFocused\s*&&\s*!windowReadOnly\s*\?/);
   });
 
   it('renders NotesExtraComponent slot when provided', () => {
@@ -111,5 +114,33 @@ describe('LinesBottomSection', () => {
     assert.match(inlineStyle, /minHeight:\s*200/, 'totals wrapper must declare minHeight: 200');
     assert.doesNotMatch(inlineStyle, /(^|[^a-zA-Z])height:\s*241/, 'rigid `height: 241` must not return on the live style');
     assert.doesNotMatch(inlineStyle, /maxHeight:\s*241/, 'rigid `maxHeight: 241` must not return on the live style');
+  });
+
+  it('accepts an isDocumentReadOnly prop', () => {
+    assert.match(src, /\bisDocumentReadOnly\b/);
+  });
+
+  it('derives isReadOnly from documentStatus OR isDocumentReadOnly (ETP-5205)', () => {
+    assert.match(src, /documentStatus\s*!==\s*'DR'\s*\|\|\s*isDocumentReadOnly/);
+  });
+
+  it('locks the notes field (own inline textarea/div) when windowReadOnly, not just when unfocused (ETP-5205)', () => {
+    // This file renders its OWN notes textarea/div — a separate implementation from
+    // detailViewHelpers.jsx's renderNotesField, discovered live: Purchase Order (and every
+    // other window using this bottomSection) never went through DetailView's generic
+    // renderNotesField call site at all, so gating only that one left this copy unfixed.
+    assert.match(src, /notesFocused\s*&&\s*!windowReadOnly\s*\?/);
+    assert.match(src, /onClick=\{\(\)\s*=>\s*!windowReadOnly\s*&&\s*setNotesFocused\?\.\(true\)\}/);
+    assert.match(src, /onFocus=\{\(\)\s*=>\s*!windowReadOnly\s*&&\s*setNotesFocused\?\.\(true\)\}/);
+  });
+
+  it('does NOT lock the notes field on documentStatus !== DR alone — notes must survive document completion and a brand-new record (ETP-5205 regression)', () => {
+    // Unlike `isReadOnly` (used for the total-discount field, correctly locked once the
+    // document leaves Draft), the notes textarea/div ternary and its onClick/onFocus guards
+    // must reference `windowReadOnly`, never the documentStatus-derived `isReadOnly` — a
+    // regression here would silently re-lock notes on any completed doc or new record.
+    assert.doesNotMatch(src, /notesFocused\s*&&\s*!isReadOnly\s*\?/);
+    assert.doesNotMatch(src, /onClick=\{\(\)\s*=>\s*!isReadOnly\s*&&\s*setNotesFocused/);
+    assert.doesNotMatch(src, /onFocus=\{\(\)\s*=>\s*!isReadOnly\s*&&\s*setNotesFocused/);
   });
 });

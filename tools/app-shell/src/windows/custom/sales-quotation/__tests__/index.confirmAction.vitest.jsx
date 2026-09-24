@@ -22,6 +22,22 @@ vi.mock('@/hooks/useRowDelete', () => ({
   useRowDelete: () => ({ requestDelete: vi.fn(), deleteDialog: null }),
 }));
 
+// ETP-5205 — rowMenuActions now reads useWindowAccess() (via useAuth()), which
+// this file never needed before. Defaults to 'full' so none of the pre-existing
+// tests below are affected; a dedicated ETP-5205 describe block below overrides
+// it to 'read-only' to test the new gate itself. Inlined (not the shared
+// @/test/mockOrderWindowAuth.jsx factory purchase-order/sales-order use) — that
+// helper's cross-file import inside this file's hoisted vi.mock factory hit a
+// Vitest TDZ ReferenceError here; a self-contained factory referencing only this
+// file's own local closure (same pattern as apiFetchMock/lastGeneratedAppProps
+// below) avoids it.
+let currentWindowAccessTier = 'full';
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useAuth: () => ({ selectedOrg: { id: 'org-1' }, logout: vi.fn() }),
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: (props) => <div data-testid="window-access-guard" data-window-id={props.windowId} />,
+}));
+
 vi.mock('@/components/contract-ui/CreateContactContext.js', () => ({
   CreateContactContext: { Provider: ({ children }) => children },
 }));
@@ -75,7 +91,7 @@ vi.mock('@generated/sales-quotation/custom/RejectQuotationModal', () => ({
 }));
 
 import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SalesQuotationWindow from '../index.jsx';
 
 function jsonResponse(body, ok = true, status = 200) {
@@ -231,5 +247,23 @@ describe('SalesQuotationWindow — row-hover Rechazar (ETP-5378)', () => {
 
     expect(screen.queryByTestId('reject-modal')).not.toBeInTheDocument();
     expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('SalesQuotationWindow — rowMenuActions respects windowAccessTier (ETP-5205)', () => {
+  beforeEach(() => {
+    lastGeneratedAppProps = null;
+    currentWindowAccessTier = 'read-only';
+  });
+
+  afterEach(() => {
+    currentWindowAccessTier = 'full';
+  });
+
+  it('returns an empty row-kebab menu when the window is read-only, regardless of status', () => {
+    render(<SalesQuotationWindow windowName="sales-quotation" apiBaseUrl="/sws/neo/sales-quotation" token="tkn" />);
+    const actions = lastGeneratedAppProps.rowQuickActions.menuActions({ row: { id: 'q-ro-1', documentStatus: 'UE' }, status: 'UE' });
+
+    expect(actions).toEqual([]);
   });
 });

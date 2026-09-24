@@ -132,6 +132,7 @@ export function useRowConfirmAction({
         <ConfirmModal
           base={base}
           headers={headers}
+          token={token}
           recordId={confirmRecord.id}
           data={confirmRecord}
           onConfirmed={({ invoice } = {}) => {
@@ -158,6 +159,15 @@ export function useRowConfirmAction({
             type: invoiceDocType,
             num: invoiceResult.invoice.documentNo,
             amount: invoiceResult.invoice.amount ?? null,
+            // ETP-5378 QA follow-up — ConfirmResultModal badges the document "Borrador" unless
+            // it reads `documentStatus === 'CO'` (ETP-5381 made that badge follow the real
+            // status). `runConfirm` in ConfirmInOutModal already returns it, and the backend
+            // fills it (finalizeReturnInvoice puts the COMPLETED invoice's status), but this
+            // row path dropped it while the form path (useConfirmWithCredit) carried it — so
+            // the same rectificative invoice read "Completado" from the form and "Borrador"
+            // from the grid. It is created AND confirmed in one step, so "Borrador" was never
+            // a possible state here.
+            documentStatus: invoiceResult.invoice.documentStatus ?? null,
             route: `${invoiceRoute}/${invoiceResult.invoice.id}`,
           }]}
           primary={ui('soViewInvoice')}

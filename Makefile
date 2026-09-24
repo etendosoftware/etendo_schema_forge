@@ -1,5 +1,3 @@
-.PHONY: test test-all-coverage test-ci test-ci-coverage test-frontend test-stripe-local test-e2e test-e2e-headless test-e2e-debug test-e2e-ui test-e2e-report test-e2e-record test-e2e-onboarding-integration test-e2e-purchase-sales test-e2e-last-failed email-stress-limits email-stress-limits-report email-stress-help ast-churn-ranking ast-churn-heatmap generate regen dev dev-local-core dev-mock ai-bff-install build install bump-core-version _bump-core-version-run install-e2e deploy clean help report-serve report-serve-detach report-stop report-preview validate-pipeline method-budget window-leak-budget quality-gate domain-boundary-check sonar sonar-coverage flag-debt menu-cache uuid merge-block-check xml-regeneration-check dump-delta regen-check regen-check-help regen-check-clean regen-help data-fixes data-fixes-help data-fixes-remote db-tunnel db-tunnel-down db-tunnel-status db-psql db-tunnel-help switch-to-es ensure-locale project-status ci-parity ci-parity-help regen-public-api generate-base-public-api-manifest gateway-link-local-core gateway-dev-local-core docs-api-sync docs-api-generate docs-api-build docs-api-dev mcp-test mcp-login mcp-ui sync-agents sync-agents-check
-
 export SF_ROOT := $(CURDIR)
 
 # --- CLI source resolution -------------------------------------------------
@@ -17,6 +15,7 @@ endif
 
 # --- Testing ---
 
+.PHONY: test
 test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
@@ -24,6 +23,7 @@ test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 	node --test 'artifacts/**/__tests__/*.test.js'
 	cd tools/app-shell && npx vitest run
 
+.PHONY: test-all-coverage
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
 	@echo "=== Node tests (4 groups in parallel) ==="
@@ -61,6 +61,7 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
 	@echo "  Merged:     merged-lcov.info (used by SonarQube)"
 
+.PHONY: test-ci
 test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	@mkdir -p test-results
 	node --test \
@@ -80,6 +81,7 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --reporter=junit \
 	  --outputFile=../../test-results/vitest.xml
 
+.PHONY: test-ci-coverage
 test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (CI mode, single pass)
 	@mkdir -p test-results coverage
 	node --test --experimental-test-coverage \
@@ -105,18 +107,23 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
+.PHONY: validate-pipeline
 validate-pipeline: ## Validate pipeline completeness across all artifacts
 	$(SF) sf-validate-pipeline --format=text
 
+.PHONY: method-budget
 method-budget: ## Ratchet guard: fail only if a tracked class grew past its method baseline
 	$(SF) sf-method-budget
 
+.PHONY: window-leak-budget
 window-leak-budget: ## Ratchet guard: fail only if window-specific literals in contract-ui grew (use --list to enumerate)
 	$(SF) sf-window-leak-budget
 
+.PHONY: test-frontend
 test-frontend: ## Run only frontend generator tests
 	cd cli && node --test 'test/generate-frontend.test.js'
 
+.PHONY: test-stripe-local
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
 
@@ -132,9 +139,11 @@ HOTSPOT_LIMIT ?= 10
 BASE_REF ?= origin/main
 HOTSPOT_SINCE ?= $(shell date -v-$(HOTSPOT_DAYS)d +%Y-%m-%d 2>/dev/null || date -d '$(HOTSPOT_DAYS) days ago' +%Y-%m-%d)
 
+.PHONY: ast-churn-ranking
 ast-churn-ranking: ## Show AST churn hotspots from the last N days and current-branch delta
 	@node cli/src/ast-churn-hotspot.js --file "$(HOTSPOT_FILE)" --since "$(HOTSPOT_SINCE)" --days "$(HOTSPOT_DAYS)" --base-ref "$(BASE_REF)" --limit "$(HOTSPOT_LIMIT)" --summary
 
+.PHONY: ast-churn-heatmap
 ast-churn-heatmap: ## Write a line-numbered HTML heatmap for the hotspot file
 	@output="$$(mktemp -t sf-ast-churn-heatmap).html"; \
 	if node cli/src/ast-churn-hotspot.js --file "$(HOTSPOT_FILE)" --since "$(HOTSPOT_SINCE)" --days "$(HOTSPOT_DAYS)" --base-ref "$(BASE_REF)" --limit "$(HOTSPOT_LIMIT)" --out-html "$$output" >/dev/null 2>/dev/null; then \
@@ -155,6 +164,7 @@ TOKEN ?=
 DB_GRADLE_PROPERTIES ?=
 EMAIL_STRESS_REPORT ?= docs/reports/email-stress-limit-report-$(shell date +%Y-%m-%d-%H%M%S).html
 
+.PHONY: email-stress-limits
 email-stress-limits: ## Probe email contract limits. Usage: make email-stress-limits TOKEN=... DOC_ID=... [WORKER_STEPS=1,2,5,10,20]
 	@if [ -z "$(TOKEN)" ]; then \
 	  echo "Usage: make email-stress-limits TOKEN=<jwt> DOC_ID=<id> [SCENARIO=double-send|concurrent-load] [WORKER_STEPS=1,2,5,10,20]"; \
@@ -178,6 +188,7 @@ email-stress-limits: ## Probe email contract limits. Usage: make email-stress-li
 	STRESS_DOC_IDS="$(DOC_IDS)" \
 	node cli/test/stress/limits.js --scenario "$(SCENARIO)" $$EXTRA_ARGS
 
+.PHONY: email-stress-limits-report
 email-stress-limits-report: ## Probe email limits and generate a Jest/JUnit-style HTML report
 	@STRESS_HTML_REPORT="$(EMAIL_STRESS_REPORT)" \
 	$(MAKE) email-stress-limits; \
@@ -185,6 +196,7 @@ email-stress-limits-report: ## Probe email limits and generate a Jest/JUnit-styl
 	echo "Email stress HTML report: $(EMAIL_STRESS_REPORT)"; \
 	exit $$status
 
+.PHONY: email-stress-help
 email-stress-help: ## Show email stress limit probe variables
 	@echo "Usage:"
 	@echo "  make email-stress-limits TOKEN=<jwt> DOC_ID=<id>"
@@ -201,9 +213,11 @@ email-stress-help: ## Show email stress limit probe variables
 	@echo "  DB_GRADLE_PROPERTIES=<path>            Optional DB config source for RESET_SAFETY"
 	@echo "  EMAIL_STRESS_REPORT=<path>             HTML report path for email-stress-limits-report"
 
+.PHONY: quality-gate
 quality-gate: ## Run Schema Forge quality gate for PR-affected windows
 	$(SF) sf-quality-gate --pr-affected --baseline-ref origin/main --format md
 
+.PHONY: domain-boundary-check
 domain-boundary-check: ## Check changed files against monorepo intent/domain boundaries (BASE=<ref>, HEAD=<ref>)
 	@if [ -z "$(BASE)" ]; then \
 	  echo "Usage: make domain-boundary-check BASE=<ref> [HEAD=<ref>] [LABELS=a,b] [PR_BODY_FILE=path]"; \
@@ -221,21 +235,27 @@ domain-boundary-check: ## Check changed files against monorepo intent/domain bou
 # Caveat: all workers share the single dev server on :3100 — too many may cause flaky timeouts.
 WORKERS ?= 5
 
+.PHONY: test-e2e
 test-e2e: ## Run E2E tests with visible browser (override parallelism with WORKERS=N)
 	cd e2e && npx playwright test --headed --workers=$(WORKERS)
 
+.PHONY: test-e2e-headless
 test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own port — mocked defaults to 4 workers, integration to 1 (shared admin/backend — E2E_WORKERS>1 there is an accepted data-race risk); override E2E_PASSWORD, E2E_BACKEND_URL, E2E_PORT, E2E_WORKERS, E2E_SUITE=mocked|integration|all
 	./scripts/run-e2e-full.sh
 
+.PHONY: test-e2e-purchase-sales
 test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
 	E2E_FILES=tests/flows/sales/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
 
+.PHONY: test-e2e-last-failed
 test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run
 	./scripts/run-e2e-last-failed.sh
 
+.PHONY: test-e2e-debug
 test-e2e-debug: ## Run E2E tests in debug mode (step by step)
 	cd e2e && npx playwright test --debug
 
+.PHONY: test-e2e-ui
 test-e2e-ui: ## Open Playwright UI; optionally select E2E_FILES=a.spec.js,b.spec.js
 	cd e2e && \
 	SPECS="$${E2E_FILES:-$${E2E_FILE:-}}"; \
@@ -245,20 +265,25 @@ test-e2e-ui: ## Open Playwright UI; optionally select E2E_FILES=a.spec.js,b.spec
 	  npx playwright test --ui; \
 	fi
 
+.PHONY: test-e2e-report
 test-e2e-report: ## Show last E2E test report in browser
 	cd e2e && npx playwright show-report ../artifacts/e2e-report
 
+.PHONY: test-e2e-record
 test-e2e-record: ## Record a test flow (opens browser, generates code)
 	cd e2e && npx playwright codegen --save-storage=auth.json http://localhost:3100 --output=recordings/recorded-flow.spec.js
 
+.PHONY: test-e2e-onboarding-integration
 test-e2e-onboarding-integration: ## Run the live onboarding integration spec; e2e/onboarding-accounts.json controls repeated account fixtures. Needs the backend pointed at the email sink (docs/e2e-testing-guide.md)
 	cd e2e && E2E_ONBOARDING_INTEGRATION=1 E2E_EMAIL_SINK=$${E2E_EMAIL_SINK:-1} npx playwright test tests/flows/onboarding/onboarding-register.integration.spec.js
 
+.PHONY: install-e2e
 install-e2e: ## Install E2E dependencies + browsers
 	cd e2e && npm install && npx playwright install chromium
 
 # --- Code Generation ---
 
+.PHONY: generate
 generate: ## Generate frontend from Sales Order contract
 	$(SF) sf-generate-frontend artifacts/sales-order/contract.json
 
@@ -269,6 +294,7 @@ FROM_CACHE ?= 0
 ONLY ?=
 SF_CACHE_PATH ?= cli/cache/ad-snapshot
 
+.PHONY: regen
 regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s regen-help; exit 0; fi; \
 	REGEN_ARGS=""; \
@@ -282,6 +308,7 @@ regen: ## Re-run full pipeline for all active windows (HELP=1 or `make regen-hel
 	if [ -n "$(ONLY)" ]; then REGEN_ARGS="$$REGEN_ARGS --only $(ONLY)"; fi; \
 	env $$CACHE_ENV $(SF) sf-regen-all $$REGEN_ARGS
 
+.PHONY: regen-help
 regen-help: ## Show usage and examples for `make regen`
 	@echo "Usage: make regen [VAR=value ...]"
 	@echo ""
@@ -315,9 +342,11 @@ regen-help: ## Show usage and examples for `make regen`
 # allowlist artifact per API version (artifacts/_public-api/allowlist.<version>.json),
 # consumed by the gateway/ NestJS app. Same LOCAL_CORE dispatcher as `regen` above.
 
+.PHONY: regen-public-api
 regen-public-api: ## Generate artifacts/_public-api/allowlist.v1.json from curated publicApi fields
 	$(SF) sf-generate-public-api-schema --artifacts-root artifacts
 
+.PHONY: generate-base-public-api-manifest
 generate-base-public-api-manifest: ## Generate the editable primary-entity Base-window public API manifest
 	node scripts/generate-base-public-api-manifest.mjs artifacts public-api/base.v1.json
 	node scripts/validate-base-public-api-manifest.mjs public-api/base.v1.json
@@ -330,6 +359,7 @@ generate-base-public-api-manifest: ## Generate the editable primary-entity Base-
 # see docs/repo-topology.md.
 GATEWAY_CORE_PKG := $(CURDIR)/../schema_forge_core/packages/api-gateway-core
 
+.PHONY: gateway-link-local-core
 gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and npm-link it into gateway/ (LOCAL_CORE dev only)
 	@if [ ! -d "$(GATEWAY_CORE_PKG)" ]; then \
 		echo "gateway-link-local-core: schema_forge_core not found as a sibling at $(GATEWAY_CORE_PKG)" >&2; \
@@ -354,18 +384,23 @@ gateway-link-local-core: ## Build api-gateway-core in the sibling core repo and 
 # gateway/package.json's start:dev) since it would be a no-op for the published
 # (non-linked) consumption path anyway, and forcing it repo-wide risks changing
 # resolution for other, unrelated symlinked packages this monorepo may have.
+.PHONY: gateway-dev-local-core
 gateway-dev-local-core: ## Start the gateway dev server against the linked local api-gateway-core (LOCAL_CORE dev only)
 	cd gateway && NODE_OPTIONS=--preserve-symlinks npm run start:dev
 
+.PHONY: docs-api-sync
 docs-api-sync: ## Copy the running gateway OpenAPI contract into the Docusaurus portal
 	cd docs-api && npm run sync:openapi
 
+.PHONY: docs-api-generate
 docs-api-generate: docs-api-sync ## Generate Docusaurus API reference pages from OpenAPI
 	cd docs-api && npx docusaurus clean-api-docs publicApi && npm run gen:api
 
+.PHONY: docs-api-build
 docs-api-build: docs-api-generate ## Build the static self-hosted API documentation portal
 	cd docs-api && npm run build
 
+.PHONY: docs-api-dev
 docs-api-dev: ## Docusaurus is disabled while Scalar is the active API documentation
 	@echo 'Docusaurus is disabled for now. Use Scalar at http://localhost:4300/docs'
 
@@ -373,6 +408,7 @@ docs-api-dev: ## Docusaurus is disabled while Scalar is the active API documenta
 
 PREV_XML_DIR ?=
 
+.PHONY: dump-delta
 dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB writes)
 	@if [ -z "$(ONLY)" ]; then \
 	  echo "Usage: make dump-delta ONLY=<spec> [PREV_XML_DIR=<dir>] [FROM_CACHE=1]"; \
@@ -400,6 +436,7 @@ dump-delta: ## Dump the writes push-to-neo WOULD make for ONLY=<spec> (no DB wri
 REGEN_CHECK_PREV_XML_DIR ?= $(firstword $(wildcard etendo_core/modules/com.etendoerp.go/src-db/database/sourcedata ../modules/com.etendoerp.go/src-db/database/sourcedata))
 REGEN_CHECK_OUT_ROOT     ?= tmp/regen-check
 
+.PHONY: regen-check
 regen-check: ## Predict and compare ETGO_SF_*.xml against committed XML (no DB, no gradle). Defaults to all AD-backed windows.
 	@SPECS="$(ONLY)"; \
 	if [ -z "$$SPECS" ]; then \
@@ -468,6 +505,7 @@ process.stdout.write(r.windows.filter(w=>{\
 	echo "  FAIL: $$TOTAL_FAIL"; \
 	exit $$FAIL
 
+.PHONY: regen-check-help
 regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo "Usage: make regen-check ONLY=<spec>[,<spec>...] [VAR=value ...]"
 	@echo ""
@@ -492,6 +530,7 @@ regen-check-help: ## Show usage and examples for `make regen-check`
 	@echo "  - Outputs are under tmp/regen-check/<spec>/ (gitignored)."
 	@echo "  - To refresh the AD cache when AD changes: make regen ONLY=<spec> CACHE_DB=1, then commit $(SF_CACHE_PATH)."
 
+.PHONY: regen-check-clean
 regen-check-clean: ## Remove tmp/regen-check/ outputs
 	rm -rf $(REGEN_CHECK_OUT_ROOT)
 
@@ -503,6 +542,7 @@ CLIENT     ?=
 FIX        ?=
 REASON     ?=
 
+.PHONY: data-fixes
 data-fixes: ## Run the tenant data-fixes runner (HELP=1 or `make data-fixes-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s data-fixes-help; exit 0; fi; \
 	DF_ARGS=""; \
@@ -514,6 +554,7 @@ data-fixes: ## Run the tenant data-fixes runner (HELP=1 or `make data-fixes-help
 	if [ -n "$(REASON)" ]; then DF_ARGS="$$DF_ARGS --reason \"$(REASON)\""; fi; \
 	eval node cli/src/data-fixes/run.js $$DF_ARGS
 
+.PHONY: data-fixes-help
 data-fixes-help: ## Show usage and examples for `make data-fixes`
 	@echo "Usage: make data-fixes [VAR=value ...]"
 	@echo ""
@@ -561,18 +602,48 @@ LOCAL_PORT  ?=
 # Assemble scripts/db-tunnel.sh connection flags from whatever vars are set.
 TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host $(SSH_HOST)) $(if $(DB_HOST),--db-host $(DB_HOST)) $(if $(DB_PORT),--db-port $(DB_PORT)) $(if $(DB_NAME),--db-name $(DB_NAME)) $(if $(DB_USER),--db-user $(DB_USER)) $(if $(DB_PASSWORD),--db-password '$(DB_PASSWORD)') $(if $(LOCAL_PORT),--local-port $(LOCAL_PORT))
 
+# --- MCP usage telemetry export ---
+#
+# HOST is an SSH alias (etendo-go-experimental, etendo-go-production). The script
+# reads that host's own gradle.properties, so no credentials are passed here.
+# Dumps land in the gitignored mcp-usage/ folder. Run `make mcp-usage-help` for every option.
+
+HOST ?=
+
+.PHONY: mcp-usage
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
+	if [ -z "$(HOST)" ]; then echo "HOST is required, e.g. make mcp-usage HOST=etendo-go-experimental"; exit 1; fi; \
+	scripts/mcp-usage-dump.sh $(HOST) \
+		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
+		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
+		$(if $(filter 1,$(COUNT)),--count) \
+		$(if $(SINCE),--since $(SINCE)) \
+		$(if $(LIMIT),--limit $(LIMIT)) \
+		$(if $(OUT),--out $(OUT)) \
+		$(ARGS)
+
+.PHONY: mcp-usage-help
+mcp-usage-help: ## Show usage and examples for `make mcp-usage`
+	@scripts/mcp-usage-dump.sh --help
+
+.PHONY: db-tunnel
 db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)
 	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) up
 
+.PHONY: db-tunnel-down
 db-tunnel-down: ## Close the remote DB tunnel
 	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) down
 
+.PHONY: db-tunnel-status
 db-tunnel-status: ## Report whether the remote DB tunnel is up
 	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) status
 
+.PHONY: db-psql
 db-psql: ## Interactive psql to a remote DB through the tunnel (SQL='...' or ARGS='...' optional)
 	@scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) psql $(if $(SQL),-- -c "$(SQL)") $(ARGS)
 
+.PHONY: data-fixes-remote
 data-fixes-remote: ## Run the tenant data-fixes runner against a REMOTE DB via the tunnel (same vars as data-fixes; no flags = interactive TUI)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s db-tunnel-help; exit 0; fi; \
 	DF_ARGS=""; \
@@ -585,6 +656,7 @@ data-fixes-remote: ## Run the tenant data-fixes runner against a REMOTE DB via t
 	scripts/db-tunnel.sh $(strip $(TUNNEL_FLAGS)) run -- \
 		sh -c "node cli/src/data-fixes/run.js $$DF_ARGS"
 
+.PHONY: db-tunnel-help
 db-tunnel-help: ## Show usage and examples for the remote DB tunnel targets
 	@echo "Remote DB tunnel — reach an RDS in a private VPC through an SSH bastion."
 	@echo ""
@@ -628,15 +700,18 @@ sync-regen-check-workflow: ## Regenerate the mirror Offline Regen Check workflow
 
 # --- Dev Server ---
 
+.PHONY: dev
 dev: ensure-locale ## Start app-shell and AI BFF dev servers
 	@$(MAKE) -s ai-bff-install
 	@cd tools/ai-bff && npm run start & bff_pid=$$!; \
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && npm run dev
 
+.PHONY: ai-bff-install
 ai-bff-install:
 	@test -d tools/ai-bff/node_modules || npm install --prefix tools/ai-bff
 
+.PHONY: dev-local-core
 dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-shell-core from local ../schema_forge_core source (hot-reload; requires it cloned as sibling)
 	@test -d ../schema_forge_core/packages/app-shell-core/src || { echo "ERROR: ../schema_forge_core/packages/app-shell-core/src not found."; echo "Clone schema_forge_core as a sibling of this repo, or use 'make dev' to run against the published package."; exit 1; }
 	@echo ">> LOCAL_CORE dev mode: app-shell-core resolves to ../schema_forge_core (published package bypassed)"
@@ -653,9 +728,11 @@ dev-local-core: ensure-locale ## Start dev server resolving @etendosoftware/app-
 	trap 'kill $$bff_pid 2>/dev/null || true' EXIT INT TERM; \
 	cd tools/app-shell && LOCAL_CORE=1 npm run dev
 
+.PHONY: dev-mock
 dev-mock: ensure-locale ## Start app-shell dev server with mock data — required for E2E tests
 	cd tools/app-shell && npm run dev:mock
 
+.PHONY: build
 build: ## Build app-shell for production
 	cd tools/app-shell && npm run build
 	$(SF) sf-generate-reports-manifest
@@ -665,18 +742,23 @@ preview: build ## Build app-shell for production and serve it locally on :3100 (
 
 # --- Setup ---
 
+.PHONY: menu-cache
 menu-cache: ## Refresh the AD menu cache from the database
 	$(SF) sf-menu-cache refresh
 
+.PHONY: uuid
 uuid: ## Generate a new Etendo-format UUID (32 uppercase hex chars, no hyphens)
 	@uuidgen | tr -d '-' | tr '[:lower:]' '[:upper:]'
 
+.PHONY: sync-agents
 sync-agents: ## Mirror CLAUDE.md -> AGENTS.md and .claude/skills -> .agents/skills (for Codex/Cursor/Copilot)
 	@./cli/sync-agents.sh
 
+.PHONY: sync-agents-check
 sync-agents-check: ## Fail if the AGENTS.md mirrors are stale (CI guard)
 	@./cli/sync-agents.sh --check
 
+.PHONY: merge-block-check
 merge-block-check: ## Merge-block pre-flight: PR checks across the 3 repos + copy-paste merge cmds (TASK="ETP-XXXX [ETP-YYYY ...]")
 	@if [ -z "$(TASK)" ]; then echo "Usage: make merge-block-check TASK=ETP-4442"; exit 1; fi
 	@./scripts/merge-block-check.sh $(TASK)
@@ -700,6 +782,7 @@ CI_PARITY_JSON      = $(call ci_parity_var,JSON,)
 CI_PARITY_NO_FETCH  = $(call ci_parity_var,NO_FETCH,)
 CI_PARITY_CHECK_CACHE = $(call ci_parity_var,CHECK_CACHE,)
 
+.PHONY: ci-parity
 ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + install (DRY RUN by default; HELP=1 or `make ci-parity-help` for options)
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s ci-parity-help; exit 0; fi; \
 	PHASES_ARG="$(CI_PARITY_PHASES)"; \
@@ -713,6 +796,7 @@ ci-parity: ## Bring the local Etendo checkout to CI parity, then clean DB + inst
 	if [ "$(CI_PARITY_JSON)" = "1" ]; then PARITY_ARGS="$$PARITY_ARGS --json"; fi; \
 	node cli/src/ci-parity.js $$PARITY_ARGS
 
+.PHONY: ci-parity-help
 ci-parity-help: ## Show usage and examples for `make ci-parity`
 	@echo "Usage: make ci-parity [VAR=value ...]"
 	@echo ""
@@ -758,16 +842,19 @@ ci-parity-help: ## Show usage and examples for `make ci-parity`
 	@echo "    work from the INSTALL even though the commits stay on the branch."
 	@echo "  - Full reference: docs/ci-parity-install.md"
 
+.PHONY: install
 install: ## Install all workspace dependencies and activate git hooks
 	npm install
 	git config core.hooksPath .githooks
 
+.PHONY: bump-core-version
 bump-core-version: ## Bump the schema_forge_core lockstep pin in all package.json + refresh lockfiles (VERSION=x.y.z; prompts if omitted)
 	@V="$(VERSION)"; \
 	if [ -z "$$V" ]; then read -p "Core version to pin (x.y.z): " V; fi; \
 	if [ -z "$$V" ]; then echo "No version provided, aborting"; exit 1; fi; \
 	$(MAKE) _bump-core-version-run VERSION=$$V
 
+.PHONY: _bump-core-version-run
 _bump-core-version-run:
 	node scripts/bump-core-version.mjs $(VERSION)
 	@echo "=== npm install (root workspace — installs + hoists app-shell deps) ==="
@@ -787,6 +874,7 @@ ETENDO_ROOT ?= ..
 MODULE_WEB := $(ETENDO_ROOT)/modules/com.etendoerp.go/web/com.etendoerp.go
 LEGACY_DEPLOY ?= 0
 
+.PHONY: deploy
 deploy: ## Deprecated: use the dedicated UI container; set LEGACY_DEPLOY=1 to run the old copy flow
 	@if [ "$(LEGACY_DEPLOY)" = "1" ] || [ "$(LEGACY_DEPLOY)" = "true" ] || [ "$(LEGACY_DEPLOY)" = "yes" ]; then \
 		$(MAKE) build && \
@@ -807,15 +895,19 @@ SCHEMA_FORGE_ABS := $(shell realpath .)
 report-build: ## Build jsreport Docker image (required before first resources.up)
 	cd $(JSREPORT_COMPOSE_DIR) && docker build -t etendo-jsreport:latest .
 
+.PHONY: report-serve
 report-serve: ## Start jsreport Docker container (run report-build first)
 	cd $(JSREPORT_COMPOSE_DIR) && SCHEMA_FORGE_DIR=$(SCHEMA_FORGE_ABS) docker compose -f com.etendoerp.go.yml up
 
+.PHONY: report-serve-detach
 report-serve-detach: ## Start jsreport in background (run report-build first)
 	cd $(JSREPORT_COMPOSE_DIR) && SCHEMA_FORGE_DIR=$(SCHEMA_FORGE_ABS) docker compose -f com.etendoerp.go.yml up -d
 
+.PHONY: report-stop
 report-stop: ## Stop jsreport Docker container
 	cd $(JSREPORT_COMPOSE_DIR) && docker compose -f com.etendoerp.go.yml down
 
+.PHONY: report-preview
 report-preview: ## Preview Business Partner listing report
 	$(SF) sf-report-preview --artifact business-partner --report listing
 
@@ -890,9 +982,11 @@ report-server-down: ## Stop and remove the local report-server container
 
 # --- Static Analysis (SonarQube) ---
 
+.PHONY: sonar
 sonar: ## Run SonarQube analysis on Schema Forge JS/JSX code
 	sonar-scanner -Dproject.settings=sonar-project.properties
 
+.PHONY: sonar-coverage
 sonar-coverage: ## Run all tests with coverage then SonarQube analysis
 	@mkdir -p coverage
 	node --test --experimental-test-coverage --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info 'tools/app-shell/src/**/__tests__/*.test.js'
@@ -909,20 +1003,24 @@ SUITE  ?= sales-order
 PROBE  ?=
 MODEL  ?=
 
+.PHONY: mcp-test
 mcp-test: ## Fire an agent probe suite at an MCP target (TARGET=, SUITE=, PROBE=, MODEL=)
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --suite $(SUITE) $(if $(PROBE),--probe $(PROBE)) $(if $(MODEL),--model $(MODEL))
 
+.PHONY: mcp-login
 mcp-login: ## Pre-warm or refresh a target's OAuth token (TARGET=). Never a prerequisite for mcp-test.
 	cd mcp-tests && uv run python -m runner.cli --target $(TARGET) --login
 
 # Deliberately NOT folded into mcp-test: that target must stay a command that
 # starts, runs and returns an exit code, so it keeps working from a script and
 # from CI. The UI is a separate, optional process that only reads files.
+.PHONY: mcp-ui
 mcp-ui: ## Launch the optional Streamlit panel for the MCP harness (§9)
 	cd mcp-tests && uv run --extra ui streamlit run ui/app.py
 
 # --- Feature Flag Debt ---
 
+.PHONY: flag-debt
 flag-debt: ## Score per-flag technical debt from flags-registry.json (FLAG=<key>, JSON=1, HTML=1)
 	@$(SF) sf-flag-debt $(if $(FLAG),--flag $(FLAG)) $(if $(JSON),--json) $(if $(HTML),--html)
 
@@ -931,6 +1029,7 @@ flag-debt: ## Score per-flag technical debt from flags-registry.json (FLAG=<key>
 ORIGINAL_DB_DIR ?=
 EXPORTED_DB_DIR ?=
 
+.PHONY: xml-regeneration-check
 xml-regeneration-check: ## Compare original module XML vs export.database output (requires ORIGINAL_DB_DIR and EXPORTED_DB_DIR)
 	@if [ -z "$(ORIGINAL_DB_DIR)" ] || [ -z "$(EXPORTED_DB_DIR)" ]; then \
 		echo "Usage: make xml-regeneration-check ORIGINAL_DB_DIR=<path> EXPORTED_DB_DIR=<path>"; \
@@ -942,11 +1041,13 @@ xml-regeneration-check: ## Compare original module XML vs export.database output
 # Active locale is tracked in .active-locale (gitignored). Default: es.
 # Usage: make switch-to-es
 
+.PHONY: switch-to-es
 switch-to-es: ## Switch active locale to Spain (ES)
 	@cp tools/app-shell/.env.es tools/app-shell/.env.local
 	@echo es > .active-locale
 	@echo "Active locale: ES (Spain) — com.etendoerp.go"
 
+.PHONY: ensure-locale
 ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called automatically)
 	@if [ ! -f .active-locale ]; then \
 		if [ -f tools/app-shell/.env.es ]; then \
@@ -957,6 +1058,7 @@ ensure-locale: ## Bootstrap ES locale if .active-locale does not exist (called a
 		fi; \
 	fi
 
+.PHONY: project-status
 project-status: ## Show active locale and module ID
 	@echo "Active locale : es"; \
 	echo "Module        : com.etendoerp.go (Spain)"; \
@@ -964,11 +1066,13 @@ project-status: ## Show active locale and module ID
 
 # --- Cleanup ---
 
+.PHONY: clean
 clean: ## Remove generated artifacts and build output
 	rm -rf tools/app-shell/dist
 
 # --- Help ---
 
+.PHONY: help
 help: ## Show this help
 	@echo ""; \
 	echo "\033[1mSchema Forge — Available targets\033[0m"; \

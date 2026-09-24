@@ -129,6 +129,98 @@ describe('AutoMatchSuggestionModal', () => {
     expect(screen.getByText('financeReconcileAutomatchColOps')).toBeInTheDocument();
   });
 
+  // ── Column-header box model (ETP-4928 follow-up) ──────────────────────────────
+  // The header row must mirror GroupRow's 3-sibling box model — a `w-8` checkbox spacer as a
+  // sibling of the two title blocks, not nested inside the first one — so the divider between the
+  // two column titles lines up with the divider between the two row columns below it. The bug had
+  // the select-all checkbox wrapper nested INSIDE the left ("Línea del extracto bancario") title
+  // block, which stole 16px from that block's flex-1 share and shifted the whole 50/50 split. jsdom
+  // can't measure real pixel geometry, so this asserts the DOM shape directly: the select-all
+  // checkbox's wrapper and both title blocks must all be direct children of the same header row.
+  it('column-header select-all checkbox is a sibling of both title blocks, not nested inside the left one', () => {
+    renderModal();
+
+    const selectAll = screen.getByTestId('automatch-select-all');
+    const statementLabel = screen.getByText('financeReconcileAutomatchColStatement');
+    const opsLabel = screen.getByText('financeReconcileAutomatchColOps');
+
+    // The `w-8` spacer div directly wrapping the checkbox button, and each title span's own
+    // direct wrapper block — same walk GroupRow's box model would produce for its own siblings.
+    const checkboxWrapper = selectAll.parentElement;
+    const leftBlock = statementLabel.parentElement;
+    const rightBlock = opsLabel.parentElement;
+
+    // All three must share the same parent (the header row container) — i.e. be siblings.
+    const headerRow = checkboxWrapper.parentElement;
+    expect(leftBlock.parentElement).toBe(headerRow);
+    expect(rightBlock.parentElement).toBe(headerRow);
+
+    // Regression guard: neither title block may contain the checkbox wrapper (or vice versa) —
+    // that nesting is exactly what broke the 50/50 split.
+    expect(leftBlock.contains(checkboxWrapper)).toBe(false);
+    expect(checkboxWrapper.contains(leftBlock)).toBe(false);
+    expect(rightBlock.contains(checkboxWrapper)).toBe(false);
+  });
+
+  // QA edge cases (Sentinel, ETP-4928 follow-up): the header box model must hold across every
+  // state the modal can actually be in, not just the 2-group happy path DEV tested against.
+  it('header keeps the 3-sibling box model with zero groups (empty state)', () => {
+    renderModal({ groups: [] });
+
+    // The empty-state placeholder replaces the ROWS, not the header — the header block renders
+    // unconditionally above the `groups.length === 0` branch, so it must still be intact here.
+    expect(screen.getByText('financeReconcileAutomatchEmpty')).toBeInTheDocument();
+
+    const selectAll = screen.getByTestId('automatch-select-all');
+    const statementLabel = screen.getByText('financeReconcileAutomatchColStatement');
+    const opsLabel = screen.getByText('financeReconcileAutomatchColOps');
+    const headerRow = selectAll.parentElement.parentElement;
+
+    expect(statementLabel.parentElement.parentElement).toBe(headerRow);
+    expect(opsLabel.parentElement.parentElement).toBe(headerRow);
+    // The group-count badge next to the left title must read 0, not disappear or throw.
+    expect(statementLabel.parentElement).toHaveTextContent('0');
+  });
+
+  it('header keeps the 3-sibling box model with many groups (scroll case)', () => {
+    const manyGroups = Array.from({ length: 15 }, (_, i) => ({
+      ...GROUP_STANDARD,
+      groupKey: `scroll-group-${i}`,
+      statementLine: { ...GROUP_STANDARD.statementLine, id: `line-${i}` },
+    }));
+    renderModal({ groups: manyGroups });
+
+    const selectAll = screen.getByTestId('automatch-select-all');
+    const statementLabel = screen.getByText('financeReconcileAutomatchColStatement');
+    const opsLabel = screen.getByText('financeReconcileAutomatchColOps');
+    const headerRow = selectAll.parentElement.parentElement;
+
+    // Row count is irrelevant to the header's own layout — it sits above the scrollable rows
+    // container, so adding 15 rows must not perturb its sibling structure.
+    expect(statementLabel.parentElement.parentElement).toBe(headerRow);
+    expect(opsLabel.parentElement.parentElement).toBe(headerRow);
+    expect(statementLabel.parentElement).toHaveTextContent('15');
+  });
+
+  it('both header title blocks keep min-w-0 so a long i18n label cannot push the divider off the 50/50 split', () => {
+    // "Línea del extracto bancario" (es_ES/es_AR, 28 chars) is noticeably longer than "Bank
+    // statement line" (en_US, 20 chars) plus the count badge sharing the same flex-1 block. Without
+    // min-w-0, a flex child's min-width defaults to the width of its (unwrapped) text content, so
+    // this label alone could grow the left block past its 50% share at narrow widths (e.g. the
+    // modal's maxWidth: 96vw on small screens) and shove the divider — exactly the bug this fix
+    // corrects. jsdom can't measure the resulting pixel overflow, so this pins the CSS contract
+    // that prevents it instead.
+    renderModal();
+
+    const statementLabel = screen.getByText('financeReconcileAutomatchColStatement');
+    const opsLabel = screen.getByText('financeReconcileAutomatchColOps');
+
+    expect(statementLabel.parentElement.className).toMatch(/\bmin-w-0\b/);
+    expect(statementLabel.parentElement.className).toMatch(/\bflex-1\b/);
+    expect(opsLabel.parentElement.className).toMatch(/\bmin-w-0\b/);
+    expect(opsLabel.parentElement.className).toMatch(/\bflex-1\b/);
+  });
+
   it('renders statement line descriptions', () => {
     renderModal();
     expect(screen.getByText('Transf. recibida ACME')).toBeInTheDocument();

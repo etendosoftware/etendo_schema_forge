@@ -1,12 +1,15 @@
+import { useMemo } from 'react';
 import ReturnToVendorShipmentPage from '@generated/return-to-vendor-shipment/generated/web/return-to-vendor-shipment/ReturnToVendorShipmentPage';
 import ReturnToVendorShipmentPreview from './ReturnToVendorShipmentPreview';
 import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import ReturnToVendorShipmentRowConfirmModal from './ReturnToVendorShipmentRowConfirmModal.jsx';
 import ReturnToVendorShipmentSecondaryActions from './ReturnToVendorShipmentSecondaryActions.jsx';
+import { CONFIRM_EVENT } from './ConfirmWithCreditButton.jsx';
 import ReturnWindowShell from '../shared/ReturnWindowShell';
-import { useMenuLabel } from '@/i18n';
+import { buildReturnDraftMode } from '../shared/returnDraftMode.js';
+import { useMenuLabel, useUI } from '@/i18n';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
-import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter } from '@/components/contract-ui/BulkDocumentAction';
+import BulkDocumentAction, { buildInOutActions, buildPostActions, postRowFilter, buildUnpostActions, unpostRowFilter } from '@/components/contract-ui/BulkDocumentAction';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 
@@ -32,6 +35,22 @@ function ReturnToVendorShipmentBulkActions(props) {
         rowFilter={postRowFilter}
         labelKey="post"
         data-testid="BulkDocumentActionPost__a5f79c" />
+      {/* ETP-5378 QA follow-up (SEL-05 / SEL-06) — bulk Descontabilizar, the counterpart of
+          the unpost entry this window's row kebab already offers via
+          buildDocumentRowQuickActionsPostMenu({ includeUnpost: true }). Without it a posted
+          row showed "Descontabilizar" on hover but the selection bar offered nothing at all,
+          since buildPostActions only fires on not-yet-posted rows. Its own button rather than
+          a second option inside "Contabilizar" (same reasoning as Goods Shipment: that button
+          would then be named after the opposite of what it does), and a plain `unpost`
+          neoAction with no pre-step, matching what the kebab runs. */}
+      <BulkDocumentAction
+        {...props}
+        entity="returnToVendorShipment"
+        actionMode="neoAction"
+        buildActions={buildUnpostActions}
+        rowFilter={unpostRowFilter}
+        labelKey="unpost"
+        data-testid="BulkDocumentActionUnpost__a5f79c" />
       <CopyLinkButton
         selectedRows={props.selectedRows}
         windowName={props.windowName}
@@ -42,6 +61,8 @@ function ReturnToVendorShipmentBulkActions(props) {
 
 export default function ReturnToVendorShipmentWindow({ windowName, recordId, apiBaseUrl, token, ...rest }) {
   const tMenu = useMenuLabel();
+  const ui = useUI();
+  const draftMode = useMemo(() => buildReturnDraftMode(ui, CONFIRM_EVENT), [ui]);
   const { createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
   return (
@@ -68,9 +89,9 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
         // ETP-5260 defect fix — forwarded through ReturnWindowShell's `...pageProps`
         // and the generated ReturnToVendorShipmentPage's own `{...props}` spread
         // straight to DetailView; renders Copy link to the LEFT of Save/Confirm.
-        // ConfirmWithCreditButton (topbarRight, hardcoded in the generated Page)
-        // is untouched — see ReturnToVendorShipmentSecondaryActions' doc comment.
         topbarSecondary={ReturnToVendorShipmentSecondaryActions}
+        // ETP-5408 — wins over the generated Page's own `draftMode` (it spreads `{...props}` after).
+        draftMode={draftMode}
         duplicateAction={{ show: false }}
         hideLink
         bulkActions={ReturnToVendorShipmentBulkActions}
