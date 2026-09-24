@@ -15,7 +15,7 @@ import { useBankStatementLines } from '@/hooks/useBankStatementLines';
 import { useBPartnerLookup, useGLItemLookup } from '@/hooks/useMovementLookups';
 import { AddLineButton } from '@/components/ui/add-line-button';
 import { ChipSelect } from '@/components/forms/fields';
-import { FieldRow, inputClass, textareaClass } from './formFields';
+import { FieldRow, inputClass, invalidControlClass, textareaClass } from './formFields';
 // The manual grid's cells are MaskedAmountInput, so their values arrive CLEAN (dot-decimal,
 // already disambiguated by the mask) — they parse with parseLocaleNumber. The structural
 // statementAmount parser stays where it belongs: the CSV/xlsx import path, whose cells nobody
@@ -152,38 +152,53 @@ function makeMoneyFormatter(currency) {
 // Header fields
 // ─────────────────────────────────────────────────────────────────────────────
 
-function HeaderFields({ form, setForm, ui }) {
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+function HeaderFields({ form, setForm, fieldErrors = {}, clearFieldError, ui }) {
+  // Editing a field clears its own inline error right away (not only on the next save).
+  const setField = (field, value) => {
+    clearFieldError?.(field);
+    setForm((f) => ({ ...f, [field]: value }));
+  };
+  const set = (field) => (e) => setField(field, e.target.value);
   return (
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         <FieldRow
           label={ui('financeAccountStatementsManualName')}
           required
+          error={fieldErrors.name}
+          errorTestId="manual-statement-name-error"
           data-testid="FieldRow__6b4086">
           <input
             type="text" value={form.name} onChange={set('name')}
             placeholder={ui('financeAccountStatementsManualNamePlaceholder')}
-            data-testid="manual-statement-name" className={inputClass}
+            aria-invalid={fieldErrors.name ? true : undefined}
+            data-testid="manual-statement-name"
+            className={cn(inputClass, fieldErrors.name && invalidControlClass)}
           />
         </FieldRow>
         <FieldRow
           label={ui('financeAccountStatementsManualTrxDate')}
           required
+          error={fieldErrors.transactionDate}
+          errorTestId="manual-statement-trxdate-error"
           data-testid="FieldRow__6b4086">
           <DateField
             value={form.transactionDate}
-            onChange={(iso) => setForm((f) => ({ ...f, transactionDate: iso }))}
+            onChange={(iso) => setField('transactionDate', iso)}
+            className={fieldErrors.transactionDate ? invalidControlClass : undefined}
             data-testid="manual-statement-trxdate"
           />
         </FieldRow>
         <FieldRow
           label={ui('financeAccountStatementsManualImportDate')}
           required
+          error={fieldErrors.importDate}
+          errorTestId="manual-statement-importdate-error"
           data-testid="FieldRow__6b4086">
           <DateField
             value={form.importDate}
-            onChange={(iso) => setForm((f) => ({ ...f, importDate: iso }))}
+            onChange={(iso) => setField('importDate', iso)}
+            className={fieldErrors.importDate ? invalidControlClass : undefined}
             data-testid="manual-statement-importdate"
           />
         </FieldRow>
@@ -703,6 +718,17 @@ export function ManualStatementModal({
   // discard-changes prompt) and whether that prompt is currently shown.
   const [dirty, setDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // Inline required-field errors for the header (name / transactionDate / importDate),
+  // set on save and cleared per field as soon as the user edits it.
+  const [fieldErrors, setFieldErrors] = useState({});
+  const clearFieldError = (field) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
   // Guards single hydration per open so user edits aren't clobbered on re-render.
   const hydratedRef = useRef(false);
   // ETP-4924: re-editing the SAME already-saved statement a second time (close, edit
@@ -737,6 +763,7 @@ export function ManualStatementModal({
     setRows([]);
     setDirty(false);
     setConfirmClose(false);
+    setFieldErrors({});
   }, [open, today]);
 
   // Hydrate once per open. In edit mode, seed the header + lines from the draft
@@ -769,10 +796,18 @@ export function ManualStatementModal({
   }, [open, editing, linesLoading, loadedLines, statement, today]);
 
   const handleSave = async (process) => {
-    if (!form.name.trim()) {
-      toast.error(ui('financeAccountStatementsManualErrorName'));
-      return;
-    }
+    // Required header fields are flagged inline (red border + message under the field), all at
+    // once, the same way the generated forms do (EntityForm / RecordCreateModal) — no toast.
+    // ETP-5447 — both header dates are required, and the backend rejects a blank one with a 400.
+    // They start pre-filled with today, so a date only fails when the user cleared the field:
+    // DateField emits '' on "Borrar" and when its text is emptied and blurred. The backend used to
+    // silently replace a blank date with today, which hid the cleared field instead of asking.
+    const headerErrors = {};
+    if (!form.name.trim()) headerErrors.name = ui('fieldRequired');
+    if (!form.transactionDate) headerErrors.transactionDate = ui('fieldRequired');
+    if (!form.importDate) headerErrors.importDate = ui('fieldRequired');
+    setFieldErrors(headerErrors);
+    if (Object.keys(headerErrors).length > 0) return;
     // ETP-4921 — matched lines are excluded from the payload entirely: they are immutable at the
     // DB level, and `?action=update` keeps them in place rather than deleting-and-recreating (see
     // deleteUnmatchedLines in BankStatementsHandler.java). Sending them would be asking the
@@ -870,6 +905,8 @@ export function ManualStatementModal({
               <HeaderFields
                 form={form}
                 setForm={setFormDirty}
+                fieldErrors={fieldErrors}
+                clearFieldError={clearFieldError}
                 ui={ui}
                 data-testid="HeaderFields__6b4086" />
             </div>
