@@ -8,7 +8,7 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
 
 /**
  * Static + parse validation for the R37 corrective data-fix
- * (20260924T150000Z__R37-tenant-subscription-backfill.sql, ETP-5046, gap B2).
+ * (20260924T150000Z__R37-tenant-subscription-backfill.sql, ETP-5046, gap S1).
  *
  * Gives every already-onboarded tenant that carries the legacy AD_Preference plan marker
  * (ETGO_TenantPlan='productive') exactly ONE open ETGO_SUBSCRIPTION row on the grandfathered
@@ -105,7 +105,7 @@ const SCOPE_PREDICATES = [
 describe('R37 data-fix — header metadata', () => {
   it('parses with the expected id and gap label', () => {
     assert.equal(fix.id, 'R37-tenant-subscription-backfill');
-    assert.equal(fix.gap, 'B2');
+    assert.equal(fix.gap, 'S1');
   });
 
   it('is a medium-risk sql fix', () => {

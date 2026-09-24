@@ -1,5 +1,5 @@
 -- @id: R37-tenant-subscription-backfill
--- @gap: B2
+-- @gap: S1
 -- @risk: medium
 -- @type: sql
 -- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no open subscription, copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire that tenant's now-stale ETGO_TenantPlan preference in the SAME transaction (ETP-5046)
@@ -15,8 +15,11 @@
 -- forbids renaming an APPLIED fix, not an unapplied one). Keep it strictly newer than every fix
 -- already merged when it lands.
 
--- Context (ETP-5046, gap B1 "Tenant subscription")
+-- Context (ETP-5046, gap S1 "Tenant subscription")
 -- --------------------------------------------------------------------------------------------
+-- Gap id S1 opens a new series (S = subscription). It was first filed as B2, which collides with
+-- the chart-of-accounts B2 in onboarding-and-datafixes-map.md (the B series is the org hierarchy).
+--
 -- Before the subscription model existed, the ONLY record that a tenant had been provisioned
 -- through the paid upgrade flow was a single AD_Preference row, attribute 'ETGO_TenantPlan',
 -- value 'productive' (com.etendoerp.go, TenantPlanService#markProductive / #resolvePlan). That
