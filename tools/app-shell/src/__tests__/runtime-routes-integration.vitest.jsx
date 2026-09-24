@@ -21,6 +21,19 @@ import { buildRuntimeRoutes } from '../runtime-routes.jsx';
 import en_US from '../locales/en_US.json';
 import es_ES from '../locales/es_ES.json';
 
+const { authLogoutOverride } = vi.hoisted(() => ({ authLogoutOverride: { current: null } }));
+
+vi.mock('@etendosoftware/app-shell-core/auth', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    useAuthOptional: () => {
+      const auth = actual.useAuthOptional();
+      return authLogoutOverride.current ? { ...auth, logout: authLogoutOverride.current } : auth;
+    },
+  };
+});
+
 const LOCALE_DICTIONARIES = { en_US, es_ES };
 
 // Only WindowLoader is mocked: it does real `apiBaseUrl`/`windowMap`-driven fetching
@@ -58,6 +71,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  authLogoutOverride.current = null;
   window.localStorage.clear();
   window.history.pushState({}, '', '/');
 });
@@ -173,6 +187,54 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     }
   }, 30000);
 
+  it('waits for cookie-session revocation before navigating away from logout', async () => {
+    let resolveRevocation;
+    const revocationStarted = vi.fn();
+    globalThis.fetch = vi.fn((input, options = {}) => {
+      if (options.method === 'DELETE' && String(input).endsWith('/sws/go/session')) {
+        revocationStarted();
+        return new Promise((resolve) => {
+          resolveRevocation = () => resolve({
+            ok: true,
+            status: 204,
+            headers: { get: () => null },
+            json: async () => ({}),
+          });
+        });
+      }
+
+      if (!options.method && String(input).endsWith('/sws/go/session')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: { message: 'No active session' } }),
+        });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+      });
+    });
+
+    authLogoutOverride.current = () => globalThis.fetch('/sws/go/session', { method: 'DELETE' });
+
+    renderAt('/logout', {
+      auth: { loginPath: '/login' },
+    });
+
+    await waitFor(() => expect(revocationStarted).toHaveBeenCalledOnce());
+    expect(window.location.pathname).toBe('/logout');
+
+    resolveRevocation();
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Correo electrónico/ })).toBeInTheDocument();
+  }, 30000);
+
   it.each([
     '/logout?returnTo=/logout',
     '/logout?returnTo=/onboarding%3FreturnTo%3D%252Flogout',
@@ -188,11 +250,28 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
   }, 30000);
 
-  it('keeps /login as the destination instead of redirecting to /onboarding', async () => {
+  it('renders the login form at /login instead of redirecting to the onboarding wizard', async () => {
+    globalThis.fetch.mockImplementation(async (input, options = {}) => {
+      if (String(input).endsWith('/sws/go/session') && !options.method) {
+        return {
+          ok: false,
+          status: 401,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ error: { message: 'No active session' } }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ result: JSON.stringify({ unchanged: true }) }),
+      };
+    });
     renderAt('/login', { auth: { loginPath: '/login' } });
 
-    await waitFor(() => expect(window.location.pathname).toBe('/login'));
-    expect(window.location.pathname).not.toBe('/onboarding');
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^Correo electrónico/ })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/login');
   });
 
   it('resolves a lazy-loaded route via Suspense', async () => {
