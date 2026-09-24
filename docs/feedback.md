@@ -2770,6 +2770,9 @@ showed "Tu rol no tiene acceso".
 
 **Fix:** timeout raised to 10s, which still guards against a request that never answers while clearing real latency.
 Regression test: `App.vitest.jsx` "uses a slow but successful SFListMenu answer instead of failing open".
+A timed-out request is now also cached as a failure (60s failure TTL) and detached, so a request that never
+answers no longer makes every later load wait the full timeout again; if it does answer later, that answer
+replaces the cached failure.
 
 **Lesson:** a timeout whose fallback is fail-OPEN is a permission decision, not a performance knob. Size it against
 production latency, not local or mocked latency.

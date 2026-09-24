@@ -367,6 +367,47 @@ describe('fetchWindowAccess', () => {
     vi.useRealTimers();
   });
 
+  // ETP-5395 review — a request that never answers used to stay "in flight" forever, so every
+  // later access load (focus, the 5-min poll) joined it and waited the full timeout again.
+  it('caches a timed-out SFListMenu as unreachable so later loads neither wait nor refetch', async () => {
+    vi.useFakeTimers();
+    const fetchStub = vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? new Promise(() => {})
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    ));
+    vi.stubGlobal('fetch', fetchStub);
+
+    const first = fetchWindowAccess({ token: 'tok' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(first).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+    let secondSettled = false;
+    const second = fetchWindowAccess({ token: 'tok' }).then((value) => { secondSettled = true; return value; });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(secondSettled).toBe(true);
+    await expect(second).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+    expect(fetchStub.mock.calls.filter(([url]) => String(url).includes('/listmenu'))).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('lets an SFListMenu answer that arrives after the timeout replace the cached failure', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? new Promise((resolve) => { setTimeout(() => resolve(menuTextResponse(MENU_TREE)), 12_000); })
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const first = fetchWindowAccess({ token: 'tok' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(first).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(fetchWindowAccess({ token: 'tok' })).resolves.toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+    vi.useRealTimers();
+  });
+
   it('does not block window access forever when SFListMenu never settles', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn((url) => (
