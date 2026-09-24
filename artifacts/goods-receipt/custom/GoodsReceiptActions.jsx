@@ -573,8 +573,8 @@ export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) 
 
           {/* Cancel used to paint its border with `--card` and its label with `--muted`, a
               background token — both invisible. The primary filled itself with
-              `--status-info-bg` (#EFF6FF, a banner background) under a white label:
-              ~1.07:1, which is what "tono celeste que parece deshabilitado" was. */}
+              `--status-info-bg`, a pale banner background, under a `--card` (white)
+              label: ~1.07:1, which is what "tono celeste que parece deshabilitado" was. */}
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
             <button type="button" onClick={onClose} style={cloneBtnCancel}>{ui('cancel')}</button>
             <button type="button" onClick={handleClone} disabled={loading} style={loading ? cloneBtnPrimaryDisabled : cloneBtnPrimary}>

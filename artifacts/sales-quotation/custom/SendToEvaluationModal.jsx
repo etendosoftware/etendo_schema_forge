@@ -135,7 +135,7 @@ export default function SendToEvaluationModal({
           </div>
         </div>
 
-        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid hsl(var(--card))' }}>
+        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))', marginBottom: 4 }}>
             {ui('sqSendToEvalTitle')}
           </div>
