@@ -18,47 +18,39 @@ describe('InternalConsumptionActions', () => {
 
   // ── Visibility guard ────────────────────────────────────────────────────────
   // Void only makes sense on a Completed document. Returning null for any other
-  // status keeps the kebab clean on draft/open records.
-  it('renders only for completed documents (data?.status === CO, returns null otherwise)', () => {
-    assert.match(src, /data\?\.status\s*!==\s*'CO'/);
-    assert.match(src, /if\s*\(data\?\.status\s*!==\s*'CO'\)\s*return null;/);
+  // status keeps the kebab clean on draft/open records. ETP-5445 — the CO gate now
+  // lives in the shared helper's isVoidableRow (also used by the grid row kebab).
+  it('renders only for completed documents (isVoidableRow(data) gate, returns null otherwise)', () => {
+    assert.match(src, /import\s*\{[^}]*\bisVoidableRow\b[^}]*\}\s*from\s*'@\/windows\/custom\/internal-consumption\/voidInternalConsumption\.js'/);
+    assert.match(src, /if\s*\(!isVoidableRow\(data\)\)\s*return null;/);
   });
 
-  // ── Endpoint + payload (ETP regression: was Process { action: 'CO' }) ─────────
-  it('POSTs to the processNow action endpoint for internalConsumption', () => {
-    assert.match(src, /\/internalConsumption\/\$\{recordId\}\/action\/processNow/);
+  // ── Delegation (ETP-5445) ─────────────────────────────────────────────────────
+  // Endpoint, body and toasts moved to voidInternalConsumption.js (asserted in its own
+  // tests); the component must delegate, passing its spec-scoped apiBaseUrl as basePath
+  // because its apiFetch is created with an EMPTY base.
+  it('delegates the void to the shared voidInternalConsumption helper with basePath: apiBaseUrl', () => {
+    assert.match(src, /import\s*\{[^}]*\bvoidInternalConsumption\b[^}]*\}\s*from\s*'@\/windows\/custom\/internal-consumption\/voidInternalConsumption\.js'/);
+    assert.match(src, /await voidInternalConsumption\(\{\s*apiFetch,\s*basePath:\s*apiBaseUrl,\s*recordId,\s*ui\s*\}\)/);
   });
 
-  // ETP-4576 — the credential is apiFetch's, not the component's: it picks the active
-  // scheme's headers and the CSRF proof. A hand-built Authorization here would be the bug.
-  it('POSTs through apiFetch, never a hand-built credential header', () => {
-    assert.match(src, /method:\s*'POST'/);
-    assert.match(src, /apiFetch\(/);
+  // ETP-4576 — the credential is apiFetch's, not the component's.
+  it('hands the helper an apiFetch, never a hand-built credential header', () => {
+    assert.match(src, /const apiFetch = useApiFetch\(''\)/);
     assert.doesNotMatch(src, /Authorization:\s*`Bearer/);
   });
 
-  it('sends a flat { action: VO } body (NOT the old CO process, NOT wrapped in fieldValues)', () => {
-    assert.match(src, /body:\s*JSON\.stringify\(\{\s*action:\s*'VO'\s*\}\)/);
-    assert.match(src, /action:\s*'VO'/);
-    // Regression guards: the old Process flow used { action: 'CO' }.
-    assert.doesNotMatch(src, /action:\s*'CO'/);
-    // The Void payload is flat — it must not be nested under fieldValues.
-    assert.doesNotMatch(src, /fieldValues/);
+  it('no longer builds the request or the toasts itself (single implementation in the helper)', () => {
+    assert.doesNotMatch(src, /\/action\/processNow/);
+    assert.doesNotMatch(src, /method:\s*'POST'/);
+    assert.doesNotMatch(src, /JSON\.stringify/);
+    assert.doesNotMatch(src, /\btoast\./);
+    assert.doesNotMatch(src, /from 'sonner'/);
   });
 
-  // ── Success + error handling ──────────────────────────────────────────────────
-  it('calls onRefresh then onClose after a successful void', () => {
-    assert.match(src, /onRefresh\?\.\(\)/);
-    assert.match(src, /onClose\(\)/);
-    assert.match(src, /onRefresh\?\.\(\);\s*onClose\(\);/);
-  });
-
-  it('shows the success toast via the internalConsumptionVoided i18n key', () => {
-    assert.match(src, /toast\.success\(ui\('internalConsumptionVoided'\)\)/);
-  });
-
-  it('shows the error toast via internalConsumptionVoidError with {error} interpolation', () => {
-    assert.match(src, /toast\.error\(ui\('internalConsumptionVoidError'\)\.replace\('\{error\}',\s*err\.message\)\)/);
+  // ── Success handling ──────────────────────────────────────────────────────────
+  it('calls onRefresh then onClose only after a successful void', () => {
+    assert.match(src, /if\s*\(result\.success\)\s*\{\s*onRefresh\?\.\(\);\s*onClose\(\);\s*\}/);
   });
 
   // ── i18n labels (no hardcoded strings) ────────────────────────────────────────

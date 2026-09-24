@@ -427,4 +427,26 @@ describe('InternalConsumptionWindow (ETP-5445)', () => {
       expect(lastAppProps().refreshTrigger).toBe(0);
     });
   });
+  // ETP-5445 regression — Anular (Void) was deliberately REMOVED from the row-hover kebab by
+  // user decision; it lives only in the detail kebab (InternalConsumptionActions). Completed
+  // rows must offer Post/Unpost but never `void`.
+  describe('no row Void (ETP-5445)', () => {
+    it.each([
+      ['unposted', { id: 'ic-6', status: 'CO', processed: 'Y', posted: 'N' }, ['post']],
+      ['posted', { id: 'ic-7', status: 'CO', processed: 'Y', posted: 'Y' }, ['unpost']],
+    ])('a completed %s row has no void entry in the row kebab', (_label, row, expectedKeys) => {
+      render(<InternalConsumptionWindow />);
+      const keys = lastAppProps().rowQuickActions.menuActions({ row }).map((a) => a.key);
+
+      expect(keys).not.toContain('void');
+      expect(keys).toEqual(expectedKeys);
+    });
+
+    it('the wrapper does not import the voidInternalConsumption helper', async () => {
+      const { default: wrapperSrc } = await import('../index.jsx?raw');
+
+      expect(wrapperSrc).not.toMatch(/voidInternalConsumption/);
+      expect(wrapperSrc).not.toMatch(/isVoidableRow/);
+    });
+  });
 });

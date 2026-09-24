@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { isVoidableRow, voidInternalConsumption } from '@/windows/custom/internal-consumption/voidInternalConsumption.js';
 
 /**
  * moreMenuContent (kebab) for Internal Consumption.
  * Renders a "Void" action that calls M_Internal_Consumption_Post with { action: 'VO' }.
  * Only shown when the document is Completed ('CO') — voiding an open/draft document is not allowed.
+ * The request and its toasts live in the shared voidInternalConsumption helper (ETP-5445), also
+ * used by the grid row-hover kebab.
  */
 export default function InternalConsumptionActions({ data, recordId, token, apiBaseUrl, onClose, onRefresh }) {
   // ETP-4576 - the credential belongs to apiFetch, not to the component.
@@ -19,25 +21,17 @@ export default function InternalConsumptionActions({ data, recordId, token, apiB
   const [processing, setProcessing] = useState(false);
 
   // Void is only available on completed documents.
-  if (data?.status !== 'CO') return null;
+  if (!isVoidableRow(data)) return null;
 
   const handleVoid = async () => {
     if (processing) return;
     setProcessing(true);
     try {
-      const res = await apiFetch(`${apiBaseUrl}/internalConsumption/${recordId}/action/processNow`, {
-        method: 'POST',
-        body: JSON.stringify({ action: 'VO' }),
-      });
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(text || `${res.status} ${res.statusText}`);
+      const result = await voidInternalConsumption({ apiFetch, basePath: apiBaseUrl, recordId, ui });
+      if (result.success) {
+        onRefresh?.();
+        onClose();
       }
-      toast.success(ui('internalConsumptionVoided'));
-      onRefresh?.();
-      onClose();
-    } catch (err) {
-      toast.error(ui('internalConsumptionVoidError').replace('{error}', err.message));
     } finally {
       setProcessing(false);
     }
