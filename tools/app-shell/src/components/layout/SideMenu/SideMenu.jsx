@@ -745,7 +745,8 @@ export default function SideMenu({
                             pointer-events-none on the item and would swallow the hover. */}
                         <TruncatedText
                           text={env.clientName || env.orgName || ui('yourCompany')}
-                          className="flex-1 pointer-events-auto" />
+                          className="flex-1 pointer-events-auto"
+                          data-testid="TruncatedText__247c75" />
                         <span className={cn(
                           'ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
                           env.plan === 'productive'
@@ -783,7 +784,8 @@ export default function SideMenu({
                     />
                     <TruncatedText
                       text={selectedOrg?.name || ui('yourCompany')}
-                      className="flex-1 pointer-events-auto" />
+                      className="flex-1 pointer-events-auto"
+                      data-testid="TruncatedText__247c75" />
                   </DropdownMenuItem>)
                 )}
               </DropdownMenuContent>
