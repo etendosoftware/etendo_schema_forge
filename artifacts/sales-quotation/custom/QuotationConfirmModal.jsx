@@ -4,6 +4,7 @@ import { useUI } from '@/i18n';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -278,7 +279,7 @@ export default function QuotationConfirmModal({
           </div>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8,
-            padding: '12px 16px', borderTop: '0.5px solid hsl(var(--card))',
+            padding: '12px 16px', borderTop: '0.5px solid hsl(var(--border-subtle))',
           }}>
             <button type="button" onClick={handleCloseAfterCreate} style={btnSecondary}>
               {ui('soClose')}
@@ -306,7 +307,7 @@ export default function QuotationConfirmModal({
             onClick={onClose}
             style={{
               position: 'absolute', top: 10, right: 12,
-              fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
+              fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
               background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
             }}
           >
@@ -365,15 +366,11 @@ export default function QuotationConfirmModal({
         {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
           <button type="button" onClick={onClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ ...btnSecondary, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
           <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading}
-            style={{
-              ...btnPrimary,
-              opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
+            style={loading ? btnPrimaryDisabled : btnPrimary}>
             {loading && (
               <svg style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }}
                 viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -455,16 +452,20 @@ const overlayStyle = {
 
 const cardStyle = {
   width: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
+  overflow: 'hidden', borderRadius: 8, backgroundColor: 'hsl(var(--card))',
+  boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))',
 };
 
-const btnSecondary = {
-  fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-};
+// ETP-5398 — buttons come from MODAL_STYLES, the canonical action-modal palette. The
+// primary used to be `--status-info-fg` (blue) and the secondary a transparent box with a
+// divider-role border and muted-role label. `width` is overridden to 'auto' on purpose:
+// MODAL_STYLES pins the widths of one Figma frame, and modal button widths are NOT
+// normalised by this ticket — each modal hugs its own label.
+const btnSecondary = { ...MODAL_STYLES.btnCancel, width: 'auto' };
 
-const btnPrimary = {
-  fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
-};
+const btnPrimary = { ...MODAL_STYLES.btnSaveEnabled, width: 'auto', display: 'inline-flex', gap: 6 };
+
+// Disabled swaps the whole object — never `opacity` on the fill. This modal dimming the
+// same blue by 0.6 while SendToEvaluationModal dimmed it by 0.5 is what the reporter saw
+// as "two different blues"; there was never a second blue token.
+const btnPrimaryDisabled = { ...MODAL_STYLES.btnSaveDisabled, width: 'auto', display: 'inline-flex', gap: 6 };

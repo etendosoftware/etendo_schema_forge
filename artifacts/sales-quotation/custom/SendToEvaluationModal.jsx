@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -109,7 +110,7 @@ export default function SendToEvaluationModal({
             onClick={onClose}
             style={{
               position: 'absolute', top: 10, right: 12,
-              fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
+              fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
               background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
             }}
           >
@@ -151,15 +152,11 @@ export default function SendToEvaluationModal({
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
           <button type="button" onClick={onClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ ...btnSecondary, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
           <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading || lineCount === 0}
-            style={{
-              ...btnPrimary,
-              opacity: loading || lineCount === 0 ? 0.5 : 1, cursor: loading || lineCount === 0 ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
+            style={loading || lineCount === 0 ? btnPrimaryDisabled : btnPrimary}>
             {loading && (
               <svg style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }}
                 viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -183,16 +180,18 @@ const overlayStyle = {
 
 const cardStyle = {
   width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
+  overflow: 'hidden', borderRadius: 8, backgroundColor: 'hsl(var(--card))',
+  boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))',
 };
 
-const btnSecondary = {
-  fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
-};
+// ETP-5398 — buttons come from MODAL_STYLES, the canonical action-modal palette. See the
+// matching comment in QuotationConfirmModal: same edits, these two style blocks were
+// byte-identical. `width: 'auto'` overrides the per-frame widths MODAL_STYLES pins.
+const btnSecondary = { ...MODAL_STYLES.btnCancel, width: 'auto' };
 
-const btnPrimary = {
-  fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
-};
+const btnPrimary = { ...MODAL_STYLES.btnSaveEnabled, width: 'auto', display: 'inline-flex', gap: 6 };
+
+// Disabled swaps the whole object — never `opacity` on the fill. This modal disables on
+// `lineCount === 0`, a resting state, so its dimmed blue sat next to the other modal's
+// full-strength blue in the report. Same hex, two opacities.
+const btnPrimaryDisabled = { ...MODAL_STYLES.btnSaveDisabled, width: 'auto', display: 'inline-flex', gap: 6 };
