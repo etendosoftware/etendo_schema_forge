@@ -157,6 +157,31 @@ function isMissingRecordedSelection(purchase) {
     && !normalizeDataTransfer(purchase.dataTransfer);
 }
 
+function getPurchaseTransferSelection(purchase, explicitFallback) {
+  const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
+  if (!hasPersistedDemoSource) {
+    return { selectedTransfer: null, hasMissingRecordedSelection: false };
+  }
+  return {
+    selectedTransfer: purchaseDataTransfer(purchase, explicitFallback),
+    hasMissingRecordedSelection: isMissingRecordedSelection(purchase),
+  };
+}
+
+async function pollExistingPurchase(baseUrl, purchaseId) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    try {
+      const current = await getBillingPurchase(baseUrl, purchaseId);
+      if (current?.status === 'PROVISIONED' || current?.status === 'PAID') return current;
+      if (current?.status !== 'PROVISIONING') break;
+    } catch {
+      // Keep polling; the purchase remains durable and another request can recover it.
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  return null;
+}
+
 async function waitForCheckoutPayment({ baseUrl, requestId }) {
   let status = { status: 'pending' };
   for (let attempt = 0; attempt < 60 && status.status === 'pending'; attempt += 1) {
@@ -688,11 +713,11 @@ export default function UpgradePage() {
     }
     // Only a purchase with a persisted demo source carries a transfer; the recorded selection
     // stays authoritative over the local choice.
-    const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
-    const selectedTransfer = hasPersistedDemoSource
-      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
-      : null;
-    setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
+    const { selectedTransfer, hasMissingRecordedSelection } = getPurchaseTransferSelection(
+      purchase,
+      dataTransferChosen ? dataTransfer : null
+    );
+    setTransferWarning(hasMissingRecordedSelection);
     setResumingPurchaseId(purchase.purchaseId);
     setProvisioningPurchaseId(purchase.purchaseId);
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
@@ -717,35 +742,27 @@ export default function UpgradePage() {
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setPhase('running');
     setProvisioningPurchaseId(purchase.purchaseId);
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      try {
-        const current = await getBillingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
-        if (current?.status === 'PROVISIONED') {
-          await resetFirstStepsAfterProvisioning(apiFetch, purchase.purchaseId);
-          const createdClientId = String(current.createdClientId || current.clientId || '').trim();
-          setProvisionedClientId(createdClientId);
-          setProvisioningPurchaseId(purchase.purchaseId);
-          const environmentIsListed = await syncProvisionedEnvironment(createdClientId);
-          setPhase(environmentIsListed ? 'success' : 'syncing-environment');
-          return;
-        }
-        if (current?.status === 'PAID') {
-          await resumePaidPurchase(current);
-          return;
-        }
-        if (current?.status !== 'PROVISIONING') break;
-      } catch {
-        // Keep polling; the purchase remains durable and another request can recover it.
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    const current = await pollExistingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
+    if (current?.status === 'PROVISIONED') {
+      await resetFirstStepsAfterProvisioning(apiFetch, purchase.purchaseId);
+      const createdClientId = String(current.createdClientId || current.clientId || '').trim();
+      setProvisionedClientId(createdClientId);
+      setProvisioningPurchaseId(purchase.purchaseId);
+      const environmentIsListed = await syncProvisionedEnvironment(createdClientId);
+      setPhase(environmentIsListed ? 'success' : 'syncing-environment');
+      return;
+    }
+    if (current?.status === 'PAID') {
+      await resumePaidPurchase(current);
+      return;
     }
     // Only a purchase with a persisted demo source carries a transfer; the recorded selection
     // stays authoritative over the local choice.
-    const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
-    const selectedTransfer = hasPersistedDemoSource
-      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
-      : null;
-    setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
+    const { selectedTransfer, hasMissingRecordedSelection } = getPurchaseTransferSelection(
+      purchase,
+      dataTransferChosen ? dataTransfer : null
+    );
+    setTransferWarning(hasMissingRecordedSelection);
     setPendingProvisioning({
       clientName: purchase.clientName,
       paymentToken: purchase.purchaseId,
@@ -790,9 +807,14 @@ export default function UpgradePage() {
         // Preserve the current environment's name; only use a demo fallback when there is one.
         // The source itself remains an explicit ID choice when the current environment is not a demo.
         const currentIsProductive = Boolean(current && isProductiveEnvironment(current));
-        const prefillName = currentIsProductive
-          ? ''
-          : current?.clientName || (demos.length === 1 ? demos[0].clientName : '');
+        let prefillName = '';
+        if (!currentIsProductive) {
+          if (current?.clientName) {
+            prefillName = current.clientName;
+          } else if (demos.length === 1) {
+            prefillName = demos[0].clientName;
+          }
+        }
         if (prefillName) {
           setForm(previous => previous.tenantName
             ? previous
