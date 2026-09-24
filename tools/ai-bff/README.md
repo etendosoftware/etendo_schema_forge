@@ -1,9 +1,47 @@
 # Local AI BFF
 
 The BFF keeps the OpenCode Go credential server-side and forwards only the
-current browser session Bearer token to Etendo Go's MCP endpoint. The existing
+current browser session credential to Etendo Go's MCP endpoint. The existing
 Copilot popup calls this BFF when the `webmcp-agent-chat` feature flag is on;
 when it is off, the legacy Copilot API remains unchanged.
+
+## The forwarded credential: two schemes, three headers
+
+Etendo Go issues one of two session schemes (ETP-4575/4576) and the SPA resolves
+which one is active from whether the backend handed it a CSRF token:
+
+| Scheme | What the browser sends | What the BFF forwards |
+|---|---|---|
+| `bearer` | `Authorization: Bearer <jwt>` | `Authorization` |
+| `cookie` | `__Host-go_session` cookie + `X-Go-CSRF` | `Cookie` (the session cookie only), `X-Go-CSRF`, `Origin`, `Referer` |
+
+Under `cookie` the client holds **no token at all** — `authHeaders()` deliberately
+sends nothing and lets the `__Host-` cookie travel on its own. A BFF that gates on
+`Authorization: Bearer` therefore rejects every in-app conversation with a 401 that
+reads like an expired login, while every other request in the app keeps working.
+That is what `sessionCredentials()` exists to prevent; it accepts either scheme and
+returns `null` only when neither is present.
+
+`Origin` is the one that is easy to drop and expensive to debug. The chat POST is an
+unsafe method, so `GoSessionSecurity.isUnsafeRequestAuthorized()` requires a valid
+`X-Go-CSRF` **and** an allowlisted origin, and the origin check fails closed. Losing
+the header turns the 401 into a `403 CSRF validation failed`, which reads like an
+unrelated second bug. It is forwarded verbatim rather than reconstructed, because the
+backend compares it exactly (`CorsUtils.isAllowedOrigin`).
+
+Only the session cookie is forwarded, never the whole jar: `ETENDO_MCP_URL` is
+configuration, so passing the browser's full `Cookie` header would hand every unrelated
+cookie it happens to hold to whatever that variable points at.
+
+A missing CSRF proof is **not** rejected here: this process proxies a credential, it is
+not a second authority on it, so the caller gets Etendo Go's own 403 rather than a
+lookalike invented one hop earlier.
+
+**Deployment note.** `isAllowedOrigin` accepts the request's own origin plus a
+localhost allowlist, so local dev (`http://localhost:3100`) works out of the box. When
+the BFF reaches Etendo over an internal URL, the browser's origin is not the backend's
+own, so that origin must be listed in `ETGO_ALLOWED_ORIGINS` (or the
+`etgo.allowed.origins` system property) on the Etendo side.
 
 Copy `.env.example` to `.env` and set:
 

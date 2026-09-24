@@ -111,7 +111,12 @@ const MENU_ACCESS_CACHE_TTL_MS = 3_000;
 const MENU_ACCESS_FAILURE_TTL_MS = 60_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
-const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;
+// [ETP-5395] This only guards against a request that never answers, so it must sit far
+// above real latency: a timed-out race fails OPEN (the full, unfiltered sidebar). At 1s,
+// production (app.etendo.ai) answered SFListMenu correctly for a Purchasing role but a bit
+// later than that, and every load showed every menu entry. 10s stays well under the test
+// timeout above and well over any healthy answer.
+const MENU_ACCESS_FETCH_TIMEOUT_MS = 10_000;
 let menuAccessCache = null; // { value, expiresAt } | null
 let menuAccessInFlight = null;
 
@@ -122,7 +127,7 @@ async function fetchMenuAccess() {
   if (menuAccessInFlight) {
     return menuAccessInFlight;
   }
-  menuAccessInFlight = (async () => {
+  const request = (async () => {
     let value;
     let ttl;
     try {
@@ -139,9 +144,12 @@ async function fetchMenuAccess() {
     menuAccessCache = { value, expiresAt: Date.now() + ttl };
     return value;
   })().finally(() => {
-    menuAccessInFlight = null;
+    // Only clear our own slot: a request abandoned by the timeout below may settle after a
+    // newer one took its place.
+    if (menuAccessInFlight === request) menuAccessInFlight = null;
   });
-  return menuAccessInFlight;
+  menuAccessInFlight = request;
+  return request;
 }
 
 async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
@@ -150,7 +158,15 @@ async function resolveMenuAccessWithoutBlocking(menuAccessPromise) {
     timeoutId = setTimeout(() => {
       // ETP-5375 — same reason as the catch branch above: a timed-out race must not be
       // reported as a confirmed-empty allow set.
-      resolve({ [MENU_ACCESS_UNREACHABLE]: true });
+      const unreachable = { [MENU_ACCESS_UNREACHABLE]: true };
+      // [ETP-5395] Treat the timeout as the failure it is: cache it for the failure TTL and
+      // drop the stuck request, or every later load (focus, the 5-min poll) joins it and waits
+      // the full timeout again. If the stuck request does answer later, its result still
+      // replaces this cache entry.
+      // Callers arriving while a request is pending join it, so the pending one is the stuck one.
+      menuAccessInFlight = null;
+      menuAccessCache = { value: unreachable, expiresAt: Date.now() + MENU_ACCESS_FAILURE_TTL_MS };
+      resolve(unreachable);
     }, MENU_ACCESS_FETCH_TIMEOUT_MS);
   });
   try {
