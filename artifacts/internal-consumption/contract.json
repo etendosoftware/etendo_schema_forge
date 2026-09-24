@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-09-01T16:56:21.623Z",
-  "checksum": "ff782f46b2d85db9",
+  "updatedAt": "2026-09-24T10:36:51.328Z",
+  "checksum": "ff1839a5fe3de5a5",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -65,7 +65,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -87,7 +87,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
