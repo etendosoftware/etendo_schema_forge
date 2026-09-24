@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { render, screen, waitFor, within, act } from '@testing-library/react';
+import { render, screen, waitFor, within, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -42,9 +42,10 @@ vi.mock('@/components/ui/dialog', () => ({
 
 // Stub the date field with a native date input that forwards the test id and
 // emits the ISO value through onChange (the real component emits "YYYY-MM-DD").
+// `className` is forwarded so the invalid-border flag (ETP-5447) is observable.
 vi.mock('@/components/ui/date-field', () => ({
-  DateField: ({ value, onChange, 'data-testid': dataTestId }) => (
-    <input type="date" value={value || ''} data-testid={dataTestId}
+  DateField: ({ value, onChange, className, 'data-testid': dataTestId }) => (
+    <input type="date" value={value || ''} data-testid={dataTestId} className={className}
       onChange={(e) => onChange?.(e.target.value)} />
   ),
 }));
@@ -195,12 +196,15 @@ describe('ManualStatementModal', () => {
     expect(screen.getAllByTestId('manual-line-editrow')).toHaveLength(1);
   });
 
-  it('blocks saving with a blank name and surfaces an error toast', async () => {
+  it('blocks saving with a blank name and flags it inline instead of with a toast', async () => {
     const user = userEvent.setup();
     renderModal();
     await fillFirstLine(user, { ref: 'REF-1', in: '100' });
     await user.click(screen.getByTestId('manual-statement-save'));
-    expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorName');
+    const error = screen.getByTestId('manual-statement-name-error');
+    expect(error).toHaveTextContent('fieldRequired');
+    expect(error).toHaveAttribute('role', 'alert');
+    expect(toastError).not.toHaveBeenCalled();
     expect(createStatement).not.toHaveBeenCalled();
   });
 
@@ -627,6 +631,286 @@ describe('ManualStatementModal', () => {
     expect(screen.queryByTestId('manual-discard-overlay')).not.toBeInTheDocument();
     expect(props.onClose).not.toHaveBeenCalled();
     expect(screen.getByTestId('manual-statement-name')).toHaveValue('Algo');
+  });
+
+  /**
+   * ETP-5447 — both header dates are required. They still start pre-filled with today, but the
+   * user can clear them (the real DateField emits '' on "Borrar" and when its text is emptied
+   * and blurred; the stub above emits '' when its value is set to empty). The backend used to
+   * replace a blank date with today, silently, so a cleared field saved as if nothing happened;
+   * it now answers 400, and the modal must stop the save before it gets that far — flagging
+   * every missing header field inline (no toast), all at once.
+   */
+  describe('ETP-5447 header dates are required', () => {
+    const EDITED = {
+      id: 'st-7', name: 'Extracto junio', documentNo: '1000030',
+      transactionDate: '2026-06-10T00:00:00Z', importDate: '2026-06-11T00:00:00Z',
+      fileName: '', notes: '',
+    };
+    const EDITED_LINE = {
+      id: 'ln-7', date: '2026-06-09T00:00:00Z', reference: 'REF7', description: '',
+      bpartnerName: 'Acme', bpartnerId: null, bpartnerFkName: '', glItemId: null, glItemName: '',
+      in: 120, out: 0,
+    };
+
+    /** Today as the modal seeds it: local calendar getters, `yyyy-MM-dd`. */
+    function localToday() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function setDate(testId, value) {
+      fireEvent.change(screen.getByTestId(testId), { target: { value } });
+    }
+
+    /** A create-mode modal with a valid name and one complete line: only the dates can block it. */
+    async function renderValidCreate(user) {
+      renderModal();
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await fillFirstLine(user, { ref: 'REF-1', in: '100' });
+    }
+
+    /** An edit-mode modal hydrated from a valid draft: only the dates can block it. */
+    async function renderValidEdit() {
+      linesRef.value = [EDITED_LINE];
+      renderModal({ statement: EDITED });
+      await waitFor(() => expect(screen.getByTestId('manual-statement-name')).toHaveValue('Extracto junio'));
+      await waitFor(() => expect(within(firstEditRow()).getByTestId('manual-line-ref')).toHaveValue('REF7'));
+    }
+
+    function expectNothingSent() {
+      expect(createStatement).not.toHaveBeenCalled();
+      expect(updateStatement).not.toHaveBeenCalled();
+    }
+
+    it('still pre-fills both header dates with today on a new statement', () => {
+      renderModal();
+      expect(screen.getByTestId('manual-statement-trxdate')).toHaveValue(localToday());
+      expect(screen.getByTestId('manual-statement-importdate')).toHaveValue(localToday());
+    });
+
+    /**
+     * Header required fields are flagged INLINE under each control (FieldRow's `role="alert"`
+     * paragraph, the same markup the generated forms use), never with a toast, and all of them
+     * at once: the user sees every missing field on the first save attempt. The `ui` mock
+     * returns the key, so the rendered message is the `fieldRequired` key itself.
+     */
+    const ERROR_IDS = {
+      name: 'manual-statement-name-error',
+      trx: 'manual-statement-trxdate-error',
+      imp: 'manual-statement-importdate-error',
+    };
+
+    function expectInlineError(testId) {
+      const el = screen.getByTestId(testId);
+      expect(el).toHaveTextContent('fieldRequired');
+      expect(el).toHaveAttribute('role', 'alert');
+    }
+
+    function expectNoInlineError(testId) {
+      expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+    }
+
+    it('renders no inline error on first open', () => {
+      renderModal();
+      Object.values(ERROR_IDS).forEach(expectNoInlineError);
+      expect(screen.getByTestId('manual-statement-name')).not.toHaveAttribute('aria-invalid');
+      expect(screen.getByTestId('manual-statement-trxdate')).not.toHaveClass('border-destructive');
+      expect(screen.getByTestId('manual-statement-importdate')).not.toHaveClass('border-destructive');
+    });
+
+    it('TC3: flags a cleared transaction date inline on a new statement and sends nothing', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.trx);
+      expect(screen.getByTestId('manual-statement-trxdate')).toHaveClass('border-destructive');
+      expectNoInlineError(ERROR_IDS.imp);
+      expectNoInlineError(ERROR_IDS.name);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('TC3: flags a cleared transaction date inline on an edited draft and sends nothing', async () => {
+      const user = userEvent.setup();
+      await renderValidEdit();
+      setDate('manual-statement-trxdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.trx);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('TC3: blocks the save-as-draft path too when the transaction date was cleared', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '');
+      await user.click(screen.getByTestId('manual-statement-save-split'));
+      await user.click(screen.getByTestId('manual-statement-save-draft'));
+      expectInlineError(ERROR_IDS.trx);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('TC4: flags a cleared import date inline on a new statement and sends nothing', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.imp);
+      expect(screen.getByTestId('manual-statement-importdate')).toHaveClass('border-destructive');
+      expectNoInlineError(ERROR_IDS.trx);
+      expectNoInlineError(ERROR_IDS.name);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('TC4: flags a cleared import date inline on an edited draft and sends nothing', async () => {
+      const user = userEvent.setup();
+      await renderValidEdit();
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.imp);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('flags both cleared dates at once, not one per save attempt', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '');
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.trx);
+      expectInlineError(ERROR_IDS.imp);
+      expectNoInlineError(ERROR_IDS.name);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('flags name and both dates at once when all three are missing', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await fillFirstLine(user, { ref: 'REF-1', in: '100' });
+      setDate('manual-statement-trxdate', '');
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.name);
+      expectInlineError(ERROR_IDS.trx);
+      expectInlineError(ERROR_IDS.imp);
+      expect(screen.getAllByRole('alert')).toHaveLength(3);
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+    });
+
+    it('does not reach the line validation while the header is invalid', async () => {
+      // Blank name AND no usable line: only the inline header error shows; the line toast
+      // fires only once the header is valid.
+      const user = userEvent.setup();
+      renderModal();
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.name);
+      expect(toastError).not.toHaveBeenCalled();
+
+      await user.type(screen.getByTestId('manual-statement-name'), 'Extracto manual');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(toastError).toHaveBeenCalledWith('financeAccountStatementsManualErrorLines');
+      expectNothingSent();
+    });
+
+    it('marks the name input aria-invalid with the destructive border when flagged', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await fillFirstLine(user, { ref: 'REF-1', in: '100' });
+      await user.click(screen.getByTestId('manual-statement-save'));
+      const name = screen.getByTestId('manual-statement-name');
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveClass('border-destructive');
+    });
+
+    it('keeps the Save button enabled while header errors are shown', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.name);
+      expect(screen.getByTestId('manual-statement-save')).toBeEnabled();
+    });
+
+    it('typing a name clears only the name error', async () => {
+      const user = userEvent.setup();
+      renderModal();
+      setDate('manual-statement-trxdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.name);
+      expectInlineError(ERROR_IDS.trx);
+
+      await user.type(screen.getByTestId('manual-statement-name'), 'E');
+      expectNoInlineError(ERROR_IDS.name);
+      expect(screen.getByTestId('manual-statement-name')).not.toHaveAttribute('aria-invalid');
+      expectInlineError(ERROR_IDS.trx);
+    });
+
+    it('picking a cleared date again clears only that date error', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '');
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expectInlineError(ERROR_IDS.trx);
+      expectInlineError(ERROR_IDS.imp);
+
+      setDate('manual-statement-trxdate', '2025-04-01');
+      expectNoInlineError(ERROR_IDS.trx);
+      expect(screen.getByTestId('manual-statement-trxdate')).not.toHaveClass('border-destructive');
+      expectInlineError(ERROR_IDS.imp);
+      expect(screen.getByTestId('manual-statement-importdate')).toHaveClass('border-destructive');
+    });
+
+    it('clears every inline error when the modal is closed and reopened', async () => {
+      const user = userEvent.setup();
+      const { rerender, props } = renderModal();
+      setDate('manual-statement-trxdate', '');
+      setDate('manual-statement-importdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(screen.getAllByRole('alert')).toHaveLength(3);
+
+      rerender(<ManualStatementModal {...props} open={false} />);
+      rerender(<ManualStatementModal {...props} open />);
+
+      await waitFor(() => Object.values(ERROR_IDS).forEach(expectNoInlineError));
+      expect(screen.getByTestId('manual-statement-name')).not.toHaveAttribute('aria-invalid');
+      expect(screen.getByTestId('manual-statement-trxdate')).not.toHaveClass('border-destructive');
+    });
+
+    it('TC5: sends exactly the chosen calendar days as UTC midnight', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '2025-03-15');
+      setDate('manual-statement-importdate', '2025-03-20');
+      await user.click(screen.getByTestId('manual-statement-save'));
+
+      await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
+      const payload = createStatement.mock.calls[0][0];
+      expect(payload.transactionDate).toBe('2025-03-15T00:00:00Z');
+      expect(payload.importDate).toBe('2025-03-20T00:00:00Z');
+      expect(toastError).not.toHaveBeenCalled();
+    });
+
+    it('saves normally once a cleared date is picked again', async () => {
+      const user = userEvent.setup();
+      await renderValidCreate(user);
+      setDate('manual-statement-trxdate', '');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      expect(screen.getByTestId('manual-statement-trxdate-error')).toHaveTextContent('fieldRequired');
+      expect(toastError).not.toHaveBeenCalled();
+      expectNothingSent();
+
+      setDate('manual-statement-trxdate', '2025-04-01');
+      await user.click(screen.getByTestId('manual-statement-save'));
+      await waitFor(() => expect(createStatement).toHaveBeenCalledTimes(1));
+      expect(createStatement.mock.calls[0][0].transactionDate).toBe('2025-04-01T00:00:00Z');
+    });
   });
 
   describe('edit mode', () => {
