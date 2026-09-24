@@ -118,6 +118,33 @@ describe('QuotationConfirmModal', () => {
     });
   });
 
+  // ETP-5398 — the modal was rebuilt to the design frame: a named title, the two choices
+  // side by side, and one generic "Continuar" on the primary instead of repeating the
+  // chosen document on the button.
+  describe('design frame (ETP-5398)', () => {
+    it('titles the modal with its own key, not the bare confirm label', () => {
+      assert.match(src, /style=\{MODAL_STYLES\.title\}>\{ui\('sqConfirmSaleTitle'\)\}/);
+    });
+
+    it('labels the primary Continuar and leads it with the arrow glyph', () => {
+      assert.match(src, /\{!loading && <span aria-hidden="true">→<\/span>\}/);
+      assert.match(src, /ui\('soProcessing'\) : ui\('continue'\)/);
+    });
+
+    it('no longer names the target document on the primary button', () => {
+      assert.doesNotMatch(src, /sqConfirmActionOrder|soConfirmActionInvoice/);
+    });
+
+    it('keeps both option testIds, which four E2E specs click', () => {
+      assert.match(src, /testId="confirm-option-order"/);
+      assert.match(src, /testId="confirm-option-invoice"/);
+    });
+
+    it('keeps the confirm testId the E2E specs press', () => {
+      assert.match(src, /data-testid="action-confirm-modal"/);
+    });
+  });
+
   describe('i18n', () => {
     it('uses the useUI() hook for translations', () => {
       assert.match(src, /from\s+['"]@\/i18n['"]/);

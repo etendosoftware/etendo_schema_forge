@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
+import { ActionModalSummary, ActionModalBanner } from '@/components/contract-ui/ActionModalSummary.jsx';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -9,6 +11,7 @@ export default function SendToEvaluationModal({
   token,
   apiBaseUrl,
   onClose,
+  onRefresh,
 }) {
   const ui = useUI();
   const [loading, setLoading] = useState(false);
@@ -73,6 +76,31 @@ export default function SendToEvaluationModal({
   const grandTotal    = grossBase;
   const currency       = d['currency$_identifier'] || '';
 
+  // ETP-5398 — the summary strip's columns. The two testIds are unchanged and still land
+  // on the amounts: two E2E specs read their text.
+  const summaryItems = [
+    { label: ui('quotationDocumentLabel'), value: documentNo },
+    { label: ui('contact'), value: bpName },
+    { label: ui('lines'), value: lineCount ?? '…' },
+    { label: ui('soSubtotal'), value: formatCurrency(currency, totalLines), testId: 'confirm-summary-subtotal' },
+    { label: ui('total'), value: formatCurrency(currency, grandTotal), testId: 'confirm-summary-total' },
+  ];
+
+  // The DR → UE transition only changes the header's status, which drives the badge and
+  // the readonly logic — exactly what `onRefresh` refetches. A full page reload threw away
+  // the SPA boot, the scroll position and any open panel to show that one badge. Same fix
+  // QuotationConfirmModal already carries (ETP-4779).
+  //
+  // The reload stays as the fallback so a mount that has not wired the prop keeps working
+  // as before rather than silently leaving a stale screen.
+  const refreshAfterTransition = () => {
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+    window.location.reload();
+  };
+
   const handleConfirm = async () => {
     if (loading) return;
     if (lineCount === 0) {
@@ -92,7 +120,7 @@ export default function SendToEvaluationModal({
         throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('sqNoLinesError') : rawMsg);
       }
       onClose();
-      window.location.reload();
+      refreshAfterTransition();
     } catch (err) {
       setError(err.message || ui('soErrorOccurred'));
       setLoading(false);
@@ -103,63 +131,36 @@ export default function SendToEvaluationModal({
     <div onClick={onClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={cardStyle}>
 
-        <div style={{ padding: '14px 16px 0', position: 'relative' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              position: 'absolute', top: 10, right: 12,
-              fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
-            }}
-          >
+        {/* ETP-5398 — the title is the ACTION, not the document reference. The document
+            number moved into the summary strip below, where it reads as one more column
+            alongside the contact and the amounts. */}
+        <div style={headerStyle}>
+          <span style={MODAL_STYLES.title}>{ui('sqSendToEvalConfirm')}</span>
+          <button type="button" onClick={onClose} aria-label={ui('cancel')} style={MODAL_STYLES.closeBtn}>
             &times;
           </button>
-          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
-            {ui('quotationDocumentLabel')} #{documentNo}
-          </div>
-          <div style={{
-            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
-            padding: '14px 16px', marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
-              {bpName}
-            </div>
-            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {formatCurrency(currency, grandTotal)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
-            </div>
-          </div>
         </div>
 
-        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid hsl(var(--card))' }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))', marginBottom: 4 }}>
-            {ui('sqSendToEvalTitle')}
-          </div>
-          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
-            {ui('sqSendToEvalDesc')}
-          </div>
+        <div style={bodyStyle}>
+          <ActionModalSummary items={summaryItems} />
+          <ActionModalBanner>{ui('sqSendToEvalDesc')}</ActionModalBanner>
         </div>
 
         {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
+          <div style={{ padding: '8px 20px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
+        {/* Footer is space-between: Cancelar anchors left, the primary right. No padding
+            on top: the body's own 20px bottom padding is the gap to the banner. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '0 20px 20px' }}>
           <button type="button" onClick={onClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            style={{ ...btnSecondary, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
           </button>
           <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading || lineCount === 0}
-            style={{
-              ...btnPrimary,
-              opacity: loading || lineCount === 0 ? 0.5 : 1, cursor: loading || lineCount === 0 ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
+            style={loading || lineCount === 0 ? btnPrimaryDisabled : btnPrimary}>
             {loading && (
               <svg style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }}
                 viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -168,8 +169,10 @@ export default function SendToEvaluationModal({
             )}
             {loading ? ui('soProcessing') : ui('sqSendToEvalConfirm')}
           </button>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
+        {/* Outside the footer on purpose: it is a flex child there, and under
+            `space-between` a third child pushes the primary button to the centre. */}
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );
@@ -181,18 +184,32 @@ const overlayStyle = {
   backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
+// ETP-5398 — widened from 460: the summary strip carries five columns now, and the
+// contact name is the one that overflows first. Widths stay per-modal, not normalised.
 const cardStyle = {
-  width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
+  width: 620, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+  overflow: 'hidden', borderRadius: 8, backgroundColor: 'hsl(var(--card))',
+  boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))',
 };
 
-const btnSecondary = {
-  fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
+// The divider belongs under the header, not above the footer.
+const headerStyle = {
+  display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  gap: 20, padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))',
 };
 
-const btnPrimary = {
-  fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
+const bodyStyle = {
+  display: 'flex', flexDirection: 'column', gap: 16, padding: '20px',
 };
+
+// ETP-5398 — buttons come from MODAL_STYLES, the canonical action-modal palette. See the
+// matching comment in QuotationConfirmModal: same edits, these two style blocks were
+// byte-identical. `width: 'auto'` overrides the per-frame widths MODAL_STYLES pins.
+const btnSecondary = { ...MODAL_STYLES.btnCancel, width: 'auto' };
+
+const btnPrimary = { ...MODAL_STYLES.btnSaveEnabled, width: 'auto', display: 'inline-flex', gap: 6 };
+
+// Disabled swaps the whole object — never `opacity` on the fill. This modal disables on
+// `lineCount === 0`, a resting state, so its dimmed blue sat next to the other modal's
+// full-strength blue in the report. Same hex, two opacities.
+const btnPrimaryDisabled = { ...MODAL_STYLES.btnSaveDisabled, width: 'auto', display: 'inline-flex', gap: 6 };

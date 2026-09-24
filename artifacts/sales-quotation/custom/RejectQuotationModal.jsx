@@ -152,7 +152,10 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2"
+          {/* ETP-5398 — the close X is `--muted-foreground`, the role tuned for WCAG AA, not
+              `--icon-secondary` (decorative icons). The chevron and the input's clear button
+              below stay on `--icon-secondary`: those ARE decorative. */}
+          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="hsl(var(--muted-foreground))" strokeWidth="2"
                strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 5l10 10M15 5l-10 10" />
           </svg>

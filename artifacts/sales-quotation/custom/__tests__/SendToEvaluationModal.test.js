@@ -29,12 +29,17 @@ describe('SendToEvaluationModal', () => {
     assert.match(src, /onClose\(\)/);
   });
 
-  it('renders sqSendToEvalTitle i18n key', () => {
-    assert.match(src, /sqSendToEvalTitle/);
+  // ETP-5398 — the modal title is now the ACTION name, which is what the Figma frame
+  // shows, so it reuses `sqSendToEvalConfirm` (the same wording as the primary button).
+  // `sqSendToEvalTitle` ("¿Enviar a Bajo Evaluación?") is no longer rendered: the frame
+  // has no such line. The key is left in the locale catalogs, unused.
+  it('titles the modal with the action name, not the question form', () => {
+    assert.match(src, /style=\{MODAL_STYLES\.title\}>\{ui\('sqSendToEvalConfirm'\)\}/);
+    assert.doesNotMatch(src, /sqSendToEvalTitle/);
   });
 
-  it('renders sqSendToEvalDesc i18n key', () => {
-    assert.match(src, /sqSendToEvalDesc/);
+  it('renders sqSendToEvalDesc i18n key inside the info banner', () => {
+    assert.match(src, /ActionModalBanner>\{ui\('sqSendToEvalDesc'\)\}/);
   });
 
   it('renders sqSendToEvalConfirm i18n key on confirm button', () => {
