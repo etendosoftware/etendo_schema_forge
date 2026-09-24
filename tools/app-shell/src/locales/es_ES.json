@@ -21975,6 +21975,8 @@
     "fm.sources.col.vat": "Cuota",
     "fm.sources.col.total": "Total",
     "fm.sources.col.boxes": "Casillas",
+    "fm.sources.type.accrued": "IVA Devengado",
+    "fm.sources.type.deductible": "IVA Deducible",
     "fm.sources.filter.incidents": "Con incidencias",
     "fm.files.title": "Ficheros",
     "fm.files.empty": "Sin fichero generado",

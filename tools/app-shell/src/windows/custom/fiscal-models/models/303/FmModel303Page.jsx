@@ -22,7 +22,7 @@ import {
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
   clampNegativeOverrides, buildValidatedBoxValue,
 } from '../../fiscalModelsUtils.js';
-import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
+import { getCachedFiscalCompute, invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -639,6 +639,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // changed, not the fire-and-forget nature of the persist.
   async function handleComputeClick() {
     const nextManualOverrides = await handleCompute();
+    // ETP-5456 — `handleCompute` just resolved a LIVE backend recompute, which can disagree with
+    // whatever `FmListPage`'s `useFiscalAutoCompute` last wrote to sessionStorage for this
+    // declaration (e.g. the cache predates a backend calculation-logic deploy, which
+    // `checkModified303` has no way to detect — it only tracks invoice changes). Dropping the
+    // cached entry here forces the NEXT mount of this declaration (from the list) to recompute
+    // from the server instead of restoring the now-stale cached payload. Placed after the await
+    // resolves (never before, never in a catch) so a failed/thrown compute leaves the cache
+    // untouched.
+    invalidateFiscalComputeCache(decl.id);
     persistEditableFields({ manualOverridesOverride: nextManualOverrides }).then(({ ok }) => {
       if (!ok) toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
     });
@@ -864,6 +873,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
     const { ok } = await persistEditableFields();
     if (ok) {
+      // ETP-5456 — same rationale as `handleComputeClick` above: an explicit save can persist a
+      // `manualOverrides` snapshot that changes what a later live recompute would return, so the
+      // cached payload for this declaration must not survive to be restored on the next visit.
+      // Gated on `ok` (never on the catch/error path) — a failed save must leave any existing
+      // cache exactly as it was.
+      invalidateFiscalComputeCache(decl.id);
       toast.success(t('recordSaved') ?? 'Registro guardado');
     } else {
       toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');

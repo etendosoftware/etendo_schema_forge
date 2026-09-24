@@ -467,37 +467,87 @@ exercise the blank-render path in manual QA).
 
 ### Sources tab — intra-EU acquisition invoices no longer double-counted (ETP-5456)
 
-**Confirmed bug, Modelo 303 only** — Modelo 349's `AEAT3492010ReportDao` already handled this
-correctly (see below), so this was a 303-only gap. A Spanish intra-EU acquisition (adquisición
-intracomunitaria) is reverse-charge: the SAME purchase invoice posts TWO `C_INVOICETAX` lines over
-the SAME taxable base — an output/devengado line (feeds boxes 10/11, `VAT_SALES_EU` in
+**Confirmed bug, Modelo 303 only** — Modelo 349's `AEAT3492010ReportDao` already handled the
+equivalent case correctly, so this was a 303-only gap. A Spanish intra-EU acquisition (adquisición
+intracomunitaria) — and, identically in shape, a domestic reverse-charge/ISP operation — is
+reverse-charge: the SAME purchase invoice posts TWO `C_INVOICETAX` lines over the SAME taxable
+base — an output/devengado line (feeds boxes 10/11, `VAT_SALES_EU` in
 `Fiscal303BoxesHandler#fillSalesBoxes`) and an input/soportado deductible line (feeds boxes 36/37
 `Intracommunity_Goods`, or 38/39 `Intracommunity_Investments`, in `#fillPurchaseBoxes`). Before this
 fix, `Fiscal303SourcesSupport#accumulateInvoiceTax` summed every matching `C_INVOICETAX` line into
-the invoice's `SourcesTab` row unconditionally, so an affected invoice showed base/vat/total exactly
-doubled — e.g. a real base 100,00€ / cuota 21,00€ (21%) / total 121,00€ invoice rendered as
+ONE invoice row unconditionally, so an affected invoice showed base/vat/total exactly doubled —
+e.g. a real base 100,00€ / cuota 21,00€ (21%) / total 121,00€ invoice rendered as
 200,00€/42,00€/242,00€ in the "Facturas" tab.
 
-**Fix, scoped to display aggregation only.** `Fiscal303SourcesSupport` now halves a tax line's
-base/tax contribution to its invoice row when that line's mapped boxes fall in
-`REVERSE_CHARGE_PAIRED_BOXES = {10, 11, 36, 37, 38, 39}` — mirroring
-`org.openbravo.module.aeat349.es.AEAT3492010ReportDao#getTaxBaseAmountPerBusinessPartner`, whose
-javadoc documents the identical domain fact ("An Intracommunity purchase invoice line has two tax
-rates with the same rate but with opposite sign") and halves each paired line so summing both nets
-back to the real single amount. **The casilla (box) computation path is untouched** —
-`fillGroupBoxes`/`applyPercentageSplit` (which feed boxes 10/11/36/37/38/39 themselves) still use
-each tax line's FULL individual amount, exactly once per box, which is correct AEAT behavior; only
-the per-invoice `sources` row this class builds for the "Facturas" tab was over-summing. A normal
-domestic invoice (single tax line, boxes outside that set — e.g. 7/9 regimen general) is provably
-unaffected: it never touches the reverse-charge box set, so no halving applies.
+**Discarded intermediate fix — halving.** A first pass halved a tax line's base/tax contribution
+whenever its mapped boxes fell in a hardcoded `REVERSE_CHARGE_PAIRED_BOXES` set, mirroring
+`org.openbravo.module.aeat349.es.AEAT3492010ReportDao#getTaxBaseAmountPerBusinessPartner`. It
+shipped, then was discarded for three reasons found in code review/QA: (1) it silently halved an
+**unpaired** line too (a data-integrity edge case — only the devengado leg posted) to HALF its
+real amount instead of showing it in full or flagging it; (2) rounding to scale-2 after EACH
+accumulated line could push a halved total across a `.xx5` boundary and land on the wrong cent;
+(3) it collapsed the devengado and deducible sides into ONE row, so a user could never tell from
+the "Facturas" tab which side of the declaration an invoice's amount actually landed on — the two
+legs of an intra-EU acquisition are genuinely different declaration events, not duplicate views of
+the same one.
 
-Regression coverage: `Fiscal303SourcesSupportTest#testCollectSources_intraEuAcquisitionPairedLines_notDoubled`
-(two paired lines, base 20,00€/cuota 4,20€ each → row ends at 20,00€/4,20€/24,20€, not doubled) and
-`#testCollectSources_domesticInvoiceSingleLine_unaffected` (single non-paired line stays exactly as
-before). Full `Fiscal303*` suite (`Fiscal303BoxesHandlerTest`, `Fiscal303SourcesSupportTest`,
-`Fiscal303SubmitHandlerTest`) re-run green, confirming box totals were not disturbed. Manually
-validated end-to-end against a real intra-EU purchase invoice: boxes 10/11 and 36/37 each still show
-the full individual amount, and the Facturas tab now shows the correct non-duplicated row.
+**Final design — one row per (invoice, box set).** `Fiscal303SourcesSupport#collectSources` now
+groups by `(invoice id, display box set)` instead of by invoice alone. A line's box set comes from
+`rateToBoxes` (generic — already covers every tax family, no box list is hardcoded for this
+feature) redirected through `correctiveBoxesFor` when the invoice is corrective/rectificativa (see
+below). Two lines of the same invoice that resolve to the SAME box set still merge into one row;
+two lines that resolve to DIFFERENT box sets — the intra-EU/ISP devengado + deducible case —
+produce TWO rows, each showing the line's FULL (non-halved) amount, tagged with a machine `type`
+key: `"accrued"` (devengado, sales side) or `"deductible"` (soportado, purchase side) —
+`isPurchaseSideBoxes` decides which, generic over the box family via `PURCHASE_DEDUCTION_BOXES`/
+`PURCHASE_CORRECTIVE_BOXES`, not a fixed intra-EU list. The frontend (`FmTabContent.jsx`'s
+`SourcesTab`) translates the key via `typeLabel()` → `fm.sources.type.accrued` / `.deductible` (new
+`genericLabels` keys in `en_US.json`/`es_ES.json`: "Output VAT"/"IVA Devengado" and "Deductible
+VAT"/"IVA Deducible"), replacing the old hardcoded `"Venta"/"Compra"` label that used to be derived
+from the invoice's document category — a signal that no longer works once one invoice can produce
+rows on both sides.  **The casilla (box) computation path is untouched** —
+`fillGroupBoxes`/`applyPercentageSplit` (which feed boxes 10/11/36/37/38/39 themselves) still use
+each tax line's FULL individual amount, exactly once per box, which was always correct AEAT
+behavior; only this class's per-invoice `sources` row was ever over-summing.
+
+**Sign rule (separate PM-reported bug fixed in the same pass).** `accumulateInvoiceTax` used to
+`.abs()` both base and tax, which stripped the sign off a negative (rectificativa) row. It now
+keeps `taxableAmount`'s own sign on `base`, and re-signs `tax` (`.abs()`'d first, since a
+reverse-charge rate can be stored as e.g. `-21%`, an artifact of the rate itself, not a business
+sign) to match the base — mirroring `AEAT303CalculationsHelper#calculateNormalOperations` /
+`#calculateCorrectiveOperations` in the classic module, which is the source of truth for the real
+AEAT 303 file.
+
+**Corrective redirection.** When the invoice carrying a tax line is itself corrective (mirrors
+`AEAT303CalculationsHelper#calculateCorrectiveOperations` exactly — a reversal doc type or
+`ARC`/`APC` credit memo is always corrective; `ARI`/`API`/`ARI_RM` is corrective iff the line's
+taxable amount is negative), `correctiveBoxesFor` redirects the row's display boxes to the
+corrective pair the classic engine's aggregate totals actually use: régimen-general/EU/ISP sales
+(1/3/4/6/7/9/10/11/12/13/150/152/165/167) → 14/15; recargo de equivalencia
+(16/18/19/21/22/24/156/158/168/170) → 25/26; any purchase-deduction box (28/29 through 38/39) →
+40/41. This keeps the "Casillas" column consistent with what the AEAT file itself reports for a
+rectificativa, rather than diverging for a positive-amount corrective line.
+
+Regression coverage in `Fiscal303SourcesSupportTest`: paired intra-EU lines now assert 2 rows (one
+`accrued`, one `deductible`, each with the FULL amount); a domestic ISP reverse-charge case proves
+the grouping is generic over the box family, not hardcoded to intra-EU; a 3-lines-3-rows case and a
+mixed reverse-charge-pair-plus-normal-line case both confirm nothing merges across different box
+sets and nothing is halved; a negative rectificativa case confirms both rows keep their negative
+sign and land on the corrective box pair; the previously-documented "unpaired line silently halved"
+gap is now closed (full amount, single row). Full `Fiscal303*` suite re-run green.
+
+### Cache invalidation on Guardar/Calcular, Modelo 303 (ETP-5456 follow-up)
+
+Same root cause as the Modelo 349 VIES case documented further below (`useFiscalAutoCompute`'s
+`sessionStorage` cache is only invalidated by an invoice-change timestamp check, never by a change
+in the BACKEND's calculation logic itself) — but here the trigger is the row-per-side rewrite
+above: reopening a declaration after this backend deploy could still serve a stale cached payload
+computed under the OLD (doubled/halved) logic, since `checkModified303` has no way to detect a
+logic change. `FmModel303Page.jsx`'s `handleComputeClick` (Calcular) and `handleSave` (Guardar)
+both now call `invalidateFiscalComputeCache(decl.id)` — but only AFTER their own operation
+succeeds (after the `await` for Calcular, gated on `ok` for Guardar), so a failed compute/save
+leaves any existing cache entry untouched. Regression coverage:
+`models/303/__tests__/FmModel303Page.cacheInvalidation.vitest.jsx`.
 
 ### Duplicate-period warning and rectificativa gate (ETP-5187)
 

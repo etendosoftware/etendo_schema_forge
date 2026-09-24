@@ -21739,6 +21739,8 @@
     "fm.sources.col.vat": "VAT",
     "fm.sources.col.total": "Total",
     "fm.sources.col.boxes": "Boxes",
+    "fm.sources.type.accrued": "Output VAT",
+    "fm.sources.type.deductible": "Deductible VAT",
     "fm.sources.filter.incidents": "With incidents",
     "fm.files.title": "Files",
     "fm.files.empty": "No file generated",
