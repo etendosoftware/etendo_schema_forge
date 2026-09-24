@@ -95,6 +95,15 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
   }, [apiBaseUrl]);
 
   const hasSubscription = subscription?.hasSubscription === true;
+  const normalizedAmount = subscription
+    ? minorUnitsToAmount(subscription.currency, subscription.amountMinor)
+    : null;
+  const subscriptionAmount = normalizedAmount
+    ? formatCurrency(subscription.currency, normalizedAmount.amount, {
+      minimumFractionDigits: normalizedAmount.fractionDigits,
+      maximumFractionDigits: normalizedAmount.fractionDigits,
+    })
+    : '—';
   const cancelsAtPeriodEnd = subscription?.cancelAtPeriodEnd === true;
   const renewalDate = subscription?.renewalAt
     ? formatCalendarDate(subscription.renewalAt, locale)
@@ -178,10 +187,7 @@ export function SubscriptionSection({ apiBaseUrl, 'data-testid': dataTestId }) {
                 className="text-sm text-muted-foreground"
                 data-testid="SubscriptionSection__amount"
               >
-                {formatCurrency(
-                  subscription.currency,
-                  minorUnitsToAmount(subscription.currency, subscription.amountMinor),
-                )}
+                {subscriptionAmount}
               </span>
             </div>
 
