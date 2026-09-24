@@ -81,7 +81,7 @@ export function useEnvironmentSwitch({
         if (!cancelled) setLoading(false);
       }
     };
-    void refreshEnvironments();
+    refreshEnvironments();
     window.addEventListener(ENVIRONMENT_LIST_REFRESH_EVENT, refreshEnvironments);
     return () => {
       cancelled = true;
