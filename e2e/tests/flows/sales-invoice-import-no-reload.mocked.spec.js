@@ -576,7 +576,7 @@ test.describe('Sales Invoice — Import from Source Invoice (ETP-4737)', () => {
 
     // Assertion: the quantity stepper displays a NEGATIVE value (negativeQuantity prop),
     // not a positive magnitude — checked on the selectable line (invoicedQuantity=3 → -3).
-    const qtyInputs = page.locator('input[type="number"]');
+    const qtyInputs = page.getByTestId('ImportLinesModal__qtyInput');
     await expect(qtyInputs.nth(1)).toHaveValue('-3', { timeout: 5_000 });
 
     // Select the selectable line and import it. Uses a native evaluate()-click (same

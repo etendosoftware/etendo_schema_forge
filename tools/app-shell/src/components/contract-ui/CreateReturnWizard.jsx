@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { formatCurrency } from '@/lib/formatCurrency.js';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 import { extractBackendMessageKeys, translateBackendError } from '@/lib/backendErrors.js';
 
 // Same shape as ImportLinesModal's classifyQtyDraft — a draft is valid when it
@@ -264,22 +265,18 @@ export default function CreateReturnWizard({
                           {line['product$_identifier'] || line.product$_identifier || '—'}
                         </td>
                         <td className="px-2 text-right tabular-nums text-muted-foreground" style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6 }}>
-                          {maxQty}
+                          {formatPlainDecimal(maxQty)}
                         </td>
                         <td style={{ ...cellStyle, paddingTop: 6, paddingBottom: 6, textAlign: 'right', paddingLeft: 8, paddingRight: 8 }}>
-                          <input
-                            type="number"
-                            min={0}
-                            max={maxQty}
-                            value={draft ?? currentQty}
+                          <span
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              setQtyDrafts((prev) => ({ ...prev, [line.id]: raw }));
-                            }}
-                            onBlur={() => {
-                              const raw = qtyDrafts[line.id];
-                              if (raw !== undefined) {
+                            style={{ display: 'inline-block', width: 70, marginLeft: 'auto' }}>
+                            <MaskedAmountInput
+                              bare
+                              grouping={false}
+                              value={currentQty}
+                              onChange={(raw) => setQtyDrafts((prev) => ({ ...prev, [line.id]: raw }))}
+                              onCommit={(_parsed, raw) => {
                                 const check = classifyQtyDraft(raw, maxQty);
                                 if (check.valid) {
                                   setQuantities((prev) => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
@@ -289,12 +286,11 @@ export default function CreateReturnWizard({
                                   toast.error(ui('qtyMustBePositive'));
                                 }
                                 setQtyDrafts((prev) => { const n = { ...prev }; delete n[line.id]; return n; });
-                              }
-                            }}
-                            disabled={!isSelected}
-                            className={`border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${draftInvalid ? 'border-destructive' : 'border-border'}`}
-                            style={{ width: 70, textAlign: 'center', borderWidth: '0.5px', borderRadius: 4, fontSize: 13, paddingTop: 4, paddingBottom: 4, paddingLeft: 4, paddingRight: 4, marginLeft: 'auto', display: 'block' }}
-                          />
+                              }}
+                              disabled={!isSelected}
+                              className={`w-full border rounded tabular-nums bg-muted/20 focus:bg-card focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-30 disabled:bg-transparent text-[13px] py-1 px-1 border-[0.5px] ${draftInvalid ? 'border-destructive' : 'border-border'}`}
+                              data-testid="CreateReturnWizard__qtyInput" />
+                          </span>
                         </td>
                       </tr>
                     );
@@ -358,7 +354,7 @@ export default function CreateReturnWizard({
                         {line['product$_identifier'] || line.product$_identifier || '—'}
                       </td>
                       <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
-                        {quantities[line.id] || 0}
+                        {formatPlainDecimal(quantities[line.id] || 0)}
                       </td>
                       {showAmountColumn && (
                         <td className="py-2 px-2 text-right tabular-nums" style={cellStyle}>
@@ -371,7 +367,7 @@ export default function CreateReturnWizard({
                 <tfoot>
                   <tr className="font-medium">
                     <td className="py-2 px-2 text-foreground">{ui('total')}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{totalReturnQty}</td>
+                    <td className="py-2 px-2 text-right tabular-nums">{formatPlainDecimal(totalReturnQty)}</td>
                     {showAmountColumn && (
                       <td className="py-2 px-2 text-right tabular-nums">{totalAmount > 0 ? fmtAmount(totalAmount) : '—'}</td>
                     )}

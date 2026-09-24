@@ -68,10 +68,13 @@ function renderWizard(overrides = {}) {
   return { ...render(<CreateReturnWizard {...props} />), props };
 }
 
-// A line's quantity input, scoped to its own row (there is one <input type="number"> per row).
+// A line's quantity input, scoped to its own row (there is one MaskedAmountInput per row,
+// identified by its data-testid rather than the native 'spinbutton' role — the migration to
+// MaskedAmountInput (type="text") dropped that ARIA role, which was exclusive to
+// <input type="number">).
 function qtyInputFor(productLabel) {
   const row = screen.getByText(productLabel).closest('tr');
-  return within(row).getByRole('spinbutton');
+  return within(row).getByTestId('CreateReturnWizard__qtyInput');
 }
 
 function checkboxFor(productLabel) {
@@ -179,7 +182,10 @@ describe('CreateReturnWizard', () => {
       fireEvent.change(qtyInput, { target: { value: '2.5' } });
       fireEvent.blur(qtyInput);
 
-      expect(qtyInput.value).toBe('2.5');
+      // MaskedAmountInput always displays the CONFIGURED decimal separator (comma in
+      // the default es-ES-style config), whichever accepted char (',' or '.') was
+      // actually typed — see fields.jsx filterMaskChars.
+      expect(qtyInput.value).toBe('2,5');
       expect(toast.error).not.toHaveBeenCalled();
     });
 
