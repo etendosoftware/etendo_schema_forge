@@ -279,16 +279,27 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
   });
 
   it('copies the Stripe ids from the latest paid checkout request via LEFT JOIN LATERAL', () => {
-    assert.match(normApply, /LEFT JOIN LATERAL \( SELECT r\.stripe_customer_id, r\.stripe_subscription_id, r\.paid_at/);
+    assert.match(normApply, /LEFT JOIN LATERAL \( SELECT r\.stripe_customer_id, r\.stripe_subscription_id, r\.stripe_price_id, r\.paid_at/);
     assert.match(normApply, /r\.stripe_subscription_id IS NOT NULL/);
     assert.match(normApply, /ORDER BY r\.paid_at DESC NULLS LAST, r\.created DESC LIMIT 1 \) cr ON TRUE/);
     assert.match(normApply, /cr\.stripe_customer_id, cr\.stripe_subscription_id,/);
   });
 
-  it('leaves provider_price_id, snapshot_amount and snapshot_currency NULL (the legacy plan has no price)', () => {
+  it('copies the charged Stripe price id from the same checkout request, NULL when unknown', () => {
     assert.match(normApply, /etgo_account_id, provider_price_id, snapshot_amount, snapshot_currency, pending_plan_id, pending_effective_date/);
-    assert.match(normApply, /NULL, NULL, NULL, NULL, NULL, NULL FROM ad_client c/);
+    // etgo_account_id NULL, provider_price_id from the request, snapshot amount/currency NULL.
+    assert.match(normApply, /NULL, cr\.stripe_price_id, NULL, NULL, NULL, NULL FROM ad_client c/);
+    // The LEFT JOIN makes it NULL for a tenant with no usable request, never a guessed value.
+    assert.match(normApply, /\) cr ON TRUE/);
+  });
+
+  it('leaves snapshot_amount and snapshot_currency NULL (the legacy plan has no price to snapshot)', () => {
     assert.match(rawText, /grandfathered 'legacy-productive' plan has no price/);
+    assert.doesNotMatch(normApply, /snapshot_amount\s*=|display_price/);
+  });
+
+  it('reports the copied price id per created subscription', () => {
+    assert.match(normReport, /', price=' \|\| COALESCE\(s\.provider_price_id, 'unknown'\)/);
   });
 });
 

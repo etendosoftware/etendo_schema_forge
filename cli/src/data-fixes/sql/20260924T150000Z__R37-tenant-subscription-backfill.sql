@@ -92,8 +92,11 @@
 -- through a path that left no checkout request simply gets both ids NULL -- correct, not a defect:
 -- there is no Stripe subscription to point at. @report says, per created row, which of the two
 -- happened, so an operator never has to guess.
--- provider_price_id / snapshot_amount / snapshot_currency are ALL left NULL on purpose: the
--- grandfathered 'legacy-productive' plan has no price, so there is nothing truthful to snapshot.
+-- provider_price_id is copied from that same checkout request's stripe_price_id -- the Stripe price
+-- the tenant was actually charged, recorded on the request since develop's ETP-5463 -- and is NULL
+-- when the request predates that column or no request exists. snapshot_amount / snapshot_currency
+-- stay NULL on purpose: the grandfathered 'legacy-productive' plan has no price, the request stores
+-- only the price id, so there is no truthful amount to snapshot.
 -- etgo_account_id is likewise NULL -- the checkout request does not carry it and inventing an
 -- owner account here would be a guess.
 --
@@ -262,11 +265,11 @@ SELECT
   COALESCE(cr.paid_at, c.created, now()),
   NULL, NULL, NULL,
   cr.stripe_customer_id, cr.stripe_subscription_id,
-  NULL, NULL, NULL, NULL,
+  NULL, cr.stripe_price_id, NULL, NULL,
   NULL, NULL
 FROM ad_client c
 LEFT JOIN LATERAL (
-  SELECT r.stripe_customer_id, r.stripe_subscription_id, r.paid_at
+  SELECT r.stripe_customer_id, r.stripe_subscription_id, r.stripe_price_id, r.paid_at
   FROM etgo_checkout_request r
   WHERE r.created_client_id = :client_id
     AND r.isactive = 'Y'
@@ -350,7 +353,8 @@ SELECT 'open-subscription' AS item,
          WHEN s.stripe_subscription_id IS NOT NULL
            THEN 'stripe ids copied from etgo_checkout_request (customer='
                 || COALESCE(s.stripe_customer_id, 'none')
-                || ', subscription=' || s.stripe_subscription_id || ')'
+                || ', subscription=' || s.stripe_subscription_id
+                || ', price=' || COALESCE(s.provider_price_id, 'unknown') || ')'
          ELSE 'no usable etgo_checkout_request found, stripe ids left NULL'
        END AS outcome,
        s.etgo_subscription_id AS ref
