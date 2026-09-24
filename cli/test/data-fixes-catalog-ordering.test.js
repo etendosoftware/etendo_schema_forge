@@ -34,6 +34,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
 
 const R37_BACKFILL = '20260924T150000Z__R37-tenant-subscription-backfill.sql';
+/** The newest fix in develop when ETP-5046 merged it; R37 was re-dated to sort after it. */
+const NEWEST_DEVELOP_FIX_AT_MERGE = '20260922T130000Z__R39-document-sequence-clear-descriptions.sql';
 
 /**
  * Already-applied fixes that share a timestamp prefix. Immutable (README rule 3), so they are
@@ -117,14 +119,15 @@ describe('data-fix catalog — timestamp ordering guard (watermark trap)', () =>
       `fix files without a YYYYMMDDTHHMMSSZ prefix have no watermark position: ${unparsable.join(', ')}`);
   });
 
-  it('keeps the R37 subscription backfill strictly after every other fix', () => {
+  // Frozen, not "after every other fix": later fixes are expected to land after R37, and a guard
+  // that failed on them would tell their authors to move an already-applied fix. What must hold
+  // forever is that R37 sorts after the newest fix develop carried when ETP-5046 merged.
+  it('keeps the R37 subscription backfill after the newest develop fix at merge time', () => {
     assert.ok(sqlFiles.includes(R37_BACKFILL), `${R37_BACKFILL} is missing from the catalog`);
-    const r37 = tsOf(R37_BACKFILL).getTime();
-    const notBefore = sqlFiles
-      .filter(f => f !== R37_BACKFILL && tsOf(f).getTime() >= r37);
-    assert.deepEqual(notBefore, [],
-      `${R37_BACKFILL} must sort strictly after every other fix. ${WATERMARK_TRAP} ` +
-      `Offending fixes: ${notBefore.join(', ')}`);
+    assert.ok(sqlFiles.includes(NEWEST_DEVELOP_FIX_AT_MERGE),
+      `${NEWEST_DEVELOP_FIX_AT_MERGE} is missing from the catalog`);
+    assert.ok(tsOf(R37_BACKFILL).getTime() > tsOf(NEWEST_DEVELOP_FIX_AT_MERGE).getTime(),
+      `${R37_BACKFILL} must sort after ${NEWEST_DEVELOP_FIX_AT_MERGE}. ${WATERMARK_TRAP}`);
   });
 
   it('gives every fix a unique timestamp prefix, except the frozen already-applied pairs', () => {
