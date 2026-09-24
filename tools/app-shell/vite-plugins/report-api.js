@@ -12,16 +12,27 @@ import { createRequire } from 'node:module';
 const _require = createRequire(import.meta.url);
 import { resolve, join } from 'node:path';
 import { registerReportHelpers, buildJsreportHelpersString, computeDocumentQrDataUrl } from '../../../templates/reports/helpers/report-html-helpers.js';
-import { REPORT_UI_STRINGS, pickLabel, buildContractLabels } from '@etendosoftware/schema-forge-cli/src/report-i18n.js';
-import { resolveGrouping, buildNestedGroups, buildAccountReportTree }
-  from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
-import { applyPlaceholders } from '@etendosoftware/schema-forge-cli/src/report-sql.js';
-import { filterAndTransformParams } from '@etendosoftware/schema-forge-cli/src/report-filters.js';
-import { hydrateDocumentBranding, resolveCompanyLogoDataUrl } from '@etendosoftware/schema-forge-cli/src/report-branding.js';
+import { loadReportCli } from './report-cli.js';
+
+// ETP-5460: every shared report-* module (plus the jasper extractor) is now
+// loaded through loadReportCli() instead of a static import, so a
+// LOCAL_CORE=1 dev run consumes schema_forge_core's own source (report-auth.js
+// is new in this change and not yet published) while a normal run keeps
+// resolving the published @etendosoftware/schema-forge-cli package exactly as
+// every static import here always has. See report-cli.js / design id 455
+// ("Local verification of the plugin") and tasks id 458 (WU3.1/WU3.2).
+const { REPORT_UI_STRINGS, pickLabel, buildContractLabels } = await loadReportCli('report-i18n');
+const { resolveGrouping, buildNestedGroups, buildAccountReportTree, foldOpeningBalance, foldAggregateRows } =
+  await loadReportCli('report-grouping');
+const { applyPlaceholders } = await loadReportCli('report-sql');
+const { filterAndTransformParams } = await loadReportCli('report-filters');
+const { hydrateDocumentBranding, resolveCompanyLogoDataUrl } = await loadReportCli('report-branding');
+const { resolveReportSession, reportAuthErrorBody } = await loadReportCli('report-auth');
 
 const ARTIFACTS_DIR = resolve(import.meta.dirname, '../../../artifacts');
 const ROOT = resolve(ARTIFACTS_DIR, '..');
 const JSREPORT_URL = process.env.JSREPORT_URL || 'http://localhost:5488';
+const ETENDO_URL = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
 const REPORT_PARTIALS_DIR = resolve(ROOT, 'templates', 'reports');
 
 function expandReportPartials(templateContent) {
@@ -46,17 +57,6 @@ async function getReportCurrencySeparators() {
     }))
     .catch(() => ({ thousandsSeparator: '.', decimalSeparator: ',' }));
   return currencySeparatorsPromise;
-}
-
-// Decode JWT payload (no verification needed — dev proxy only) to extract Etendo claims.
-function getClientIdFromRequest(req) {
-  try {
-    const auth = req.headers['authorization'] || '';
-    const token = auth.replace(/^Bearer\s+/i, '');
-    if (!token) return null;
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-    return payload.client || null;
-  } catch { return null; }
 }
 
 // Find gradle.properties for DB connection
@@ -95,18 +95,15 @@ function parseGradleProps(path) {
 
 // ---------------------------------------------------------------------------
 // Row grouping, opening balances and account trees now live in
-// @etendosoftware/schema-forge-cli (cli/src/report-grouping.js) and are imported
-// above. They used to be defined right here, which is exactly why the production
-// report-server never had them: code written inline in this plugin does not
-// reach the server, only shared modules do. The re-export below keeps the
-// existing `import { ... } from '../vite-plugins/report-api.js'` test entry
-// points working. Do not re-add local copies — extend the shared module.
+// @etendosoftware/schema-forge-cli (cli/src/report-grouping.js) and are loaded
+// above via loadReportCli(). They used to be defined right here, which is
+// exactly why the production report-server never had them: code written
+// inline in this plugin does not reach the server, only shared modules do.
+// The re-export below keeps the existing `import { ... } from
+// '../vite-plugins/report-api.js'` test entry points working. Do not re-add
+// local copies — extend the shared module.
 // ---------------------------------------------------------------------------
-export { buildNestedGroups, buildAccountReportTree };
-export {
-  foldOpeningBalance,
-  foldAggregateRows,
-} from '@etendosoftware/schema-forge-cli/src/report-grouping.js';
+export { buildNestedGroups, buildAccountReportTree, foldOpeningBalance, foldAggregateRows };
 
 
 /**
@@ -148,7 +145,7 @@ function listReports() {
  *   VITE_MOCK=true  → use mock data files
  *   VITE_MOCK=false → use real data (NEO API or Jasper SQL)
  */
-async function fetchReportData(reportId, { limit, authToken, params = {}, locale } = {}) {
+async function fetchReportData(reportId, { limit, session, params = {}, locale } = {}) {
   const contractPath = join(ARTIFACTS_DIR, reportId, 'report-contract.json');
   const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
 
@@ -170,16 +167,19 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
 
   // Real mode: NEO API (calls Etendo backend via NeoHandler)
   if (contract.neo?.endpoint) {
-    if (!authToken) throw new Error('No auth token — user must be logged in');
-    const etendoBase = process.env.ETENDO_URL || 'http://localhost:8080/etendo';
-    const neoUrl = `${etendoBase}${contract.neo.endpoint}`;
+    const neoUrl = `${ETENDO_URL}${contract.neo.endpoint}`;
     const neoBody = { ...(contract.neo.body || {}), ...params };
 
     const neoRes = await fetch(neoUrl, {
       method: contract.neo.method || 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
+        // ETP-5460: forwards the session's Cookie (+ Origin/Referer, + CSRF
+        // when the caller's own request was unsafe) instead of a Bearer
+        // token — see report-auth.js's resolveReportSession. The session is
+        // already resolved (and any missing/invalid/CSRF-rejected session
+        // already rejected) by the caller before fetchReportData runs.
+        ...session.forwardHeaders,
         // The render's own locale, so the backend translates row VALUES to the
         // language the report was generated in — not to whatever the Etendo user's
         // default_ad_language happens to be (ETP-5013: Tax Report's country column
@@ -241,9 +241,8 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
           max: 1,
         });
         try {
-          const clientId = getClientIdFromRequest({ headers: { authorization: `Bearer ${authToken}` } }) || '0';
           companyLogoDataUrl = await resolveCompanyLogoDataUrl(logoPool, {
-            clientId, orgId: params.orgId, authToken, etendoBase,
+            clientId: session.clientId, orgId: params.orgId, authHeaders: session.forwardHeaders, etendoBase: ETENDO_URL,
           });
         } finally {
           await logoPool.end();
@@ -291,8 +290,8 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
 
       const headerResult = await pool.query(brandedHeaderSql);
       const header = await hydrateDocumentBranding(headerResult.rows[0] || {}, {
-        authToken,
-        etendoBase: process.env.ETENDO_URL || 'http://localhost:8080/etendo',
+        authHeaders: session.forwardHeaders,
+        etendoBase: ETENDO_URL,
       });
 
       const linesResult = await pool.query(linesSql);
@@ -326,8 +325,7 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
     if (!existsSync(jrxmlPath)) {
       throw new Error(`JRXML not found: ${jrxmlPath}`);
     }
-    const extractorPath = resolve(ROOT, 'node_modules/@etendosoftware/schema-forge-cli/src/extract-from-jasper.js');
-    const { parseJrxml } = await import(/* @vite-ignore */ extractorPath);
+    const { parseJrxml } = await loadReportCli('extract-from-jasper');
     const parsed = parseJrxml(readFileSync(jrxmlPath, 'utf8'));
     sql = parsed.query;
   }
@@ -357,7 +355,10 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
   // broke Balance Sheet and Profit & Loss on every server.
 
   try {
-    const clientId = getClientIdFromRequest({ headers: { authorization: authToken ? `Bearer ${authToken}` : '' } }) || '0';
+    // ETP-5460: clientId always comes from the already-resolved session —
+    // resolveReportSession already rejected the request with 401 otherwise,
+    // so there is no '0' (System scope) fallback left to fall into.
+    const clientId = session.clientId;
 
     sql = applyPlaceholders(sql, { clientId, params, contract, locale });
 
@@ -423,8 +424,8 @@ async function fetchReportData(reportId, { limit, authToken, params = {}, locale
     // instead (falls back to the client's own logo when the report has no
     // `orgId` filter, e.g. Inventory Stock Report, Order Not Shipped).
     const companyLogoDataUrl = await resolveCompanyLogoDataUrl(pool, {
-      clientId, orgId: params.orgId, authToken,
-      etendoBase: process.env.ETENDO_URL || 'http://localhost:8080/etendo',
+      clientId, orgId: params.orgId, authHeaders: session.forwardHeaders,
+      etendoBase: ETENDO_URL,
     });
 
     return { rows, contract, openingRows, operandRows, companyLogoDataUrl };
@@ -459,6 +460,22 @@ export default function reportApiPlugin() {
             .split(',')
             .map(s => s.trim())
             .filter(Boolean);
+
+          // ETP-5460: resolve identity from the session cookie BEFORE any DB
+          // access — a missing/invalid/CSRF-rejected session must reach the
+          // SPA with the exact status resolveReportSession decided
+          // (401/403/502), never a generic 500, and must never touch the DB.
+          let session;
+          try {
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+          } catch (e) {
+            const { status, body } = reportAuthErrorBody(e);
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(body));
+            return;
+          }
+
           try {
             const gradlePath = findGradleProps();
             if (!gradlePath) throw new Error('gradle.properties not found');
@@ -466,8 +483,13 @@ export default function reportApiPlugin() {
             const pg = await import('pg');
             const pool = new pg.default.Pool({ host: gradle['bbdd.host'] || 'localhost', port: parseInt(gradle['bbdd.port']) || 5432, user: gradle['bbdd.user'], password: gradle['bbdd.password'], database: gradle['bbdd.sid'], max: 2 });
             try {
-              const clientId = getClientIdFromRequest(req);
-              const byClient = (col) => clientId ? `AND ${col} = '${clientId}'` : '';
+              // ETP-5460: clientId is always resolved by this point
+              // (resolveReportSession already rejected the request with 401
+              // otherwise) — the filter is therefore unconditional, unlike
+              // the old token-derived value which could be null and
+              // silently return every client's rows.
+              const clientId = session.clientId;
+              const byClient = (col) => `AND ${col} = '${clientId}'`;
               const queries = {
                 'bpartner': {
                   fromWhere: `FROM c_bpartner WHERE isactive='Y' ${byClient('ad_client_id')} AND name ILIKE $1`,
@@ -542,8 +564,12 @@ export default function reportApiPlugin() {
                   // not just the client's base currency: a multi-org client can have organizations
                   // in different currencies. Falls back to the client's base currency when no
                   // selectedOrgId is passed (matches every other org-scoped selector's fallback).
-                  fromWhere: clientId
-                    ? `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)
+                  // ETP-5460: clientId is always resolved by this point (same
+                  // guarantee as byClient() above), so the old `clientId ?`
+                  // branch (silently unscoped to the full ISO table when the
+                  // token-derived clientId was null) is gone — this is
+                  // always the scoped query now.
+                  fromWhere: `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)
                         AND (
                           c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}')
                           ${selectedOrgId ? `OR c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}')` : ''}
@@ -553,13 +579,10 @@ export default function reportApiPlugin() {
                                AND cr.ad_client_id IN ('${clientId}', '0')
                                AND (cr.c_currency_id = c_currency.c_currency_id OR cr.c_currency_id_to = c_currency.c_currency_id)
                           )
-                        )`
-                    : `FROM c_currency WHERE isactive='Y' AND (iso_code ILIKE $1 OR description ILIKE $1)`,
-                  orderBy: clientId
-                    ? (selectedOrgId
-                        ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}') THEN 0 ELSE 1 END), iso_code`
-                        : `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`)
-                    : 'ORDER BY iso_code',
+                        )`,
+                  orderBy: selectedOrgId
+                    ? `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_org WHERE ad_org_id = '${selectedOrgId}') THEN 0 ELSE 1 END), iso_code`
+                    : `ORDER BY (CASE WHEN c_currency_id = (SELECT c_currency_id FROM ad_client WHERE ad_client_id = '${clientId}') THEN 0 ELSE 1 END), iso_code`,
                   select: `SELECT c_currency_id AS id, iso_code AS name, iso_code || ' - ' || description AS label`
                 },
                 'tax': {
@@ -664,9 +687,25 @@ export default function reportApiPlugin() {
         if (req.method === 'GET' && dataMatch) {
           const reportId = dataMatch[1];
           const limit = url.searchParams.get('limit');
+
+          // ETP-5460: resolve identity from the session cookie BEFORE any
+          // report data fetch — a missing/invalid/CSRF-rejected session must
+          // reach the SPA with the exact status resolveReportSession decided
+          // (401/403/502), never a generic 500, and must never touch the DB
+          // or call NEO at all.
+          let session;
           try {
-            const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-            const { rows, contract } = await fetchReportData(reportId, { limit, authToken });
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+          } catch (e) {
+            const { status, body } = reportAuthErrorBody(e);
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(body));
+            return;
+          }
+
+          try {
+            const { rows, contract } = await fetchReportData(reportId, { limit, session });
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({ rows, contract, count: rows.length }));
           } catch (e) {
@@ -684,9 +723,24 @@ export default function reportApiPlugin() {
           for await (const chunk of req) body += chunk;
           const { format = 'html', limit, params = {}, locale = 'en_US' } = JSON.parse(body || '{}');
 
+          // ETP-5460: resolve identity from the session cookie BEFORE any
+          // report data fetch — a missing/invalid/CSRF-rejected session must
+          // reach the SPA with the exact status resolveReportSession decided
+          // (401/403/502), never a generic 500, and must never touch the DB
+          // or call NEO at all.
+          let session;
           try {
-            const authToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-            const result = await fetchReportData(reportId, { limit, authToken, params, locale });
+            session = await resolveReportSession(req.headers, { method: req.method, etendoBase: ETENDO_URL });
+          } catch (e) {
+            const { status, body: errorBody } = reportAuthErrorBody(e);
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(errorBody));
+            return;
+          }
+
+          try {
+            const result = await fetchReportData(reportId, { limit, session, params, locale });
             let { rows, contract, documentData, neoMeta = {}, openingRows, operandRows, companyLogoDataUrl } = result;
 
             // Account-report tree reports (ETP-4899 — Profit & Loss): the SQL returns

@@ -19,7 +19,6 @@ import { hasUnsavedChanges, suppressNextUnloadPrompt, installUnloadGuard } from 
 import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialog.jsx';
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
-import { RoleChangedBanner } from './components/RoleChangedBanner.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
@@ -482,11 +481,6 @@ export default function App() {
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />
-        {/* ETP-5189 — notifies the active user their role/permissions changed elsewhere.
-            Mounted here (not inside AppLayout) so it is visible regardless of which
-            window is open when the change lands; see RoleChangedBanner.jsx's own
-            doc comment for why it's a fixed overlay rather than a layout-flow element. */}
-        <RoleChangedBanner data-testid="RoleChangedBanner__ecaf3f" />
         <LocaleChangeConfirmDialog
           open={pendingLocale !== null}
           onConfirm={() => applyLocaleAndReload(pendingLocale)}

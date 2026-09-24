@@ -29,12 +29,23 @@ import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
  * @param {string} config.confirmLabelKey            i18n key for the plain confirm button
  * @param {string} config.confirmWithInvoiceLabelKey i18n key for the confirm-with-invoice button
  * @param {string} config.testId      data-testid for the rendered ConfirmInOutModal
- * @returns {Function} a `{ base, headers, recordId, data, onConfirmed, onClose }` component
+ * @returns {Function} a `{ base, headers, token, recordId, data, onConfirmed, onClose }` component
  */
 export function buildReturnRowConfirmModal(config) {
-  return function ReturnRowConfirmModal({ base, headers, recordId, data, onConfirmed, onClose }) {
+  return function ReturnRowConfirmModal({ base, headers, token, recordId, data, onConfirmed, onClose }) {
     const ui = useUI();
     const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
+    // ETP-5378 QA follow-up (CP-10 / CP-15) — the SAME picker the form shows. Without this URL
+    // `rectifyActive` stays false in ConfirmInOutModal, so the popup rendered no "Factura a
+    // rectificar" field, `originInvoices` never reached createReturnInvoice, and the backend
+    // fell back to chain auto-detection. On a return with no invoiced origin that detection
+    // finds nothing and answers 400 (ERR_RECTIFIED_INVOICE_REQUIRED) — but only AFTER the
+    // separate documentAction POST has already committed, leaving the document Completed with
+    // no invoice and no way back from the UI. Supplying the URL also arms the `rectify.isSatisfied`
+    // gate in `canConfirm`, so the confirm button stays disabled until an invoice is picked and
+    // that request can no longer be sent empty.
+    const rectifiableInvoicesUrl =
+      `${base}/${config.specName}/${config.entityName}/${data?.id || recordId}/action/rectifiableInvoices`;
     return (
       <ConfirmInOutModal
         base={base}
@@ -44,6 +55,8 @@ export function buildReturnRowConfirmModal(config) {
         entityName={config.entityName}
         invoiceAction={isFullyInvoiced ? undefined : 'createReturnInvoice'}
         defaultCreateInvoice={!isFullyInvoiced}
+        rectifiableInvoicesUrl={rectifiableInvoicesUrl}
+        token={token}
         title={ui(config.titleKey)}
         docInfo={{ bpName: data?.['businessPartner$_identifier'], documentNo: data?.documentNo }}
         infoRowPre={ui(config.infoRowPreKey)}

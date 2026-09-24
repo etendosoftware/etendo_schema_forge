@@ -1920,3 +1920,15 @@ which is the commitment, and it is Classic's own behaviour.
 no order behind it (invoiced straight from a standalone shipment) now has no quantity ceiling at all.
 Flagged rather than papered over; covering it would need a validation against the *confirmed*
 shipment, which is a separate decision.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier must hide every mutating control in a window the Solo
+Lectura role can see. For this window: the secondary-actions bar's Clone (shared
+`DocumentSecondaryActions` via `topbarSecondary`) and the bulk-selection toolbar's document
+actions. **"Enviar a SIF" (`SendToSifButton`, rendered inside `PurchaseInvoiceSecondaryActions`)
+was initially missed** — its sibling on sales-invoice (`InvoiceTopbarExtra`) forwards
+`isDocumentReadOnly` to `SendToSifButton`, but this window's own wrapper destructured only
+`{ data, recordId, apiBaseUrl, onSave, isDirty }` from its props and silently dropped the prop, so
+the button stayed visible/clickable for a completed invoice with pending SII/TBAI targets even
+under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `d134ecb82`).

@@ -162,6 +162,22 @@ describe('translateBackendError', () => {
     });
   });
 
+  describe('known access-control messages (ETP-5205)', () => {
+    const KNOWN = [
+      {
+        raw: 'Access denied to spec for current role',
+        key: 'backendError.accessDeniedToSpec',
+      },
+    ];
+
+    for (const { raw, key } of KNOWN) {
+      it(`maps "${raw.slice(0, 40)}..." to key ${key}`, () => {
+        const t = (k) => (k === key ? `translated:${key}` : k);
+        assert.equal(translateBackendError(raw, t), `translated:${key}`);
+      });
+    }
+  });
+
   // ── translation missing guard ────────────────────────────────────────────────
 
   it('returns original message when t returns the key itself (key not found in locale)', () => {

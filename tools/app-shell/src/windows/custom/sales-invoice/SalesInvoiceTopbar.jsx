@@ -8,7 +8,7 @@ import { useInvoiceUpdatedListener } from '../shared/useInvoiceUpdatedListener.j
 // InvoiceTopbarExtra (payment-status badge, SendToSif, Send-by-email — all of
 // which stay in topbarRight, at the extreme right after Save/Confirm, per the
 // DF; see SalesInvoiceSecondaryActions' doc comment for the rationale).
-export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh, onSave, isDirty }) {
+export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, api, onProcess, onRefresh, onSave, isDirty, isDocumentReadOnly }) {
   useInvoiceUpdatedListener('sales-invoice', recordId, onRefresh);
 
   if (!data || !recordId) return null;
@@ -23,6 +23,7 @@ export default function SalesInvoiceTopbar({ data, recordId, token, apiBaseUrl, 
       onProcess={onProcess}
       onSave={onSave}
       isDirty={isDirty}
+      isDocumentReadOnly={isDocumentReadOnly}
       data-testid="InvoiceTopbarExtra__5c4da7" />
   );
 }

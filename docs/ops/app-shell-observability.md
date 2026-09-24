@@ -19,10 +19,12 @@ environment override after reviewing the privacy and legal impact. Release is
 set from `VITE_SENTRY_RELEASE` when present, otherwise from available build
 metadata such as `SENTRY_RELEASE.id` injected at build time.
 
-AWS RUM uses hostname-gated configuration for staging, experimental, and
-production (`go.etendo.cloud`). `VITE_RUM_SESSION_SAMPLE_RATE` is parsed as a
+The environment is not derived from the hostname. The deploy workflow knows its
+target and injects `VITE_APP_ENV` (Sentry `environment`) and the RUM IDs of that
+target, so a domain change is an Actions variable edit (`PUBLIC_ORIGIN_*`) plus a
+redeploy, with no code change. `VITE_RUM_SESSION_SAMPLE_RATE` is parsed as a
 bounded number from `0` to `1`; invalid or missing values fall back to the
-conservative default `0.1`. Missing host config is still a no-op.
+conservative default `0.1`. Missing RUM IDs are a no-op.
 
 Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
 `VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
@@ -35,12 +37,9 @@ is lazy-loaded only when the provider is enabled and used.
 | `VITE_SENTRY_DSN` | Enables Sentry. |
 | `VITE_SENTRY_RELEASE` | Optional explicit Sentry release. If unset, the app falls back to available build metadata. |
 | `VITE_SENTRY_SEND_DEFAULT_PII` | Optional explicit Sentry PII gate. Defaults to `false`; set to `true` only with approved privacy review. |
-| `VITE_RUM_APP_MONITOR_ID_STAGING` | CloudWatch RUM app monitor for `go.staging.etendo.cloud`. |
-| `VITE_RUM_IDENTITY_POOL_ID_STAGING` | CloudWatch RUM identity pool for staging. |
-| `VITE_RUM_APP_MONITOR_ID_EXPERIMENTAL` | CloudWatch RUM app monitor for `go.experimental.etendo.cloud`. |
-| `VITE_RUM_IDENTITY_POOL_ID_EXPERIMENTAL` | CloudWatch RUM identity pool for experimental. |
-| `VITE_RUM_APP_MONITOR_ID_PROD` | CloudWatch RUM app monitor for `go.etendo.cloud`. |
-| `VITE_RUM_IDENTITY_POOL_ID_PROD` | CloudWatch RUM identity pool for `go.etendo.cloud`. |
+| `VITE_APP_ENV` | Deploy target (`production`, `experimental`, `staging`). Sentry `environment`; unset means `development`. |
+| `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
+| `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |
 | `VITE_RUM_SESSION_SAMPLE_RATE` | Optional RUM session sample rate. Values are clamped to `0..1`; invalid values fall back to `0.1`. |
 | `VITE_MIXPANEL_ENABLED` | Set to `true` to enable Mixpanel. |
 | `VITE_MIXPANEL_TOKEN` | Mixpanel project token. Required when Mixpanel is enabled. |

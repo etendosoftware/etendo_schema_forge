@@ -166,14 +166,6 @@ export async function login(page, {
     // Seeding a token briefly starts a stale bearer refresh before that restore
     // wins, which looks like a post-login permissions change to the shell.
     await page.addInitScript(() => {
-      // Permission-change UI is covered by its focused Vitest suite. Mocked E2E
-      // sessions use an in-browser access-map stand-in, so discard this unrelated
-      // notification before it can cover the fixed sidebar/topbar controls.
-      const dismissRoleChangedBanner = () => {
-        document.querySelector("[data-testid=RoleChangedBanner__ecaf3f] button")?.click();
-      };
-      new MutationObserver(dismissRoleChangedBanner).observe(document, { childList: true, subtree: true });
-
       // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
       // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
       // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a

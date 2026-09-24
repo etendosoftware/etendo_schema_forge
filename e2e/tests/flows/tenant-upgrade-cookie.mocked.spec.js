@@ -118,8 +118,7 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     expect(legacyBefore).toBeNull();
 
     await reachPaymentStep(page);
-    // The name field is prefilled from the CURRENT environment (see below) — submitting as-is
-    // is the demo -> pro conversion, not a name change, so this alone must not error.
+    // The prefilled demo name remains valid for the legacy tenant conversion flow.
     await page.getByTestId('upgrade-submit').click();
     await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
 
@@ -151,11 +150,29 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
       action: 'productive-tenant',
       upgradeAction: 'create-productive',
       clientName: 'Acme Productive',
+      dataTransfer: { products: true, contacts: true },
     });
     // The whole point of the cookie scheme: the write proof travels in X-Go-CSRF, and there is
     // no bearer token to put in Authorization at all (sessionCredentials.js's `authHeaders()`).
     expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
     expect(requests[0].headers.authorization).toBeUndefined();
+  });
+
+  test('the addon choice reaches the purchase even when both checkboxes are cleared', async ({ page }) => {
+    await installEnvironmentsMock(page, [CURRENT_ENV]);
+    const requests = await installPurchaseMock(page);
+    await gotoUpgrade(page);
+
+    await page.getByTestId('upgrade-plan-select').click();
+    await page.getByTestId('upgrade-data-transfer-products').uncheck();
+    await page.getByTestId('upgrade-data-transfer-contacts').uncheck();
+    await page.getByTestId('upgrade-addons-continue').click();
+    await page.getByTestId('upgrade-tenant-name-input').fill('Acme Productive');
+    await page.getByTestId('upgrade-submit').click();
+
+    await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.dataTransfer).toEqual({ products: false, contacts: false });
   });
 
   test('a name matching the account\'s own productive environment is rejected before paying', async ({ page }) => {

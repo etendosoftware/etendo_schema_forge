@@ -2,8 +2,8 @@
  * ETP-5190 — the declarative catalogue of post-signup "First Steps" onboarding steps.
  *
  * This module is the SINGLE place a step is added, removed or reordered. `FirstStepsPage`
- * renders whatever is here and `useFirstSteps` persists only the toggleable subset, so a new
- * step needs no change in either of them (beyond its i18n keys).
+ * renders whatever is here and `useFirstSteps` persists only the toggleable subset. A new
+ * standard step needs only its entry and i18n keys; a new action type also needs a page action.
  *
  * This module holds NO icon imports on purpose. It is read by `SideMenu` (for the sidebar's
  * progress badge) and by `DashboardPage` (for the one-time redirect), neither of which draws a
@@ -16,9 +16,9 @@
  * 20px — a lucide stand-in reads visibly different from the mockup.
  *
  * Every entry carries:
- *   - `id`         stable identifier, also the value persisted in `firstSteps.completed`.
- *                  The backend allowlists exactly the ids of the toggleable steps
- *                  (`TOGGLEABLE_STEP_IDS`) and silently drops anything else.
+ *   - `id`         stable identifier. Toggleable ids are persisted in `firstSteps.completed`;
+ *                  the backend allowlists those ids (`TOGGLEABLE_STEP_IDS`) and silently drops
+ *                  anything else. The transfer result is stored by its own server job.
  *   - `iconName`   key into `firstStepsIcons.js`, rendered in the row's leading badge.
  *   - `titleKey`   `genericLabels` key for the row title.
  *   - `descKey`    `genericLabels` key for the expanded row's description, or `null`.
@@ -42,31 +42,33 @@
  *   - `'import'`    an "Import" button that opens the window's real import dialog in place,
  *                   because sending the user off to the list view just to find the same
  *                   button is a detour, not a step;
+ *   - `'dataTransfer'` shows the server-owned demo transfer status and a retry on failure;
  *   - `null`        nothing to do — the row is informational.
  *
  * `keepActionWhenDone` keeps a completed row's controls live. Ticking a step normally locks its
- * controls, which is what stops an already-run import from being run again by accident; company
- * data is the exception because "done" there means "I filled it in", and a company's details
- * are the one thing on this list a user genuinely comes back to change.
+ * controls, which is what stops an already-run import from being run again by accident. Company
+ * data stays editable after completion, and the transfer row keeps its server-owned result
+ * visible after completion.
  *
  * `alwaysDone` steps are rendered as completed, are NOT toggleable and are never persisted,
- * yet they DO count toward the progress figures — which is why the counter starts at 1/5 on a
- * trial and 1/7 on a productive tenant. Both numbers are derived from this array; never
- * hardcode them.
+ * yet they DO count toward the progress figures. A trial starts at 1/5. A productive tenant
+ * has seven visible steps without the transfer row, or eight when the backend exposes it;
+ * its completed count also depends on the server-owned transfer state. The total is derived
+ * from the visible list; never hardcode it.
  *
  * ## Plan-dependent steps
  *
- * A trial tenant is shown a SHORTER list. Invoice numbering and the fiscal configuration are
- * marked `productiveOnly` because neither is worth doing in a trial: a document series a tenant
- * abandons in 14 days numbers nothing, and the fiscal setup is what the productive environment
- * is created with. They appear when the tenant goes productive, which is also when the whole
- * checklist is offered again.
+ * A trial tenant is shown a SHORTER list. Invoice numbering, fiscal configuration, and the
+ * demo data transfer are `productiveOnly`. A document series a tenant abandons in 14 days
+ * numbers nothing; fiscal setup and the transfer belong to the productive environment. These
+ * rows appear when the tenant goes productive, which is also when the whole checklist is
+ * offered again.
  *
- * Every plan-aware helper here takes the plan as its last REQUIRED argument and an unknown plan
+ * Plan-aware helpers accept the plan explicitly. An unknown plan
  * (`undefined`, a session with no platform token, a failed `/environments` call) is treated as
- * productive — it shows everything. That direction is deliberate: hiding invoice numbering from
- * a tenant that paid for it is a worse failure than showing two extra rows to a trial, and it
- * is also the behaviour every tenant had before the gate existed.
+ * productive — it shows productive-only steps. That direction is deliberate: hiding invoice
+ * numbering from a tenant that paid for it is a worse failure than showing extra rows to a
+ * trial, and it is also the behaviour every tenant had before the gate existed.
  *
  * ## Gated steps
  *
@@ -227,17 +229,18 @@ export function firstStepsTotal(plan, transfer = NO_DEMO_DATA_TRANSFER) {
  * sent to `POST /sws/go/onboarding/first-steps`.
  *
  * The SERVER allowlist is the full toggleable set, not this one — it has no notion of a plan
- * and a tenant that goes productive must be able to persist the two steps that just appeared.
+ * and a tenant that goes productive must be able to persist the two toggleable steps that
+ * appeared. The third productive-only row is the server-owned data transfer.
  * This narrower list is what `FirstStepsProvider` hands to `useFirstSteps`, so a step the
  * current plan does not show can never be written by accident.
  */
 export function toggleableStepIds(plan) {
   return visibleFirstSteps(plan)
-    .filter((step) => !step.alwaysDone)
+    .filter((step) => !step.alwaysDone && step.action !== 'dataTransfer')
     .map((step) => step.id);
 }
 
-/** True when the step renders as completed — always-done, or user-completed. */
+/** True when the step renders as completed — always-done, user-completed, or transfer-done. */
 export function isStepDone(step, completed, transfer = NO_DEMO_DATA_TRANSFER) {
   if (step.action === 'dataTransfer') return transfer.done;
   return step.alwaysDone || (Array.isArray(completed) && completed.includes(step.id));

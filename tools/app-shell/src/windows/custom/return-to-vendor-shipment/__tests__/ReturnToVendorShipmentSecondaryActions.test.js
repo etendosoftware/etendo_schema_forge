@@ -10,10 +10,7 @@ const src = readFileSync(join(__dirname, '..', 'ReturnToVendorShipmentSecondaryA
 // ETP-5260 defect fix — CopyRecordLinkButton used to render inside
 // ConfirmWithCreditButton.jsx (topbarRight, ETP-4721), to the RIGHT of
 // Save/Confirm against the DF. It moved here (topbarSecondary, LEFT of
-// Save/Confirm). ConfirmWithCreditButtonBase — a PRIMARY action available in
-// Borrador (ETP-4933) — stays in ConfirmWithCreditButton.jsx/topbarRight,
-// untouched. See ConfirmWithCreditButton.spec.jsx's "renders nothing when
-// status is not DR or CO" regression guard for the sibling coverage.
+// Save/Confirm). ETP-5408: return-to-vendor-shipment's Borrador Confirmar is the generic draftMode Confirm.
 describe('ReturnToVendorShipmentSecondaryActions', () => {
   it('exports a default function component named ReturnToVendorShipmentSecondaryActions', () => {
     assert.match(src, /export default function ReturnToVendorShipmentSecondaryActions/);
