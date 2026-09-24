@@ -24,7 +24,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 38907,
     "eTGOSalePrice": 38907,
-    "eTGOStock": 99.44
+    "eTGOStock": 99.44,
+    "eTGOCost": 38907
   },
   {
     "id": "mock-product-002",
@@ -49,7 +50,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 9306,
     "eTGOSalePrice": 9306,
-    "eTGOStock": 96.94
+    "eTGOStock": 96.94,
+    "eTGOCost": 9306
   },
   {
     "id": "mock-product-003",
@@ -74,7 +76,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 11544,
     "eTGOSalePrice": 11544,
-    "eTGOStock": 12.48
+    "eTGOStock": 12.48,
+    "eTGOCost": 11544
   },
   {
     "id": "mock-product-004",
@@ -99,7 +102,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 11872,
     "eTGOSalePrice": 11872,
-    "eTGOStock": 96.31
+    "eTGOStock": 96.31,
+    "eTGOCost": 11872
   },
   {
     "id": "mock-product-005",
@@ -124,7 +128,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 48460,
     "eTGOSalePrice": 48460,
-    "eTGOStock": 31.27
+    "eTGOStock": 31.27,
+    "eTGOCost": 48460
   },
   {
     "id": "mock-product-006",
@@ -149,7 +154,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 45418,
     "eTGOSalePrice": 45418,
-    "eTGOStock": 76.52
+    "eTGOStock": 76.52,
+    "eTGOCost": 45418
   },
   {
     "id": "mock-product-007",
@@ -174,7 +180,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 33840,
     "eTGOSalePrice": 33840,
-    "eTGOStock": 2.66
+    "eTGOStock": 2.66,
+    "eTGOCost": 33840
   },
   {
     "id": "mock-product-008",
@@ -199,7 +206,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 25716,
     "eTGOSalePrice": 25716,
-    "eTGOStock": 10.03
+    "eTGOStock": 10.03,
+    "eTGOCost": 25716
   },
   {
     "id": "mock-product-009",
@@ -224,7 +232,8 @@ export const product = [
     "mProductStatusID": "DR",
     "eTGOPurchasePrice": 44780,
     "eTGOSalePrice": 44780,
-    "eTGOStock": 93.97
+    "eTGOStock": 93.97,
+    "eTGOCost": 44780
   },
   {
     "id": "mock-product-010",
@@ -249,7 +258,8 @@ export const product = [
     "mProductStatusID": "CO",
     "eTGOPurchasePrice": 12483,
     "eTGOSalePrice": 12483,
-    "eTGOStock": 1.1
+    "eTGOStock": 1.1,
+    "eTGOCost": 12483
   },
   {
     "id": "mock-product-011",
@@ -274,7 +284,8 @@ export const product = [
     "mProductStatusID": "VO",
     "eTGOPurchasePrice": 46022,
     "eTGOSalePrice": 46022,
-    "eTGOStock": 79.99
+    "eTGOStock": 79.99,
+    "eTGOCost": 46022
   },
   {
     "id": "mock-product-012",
@@ -299,7 +310,8 @@ export const product = [
     "mProductStatusID": "IP",
     "eTGOPurchasePrice": 38634,
     "eTGOSalePrice": 38634,
-    "eTGOStock": 53.61
+    "eTGOStock": 53.61,
+    "eTGOCost": 38634
   }
 ];
 

@@ -46,7 +46,7 @@ const BADGE_STYLES = {
  *
  * The badge is the ONLY entry point. Clicking it opens the payments modal.
  */
-export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty }) {
+export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, api, onSave, isDirty, isDocumentReadOnly }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const [showPaymentsModal, setShowPaymentsModal] = useState(false);
@@ -283,7 +283,10 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         >
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: 'hsl(var(--primary))' }} />
           {ui('cpFavorBadge')}
-          <TruncatedText text={fmt(outstandingAbs, currency)} className="w-[72px] shrink-0 text-left" />
+          <TruncatedText
+            text={fmt(outstandingAbs, currency)}
+            className="w-[72px] shrink-0 text-left"
+            data-testid="TruncatedText__329004" />
         </button>
         {showPaymentsModal && (
           <InvoicePaymentHistoryModal
@@ -293,7 +296,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
             apiBaseUrl={apiBaseUrl}
             onClose={() => setShowPaymentsModal(false)}
             onPaymentAdded={fetchInstallments}
-          />
+            data-testid="InvoicePaymentHistoryModal__329004" />
         )}
       </>
     );
@@ -379,7 +382,8 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
         status={data?.documentStatus}
         onSave={onSave}
         isDirty={isDirty}
-      />
+        isDocumentReadOnly={isDocumentReadOnly}
+        data-testid="SendToSifButton__329004" />
 
       {/* View payments modal — installment breakdown */}
       {showPaymentsModal && (
@@ -390,7 +394,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowPaymentsModal(false)}
           onPaymentAdded={fetchInstallments}
-        />
+          data-testid="InvoicePaymentHistoryModal__329004" />
       )}
 
       {/* Send Invoice modal */}
@@ -407,7 +411,7 @@ export default function InvoiceTopbarExtra({ data, recordId, token, apiBaseUrl, 
           pdfBlobUrl={pdfUrl}
           pdfBlobLoading={pdfLoading}
           onClose={() => setShowSendModal(false)}
-        />
+          data-testid="SendDocumentModal__329004" />
       )}
 
       {/* "¿Gestionar envío?" dialog — offered after confirming a standard invoice */}

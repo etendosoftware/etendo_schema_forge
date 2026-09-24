@@ -594,7 +594,7 @@ function computeMovementRowClassName({ selected, highlighted, expanded, rowCanEx
 export function MovementsTable({
   movements, loading, enabledDimensions = [], selectedIds, onSelectionChange,
   highlightTxnId = null, onReload, onEdit, accountCurrencyId = null,
-  sortKey = null, sortDirection = 'asc', onSort,
+  sortKey = null, sortDirection = 'asc', onSort, windowReadOnly,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -724,7 +724,7 @@ export function MovementsTable({
           {/* Kebab — visible on row hover */}
           <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__ae5a16">
             <div className="opacity-0 transition-opacity group-hover:opacity-100">
-              <MovementRowKebab movement={movement} onReload={onReload} onEdit={onEdit} data-testid="MovementRowKebab__ae5a16" />
+              <MovementRowKebab movement={movement} onReload={onReload} onEdit={onEdit} windowReadOnly={windowReadOnly} data-testid="MovementRowKebab__ae5a16" />
             </div>
           </TableCell>
         </TableRow>

@@ -2817,8 +2817,49 @@ checks `useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C')` right after its las
 developer-only debug/mock profile override the same way. Regression test added to
 `FiscalMonitorPage.vitest.jsx`, verified to fail without the fix and pass with it.
 
-Also unrelated but found in the same investigation: the "Roles del usuario" admin role-assignment
-UI (`AssignTemplateRolesControl.jsx` → `neoWebhookClient.js`) is currently broken under the cookie
-scheme (`getToken()` still reads the legacy `localStorage.sf_auth_token`, which a cookie session
-never populates) — a real, independent regression from the ETP-4576 migration, tracked separately,
-not fixed here.
+~~Also found in the same investigation: the "Roles del usuario" admin UI broken under the cookie
+scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
+promoting/demoting through the real UI works under cookie sessions. Not a bug.
+
+---
+
+## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
+
+**Component:** `artifacts/goods-movements/decisions.json` + `GoodsMovementsHeaderHandler.java`
+
+**Symptom:** The Goods Movements window had `post`/`unpost` `menuActions` and a `posted`
+`statusPills` entry in `decisions.json`, and the generated detail kebab rendered the Post/Unpost
+buttons — but clicking either one returned `Action not found: post` from the form, and the exact
+same document had no way to post from the list at all. The Not Posted Documents window could post
+the identical record without any error, because it calls `DocumentPostingService` directly.
+
+**Root cause:** A `post`/`unpost` `menuActions` pair in `decisions.json` only tells the generator to
+render two buttons that call `POST /sws/neo/<spec>/<entity>/{id}/action/post`. It does **not**, by
+itself, make that endpoint do anything. Three separate pieces all have to be present for the
+request to succeed:
+1. The header's `NeoHandler` must route `post`/`unpost` to `DocumentPostingService.handleAction()`
+   — otherwise the generic `NeoButtonActionHelper` dispatcher tries to resolve `post` as an AD
+   column name, fails, and 404s with `Action not found: post`.
+2. The `posted` column must be **declared as a field** in `decisions.json` (readOnly badge) —
+   otherwise it stays classified as an implicit AD-button *action* in `contract.json`, absent from
+   `entities.<entity>.fields`, so the `menuActions` visibility gate and the `statusPills` entry both
+   read a value the contract never actually exposes.
+3. A separate, hand-written `javaQualifier` typo/duplicate in the same `entities.header` object
+   (`"javaQualifier": "document-posting"` followed immediately by `"javaQualifier":
+   "goodsMovementsHeaderHandler"`) silently lost the first value to `JSON.parse`'s
+   last-key-wins — an earlier attempt to route through the shared `@Named("document-posting")`
+   handler had been overwritten and nobody noticed, because a duplicate JSON key is not a parse
+   error.
+
+**Fix:** Added the `posted` field declaration, routed `post`/`unpost` in
+`GoodsMovementsHeaderHandler.handle()` to `DocumentPostingService.handleAction()` (mirroring
+`GoodsReceiptHeaderHandler`), removed the duplicate `javaQualifier` key, and added the matching
+list-level `BulkDocumentAction`s + row-kebab entry so the same gate applies wherever the button
+appears.
+
+**Lesson:** A `menuActions`/`statusPills` entry referencing `post`/`unpost` (or any `neoAction`) is
+not self-sufficient — grep the target window's `NeoHandler` for a `DocumentPostingService` (or
+equivalent) call before assuming the wiring is complete, and confirm the field the action's
+visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
+action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
+error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).

@@ -273,7 +273,12 @@ describe('bulk unpost call sites (ETP-5302)', () => {
   const read = (window) =>
     readFileSync(join(__dirname, '..', '..', '..', 'windows', 'custom', window, 'index.jsx'), 'utf8');
 
-  for (const window of ['goods-shipment', 'goods-receipt']) {
+  // ETP-5378 QA follow-up (SEL-05/SEL-06) added the two return windows to this list. They
+  // belong here for the same reason the two goods windows do: their row-hover kebab already
+  // exposed "Descontabilizar" (via buildDocumentRowQuickActionsPostMenu({ includeUnpost: true })
+  // in ReturnWindowShell), so the selection bar lacking it was a grid-vs-selection asymmetry
+  // — a posted row showed the action on hover and offered nothing at all once ticked.
+  for (const window of ['goods-shipment', 'goods-receipt', 'return-material-receipt', 'return-to-vendor-shipment']) {
     it(`${window} mounts a third BulkDocumentAction wired to the shared unpost helpers`, () => {
       const source = read(window);
       assert.match(source, /import BulkDocumentAction, \{[^}]*buildUnpostActions[^}]*unpostRowFilter[^}]*\}/);

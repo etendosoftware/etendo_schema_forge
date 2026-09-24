@@ -51,7 +51,7 @@ Goods Movements should let an inventory user register a stock transfer from one 
 
 ## Gap assessment
 
-- The backend contract exposes action endpoints for `moveBetweenLocators` and `posted`. Both are intentionally discarded from the simplified UI (`decision: "Omit"`). `moveBetweenLocators` (bulk locator move) is not applicable; `posted` (accounting posting) is handled through the backend. If either is needed in future, it must be re-evaluated.
+- The backend contract exposes an action endpoint for `moveBetweenLocators` (bulk locator move), intentionally discarded from the simplified UI (`decision: "Omit"`) — not applicable to this window. `posted` (accounting posting) is **not** discarded — see "Design changes — ETP-5436" below for how it is exposed instead.
 - ~~The on-hand quantity shown in the product picker drawer is informational. There is no inline stock-availability validation, negative-stock prevention, or quantity warnings in the SPA. Those remain backend-only.~~ **Closed by ETP-5037** — see "Design changes — ETP-5037" below. Descriptive stock validation now exists on line save/update and on "Procesar" (aggregate check across lines), gated per source locator by `M_InventoryStatus.overissue`. Deliberately **not** reactive: no check fires while the user is still editing a field (e.g. changing the source warehouse or typing a quantity) — only at save/PATCH/process time. A reactive variant was built and live-verified, then dropped (see the design-changes section) because it meant a backend round-trip per keystroke on the Cantidad field.
 - Classic callouts for UOM autofill and quantity conversion are omitted. Users who expect immediate UOM population after product selection should be informed that UOM is resolved on save by the backend, not on field change in the UI.
 - Hard destination-bin validation (bin cannot equal source bin) is enforced by Etendo at process time. The browser-side `excludeValueOf` mechanism is a UX aid that hides the offending option from the selector, but it does not guard against edge cases where the value was set programmatically before the exclusion was applied.
@@ -203,3 +203,53 @@ it. Full design record: `docs/plans/ETP-5037-goods-movements-stock-validation-pl
   still showed the stale on-hand-quantity default until this was extended to that path too).
   Verified live end-to-end on both paths, with the persisted quantity confirmed at the database
   row, not just the UI.
+
+## Design changes — ETP-5436
+
+Posting/unposting a completed movement previously failed from both entry points: the detail
+kebab returned `Action not found: post` (the `post`/`unpost` `menuActions` and `posted`
+`statusPills` entry existed in `decisions.json`, but nothing routed the action or declared the
+field, so NEO Headless's generic button dispatcher 404'd looking for an AD column named
+`post`), and the list-level bulk bar had no Post/Unpost buttons at all. Only the "Documentos no
+contabilizados" window could post a movement, because that window calls
+`DocumentPostingService` directly instead of going through this one.
+
+- **Field declared.** `posted` is now a real field in `decisions.json` (readOnly badge,
+  mirroring `goods-receipt`), not an implicit AD button action — this is what moves it from
+  `contract.json`'s `api.actions` into `entities.movement.fields`, giving the `menuActions`
+  gate and the `statusPills` entry a real value to read. `rules.PROCESS_Posted` changed from
+  `Omit` to `Keep`: the classic hardcoded button is still not exposed, but posting itself is,
+  via `DocumentPostingService`.
+- **Action routed.** `GoodsMovementsHeaderHandler.handle()` now delegates `post`/`unpost` to the
+  shared `DocumentPostingService.handleAction()`, the same call every other posting window
+  (`goods-receipt`, `goods-shipment`, `sales-invoice`, …) already makes — run after the ETP-5037
+  stock guard and before the `documentNo` materialization, so neither existing hook is
+  reordered.
+- **List-level Post/Unpost.** The custom `goods-movements/index.jsx` wrapper adds
+  `bulkActions` (two `BulkDocumentAction`s, `actionMode="neoAction"`, gated by the shared
+  `buildPostActions`/`postRowFilter`/`buildUnpostActions`/`unpostRowFilter`) and a row-kebab
+  Post entry via `buildDocumentRowQuickActionsPostMenu` — the same shared helpers
+  `goods-receipt`/`goods-shipment` use, extracted in ETP-5209 for exactly this reuse. No
+  `buildInOutActions` bulk button: `M_Movement` has no `DocStatus`, and this window's own
+  completion flow is the `draftMode` "Procesar" action, untouched here.
+- **`Posted = 'D'` ("Documento deshabilitado") explained.** Core's
+  `DocMovement.getDocumentConfirmation()` sets this status when none of the movement's lines
+  yet carry an `M_Transaction` with a non-zero `transactionCost` — i.e. the background
+  cost-calculation process has not run for this movement yet. `DocumentPostingService` now
+  resolves an EN/ES message naming that cause (hardcoded in Java, not a new `AD_MESSAGE` — this
+  module has no `AD_MESSAGE_TRL` translation pipeline of its own, so a fresh message row would
+  silently stay English-only for es_ES clients) and surfaces it in the post-attempt toast.
+  Scoped to `acct.tableName === "M_Movement"` only: `D` means a structurally different
+  precondition on every other `Doc*` subclass, so a table-agnostic message would misinform
+  other document types that can also reach `D`.
+- **Pill hint (generator change, `schema_forge_core`).** The detail-view `posted` status pill
+  can now carry an optional `hint` (rendered as its `title` tooltip), resolved from a new
+  per-window `statusPills[].hintKeys` map (code → i18n key) in `decisions.json` —
+  `resolveStatusPill`/`DocumentStatusPill.jsx` in `schema_forge`, plus the corresponding
+  `extraBadges` emission in `generate-frontend.js`. Deliberately per-window, not a new case in
+  the shared `POSTED_STATUS` registry: that registry has no notion of which AD table produced a
+  code, so a hint added there would misinform every other window that can hit the same code.
+  goods-movements declares `hintKeys: { "D": "goodsMovementsPostedDisabledHint" }`. **Requires a
+  `schema_forge_core` publish (or `LOCAL_CORE=1`) before `make regen` picks it up** — until
+  then the generated `extraBadges` array silently omits `hintKeys`, same as any window that
+  never declares it.
