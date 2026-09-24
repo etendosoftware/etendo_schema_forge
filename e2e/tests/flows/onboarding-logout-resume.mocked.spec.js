@@ -115,7 +115,10 @@ test.describe('ETP-4584 — onboarding logout and resume', () => {
     });
 
     await page.goto('/logout?returnTo=/logout');
-    await expect(page).toHaveURL(/\/onboarding$/);
+    // ETP-5463 (develop, e694270e7) routes logout to the public /login page, which renders the
+    // login form itself instead of redirecting to /onboarding. The request's `returnTo` is still
+    // ignored, so the loop-back to /logout cannot happen.
+    await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByTestId('action-login-submit')).toBeVisible();
     await expect.poll(() => page.evaluate(() => ({
       auth: localStorage.getItem('sf_auth_token'),
