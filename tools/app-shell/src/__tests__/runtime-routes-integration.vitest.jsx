@@ -157,11 +157,20 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     sessionEntries.forEach(([key, value]) => window.localStorage.setItem(key, value));
     renderAt('/logout', { auth: { loginPath: '/login' } });
 
-    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(window.location.search).toBe('');
-    expect(window.location.href).not.toContain('/onboarding?returnTo=/logout');
-    expect(window.localStorage.getItem('sf_auth_token')).toBeNull();
-    expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
+    expect(window.location.href).not.toContain('/login?returnTo=/logout');
+    for (const key of [
+      'sf_auth_token',
+      'sf_auth_user',
+      'sf_auth_client_id',
+      'sf_auth_rolelist',
+      'sf_auth_selected_role',
+      'sf_auth_selected_org',
+      'sf_platform_token',
+    ]) {
+      expect(window.localStorage.getItem(key), `${key} is cleared on logout`).toBeNull();
+    }
   }, 30000);
 
   it.each([
@@ -170,14 +179,21 @@ describe('buildRuntimeRoutes through the real AppShellRuntime', () => {
     '/logout?returnTo=https%3A%2F%2Fattacker.example%2Fsteal',
     '/logout?returnTo=%2F%2Fattacker.example%2Fsteal',
     '/logout?returnTo=%2F%25',
-  ])('uses onboarding as the safe destination for unsafe logout return targets: %s', async (path) => {
+  ])('uses login as the safe destination for unsafe logout return targets: %s', async (path) => {
     window.localStorage.setItem('sf_platform_token', 'platform-token');
     renderAt(path, { auth: { loginPath: '/login' } });
 
-    await waitFor(() => expect(window.location.pathname).toBe('/onboarding'));
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(window.location.search).toBe('');
     expect(window.localStorage.getItem('sf_platform_token')).toBeNull();
   }, 30000);
+
+  it('keeps /login as the destination instead of redirecting to /onboarding', async () => {
+    renderAt('/login', { auth: { loginPath: '/login' } });
+
+    await waitFor(() => expect(window.location.pathname).toBe('/login'));
+    expect(window.location.pathname).not.toBe('/onboarding');
+  });
 
   it('resolves a lazy-loaded route via Suspense', async () => {
     // The brief's literal assertion (`findByText(/.+/)`) is ambiguous here: once AppStorePage
