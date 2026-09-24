@@ -320,6 +320,38 @@ describe('createCheckoutSession', () => {
     );
   });
 
+  // ETP-5046 — the server's legacy price fallback retires itself when the first priced plan is
+  // created, so a page loaded before that flip still offers `legacy-productive` and gets a 400
+  // PLAN_NOT_AVAILABLE. That must reach the page as its own code, whose copy says "reload" —
+  // not as the generic failure, which would leave the buyer retrying a plan that is gone.
+  it('maps a PLAN_NOT_AVAILABLE refusal onto planNotAvailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createCheckoutSession('', { planKey: 'legacy-productive' }),
+      (error) => error.code === UPGRADE_ERROR_CODES.planNotAvailable
+        && error.code === 'upgradePlanNotAvailable'
+        && error.status === 400,
+    );
+  });
+
+  it('keeps any other 400 on the generic checkout failure', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'INVALID_CLIENT_NAME', message: 'bad name' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createCheckoutSession('', {}),
+      (error) => error.code === UPGRADE_ERROR_CODES.checkoutCreationFailed,
+    );
+  });
+
   // `on401: 'ignore'` is this module's documented policy (docs/request-policy.md): a 401 has to
   // reach the page as `sessionExpired`, which it renders, instead of being routed to the logout
   // choke point — that would drop the user out of the app mid-checkout. Without the option
@@ -609,6 +641,19 @@ describe('createBillingPurchase', () => {
 
   // A 409 that names no purchase is not a duplicate the page can reopen, and must not be reported
   // as one — the screen would navigate to a purchase nobody named.
+  it('maps a PLAN_NOT_AVAILABLE refusal onto planNotAvailable', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse(
+      { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+      { ok: false, status: 400 },
+    ));
+
+    await assert.rejects(
+      () => createBillingPurchase('', { planKey: 'legacy-productive' }),
+      (error) => error.code === UPGRADE_ERROR_CODES.planNotAvailable && error.status === 400,
+    );
+  });
+
   it('falls back to the generic failure on a 409 that names no purchase', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ message: 'conflict' }, { ok: false, status: 409 }));

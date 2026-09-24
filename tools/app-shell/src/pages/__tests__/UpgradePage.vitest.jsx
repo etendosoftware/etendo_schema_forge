@@ -554,6 +554,32 @@ describe('UpgradePage — hosted checkout', () => {
     expect(assignMock).not.toHaveBeenCalled();
     expect(requests).toHaveLength(0);
   });
+
+  // ETP-5046 — the server's legacy price fallback retires itself when the first priced plan is
+  // created. A page loaded before that flip still offers the old plan, and the server refuses it
+  // with 400 PLAN_NOT_AVAILABLE. The buyer must be told to RELOAD (the plan list is stale), not
+  // shown the generic "checkout failed" that invites retrying a plan that is gone.
+  it('tells the buyer to reload when the plan they chose is no longer available', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: 'Acme Trial' }],
+      checkout: () => jsonResponse(
+        { error: { code: 'PLAN_NOT_AVAILABLE', message: 'The selected plan is no longer available.' } },
+        { ok: false, status: 400 },
+      ),
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    const error = await screen.findByTestId('upgrade-error');
+    expect(error).toHaveTextContent('upgradePlanNotAvailable');
+    expect(error).not.toHaveTextContent('upgradeCheckoutCreationFailed');
+    expect(assignMock).not.toHaveBeenCalled();
+    // The key renders real copy in both shipped languages, and that copy asks for a reload.
+    expect(enUs.genericLabels.upgradePlanNotAvailable).toMatch(/reload/i);
+    expect(esEs.genericLabels.upgradePlanNotAvailable).toMatch(/recarga/i);
+  });
 });
 
 /**
