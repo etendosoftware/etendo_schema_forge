@@ -129,6 +129,26 @@ Whenever you add a new numeric field to an inline-add or inline-edit row, verify
 
 ---
 
+## [2026-09-24] ETP-5488 — A new invitee could not enter the company after creating the account
+
+**Component:** `tools/app-shell/src/pages/InviteAcceptancePage.jsx`.
+
+**Symptom:** An invitee without an Etendo Go account filled in the register form, got "¡Bienvenido a <empresa>!", and
+"Entrar en <empresa>" answered "No hemos podido abrir esa empresa. Puede que todavía no tengas un rol asignado", even
+with roles assigned. No request and no console output.
+
+**Root cause:** `POST /sws/go/company-invitations/register-and-accept` creates the account and joins the company but
+opens no session (no cookie; the call also goes out with `credentials: 'omit'`). The existing-account branch signs in
+through `LoginStep` first, so it holds a credential; the register branch never did. `useEnvironmentSwitch` saw no
+credential, so `enterByClientName` returned `false` before sending anything.
+
+**Fix:** after a successful register-and-accept, the page signs the new account in with `loginAccount`
+(`POST /sws/go/session`, the cookie session) using the invitation email and the password just chosen, and keeps the
+credential the same way the existing-account branch does. Applied to both register paths (`RegisterStep`'s
+`registerInvitationAccount` and the legacy form). Regression test in `InviteAcceptancePage.vitest.jsx`.
+
+---
+
 ## [2026-05-26] ETP-4027 — three bugs fixed during dual-currency display session
 
 ### Bug 1 — principal section currency field not locked (DetailView.jsx)
