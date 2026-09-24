@@ -2,15 +2,15 @@ import { EntityForm } from '@/components/contract-ui';
 
 // @sf-generated-start fields:lines
 const fields = [
-  { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', lookup: true, section: 'principal', reference: 'Product', inputMode: 'search', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'product', column: 'M_Product_ID', type: 'search', label: 'Product', lookup: true, section: 'principal', reference: 'Product', inputMode: 'search', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'description', column: 'Description', type: 'textarea', label: 'Description', section: 'principal', maxLength: 2000 },
-  { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true, section: 'principal', defaultValue: '1', readOnlyLogic: (record) => record['processed'] === true || (record['uomManagement'] === 'Y' && record['financialInvoiceLine'] !== true) },
-  { key: 'listPrice', column: 'PriceList', type: 'number', label: 'List Price', required: true, section: 'principal', readOnlyLogic: (record) => record['processed'] === true },
-  { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', section: 'principal', defaultValue: '0', min: 0, readOnlyLogic: (record) => record['processed'] === true },
-  { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', section: 'principal', reference: 'Tax', inputMode: 'selector', readOnlyLogic: (record) => record['processed'] === true },
+  { key: 'invoicedQuantity', column: 'QtyInvoiced', type: 'number', label: 'Invoiced Quantity', required: true, section: 'principal', defaultValue: '1', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') || (record['uomManagement'] === 'Y' && (record['financialInvoiceLine'] !== true && record['financialInvoiceLine'] !== 'Y')) },
+  { key: 'listPrice', column: 'PriceList', type: 'number', label: 'List Price', required: true, section: 'principal', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
+  { key: 'etgoDiscount', column: 'EM_Etgo_Discount', type: 'number', label: 'Discount %', section: 'principal', defaultValue: '0', min: 0, readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
+  { key: 'tax', column: 'C_Tax_ID', type: 'selector', label: 'Tax', section: 'principal', reference: 'Tax', inputMode: 'selector', readOnlyLogic: (record) => (record['processed'] === true || record['processed'] === 'Y') },
   { key: 'grossAmount', column: 'Line_Gross_Amount', type: 'number', label: 'Line Gross Amount', readOnly: true, section: 'principal', defaultValue: '0' },
-  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
-  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'CostCenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => record['posted'] === true },
+  { key: 'project', column: 'C_Project_ID', type: 'search', label: 'Project', section: 'principal', reference: 'Project', inputMode: 'search', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') },
+  { key: 'costcenter', column: 'C_Costcenter_ID', type: 'selector', label: 'Cost Center', section: 'principal', reference: 'CostCenter', inputMode: 'selector', visible: null, visibilitySource: 'server', displayLogicReason: 'server-macro', readOnlyLogic: (record) => (record['posted'] === true || record['posted'] === 'Y') },
 ];
 // @sf-generated-end fields:lines
 
