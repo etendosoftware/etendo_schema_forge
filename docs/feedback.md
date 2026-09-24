@@ -2755,6 +2755,27 @@ the burst, not the largest window that still "feels safe."
 
 ---
 
+## [2026-09-24] ETP-5395 — Slow SFListMenu showed every sidebar entry in production
+
+**Component:** `tools/app-shell/src/App.jsx` (`MENU_ACCESS_FETCH_TIMEOUT_MS`).
+
+**Symptom:** On app.etendo.ai a Purchasing ("Compras") user saw the whole sidebar (Ventas included) on every load, and a
+freshly invited user with no roles saw it right after accepting the invitation.
+
+**Root cause:** `fetchWindowAccess` races `/sws/neo/listmenu` against a timeout and, when the timeout wins, reports
+the menu as unreachable. `useRoleMenu` then fails open and `AppLayout` renders the unfiltered menu. The timeout was
+1s (ETP-5189, added so a hung request cannot stall E2E bootstrap), but production answered a correct tree in 2.1s.
+The role-less case was the same race on the first, cold request; the later refocus answered fast and correctly
+showed "Tu rol no tiene acceso".
+
+**Fix:** timeout raised to 10s, which still guards against a request that never answers while clearing real latency.
+Regression test: `App.vitest.jsx` "uses a slow but successful SFListMenu answer instead of failing open".
+
+**Lesson:** a timeout whose fallback is fail-OPEN is a permission decision, not a performance knob. Size it against
+production latency, not local or mocked latency.
+
+---
+
 ## [2026-09-23] ETP-5395 (post-merge regression) — Two custom windows never wired the standard access-tier gate
 
 **Component:** `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx`,

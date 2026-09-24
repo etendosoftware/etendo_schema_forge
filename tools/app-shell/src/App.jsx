@@ -111,7 +111,12 @@ const MENU_ACCESS_CACHE_TTL_MS = 3_000;
 const MENU_ACCESS_FAILURE_TTL_MS = 60_000;
 // SFListMenu is optional for the window-access decision. A hung/aborted menu
 // request must not hold AuthContext bootstrap behind the global 60s test timeout.
-const MENU_ACCESS_FETCH_TIMEOUT_MS = 1_000;
+// [ETP-5395] This only guards against a request that never answers, so it must sit far
+// above real latency: a timed-out race fails OPEN (the full, unfiltered sidebar). At 1s,
+// production (app.etendo.ai) answered SFListMenu correctly for a Purchasing role but a bit
+// later than that, and every load showed every menu entry. 10s stays well under the test
+// timeout above and well over any healthy answer.
+const MENU_ACCESS_FETCH_TIMEOUT_MS = 10_000;
 let menuAccessCache = null; // { value, expiresAt } | null
 let menuAccessInFlight = null;
 

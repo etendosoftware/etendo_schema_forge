@@ -348,6 +348,25 @@ describe('fetchWindowAccess', () => {
     expect(result).toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
   });
 
+  // ETP-5395 — production regression: on app.etendo.ai a correct SFListMenu answer for a
+  // Purchasing role took longer than the old 1s budget, so the menu fell back to "unknown"
+  // and the sidebar showed every entry (Ventas included) on every load. A slow but valid
+  // answer must be used, not replaced by the fail-open sentinel.
+  it('uses a slow but successful SFListMenu answer instead of failing open', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn((url) => (
+      String(url).includes('/listmenu')
+        ? new Promise((resolve) => { setTimeout(() => resolve(menuTextResponse(MENU_TREE)), 2_500); })
+        : Promise.resolve(jsonResponse(PAYLOAD))
+    )));
+
+    const resultPromise = fetchWindowAccess({ token: 'tok' });
+    await vi.advanceTimersByTimeAsync(2_500);
+
+    await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: EXPECTED_MENU_ACCESS });
+    vi.useRealTimers();
+  });
+
   it('does not block window access forever when SFListMenu never settles', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn((url) => (
@@ -357,7 +376,7 @@ describe('fetchWindowAccess', () => {
     )));
 
     const resultPromise = fetchWindowAccess({ token: 'tok' });
-    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(10_000);
 
     await expect(resultPromise).resolves.toEqual({ ...PAYLOAD, menuAccess: { [MENU_ACCESS_UNREACHABLE]: true } });
     vi.useRealTimers();
