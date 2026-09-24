@@ -212,6 +212,12 @@
           "form": false,
           "section": "other"
         },
+        "eTGOCost": {
+          "visibility": "readOnly",
+          "grid": true,
+          "form": false,
+          "section": "other"
+        },
         "eTGOStock": {
           "visibility": "readOnly",
           "grid": true,

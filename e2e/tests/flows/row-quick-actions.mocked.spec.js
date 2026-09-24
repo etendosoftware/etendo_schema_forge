@@ -219,7 +219,9 @@ test.describe('Preview panel — row click opens preview', () => {
         await expect(modal).toBeVisible();
         // aria-label resolves to "Cerrar" (es_ES) or "Close" (en_US) via ui('close')
         await modal.getByRole('button', { name: /cerrar|close/i }).click();
-        await expect(modal).toBeHidden({ timeout: 1000 });
+        // The card first plays its 280 ms exit animation, then ListView unmounts it.
+        // A 1 s budget is too tight when the mocked suite runs four workers.
+        await expect(modal).toBeHidden({ timeout: 5_000 });
       });
 
       test('Edit button navigates to detail from preview', async ({ page }) => {

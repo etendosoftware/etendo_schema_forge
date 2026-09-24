@@ -248,7 +248,11 @@ export default function BulkInvoiceFromReceipt({ selectedRows, clearSelection, t
     ? undefined
     : (quoteAmount != null
       ? formatCurrency(currencyCode, quoteAmount)
-      : `${invoiceableCount} ${ui('receipt')}${invoiceableCount !== 1 ? 's' : ''}`);
+      // ETP-5378 QA follow-up — see the matching note in BulkInvoiceFromShipment.jsx. The
+      // Spanish value here is identical to the shipment side ("albarán"); the separate key
+      // exists for English, which calls this window's document a receipt.
+      : ui(invoiceableCount === 1 ? 'receiptCount_one' : 'receiptCount_plural',
+        { count: invoiceableCount }));
 
   if (selectedRows.length < 1) return null;
 

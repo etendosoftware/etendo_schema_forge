@@ -159,6 +159,16 @@ describe('the module surface', () => {
 });
 
 describe('createCheckoutSession', () => {
+  it('preserves an explicit all-false transfer choice on the legacy checkout route', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ requestId: 'req-1', checkoutUrl: 'https://c.test/s1' }));
+
+    await createCheckoutSession('', { dataTransfer: { products: false, contacts: false } });
+
+    assert.deepEqual(JSON.parse(calls[0][1].body).dataTransfer,
+      { products: false, contacts: false });
+  });
+
   it('posts product intent without card or price fields', async () => {
     declareCookieSession();
     installFetch(jsonResponse({ requestId: 'req-1', checkoutUrl: 'https://checkout.stripe.test/s1' }));
@@ -407,6 +417,24 @@ describe('runPaidOnboarding', () => {
  * `Authorization: Bearer <purged key>` as a pass while the wire carried no proof of intent at all.
  */
 describe('createBillingPurchase', () => {
+  for (const selection of [
+    { products: false, contacts: false },
+    { products: true, contacts: false },
+    { products: false, contacts: true },
+    { products: true, contacts: true },
+  ]) {
+    it(`sends the explicit transfer choice ${JSON.stringify(selection)} with the purchase`, async () => {
+      declareCookieSession();
+      installFetch(jsonResponse({ requestId: 'req-2', checkoutUrl: 'https://c.test/s2' }));
+
+      await createBillingPurchase('https://api.test', {
+        clientName: 'Acme Productive', dataTransfer: selection,
+      });
+
+      assert.deepEqual(JSON.parse(calls[0][1].body).dataTransfer, selection);
+    });
+  }
+
   it('posts product intent to the billing boundary, with no card or price fields', async () => {
     declareCookieSession();
     installFetch(jsonResponse({
