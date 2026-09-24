@@ -21,8 +21,10 @@ import {
   runPaidOnboarding,
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
-import { useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
+import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
 import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
+import { formatCurrency } from '@/lib/formatCurrency.js';
+import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 
 const PRODUCTIVE_FEATURES = [
   'upgradeProductiveFeatureSeparate',
@@ -61,6 +63,7 @@ const PENDING_CHECKOUT_ACTION = 'sf_pending_checkout_action';
 const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 const PENDING_CHECKOUT_DATA_TRANSFER = 'sf_pending_checkout_data_transfer';
 const DEFAULT_DATA_TRANSFER = { products: true, contacts: true };
+const PAYMENT_CONFIRMED_PURCHASE_STATUSES = new Set(['PAID', 'PROVISIONING', 'PROVISIONED']);
 
 /** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
 function emitUpgradeEvent(eventDefinition, properties) {
@@ -217,10 +220,14 @@ async function resumeCheckoutProvisioning({
   const status = await waitForCheckoutPayment({ baseUrl, requestId });
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
 
+  // A purchase without a persisted demo source (productive origin) never carries a transfer.
+  const hasPersistedDemoSource = Boolean(String(status?.demoClientId ?? '').trim());
   // The recorded purchase is authoritative when it has a selection. An explicit local choice
   // remains available for older/flag-off purchases, where the backend does not persist it.
-  const selectedTransfer = purchaseDataTransfer(purchase, readPendingDataTransfer(storage));
-  onTransferWarning(isMissingRecordedSelection(purchase));
+  const selectedTransfer = hasPersistedDemoSource
+    ? purchaseDataTransfer(purchase, readPendingDataTransfer(storage))
+    : null;
+  onTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
   onPendingProvisioning({
     clientName: status.clientName || tenantName,
     paymentToken: requestId,
@@ -258,7 +265,6 @@ function PlanCard({ testId, name, tagline, price, features, current, highlighted
         </div>
         <div className="flex items-baseline gap-2">
           <p className="text-3xl font-bold tracking-tight">{price}</p>
-          <span className="text-sm text-muted-foreground">/ {ui('upgradeCheckoutMonth')}</span>
         </div>
         {onSelect && (
           <Button
@@ -306,32 +312,41 @@ function SkeletonPlanCard({ testId, className = '' }) {
   );
 }
 
-function CheckoutSteps({ ui, phase, checkoutStep }) {
+function CheckoutSteps({ ui, checkoutStep, highestReachedStep, enabled, onStepChange }) {
   const steps = [
-    { label: ui('upgradeCheckoutStepPlan'), active: checkoutStep === 'plan' },
-    { label: ui('upgradeCheckoutStepAddons'), active: checkoutStep === 'addons' },
-    { label: ui('upgradeCheckoutStepPayment'), active: checkoutStep === 'payment' || phase === 'running' },
+    { key: 'plan', label: ui('upgradeCheckoutStepPlan') },
+    { key: 'addons', label: ui('upgradeCheckoutStepAddons') },
+    { key: 'payment', label: ui('upgradeCheckoutStepPayment') },
   ];
   return (
-    <nav className="hidden items-center gap-3 md:flex" aria-label={ui('upgradeCheckoutSteps')}>
+    <nav className="flex min-w-0 max-w-full items-center gap-2 overflow-x-auto py-1" aria-label={ui('upgradeCheckoutSteps')}>
       {steps.map((step, index) => (
-        <div key={step.label} className="flex items-center gap-3">
-          <span className={step.active
-            ? 'flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground'
-            : 'flex h-8 w-8 items-center justify-center rounded-full border border-border text-sm font-semibold text-muted-foreground'}>
-            {index + 1}
-          </span>
-          <span className={step.active ? 'text-sm font-semibold text-foreground' : 'text-sm text-muted-foreground'}>
-            {step.label}
-          </span>
-          {index < steps.length - 1 && <span className="h-px w-8 bg-border" aria-hidden="true" />}
+        <div key={step.key} className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={step.label}
+            aria-current={checkoutStep === step.key ? 'step' : undefined}
+            disabled={!enabled || index > highestReachedStep}
+            onClick={() => onStepChange(step.key)}
+            data-testid={`upgrade-checkout-step-${step.key}`}>
+            <span className={checkoutStep === step.key
+              ? 'flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground'
+              : 'flex h-8 w-8 items-center justify-center rounded-full border border-border text-sm font-semibold text-muted-foreground'}>
+              {index + 1}
+            </span>
+            <span className={checkoutStep === step.key ? 'text-sm font-semibold text-foreground' : 'text-sm text-muted-foreground'}>
+              {step.label}
+            </span>
+          </button>
+          {index < steps.length - 1 && <span className="h-px w-5 bg-border" aria-hidden="true" />}
         </div>
       ))}
     </nav>
   );
 }
 
-function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
+function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue, includeDataTransfer }) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]" data-testid="upgrade-addons-step">
       <section className="space-y-5">
@@ -343,10 +358,14 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
         <div className="grid gap-4 md:grid-cols-2">
           <Card className="border-border bg-card" data-testid="upgrade-data-transfer">
             <CardHeader data-testid="CardHeader__58bad7">
-              <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeDataTransferTitle')}</CardTitle>
-              <p className="text-sm text-muted-foreground">{ui('upgradeDataTransferBody')}</p>
+              <CardTitle className="text-base" data-testid="CardTitle__58bad7">
+                {ui(includeDataTransfer ? 'upgradeDataTransferTitle' : 'upgradeNoDataTransferTitle')}
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {ui(includeDataTransfer ? 'upgradeDataTransferBody' : 'upgradeNoDataTransferBody')}
+              </p>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2" data-testid="CardContent__58bad7">
+            {includeDataTransfer && <CardContent className="grid gap-3 sm:grid-cols-2" data-testid="CardContent__58bad7">
               {[
                 { key: 'products', labelKey: 'upgradeMigrateProducts' },
                 { key: 'contacts', labelKey: 'upgradeMigrateContacts' },
@@ -362,7 +381,7 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
                   <span>{ui(item.labelKey)}</span>
                 </label>
               ))}
-            </CardContent>
+            </CardContent>}
           </Card>
           {[1, 2, 3, 4].map(item => (
             <Card key={item} className="min-h-[130px] border-border bg-muted/20" data-testid={`upgrade-addon-skeleton-${item}`}>
@@ -390,10 +409,12 @@ function AddonsStep({ ui, dataTransfer, onDataTransferChange, onContinue }) {
             <span className="font-semibold">{ui('upgradeCheckoutIncluded')}</span>
           </div>
           <div className="border-t pt-4 text-sm text-muted-foreground">{ui('upgradeCheckoutNoAddons')}</div>
-          <Button className="w-full" onClick={onContinue} data-testid="upgrade-addons-continue">
-            {ui('upgradeCheckoutContinue')}
-            <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
-          </Button>
+          <div className="grid gap-2">
+            <Button type="button" onClick={onContinue} data-testid="upgrade-addons-continue">
+              {ui('upgradeCheckoutContinue')}
+              <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -483,7 +504,10 @@ function SuccessPanel({ ui, onContinue, entering, enterError }) {
 }
 
 function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
-  if (!purchases.length) return null;
+  const confirmedPurchases = purchases.filter(purchase => (
+    PAYMENT_CONFIRMED_PURCHASE_STATUSES.has(purchase.status)
+  ));
+  if (!confirmedPurchases.length) return null;
   return (
     <Card data-testid="upgrade-billing-overview">
       <CardHeader data-testid="CardHeader__58bad7">
@@ -492,11 +516,13 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
       </CardHeader>
       <CardContent data-testid="CardContent__58bad7">
         <ul className="space-y-2 text-sm">
-          {purchases.map(purchase => (
-            <li key={purchase.purchaseId} className="flex items-center justify-between gap-3">
+          {confirmedPurchases.map(purchase => (
+            <li key={purchase.purchaseId} className="flex flex-wrap items-center justify-between gap-3">
               <span className="truncate">{purchase.clientName || ui('upgradeUnnamedPurchase')}</span>
               <div className="flex items-center gap-2">
-                <Badge variant="secondary" data-testid="Badge__58bad7">{purchase.status}</Badge>
+                <Badge variant="secondary" data-testid="Badge__58bad7">
+                  {ui(({ PAID: 'upgradePurchaseStatusPaid', PROVISIONING: 'upgradePurchaseStatusProvisioning', PROVISIONED: 'upgradePurchaseStatusProvisioned' })[purchase.status] || 'upgradePurchaseStatusUnknown')}
+                </Badge>
                 {(purchase.status === 'PAID' || purchase.status === 'PROVISIONING') && (
                   <Button
                     variant="outline"
@@ -511,6 +537,16 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
                   </Button>
                 )}
               </div>
+              {(purchase.status === 'PAID' || purchase.status === 'PROVISIONING') && (
+                <p className="basis-full text-xs text-muted-foreground" data-testid={`upgrade-purchase-resume-help-${purchase.purchaseId}`}>
+                  {ui('upgradePurchaseResumeHelp')}
+                </p>
+              )}
+              {purchase.status === 'PROVISIONED' && (
+                <p className="basis-full text-xs text-muted-foreground" data-testid={`upgrade-purchase-ready-help-${purchase.purchaseId}`}>
+                  {ui('upgradePurchaseReadyHelp')}
+                </p>
+              )}
             </li>
           ))}
         </ul>
@@ -519,15 +555,14 @@ function BillingOverviewPanel({ purchases, onResume, resumingPurchaseId, ui }) {
   );
 }
 
-function formatOfferPrice(offer, locale) {
+function formatOfferAmount(offer) {
   if (!offer || !Number.isFinite(Number(offer.amountMinor)) || !offer.currency) return null;
-  try {
-    return new Intl.NumberFormat(String(locale || 'en-US').replace('_', '-'), {
-      style: 'currency', currency: offer.currency,
-    }).format(Number(offer.amountMinor) / 100);
-  } catch {
-    return `${offer.currency} ${(Number(offer.amountMinor) / 100).toFixed(2)}`;
-  }
+  const normalized = minorUnitsToAmount(offer.currency, Number(offer.amountMinor));
+  if (!normalized) return null;
+  return formatCurrency(offer.currency, normalized.amount, {
+    minimumFractionDigits: normalized.fractionDigits,
+    maximumFractionDigits: normalized.fractionDigits,
+  });
 }
 
 export default function UpgradePage() {
@@ -536,7 +571,9 @@ export default function UpgradePage() {
   const apiFetch = useApiFetch(getUpgradeBaseUrl());
 
   const [phase, setPhase] = useState('form'); // 'form' | 'running' | 'success'
+  const [returnedFromCheckout, setReturnedFromCheckout] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('plan'); // 'plan' | 'addons' | 'payment'
+  const [highestReachedCheckoutStep, setHighestReachedCheckoutStep] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
@@ -546,13 +583,17 @@ export default function UpgradePage() {
   // legitimate upgrade.
   const [accountState, setAccountState] = useState('loading');
   const [environments, setEnvironments] = useState([]);
+  const [selectedDemoClientId, setSelectedDemoClientId] = useState('');
+  const [provisionedClientId, setProvisionedClientId] = useState('');
+  const [provisioningPurchaseId, setProvisioningPurchaseId] = useState('');
+  const [environmentSyncPending, setEnvironmentSyncPending] = useState(false);
   const [billingPurchases, setBillingPurchases] = useState([]);
   const [billingOffer, setBillingOffer] = useState(null);
   const [resumingPurchaseId, setResumingPurchaseId] = useState(null);
   // Bumped by the retry button so the lookup effect re-runs. A failed lookup is recoverable —
   // the usual cause is a transient/auth error, not an account without environments.
   const [lookupAttempt, setLookupAttempt] = useState(0);
-  const { enterByClientName, currentClientId } = useEnvironmentSwitch({ enabled: false });
+  const { switchTo, currentClientId } = useEnvironmentSwitch({ enabled: false });
   // Read inside the one-shot environments effect below, which must see the session's value at
   // the time the lookup settles rather than the one its mount-time closure captured.
   const currentClientIdRef = useRef(currentClientId);
@@ -564,6 +605,28 @@ export default function UpgradePage() {
   const [dataTransferChosen, setDataTransferChosen] = useState(false);
   const [transferWarning, setTransferWarning] = useState(false);
 
+  const syncProvisionedEnvironment = async clientId => {
+    const wanted = String(clientId ?? '').trim();
+    if (!wanted) return false;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const latestEnvironments = await fetchEnvironments(fetch, getUpgradeBaseUrl());
+        const canonicalEnvironments = Array.isArray(latestEnvironments) ? latestEnvironments : [];
+        setEnvironments(canonicalEnvironments);
+        if (canonicalEnvironments.some(environment => String(environment?.clientId ?? '').trim() === wanted)) {
+          setEnvironmentSyncPending(false);
+          window.dispatchEvent(new Event(ENVIRONMENT_LIST_REFRESH_EVENT));
+          return true;
+        }
+      } catch {
+        // A later bounded lookup may see the account projection after it catches up.
+      }
+      if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    setEnvironmentSyncPending(true);
+    return false;
+  };
+
   const startProvisioning = async () => {
     if (!pendingProvisioning) return;
     // ETP-4576 — no `!token` gate: under the cookie session there is no client-held token, so the
@@ -572,13 +635,27 @@ export default function UpgradePage() {
     setEntering(true);
     try {
       const { startedAt, ...onboardingInput } = pendingProvisioning;
-      await runPaidOnboarding(getUpgradeBaseUrl(), onboardingInput, message => {
+      const result = await runPaidOnboarding(getUpgradeBaseUrl(), onboardingInput, message => {
         setSteps(previous => applyProgressMessage(previous, message));
       });
       await resetFirstStepsAfterProvisioning(apiFetch, onboardingInput.paymentToken);
+      let createdClientId = String(result?.clientId || result?.createdClientId || '').trim();
+      if (!createdClientId && onboardingInput.paymentToken) {
+        try {
+          const purchase = await getBillingPurchase(getUpgradeBaseUrl(), onboardingInput.paymentToken);
+          createdClientId = String(purchase?.createdClientId || purchase?.clientId || '').trim();
+        } catch {
+          // The purchase projection may not yet expose the created environment.
+        }
+      }
+      setProvisionedClientId(createdClientId);
+      setProvisioningPurchaseId(onboardingInput.paymentToken || '');
+      // The company selector is the canonical account projection. Do not present
+      // completion as ready until that list contains the exact returned client ID.
+      const environmentIsListed = await syncProvisionedEnvironment(createdClientId);
       setPendingProvisioning(null);
       setEntering(false);
-      setPhase('success');
+      setPhase(environmentIsListed ? 'success' : 'syncing-environment');
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_SUCCEEDED, {
         upgradeAction: onboardingInput.upgradeAction,
         ...(startedAt ? { durationMs: Date.now() - startedAt } : {}),
@@ -609,9 +686,15 @@ export default function UpgradePage() {
       setFormError('upgradeCheckoutCreationFailed');
       return;
     }
-    const selectedTransfer = purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null);
-    setTransferWarning(isMissingRecordedSelection(purchase));
+    // Only a purchase with a persisted demo source carries a transfer; the recorded selection
+    // stays authoritative over the local choice.
+    const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
+    const selectedTransfer = hasPersistedDemoSource
+      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
+      : null;
+    setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
     setResumingPurchaseId(purchase.purchaseId);
+    setProvisioningPurchaseId(purchase.purchaseId);
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setFormError(null);
     setPhase('running');
@@ -633,12 +716,17 @@ export default function UpgradePage() {
     }
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setPhase('running');
+    setProvisioningPurchaseId(purchase.purchaseId);
     for (let attempt = 0; attempt < 60; attempt += 1) {
       try {
         const current = await getBillingPurchase(getUpgradeBaseUrl(), purchase.purchaseId);
         if (current?.status === 'PROVISIONED') {
           await resetFirstStepsAfterProvisioning(apiFetch, purchase.purchaseId);
-          setPhase('success');
+          const createdClientId = String(current.createdClientId || current.clientId || '').trim();
+          setProvisionedClientId(createdClientId);
+          setProvisioningPurchaseId(purchase.purchaseId);
+          const environmentIsListed = await syncProvisionedEnvironment(createdClientId);
+          setPhase(environmentIsListed ? 'success' : 'syncing-environment');
           return;
         }
         if (current?.status === 'PAID') {
@@ -651,8 +739,13 @@ export default function UpgradePage() {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    const selectedTransfer = purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null);
-    setTransferWarning(isMissingRecordedSelection(purchase));
+    // Only a purchase with a persisted demo source carries a transfer; the recorded selection
+    // stays authoritative over the local choice.
+    const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
+    const selectedTransfer = hasPersistedDemoSource
+      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
+      : null;
+    setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
     setPendingProvisioning({
       clientName: purchase.clientName,
       paymentToken: purchase.purchaseId,
@@ -664,6 +757,23 @@ export default function UpgradePage() {
     setPhase('running');
   };
 
+  const retryEnvironmentSync = async () => {
+    setEntering(true);
+    let clientId = provisionedClientId;
+    if (!clientId && provisioningPurchaseId) {
+      try {
+        const purchase = await getBillingPurchase(getUpgradeBaseUrl(), provisioningPurchaseId);
+        clientId = String(purchase?.createdClientId || purchase?.clientId || '').trim();
+        if (clientId) setProvisionedClientId(clientId);
+      } catch {
+        // Keep the sync action available so the user can retry after the projection catches up.
+      }
+    }
+    const ready = await syncProvisionedEnvironment(clientId);
+    setEntering(false);
+    if (ready) setPhase('success');
+  };
+
   useEffect(() => {
     let cancelled = false;
     fetchEnvironments(fetch, getUpgradeBaseUrl())
@@ -671,13 +781,18 @@ export default function UpgradePage() {
         if (cancelled) return;
         const nextEnvironments = Array.isArray(list) ? list : [];
         setEnvironments(nextEnvironments);
-        const demo = nextEnvironments.find(environment => environment.plan !== 'productive');
+        const demos = nextEnvironments.filter(environment => environment.plan !== 'productive');
         const current = currentClientIdRef.current
           ? nextEnvironments.find(environment => environment.clientId === currentClientIdRef.current)
           : undefined;
-        // The current environment first, the demo only as a fallback (ETP-5443). Never over a
-        // name the user already typed.
-        const prefillName = current?.clientName || demo?.clientName;
+        const currentDemo = demos.find(environment => environment.clientId === currentClientIdRef.current);
+        setSelectedDemoClientId(String(currentDemo?.clientId || ''));
+        // Preserve the current environment's name; only use a demo fallback when there is one.
+        // The source itself remains an explicit ID choice when the current environment is not a demo.
+        const currentIsProductive = Boolean(current && isProductiveEnvironment(current));
+        const prefillName = currentIsProductive
+          ? ''
+          : current?.clientName || (demos.length === 1 ? demos[0].clientName : '');
         if (prefillName) {
           setForm(previous => previous.tenantName
             ? previous
@@ -727,7 +842,19 @@ export default function UpgradePage() {
   // away, so it never sees whether the payment or the onboarding succeeded.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('checkout') !== 'success') return undefined;
+    const checkoutResult = params.get('checkout');
+    if (checkoutResult === 'cancelled') {
+      setReturnedFromCheckout(true);
+      sessionStorage.removeItem(PENDING_CHECKOUT_NAME);
+      sessionStorage.removeItem(PENDING_CHECKOUT_ACTION);
+      sessionStorage.removeItem(PENDING_CHECKOUT_STARTED_AT);
+      sessionStorage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
+      // Remove Stripe's return parameters so a reload does not reuse a stale checkout URL.
+      window.history.replaceState({}, '', '/upgrade');
+      return undefined;
+    }
+    if (checkoutResult !== 'success') return undefined;
+    setReturnedFromCheckout(true);
     const requestId = params.get('requestId');
     const storedTenantName = sessionStorage.getItem(PENDING_CHECKOUT_NAME) || '';
     const upgradeAction = sessionStorage.getItem(PENDING_CHECKOUT_ACTION) || 'create-productive';
@@ -792,17 +919,23 @@ export default function UpgradePage() {
         {
           action: 'productive-tenant',
           clientName: tenantName,
+          ...(isDemoOrigin && selectedDemoClientId ? { demoClientId: selectedDemoClientId } : {}),
+          ...(includeDataTransfer ? { dataTransfer } : {}),
           upgradeAction: form.upgradeAction,
           language: getStoredLocale(),
-          dataTransfer,
         }
       );
       // Payment and provisioning are confirmed by the backend/webhook. The
       // browser only follows the provider-hosted URL and never handles cards.
       sessionStorage.setItem(PENDING_CHECKOUT_NAME, tenantName);
       sessionStorage.setItem(PENDING_CHECKOUT_ACTION, form.upgradeAction);
+      // The server persists this choice with the purchase; local storage is not
+      // authoritative and is intentionally not used to restore the association.
       sessionStorage.setItem(PENDING_CHECKOUT_STARTED_AT, String(Date.now()));
-      sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER, JSON.stringify(dataTransfer));
+      // An explicit empty selection survives the Stripe redirect without restoring the demo
+      // transfer defaults when the purchase starts in a productive environment.
+      sessionStorage.setItem(PENDING_CHECKOUT_DATA_TRANSFER,
+        JSON.stringify(includeDataTransfer ? dataTransfer : {}));
       window.location.assign(session.checkoutUrl);
     } catch (error) {
       const existingPurchaseHandled = await handleExistingPurchaseError(error, {
@@ -834,11 +967,49 @@ export default function UpgradePage() {
   const showAccountLoading = phase === 'form' && accountState === 'loading';
   const showFirstTenantFree = phase === 'form' && hasNoTenants;
   const showCheckout = phase === 'form' && accountState !== 'loading' && !hasNoTenants;
-  const demoEnvironment = environments.find(environment => environment.plan !== 'productive');
+  const goToCheckoutStep = step => {
+    const stepIndex = { plan: 0, addons: 1, payment: 2 }[step];
+    if (phase !== 'form' || stepIndex === undefined || stepIndex > highestReachedCheckoutStep) return;
+    setCheckoutStep(step);
+  };
+  const advanceCheckoutStep = step => {
+    const stepIndex = { plan: 0, addons: 1, payment: 2 }[step];
+    if (phase !== 'form' || stepIndex === undefined) return;
+    setHighestReachedCheckoutStep(previous => Math.max(previous, stepIndex));
+    setCheckoutStep(step);
+  };
+  const demoEnvironments = environments.filter(environment => environment.plan !== 'productive');
+  // A session that names no current environment is inside none of them: comparing two empty IDs
+  // would otherwise adopt any listed environment without an ID as the purchase origin.
+  const currentEnvironment = currentClientId
+    ? environments.find(environment => String(environment?.clientId ?? '') === String(currentClientId))
+    : undefined;
+  // Only a verified demo origin can provide a data-transfer source. Productive-origin
+  // purchases create an independent environment, even when the account owns other demos.
+  const isDemoOrigin = Boolean(currentEnvironment && !isProductiveEnvironment(currentEnvironment));
+  const includeDataTransfer = isDemoOrigin;
+  const offerIntervalLabel = ({ day: 'upgradeBillingIntervalDay', week: 'upgradeBillingIntervalWeek', month: 'upgradeBillingIntervalMonth', year: 'upgradeBillingIntervalYear' })[billingOffer?.interval];
+  const offerPrice = formatOfferAmount(billingOffer);
+  const offerPriceLabel = offerPrice && offerIntervalLabel
+    ? ui('upgradePlanProductivePrice', { amount: offerPrice, interval: ui(offerIntervalLabel) })
+    : ui('upgradePlanProductivePriceUnavailable');
+  const demoEnvironment = demoEnvironments.find(environment => environment.clientId === selectedDemoClientId);
   const demoDays = demoEnvironment?.trialDaysRemaining;
   const handleSubmit = event => {
     event.preventDefault();
     setFormError(null);
+
+    if (accountState !== 'ready') {
+      setFormError('upgradeEnvironmentsUnavailable');
+      return;
+    }
+
+    if (isDemoOrigin && !demoEnvironments.some(
+      environment => String(environment.clientId) === selectedDemoClientId
+    )) {
+      setErrors({ demoClientId: 'upgradeDemoSelectionRequired' });
+      return;
+    }
 
     const tenantName = form.tenantName.trim();
 
@@ -889,10 +1060,20 @@ export default function UpgradePage() {
         </div>
         <CheckoutSteps
           ui={ui}
-          phase={phase}
           checkoutStep={checkoutStep}
+          highestReachedStep={highestReachedCheckoutStep}
+          enabled={showCheckout}
+          onStepChange={goToCheckoutStep}
           data-testid="CheckoutSteps__58bad7" />
-        <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label={ui('back')} data-testid="upgrade-close">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => (returnedFromCheckout
+            ? navigate('/dashboard', { replace: true })
+            : navigate(-1))}
+          aria-label={ui('back')}
+          data-testid="upgrade-close">
           <span className="text-2xl leading-none" aria-hidden="true">×</span>
         </Button>
       </header>
@@ -921,13 +1102,12 @@ export default function UpgradePage() {
           testId="upgrade-plan-productive"
           name={ui('upgradePlanProductiveName')}
           tagline={ui('upgradePlanProductiveTagline')}
-          price={formatOfferPrice(billingOffer, getStoredLocale())
-            || ui('upgradePlanProductivePriceUnavailable')}
+          price={offerPriceLabel}
           features={PRODUCTIVE_FEATURES}
           highlighted
           ui={ui}
           className="w-full"
-          onSelect={() => setCheckoutStep('addons')}
+          onSelect={() => advanceCheckoutStep('addons')}
           data-testid="PlanCard__58bad7" />
         <SkeletonPlanCard
           testId="upgrade-plan-coming-soon-1"
@@ -939,7 +1119,7 @@ export default function UpgradePage() {
           data-testid="SkeletonPlanCard__58bad7" />
       </div>
       <div className="flex justify-end md:hidden">
-        <Button onClick={() => setCheckoutStep('addons')} data-testid="upgrade-plan-continue">
+        <Button onClick={() => advanceCheckoutStep('addons')} data-testid="upgrade-plan-continue">
           {ui('upgradeCheckoutContinue')}
           <ArrowRight className="h-4 w-4" data-testid="ArrowRight__58bad7" />
         </Button>
@@ -955,11 +1135,23 @@ export default function UpgradePage() {
           }}
           onContinue={() => {
             setDataTransferChosen(true);
-            setCheckoutStep('payment');
+            advanceCheckoutStep('payment');
           }}
+          includeDataTransfer={includeDataTransfer}
           data-testid="AddonsStep__58bad7" />
       )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
+      {phase === 'syncing-environment' && (
+        <Card data-testid="upgrade-environment-sync-pending" aria-busy={environmentSyncPending}>
+          <CardContent className="space-y-3 py-6" data-testid="CardContent__58bad7">
+            <p className="font-semibold">{ui('upgradeSyncTitle')}</p>
+            <p className="text-sm text-muted-foreground">{ui('upgradeSyncBody')}</p>
+            <Button type="button" onClick={retryEnvironmentSync} disabled={entering} data-testid="upgrade-environment-sync-retry">
+              {ui('upgradeSyncRetry')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       {phase === 'success' && <SuccessPanel
         ui={ui}
         entering={entering}
@@ -971,7 +1163,24 @@ export default function UpgradePage() {
         onContinue={async () => {
           setEnterError(false);
           setEntering(true);
-          const entered = await enterByClientName(form.tenantName);
+          let canonicalEnvironments = [];
+          try {
+            const latest = await fetchEnvironments(fetch, getUpgradeBaseUrl());
+            canonicalEnvironments = Array.isArray(latest) ? latest : [];
+            setEnvironments(canonicalEnvironments);
+          } catch {
+            canonicalEnvironments = [];
+          }
+          const exactEnvironment = canonicalEnvironments.find(
+            environment => String(environment?.clientId ?? '').trim() === provisionedClientId
+          );
+          if (!exactEnvironment) {
+            setEntering(false);
+            setEnvironmentSyncPending(true);
+            setPhase('syncing-environment');
+            return;
+          }
+          const entered = await switchTo(exactEnvironment);
           if (!entered) {
             setEntering(false);
             setEnterError(true);
@@ -1003,10 +1212,10 @@ export default function UpgradePage() {
         <Card className="w-full border-border shadow-sm" data-testid="upgrade-checkout">
           <CardHeader data-testid="CardHeader__58bad7">
             <div className="flex items-center gap-2">
-              <CreditCard
-                className="h-4 w-4 text-muted-foreground"
-                data-testid="CreditCard__58bad7" />
-              <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeCheckoutTitle')}</CardTitle>
+                <CreditCard
+                  className="h-4 w-4 text-muted-foreground"
+                  data-testid="CreditCard__58bad7" />
+                <CardTitle className="text-base" data-testid="CardTitle__58bad7">{ui('upgradeCheckoutTitle')}</CardTitle>
             </div>
           </CardHeader>
           <CardContent data-testid="CardContent__58bad7">
@@ -1041,6 +1250,44 @@ export default function UpgradePage() {
                   data-testid="upgrade-tenant-name-input"
                 />
               </div>
+              {isDemoOrigin && demoEnvironments.length > 0 && (
+                <div className="space-y-1.5" data-testid="upgrade-source-demo-field">
+                  <Label htmlFor="upgrade-source-demo-select">{ui('upgradeDemoSelectionLabel')}</Label>
+                  <select
+                    id="upgrade-source-demo-select"
+                    className="w-full rounded-md border bg-background p-2"
+                    value={selectedDemoClientId}
+                    aria-invalid={Boolean(errors.demoClientId)}
+                    onChange={event => {
+                      const nextDemoClientId = event.target.value;
+                      const previousDemoName = demoEnvironments.find(
+                        environment => environment.clientId === selectedDemoClientId
+                      )?.clientName;
+                      const nextDemoName = demoEnvironments.find(
+                        environment => String(environment.clientId) === nextDemoClientId
+                      )?.clientName;
+                      setSelectedDemoClientId(nextDemoClientId);
+                      if (nextDemoName) {
+                        setForm(previous => (!previous.tenantName || previous.tenantName === previousDemoName
+                          ? { ...previous, tenantName: nextDemoName }
+                          : previous));
+                      }
+                      setErrors(previous => ({ ...previous, demoClientId: undefined }));
+                    }}
+                    data-testid="upgrade-source-demo-select"
+                  >
+                    <option value="">{ui('upgradeDemoSelectionPlaceholder')}</option>
+                    {demoEnvironments.map(environment => (
+                      <option key={environment.clientId} value={environment.clientId}>{environment.clientName}</option>
+                    ))}
+                  </select>
+                  {errors.demoClientId && (
+                    <p className="text-xs text-destructive" data-testid="upgrade-demo-selection-required">
+                      {ui(errors.demoClientId)}
+                    </p>
+                  )}
+                </div>
+              )}
               {errors.tenantName && (
                 <p
                   className="text-xs text-destructive"
