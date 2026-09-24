@@ -273,9 +273,17 @@ WHERE c.ad_client_id = :client_id
 -- ETGO_SUB_PERIOD_CHK (end >= start, either side NULL passes) can never reject the insert. The
 -- value is cast only when it has the ISO-8601 UTC shape Instant.toString() writes; anything else
 -- becomes NULL -- the same "ignore an invalid due timestamp" the Java reader applies -- instead
--- of raising and failing the tenant on a cosmetic value. The cast goes through timestamptz, so
--- the stored TIMESTAMP is the instant in the session time zone, as a Date.from(Instant) write
--- from the JVM would be.
+-- of raising and failing the tenant on a cosmetic value.
+--
+-- TIME ZONE ASSUMPTION. current_period_end is a TIMESTAMP (no zone). The CAST to timestamptz
+-- fixes the instant; assigning it to the TIMESTAMP column renders it in the DATABASE SESSION's
+-- TimeZone (the server's `timezone` setting for this runner). Java reads the column back through
+-- Date/Timestamp in the TOMCAT JVM's default zone. The two agree only when the DB server
+-- `timezone` equals the JVM zone -- an assumption Etendo already makes for every TIMESTAMP
+-- column, and the same one a Date.from(Instant) write from the webhook relies on. If they differ,
+-- the seeded grace anchor is off by the offset between the two zones (e.g. a UTC server under a
+-- UTC-3 JVM moves the end of the paid period 3 hours). This fix does not correct for it, and the
+-- runner is deliberately left as is.
 --
 -- Both preferences are scoped by AD_CLIENT_ID, NOT by VISIBLEAT_CLIENT_ID: develop's
 -- TenantEnvironmentLifecycleService#setPreferenceValue creates them with setClient(tenant) and
