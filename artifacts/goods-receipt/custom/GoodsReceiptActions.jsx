@@ -12,6 +12,7 @@ import { useMainAttachment } from '@/windows/custom/shared/useMainAttachment.js'
 import PurchaseReturnWizard from './PurchaseReturnWizard';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
 import { useDocumentAction } from '@/hooks/useDocumentAction';
+import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
 
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -484,6 +485,17 @@ export default function GoodsReceiptActions({ data, recordId, token, apiBaseUrl,
 // UX is bespoke — a self-contained fetch-lines-then-clone modal, not
 // CloneOrderModal — so it stays a window-owned child instead of being folded
 // into the shared component's generic `clone` config).
+//
+// ETP-5398 — the buttons below come from MODAL_STYLES, the canonical action-modal
+// palette. `width` is overridden to 'auto' on purpose: MODAL_STYLES pins the widths
+// of one specific Figma frame (100 / 158) and modal button widths are NOT normalised
+// by that ticket — each modal hugs its own label.
+
+const cloneBtnCancel = { ...MODAL_STYLES.btnCancel, width: 'auto' };
+const cloneBtnPrimary = { ...MODAL_STYLES.btnSaveEnabled, width: 'auto', display: 'inline-flex', gap: 8 };
+// Disabled swaps the whole object — never `opacity` on the fill. Two modals dimming the
+// same hex by different amounts is what the reporter saw as "two different blues".
+const cloneBtnPrimaryDisabled = { ...MODAL_STYLES.btnSaveDisabled, width: 'auto', display: 'inline-flex', gap: 8 };
 
 export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) {
   const apiFetch = useApiFetch('');
@@ -533,20 +545,25 @@ export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) 
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'hsl(var(--foreground) / 0.3)' }}>
-      <div style={{ width: 440, borderRadius: 12, backgroundColor: 'hsl(var(--card))', boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--card))', overflow: 'hidden' }}>
+      {/* ETP-5398 — the border was `--card`, the surface colour it sits on, so it never
+          rendered. Panel radius and shadow now match MODAL_STYLES.dialog; the width stays
+          per-modal. */}
+      <div style={{ width: 440, borderRadius: 8, backgroundColor: 'hsl(var(--card))', boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))', overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 16px 0' }}>
           <span style={{ fontWeight: 600, fontSize: 15, color: 'hsl(var(--foreground))' }}>{ui('cloneReceiptConfirmTitle')}</span>
           <button type="button" onClick={onClose} style={{ fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>&times;</button>
         </div>
 
         <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ border: '1px solid hsl(var(--card))', borderRadius: 8, overflow: 'hidden' }}>
+          {/* Summary card. Its outline and inner divider were also `--card` (invisible);
+              they take the structural border roles now. The fills stay `--card`. */}
+          <div style={{ border: '1px solid hsl(var(--border-control))', borderRadius: 8, overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'hsl(var(--card))' }}>
               <span style={{ fontSize: 13, fontWeight: 500, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bpName}</span>
               {documentNo && <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>{documentNo}</span>}
               {status && <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 999, background: badge.bg, color: badge.color, whiteSpace: 'nowrap', flexShrink: 0 }}>{badge.label}</span>}
             </div>
-            <div style={{ padding: '6px 14px 9px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--card))' }}>
+            <div style={{ padding: '6px 14px 9px', background: 'hsl(var(--card))', borderTop: '1px solid hsl(var(--border-subtle))' }}>
               <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{lineLabel}</span>
             </div>
           </div>
@@ -554,9 +571,13 @@ export function CloneReceiptModal({ receiptId, data, base, onClose, onCloned }) 
           <p style={{ fontSize: 13, color: 'hsl(var(--muted-foreground))', margin: 0, padding: '0 2px' }}>{ui('cloneReceiptConfirmBody')}</p>
           {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button type="button" onClick={onClose} style={{ fontSize: 12, padding: '7px 14px', borderRadius: 6, border: '1px solid hsl(var(--card))', background: 'transparent', color: 'hsl(var(--muted))', cursor: 'pointer' }}>{ui('cancel')}</button>
-            <button type="button" onClick={handleClone} disabled={loading} style={{ fontSize: 13, padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-bg)', color: 'hsl(var(--card))', fontWeight: 500, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {/* Cancel used to paint its border with `--card` and its label with `--muted`, a
+              background token — both invisible. The primary filled itself with
+              `--status-info-bg` (#EFF6FF, a banner background) under a white label:
+              ~1.07:1, which is what "tono celeste que parece deshabilitado" was. */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} style={cloneBtnCancel}>{ui('cancel')}</button>
+            <button type="button" onClick={handleClone} disabled={loading} style={loading ? cloneBtnPrimaryDisabled : cloneBtnPrimary}>
               {loading ? ui('creating') : ui('cloneReceiptAction')}
             </button>
           </div>
