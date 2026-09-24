@@ -64,7 +64,7 @@ vi.mock('lucide-react', () => ({
   FileCheck: () => null, Landmark: () => null,
 }));
 
-import FmModel303Page from '../FmModel303Page.jsx';
+import FmModel303Page, { submittedSnapshotOf, isSnapshotServed303, invoiceCountFor, sourcesTabBadge } from '../FmModel303Page.jsx';
 
 // ETP-5438 scope decision — the submission snapshot keeps only the figures (boxes + summary) and
 // the invoice COUNT (`sourceCount`), never the per-invoice `sources`. A declaration served from it
@@ -129,5 +129,35 @@ describe('FmModel303Page — figures-only submission snapshot (ETP-5438)', () =>
 
     await waitFor(() => expect(kpis(container)).toContain('500'));
     expect(computeBoxes303).not.toHaveBeenCalled();
+  });
+});
+
+describe('FmModel303Page snapshot helpers (ETP-5438)', () => {
+  it('submittedSnapshotOf returns the object snapshot, else null', () => {
+    const snap = { boxes: {} };
+    expect(submittedSnapshotOf({ submittedSnapshot: snap })).toBe(snap);
+    expect(submittedSnapshotOf({ submittedSnapshot: null })).toBeNull();
+    expect(submittedSnapshotOf({ submittedSnapshot: '{"boxes":{}}' })).toBeNull();
+    expect(submittedSnapshotOf({})).toBeNull();
+  });
+
+  it('isSnapshotServed303 needs a submitted status AND snapshot boxes', () => {
+    expect(isSnapshotServed303(true, { boxes: {} })).toBe(true);
+    expect(isSnapshotServed303(false, { boxes: {} })).toBe(false);
+    expect(isSnapshotServed303(true, { summary: {} })).toBe(false);
+    expect(isSnapshotServed303(true, null)).toBe(false);
+  });
+
+  it('invoiceCountFor reads sourceCount when snapshot-served, else the rows', () => {
+    expect(invoiceCountFor(true, { sourceCount: 7 }, [])).toBe(7);
+    expect(invoiceCountFor(true, { sourceCount: 'x' }, [1, 2])).toBe(0);
+    expect(invoiceCountFor(true, {}, [1, 2])).toBe(0);
+    expect(invoiceCountFor(false, { sourceCount: 7 }, [1, 2])).toBe(2);
+  });
+
+  it('sourcesTabBadge shows the count when snapshot-served, else the rows length or null', () => {
+    expect(sourcesTabBadge(true, 7, undefined)).toBe(7);
+    expect(sourcesTabBadge(false, 7, [1, 2, 3])).toBe(3);
+    expect(sourcesTabBadge(false, 7, undefined)).toBeNull();
   });
 });

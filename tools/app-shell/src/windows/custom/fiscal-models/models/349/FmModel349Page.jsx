@@ -679,6 +679,43 @@ function DetailTabContent({
   );
 }
 
+// ── Submission snapshot helpers (ETP-5438) ────────────────────────
+// Pure, module-level — extracted from the component body to keep its cognitive complexity under
+// the SonarQube javascript:S3776 threshold. Exported for their unit tests only.
+
+// The snapshot the backend persisted when the declaration was presented, or `null` (drafts, and
+// legacy declarations presented before snapshots existed).
+export function submittedSnapshotOf(decl) {
+  const snapshot = decl?.submittedSnapshot;
+  return snapshot && typeof snapshot === 'object' ? snapshot : null;
+}
+
+// True when the page is served from the snapshot: a submitted declaration whose snapshot carries
+// the operators.
+export function isSnapshotServed349(isSubmitted, snapshot) {
+  return isSubmitted && Array.isArray(snapshot?.operators);
+}
+
+// Rectification count: the snapshot keeps only the COUNT, a live payload keeps the rows (the
+// legacy/mock shape can carry a plain number instead of an array, which counts as 0 here).
+export function rectificationCountFor(snapshotServed, snapshot, rows) {
+  if (snapshotServed) return Number(snapshot.rectificationCount) || 0;
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+// The "Facturas origen" tab badge: the snapshot's invoice count, else the live rows' length
+// (`null` while nothing is loaded).
+export function invoicesTabBadge(snapshotServed, snapshot, liveInvoices) {
+  if (snapshotServed) return Number(snapshot.invoiceCount) || 0;
+  return liveInvoices?.length ?? null;
+}
+
+// The tab the shared DetailTabContent renders: none for a snapshot-served "Facturas origen" tab,
+// whose content is the "not kept" note instead.
+export function detailTabFor(snapshotServed, activeTab) {
+  return snapshotServed && activeTab === 'invoices' ? null : activeTab;
+}
+
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
@@ -699,13 +736,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // ETP-5438 — the operators payload the backend persisted when this declaration was presented
   // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
   // mount-time auto-compute effect below for how it is consumed.
-  const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
-    ? decl.submittedSnapshot : null;
+  const submittedSnapshot = submittedSnapshotOf(decl);
   // ETP-5438 — the snapshot keeps operators and the key totals, plus the invoice/rectification
   // COUNTS (`invoiceCount`, `rectificationCount`); the per-invoice `invoices`/`rectifications`
   // rows are not kept. While served from a snapshot those two tabs show a note instead of a list;
   // the operators' "Origen" counts come from `originPurchases`/`originSales` on each row.
-  const snapshotServed = isSubmitted && Array.isArray(submittedSnapshot?.operators);
+  const snapshotServed = isSnapshotServed349(isSubmitted, submittedSnapshot);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -774,9 +810,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     .reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
   const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
-  const rectifications = snapshotServed
-    ? (Number(submittedSnapshot.rectificationCount) || 0)
-    : (Array.isArray(rectifRows) ? rectifRows.length : 0);
+  const rectifications = rectificationCountFor(snapshotServed, submittedSnapshot, rectifRows);
 
   // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
   // caller can react to a rejected transition — see `handlePresent`.
@@ -1080,7 +1114,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
     { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: snapshotServed ? (Number(submittedSnapshot.invoiceCount) || 0) : (liveInvoices?.length ?? null), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
@@ -1402,7 +1436,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
       {/* Shared tab content — same layout as 303 */}
       {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
       <DetailTabContent
-        activeTab={snapshotServed && activeTab === 'invoices' ? null : activeTab}
+        activeTab={detailTabFor(snapshotServed, activeTab)}
         decl={decl}
         liveInvoices={liveInvoices}
         blocking={blocking}

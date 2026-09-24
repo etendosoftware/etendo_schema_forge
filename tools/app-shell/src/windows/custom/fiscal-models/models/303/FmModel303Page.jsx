@@ -231,6 +231,35 @@ function buildIncidentVariants(blocking, warning, t) {
   return { tone, iconColor, badge };
 }
 
+// ── Submission snapshot helpers (ETP-5438) ────────────────────────
+// Pure, module-level — extracted from the component body to keep its cognitive complexity under
+// the SonarQube javascript:S3776 threshold. Exported for their unit tests only.
+
+// The snapshot the backend persisted when the declaration was presented, or `null` (drafts, and
+// legacy declarations presented before snapshots existed).
+export function submittedSnapshotOf(decl) {
+  const snapshot = decl?.submittedSnapshot;
+  return snapshot && typeof snapshot === 'object' ? snapshot : null;
+}
+
+// True when the page is served from the snapshot: a submitted declaration whose snapshot carries
+// the boxes figures.
+export function isSnapshotServed303(isSubmitted, snapshot) {
+  return isSubmitted && snapshot?.boxes != null;
+}
+
+// How many invoices back the declaration: the snapshot keeps only the COUNT (`sourceCount`), a
+// live compute keeps the rows themselves.
+export function invoiceCountFor(snapshotServed, snapshot, sources) {
+  return snapshotServed ? (Number(snapshot.sourceCount) || 0) : sources.length;
+}
+
+// The "Facturas" tab badge: the snapshot's invoice count, else the live rows' length (`null`
+// while nothing is loaded).
+export function sourcesTabBadge(snapshotServed, invoiceCount, sources) {
+  return snapshotServed ? invoiceCount : (sources?.length ?? null);
+}
+
 // ── Main page ─────────────────────────────────────────────────────
 
 export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmittedRemotely, onManualDataSaved, token, apiBaseUrl }) {
@@ -252,13 +281,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // ETP-5438 — the boxes payload the backend persisted when this declaration was presented
   // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
   // mount-time auto-compute effect below for how it is consumed.
-  const submittedSnapshot = decl.submittedSnapshot && typeof decl.submittedSnapshot === 'object'
-    ? decl.submittedSnapshot : null;
+  const submittedSnapshot = submittedSnapshotOf(decl);
   // ETP-5438 — the snapshot keeps only the figures (boxes + summary) and the invoice COUNT
   // (`sourceCount`); the per-invoice `sources` drilldown is not kept (a period can hold tens of
   // thousands of invoices). While this page is served from a snapshot the "Facturas" tab shows a
   // note instead of a list, and nothing here recomputes to fill it.
-  const snapshotServed = isSubmitted && submittedSnapshot?.boxes != null;
+  const snapshotServed = isSnapshotServed303(isSubmitted, submittedSnapshot);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
@@ -1018,7 +1046,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // card already displays, via the single shared `deriveResultKind` also used by FmListPage.jsx,
   // so both screens agree on the same label for the same declaration.
   const sourcesForResult = liveSources ?? decl.sources ?? [];
-  const invoiceCount = snapshotServed ? (Number(submittedSnapshot.sourceCount) || 0) : sourcesForResult.length;
+  const invoiceCount = invoiceCountFor(snapshotServed, submittedSnapshot, sourcesForResult);
   const resultKind = deriveResultKind(summary, { hasInvoices: invoiceCount > 0 });
 
   // Derive result sublabel from kind
@@ -1033,7 +1061,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
       icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
     { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
-      badge: snapshotServed ? invoiceCount : ((liveSources ?? decl.sources)?.length ?? null),
+      badge: sourcesTabBadge(snapshotServed, invoiceCount, liveSources ?? decl.sources),
       icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
     { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       badge: incidentCount > 0 ? incidentCount : null,

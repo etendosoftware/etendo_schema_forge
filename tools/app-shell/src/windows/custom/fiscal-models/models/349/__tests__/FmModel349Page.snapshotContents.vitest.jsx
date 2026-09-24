@@ -47,7 +47,7 @@ vi.mock('lucide-react', () => ({
   FileCheck: () => null,
 }));
 
-import FmModel349Page from '../FmModel349Page.jsx';
+import FmModel349Page, { submittedSnapshotOf, isSnapshotServed349, rectificationCountFor, invoicesTabBadge, detailTabFor } from '../FmModel349Page.jsx';
 
 // ETP-5438 scope decision — the 349 snapshot keeps operators and the key totals plus the
 // invoice/rectification COUNTS, never the per-invoice rows. Those two tabs show a note instead.
@@ -102,5 +102,41 @@ describe('FmModel349Page — figures-only submission snapshot (ETP-5438)', () =>
     expect(document.querySelectorAll('.fm-origin-link')).toHaveLength(0);
     expect(screen.getAllByTestId('fm-origin-text').map(n => n.textContent))
       .toEqual(expect.arrayContaining(['3 facturas venta', '1 compra, 2 venta']));
+  });
+});
+
+describe('FmModel349Page snapshot helpers (ETP-5438)', () => {
+  it('submittedSnapshotOf returns the object snapshot, else null', () => {
+    const snap = { operators: [] };
+    expect(submittedSnapshotOf({ submittedSnapshot: snap })).toBe(snap);
+    expect(submittedSnapshotOf({ submittedSnapshot: 'text' })).toBeNull();
+    expect(submittedSnapshotOf({})).toBeNull();
+  });
+
+  it('isSnapshotServed349 needs a submitted status AND an operators array', () => {
+    expect(isSnapshotServed349(true, { operators: [] })).toBe(true);
+    expect(isSnapshotServed349(false, { operators: [] })).toBe(false);
+    expect(isSnapshotServed349(true, { operators: 'x' })).toBe(false);
+    expect(isSnapshotServed349(true, null)).toBe(false);
+  });
+
+  it('rectificationCountFor reads the snapshot count, else the rows (a non-array counts 0)', () => {
+    expect(rectificationCountFor(true, { rectificationCount: 4 }, [1])).toBe(4);
+    expect(rectificationCountFor(true, {}, [1])).toBe(0);
+    expect(rectificationCountFor(false, { rectificationCount: 4 }, [1, 2])).toBe(2);
+    expect(rectificationCountFor(false, null, 3)).toBe(0);
+  });
+
+  it('invoicesTabBadge reads the snapshot count, else the live rows length or null', () => {
+    expect(invoicesTabBadge(true, { invoiceCount: 9 }, [1])).toBe(9);
+    expect(invoicesTabBadge(true, {}, [1])).toBe(0);
+    expect(invoicesTabBadge(false, { invoiceCount: 9 }, [1, 2])).toBe(2);
+    expect(invoicesTabBadge(false, null, null)).toBeNull();
+  });
+
+  it('detailTabFor hides only the snapshot-served invoices tab', () => {
+    expect(detailTabFor(true, 'invoices')).toBeNull();
+    expect(detailTabFor(true, 'incidents')).toBe('incidents');
+    expect(detailTabFor(false, 'invoices')).toBe('invoices');
   });
 });
