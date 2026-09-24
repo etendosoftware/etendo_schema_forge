@@ -21,9 +21,11 @@ export default function SendToSifButton({ data, recordId, apiBaseUrl, status, on
   const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const base = useMemo(() => (apiBaseUrl || '').replace(/\/[^/]+$/, ''), [apiBaseUrl]);
 
-  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
-  const pendingTargets = getPendingSifTargets(specName, profile, data, territory, tbaiRecord);
+  // ETP-5432 #3: SII target must also be gated on the org's earliest SII cutover
+  // date, same as TBAI already is — see sifSending.js.
+  const pendingTargets = getPendingSifTargets(specName, profile, data, territory, tbaiRecord, earliestSiiCutoverDate);
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
 
   if (status !== 'CO' || !hasPendingTargets || isDocumentReadOnly) return null;
