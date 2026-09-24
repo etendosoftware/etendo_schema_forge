@@ -5,6 +5,7 @@ import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
+import { ActionModalSummary } from '@/components/contract-ui/ActionModalSummary.jsx';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -78,6 +79,16 @@ export default function QuotationConfirmModal({
   const grandTotal     = Number(d.grandTotalAmount ?? d.grandTotal ?? 0) || 0;
   const totalLines     = Number(d.summedLineAmount ?? d.totalLines ?? d.grandTotalAmount ?? 0) || 0;
   const currency       = d['currency$_identifier'] || '';
+
+  // ETP-5398 — the summary strip's columns, same shape as SendToEvaluationModal. The two
+  // testIds are unchanged and still land on the amounts: two E2E specs read their text.
+  const summaryItems = [
+    { label: ui('quotationDocumentLabel'), value: documentNo },
+    { label: ui('contact'), value: bpName },
+    { label: ui('lines'), value: lineCount ?? '…' },
+    { label: ui('soSubtotal'), value: formatCurrency(currency, totalLines), testId: 'confirm-summary-subtotal' },
+    { label: ui('total'), value: formatCurrency(currency, grandTotal), testId: 'confirm-summary-total' },
+  ];
 
   const handleConfirm = async () => {
     if (loading) return;
@@ -300,40 +311,21 @@ export default function QuotationConfirmModal({
     <div onClick={onClose} style={overlayStyle}>
       <div onClick={e => e.stopPropagation()} style={cardStyle}>
 
-        {/* Blue card header */}
-        <div style={{ padding: '14px 16px 0', position: 'relative' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              position: 'absolute', top: 10, right: 12,
-              fontSize: 20, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
-            }}
-          >
+        {/* ETP-5398 — the title is the ACTION, not the document reference. The document
+            number moved into the summary strip below, alongside the contact and amounts. */}
+        <div style={headerStyle}>
+          <span style={MODAL_STYLES.title}>{ui('confirm')}</span>
+          <button type="button" onClick={onClose} aria-label={ui('cancel')} style={MODAL_STYLES.closeBtn}>
             &times;
           </button>
-          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
-            {ui('quotationDocumentLabel')} #{documentNo}
-          </div>
-          <div style={{
-            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
-            padding: '14px 16px', marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
-              {bpName}
-            </div>
-            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {formatCurrency(currency, grandTotal)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
-            </div>
-          </div>
+        </div>
+
+        <div style={{ padding: '20px 20px 0' }}>
+          <ActionModalSummary items={summaryItems} />
         </div>
 
         {/* Options */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
+        <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--border-subtle))' }}>
           <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
             {ui('sqWhatToDo')}
           </div>
@@ -363,8 +355,8 @@ export default function QuotationConfirmModal({
           </div>
         )}
 
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
+        {/* Footer is space-between: Cancelar anchors left, the primary right. */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '20px' }}>
           <button type="button" onClick={onClose} disabled={loading}
             style={{ ...btnSecondary, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {ui('cancel')}
@@ -379,8 +371,10 @@ export default function QuotationConfirmModal({
             )}
             {loading ? ui('soProcessing') : primaryLabel}
           </button>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
+        {/* Outside the footer on purpose: it is a flex child there, and under
+            `space-between` a third child pushes the primary button to the centre. */}
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );
@@ -450,10 +444,18 @@ const overlayStyle = {
   backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
+// ETP-5398 — widened from 480: the summary strip carries five columns now, and the
+// contact name is the one that overflows first. Widths stay per-modal, not normalised.
 const cardStyle = {
-  width: 480, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+  width: 620, maxWidth: '92vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
   overflow: 'hidden', borderRadius: 8, backgroundColor: 'hsl(var(--card))',
   boxShadow: MODAL_STYLES.dialog.boxShadow, border: '0.5px solid hsl(var(--border-subtle))',
+};
+
+// The divider belongs under the header.
+const headerStyle = {
+  display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+  gap: 20, padding: '16px 20px', borderBottom: '1px solid hsl(var(--border-subtle))',
 };
 
 // ETP-5398 — buttons come from MODAL_STYLES, the canonical action-modal palette. The

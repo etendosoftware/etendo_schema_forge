@@ -212,6 +212,23 @@
   --switch-track-on-enabled: 240 12.2% 8%;
   --switch-track-off-disabled: 222.9 17.9% 92.4%;
   --switch-track-on-disabled: 224.2 12.4% 70%;
+
+  /*
+   * ETP-5398 — the accent-blue pair used by the action modals' info banner. They carry
+   * the design system's `color/background/accent/blue` and
+   * `color/text/accent/blue-secondary`.
+   *
+   * They are NOT `--status-info-*`. That family is a different, indigo-leaning blue that
+   * belongs to status messaging; this banner is an accent surface, and substituting the
+   * status family (as the quotation modals did) reads visibly off against the frame.
+   *
+   * Declared here rather than in the core's styles.css because ETP-5398 must not touch
+   * the shared token layer, and stored as `H S% L%` like every other token in this file
+   * so the value is never a colour literal — `lib/__tests__/semanticThemeUsage.test.js`
+   * rejects those. Both round-trip exactly back to the design system's hex values.
+   */
+  --accent-blue-bg: 200 100% 97%;
+  --accent-blue-secondary: 199.4 100% 33.9%;
 }
 
 .dark {
@@ -219,4 +236,13 @@
   --switch-track-on-enabled: 240 12.2% 8%;
   --switch-track-off-disabled: 0 0% 100% / 0.20;
   --switch-track-on-disabled: 224.2 12.4% 70%;
+
+  /*
+   * The design only specifies the light pair, so these mirror how the core inverts
+   * `--status-info-*`: the tint becomes a deep surface of the SAME hue and the text a
+   * light one, keeping the contrast direction rather than the literal values.
+   * Replace with the design system's own dark values once they exist.
+   */
+  --accent-blue-bg: 199.4 80% 12%;
+  --accent-blue-secondary: 199.4 100% 75%;
 }

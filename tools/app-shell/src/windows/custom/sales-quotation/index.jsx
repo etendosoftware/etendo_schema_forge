@@ -236,6 +236,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
         token={token}
         apiBaseUrl={apiBaseUrl}
         onClose={closeQuotationConfirm}
+        onRefresh={() => setRefreshKey(k => k + 1)}
         data-testid="RowSendToEvaluationModal__bc8637" />
     ) : (
       <QuotationConfirmModal

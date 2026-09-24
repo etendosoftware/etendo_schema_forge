@@ -17323,6 +17323,7 @@
     "saveHeaderFirst": "Guarda el encabezado primero para agregar líneas.",
     "documentStatus": "Estado del documento",
     "subtotal": "Subtotal",
+    "lines": "Líneas",
     "tax": "Impuesto",
     "total": "Total",
     "addTotalDiscount": "Añadir descuento total",

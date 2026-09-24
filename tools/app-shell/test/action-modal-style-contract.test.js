@@ -151,9 +151,11 @@ describe('ETP-5398 — action modal style contract', () => {
       it('colours the close icon with the muted-foreground role', () => {
         // The role explicitly tuned for WCAG AA. `--icon-secondary` (decorative) and
         // `--text-disabled` both made the X read as too faint to find.
+        // Either the modal spells the token out, or it defers to MODAL_STYLES.closeBtn —
+        // whose own colour is pinned by the suite below, so the guarantee holds either way.
         assert.ok(
-          code.includes(MUTED_FOREGROUND),
-          `expected the close icon to use ${MUTED_FOREGROUND}`,
+          code.includes(MUTED_FOREGROUND) || code.includes('MODAL_STYLES.closeBtn'),
+          `expected the close icon to use ${MUTED_FOREGROUND} or MODAL_STYLES.closeBtn`,
         );
         assert.doesNotMatch(code, /--text-disabled/);
         if (!modal.allowsIconSecondary) assert.doesNotMatch(code, /--icon-secondary/);
@@ -165,4 +167,55 @@ describe('ETP-5398 — action modal style contract', () => {
       });
     });
   }
+
+  // The shared palette the modals above defer to. Pinning it here is what lets each
+  // modal satisfy the contract by reference instead of by copied literal.
+  describe('MODAL_STYLES (the shared palette)', () => {
+    const code = readCode(join('tools', 'app-shell', 'src', 'components', 'contract-ui', 'modal-styles.js'));
+
+    it('gives the close button the muted-foreground role', () => {
+      assert.match(code, /closeBtn:\s*\{[^}]*color:\s*'hsl\(var\(--muted-foreground\)\)'/);
+    });
+
+    it('keeps the summary card neutral, never tinted with a status token', () => {
+      // The quotation modals used to paint it with `--status-info-bg`. It carries document
+      // data, not a status, and tinting it left the real message with no banner to sit in.
+      const summary = code.match(/summaryCard:\s*\{[^}]*\}/s)?.[0] ?? '';
+      assert.match(summary, /border:\s*'1px solid hsl\(var\(--border-control\)\)'/);
+      assert.doesNotMatch(summary, /--status-/);
+    });
+
+    it('gives the banner the accent-blue pair, not the status-info family', () => {
+      // The design system puts this banner on `color/background/accent/blue` over
+      // `color/text/accent/blue-secondary`. `--status-info-*` is a different, indigo
+      // leaning blue for status messaging, and reads visibly off against the frame.
+      const banner = code.match(/banner:\s*\{[^}]*\}/s)?.[0] ?? '';
+      assert.match(banner, /background:\s*'hsl\(var\(--accent-blue-bg\)\)'/);
+      assert.match(banner, /color:\s*'hsl\(var\(--accent-blue-secondary\)\)'/);
+      assert.doesNotMatch(banner, /--status-/);
+    });
+
+    it('never lets a button carry a status token', () => {
+      // That was the blue-primary bug this ticket closes.
+      for (const key of ['btnSaveEnabled', 'btnSaveDisabled', 'btnCancel']) {
+        assert.doesNotMatch(code.match(new RegExp(`${key}:\\s*\\{[^}]*\\}`, 's'))?.[0] ?? '', /--status-/);
+      }
+    });
+
+    it('pins the type scale the design specifies', () => {
+      const block = (key) => code.match(new RegExp(`${key}:\\s*\\{[^}]*\\}`, 's'))?.[0] ?? '';
+      // Title 20/600, column label 12/400, column value 16/500, banner text 14/400.
+      assert.match(block('title'), /fontSize:\s*'20px'[\s\S]*fontWeight:\s*600|fontWeight:\s*600[\s\S]*fontSize:\s*'20px'/);
+      assert.match(block('summaryLabel'), /fontSize:\s*'12px'/);
+      assert.match(block('summaryLabel'), /fontWeight:\s*400/);
+      assert.match(block('summaryValue'), /fontSize:\s*'16px'/);
+      assert.match(block('summaryValue'), /fontWeight:\s*500/);
+      assert.match(block('banner'), /fontSize:\s*'14px'/);
+      assert.match(block('banner'), /fontWeight:\s*400/);
+    });
+
+    it('spreads the summary columns instead of letting them hug the left edge', () => {
+      assert.match(code.match(/summaryCell:\s*\{[^}]*\}/s)?.[0] ?? '', /flex:\s*'1 1 0'/);
+    });
+  });
 });

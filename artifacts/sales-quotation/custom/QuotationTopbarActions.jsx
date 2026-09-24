@@ -65,6 +65,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           token={token}
           apiBaseUrl={apiBaseUrl}
           onClose={() => setShowSendToEval(false)}
+          onRefresh={onRefresh}
         />,
         document.body,
       )}
