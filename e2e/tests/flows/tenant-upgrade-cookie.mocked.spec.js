@@ -33,6 +33,33 @@ const CURRENT_ENV = {
   plan: 'free',
 };
 
+/**
+ * The Subscription Plan Catalog (ETP-5046), shaped exactly like `GET /sws/go/plans` answers — note
+ * there is no provider price id; the server never sends one. The upgrade page keeps its submit
+ * DISABLED until this catalog has loaded with at least one plan (`canCheckout` in UpgradePage.jsx),
+ * and the generic `**\/sws/**` stub from `login()` carries no catalog, so every checkout test here
+ * needs this route. A single plan is auto-selected, which is the v1 catalog.
+ */
+const PRODUCTIVE_PLAN = {
+  planKey: 'productive-monthly',
+  name: 'Productive',
+  description: 'A second tenant for real work',
+  displayPrice: '49.00',
+  currency: 'EUR',
+  billingInterval: 'month',
+};
+
+async function installPlansMock(page, plans = [PRODUCTIVE_PLAN]) {
+  await page.route('**/sws/go/plans', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ plans }),
+    });
+  });
+}
+
 async function installEnvironmentsMock(page, environments) {
   await page.route('**/sws/go/environments{/**,}**', async (route) => {
     await route.fulfill({
@@ -107,6 +134,7 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
     await declareCookieSession(page);
+    await installPlansMock(page);
   });
 
   test('no legacy platform token exists before or after the checkout', async ({ page }) => {
@@ -149,9 +177,12 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     expect(requests[0].body).toMatchObject({
       action: 'productive-tenant',
       upgradeAction: 'create-productive',
+      // The auto-selected catalog key — a plan, never a price (ETP-5046).
+      planKey: PRODUCTIVE_PLAN.planKey,
       clientName: 'Acme Productive',
       dataTransfer: { products: true, contacts: true },
     });
+    expect(JSON.stringify(requests[0].body)).not.toMatch(/priceId/i);
     // The whole point of the cookie scheme: the write proof travels in X-Go-CSRF, and there is
     // no bearer token to put in Authorization at all (sessionCredentials.js's `authHeaders()`).
     expect(requests[0].headers['x-go-csrf']).toBe('e2e-cookie-csrf-token');
@@ -173,6 +204,7 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
     expect(requests).toHaveLength(1);
     expect(requests[0].body.dataTransfer).toEqual({ products: false, contacts: false });
+    expect(requests[0].body.planKey).toBe(PRODUCTIVE_PLAN.planKey);
   });
 
   test('a name matching the account\'s own productive environment is rejected before paying', async ({ page }) => {
@@ -181,10 +213,13 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     const requests = await installPurchaseMock(page);
     await gotoUpgrade(page);
 
-    // Submitting unchanged: the prefilled name already equals the account's own productive
-    // environment's name, so this must be rejected client-side before any request goes out.
+    // When the current environment is already productive the name is deliberately NOT prefilled
+    // (ETP-5463, UpgradePage.jsx `currentIsProductive`): a new productive tenant needs a new name.
     await reachPaymentStep(page);
-    await expect(page.getByTestId('upgrade-tenant-name-input')).toHaveValue(productiveEnv.clientName);
+    await expect(page.getByTestId('upgrade-tenant-name-input')).toHaveValue('');
+    // Typing the account's own productive environment's name must be rejected client-side,
+    // before any request goes out.
+    await page.getByTestId('upgrade-tenant-name-input').fill(productiveEnv.clientName);
     await page.getByTestId('upgrade-submit').click();
 
     await expect(page.getByTestId('upgrade-tenant-name-taken')).toBeVisible();
@@ -203,5 +238,6 @@ test.describe('Tenant upgrade — cookie session scheme', () => {
     await expect(page).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
     expect(requests).toHaveLength(1);
     expect(requests[0].body.clientName).toBe('Brand New Co');
+    expect(requests[0].body.planKey).toBe(PRODUCTIVE_PLAN.planKey);
   });
 });
