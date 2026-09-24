@@ -726,7 +726,8 @@ or directly: `tools/stripe-subscription-past-due.sh [fail|recover|status] <id>`.
   was on file) and pays the *same* invoice `fail` left open — this time expected to succeed — then
   polls for `invoice.paid` and the `CURRENT` projection with the due date cleared.
 - **`status`** is read-only: prints the resolved ids, the live Stripe subscription (status, period,
-  default payment method, latest invoice) and the stored `ETGO_Subscription*` preferences.
+  default payment method, latest invoice) and the stored lifecycle state — the open subscription
+  row when there is one, the `ETGO_Subscription*` preferences otherwise.
 
 **Why a manual invoice instead of resetting `billing_cycle_anchor=now`:** this subscription's
 `billing_mode` is `flexible`. With that mode, `proration_behavior=none` on a
@@ -737,17 +738,22 @@ existing period, is what actually produces a payable (and payment-failable) invo
 
 **The Stripe subscription itself can stay `active` throughout.** The manual invoice is not the
 subscription's regular renewal invoice, so Stripe does not necessarily flip the subscription's own
-`status` field to `past_due`. What matters for this test is `ETGO_SubscriptionStatus`: the backend
-sets it from the `invoice.payment_failed` event regardless of what the subscription object itself
-reports — check the AD_Preference projection (`status`/`recover` above), not
-`stripe subscriptions retrieve`'s `status` field, to confirm the lifecycle actually moved.
+`status` field to `past_due`. What matters for this test is the stored lifecycle status (the row's
+`STATUS`, or `ETGO_SubscriptionStatus` for a tenant without a row): the backend sets it from the
+`invoice.payment_failed` event regardless of what the subscription object itself reports — check it
+with `status`/`recover` above, not `stripe subscriptions retrieve`'s `status` field, to confirm the
+lifecycle actually moved.
 
-> **Known gap since ETP-5046.** `tools/stripe-subscription-past-due.sh` polls and reports only the
-> `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` **preferences**. A tenant purchased since
-> ETP-5046 (or backfilled by R37) has an open `etgo_subscription` row, and the webhook writes the
-> row instead — so for that tenant `fail` / `recover` time out on the preference and print a failed
-> RESULT even though the event was `APPLIED`. Check the row with the query in §1 ("Where the outcome
-> is stored") until the script learns to read it.
+**Which store the script reads (ETP-5046).** The webhook writes the lifecycle outcome to the
+tenant's **open `etgo_subscription` row** when it has one — every purchase since ETP-5046, and every
+tenant backfilled by R37 — and to the `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt`
+preferences only when it has none (§1, "Where the outcome is stored"). The script reads the same
+store, re-checked on every poll: the row's `STATUS` (reported as `CURRENT` / `PAST_DUE` / `EXPIRED`
+for `active` / `past_due` / `canceled`, so both stores compare alike) and `CURRENT_PERIOD_END` as the
+due date when the row exists, the preferences otherwise. The RESULT block prints a
+`Lifecycle store : row | preference` line saying which one it checked. `status` prints the row
+(plus the `ETGO_SubscriptionEventAt` ordering watermark, which stays a preference on both routes)
+or the three preferences.
 
 `fail` and `recover` **mutate the Stripe Test Mode account** (a human runs them, not an agent, per
 this repo's automation guardrails); `status` never mutates anything. Both refuse to run against a
