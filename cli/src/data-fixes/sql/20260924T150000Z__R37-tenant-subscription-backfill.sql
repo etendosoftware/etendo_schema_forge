@@ -52,6 +52,10 @@
 --       already gate on this same marker (R31-force-test-mode-demo-tenants,
 --       R32-revert-test-mode-productive-tenants) use `visibleat_client_id` verbatim. Using
 --       `ad_client_id` here would disagree with both of them about which tenants are productive.
+--     The two LIFECYCLE preferences statement 2 reads (ETGO_SubscriptionStatus and
+--     ETGO_SubscriptionDueAt) are the exception, and are scoped by `ad_client_id = :client_id`:
+--     their writer sets the row's client to the tenant and their reader filters on it. See the
+--     comment on statement 2.
 --
 -- `ad_client` (the anchor of @check, @apply's INSERT ... SELECT and @report's first branch) IS
 -- filtered on `ad_client_id = :client_id`, so rule 1 is met literally on the driving table of
@@ -60,7 +64,7 @@
 --
 -- Target schema (the constraints this fix has to respect)
 -- --------------------------------------------------------------------------------------------
---   * status IN ('active','past_due','canceled')          -- we always write 'active'
+--   * status IN ('active','past_due','canceled')          -- seeded from ETGO_SubscriptionStatus
 --   * end_date IS NULL OR end_date >= start_date          -- we always write end_date = NULL (open)
 --   * PARTIAL UNIQUE INDEX etgo_sub_open_envclient_uq
 --       ON etgo_subscription(environment_client_id) WHERE isactive='Y' AND end_date IS NULL
@@ -244,6 +248,36 @@ WHERE c.ad_client_id = :client_id
 
 -- Statement 2 of 3 -- the backfill itself. One open row per productive tenant, on the
 -- grandfathered plan, guarded by the same NOT EXISTS the partial unique index enforces.
+--
+-- STATUS AND GRACE ANCHOR ARE SEEDED FROM THE LIFECYCLE PREFERENCES (ETP-5443)
+-- Until this row exists, the Stripe lifecycle webhooks project a productive tenant's billing state
+-- into two preferences: ETGO_SubscriptionStatus (CURRENT / PAST_DUE / EXPIRED, the
+-- EnvironmentAccessPolicy vocabulary) and ETGO_SubscriptionDueAt (an Instant.toString() value,
+-- the end of the paid period). Once the row exists it WINS over both
+-- (TenantEnvironmentLifecycleService#productiveSnapshot reads the row first), so writing a flat
+-- 'active' here would silently turn a past-due or expired tenant back into a paying one. The row
+-- therefore carries the preference state over:
+--     CURRENT  -> 'active'      PAST_DUE -> 'past_due'      EXPIRED -> 'canceled'
+--     absent, blank or any other value -> 'active'
+-- The last line mirrors the reader's own fallback: without a status preference the tenant reads
+-- as LEGACY_ENTITLEMENT (entitled), and a row status the reader maps back to CURRENT is the
+-- closest entitled value the STATUS check constraint allows. 'canceled' keeps end_date NULL, the
+-- decided ETP-5046 behaviour for a canceled subscription (free immediately, row stays open).
+--
+-- current_period_end comes from ETGO_SubscriptionDueAt; current_period_start stays NULL, so
+-- ETGO_SUB_PERIOD_CHK (end >= start, either side NULL passes) can never reject the insert. The
+-- value is cast only when it has the ISO-8601 UTC shape Instant.toString() writes; anything else
+-- becomes NULL -- the same "ignore an invalid due timestamp" the Java reader applies -- instead
+-- of raising and failing the tenant on a cosmetic value. The cast goes through timestamptz, so
+-- the stored TIMESTAMP is the instant in the session time zone, as a Date.from(Instant) write
+-- from the JVM would be.
+--
+-- Both preferences are scoped by AD_CLIENT_ID, NOT by VISIBLEAT_CLIENT_ID: develop's
+-- TenantEnvironmentLifecycleService#setPreferenceValue creates them with setClient(tenant) and
+-- reads them back through Preference.PROPERTY_CLIENT, unlike the ETGO_TenantPlan marker above.
+-- Neither preference is removed here: ETGO_SubscriptionEventAt (the webhook ordering watermark)
+-- stays a preference by decision, and the status/due-at pair is simply no longer read once the
+-- row exists.
 INSERT INTO etgo_subscription (
   etgo_subscription_id, ad_client_id, ad_org_id, isactive,
   created, createdby, updated, updatedby,
@@ -261,9 +295,17 @@ SELECT
   (SELECT p.etgo_plan_id FROM etgo_plan p
     WHERE p.value = 'legacy-productive' AND p.isactive = 'Y'
     LIMIT 1),
-  'active',
+  CASE st.status_value
+    WHEN 'PAST_DUE' THEN 'past_due'
+    WHEN 'EXPIRED' THEN 'canceled'
+    ELSE 'active'
+  END,
   COALESCE(cr.paid_at, c.created, now()),
-  NULL, NULL, NULL,
+  NULL, NULL,
+  CASE
+    WHEN du.due_at_value ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,9})?)?Z$'
+      THEN CAST(du.due_at_value AS timestamptz)
+  END,
   cr.stripe_customer_id, cr.stripe_subscription_id,
   NULL, cr.stripe_price_id, NULL, NULL,
   NULL, NULL
@@ -277,6 +319,24 @@ LEFT JOIN LATERAL (
   ORDER BY r.paid_at DESC NULLS LAST, r.created DESC
   LIMIT 1
 ) cr ON TRUE
+LEFT JOIN LATERAL (
+  SELECT upper(trim(sp.value)) AS status_value
+  FROM ad_preference sp
+  WHERE sp.attribute = 'ETGO_SubscriptionStatus'
+    AND sp.ad_client_id = :client_id
+    AND sp.isactive = 'Y'
+  ORDER BY sp.updated DESC
+  LIMIT 1
+) st ON TRUE
+LEFT JOIN LATERAL (
+  SELECT trim(dp.value) AS due_at_value
+  FROM ad_preference dp
+  WHERE dp.attribute = 'ETGO_SubscriptionDueAt'
+    AND dp.ad_client_id = :client_id
+    AND dp.isactive = 'Y'
+  ORDER BY dp.updated DESC
+  LIMIT 1
+) du ON TRUE
 WHERE c.ad_client_id = :client_id
   AND EXISTS (
     SELECT 1 FROM ad_preference tp

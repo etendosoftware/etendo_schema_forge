@@ -274,8 +274,62 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
     );
   });
 
-  it('writes an OPEN, active subscription (status active, end_date NULL) so the constraints hold', () => {
-    assert.match(normApply, /'active', COALESCE\(cr\.paid_at, c\.created, now\(\)\), NULL, NULL, NULL,/);
+  it('writes an OPEN subscription (end_date and current_period_start NULL) so the constraints hold', () => {
+    // start_date, then end_date NULL (open) and current_period_start NULL (ETGO_SUB_PERIOD_CHK
+    // can never reject a row with one side NULL), then the seeded current_period_end.
+    assert.match(normApply, /END, COALESCE\(cr\.paid_at, c\.created, now\(\)\), NULL, NULL, CASE WHEN du\.due_at_value/);
+  });
+
+  it('seeds status from ETGO_SubscriptionStatus instead of a flat active (ETP-5443)', () => {
+    // A flat 'active' would turn a PAST_DUE / EXPIRED tenant back into a paying one: once the
+    // row exists it wins over the preference projection.
+    assert.match(
+      normApply,
+      /CASE st\.status_value WHEN 'PAST_DUE' THEN 'past_due' WHEN 'EXPIRED' THEN 'canceled' ELSE 'active' END,/,
+    );
+    assert.doesNotMatch(normApply, /c\.ad_client_id, \(SELECT p\.etgo_plan_id[^)]*\), 'active',/);
+  });
+
+  it('maps only onto the statuses ETGO_SUB_STATUS_CHK allows', () => {
+    const statusCase = normApply.match(/CASE st\.status_value (.*?) END,/)[1];
+    const written = [...statusCase.matchAll(/THEN '([a-z_]+)'|ELSE '([a-z_]+)'/g)].map(m => m[1] || m[2]);
+    assert.deepEqual([...new Set(written)].sort(), ['active', 'canceled', 'past_due']);
+  });
+
+  it('seeds current_period_end from ETGO_SubscriptionDueAt, cast only when it is a UTC ISO instant', () => {
+    assert.match(normApply, /CASE WHEN du\.due_at_value ~ '\^\[0-9\]\{4\}-/);
+    assert.match(normApply, /Z\$' THEN CAST\(du\.due_at_value AS timestamptz\) END,/);
+  });
+
+  it('accepts exactly the shapes Instant.toString() writes and rejects anything else', () => {
+    const shape = normApply.match(/du\.due_at_value ~ '([^']+)'/)[1];
+    const re = new RegExp(shape);
+    for (const ok of ['2026-10-01T00:00:00Z', '2026-10-01T12:34Z', '2026-10-01T12:34:56.123456789Z']) {
+      assert.match(ok, re, ok);
+    }
+    for (const bad of ['', 'not-a-date', '2026-13-01T00:00:00Z', '2026-10-01', '2026-10-01T00:00:00+02:00',
+      "2026-10-01T00:00:00Z'; DROP TABLE x"]) {
+      assert.doesNotMatch(bad, re, bad);
+    }
+  });
+
+  it('reads both lifecycle preferences by ad_client_id (their writer owns them at the tenant)', () => {
+    assert.match(
+      normApply,
+      /LEFT JOIN LATERAL \( SELECT upper\(trim\(sp\.value\)\) AS status_value FROM ad_preference sp WHERE sp\.attribute = 'ETGO_SubscriptionStatus' AND sp\.ad_client_id = :client_id AND sp\.isactive = 'Y' ORDER BY sp\.updated DESC LIMIT 1 \) st ON TRUE/,
+    );
+    assert.match(
+      normApply,
+      /LEFT JOIN LATERAL \( SELECT trim\(dp\.value\) AS due_at_value FROM ad_preference dp WHERE dp\.attribute = 'ETGO_SubscriptionDueAt' AND dp\.ad_client_id = :client_id AND dp\.isactive = 'Y' ORDER BY dp\.updated DESC LIMIT 1 \) du ON TRUE/,
+    );
+    assert.doesNotMatch(normApply, /[sd]p\.visibleat_client_id/);
+  });
+
+  it('leaves the lifecycle preferences in place (only the ETGO_TenantPlan marker is retired)', () => {
+    const deletes = splitStatements(fix.apply).filter(st => /^DELETE/.test(st));
+    for (const del of deletes) {
+      assert.doesNotMatch(del, /ETGO_Subscription(Status|DueAt|EventAt)/);
+    }
   });
 
   it('copies the Stripe ids from the latest paid checkout request via LEFT JOIN LATERAL', () => {
