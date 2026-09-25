@@ -19271,7 +19271,6 @@
     "financeAccountStatementsManualSaveDraft": "Save as draft",
     "financeAccountStatementsManualSaveMore": "More save options",
     "financeAccountStatementsManualSaving": "Saving…",
-    "financeAccountStatementsManualErrorName": "Enter a name for the statement",
     "financeAccountStatementsManualErrorLines": "Add at least one line with an amount",
     "financeAccountStatementsManualErrorIncompleteLine": "Complete the required fields of each line (date and a positive amount in either out or in)",
     "financeAccountStatementsManualDiscardTitle": "Discard changes?",

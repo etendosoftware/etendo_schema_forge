@@ -3,16 +3,24 @@ import userEvent from '@testing-library/user-event';
 import { todayCalendarISO } from '@/lib/dateOnly.js';
 
 /**
- * ETP-4954 — the statement list's DEFAULT ORDER.
+ * ETP-5447 — the statement list's DEFAULT ORDER.
  *
- * The handler returns the statements in no particular order, so a freshly created statement
- * (manual or imported) landed wherever it happened to fall and the user had to hunt for the row
- * they had just made. The tab now opens newest-first, keyed on `documentNo` — the only strictly
- * increasing key the list has (the transaction date is the bank's, not the creation order).
+ * ETP-4954 made the tab open newest-first keyed on `documentNo`, on the assumption that the
+ * document number grows with creation order. It does not reliably: two statements for the same
+ * bank day could come back in a different order on every refresh, and a statement numbered from
+ * a different sequence landed far from where the user expected it. The default is now:
+ *
+ *   1. `transactionDate` DESC — the bank day the statement is for;
+ *   2. `created` DESC — the full creation instant the handler now sends on every row, so two
+ *      statements of the same day are deterministic and the one just made is on top;
+ *   3. the backend's own order as the last resort (the sort is stable).
+ *
+ * `documentNo` is NOT a sort key any more, and the fixtures below are built so that a documentNo
+ * sort would produce a visibly different order.
  *
  * Kept in its own file rather than bolted onto ImportedStatementsTab.vitest.jsx: that suite's
- * fixtures are shaped for the filter/row-action state machine and are already in documentNo
- * order, so an ordering assertion there could not tell a real sort from a no-op.
+ * fixtures are shaped for the filter/row-action state machine, so an ordering assertion there
+ * could not tell a real sort from a no-op.
  */
 
 vi.mock('@/i18n', () => ({
@@ -41,21 +49,11 @@ vi.mock('@/hooks/useBankStatements', () => ({
 }));
 
 vi.mock('../StatementsToolbar', () => ({
-  StatementsToolbar: ({ onSearchChange, onDateRangeChange }) => (
-    <div data-testid="stub-toolbar">
-      <button type="button" data-testid="toolbar-search" onClick={() => onSearchChange('BS-')} />
-      <button
-        type="button"
-        data-testid="toolbar-alldates"
-        onClick={() => onDateRangeChange({ presetId: 'all' })}
-      />
-    </div>
-  ),
+  StatementsToolbar: () => <div data-testid="stub-toolbar" />,
 }));
 
 // The real sort-accessor builder is kept (only the rendering half is stubbed) so the test
-// exercises the same accessor map production uses — `documentNo` declares no `sortValue`, so
-// it must fall through to `row.documentNo`, and this would catch that changing.
+// exercises the same accessor map production uses.
 vi.mock('../StatementsTable', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -64,13 +62,13 @@ vi.mock('../StatementsTable', async (importOriginal) => {
     StatementsTable: ({ statements, sortKey, sortDirection, onSort }) => (
       <div
         data-testid="stub-table"
-        data-order={statements.map((s) => s.documentNo ?? '').join('|')}
+        data-order={statements.map((s) => s.id).join('|')}
         data-sort-key={sortKey ?? ''}
         data-sort-direction={sortDirection ?? ''}
       >
-        <button type="button" data-testid="sort-documentNo" onClick={() => onSort('documentNo')} />
+        <button type="button" data-testid="sort-transactionDate" onClick={() => onSort('transactionDate')} />
         {statements.map((s) => (
-          <span key={s.id} data-testid="stmt-row">{s.documentNo ?? ''}</span>
+          <span key={s.id} data-testid="stmt-row">{s.id}</span>
         ))}
       </div>
     ),
@@ -87,138 +85,151 @@ import { ImportedStatementsTab } from '../ImportedStatementsTab.jsx';
 const ACCOUNT = { id: 'acc-1', currencyIso: 'EUR' };
 
 /**
- * Recent enough to stay inside the tab's default last-30-days window. Returns a
- * date-only `yyyy-MM-dd` string — the shape NEO actually sends for `importDate`
- * (see ImportedStatementsTab.tz-bug.vitest.jsx) — built from LOCAL calendar
- * getters, not `toISOString()`: that UTC-converts the instant first, which
- * rolls the date to the next day for any host west of UTC (e.g.
- * America/Argentina/Buenos_Aires) once local time is late enough in the day.
+ * A `yyyy-MM-dd` for `daysAgo` days back, built from LOCAL calendar getters (not
+ * `toISOString()`, which UTC-converts first and rolls the day west of UTC). Recent enough to
+ * keep `importDate` inside the tab's default last-30-days window.
  */
-function recentIso(daysAgo = 1) {
+function recentDay(daysAgo = 1) {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
   return todayCalendarISO(d);
 }
 
-function statement(id, documentNo, daysAgo = 1) {
+/**
+ * A statement row in the shape the handler sends: `transactionDate` is NEO's zone-less wire
+ * datetime, `created` a full ISO instant.
+ */
+function statement(id, { documentNo, trxDaysAgo = 1, created }) {
   return {
     id,
     documentNo,
     name: `Extracto ${id}`,
     fileName: `${id}.c43`,
-    importDate: recentIso(daysAgo),
+    importDate: recentDay(1),
+    transactionDate: `${recentDay(trxDaysAgo)}T00:00:00`,
+    created,
     status: 'DRAFT',
   };
 }
 
-/** The documentNo of every rendered row, in DOM order. */
+/** The id of every rendered row, in DOM order. */
 function renderedOrder() {
   return screen.getAllByTestId('stmt-row').map((el) => el.textContent);
 }
 
-describe('ImportedStatementsTab — default order (newest statement first)', () => {
-  it('renders the highest documentNo first even though the handler returned them shuffled', () => {
-    statementsRef.value = [
-      statement('s2', 'BS-002'),
-      statement('s5', 'BS-005'),
-      statement('s1', 'BS-001'),
-      statement('s4', 'BS-004'),
-      statement('s3', 'BS-003'),
-    ];
+// Same bank day for all three; creation instants differ by minutes and milliseconds, and the
+// documentNo order is the REVERSE of the creation order.
+const SAME_DAY = [
+  statement('oldest', { documentNo: 'BS-003', trxDaysAgo: 2, created: '2026-09-24T09:00:00.000Z' }),
+  statement('middle', { documentNo: 'BS-002', trxDaysAgo: 2, created: '2026-09-24T13:05:12.345Z' }),
+  statement('newest', { documentNo: 'BS-001', trxDaysAgo: 2, created: '2026-09-24T13:05:12.346Z' }),
+];
+
+describe('ImportedStatementsTab — default order: transactionDate desc, then created desc', () => {
+  it('TC1: on the same transaction day, the most recently created statement comes first', () => {
+    statementsRef.value = [...SAME_DAY];
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(renderedOrder()).toEqual(['BS-005', 'BS-004', 'BS-003', 'BS-002', 'BS-001']);
+    expect(renderedOrder()).toEqual(['newest', 'middle', 'oldest']);
   });
 
-  it('puts a freshly created statement at the top of the list without the user sorting anything', () => {
-    // The whole point of the change: the row the user just made is the first one they see.
-    statementsRef.value = [
-      statement('s1', 'BS-001'),
-      statement('s2', 'BS-002'),
-      statement('brand-new', 'BS-999', 0),
+  it('TC1: the same-day order does not depend on the order the rows arrive in', () => {
+    const [a, b, c] = SAME_DAY;
+    const permutations = [
+      [a, b, c], [a, c, b], [b, a, c], [b, c, a], [c, a, b], [c, b, a],
     ];
-    render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(renderedOrder()[0]).toBe('BS-999');
+    for (const rows of permutations) {
+      statementsRef.value = rows;
+      const { unmount } = render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(renderedOrder()).toEqual(['newest', 'middle', 'oldest']);
+      unmount();
+    }
   });
 
-  it('orders document numbers NUMERICALLY, not lexicographically', () => {
-    // `compareCellValues` uses localeCompare(..., { numeric: true }), so BS-1000100 is newer
-    // than BS-999. A naive string compare would put BS-999 first ('9' > '1') and bury the
-    // newest statement at the bottom — the exact failure this sort exists to prevent, and one
-    // that only appears once an instance passes its 1000th statement.
-    statementsRef.value = [
-      statement('a', 'BS-999'),
-      statement('b', 'BS-1000100'),
-      statement('c', 'BS-1000099'),
-      statement('d', 'BS-1000'),
-    ];
-    render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(renderedOrder()).toEqual(['BS-1000100', 'BS-1000099', 'BS-1000', 'BS-999']);
+  it('TC1: the order stays put when the same rows come back reshuffled on a rerender', () => {
+    statementsRef.value = [...SAME_DAY];
+    const { rerender } = render(<ImportedStatementsTab account={ACCOUNT} />);
+    expect(renderedOrder()).toEqual(['newest', 'middle', 'oldest']);
+
+    // A refresh hands back the same statements in a different order (new array identity).
+    statementsRef.value = [SAME_DAY[1], SAME_DAY[2], SAME_DAY[0]];
+    rerender(<ImportedStatementsTab account={ACCOUNT} />);
+    expect(renderedOrder()).toEqual(['newest', 'middle', 'oldest']);
+
+    statementsRef.value = [SAME_DAY[2], SAME_DAY[0], SAME_DAY[1]];
+    rerender(<ImportedStatementsTab account={ACCOUNT} />);
+    expect(renderedOrder()).toEqual(['newest', 'middle', 'oldest']);
   });
 
-  it('orders bare numeric document numbers numerically too', () => {
+  it('TC2: different transaction days sort newest day first', () => {
     statementsRef.value = [
-      statement('a', '999'),
-      statement('b', '1000100'),
-      statement('c', '80'),
+      statement('day-5', { documentNo: 'BS-010', trxDaysAgo: 5, created: '2026-09-20T10:00:00.000Z' }),
+      statement('day-1', { documentNo: 'BS-011', trxDaysAgo: 1, created: '2026-09-20T10:00:00.000Z' }),
+      statement('day-3', { documentNo: 'BS-012', trxDaysAgo: 3, created: '2026-09-20T10:00:00.000Z' }),
     ];
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(renderedOrder()).toEqual(['1000100', '999', '80']);
+    expect(renderedOrder()).toEqual(['day-1', 'day-3', 'day-5']);
   });
 
-  it('sorts statements with no document number LAST, despite the descending direction', () => {
-    // Blank handling in `sortRows` is direction-invariant: a blank carries no ordering
-    // information, and flipping blanks to the top on a desc sort would bury the newest rows.
+  it('TC2: the transaction day outranks the creation instant', () => {
+    // A statement for an OLDER bank day created LATER must still sit below a newer bank day.
     statementsRef.value = [
-      statement('a', 'BS-001'),
-      statement('blank', null),
-      statement('b', 'BS-003'),
-      statement('empty', ''),
+      statement('old-day-created-late', { documentNo: 'BS-100', trxDaysAgo: 6, created: '2026-09-24T18:00:00.000Z' }),
+      statement('new-day-created-early', { documentNo: 'BS-001', trxDaysAgo: 1, created: '2026-09-01T08:00:00.000Z' }),
     ];
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    const order = renderedOrder();
-    expect(order.slice(0, 2)).toEqual(['BS-003', 'BS-001']);
-    expect(order.slice(2)).toEqual(['', '']);
+    expect(renderedOrder()).toEqual(['new-day-created-early', 'old-day-created-late']);
   });
 
-  it('keeps the newest-first order after a filter narrows the list', () => {
+  it('does not order by documentNo', () => {
+    // documentNo DESC would give BS-900, BS-500, BS-100; the date order is the exact reverse.
     statementsRef.value = [
-      statement('s1', 'BS-001'),
-      statement('s3', 'BS-003'),
-      statement('s2', 'BS-002'),
+      statement('doc-900', { documentNo: 'BS-900', trxDaysAgo: 9, created: '2026-09-15T10:00:00.000Z' }),
+      statement('doc-100', { documentNo: 'BS-100', trxDaysAgo: 1, created: '2026-09-23T10:00:00.000Z' }),
+      statement('doc-500', { documentNo: 'BS-500', trxDaysAgo: 4, created: '2026-09-20T10:00:00.000Z' }),
     ];
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    // Re-filtering rebuilds the array from `statements`; the order must be re-applied, not
-    // inherited from whatever the filter happened to emit.
-    expect(renderedOrder()).toEqual(['BS-003', 'BS-002', 'BS-001']);
+    expect(renderedOrder()).toEqual(['doc-100', 'doc-500', 'doc-900']);
+    expect(renderedOrder()).not.toEqual(['doc-900', 'doc-500', 'doc-100']);
+  });
+
+  it('falls back to the backend order when transaction day and created instant are equal', () => {
+    const created = '2026-09-22T11:11:11.111Z';
+    statementsRef.value = [
+      statement('first', { documentNo: 'BS-001', trxDaysAgo: 2, created }),
+      statement('second', { documentNo: 'BS-003', trxDaysAgo: 2, created }),
+      statement('third', { documentNo: 'BS-002', trxDaysAgo: 2, created }),
+    ];
+    render(<ImportedStatementsTab account={ACCOUNT} />);
+    expect(renderedOrder()).toEqual(['first', 'second', 'third']);
   });
 });
 
 describe('ImportedStatementsTab — the header indicator agrees with the rendered order', () => {
-  it('shows documentNo / desc on first paint, matching what is actually on screen', () => {
-    // `initialSort` seeds the indicator; the pre-sort puts the rows in that order. If the two
-    // ever disagreed the header arrow would describe an order the rows are not in.
-    statementsRef.value = [statement('s1', 'BS-001'), statement('s2', 'BS-002')];
+  it('shows transactionDate / desc on first paint, matching what is actually on screen', () => {
+    statementsRef.value = [
+      statement('older', { documentNo: 'BS-002', trxDaysAgo: 3, created: '2026-09-20T10:00:00.000Z' }),
+      statement('newer', { documentNo: 'BS-001', trxDaysAgo: 1, created: '2026-09-20T10:00:00.000Z' }),
+    ];
     render(<ImportedStatementsTab account={ACCOUNT} />);
     const table = screen.getByTestId('stub-table');
-    expect(table).toHaveAttribute('data-sort-key', 'documentNo');
+    expect(table).toHaveAttribute('data-sort-key', 'transactionDate');
     expect(table).toHaveAttribute('data-sort-direction', 'desc');
-    expect(table).toHaveAttribute('data-order', 'BS-002|BS-001');
+    expect(table).toHaveAttribute('data-order', 'newer|older');
   });
 
   it('flips to ascending on the first click of the seeded column, and the rows follow', async () => {
     // `useClientSort`'s one-shot seed override: clicking the already-sorted column must produce
-    // a visible reorder rather than cycling through "none", which would leave the rows exactly
-    // as they were and read as a dead click.
+    // a visible reorder rather than cycling through "none".
     const user = userEvent.setup();
     statementsRef.value = [
-      statement('s1', 'BS-001'),
-      statement('s3', 'BS-003'),
-      statement('s2', 'BS-002'),
+      statement('day-3', { documentNo: 'BS-001', trxDaysAgo: 3, created: '2026-09-20T10:00:00.000Z' }),
+      statement('day-1', { documentNo: 'BS-002', trxDaysAgo: 1, created: '2026-09-20T10:00:00.000Z' }),
+      statement('day-2', { documentNo: 'BS-003', trxDaysAgo: 2, created: '2026-09-20T10:00:00.000Z' }),
     ];
     render(<ImportedStatementsTab account={ACCOUNT} />);
-    expect(renderedOrder()).toEqual(['BS-003', 'BS-002', 'BS-001']);
-    await user.click(screen.getByTestId('sort-documentNo'));
+    expect(renderedOrder()).toEqual(['day-1', 'day-2', 'day-3']);
+    await user.click(screen.getByTestId('sort-transactionDate'));
     expect(screen.getByTestId('stub-table')).toHaveAttribute('data-sort-direction', 'asc');
-    expect(renderedOrder()).toEqual(['BS-001', 'BS-002', 'BS-003']);
+    expect(renderedOrder()).toEqual(['day-3', 'day-2', 'day-1']);
   });
 });

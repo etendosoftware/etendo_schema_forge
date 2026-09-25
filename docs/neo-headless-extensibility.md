@@ -383,6 +383,81 @@ removes the whole spec from the agentic catalog with nothing in the UI to show i
 regardless keeps the catalog honest if the entity ever loses its tab. Full criteria:
 [`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) §6.
 
+### 2.7.1 `actionContracts()`: declare your named actions (ETP-5468)
+
+`servesActions()` says *that* a handler answers ACTION requests. `actionContracts()` says *which*
+named actions it answers and what each one accepts — for actions that have no AD button column
+behind them, so nothing in the configuration can describe them. A non-empty declaration also makes
+the default `servesActions()` return `true`.
+
+```java
+// ReconciliationHandler (spec bank-reconciliation) / BankStatementsHandler (spec bank-statements)
+@Override
+public Map<String, NeoActionContract> actionContracts() {
+  return BankStatementAgentActions.CONTRACTS;          // Map<name, contract>, presentation order
+}
+
+@Override
+public NeoResponse handle(NeoContext context) {
+  // Purely additive: only neo_action produces an ACTION context for this R spec; the SPA's
+  // ?action= requests carry no endpoint type and keep their own routing.
+  if (NeoEndpointType.ACTION.equals(context.getEndpointType())) {
+    return BankStatementAgentActions.dispatch(this, context);
+  }
+  ...
+}
+```
+
+**`NeoActionContract`** (`schemaforge/util`, immutable):
+
+- `NeoActionContract.write(name, description, Param...)` — an action that changes data;
+  `NeoActionContract.read(name, description, Param...)` — one that never persists.
+- `withIdDescription(String)` — a copy stating what `neo_action`'s `id` identifies (e.g. "the
+  financial account id"), rendered as `idDescription`. Keeps window-specific wording out of the
+  generic MCP classes.
+- `Param.required(name, type, desc)`, `Param.optional(name, type, desc)` (state the default in the
+  description), `Param.options(name, desc, allowedValues)` (closed enum),
+  `Param.array(name, itemType, required, desc)`. Types: `TYPE_STRING`, `TYPE_BOOLEAN`, `TYPE_DATE`
+  (`yyyy-MM-dd`), `TYPE_ARRAY` of `TYPE_STRING` / `TYPE_OBJECT`. Describe an object item's shape in
+  the description: the schema does not type it deeper.
+- `NeoActionContract.validate(contracts, action, parameters)` — `null` when the call matches,
+  otherwise a 422 naming the problem: `availableActions` (unknown action), `unknownParameters` +
+  `acceptedParameters` (undeclared key), `missingParameters` (absent, blank string or empty array),
+  `field` + `expectedType` / `allowedValues` (wrong shape). The dispatcher calls it **before**
+  running anything, so what the agent is shown and what it is judged against cannot drift.
+- `NeoActionContract.resolve(spec)` — the first included entity whose handler declares contracts;
+  the MCP layer uses it to find the `entity` to pass.
+
+**What reads it — the MCP only.** `neo_schema({spec, view:"actions"})` returns the declared catalog
+(`{action, description, mutating, invokeVia:"neo_action", idDescription?, parameters:<JSON Schema>}`);
+`neo_discover` marks the R spec `status:"actions_only"` with `actionEntity` and `actions[]`; the spec
+joins the `neo_schema` / `neo_action` enums only (never `neo_list` / `neo_get`). The call is
+`neo_action {spec, entity, id, action, parameters}`.
+
+**The dispatcher pattern** (both current implementations): validate the contract → require a
+non-blank `id` → check the same report-spec role gate the SPA passes (`POST` for mutating actions,
+`GET` for reads — `neo_action` itself is authorized as a read) → translate the call into the
+exact request the SPA sends and re-enter the unchanged engine, so every business rule is the UI's
+own → on success, flush the session to clean while the `OBContext` is still set (the MCP session
+scope flushes once and restores a null context).
+
+**Current implementations:**
+
+| Handler / R spec | Actions class | Actions |
+|---|---|---|
+| `ReconciliationHandler` / `bank-reconciliation` (ETP-5468) | `ReconciliationAgentActions` | `pendingLines`, `candidates`, `autoMatch`, `reconcileGroup`, `reconcileDifference`, `applySuggestions`, `undoReconciliation`, `removeOperation`, `reactivateSelected` |
+| `BankStatementsHandler` / `bank-statements` (ETP-5447) | `BankStatementAgentActions` | `createStatement`, `previewStatement`, `importStatement` (id = financial account); `updateStatement`, `processStatement`, `reactivateStatement`, `deleteStatement` (id = bank statement) |
+
+Full runtime reference (tables of parameters, refusals, engine routes):
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.1 and §4.12.1.2.
+
+**The rule — declare only what you answer.** Declare an action only if the dispatcher demonstrably
+serves it, with the parameters the engine reads. A declared-but-ignored action is the same silent
+lie as a declared-but-ignored report parameter. Named actions on W-spec handlers that are not
+declared this way — the order / shipment / invoice header handlers' `createDraftInvoice`,
+`listInvoices`, … — stay invisible in the catalog, and GET-only ones remain unreachable through
+`neo_action` (IMP-49).
+
 ---
 
 ## 2.8 UsageResourceCounter: counting a billable resource (ETP-5050)
