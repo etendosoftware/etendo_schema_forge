@@ -599,6 +599,17 @@ input.
 > mirror still reads "selected" after a successful bulk delete or a cancel and the toolbar never
 > comes back. That is the bug that cost this window its bulk delete once already.
 
+`ListView` also forwards **`userRefreshTrigger`** (ETP-5387): a counter that starts at `0` and is
+bumped **only** when the user presses the toolbar Refresh button. It exists for slots that fetch
+their own dataset instead of rendering `ListView`'s paginated `data` — the Refresh button's
+`hook.refresh()` reloads that page, which such a slot never shows, so without this signal Refresh
+does nothing visible there. React to a *change* of the value (the value you mount with is a baseline,
+not a request) and show your own loading state; see `artifacts/chart-of-accounts/custom/AccountTreeView.jsx`.
+It is deliberately not bumped by `onDataMutated` reloads (save, delete, toggle), which should stay
+quiet, nor by the host's `refreshTrigger` **input** prop on `ListView` (a host bumps that to make
+`ListView` itself reload — same idea, opposite direction). A slot that spreads its remaining props
+onto a DOM element must destructure `userRefreshTrigger` out of the spread, like `selectedRows`.
+
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
 
