@@ -43,7 +43,13 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
     showIaeActivityReminder: vi.fn(),
   };
 });
-vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
+// ETP-5432 pt.10 SECOND follow-up — deliberately NOT mocking `neoBase` (unlike this
+// directory's usual `(u) => u ?? ''` identity boilerplate): the real implementation strips
+// the last path segment (`/sws/neo/fiscal-models` -> `/sws/neo`), and an identity mock makes
+// `resolveApiUrl`'s "path already starts with base" verbatim escape hatch trivially true for
+// a manually-prefixed path built from the SAME `apiBaseUrl` — which is exactly what hid the
+// real double-prefix/missing-`{baseUrl:''}` bug from every test in this file the first time
+// around. The real `neoBase` is pure and dependency-free, safe to leave unmocked.
 vi.mock('../../../fiscal-models.css', () => ({}));
 vi.mock('../../../FmCommon.jsx', () => ({
   StatusPillMenu: () => null,
@@ -138,11 +144,23 @@ function jsonResponse(body, ok = true) {
 }
 
 // iaeRows null => the /organization/actividadesDelIae fetch itself rejects (fail-open case).
+//
+// ETP-5432 pt.10 SECOND follow-up — the actividadesDelIae branch used to match on a lenient
+// `url.includes('/organization/actividadesDelIae')`, which also matched a malformed,
+// double-prefixed URL (e.g. "/sws/neo/fiscal-models/sws/neo/organization/actividadesDelIae?...",
+// produced by a call site missing `{ baseUrl: '' }`) — masking a real bug that a live retest
+// caught but this mock did not. Only the EXACT clean path now resolves; anything else
+// containing the same substring 404s, exactly like the real NEO backend would against an
+// unknown route — this is what would have caught the double-prefix bug.
 function makeFetchMock({ iaeRows = [], iaeRejects = false } = {}) {
   return vi.fn((url) => {
-    if (url.includes('/organization/actividadesDelIae')) {
+    if (url.startsWith('/sws/neo/organization/actividadesDelIae?')) {
       if (iaeRejects) return Promise.reject(new Error('network down'));
       return jsonResponse({ response: { data: iaeRows } });
+    }
+    if (url.includes('/organization/actividadesDelIae')) {
+      // Any OTHER shape containing this substring (double-prefixed, wrong base, etc.) 404s.
+      return jsonResponse({}, false);
     }
     if (url.includes('/session')) {
       return jsonResponse({ organization: { taxId: 'B1', name: 'Acme' } });
@@ -235,6 +253,10 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
     // CTA-click-to-navigate mechanics are unit-tested in fiscalModelsUtils.iae.vitest.js.
     for (const call of showIaeActivityReminder.mock.calls) {
       expect(call[1]).toBe(navigateMock);
+      // ETP-5432 pt.10 third follow-up (user correction) — every call from this page's
+      // own guards (mount effect, "Generar fichero 303", "Registrar/Presentar") must use
+      // error severity, not the default warning.
+      expect(call[2]).toEqual({ severity: 'error' });
     }
   });
 });
@@ -263,6 +285,8 @@ describe('FmModel303Page — missing default IAE activity guard covers the manua
 
     await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
     expect(onStatusChange).not.toHaveBeenCalled();
+    // ETP-5432 pt.10 third follow-up (user correction) — error severity, not warning.
+    expect(showIaeActivityReminder).toHaveBeenCalledWith(expect.any(Function), navigateMock, { severity: 'error' });
   });
 
   it('blocks the "con acuse" path (status "submitted_ack") the same way', async () => {
@@ -274,6 +298,7 @@ describe('FmModel303Page — missing default IAE activity guard covers the manua
 
     await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
     expect(onStatusChange).not.toHaveBeenCalled();
+    expect(showIaeActivityReminder).toHaveBeenCalledWith(expect.any(Function), navigateMock, { severity: 'error' });
   });
 
   it('lets a manual path through normally once a valid default IAE activity exists', async () => {
@@ -309,10 +334,16 @@ describe('FmModel303Page — missing default IAE activity guard covers the manua
     // would already have fired by the time we assert, BEFORE the network call ever resolves.
     const pendingResolvers = [];
     global.fetch = vi.fn((url) => {
-      if (url.includes('/organization/actividadesDelIae')) {
+      // Exact-path match only (see `makeFetchMock`'s own comment above) — a malformed,
+      // double-prefixed URL 404s immediately rather than joining the slow-resolving pool,
+      // so this test would also fail loudly (guard never blocks) if that bug resurfaced.
+      if (url.startsWith('/sws/neo/organization/actividadesDelIae?')) {
         return new Promise((resolve) => {
           pendingResolvers.push(() => resolve({ ok: true, json: async () => ({ response: { data: [] } }) }));
         });
+      }
+      if (url.includes('/organization/actividadesDelIae')) {
+        return Promise.resolve({ ok: false, json: async () => ({}) });
       }
       return Promise.resolve({ ok: true, json: async () => ({}) });
     });

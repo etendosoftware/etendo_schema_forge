@@ -116,7 +116,10 @@ describe('AeatSubmitFlow — missing default IAE activity guard (ETP-4975)', () 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalledTimes(1));
-    expect(showIaeActivityReminder).toHaveBeenCalledWith(expect.any(Function), navigateMock);
+    // ETP-5432 pt.10 third follow-up (user correction) — this specific message must render
+    // as an error-severity toast, not the default warning, since it's the sole feedback for
+    // an active hard block.
+    expect(showIaeActivityReminder).toHaveBeenCalledWith(expect.any(Function), navigateMock, { severity: 'error' });
     expect(submitCalls()).toHaveLength(0);
     // ETP-5432 pt.10 follow-up — no fixed inline banner/CTA for this case anymore. The
     // shared `connError` banner (IBAN/NRC/connection errors) is untouched and still

@@ -517,7 +517,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         if (cancelled || !iaeRes.ok) return;
         const iaeRows = (await iaeRes.json())?.response?.data ?? [];
         if (!cancelled && isMissingDefaultIaeActivity(iaeRows)) {
-          showIaeActivityReminder(t, navigate);
+          showIaeActivityReminder(t, navigate, { severity: 'error' });
         }
       } catch (_) {
         // fail open — see comment above.
@@ -685,7 +685,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         if (iaeRes.ok) {
           const iaeRows = (await iaeRes.json())?.response?.data ?? [];
           if (isMissingDefaultIaeActivity(iaeRows)) {
-            showIaeActivityReminder(t, navigate);
+            showIaeActivityReminder(t, navigate, { severity: 'error' });
             setGenerating(false);
             return;
           }
@@ -878,13 +878,29 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // but now fails fast at path-confirmation time instead of after opening that modal).
     // Same fail-OPEN-on-error semantics as every other call site: a flaky pre-check must
     // never manufacture a false block.
+    //
+    // ETP-5432 pt.10 SECOND follow-up — the first version of this shim omitted `{ baseUrl:
+    // '' }` on the inner `apiFetch` call. This `apiFetch` (this component's own, bound to
+    // `apiBaseUrl` e.g. "/sws/neo/fiscal-models") ALWAYS re-prepends its own base unless
+    // told not to (see `createApiFetch`/`resolveApiUrl` in
+    // @etendosoftware/app-shell-core/auth/api.js — a plain string concat with only a
+    // same-prefix escape hatch, which a `neoBase(apiBaseUrl)`-prefixed path does not hit
+    // here since it diverges from `apiBaseUrl` after the shared "/sws/neo" segment). Without
+    // the override, the real request went out as
+    // "/sws/neo/fiscal-models" + "/sws/neo/organization/actividadesDelIae?..." — a
+    // double-prefixed 404 against the real backend — which the guard's own fail-OPEN
+    // semantics then silently swallowed as "not blocked". `handleGenerate`'s existing inline
+    // check (below) and the pt.10 mount effect (above) already pass this override correctly;
+    // this call site is the one that was missing it. A mocked test's `url.includes(...)`
+    // match did not catch the malformed URL — a real backend 404 would have; verify any
+    // future guard-URL fix against a URL-equality assertion, not a substring one.
     if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
       const iaeGuard = await checkMissingIaeGuard({
         decl, selectedOrg, t,
-        apiFetch: (path) => apiFetch(`${neoBase(apiBaseUrl)}${path}`),
+        apiFetch: (path) => apiFetch(`${neoBase(apiBaseUrl)}${path}`, { baseUrl: '' }),
       });
       if (iaeGuard.blocked) {
-        showIaeActivityReminder(t, navigate);
+        showIaeActivityReminder(t, navigate, { severity: 'error' });
         return;
       }
     }

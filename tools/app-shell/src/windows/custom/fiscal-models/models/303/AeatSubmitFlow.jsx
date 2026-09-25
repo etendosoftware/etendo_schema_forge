@@ -268,7 +268,7 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
       // unchanged.
       const iaeGuard = await checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t });
       if (iaeGuard.blocked) {
-        showIaeActivityReminder(t, navigate);
+        showIaeActivityReminder(t, navigate, { severity: 'error' });
         setSubmitting(false);
         return;
       }
