@@ -1,11 +1,10 @@
 /**
  * Vitest interactive behavior tests for AccountCodeField.jsx.
  *
- * Run from tools/app-shell/:
- *   npx vitest run --config vitest.config.js ../../artifacts/chart-of-accounts/custom/__tests__/AccountCodeField.vitest.jsx
- *
- * (The default Vitest include pattern covers src/ only; this file is run manually
- * or via a custom glob during CI for artifact-level component tests.)
+ * Hosted here (not next to the component under artifacts/) because the Vitest include
+ * pattern only covers src/** — it lived in artifacts/chart-of-accounts/custom/__tests__/
+ * until ETP-5399 and never ran. It imports the runtime component through `@generated`
+ * (resolves to artifacts/), like the sibling AccountTreeView / NewAccountModal suites.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -22,7 +21,7 @@ vi.mock('@/i18n', () => ({
 // Dynamic import so the mock is registered first
 let AccountCodeField;
 beforeAll(async () => {
-  const mod = await import('../AccountCodeField.jsx');
+  const mod = await import('@generated/chart-of-accounts/custom/AccountCodeField.jsx');
   AccountCodeField = mod.default;
 });
 
@@ -284,5 +283,52 @@ describe('AccountCodeField — placeholder prop', () => {
       />
     );
     expect(screen.getByTestId('account-code-suffix-input')).toHaveAttribute('placeholder', 'codeSuffixPlaceholder');
+  });
+});
+
+// ─── ETP-5399 QA: prefix + suffix render as one readable control ─────────────
+
+describe('AccountCodeField — composite control (ETP-5399)', () => {
+  function renderLeaf() {
+    render(
+      <AccountCodeField
+        value="1030"
+        onChange={vi.fn()}
+        record={{ summaryLevel: 'N', codePrefix: '1030' }}
+      />
+    );
+  }
+
+  it('wraps the locked prefix and the suffix input in a single bordered control', () => {
+    renderLeaf();
+    const control = screen.getByTestId('account-code-control');
+    expect(control).toContainElement(screen.getByTestId('account-code-prefix'));
+    expect(control).toContainElement(screen.getByTestId('account-code-suffix-input'));
+    expect(control.className).toContain('border-[hsl(var(--border-control))]');
+    expect(control.className).toContain('focus-within:ring-2');
+  });
+
+  it('renders the locked prefix in the foreground colour, not the pale info-border tone', () => {
+    renderLeaf();
+    const prefix = screen.getByTestId('account-code-prefix');
+    expect(prefix).toHaveTextContent('1030');
+    expect(prefix.className).toContain('text-[hsl(var(--foreground))]');
+    expect(prefix.className).not.toContain('status-info-border');
+  });
+
+  it('uses monospace tabular digits for both halves so the 8-digit code lines up', () => {
+    renderLeaf();
+    const control = screen.getByTestId('account-code-control');
+    expect(control.className).toContain('font-mono');
+    expect(control.className).toContain('tabular-nums');
+    // The input inherits the control's font instead of setting its own.
+    expect(screen.getByTestId('account-code-suffix-input').className).not.toMatch(/\btext-sm\b|\bfont-sans\b/);
+  });
+
+  it('gives the read-only display a visible border (no longer the card colour)', () => {
+    render(<AccountCodeField value="70100000" onChange={vi.fn()} record={{ summaryLevel: 'Y' }} />);
+    const display = screen.getByTestId('account-code-readonly');
+    expect(display.className).toContain('border-[hsl(var(--border-control))]');
+    expect(display.className).not.toContain('border-[hsl(var(--card))]');
   });
 });

@@ -41,6 +41,9 @@ export function AccountBadge({ code, className = '' }) {
  * @param {string|null} [props.error]
  * @param {string} [props.placeholder]
  * @param {string} [props.searchPlaceholder]
+ * @param {boolean} [props.modal] — render the popover in Radix modal mode. Pass it when the
+ *   selector lives inside a Dialog: the popover is portalled outside the Dialog, whose scroll
+ *   lock otherwise swallows wheel/touch scrolling of the option list. Off by default.
  */
 export function AccountBadgeSelect({
   label,
@@ -53,6 +56,7 @@ export function AccountBadgeSelect({
   error = null,
   placeholder,
   searchPlaceholder,
+  modal = false,
   'data-testid': dataTestId,
 }) {
   const ui = useUI();
@@ -63,7 +67,7 @@ export function AccountBadgeSelect({
   const triggerInner = selected ? (
     <span className="flex items-center gap-2 min-w-0">
       <AccountBadge code={selected.code} data-testid="AccountBadge__2082a8" />
-      <span className="truncate text-[hsl(var(--foreground))]">{selected.name}</span>
+      <span className="truncate text-[hsl(var(--foreground))]" title={selected.name}>{selected.name}</span>
     </span>
   ) : (
     <span className="text-[hsl(var(--text-disabled))]">{ph}</span>
@@ -95,7 +99,7 @@ export function AccountBadgeSelect({
   return (
     <div data-testid={dataTestId}>
       {labelRow}
-      <Popover open={open} onOpenChange={setOpen} data-testid="Popover__2082a8">
+      <Popover open={open} onOpenChange={setOpen} modal={modal} data-testid="Popover__2082a8">
         <PopoverTrigger asChild data-testid="PopoverTrigger__2082a8">
           <button
             type="button"
@@ -129,7 +133,7 @@ export function AccountBadgeSelect({
                   className="gap-2"
                   data-testid="CommandItem__2082a8">
                   <AccountBadge code={opt.code} data-testid="AccountBadge__2082a8" />
-                  <span className="truncate flex-1">{opt.name}</span>
+                  <span className="truncate flex-1" title={opt.name}>{opt.name}</span>
                   {opt.id === value && <Check size={16} className="text-primary" data-testid="Check__2082a8" />}
                 </CommandItem>
               ))}

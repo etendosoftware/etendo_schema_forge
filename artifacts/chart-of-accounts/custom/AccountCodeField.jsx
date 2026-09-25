@@ -51,7 +51,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
     return (
       <div
         data-testid="account-code-readonly"
-        className="flex h-10 items-center rounded-lg border border-[hsl(var(--card))] bg-muted/50 px-3 text-sm text-foreground"
+        className="flex h-10 items-center rounded-lg border border-[hsl(var(--border-control))] bg-muted/50 px-3 font-mono text-sm tabular-nums text-foreground"
       >
         {value}
       </div>
@@ -86,10 +86,16 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
 
   return (
     <div>
-      <div className="flex items-center">
+      {/* ETP-5399 (QA) — prefix + suffix render as ONE bordered control so the 8 digits read
+          as a single code: shared border/height/focus ring, monospace digits on both sides,
+          and a readable (foreground) locked prefix instead of the pale info-border tone. */}
+      <div
+        data-testid="account-code-control"
+        className="flex h-10 items-stretch overflow-hidden rounded-lg border border-[hsl(var(--border-control))] bg-card font-mono text-sm tabular-nums focus-within:ring-2 focus-within:ring-[hsl(var(--foreground))] focus-within:border-transparent"
+      >
         <span
           data-testid="account-code-prefix"
-          className="inline-flex items-center h-10 px-3 text-sm border border-r-0 rounded-l-lg border-[hsl(var(--card))] bg-muted/50 text-[var(--status-info-border)] select-none whitespace-nowrap"
+          className="inline-flex items-center pl-3 pr-2 bg-muted/50 border-r border-[hsl(var(--border-control))] text-[hsl(var(--foreground))] select-none whitespace-nowrap"
         >
           {derivedPrefix}
         </span>
@@ -102,7 +108,7 @@ export default function AccountCodeField({ value = '', onChange, record, readOnl
           onBlur={handleBlur}
           maxLength={4}
           placeholder={placeholder ?? ui('codeSuffixPlaceholder')}
-          className="h-10 flex-1 rounded-r-lg border border-[hsl(var(--card))] bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          className="min-w-0 flex-1 bg-transparent px-2 focus:outline-none"
         />
       </div>
       {error && (
