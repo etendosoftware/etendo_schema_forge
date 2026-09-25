@@ -560,7 +560,9 @@ message prefix).
 
 The polarity is inverted on purpose. Every failure of the backend flag stack resolves to `false`,
 and `false` here means **enforcing** — so an unset key or an unreachable control plane never opens
-a blocked tenant; only an explicit `true` does, and the would-be refusal is then logged at INFO. It
+a blocked tenant; only a value resolving to `true` does — on ConfigCat the boolean setting served
+as `true`, locally any of `true`, `Y`, `yes`, `1` (case-insensitive, trimmed; any other value keeps
+enforcing) — and the would-be refusal is then logged at INFO. It
 can be targeted per tenant on ConfigCat through the `clientId` attribute. Owned paths and pending
 specs are in [`flags-registry.json`](../flags-registry.json) under
 `environment-access-enforcement-kill-switch`.

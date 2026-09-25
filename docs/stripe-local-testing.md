@@ -360,15 +360,20 @@ see the blocked screen and reach `/account` / `/upgrade`. `accessDecision` is in
 backend-only: the SPA does not read it; its blocked screen follows the NEO 402.
 
 The check has a backend-only kill switch, `environment-access-enforcement-off`. **It enforces
-unless the flag is explicitly `true`** (unset, unreachable ConfigCat or a bad value all keep
-enforcing). To test both states locally, set it in `Openbravo.properties` and restart Tomcat:
+unless the flag resolves to `true`.** Locally that is any of `true`, `Y`, `yes`, `1`
+(case-insensitive, trimmed); `false`, `N`, `no`, `0` keep enforcing, and any other value is a
+`PARSE_ERROR` that keeps enforcing too, as do an unset key and an unreachable ConfigCat. On
+ConfigCat it is the boolean setting served as `true`. To test both states locally, set it in
+`Openbravo.properties` and restart Tomcat:
 
 ```properties
 etendo.go.flags.environment-access-enforcement-off=true
 ```
 
 With it on, a blocked tenant is allowed and the log shows `Environment access enforcement is
-switched off: neo would have refused tenant <id> (SUBSCRIPTION_REQUIRED) and allowed it`. Remove
+switched off: neo would have refused tenant <id> (SUBSCRIPTION_REQUIRED) and allowed it`, and
+`GET /sws/go/environments` reports that tenant's `accessState` as `ALLOWED` (its
+`subscriptionStatus` and trial fields still show the facts). Remove
 the line (or set `false`) to enforce again. On ConfigCat it can be targeted per tenant through the
 `clientId` attribute.
 
@@ -970,7 +975,7 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-22 | Re-subscribing opens a fresh row (ETP-5047) | after SF-STRIPE-LOCAL-14, buy again for the same tenant (Test Mode, §5) | a second `etgo_subscription` row, `END_DATE` null, `STATUS=active`, the new `stripe_subscription_id`; the old row stays closed; NEO answers 200 again | P0 |
 | SF-STRIPE-LOCAL-23 | A dispute is an alert only (ETP-5047) | Test Mode card `4000000000000259`, or a hand-signed `charge.dispute.created` (§4) | `event_result=APPLIED`; a WARN `Billing alert: ... charge.dispute.created`; no status or due-date change | P1 |
 | SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
-| SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; remove the property → 402 again | P0 |
+| SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; `GET /sws/go/environments` shows that tenant's `accessState` as `ALLOWED` (subscription status and trial fields unchanged); remove the property → 402 again and `accessState` back to the refusal | P0 |
 | SF-STRIPE-LOCAL-26 | Period and grace anchor are separate columns (ETP-5047) | Test Mode `tools/stripe-subscription-past-due.sh fail` then `recover` (§5), on a tenant with a row | after `fail`: `STATUS=past_due`, `GRACE_ANCHOR` = end of the paid period, `CURRENT_PERIOD_START/END` = Stripe's current period (unchanged by the failure); after `recover`: `STATUS=active`, `GRACE_ANCHOR` NULL, period advanced; `LAST_EVENT_AT` moves forward with each applied event | P0 |
 
 ## 8. Troubleshooting

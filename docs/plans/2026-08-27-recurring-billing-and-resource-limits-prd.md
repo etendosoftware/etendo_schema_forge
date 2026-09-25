@@ -271,7 +271,8 @@ Only the last tier is development, and it is additive rather than a modification
 >   never refuse.
 > - **Enforcement ships enabled, with a kill switch** (ETP-5047, decided by Martin 2026-09-25), not
 >   "ships disabled": the backend-only flag `environment-access-enforcement-off` stops the refusal
->   only when explicitly `true`, per tenant or globally, and logs what it would have refused.
+>   only when it resolves to `true` (locally `true`/`Y`/`yes`/`1`), per tenant or globally, and
+>   logs what it would have refused.
 > - The 402 carries `error.code = ENVIRONMENT_ACCESS_DENIED` and `error.decision`; the period is
 >   advanced by `invoice.paid` (not `invoice.payment_succeeded`); `charge.dispute.created` is an
 >   alert only, as specified. A cancellation closes the subscription row and a later purchase opens

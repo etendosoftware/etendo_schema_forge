@@ -755,7 +755,7 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlagTest.java",
-            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only an explicit true switches off; the clientId attribute reaches the evaluation context (asserted on the FeatureFlagContext and end to end through a per-tenant stub provider)."
+            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only a value resolving to true (locally true, Y, yes or 1, case-insensitive) switches off; the clientId attribute reaches the evaluation context (asserted on the FeatureFlagContext and end to end through a per-tenant stub provider)."
           },
           {
             "root": "backend",
