@@ -526,6 +526,17 @@ function fmListRowClassName({ selected, current }) {
   return current ? 'fm-table__row--current' : '';
 }
 
+// ETP-5456 — extracted to avoid a nested ternary (javascript:S3358). Mirrors the
+// mutually-exclusive rectificativa (303) / sustitutiva (349) precedence documented
+// at the `declTypeLabel` call site below.
+function resolveDeclTypeLabel(decl, t) {
+  if (decl.manualData?.identification?.rectificativa) return t('fm.type.rectificative');
+  const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
+    || decl.manualData?.identification?.sustitutiva === 'Y';
+  if (isSustitutiva) return t('fm.type.substitutive');
+  return t('fm.type.ordinary');
+}
+
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
@@ -998,13 +1009,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
-            const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
-              || decl.manualData?.identification?.sustitutiva === 'Y';
-            const declTypeLabel = decl.manualData?.identification?.rectificativa
-              ? t('fm.type.rectificative')
-              : isSustitutiva
-                ? t('fm.type.substitutive')
-                : t('fm.type.ordinary');
+            const declTypeLabel = resolveDeclTypeLabel(decl, t);
 
             return (
               <tr
