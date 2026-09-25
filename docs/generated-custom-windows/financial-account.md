@@ -1091,62 +1091,64 @@ The spec + entity + field source-data records live in `src-db/database/sourcedat
 
 ## MCP / agent access to bank statements (ETP-5447)
 
-Bank statement **writes** are reachable from the MCP (and from REST) as **named actions of the
-`financial-account` W spec**, not through the generic CRUD of `importedBankStatements` /
-`bankStatementLines`. An agent calls
-`neo_action {spec:"financial-account", entity, id, action, parameters}`; REST reaches the same
-actions at `/sws/neo/financial-account/<entity>/<id>/action/<name>`. Every action is `POST`; any
-other method answers `405`.
+Bank statement **writes** are reachable from the MCP as **declared actions of the R spec
+`bank-statements`** — the same mechanism (`NeoHandler#actionContracts()`, ETP-5468) and the same
+shape as reconciliation on `bank-reconciliation` (see *Reconciliation happens only through
+`bank-reconciliation`* below). An agent calls
+
+```
+neo_action {spec:"bank-statements", entity:"bank-statements", id, action, parameters}
+```
+
+and reads the catalogue (descriptions, `idDescription`, JSON-Schema parameters) with
+`neo_schema({spec:"bank-statements", view:"actions"})`.
+
+| Action | Kind | `id` = | Engine route |
+|---|---|---|---|
+| `createStatement` | write | financial account (`FIN_Financial_Account`) | `POST ?action=create` — header + lines by hand; processed by default (`process:false` keeps a draft) |
+| `previewStatement` | read | financial account | `POST ?action=preview` — parses a file, saves nothing |
+| `importStatement` | write | financial account | `POST ?action=import` — Cuaderno 43 or the generic CSV, lands processed |
+| `updateStatement` | write | bank statement (`FIN_BankStatement`) | `POST ?action=update` — drafts only; replaces the unmatched lines |
+| `processStatement` | write | bank statement | `POST ?action=process` |
+| `reactivateStatement` | write | bank statement | `POST ?action=reactivate` — does not reverse reconciliations |
+| `deleteStatement` | write | bank statement | `POST ?action=delete` — drafts only; 409 on a PSD2-connected account, 400 while matched lines remain |
+
+Parameters, line shape and refusals are documented once, in the runtime reference
+(`com.etendoerp.go/docs/neo-headless.md` §4.12.1.2) and in the catalogue itself; this guide does not
+repeat them. Both header dates of `createStatement` / `updateStatement` are required and never
+defaulted to today.
 
 **Reads go through the generic path:** `neo_list` / `neo_get` on
 `financial-account/importedBankStatements` (statements, with their persisted `EM_ETGO_*`
-aggregates) and `bankStatementLines` (their lines). There is deliberately no named read action.
+aggregates) and `financial-account/bankStatementLines` (their lines) — that is how an agent finds a
+statement id. There is deliberately no named read action for statements.
 
-These actions are an **MCP entry point on the W spec `financial-account` that reuses the handler
-of the R spec `bank-statements`** (`BankStatementsHandler`). The SPA still calls the R spec
-(`/sws/neo/bank-statements?action=...`) directly; retiring the R spec in favour of these actions is
-future work.
-
-| Entity (id =) | Action | Method | Engine call | Parameters |
-|---|---|---|---|---|
-| `account` (FIN_Financial_Account id) | `createStatement` | POST | `?action=create` | `name`, `transactionDate`, `importDate` (both **required**, `yyyy-MM-dd` or ISO), `lines[]` (required), `process?` (default `true`), `fileName?`, `notes?` |
-| `account` | `previewStatement` | POST (read-only, saves nothing) | `?action=preview` | `fileName`, `contentBase64` |
-| `account` | `importStatement` | POST | `?action=import` | `fileName`, `contentBase64` (Cuaderno 43 or the generic CSV) |
-| `importedBankStatements` (FIN_BankStatement id) | `update` | POST | `?action=update` | same header as create (name + both dates required), `lines?`, `process?` (default `false`), `fileName?`, `notes?` |
-| `importedBankStatements` | `process` / `reactivate` / `delete` | POST | `?action=process\|reactivate\|delete` | — |
-
-Each line item is `{date, description, bpartnerName, bpartnerId?, glItemId?, reference?, in, out}`:
-amounts non-negative, exactly one of `in`/`out` greater than zero, `reference` stored as `**` when
-omitted. `delete` is drafts only, answers 409 on a PSD2-connected account and 400 when the
-statement still has matched lines.
-
-**Where it lives (com.etendoerp.go).** `BankStatementActionsSupport` maps each action to the
-request the SPA itself sends to `/sws/neo/bank-statements` (the `action` query param, the
-`FIN_Financial_Account_ID` / `id` body key the engine reads, the rest of the body) and hands it to
-**`BankStatementsHandler` unchanged** — one engine, so the required dates, the BSF document type,
-the line-amount rules and the draft/processed/PSD2 guards apply identically on every path. The
-record id the action was called on always overwrites an id sent in the parameters. It also
-declares the actions (`declaredActions`) with descriptions and typed parameters for the MCP
-catalog. `FinancialAccountHandler` routes ACTION requests on `account` to it **before** its POST
-branch (which would otherwise read any POST as an account create) and skips its create post-hook
-for ACTION. The new `BankStatementEntityHandler` (`Java_Qualifier = bankStatementEntityHandler`
-on both entities, set in `decisions.json`) routes the `importedBankStatements` actions and
-refuses generic writes. The SPA is untouched: it keeps calling `/sws/neo/bank-statements`
-directly.
+**Where it lives (com.etendoerp.go).** `BankStatementsHandler#actionContracts()` returns
+`BankStatementAgentActions.CONTRACTS`; `handle()` diverts only `NeoEndpointType.ACTION` contexts to
+`BankStatementAgentActions.dispatch`, which validates the contract, requires `id`, applies the
+report-spec role gate (`POST` for writes, `GET` for `previewStatement`), and translates the call into
+the exact request the SPA sends to `/sws/neo/bank-statements?action=…` (the `id` goes into the body
+as `FIN_Financial_Account_ID` or `id`, and always wins over an id-like parameter, which the contract
+refuses as undeclared). The engine is **unchanged**, so the required dates, the BSF document type,
+the line-amount rules and the draft/processed/PSD2 guards apply identically on both paths. The SPA
+is untouched: its requests carry no endpoint type and never enter the ACTION branch.
 
 **Generic CRUD writes are blocked (405).** `POST` / `PUT` / `PATCH` / `DELETE` on
-`importedBankStatements` or `bankStatementLines` answer `405` with a message naming the action to
-use (`createStatement` / `importStatement`, `update`, `delete`); the MCP maps 405 to
-`method_not_allowed`. Reads (list, get, defaults, selectors) pass through. Why: a live probe on
-2026-09-25 showed the generic path bypasses the engine entirely — a generic create stamped
-**today** on both header dates, a line's date could not be set, `referenceNo` became required,
-and deleting a statement with lines failed with a Hibernate cascade error because
-`BankStatementLineAggregateHandler` saves the parent statement during the cascade delete. The SPA
-never used these paths. (Carrying a `Java_Qualifier` also exempts the entities from
-`NeoFieldFilter`'s IMP-28 read-only rejection on create — moot, since create is refused first.)
+`importedBankStatements` or `bankStatementLines` go through `BankStatementEntityHandler`
+(`Java_Qualifier = bankStatementEntityHandler` on both entities, set in `decisions.json`) and answer
+`405` with a message naming the `bank-statements` action to use (`createStatement` /
+`importStatement` with the account id, `updateStatement`, `deleteStatement`; any line write →
+`updateStatement` on the line's statement); the MCP maps 405 to `method_not_allowed`. Reads (list,
+get, defaults, selectors) pass through. Why: a live probe on 2026-09-25 showed the generic path
+bypasses the engine entirely — a generic create stamped **today** on both header dates, a line's
+date could not be set, `referenceNo` became required, and deleting a statement with lines failed
+with a Hibernate cascade error because `BankStatementLineAggregateHandler` saves the parent
+statement during the cascade delete. The SPA never used these paths. (Carrying a `Java_Qualifier`
+also exempts the entities from `NeoFieldFilter`'s IMP-28 read-only rejection on create — moot, since
+create is refused first.)
 
 **Header dates of a file import (ETP-5447).** `?action=import` — reached by the MCP
-`importStatement` action and by direct REST callers, for both Cuaderno 43 and the generic CSV
+`importStatement` action (spec `bank-statements`) and by direct REST callers, for both Cuaderno 43 and the generic CSV
 (the SPA itself no longer calls it: since ETP-4954 its import parses the file in the browser and
 posts `?action=create`) — stamps
 `importdate` = now and `statementdate` (`transactionDate`) = the **latest `datetrx` among the lines
@@ -1164,19 +1166,19 @@ date while it renumbers the survivors (`PruneResult.getLatestTransactionDate`, n
 real date. `?action=preview` is unchanged: it returns no statement header, only `periodFrom` /
 `periodTo`, and `periodTo` is the value the import now stores.
 
-**The classic APRM button also works over MCP now, but prefer `process`.**
+**The classic APRM button also works over MCP now, but prefer `processStatement`.**
 `neo_action {spec:"financial-account", entity:"importedBankStatements", id, action:"aPRMProcessBankStatement", parameters:{docAction:"P"}}`
 runs Classic `FIN_BankStatementProcess` after two engine fixes: `NeoButtonActionHelper.addTabParamsCore`
 also passes the real key column `FIN_Bankstatement_ID` (it previously failed with *id to load is
 required for loading*), and `NeoProcessService.buildBundleParams` aliases `docAction` to the
 `action` key that Classic Java processes read (it previously failed with *strAction is null*). The
-named `process` action is still the recommended path: it goes through `BankStatementsHandler`,
-which also recomputes the statement's `EM_ETGO_*` aggregates.
+`bank-statements` `processStatement` action is still the recommended path: it goes through
+`BankStatementsHandler`, which also recomputes the statement's `EM_ETGO_*` aggregates.
 
-Agent prompts: `agent-prompts/financial-account/account.md` (account actions) and
-`agent-prompts/financial-account/importedBankStatements.md` — short pointers only (action names,
-reads via `neo_list`/`neo_get`, generic writes 405). The parameters are documented once, in the
-catalog: `neo_schema({view:"actions"})`.
+Agent prompts: `agent-prompts/financial-account/account.md` and
+`agent-prompts/financial-account/importedBankStatements.md` — short pointers only (the
+`bank-statements` spec and action names, reads via `neo_list`/`neo_get`, generic writes 405). The
+parameters are documented once, in the catalogue: `neo_schema({spec:"bank-statements", view:"actions"})`.
 
 ## New components
 
@@ -1636,6 +1638,8 @@ SPA never produces (its calls are report-spec requests with no endpoint type). T
 refusal shapes and parameter table live in `com.etendoerp.go/docs/neo-headless.md` §4.12.1.1; the
 `financial-account` spec prompt (`agent-prompts/financial-account/spec.md`) points agents there
 instead of at the account's Core buttons.
+Bank statements (create, import, update, process, reactivate, delete) are exposed the same way on
+the `bank-statements` spec — see *MCP / agent access to bank statements (ETP-5447)* above.
 
 **No Etendo GO action processes a draft it did not build** (`ReconciliationDraftGuard`). No GO
 action leaves a draft behind on success, so a draft that already holds transactions when an action
@@ -2425,7 +2429,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
 | `useAccountMovements(accountId)` | `hooks/useAccountMovements.js` | Thin wrapper over `useNeoResource` — hits `/sws/neo/financial-account-transactions?FIN_Financial_Account_ID={id}` (powered by `FinancialAccountTransactionsHandler` on the Etendo Go side). Returns `{ movements, totals, enabledDimensions, loading, error, reload }`. Each movement carries `paymentId` / `paymentIsReceipt` (for the Payment link) and a `dimensions` object (per-row dimension values); `enabledDimensions` is the account-level list of dimension keys enabled in the chart of accounts. |
 | `useBankStatements(accountId)` | `hooks/useBankStatements.js` | Fetches imported bank statements — hits `GET /sws/neo/bank-statements?FIN_Financial_Account_ID={id}`. Returns `{ statements, loading, error, reload }`. |
 | `useBankStatementLines(statementId)` | `hooks/useBankStatementLines.js` | Fetches lines of one statement — hits `GET /sws/neo/bank-statements?action=lines&statementId={id}`. Returns `{ lines, loading, error, reload }`. |
-| `useStatementImport()` / `useStatementPreview()` | `hooks/useStatementImport.js`, `hooks/useStatementPreview.js` | **No longer called from the UI since ETP-4954** — `ImportStatementModal` parses in the browser and writes through `useCreateStatement`. Kept because the endpoints behind them remain the Cuaderno 43 path; since ETP-5447 the MCP (and REST) reach them through the `financial-account` named actions `previewStatement` / `importStatement` (see *MCP / agent access to bank statements*). Mutation hooks for file import — post `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
+| `useStatementImport()` / `useStatementPreview()` | `hooks/useStatementImport.js`, `hooks/useStatementPreview.js` | **No longer called from the UI since ETP-4954** — `ImportStatementModal` parses in the browser and writes through `useCreateStatement`. Kept because the endpoints behind them remain the Cuaderno 43 path; since ETP-5447 the MCP reaches them through the `bank-statements` spec actions `previewStatement` / `importStatement` (see *MCP / agent access to bank statements*). Mutation hooks for file import — post `{ FIN_Financial_Account_ID, fileName, contentBase64 }` to `POST /sws/neo/bank-statements?action=import`. Returns `{ importStatement, importing, error }`. Both this and `useStatementPreview` are thin wrappers over `useStatementFileRequest(action)` (`hooks/useStatementFileRequest.js`) — same body, same auth, same error shape, only the action and the flag name differ, so the plumbing lives there. A rejected call carries `err.status` and `err.code` (the NEO `error.code`, e.g. `NO_VALID_LINES`). |
 | `useCreateStatement()` | `hooks/useCreateStatement.js` | Mutation hook for manual statement creation — posts `{ FIN_Financial_Account_ID, name, transactionDate, importDate, fileName, notes, lines[] }` to `POST /sws/neo/bank-statements?action=create`. Returns `{ createStatement, creating, error }`. |
 | `useStatementActions()` | `hooks/useStatementActions.js` | Mutation hook for the draft row actions — `processStatement(id)` (`?action=process`), `updateStatement({ id, ...header, lines })` (`?action=update`), `deleteStatement(id)` (`?action=delete`). All only valid for drafts (backend returns 400 otherwise). Returns `{ processStatement, updateStatement, deleteStatement, busy, error }`. |
 
@@ -3504,7 +3508,7 @@ Two deliberate divergences from Classic, both documented in the tests:
   |---|---|---|
   | `validateBankStatementRow` (`bankStatementImportFields.js`) | the CSV/Excel import UI | the row lands in the review queue's error tab with the offending cell flagged (both cells, for a both-filled line), so the user can fix or skip it |
   | `isLineComplete` (`ManualStatementModal.jsx`) | the manual form | Save is refused with the incomplete-line toast |
-  | `BankStatementsHandler.createLines` | `?action=create` / `?action=update` — the API, reached by the MCP (and REST) through the `financial-account` named actions `createStatement` / `update` (ETP-5447) | `400` |
+  | `BankStatementsHandler.createLines` | `?action=create` / `?action=update` — the API, reached by the MCP through the `bank-statements` spec actions `createStatement` / `updateStatement` (ETP-5447) | `400` |
   | `BankStatementLinePruner` (`hasUnusableAmounts`) | `?action=import` / `?action=preview` — Cuaderno 43 and any CSV read there | the line is pruned and counted in `discardedLines`. Both-sides-filled is genuinely reachable here: `GenericCsvBankStatementImporter.saveLine` fills the two amounts from two independent columns |
 
   `isLineComplete` needed both halves asserted **separately**. The original predicate was a single

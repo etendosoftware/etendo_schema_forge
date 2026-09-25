@@ -383,77 +383,80 @@ removes the whole spec from the agentic catalog with nothing in the UI to show i
 regardless keeps the catalog honest if the entity ever loses its tab. Full criteria:
 [`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) §6.
 
-### 2.7.1 `declaredActions()`: declare your named actions (ETP-5447)
+### 2.7.1 `actionContracts()`: declare your named actions (ETP-5468)
 
-`servesActions()` says *that* a handler answers ACTION requests. `declaredActions(spec, entity)`
-says *which* named actions it answers — the `/{spec}/{entity}/{id}/action/{name}` routes that are
-not AD buttons, e.g. `createDraftInvoice` / `listInvoices` in `CreateDraftInvoiceHandler`, or the
-bank-statement actions of `FinancialAccountHandler`.
+`servesActions()` says *that* a handler answers ACTION requests. `actionContracts()` says *which*
+named actions it answers and what each one accepts — for actions that have no AD button column
+behind them, so nothing in the configuration can describe them. A non-empty declaration also makes
+the default `servesActions()` return `true`.
 
 ```java
-// Illustrative: a handler that answers GET previewTotals and POST addLines on its header entity.
+// ReconciliationHandler (spec bank-reconciliation) / BankStatementsHandler (spec bank-statements)
 @Override
-public List<NeoActionContract> declaredActions(String specName, String entityName) {
-  if (!"header".equals(entityName)) {
-    return List.of();
+public Map<String, NeoActionContract> actionContracts() {
+  return BankStatementAgentActions.CONTRACTS;          // Map<name, contract>, presentation order
+}
+
+@Override
+public NeoResponse handle(NeoContext context) {
+  // Purely additive: only neo_action produces an ACTION context for this R spec; the SPA's
+  // ?action= requests carry no endpoint type and keep their own routing.
+  if (NeoEndpointType.ACTION.equals(context.getEndpointType())) {
+    return BankStatementAgentActions.dispatch(this, context);
   }
-  return List.of(
-      NeoActionContract.builder("previewTotals")
-          .description("Totals the document would have after completion; changes nothing.")
-          .method(NeoActionContract.METHOD_GET)
-          .readOnly(true)
-          .build(),
-      NeoActionContract.builder("addLines")
-          .description("Append lines to the document; returns the created line ids.")
-          .param(NeoReportParam.required("lines", NeoReportParam.TYPE_ARRAY,
-              "The lines to add; each item is {product, quantity, unitPrice}."))
-          .build());
+  ...
 }
 ```
 
-**`NeoActionContract`** (`schemaforge/util`, immutable): `builder(name)` →
-`description(String)`, `method("GET"|"POST")` (default `POST`), `readOnly(boolean)` (default
-`false`), `param(NeoReportParam)` (repeatable, order kept), `build()` (rejects a blank name or
-any method other than `GET`/`POST`). Parameters reuse `NeoReportParam` — the same vocabulary as
-report parameters (§ `reportParameters()`), plus `TYPE_ARRAY` (rendered as an array of objects)
-and `TYPE_OBJECT` (rendered as a plain object). Describe the item/object shape in the
-description: the schema does not type it deeper.
+**`NeoActionContract`** (`schemaforge/util`, immutable):
 
-**A handler that fans out to delegates** (the order / shipment / invoice header handlers) must
-combine their declarations with `NeoHeaderActionRouter.declaredActions(spec, entity,
-delegate1, delegate2, …)`: concatenated in delegate order, de-duplicated by name, first delegate
-wins — the same precedence `NeoHeaderActionRouter.dispatch` applies at run time.
+- `NeoActionContract.write(name, description, Param...)` — an action that changes data;
+  `NeoActionContract.read(name, description, Param...)` — one that never persists.
+- `withIdDescription(String)` — a copy stating what `neo_action`'s `id` identifies (e.g. "the
+  financial account id"), rendered as `idDescription`. Keeps window-specific wording out of the
+  generic MCP classes.
+- `Param.required(name, type, desc)`, `Param.optional(name, type, desc)` (state the default in the
+  description), `Param.options(name, desc, allowedValues)` (closed enum),
+  `Param.array(name, itemType, required, desc)`. Types: `TYPE_STRING`, `TYPE_BOOLEAN`, `TYPE_DATE`
+  (`yyyy-MM-dd`), `TYPE_ARRAY` of `TYPE_STRING` / `TYPE_OBJECT`. Describe an object item's shape in
+  the description: the schema does not type it deeper.
+- `NeoActionContract.validate(contracts, action, parameters)` — `null` when the call matches,
+  otherwise a 422 naming the problem: `availableActions` (unknown action), `unknownParameters` +
+  `acceptedParameters` (undeclared key), `missingParameters` (absent, blank string or empty array),
+  `field` + `expectedType` / `allowedValues` (wrong shape). The dispatcher calls it **before**
+  running anything, so what the agent is shown and what it is judged against cannot drift.
+- `NeoActionContract.resolve(spec)` — the first included entity whose handler declares contracts;
+  the MCP layer uses it to find the `entity` to pass.
 
-**What reads it — the MCP only.** The REST path keeps dispatching on the method the client sent.
+**What reads it — the MCP only.** `neo_schema({spec, view:"actions"})` returns the declared catalog
+(`{action, description, mutating, invokeVia:"neo_action", idDescription?, parameters:<JSON Schema>}`);
+`neo_discover` marks the R spec `status:"actions_only"` with `actionEntity` and `actions[]`; the spec
+joins the `neo_schema` / `neo_action` enums only (never `neo_list` / `neo_get`). The call is
+`neo_action {spec, entity, id, action, parameters}`.
 
-- `neo_schema({view:"actions"})` appends one entry per declared action after the AD buttons:
+**The dispatcher pattern** (both current implementations): validate the contract → require a
+non-blank `id` → check the same report-spec role gate the SPA passes (`POST` for mutating actions,
+`GET` for reads — `neo_action` itself is authorized as a read) → translate the call into the
+exact request the SPA sends and re-enter the unchanged engine, so every business rule is the UI's
+own → on success, flush the session to clean while the `OBContext` is still set (the MCP session
+scope flushes once and restores a null context).
 
-  ```json
-  {"name": "listInvoices", "action": "listInvoices", "source": "handler",
-   "method": "GET", "readOnly": true, "description": "...",
-   "parameters": {"type": "object", "properties": {...}, "required": [...]},
-   "invokeVia": "neo_action"}
-  ```
+**Current implementations:**
 
-  Declared entries count in `actionCount` and `invokableCount`. If a declared name equals an AD
-  button's `action`/`name`, the button entry is dropped and the declared one carries
-  `"shadows": "button"`. The handler lookup is fail-open: a CDI failure or a throwing declaration
-  costs only the handler entries, never the schema call.
-- `neo_action` looks the action name up in the declaration first. When found it (1) rejects a
-  missing required parameter with a 422 (`status`/`error:"validation_error"`/`detail`/
-  `missingParameters`/`hint`) **without calling the handler**, (2) runs the pre-hook with the
-  **declared** method — on `GET` the `parameters` object is both the request body and, flattened
-  to strings, the query-param map — and returns the handler's own payload as the result, and
-  (3) never falls through to the AD button path: a pre-hook that returns `null` is answered with
-  a 500 `Declared action '<x>' was not handled by its handler`. An undeclared name takes the
-  unchanged button path.
+| Handler / R spec | Actions class | Actions |
+|---|---|---|
+| `ReconciliationHandler` / `bank-reconciliation` (ETP-5468) | `ReconciliationAgentActions` | `pendingLines`, `candidates`, `autoMatch`, `reconcileGroup`, `reconcileDifference`, `applySuggestions`, `undoReconciliation`, `removeOperation`, `reactivateSelected` |
+| `BankStatementsHandler` / `bank-statements` (ETP-5447) | `BankStatementAgentActions` | `createStatement`, `previewStatement`, `importStatement` (id = financial account); `updateStatement`, `processStatement`, `reactivateStatement`, `deleteStatement` (id = bank statement) |
 
-**The rule — declare only what you answer.** Declare an action only if `handle()` demonstrably
-answers it for that spec/entity, with the method it compares and the parameters it reads. A
-declared-but-ignored action is the same silent lie as a declared-but-ignored report parameter: the
-catalog promises something that then ends in the 500 above. Before this existed the named actions
-were invisible in the catalog and every `GET`-only one answered `404 Action not found` over MCP,
-because `neo_action` hard-coded `POST` (IMP-49).
+Full runtime reference (tables of parameters, refusals, engine routes):
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.1 and §4.12.1.2.
+
+**The rule — declare only what you answer.** Declare an action only if the dispatcher demonstrably
+serves it, with the parameters the engine reads. A declared-but-ignored action is the same silent
+lie as a declared-but-ignored report parameter. Named actions on W-spec handlers that are not
+declared this way — the order / shipment / invoice header handlers' `createDraftInvoice`,
+`listInvoices`, … — stay invisible in the catalog, and GET-only ones remain unreachable through
+`neo_action` (IMP-49).
 
 ---
 
