@@ -621,7 +621,7 @@
     },
     {
       "id": "demo-data-transfer",
-      "description": "After an account buys a productive environment, copy the products and contacts it chose at checkout from its demo tenant into the new productive tenant, as a durable server-side job whose progress and retry are shown as a First Steps row (ETP-5364). Gated OFF by default in ETP-5443: with the flag off the checkout selection is ignored, a paid onboarding starts no transfer, the two endpoints answer 404 and the First Steps catalogue is the pre-ETP-5364 one.",
+      "description": "After an account buys a productive environment, copy the products and contacts it chose at checkout from its demo tenant into the new productive tenant, as a durable server-side job whose progress and retry are shown as a First Steps row (ETP-5364). Gated OFF by default in ETP-5443: with the flag off the durable job does not start, its two endpoints answer 404 and the First Steps catalogue is the pre-ETP-5364 one. The pre-existing synchronous onboarding transfer remains active with the flag off.",
       "owner": "sebastianbarrozo",
       "jira": "ETP-5364",
       "created": "2026-09-22",
@@ -629,7 +629,7 @@
         "key": "demo-data-transfer",
         "defaultValue": false,
         "ttl": "2026-12-31",
-        "ttlNote": "PLACEHOLDER, not a commitment: removal target once the deferred preconditions below are closed and the transfer has run against a real demo with prices, costs and client-scoped UOMs. Revisit the date when the flag is first switched on anywhere.",
+        "ttlNote": "PLACEHOLDER, not a commitment: revisit the removal target after the transfer has run against a real demo with prices, costs and client-scoped UOMs. Revisit the date when the flag is first switched on anywhere.",
         "symbols": [
           "demo-data-transfer",
           "FLAG_DEMO_DATA_TRANSFER",
@@ -660,50 +660,8 @@
           "src/com/etendoerp/go/payment/DemoDataTransferReflection.java"
         ]
       },
-      "$pathsComment": "Owned code only. Shared toggle points, NOT owned: EtendoGoJwtServlet.java (two route conditions, the recordDemoDataTransferSelection guard, startDemoDataTransferBestEffort and the two handlers), GoFeatureFlags.java (the FLAG_DEMO_DATA_TRANSFER constant, framework path), firstStepsConfig.js (the optional transfer argument threaded through the catalogue helpers), FirstStepsContext.jsx, FirstStepsPage.jsx (DataTransferAction and the row wiring), firstStepsIcons.js and the three locale files. UpgradePage.jsx / lib/upgrade/api.js have sent the `dataTransfer` selection since ETP-5421 and are left ungated: with the flag off the copy on the checkout-session request is ignored, and the copy on POST /onboarding still drives ETP-5421's synchronous OnboardingDataTransferService, exactly as before ETP-5364. The other ETP-5364 changes (R39 data-fixes, the demo banner notice, the fiscal step gate, TopBar, the team link) are not part of this feature and are not gated.",
+      "$pathsComment": "Owned code only. Shared toggle points, NOT owned: EtendoGoJwtServlet.java (two route conditions, the recordDemoDataTransferSelection guard, startDemoDataTransferBestEffort and the two handlers), GoFeatureFlags.java (the FLAG_DEMO_DATA_TRANSFER constant, framework path), firstStepsConfig.js (the optional transfer argument threaded through the catalogue helpers), FirstStepsContext.jsx, FirstStepsPage.jsx (DataTransferAction and the row wiring), firstStepsIcons.js and the three locale files. UpgradePage.jsx / lib/upgrade/api.js now send the `dataTransfer` selection with billing purchase creation as well as the legacy checkout-session request. These shared checkout paths remain ungated: with the flag off the server does not record a durable job selection, while an explicit copy on POST /onboarding drives ETP-5421's synchronous OnboardingDataTransferService. With the flag on the backend records the checkout choice before contacting the provider and runs only the durable job after onboarding commits. A resumed paid purchase uses its recorded selection; a flag-on purchase missing that selection continues onboarding without transfer, shows a warning, and needs operator recovery for the missing data. The other ETP-5364 changes (R39 data-fixes, the demo banner notice, the fiscal step gate, TopBar, the team link) are not part of this feature and are not gated.",
       "deferredItems": [
-        {
-          "id": "record-selection-not-best-effort",
-          "kind": "precondition",
-          "note": "recordSelection runs inside the checkout/purchase request after the provider session was created and calls flush() + commitAndClose() on the request's DAL session, with no try/catch of its own (it sits inside the handler's provider-error catch). A failed preference write therefore turns a checkout the provider already accepted into a 502 CHECKOUT_PROVIDER_ERROR / BILLING_PROVIDER_ERROR, and the commit closes the request's session under the handler. AND THEREFORE the flag cannot be switched on until the selection write is isolated (own transaction, or best-effort with rollback) — otherwise a preference-table problem blocks paying.",
-          "refs": [
-            "EtendoGoJwtServlet#recordDemoDataTransferSelection",
-            "EtendoGoJwtServlet#handleCheckoutSession",
-            "EtendoGoJwtServlet#handleBillingPurchaseCreate",
-            "DemoDataTransferService#recordSelection"
-          ]
-        },
-        {
-          "id": "product-copy-referential-gaps",
-          "kind": "precondition",
-          "components": [
-            {
-              "id": "product-tax-category-unset",
-              "note": "copyProducts never sets Product.taxCategory. M_PRODUCT.C_TAXCATEGORY_ID is required=\"true\" with no default, and nothing in the go module or core defaults it on a DAL insert (no handler found; setTaxCategory appears only in AccountingPackageCloner and two core service-product action handlers). The flush of a NEW target product therefore violates NOT NULL, the run rolls back and the job ends FAILED — for every tenant whose demo has a product the productive tenant does not already carry. The fix needs a target-tenant C_TaxCategory resolved (by name or the tenant default).",
-              "ref": "DemoDataTransferService#copyProducts"
-            },
-            {
-              "id": "uom-copy-edi-code-and-system-uoms",
-              "note": "targetUom copies a property named \"X\": UOM has no getX (the column X12DE355 is property eDICode), and DemoDataTransferReflection#copy swallows the NoSuchMethodException, so the code is silently not copied. C_UOM.X12DE355 is required=\"true\", so a copied UOM fails its insert the same way. And the lookup is by name in the TARGET client only, so a product whose UOM is a client-0 system UOM never finds it and always takes the failing copy path — where the fix should instead reuse the client-0 row.",
-              "ref": "DemoDataTransferService#targetUom"
-            }
-          ],
-          "note": "Both components live in the product copy path and are triggered by the same act (switching the flag on for an account whose demo has products); one owner decision fixes them together, so they are bundled. Promotion condition: the moment either is scheduled on its own, it becomes its own item. AND THEREFORE the flag must not be switched on while either stands: a product transfer would end FAILED on its first new product, and the user's only lever, Retry, repeats the same failure.",
-          "refs": [
-            "DemoDataTransferService#copyProducts",
-            "DemoDataTransferService#targetUom",
-            "DemoDataTransferReflection#copy"
-          ]
-        },
-        {
-          "id": "duplicates-synchronous-onboarding-transfer",
-          "kind": "precondition",
-          "note": "ETP-5421's synchronous OnboardingDataTransferService already copies demo data during onboarding. This asynchronous job is a second implementation of the same migration with its own copy rules. AND THEREFORE a human must decide which one survives before the flag goes on; running both would copy the same products/contacts twice by two different rule sets.",
-          "refs": [
-            "com.etendoerp.go.onboarding.OnboardingDataTransferService (ETP-5421)",
-            "DemoDataTransferService — class javadoc"
-          ]
-        },
         {
           "id": "executor-never-shut-down",
           "kind": "open",
@@ -745,19 +703,20 @@
           },
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/payment/DemoDataTransferFlagTest.java"
+            "path": "src-test/src/com/etendoerp/go/payment/DemoDataTransferFlagTest.java",
+            "note": "Present in Go; covers default-off and configured-on flag evaluation."
           },
           {
             "root": "backend",
-            "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletDemoDataTransferFlagTest.java"
+            "path": "src-test/src/com/etendoerp/go/rest/EtendoGoJwtServletDemoDataTransferFlagTest.java",
+            "note": "Present in Go; 12 passing tests cover route gating, selection recording and projection, and flag-dependent onboarding paths."
           }
         ],
         "e2e": [
           {
             "root": "frontend",
             "path": "e2e/tests/flows/first-steps-demo-data-transfer.mocked.spec.js",
-            "expected": true,
-            "note": "Not written: no E2E drives the transfer row (flag on: RUNNING progress, FAILED retry) or pins its absence with the flag off. Transient gap, to be written before the flag is switched on anywhere."
+            "note": "Covers RUNNING progress, FAILED retry, and row absence with the flag off."
           }
         ]
       }

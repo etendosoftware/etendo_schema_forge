@@ -6,7 +6,9 @@ const assignMock = vi.fn();
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/i18n', () => ({
-  useUI: () => key => key,
+  useUI: () => (key, options) => key === 'upgradePlanProductivePrice' && options
+    ? `${options.amount} / ${options.interval}`
+    : key,
   getStoredLocale: () => 'es_ES',
 }));
 // ETP-4576 — UpgradePage reaches useEnvironmentSwitch, which now proves the account with
@@ -41,6 +43,11 @@ import {
   expectNoAuthorizationHeader,
 } from '@/test/sessionContract.js';
 import UpgradePage from '../UpgradePage.jsx';
+import { ENVIRONMENT_LIST_REFRESH_EVENT } from '../../hooks/useEnvironmentSwitch.js';
+import enUs from '@/locales/en_US.json';
+import esEs from '@/locales/es_ES.json';
+import esAr from '@/locales/es_AR.json';
+import { formatCurrency } from '@/lib/formatCurrency.js';
 // `track` is imported (not just `vi.mock`ed above) so `trackedEvents` below can
 // read `.mock.calls` off the same singleton — see OnboardingPage.vitest.jsx /
 // health-events.vitest.js for the identical pattern elsewhere in this repo.
@@ -106,13 +113,20 @@ function ndjsonResponse(lines, { chunkSize = 40 } = {}) {
   };
 }
 
-function successStream({ success = true, clientName = 'Acme Productive' } = {}) {
+/**
+ * Client id the default onboarding stream reports for the environment it created. `installFetch`
+ * lists that environment once the onboarding POST has run, the way the account projection does
+ * after a real provisioning — UpgradePage only presents success once the exact id is listed.
+ */
+const PROVISIONED_CLIENT_ID = 'PROVISIONED-CLIENT';
+
+function successStream({ success = true, clientName = 'Acme Productive', clientId = PROVISIONED_CLIENT_ID } = {}) {
   const lines = [];
   for (const step of PROVISIONING_STEPS) {
     lines.push({ type: 'progress', step, status: 'in_progress' });
     lines.push({ type: 'progress', step, status: 'done', ms: 10 });
   }
-  lines.push({ type: 'result', success, clientName });
+  lines.push({ type: 'result', success, clientName, ...(clientId ? { clientId } : {}) });
   return ndjsonResponse(lines);
 }
 
@@ -123,30 +137,54 @@ function successStream({ success = true, clientName = 'Acme Productive' } = {}) 
  * poll attempt reject/error). `onboarding` feeds the NDJSON stream behind
  * `/sws/go/onboarding`, defaulting to a successful run.
  */
-function installFetch({ environments = [], purchases = [], checkout = {}, statuses = ['paid'], onboarding } = {}) {
+function installFetch({ environments = [], purchases = [], purchaseDataTransfer,
+  purchaseDataTransferEnabled, purchaseProjection, checkoutError, checkout = {}, statuses = ['paid'], onboarding,
+  offer = { code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' },
+  sessionEnvironment } = {}) {
   const requests = [];
   let statusCallIndex = 0;
+  let onboardingRan = false;
   globalThis.fetch = vi.fn(async (url, init = {}) => {
     const target = String(url);
     if (target.includes('/sws/go/environments')) {
-      return typeof environments === 'function' ? environments() : jsonResponse({ environments });
+      if (typeof environments === 'function') return environments();
+      // A static list gains the default stream's environment once provisioning ran. It has no
+      // `adminUserId`, so entering it still fails unless a case supplies its own environment.
+      const provisioned = { clientName: 'Acme Productive', clientId: PROVISIONED_CLIENT_ID, plan: 'productive' };
+      const listed = onboardingRan && !environments.some(environment => environment.clientId === PROVISIONED_CLIENT_ID)
+        ? [...environments, provisioned]
+        : environments;
+      return jsonResponse({ environments: listed });
+    }
+    // Entering an environment (useEnvironmentSwitch.switchTo). Opt-in: unmocked, it throws like
+    // any other unexpected request and the switch reports failure.
+    if (target.includes('/sws/go/session/environment') && sessionEnvironment) {
+      return sessionEnvironment(init);
     }
     if (target.includes('/sws/go/billing/overview')) {
       return jsonResponse({ canManageBilling: true, purchases });
     }
     if (target.includes('/sws/go/billing/offers')) {
-      return jsonResponse({ code: 'productive-tenant', amountMinor: 4900, currency: 'EUR', interval: 'month' });
+      return jsonResponse(offer);
     }
     if (target.includes('/sws/go/billing/purchases')) {
       if (!init.method) {
-        return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive' });
+        if (typeof purchaseProjection === 'function') return purchaseProjection();
+        if (purchaseProjection) return jsonResponse(purchaseProjection);
+        return jsonResponse({ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'Acme Productive',
+          ...(purchaseDataTransfer === undefined ? {} : { dataTransfer: purchaseDataTransfer }),
+          ...(purchaseDataTransferEnabled === undefined ? {} : { dataTransferEnabled: purchaseDataTransferEnabled }) });
       }
       requests.push({ url, init, body: JSON.parse(init.body || '{}') });
+      if (checkoutError) return jsonResponse(checkoutError, { ok: false, status: 409 });
       return jsonResponse({
         requestId: 'upgrade-request-1',
         checkoutUrl: 'https://checkout.stripe.test/session-1',
         ...checkout,
       });
+    }
+    if (target.includes('/sws/go/onboarding/first-steps')) {
+      return jsonResponse({ firstSteps: { seen: false, completed: [] } });
     }
     // Status polling hits `/checkout/sessions/:requestId` — checked before the
     // session-creation route below, since that path is a substring of this one.
@@ -164,11 +202,17 @@ function installFetch({ environments = [], purchases = [], checkout = {}, status
       });
     }
     if (target.includes('/sws/go/onboarding')) {
+      onboardingRan = true;
       return onboarding ? onboarding() : successStream();
     }
     throw new Error(`unexpected fetch: ${url}`);
   });
   return requests;
+}
+
+/** A paid checkout status for a purchase whose persisted source is a demo environment. */
+function paidFromDemo() {
+  return jsonResponse({ status: 'paid', demoClientId: 'TRIAL-1' });
 }
 
 /**
@@ -218,14 +262,25 @@ function trackedEvents(name) {
     .map(([, properties]) => properties);
 }
 
+function findLocaleMessage(locale, key) {
+  if (!locale || typeof locale !== 'object') return undefined;
+  if (Object.prototype.hasOwnProperty.call(locale, key)) return locale[key];
+  for (const value of Object.values(locale)) {
+    const match = findLocaleMessage(value, key);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
 /**
  * Simulates the browser coming back from Stripe's hosted checkout page: a
- * `?checkout=success&requestId=...` URL plus the three sessionStorage keys
+ * `?checkout=success|cancelled&requestId=...` URL plus the sessionStorage keys
  * `runUpgrade` writes right before the redirect. Must run BEFORE
  * `renderUpgradePage()` — the resume effect only reads `window.location.search`
  * and sessionStorage once, at mount.
  */
 function setupCheckoutReturn({
+  checkoutStatus = 'success',
   requestId = 'upgrade-request-1',
   tenantName = 'Acme Productive',
   upgradeAction = 'create-productive',
@@ -233,7 +288,7 @@ function setupCheckoutReturn({
 } = {}) {
   vi.stubGlobal('location', {
     ...globalThis.location,
-    search: `?checkout=success&requestId=${requestId}`,
+    search: `?checkout=${checkoutStatus}&requestId=${requestId}`,
     assign: assignMock,
   });
   if (tenantName) sessionStorage.setItem(PENDING_CHECKOUT_NAME, tenantName);
@@ -242,15 +297,28 @@ function setupCheckoutReturn({
 }
 
 /** Renders and waits for the environments lookup to settle. */
-async function renderUpgradePage() {
+async function renderUpgradePage({ advanceCheckout = true, advanceAddons = true } = {}) {
   render(<UpgradePage />);
   await waitFor(() => expect(screen.queryByTestId('upgrade-account-loading')).not.toBeInTheDocument());
-  if (screen.queryByTestId('upgrade-plan-continue')) {
+  if (advanceCheckout && screen.queryByTestId('upgrade-plan-continue')) {
     screen.getByTestId('upgrade-plan-continue').click();
+    // The step change re-renders after the click returns, so the add-ons step has to be awaited
+    // rather than queried synchronously — a synchronous miss would skip it and never reach payment.
     await waitFor(() => expect(screen.getByTestId('upgrade-addons-continue')).toBeInTheDocument());
-    screen.getByTestId('upgrade-addons-continue').click();
-    await waitFor(() => expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument());
+    if (advanceAddons) {
+      screen.getByTestId('upgrade-addons-continue').click();
+      await waitFor(() => expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument());
+    }
   }
+}
+
+/**
+ * `formatCurrency` separates amount and symbol with a non-breaking space, while
+ * `toHaveTextContent` collapses the element's whitespace to plain spaces but not the expected
+ * string's, so an expected amount has to be normalized the same way before comparing.
+ */
+function displayed(text) {
+  return text.replace(/\s+/g, ' ');
 }
 
 beforeEach(() => {
@@ -271,6 +339,104 @@ afterEach(() => {
 });
 
 describe('UpgradePage — hosted checkout', () => {
+  it('displays the amount, currency, and interval returned by the billing offer', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const expectedAmount = formatCurrency('USD', 10);
+    const planCard = screen.getByTestId('upgrade-plan-productive');
+    expect(planCard).toHaveTextContent(displayed(`${expectedAmount} / upgradeBillingIntervalYear`));
+    expect(planCard).not.toHaveTextContent('upgradeCheckoutMonth');
+    expect(planCard).not.toHaveTextContent('49');
+  });
+
+  it('uses Stripe whole-unit amounts for zero-decimal currencies and ISK compatibility amounts', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'JPY', interval: 'month' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(screen.getByTestId('upgrade-plan-productive'))
+      .toHaveTextContent(displayed(`${formatCurrency('JPY', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
+  });
+
+  it('displays Stripe ISK compatibility amounts in whole units', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'ISK', interval: 'month' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(screen.getByTestId('upgrade-plan-productive'))
+      .toHaveTextContent(displayed(`${formatCurrency('ISK', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
+    expect(screen.getByTestId('upgrade-plan-productive')).not.toHaveTextContent('12,34');
+  });
+
+  it('displays Stripe UGX compatibility amounts in whole units', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 123400, currency: 'UGX', interval: 'month' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(screen.getByTestId('upgrade-plan-productive'))
+      .toHaveTextContent(displayed(`${formatCurrency('UGX', 1234, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / upgradeBillingIntervalMonth`));
+  });
+
+  it('preserves two-decimal HUF charge amounts', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'HUF', interval: 'month' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+    expect(screen.getByTestId('upgrade-plan-productive'))
+      .toHaveTextContent(displayed(`${formatCurrency('HUF', 12.34)} / upgradeBillingIntervalMonth`));
+  });
+
+  it('preserves two-decimal TWD charge amounts', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: { code: 'productive-tenant', amountMinor: 1234, currency: 'TWD', interval: 'month' },
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    expect(screen.getByTestId('upgrade-plan-productive'))
+      .toHaveTextContent(displayed(`${formatCurrency('TWD', 12.34)} / upgradeBillingIntervalMonth`));
+  });
+
+  it('does not show a numeric fallback when the billing offer is unavailable', async () => {
+    installFetch({
+      environments: [{ clientName: 'Acme Productive', clientId: 'CLIENT-1', plan: 'productive' }],
+      offer: null,
+    });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const planCard = screen.getByTestId('upgrade-plan-productive');
+    expect(planCard).toHaveTextContent('upgradePlanProductivePriceUnavailable');
+    expect(planCard).not.toHaveTextContent('49');
+  });
+
+  it('uses customer-facing retry and payment copy in every supported locale', () => {
+    const locales = [enUs, esEs, esAr];
+    for (const locale of locales) {
+      const customerMessages = [
+        findLocaleMessage(locale, 'upgradeBillingOverviewBody'),
+        findLocaleMessage(locale, 'upgradePurchaseAlreadyExists'),
+        findLocaleMessage(locale, 'upgradePurchaseResumeHelp'),
+        findLocaleMessage(locale, 'upgradePurchaseReadyHelp'),
+      ];
+      expect(customerMessages.every(message => typeof message === 'string')).toBe(true);
+      expect(customerMessages.join(' ')).not.toMatch(/\btenant\b/i);
+      expect(customerMessages[0]).toMatch(/resume|reanudar/i);
+      expect(customerMessages[2]).toMatch(/charged again|sin volver a pagar|no se te volverá a cobrar|cobrar de nuevo|cobrar otra vez/i);
+      expect(customerMessages[3]).toMatch(/company selector|selector de empresa/i);
+    }
+  });
+
   it('renders no raw card fields', async () => {
     installFetch({ environments: [{ clientName: 'Acme Trial' }] });
     await renderUpgradePage();
@@ -365,16 +531,17 @@ describe('UpgradePage — what the checkout requests carry (ETP-4576)', () => {
   /**
    * Drives the flow to the point where the checkout write has gone out.
    *
-   * No tenant name is typed: the always-visible input (ETP-5443) is prefilled from the demo
-   * environment. It is asserted on screen here rather than assumed, because a blank name would
-   * still produce a POST and every header assertion below would pass on a request that means
-   * nothing.
+   * This uses a productive origin, whose target-name field starts blank. Type a distinct target
+   * explicitly so the header assertions exercise a valid new-environment purchase.
    */
   async function submitCheckout() {
     const user = userEvent.setup();
-    installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
+    installFetch({ environments: [{ clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' }] });
+    UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
     await renderUpgradePage();
-    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue(EXISTING_TENANT);
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.type(nameInput, 'Checkout Target');
     await user.click(screen.getByTestId('upgrade-submit'));
     await waitFor(() => expect(assignMock).toHaveBeenCalled());
   }
@@ -494,7 +661,7 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(navigateMock).toHaveBeenCalledWith('/onboarding');
   });
 
-  it('uses the demo name without asking for a second tenant name', async () => {
+  it('uses the demo name as the target without asking for a second tenant name', async () => {
     const user = userEvent.setup();
     installFetch({ environments: [{ clientName: EXISTING_TENANT }] });
     await renderUpgradePage();
@@ -583,6 +750,53 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(trackedEvents('upgrade_tenant_provisioning_failed')).toEqual([]);
   });
 
+  it('resolves the created environment from the purchase when the onboarding stream omits clientId', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive', upgradeAction: 'create-productive' });
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ === 0
+        ? [{ clientName: EXISTING_TENANT, clientId: 'TRIAL-1', plan: 'demo' }]
+        : [{ clientName: 'Acme Productive', clientId: 'FROM-PURCHASE', plan: 'productive' }] }),
+      statuses: ['paid'],
+      purchaseProjection: { purchaseId: 'upgrade-request-1', createdClientId: 'FROM-PURCHASE' },
+      onboarding: () => successStream({ clientId: '' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/sws/go/billing/purchases/upgrade-request-1', expect.objectContaining({ headers: expect.any(Object) })
+    );
+    expect(environmentReads).toBeGreaterThan(1);
+  });
+
+  it('waits for a PROVISIONED purchase to sync, then lets the user retry environment discovery', async () => {
+    const user = userEvent.setup();
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ <= 5
+        ? [{ clientName: EXISTING_TENANT, clientId: 'TRIAL-1', plan: 'demo' }]
+        : [{ clientName: 'Ready Environment', clientId: 'READY-CLIENT', plan: 'productive' }] }),
+      checkoutError: { purchaseId: 'purchase-provisioning', status: 'PROVISIONED',
+        clientName: 'Ready Environment' },
+      purchaseProjection: { purchaseId: 'purchase-provisioning', status: 'PROVISIONED',
+        clientName: 'Ready Environment', createdClientId: 'READY-CLIENT' },
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await screen.findByTestId('upgrade-environment-sync-pending');
+    expect(globalThis.fetch.mock.calls.some(([url]) => String(url)
+      .includes('/sws/go/billing/purchases/purchase-provisioning')),
+    JSON.stringify(globalThis.fetch.mock.calls.map(([url, init]) => [String(url), init?.method]))).toBe(true);
+
+    await user.click(screen.getByTestId('upgrade-environment-sync-retry'));
+    await screen.findByTestId('upgrade-success');
+    expect(globalThis.fetch.mock.calls.some(([url, init]) => String(url) === '/sws/go/onboarding'
+      && init?.method === 'POST')).toBe(false);
+  });
+
   it('recovers the environment name from the durable purchase when session storage is empty', async () => {
     setupCheckoutReturn({ tenantName: '' });
     installFetch({
@@ -599,6 +813,117 @@ describe('UpgradePage — checkout funnel tracking', () => {
     );
   });
 
+  it('recovers the transfer choice from the purchase when browser storage is empty', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransfer: { products: false, contacts: true },
+      statuses: [paidFromDemo],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: false, contacts: true });
+  });
+
+  it('does not invent a transfer choice when neither purchase nor browser stores one', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: false,
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
+  it('uses the purchase choice over a stale browser choice, including explicit all-false', async () => {
+    setupCheckoutReturn({ tenantName: 'Stale Browser Name' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: true }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransfer: { products: false, contacts: false },
+      statuses: [paidFromDemo],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: false, contacts: false });
+  });
+
+  it('preserves an explicit browser choice for an older flag-off purchase', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: false }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: false,
+      statuses: [paidFromDemo],
+      onboarding: () => successStream(),
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(JSON.parse(call[1].body).dataTransfer).toEqual({ products: true, contacts: false });
+  });
+
+  it('provisions a legacy flag-on purchase without a recorded selection and shows a warning', async () => {
+    setupCheckoutReturn({ tenantName: '' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer',
+      JSON.stringify({ products: true, contacts: true }));
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchaseDataTransferEnabled: true,
+      statuses: [paidFromDemo],
+    });
+    await renderUpgradePage();
+
+    await screen.findByTestId('upgrade-success');
+    expect(screen.getByTestId('upgrade-transfer-selection-warning'))
+      .toHaveTextContent('upgradeDataTransferSelectionMissing');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
+  it('lets activity resume finish without transfer when the recorded selection is missing', async () => {
+    const user = userEvent.setup();
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [{ purchaseId: 'purchase-1', status: 'PAID', clientName: 'Acme Productive',
+        demoClientId: 'TRIAL-1', dataTransferEnabled: true }],
+    });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
+
+    await screen.findByTestId('upgrade-success');
+    expect(screen.getByTestId('upgrade-transfer-selection-warning'))
+      .toHaveTextContent('upgradeDataTransferSelectionMissing');
+    const call = globalThis.fetch.mock.calls.find(([url, init]) =>
+      String(url) === '/sws/go/onboarding' && init?.method === 'POST');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[1].body)).not.toHaveProperty('dataTransfer');
+  });
+
   it('resumes a paid purchase from billing activity without starting checkout', async () => {
     const user = userEvent.setup();
     const requests = installFetch({
@@ -611,6 +936,9 @@ describe('UpgradePage — checkout funnel tracking', () => {
     await user.click(screen.getByTestId('upgrade-resume-purchase-purchase-1'));
     await screen.findByTestId('upgrade-success');
     expect(requests).toHaveLength(0);
+    expect(globalThis.fetch.mock.calls.filter(([url, init]) => (
+      String(url) === CHECKOUT_POST_URL && init?.method === 'POST'
+    ))).toHaveLength(0);
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/go/onboarding', expect.objectContaining({ method: 'POST' })
     );
@@ -631,6 +959,51 @@ describe('UpgradePage — checkout funnel tracking', () => {
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/sws/go/onboarding', expect.objectContaining({ method: 'POST' })
     );
+  });
+
+  it('shows only paid purchases in billing activity and keeps the matching recovery actions', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [
+        { purchaseId: 'creating', status: 'CREATING', clientName: 'Checkout Started' },
+        { purchaseId: 'created', status: 'CREATED', clientName: 'Awaiting Payment' },
+        { purchaseId: 'paid', status: 'PAID', clientName: 'Payment Confirmed' },
+        { purchaseId: 'provisioning', status: 'PROVISIONING', clientName: 'Setup In Progress' },
+        { purchaseId: 'provisioned', status: 'PROVISIONED', clientName: 'Ready Environment' },
+        { purchaseId: 'unknown', status: 'UNRECOGNIZED', clientName: 'Unknown State' },
+      ],
+    });
+    await renderUpgradePage();
+
+    const overview = screen.getByTestId('upgrade-billing-overview');
+    expect(overview).toHaveTextContent('Payment Confirmed');
+    expect(overview).toHaveTextContent('Setup In Progress');
+    expect(overview).toHaveTextContent('Ready Environment');
+    expect(overview).not.toHaveTextContent('Checkout Started');
+    expect(overview).not.toHaveTextContent('Awaiting Payment');
+    expect(overview).not.toHaveTextContent('Unknown State');
+    expect(overview).toHaveTextContent('upgradePurchaseStatusPaid');
+    expect(overview).toHaveTextContent('upgradePurchaseStatusProvisioning');
+    expect(overview).toHaveTextContent('upgradePurchaseStatusProvisioned');
+    expect(screen.getByTestId('upgrade-resume-purchase-paid')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-resume-purchase-provisioning')).toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-resume-purchase-provisioned')).not.toBeInTheDocument();
+    expect(overview).toHaveTextContent('upgradePurchaseResumeHelp');
+    expect(overview).toHaveTextContent('upgradePurchaseReadyHelp');
+  });
+
+  it('keeps checkout available when billing activity contains only unpaid attempts', async () => {
+    installFetch({
+      environments: [{ clientName: EXISTING_TENANT }],
+      purchases: [
+        { purchaseId: 'creating', status: 'CREATING', clientName: 'Checkout Started' },
+        { purchaseId: 'created', status: 'CREATED', clientName: 'Awaiting Payment' },
+      ],
+    });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-billing-overview')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument();
   });
 
   it('resumes after the Stripe redirect and reports a failed onboarding stream', async () => {
@@ -762,7 +1135,7 @@ describe('UpgradePage — clientName resolution on submit (upgrade clientName bu
  * path (ETP-5443).
  */
 describe('UpgradePage — current-environment prefill and taken-name guard (ETP-5443)', () => {
-  it('prefills the tenant-name input from the current environment, ahead of the demo fallback', async () => {
+  it('leaves the target name blank when the current environment is productive', async () => {
     UPGRADE_SESSION.clientId = CURRENT_CLIENT_ID;
     installFetch({ environments: [
       { clientName: 'Acme Demo', clientId: 'DEMO-CLIENT', plan: 'demo' },
@@ -770,7 +1143,7 @@ describe('UpgradePage — current-environment prefill and taken-name guard (ETP-
     ] });
     await renderUpgradePage();
 
-    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('My Current Env');
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('');
   });
 
   it('prefills from the demo when the current environment IS the demo, and submits it without error', async () => {
@@ -843,6 +1216,322 @@ describe('UpgradePage — current-environment prefill and taken-name guard (ETP-
     expect(await screen.findByTestId('upgrade-tenant-name-error')).toHaveTextContent('upgradeTenantNameRequired');
     expect(requests).toHaveLength(0);
     expect(assignMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('UpgradePage — provisioning environment synchronization (ETP-5443)', () => {
+  it('requires the user to choose a demo source when starting from a demo with multiple demos', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    const requests = installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo' },
+      { clientName: 'Beta Trial', clientId: 'TRIAL-2', plan: 'demo' },
+    ] });
+    await renderUpgradePage({ advanceAddons: false });
+
+    expect(screen.getByTestId('upgrade-data-transfer-products')).toBeInTheDocument();
+    expect(screen.getByTestId('upgrade-data-transfer-contacts')).toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+    await waitFor(() => expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument());
+
+    const sourceSelect = screen.getByTestId('upgrade-source-demo-select');
+    expect(sourceSelect).toHaveValue('CURRENT-DEMO');
+    await user.selectOptions(sourceSelect, 'TRIAL-2');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests[0].body.demoClientId).toBe('TRIAL-2');
+  });
+
+  it('preserves demo transfer choices and tenant name through direct stepper navigation', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    const requests = installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo' },
+    ] });
+    await renderUpgradePage({ advanceCheckout: false });
+
+    const planStep = () => screen.getByTestId('upgrade-checkout-step-plan');
+    const addonsStep = () => screen.getByTestId('upgrade-checkout-step-addons');
+    const paymentStep = () => screen.getByTestId('upgrade-checkout-step-payment');
+    expect(planStep()).toBeEnabled();
+    expect(addonsStep()).toBeDisabled();
+    expect(paymentStep()).toBeDisabled();
+    expect(planStep()).toHaveAttribute('aria-current', 'step');
+
+    await user.click(screen.getByTestId('upgrade-plan-continue'));
+    // Both transfers default to checked; clearing one gives the stepper a non-default choice to keep.
+    expect(screen.getByTestId('upgrade-data-transfer-products')).toBeChecked();
+    expect(screen.getByTestId('upgrade-data-transfer-contacts')).toBeChecked();
+    await user.click(screen.getByTestId('upgrade-data-transfer-contacts'));
+    expect(paymentStep()).toBeDisabled();
+    await user.click(planStep());
+
+    expect(screen.getByTestId('upgrade-plan-continue')).toBeInTheDocument();
+    await user.click(addonsStep());
+    expect(addonsStep()).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByTestId('upgrade-data-transfer-products')).toBeChecked();
+    expect(screen.getByTestId('upgrade-data-transfer-contacts')).not.toBeChecked();
+
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+    expect(paymentStep()).toBeEnabled();
+    await user.click(paymentStep());
+    const nameInput = await screen.findByTestId('upgrade-tenant-name-input');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Acme Productive');
+    await user.click(addonsStep());
+
+    expect(screen.getByTestId('upgrade-data-transfer-products')).toBeChecked();
+    expect(screen.getByTestId('upgrade-data-transfer-contacts')).not.toBeChecked();
+    await user.click(paymentStep());
+    expect(screen.getByTestId('upgrade-tenant-name-input')).toHaveValue('Acme Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.clientName).toBe('Acme Productive');
+    expect(requests[0].body.dataTransfer).toEqual({ products: true, contacts: false });
+  });
+
+  it('keeps the add-ons step for a productive origin and explains that transfer is unavailable', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
+    const requests = installFetch({ environments: [
+      { clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' },
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' },
+      { clientName: 'Beta Trial', clientId: 'TRIAL-2', plan: 'demo' },
+    ] });
+    await renderUpgradePage({ advanceAddons: false });
+
+    expect(screen.getByTestId('upgrade-addons-step')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'upgradeCheckoutSteps' }))
+      .toHaveTextContent('upgradeCheckoutStepAddons');
+    expect(screen.getByTestId('upgrade-data-transfer')).toHaveTextContent('upgradeNoDataTransferTitle');
+    expect(screen.getByTestId('upgrade-data-transfer')).toHaveTextContent('upgradeNoDataTransferBody');
+    for (const locale of [enUs, esEs, esAr]) {
+      expect(findLocaleMessage(locale, 'upgradeNoDataTransferTitle')).toMatch(/\S/);
+      expect(findLocaleMessage(locale, 'upgradeNoDataTransferBody')).toMatch(/\S/);
+    }
+    expect(screen.queryByTestId('upgrade-data-transfer-products')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('upgrade-data-transfer-contacts')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('upgrade-addons-continue'));
+    await waitFor(() => expect(screen.getByTestId('upgrade-submit')).toBeInTheDocument());
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    const nameInput = screen.getByTestId('upgrade-tenant-name-input');
+    expect(nameInput).toHaveValue('');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Second Productive');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+    expect(sessionStorage.getItem('sf_pending_checkout_data_transfer')).toBe('{}');
+  });
+
+  it('omits demo identity and transfer data after a Stripe return to a productive origin', async () => {
+    UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
+    setupCheckoutReturn({ tenantName: 'New Productive' });
+    sessionStorage.setItem('sf_pending_checkout_data_transfer', JSON.stringify({ products: true, contacts: true }));
+    const requests = installFetch({
+      environments: (() => {
+        let reads = 0;
+        const beforeProvision = [
+          { clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' },
+          { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' },
+        ];
+        return () => jsonResponse({ environments: reads++ === 0 ? beforeProvision : [
+          ...beforeProvision,
+          { clientName: 'New Productive', clientId: 'CREATED-PRODUCTIVE', plan: 'productive' },
+        ] });
+      })(),
+      purchases: [{ purchaseId: 'upgrade-request-1', status: 'PAID', clientName: 'New Productive' }],
+      // The server does not select a demo for purchases created from a productive origin.
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-PRODUCTIVE' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    const onboardingCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/sws/go/onboarding'));
+    expect(onboardingCall).toBeTruthy();
+    const body = JSON.parse(onboardingCall[1].body);
+    expect(body).not.toHaveProperty('demoClientId');
+    expect(body).not.toHaveProperty('dataTransfer');
+    expect(requests).toHaveLength(0);
+  });
+
+  it('closes a cancelled Stripe return to the dashboard without navigating back to Stripe', async () => {
+    setupCheckoutReturn({ checkoutStatus: 'cancelled', tenantName: null });
+    sessionStorage.setItem(PENDING_CHECKOUT_NAME, 'Cancelled Target');
+    sessionStorage.setItem('sf_pending_checkout_data_transfer', JSON.stringify({ products: true, contacts: true }));
+    const user = userEvent.setup();
+    installFetch({ environments: [
+      { clientName: 'Current Productive', clientId: 'CURRENT-PRODUCTIVE', plan: 'productive' },
+    ] });
+    UPGRADE_SESSION.clientId = 'CURRENT-PRODUCTIVE';
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+
+    await renderUpgradePage({ advanceCheckout: false });
+    await user.click(screen.getByTestId('upgrade-close'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true });
+    expect(navigateMock).not.toHaveBeenCalledWith(-1);
+    expect(replaceStateSpy).toHaveBeenCalledWith({}, '', '/upgrade');
+    expect(globalThis.fetch.mock.calls.some(([url]) => String(url).includes('/checkout/sessions/'))).toBe(false);
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_NAME)).toBeNull();
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_ACTION)).toBeNull();
+    expect(sessionStorage.getItem(PENDING_CHECKOUT_STARTED_AT)).toBeNull();
+    expect(sessionStorage.getItem('sf_pending_checkout_data_transfer')).toBeNull();
+  });
+
+  it('treats a session with no current environment as no purchase origin, even beside a listed environment with no id', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = null;
+    const requests = installFetch({ environments: [
+      { clientName: 'Unidentified Trial', plan: 'demo' },
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.queryByTestId('upgrade-source-demo-field')).not.toBeInTheDocument();
+    await user.type(screen.getByTestId('upgrade-tenant-name-input'), 'New Company');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(screen.queryByTestId('upgrade-demo-selection-required')).not.toBeInTheDocument();
+    expect(requests[0].body).not.toHaveProperty('demoClientId');
+    expect(requests[0].body).not.toHaveProperty('dataTransfer');
+  });
+
+  it('defaults the selected trial to the current environment when that environment is a demo', async () => {
+    UPGRADE_SESSION.clientId = 'TRIAL-2';
+    installFetch({ environments: [
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' },
+      { clientName: 'Beta Trial', clientId: 'TRIAL-2', plan: 'demo' },
+    ] });
+    await renderUpgradePage();
+
+    expect(screen.getByTestId('upgrade-source-demo-select')).toHaveValue('TRIAL-2');
+  });
+
+  it('sends the explicitly selected demo clientId only for a demo-origin purchase', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'CURRENT-DEMO';
+    const requests = installFetch({ environments: [
+      { clientName: 'Current Demo', clientId: 'CURRENT-DEMO', plan: 'demo' },
+      { clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' },
+      { clientName: 'Beta Trial', clientId: 'TRIAL-2', plan: 'demo' },
+    ] });
+    await renderUpgradePage();
+    await user.selectOptions(screen.getByTestId('upgrade-source-demo-select'), 'TRIAL-2');
+    await user.click(screen.getByTestId('upgrade-submit'));
+
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+    expect(requests[0].body).toMatchObject({ demoClientId: 'TRIAL-2' });
+  });
+
+  it('carries the selected trial clientId into the paid checkout request', async () => {
+    const user = userEvent.setup();
+    UPGRADE_SESSION.clientId = 'SELECTED-TRIAL';
+    const requests = installFetch({ environments: [
+      { clientName: 'Acme Trial', clientId: 'SELECTED-TRIAL', plan: 'demo' },
+      { clientName: 'Another Trial', clientId: 'OTHER-TRIAL', plan: 'demo' },
+    ] });
+    await renderUpgradePage();
+
+    await user.click(screen.getByTestId('upgrade-submit'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalled());
+
+    expect(requests[0].body).toMatchObject({ demoClientId: 'SELECTED-TRIAL' });
+  });
+
+  it('keeps the selected demo ID server-side instead of resending it in the onboarding retry', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive' });
+    installFetch({
+      environments: [{ clientName: 'Acme Trial', clientId: 'SELECTED-TRIAL', plan: 'demo' }],
+      statuses: ['paid'],
+      onboarding: () => successStream(),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    const onboardingCall = globalThis.fetch.mock.calls.find(([url]) => String(url).includes('/sws/go/onboarding'));
+    expect(onboardingCall).toBeTruthy();
+    expect(JSON.parse(onboardingCall[1].body)).not.toHaveProperty('demoClientId');
+  });
+
+  it('refreshes the canonical environment list after provisioning before showing success actions', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive' });
+    const staleTrial = [{ clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' }];
+    const provisioned = [
+      { clientName: 'Acme Productive', clientId: 'OTHER-CLIENT', plan: 'productive' },
+      { clientName: 'Acme Productive', clientId: 'CREATED-CLIENT', plan: 'productive' },
+    ];
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ === 0 ? staleTrial : provisioned }),
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-CLIENT' }),
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+
+    await waitFor(() => expect(environmentReads).toBe(2));
+    expect(globalThis.fetch.mock.calls.filter(([url]) => String(url).includes('/sws/go/environments')))
+      .toHaveLength(2);
+  });
+
+  it('notifies the company selector after the exact provisioned clientId appears in the canonical list', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive' });
+    let environmentReads = 0;
+    installFetch({
+      environments: () => jsonResponse({ environments: environmentReads++ === 0
+        ? [{ clientName: 'Acme Trial', clientId: 'TRIAL-1', plan: 'demo' }]
+        : [{ clientName: 'Acme Productive', clientId: 'CREATED-CLIENT', plan: 'productive' }] }),
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-CLIENT' }),
+    });
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+    await waitFor(() => expect(environmentReads).toBe(2));
+
+    expect(dispatchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ type: ENVIRONMENT_LIST_REFRESH_EVENT }),
+    );
+    dispatchSpy.mockRestore();
+  });
+
+  it('reconciles the newly provisioned environment by its returned clientId when names collide', async () => {
+    setupCheckoutReturn({ tenantName: 'Acme Productive' });
+    const environments = [
+      { clientName: 'Acme Productive', clientId: 'OTHER-CLIENT', adminUserId: 'OTHER-USER', plan: 'productive' },
+      { clientName: 'Acme Productive', clientId: 'CREATED-CLIENT', adminUserId: 'CREATED-USER', plan: 'productive' },
+    ];
+    const sessionEnvironment = vi.fn(async () => jsonResponse({ status: 'success', roleList: [{ id: 'ADMIN-ROLE' }] }));
+    installFetch({
+      environments,
+      statuses: ['paid'],
+      onboarding: () => successStream({ clientId: 'CREATED-CLIENT' }),
+      sessionEnvironment,
+    });
+
+    await renderUpgradePage();
+    await screen.findByTestId('upgrade-success');
+    await userEvent.setup().click(screen.getByTestId('upgrade-enter-productive'));
+
+    await waitFor(() => expect(globalThis.localStorage.getItem('sf_last_environment')).toBe('CREATED-CLIENT'));
+    // The login went to the created environment's admin, not to the same-named OTHER-CLIENT.
+    expect(sessionEnvironment).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionEnvironment.mock.calls[0][0].body).userId).toBe('CREATED-USER');
   });
 });
 

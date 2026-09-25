@@ -9,7 +9,11 @@ import {
  * Return to Vendor Shipment — full flow smoke (mocked) — ETP-4034
  *
  * Covers:
- *   Case  2 — Confirm modal (DR → CO): ConfirmInOutModal lifecycle, cancel and confirm
+ *   Case  2 — Confirm modal (DR → CO): ConfirmInOutModal lifecycle, cancel and confirm.
+ *     ETP-5408: the Borrador "Confirmar" is the GENERIC draftMode Confirm (`action-save`,
+ *     Check icon) next to the generic Save draft (`action-save-draft`); it stays disabled
+ *     until the lines request returns >=1 line (draftMode.disableWhenEmpty), so the DR
+ *     confirm describe mocks one line (`linesByParent`).
  *   Case  5 — Create return invoice from CO detail: button gating, modal, result card
  *   Case  6 — Button visibility per document status (DR vs CO)
  *   Case  7 — Clone hidden from list view (ETP-5316): row-quick-action-clone must
@@ -62,6 +66,16 @@ const DR_RECORD = makeReturn({
   hasReturnInvoice: false,
   returnInvoices: [],
 });
+
+// ETP-5408: one line under the DR record, so the generic draftMode Confirm
+// (disableWhenEmpty) is enabled in the confirm-lifecycle describe.
+const DR_LINE = {
+  id: 'rtvs-dr-001-line-1',
+  lineNo: 10,
+  product: 'prod-001',
+  'product$_identifier': 'Producto Test',
+  movementQuantity: 1,
+};
 
 const CO_NO_INVOICE = makeReturn({
   id: 'rtvs-co-001',
@@ -135,17 +149,26 @@ const BULK_FIRST = BULK_RECTIFIABLE_INVOICES[0];
 async function installReturnToVendorMocks(
   page,
   rows = ALL_ROWS,
-  { suggestedInvoiceIds = [], state, rectifiableInvoices = RECTIFIABLE_INVOICES } = {},
+  {
+    suggestedInvoiceIds = [], state, rectifiableInvoices = RECTIFIABLE_INVOICES,
+    linesByParent = {},
+  } = {},
 ) {
-  // Lines endpoint — installed FIRST (lower LIFO priority). Returns empty.
+  // Lines endpoint — installed FIRST (lower LIFO priority). Empty by default — the
+  // import-from-receipt flow needs the lines empty state. ETP-5408: `linesByParent`
+  // ({ [parentId]: rows }) feeds the lines of a record whose generic draftMode Confirm
+  // must be ENABLED — `disableWhenEmpty` reads this request (hook.children), not the
+  // header's linesCount.
   await page.route(
     (url) => url.href.includes('/sws/neo/return-to-vendor-shipment/returnToVendorShipmentLine'),
     async (route) => {
       if (route.request().method() === 'GET') {
+        const parentId = new URL(route.request().url()).searchParams.get('parentId');
+        const data = linesByParent[parentId] ?? [];
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ response: { data: [], totalRows: 0 } }),
+          body: JSON.stringify({ response: { data, totalRows: data.length } }),
         });
         return;
       }
@@ -374,12 +397,17 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
   test.beforeEach(async ({ page }) => {
     state = { invoicePosts: [], rectifiableRequests: [] };
     await login(page);
-    await installReturnToVendorMocks(page, ALL_ROWS, { suggestedInvoiceIds: ['rtv-rect-inv-a'], state });
+    await installReturnToVendorMocks(page, ALL_ROWS, {
+      suggestedInvoiceIds: ['rtv-rect-inv-a'],
+      state,
+      linesByParent: { 'rtvs-dr-001': [DR_LINE] },
+    });
   });
 
   /**
    * For a DR record:
-   *   - action-confirm-with-credit is visible
+   *   - the generic draftMode Confirm (`action-save`, Check icon) and Save draft
+   *     (`action-save-draft`) render — ETP-5408; `action-confirm-with-credit` is gone
    *   - action-create-return-invoice is NOT present
    *   - Clone is a list-view row action, and it is hidden entirely for this
    *     window (ETP-5316/ETP-4717), so it is not asserted here
@@ -396,12 +424,21 @@ test.describe('return-to-vendor-shipment — DR detail actions', () => {
     await page.goto('/return-to-vendor-shipment/rtvs-dr-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // Wait for topbar to hydrate (async render)
-    const confirmBtn = page.getByTestId('action-confirm-with-credit');
+    // Wait for the toolbar to hydrate (async render)
+    const confirmBtn = page.getByTestId('detail-view').getByTestId('action-save');
     await confirmBtn.waitFor({ state: 'visible', timeout: 15_000 });
 
     // ── Case 6: DR button visibility ──────────────────────────────────────
+    // ETP-5408: the generic draftMode Confirm with its Check icon, enabled once the
+    // mocked line arrives (disableWhenEmpty), next to the generic Save draft.
     await expect(confirmBtn).toBeVisible();
+    await expect(confirmBtn.getByTestId('Check__fa3275')).toBeVisible();
+    await expect(confirmBtn).toHaveText(/confirmar|confirm/i);
+    await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+    const saveDraftBtn = page.getByTestId('detail-view').getByTestId('action-save-draft');
+    await expect(saveDraftBtn).toBeVisible();
+    await expect(saveDraftBtn.getByTestId('Save__fa3275')).toBeVisible();
+    await expect(page.getByTestId('action-confirm-with-credit')).toHaveCount(0);
     // Clone is a list-view row action, not a detail-view button, and it is
     // hidden entirely for this window (ETP-5316/ETP-4717) — see the
     // 'list view' describe block above for the row-quick-action-clone assertions.
@@ -498,7 +535,7 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
   /**
    * For a CO record without an existing return invoice:
    *   - action-create-return-invoice is visible
-   *   - action-confirm-with-credit is NOT present
+   *   - no Borrador Confirm: the Save/Confirm row is hidden on CO (ETP-5408)
    *   - Clone is a list-view row action, and it is hidden entirely for this
    *     window (ETP-5316/ETP-4717), so it is not asserted here
    *
@@ -535,7 +572,11 @@ test.describe('return-to-vendor-shipment — CO detail actions', () => {
     // card asserted above in the DR flow test).
     await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
 
-    // action-confirm-with-credit must NOT be present for CO
+    // ETP-5408: no Borrador Confirm on CO — the generic draftMode Save/Confirm row is
+    // hidden once completed (no keepSaveWhenCompletedFields), and the old bespoke
+    // button no longer exists at all.
+    await expect(page.getByTestId('detail-view').getByTestId('action-save')).toHaveCount(0);
+    await expect(page.getByTestId('detail-view').getByTestId('action-save-draft')).toHaveCount(0);
     await expect(page.getByTestId('action-confirm-with-credit')).toHaveCount(0);
 
     // ── Case 5: create return invoice from CO ─────────────────────────────
@@ -845,8 +886,9 @@ test.describe('return-to-vendor-shipment — import from receipt modal', () => {
     await page.goto('/return-to-vendor-shipment/rtvs-dr-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // Wait for the DR record to load (confirms header mock is working)
-    await page.getByTestId('action-confirm-with-credit').waitFor({ state: 'visible', timeout: 10_000 });
+    // Wait for the DR record to load (confirms header mock is working). ETP-5408: the
+    // generic draftMode Confirm — rendered but disabled here, since lines are empty.
+    await page.getByTestId('detail-view').getByTestId('action-save').waitFor({ state: 'visible', timeout: 10_000 });
 
     // ── Case 8: find the import trigger ──────────────────────────────────
     // Two possible triggers:
@@ -916,8 +958,8 @@ test.describe('return-to-vendor-shipment — notes section in detail', () => {
     await page.goto('/return-to-vendor-shipment/rtvs-dr-001');
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 
-    // Wait for record to load before checking notes
-    await page.getByTestId('action-confirm-with-credit').waitFor({ state: 'visible', timeout: 10_000 });
+    // Wait for record to load before checking notes (ETP-5408: the generic draftMode Confirm)
+    await page.getByTestId('detail-view').getByTestId('action-save').waitFor({ state: 'visible', timeout: 10_000 });
 
     // DetailView renders a "NOTAS" label and data-testid="notes-textarea" wrapper
     const notesContainer = page.getByTestId('notes-textarea');

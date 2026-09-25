@@ -1270,3 +1270,16 @@ the one path specific to Contacts that needed its own explicit fix: `LocationEdi
 bypasses `useEntity` mutations altogether via its raw fetch, so the generic `handleAddChild` fix
 alone does not reach it — `buildCustomAddModalOnSaved`'s own extra `invalidateEntityCache()` call
 is what closes the gap for this window's Location tab.
+
+## Solo Lectura (read-only window-access tier) gating — ETP-5205
+
+Etendo GO's per-role window-access tier (`useWindowAccess('123')` → `'none' | 'read-only' |
+'full'`) must hide every mutating control in a window the Solo Lectura role can see. This window's
+generated core (list + detail, via `BusinessPartnerPage.jsx`) already gates itself — no custom
+wrapper overrides `window`, so it inherits the tier correctly for free. The one gap this ticket
+found: Contacts' own bespoke bulk-delete affordance (`selectionBarRightActions`, its ONLY
+bulk-delete path — the generic one is opted out via `listViewOptions.hideBulkDelete: true`)
+rendered unconditionally in the shared `ListView.jsx`, regardless of `windowReadOnly`. Fixed at the
+shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
+future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
+ETP-5205 commit history for the fix and its test).

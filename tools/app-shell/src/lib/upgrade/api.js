@@ -54,6 +54,7 @@ export async function createCheckoutSession(baseUrl, input = {}) {
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
 
@@ -85,9 +86,14 @@ export async function createBillingPurchase(baseUrl, input = {}) {
     body: JSON.stringify({
       action: input.action || 'productive-tenant',
       upgradeAction: input.upgradeAction || 'create-productive',
+      ...(input.demoClientId ? { demoClientId: input.demoClientId } : {}),
+      ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
+        ? { dataTransfer: input.dataTransfer }
+        : {}),
       ...(input.clientName ? { clientName: input.clientName } : {}),
       ...(input.language ? { language: input.language } : {}),
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
     }),
   });
   const data = await readJsonSafely(response);
@@ -195,7 +201,9 @@ export async function runPaidOnboarding(baseUrl, input, onMessage) {
       ...(input.countryCode ? { countryCode: input.countryCode } : {}),
       paymentToken: input.paymentToken,
       upgradeAction: input.upgradeAction || 'create-productive',
-      ...(input.dataTransfer ? { dataTransfer: input.dataTransfer } : {}),
+      ...(input.dataTransfer && Object.keys(input.dataTransfer).length > 0
+        ? { dataTransfer: input.dataTransfer }
+        : {}),
     }),
   });
   if (response.status === 401) throw buildError(UPGRADE_ERROR_CODES.sessionExpired, null, 401);

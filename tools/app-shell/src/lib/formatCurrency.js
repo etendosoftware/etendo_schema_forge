@@ -163,6 +163,8 @@ function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalS
  * @param {boolean} [options.compact=false] - Use compact notation (e.g. "12,5 mil €" instead of
  *   "12.500,00 €"). Additive/backward-compatible — omitting the third argument entirely keeps
  *   every existing call site's output unchanged.
+ * @param {number} [options.minimumFractionDigits=2] - Minimum decimal digits to display.
+ * @param {number} [options.maximumFractionDigits=2] - Maximum decimal digits to display.
  * @returns {string} Formatted currency string, or '—' for invalid/missing values.
  *
  * @example
@@ -223,7 +225,11 @@ export function formatPlainDecimal(value) {
   return String(value).split('.').join(decimalSeparator);
 }
 
-export function formatCurrency(currencyCode, value, { compact = false } = {}) {
+export function formatCurrency(currencyCode, value, {
+  compact = false,
+  minimumFractionDigits = 2,
+  maximumFractionDigits = 2,
+} = {}) {
   // ETP-5456 — an exact-decimal-string `value` (see `EXACT_DECIMAL_STRING`'s doc comment) is
   // accepted even though `Number(value)` may not be `Number.isFinite` in the exact sense that
   // matters (it always parses fine here; the concern is precision loss, not finiteness) — a
@@ -232,6 +238,12 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   if (value == null || (!isExactDecimalString && !Number.isFinite(Number(value)))) return '—';
 
   const amount = Number(value);
+  const minFrac = Number.isInteger(minimumFractionDigits)
+    ? Math.max(0, Math.min(20, minimumFractionDigits))
+    : 2;
+  const maxFrac = Number.isInteger(maximumFractionDigits)
+    ? Math.max(minFrac, Math.min(20, maximumFractionDigits))
+    : Math.max(2, minFrac);
 
   // `compact` mode is Intl-driven and has exactly one real caller today (NewPaymentEntryModal.jsx
   // via MoneyAmount), unrelated to fiscal-models box display — an exact-decimal-string value
@@ -250,8 +262,8 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
         style: 'currency',
         currency: currencyCode,
         currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: minFrac,
+        maximumFractionDigits: maxFrac,
         useGrouping: true,
         notation: 'compact',
       });
@@ -268,7 +280,7 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
   const formattedNumber = isExactDecimalString
     ? groupExactDecimalString(value.trim(), thousandsSeparator, decimalSeparator)
-    : groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
+    : groupWithSeparators(amount, minFrac, maxFrac, thousandsSeparator, decimalSeparator);
 
   // Validate currencyCode the same way the old single combined Intl.NumberFormat
   // call did — an invalid/missing code throws here (e.g. undefined, or a

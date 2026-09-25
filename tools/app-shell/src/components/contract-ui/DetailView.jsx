@@ -2507,7 +2507,7 @@ export function DetailView({
 
   const handleNotesSave = useCallback(async (value) => {
     const currentId = data?.id || recordId;
-    if (!currentId || isNew || !notesField) return;
+    if (!currentId || isNew || !notesField || windowReadOnly) return; // ETP-5205: excludes only the completion lock, notes still respect the static/tier flags
     if (value !== undefined && value.length > 255) {
       toast.error(ui('notesMaxLengthExceeded'));
       return;
@@ -2527,7 +2527,7 @@ export function DetailView({
     } catch (err) {
       toast.error(err?.message || ui('networkError'));
     }
-  }, [data?.id, recordId, isNew, notesField, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
+  }, [data?.id, recordId, isNew, notesField, windowReadOnly, apiBaseUrl, entity, token, hook, ui, extractErrorMessage, apiFetch]);
 
   // Guard that controls whether "+ Add Lines" is shown.
   // 1. Explicit `addLineGuard` from the window wins (business-specific rules).
@@ -2810,7 +2810,7 @@ export function DetailView({
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          api={api}
+          api={api} isDocumentReadOnly={isDocumentReadOnly}
           isActive={isActive}
           isNew={isNew}
           onSaveHeader={isNew ? saveHeaderForCustomTab : undefined}
@@ -2892,10 +2892,10 @@ export function DetailView({
         apiBaseUrl={apiBaseUrl}
         api={api}
         onProcess={hook.handleProcess}
-        onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+        onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
         onSave={() => hook.handleSave({ silent: true })}
         isDirty={isDirty}
-        saveGate={saveGate}
+        saveGate={saveGate} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
         data-testid={testId} />
     );
   })();
@@ -2934,7 +2934,7 @@ export function DetailView({
                   api={api}
                   onChange={hook.handleChange}
                   onProcess={hook.handleProcess}
-                  onRefresh={() => hook.fetchById?.(data?.id || recordId, { force: true })}
+                  onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                   data-testid="TopbarExtraComponent__fa3275" />
               );
             })()}
@@ -3218,6 +3218,8 @@ export function DetailView({
                   onAddChild: hook.handleAddChild,
                   onRefresh: (parentId = data?.id || recordId) => {
                     if (!parentId) return;
+                    // ETP-5378 — a line write can change the header column the grid shows.
+                    hook.invalidateEntityCache?.();
                     hook.fetchChildren?.(parentId, { force: true });
                     hook.fetchById?.(parentId, { force: true });
                   },
@@ -3432,6 +3434,7 @@ export function DetailView({
                                 token={token}
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
+                                  hook.invalidateEntityCache?.();
                                   hook.fetchChildren?.(data?.id || recordId, { force: true });
                                   hook.fetchById?.(data?.id || recordId, { force: true });
                                 }}
@@ -3637,6 +3640,7 @@ export function DetailView({
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
+                                          hook.invalidateEntityCache?.();
                                           hook.fetchChildren?.(data?.id || recordId, { force: true });
                                           hook.fetchById?.(data?.id || recordId, { force: true });
                                         }}
@@ -3647,7 +3651,7 @@ export function DetailView({
                                     )}
                                     {/* Selection toolbar — portaled to document.body, TRUE
                               viewport-fixed (ETP-4972), not anchored to this wrapper. */}
-                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity) && (
+                                    {shouldShowInlineDeleteSelectionBar(linesLayout, api, detailEntity, isDocumentReadOnly) && (
                                       <SelectionToolbar
                                         visible={selectionBarVisible}
                                         closing={selectionBarClosing}
@@ -3848,7 +3852,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);
@@ -4042,7 +4046,7 @@ export function DetailView({
                           data={data}
                           token={token}
                           apiBaseUrl={apiBaseUrl}
-                          api={api}
+                          api={api} isDocumentReadOnly={isDocumentReadOnly} windowReadOnly={windowReadOnly}
                           summary={summary}
                           notesField={notesField}
                           onFieldChange={handleChangeWithCallout}
@@ -4105,7 +4109,7 @@ export function DetailView({
                                         data={data}
                                         token={token}
                                         apiBaseUrl={apiBaseUrl}
-                                        api={api}
+                                        api={api} isDocumentReadOnly={isDocumentReadOnly}
                                         layout="chips"
                                         docsRefreshSignal={docsRefreshSignal}
                                         {...(ct.props || {})}
@@ -4119,7 +4123,7 @@ export function DetailView({
                               <div className={getNotesRowClassName(embedded)}>
                                 <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider pt-1.5 shrink-0 w-24">{ui('notes')}</span>
                                 <div data-testid="notes-textarea" className={`flex-1 flex flex-col border border-border/40 rounded bg-card transition-all py-1.5`} style={{ borderWidth: '0.5px' }}>
-                                  {renderNotesField(notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui)}
+                                  {renderNotesField({ notesFocused, data, notesField, handleChangeWithCallout, handleNotesSave, setNotesFocused, ui, readOnly: windowReadOnly })}
                                 </div>
                               </div>
                             )}
@@ -4328,7 +4332,10 @@ export function DetailView({
             onClose={() => setCustomModalState({ key: null, rowId: null })}
             onSaved={buildCustomAddModalOnSaved({ secondaryHooks, idx, hook, setCustomModalState })}
             onParentRefresh={() => {
-              if (parentRecordId) hook.fetchById(parentRecordId, { force: true });
+              if (!parentRecordId) return;
+              // ETP-5378 — the modal just wrote the parent; the cached list holds the old row.
+              hook.invalidateEntityCache?.();
+              hook.fetchById(parentRecordId, { force: true });
             }}
             rowId={customModalState.key === st.key ? customModalState.rowId : null}
             bpId={parentRecordId}

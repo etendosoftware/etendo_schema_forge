@@ -2752,3 +2752,138 @@ the burst, not the largest window that still "feels safe."
   client-side `selectedRole` is not cleared — a pre-existing architectural gap in that refresh
   machinery, not touched by ETP-5395. Noted here for whoever next works on session/role refresh,
   not filed as a separate ticket.
+
+---
+
+## [2026-09-24] ETP-5395 — Slow SFListMenu showed every sidebar entry in production
+
+**Component:** `tools/app-shell/src/App.jsx` (`MENU_ACCESS_FETCH_TIMEOUT_MS`).
+
+**Symptom:** On app.etendo.ai a Purchasing ("Compras") user saw the whole sidebar (Ventas included) on every load, and a
+freshly invited user with no roles saw it right after accepting the invitation.
+
+**Root cause:** `fetchWindowAccess` races `/sws/neo/listmenu` against a timeout and, when the timeout wins, reports
+the menu as unreachable. `useRoleMenu` then fails open and `AppLayout` renders the unfiltered menu. The timeout was
+1s (ETP-5189, added so a hung request cannot stall E2E bootstrap), but production answered a correct tree in 2.1s.
+The role-less case was the same race on the first, cold request; the later refocus answered fast and correctly
+showed "Tu rol no tiene acceso".
+
+**Fix:** timeout raised to 10s, which still guards against a request that never answers while clearing real latency.
+Regression test: `App.vitest.jsx` "uses a slow but successful SFListMenu answer instead of failing open".
+A timed-out request is now also cached as a failure (60s failure TTL) and detached, so a request that never
+answers no longer makes every later load wait the full timeout again; if it does answer later, that answer
+replaces the cached failure.
+
+**Lesson:** a timeout whose fallback is fail-OPEN is a permission decision, not a performance knob. Size it against
+production latency, not local or mocked latency.
+
+---
+
+## [2026-09-23] ETP-5395 (post-merge regression) — Two custom windows never wired the standard access-tier gate
+
+**Component:** `tools/app-shell/src/windows/custom/organization/OrganizationPage.jsx`,
+`tools/app-shell/src/windows/custom/fiscal-config/FiscalConfigPage.jsx`.
+
+**Symptom:** First live QA pass on ETP-5395 Points 1-3 (comment #146376, 2026-09-23) reported that,
+for a role with no grant on these two windows (role "Compras"/Purchasing in the reported case),
+"Organización" and "Configuración Fiscal" showed a raw, untranslated error instead of the app's
+usual no-access treatment — e.g. `"No se pudo cargar la información de la organización: HTTP 403"`
+with a Retry button, rather than the styled `WindowAccessGuard` panel every other gated window
+shows.
+
+**Investigation note (ruled out before finding the real cause):** the QA report landed the same day
+as two unrelated cookie-session-migration PRs (ETP-4575/ETP-4576) merged, so the initial hypothesis
+was a credential-plumbing regression from that migration. Live-reproduced against a local dev
+backend (real login as a composed Purchasing-role user, captured actual network responses) and
+ruled that out directly: the backend answered a clean, correct, already-translatable
+`{"error":{"message":"Access denied to spec for current role","status":403}}` — genuinely correct
+access denial, unrelated to either cookie-session PR.
+
+**Root cause:** every custom (hand-written, non-generated) window with a real `AD_Window_ID` is
+supposed to wire the generic `useWindowAccess`/`WindowAccessGuard` pair (`@/auth/AuthContext.jsx`,
+the same mechanism `generate-frontend.js` wires automatically into every GENERATED window) — this
+was already done by hand for `financial-account`/`sales-invoice`/`purchase-order`/`sales-order`/
+`amortization`/`purchase-invoice` under **ETP-4658** ("this custom window never delegated to a
+generated Page.jsx... so it never picked up the ETP-4520 access-tier guard despite the contract
+carrying a real window.id" — that ticket's own comment in `financial-account/index.jsx`).
+`organization` and `fiscal-config` were simply 2 more custom windows that never got this same
+treatment — a pre-existing gap, not a regression from the cookie-session migration or from anything
+ETP-5395's own Points 1-3 touched. Without the guard, the page's own data-fetch hook
+(`useOrganizationData.js`, `useFiscalConfig.js`'s shared `fetchAllRows()`) still fired, got the
+correct backend 403, and rendered its own bare `Error("HTTP ${status}")` message raw, with a Retry
+button that can never help a genuine permission denial.
+
+**Fix:** added the exact same guard ETP-4658 already established, verbatim — `const
+windowAccessTier = useWindowAccess(<windowId>); if (windowAccessTier === 'none') return
+<WindowAccessGuard windowId={<windowId>} />;`, placed after every other hook call (Rules-of-Hooks-
+safe) and before the page's `loading`/`error` early returns. No new component, no change to the
+hooks' own error handling — the fix is entirely "wire the pre-existing mechanism", not "teach the
+hook about 403".
+
+**Lesson:** When a custom (hand-written) window carries a real `AD_Window_ID`, wiring
+`useWindowAccess`/`WindowAccessGuard` is not optional cleanup — it is the ONLY thing standing between
+a correct backend permission denial and a raw, untranslated technical error reaching the user. A
+`throw new Error('HTTP ' + status)` inside a data-fetch hook is not itself a bug in isolation; it
+only becomes user-visible garbage when the page around it has no access-tier gate to short-circuit
+before ever reaching that error path. Before writing (or reviewing) any new hand-written custom
+window that maps to a real `AD_Window_ID`, check for this gate first — grep the window's own
+`index.jsx`/`Page.jsx` for `WindowAccessGuard`, don't assume the generic mechanism applies just
+because the contract has a `window.id`.
+
+~~**Not fixed in this pass, flagged only:** `fiscal-monitor` shares the identical gap.~~
+**Fixed same day (user-requested follow-up, 2026-09-23).** `useFiscalMonitor.js` reuses the same
+`fetchAllRows()` helper from `useFiscalConfig.js`, and had zero `WindowAccessGuard`/`useWindowAccess`
+references anywhere in its own custom directory. Fixed identically: `FiscalMonitorPage.jsx` now
+checks `useWindowAccess('FEF76C3E0F104F06A89AAD15A4A4A35C')` right after its last hook
+(`useSetPageMeta`), before `handleRefresh`/the render branches — one difference from the
+`organization`/`fiscal-config` fix: the check is `!debugOverrideActive && windowAccessTier ===
+'none'`, matching this page's own existing `loading`/`error` gates, which already respect the
+developer-only debug/mock profile override the same way. Regression test added to
+`FiscalMonitorPage.vitest.jsx`, verified to fail without the fix and pass with it.
+
+~~Also found in the same investigation: the "Roles del usuario" admin UI broken under the cookie
+scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
+promoting/demoting through the real UI works under cookie sessions. Not a bug.
+
+---
+
+## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
+
+**Component:** `artifacts/goods-movements/decisions.json` + `GoodsMovementsHeaderHandler.java`
+
+**Symptom:** The Goods Movements window had `post`/`unpost` `menuActions` and a `posted`
+`statusPills` entry in `decisions.json`, and the generated detail kebab rendered the Post/Unpost
+buttons — but clicking either one returned `Action not found: post` from the form, and the exact
+same document had no way to post from the list at all. The Not Posted Documents window could post
+the identical record without any error, because it calls `DocumentPostingService` directly.
+
+**Root cause:** A `post`/`unpost` `menuActions` pair in `decisions.json` only tells the generator to
+render two buttons that call `POST /sws/neo/<spec>/<entity>/{id}/action/post`. It does **not**, by
+itself, make that endpoint do anything. Three separate pieces all have to be present for the
+request to succeed:
+1. The header's `NeoHandler` must route `post`/`unpost` to `DocumentPostingService.handleAction()`
+   — otherwise the generic `NeoButtonActionHelper` dispatcher tries to resolve `post` as an AD
+   column name, fails, and 404s with `Action not found: post`.
+2. The `posted` column must be **declared as a field** in `decisions.json` (readOnly badge) —
+   otherwise it stays classified as an implicit AD-button *action* in `contract.json`, absent from
+   `entities.<entity>.fields`, so the `menuActions` visibility gate and the `statusPills` entry both
+   read a value the contract never actually exposes.
+3. A separate, hand-written `javaQualifier` typo/duplicate in the same `entities.header` object
+   (`"javaQualifier": "document-posting"` followed immediately by `"javaQualifier":
+   "goodsMovementsHeaderHandler"`) silently lost the first value to `JSON.parse`'s
+   last-key-wins — an earlier attempt to route through the shared `@Named("document-posting")`
+   handler had been overwritten and nobody noticed, because a duplicate JSON key is not a parse
+   error.
+
+**Fix:** Added the `posted` field declaration, routed `post`/`unpost` in
+`GoodsMovementsHeaderHandler.handle()` to `DocumentPostingService.handleAction()` (mirroring
+`GoodsReceiptHeaderHandler`), removed the duplicate `javaQualifier` key, and added the matching
+list-level `BulkDocumentAction`s + row-kebab entry so the same gate applies wherever the button
+appears.
+
+**Lesson:** A `menuActions`/`statusPills` entry referencing `post`/`unpost` (or any `neoAction`) is
+not self-sufficient — grep the target window's `NeoHandler` for a `DocumentPostingService` (or
+equivalent) call before assuming the wiring is complete, and confirm the field the action's
+visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
+action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
+error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).

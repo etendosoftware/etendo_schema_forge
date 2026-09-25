@@ -1,8 +1,8 @@
 {
   "version": "0.5.1",
   "generatedAt": "2026-09-16T11:53:10.457Z",
-  "updatedAt": "2026-09-21T12:45:33.031Z",
-  "checksum": "c5f2f4c6d8e2b3d2",
+  "updatedAt": "2026-09-22T18:53:04.776Z",
+  "checksum": "5eb00c16c375ec1f",
   "frontendContract": {
     "window": {
       "id": "123271B9AD60469BAE8A924841456B63",
@@ -492,7 +492,14 @@
             }
           }
         ],
-        "javaQualifier": "returnMaterialReceiptHeaderHandler"
+        "javaQualifier": "returnMaterialReceiptHeaderHandler",
+        "draftMode": {
+          "enabled": true,
+          "processField": "documentAction",
+          "processValue": "CO",
+          "label": "Confirmar",
+          "disableWhenEmpty": true
+        }
       },
       "returnMaterialReceiptLine": {
         "tableName": "M_InOutLine",

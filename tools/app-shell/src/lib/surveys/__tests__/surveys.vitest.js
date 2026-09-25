@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { SURVEYS, isInvoiceSpec, isOrderSpec } from '../surveys.js';
+import { setRemoteSurveyConfig } from '../survey-config.js';
+
+afterEach(() => {
+  setRemoteSurveyConfig(null);
+});
 
 const MS_DAY = 86_400_000;
 const NOW = new Date('2026-06-26T12:00:00.000Z').getTime();
@@ -96,6 +101,44 @@ describe('nps.isEligible', () => {
       // (e.g. data written before respondedAt tracking existed).
     });
     expect(nps.isEligible({ state, now: NOW })).toBe(true);
+  });
+});
+
+// ETP-4353 Phase 2: nps.canned is the new offline fallback list resolveCannedOptions
+// (SurveyModal.jsx) reads when getRemoteCannedResponses('nps', locale) has nothing —
+// the data-shape half of the contract; the filtering/rendering behavior itself is
+// covered via SurveyModal.vitest.jsx.
+describe('nps.canned (offline fallback shape)', () => {
+  const nps = surveyById('nps');
+
+  it('has 7 entries, each with key/minScore/maxScore', () => {
+    expect(nps.canned).toHaveLength(7);
+    for (const entry of nps.canned) {
+      expect(entry).toEqual(
+        expect.objectContaining({
+          key: expect.any(String),
+          minScore: expect.any(Number),
+          maxScore: expect.any(Number),
+        }),
+      );
+    }
+  });
+
+  it('has 6 always-visible entries spanning the full 0-10 scale', () => {
+    const alwaysVisible = nps.canned.filter((c) => c.key !== 'surveyChipAI');
+    expect(alwaysVisible).toHaveLength(6);
+    for (const entry of alwaysVisible) {
+      expect(entry.minScore).toBe(0);
+      expect(entry.maxScore).toBe(10);
+    }
+  });
+
+  it('has exactly one promoter-only entry (surveyChipAI, score 8-10)', () => {
+    const aiEntries = nps.canned.filter((c) => c.key === 'surveyChipAI');
+    expect(aiEntries).toHaveLength(1);
+    expect(aiEntries[0]).toEqual(
+      expect.objectContaining({ minScore: 8, maxScore: 10 }),
+    );
   });
 });
 
@@ -276,5 +319,48 @@ describe('csat_onboarding.isEligible', () => {
       onboardingCompletedAt: null,
     });
     expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(true);
+  });
+
+  // ETP-4353 Phase 2 regression: csatOnboardingIsEligible no longer uses the removed
+  // CSAT_ONBOARDING_DELAY_MS constant — it now calls getSurveyTypeConfig('csat_onboarding', env)
+  // and gates on minAccountAgeMs instead. For a tenant that never adds a csat_onboarding row to
+  // ETGO_Survey_Type (no remote config, no env var), behavior must stay exactly the original
+  // hardcoded 24h gate.
+  describe('unconfigured (no remote config, no env var) — behavior unchanged from before the refactor', () => {
+    it('is still blocked just under 24h since onboardingCompletedAt', () => {
+      const state = baseState({
+        onboardingCompleted: true,
+        onboardingShown: false,
+        onboardingCompletedAt: isoAgo(MS_DAY - 60_000), // 23h59m ago
+      });
+      expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW, env: {} })).toBe(false);
+    });
+
+    it('is eligible at exactly 24h since onboardingCompletedAt', () => {
+      const state = baseState({
+        onboardingCompleted: true,
+        onboardingShown: false,
+        onboardingCompletedAt: isoAgo(MS_DAY),
+      });
+      expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW, env: {} })).toBe(true);
+    });
+  });
+
+  it('respects a remote-configured csat_onboarding minAccountAgeDays (e.g. 3 days) instead of the 1-day default', () => {
+    setRemoteSurveyConfig({ perSurvey: { csat_onboarding: { minAccountAgeDays: 3 } } });
+    const state = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(2 * MS_DAY),
+    });
+    // Still under the remote-configured 3-day gate, even though it's past the old 24h default.
+    expect(csatOnboarding.isEligible({ state, isAdmin: true, now: NOW })).toBe(false);
+
+    const stateEligible = baseState({
+      onboardingCompleted: true,
+      onboardingShown: false,
+      onboardingCompletedAt: isoAgo(3 * MS_DAY),
+    });
+    expect(csatOnboarding.isEligible({ state: stateEligible, isAdmin: true, now: NOW })).toBe(true);
   });
 });

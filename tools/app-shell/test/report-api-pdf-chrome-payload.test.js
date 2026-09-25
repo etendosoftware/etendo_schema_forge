@@ -45,11 +45,16 @@ function loadMiddleware() {
   return handler;
 }
 
+// ETP-5460 — session cookie replaces the Bearer token as the identity source.
+const SESSION_COOKIE = '__Host-go_session=abc123';
+const VALID_CSRF = 'good-csrf';
+
 function makeReq(method, url, body) {
   const req = Readable.from(body ? [body] : []);
   req.method = method;
   req.url = url;
-  req.headers = { authorization: 'Bearer test-token' };
+  req.headers = { cookie: SESSION_COOKIE };
+  if (method !== 'GET') req.headers['x-go-csrf'] = VALID_CSRF;
   return req;
 }
 
@@ -72,6 +77,16 @@ function stubFetch() {
   globalThis.fetch = async (url, init) => {
     const urlStr = String(url);
     fetchCalls.push({ url: urlStr, init });
+    if (urlStr.includes('/sws/go/session')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          environment: { clientId: 'C1', orgId: 'O1', roleId: 'R1', userId: 'U1' },
+          csrfToken: VALID_CSRF,
+        }),
+      };
+    }
     if (urlStr.includes('/api/report')) {
       // jsreport response
       return {
