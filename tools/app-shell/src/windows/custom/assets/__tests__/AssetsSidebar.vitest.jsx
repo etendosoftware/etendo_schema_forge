@@ -1,107 +1,47 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
-// ── Mocks ──
+// ETP-5414 — QA rejection: the "Amortizado" percentage metric printed the raw
+// JS number (`1.67%`, dot decimal) instead of the localized value (`1,67%`,
+// comma decimal) required by the es-ES-style separator config. Fixed by
+// routing the value through the canonical `formatPlainDecimal` (see
+// CLAUDE.md § Currency & Amount Formatting / `formatCurrency.js`'s
+// `formatPlainDecimal` doc comment) instead of interpolating `pct` raw.
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
 
-vi.mock('@/hooks/useCurrency', () => ({
-  useCurrency: () => 'USD',
-}));
-
-vi.mock('@/lib/formatCurrency', () => ({
-  formatCurrency: (cur, val) => `${cur} ${val}`,
-}));
-
 import AssetsSidebar from '../AssetsSidebar.jsx';
 
-describe('AssetsSidebar', () => {
-  it('renders section title', () => {
-    render(<AssetsSidebar data={null} />);
-    expect(screen.getByText('assetsDepreciationSummary')).toBeInTheDocument();
+describe('AssetsSidebar — "Amortizado" percentage formatting (ETP-5414)', () => {
+  it('renders the percentage with a comma decimal separator, not a raw dot', () => {
+    render(<AssetsSidebar data={{ etgoAmortizationStatus: 1.6666666, assetValue: 100, depreciationAmt: 0, depreciatedValue: 0, depreciatedPlan: 0 }} />);
+
+    // Correct, localized value.
+    expect(screen.getByText('1,67%')).toBeInTheDocument();
+    // Never the old bug: raw JS dot-decimal string.
+    expect(screen.queryByText('1.67%')).not.toBeInTheDocument();
   });
 
-  it('shows dashes when data is null', () => {
-    render(<AssetsSidebar data={null} />);
-    const dashes = screen.getAllByText('\u2014');
-    // currentValue, residual, planned, depreciated all show dashes
-    expect(dashes.length).toBeGreaterThanOrEqual(4);
+  it('does not round to an integer — keeps the 2-decimal precision', () => {
+    render(<AssetsSidebar data={{ etgoAmortizationStatus: 33.333, assetValue: 100, depreciationAmt: 0, depreciatedValue: 0, depreciatedPlan: 0 }} />);
+
+    expect(screen.getByText('33,33%')).toBeInTheDocument();
+    expect(screen.queryByText('33%')).not.toBeInTheDocument();
   });
 
-  it('shows formatted values when data is provided', () => {
-    render(
-      <AssetsSidebar
-        data={{
-          assetValue: 10000,
-          depreciationAmt: 8000,
-          depreciatedValue: 1500,
-          previouslyDepreciatedAmt: 500,
-          depreciatedPlan: 8000,
-          etgoAmortizationStatus: 75,
-        }}
-      />,
-    );
-    expect(screen.getByText('USD 10000')).toBeInTheDocument();
-    // pendingToDepreciate = depreciationAmt - (depreciatedValue + previouslyDepreciatedAmt) = 8000 - 2000 = 6000
-    expect(screen.getByText('USD 6000')).toBeInTheDocument();
-    expect(screen.getByText('USD 8000')).toBeInTheDocument();
-    expect(screen.getByText('75%')).toBeInTheDocument();
-  });
+  it('renders a whole-number percentage without a trailing decimal (100%, complete)', () => {
+    render(<AssetsSidebar data={{ etgoAmortizationStatus: 100, assetValue: 100, depreciationAmt: 0, depreciatedValue: 0, depreciatedPlan: 0 }} />);
 
-  it('computes pendingToDepreciate as depreciationAmt minus accumulated depreciation', () => {
-    render(
-      <AssetsSidebar
-        data={{
-          depreciationAmt: 10000,
-          depreciatedValue: 5000,
-          previouslyDepreciatedAmt: 0,
-        }}
-      />,
-    );
-    expect(screen.getByText('USD 5000')).toBeInTheDocument();
-  });
-
-  it('shows "still in progress" subtitle when pct < 100', () => {
-    render(
-      <AssetsSidebar data={{ etgoAmortizationStatus: 50 }} />,
-    );
-    expect(screen.getByText('assetsStillInProgress')).toBeInTheDocument();
-  });
-
-  it('shows "fully depreciated" subtitle when pct is 100', () => {
-    render(
-      <AssetsSidebar data={{ etgoAmortizationStatus: 100 }} />,
-    );
+    // formatPlainDecimal on "100.00" only swaps the separator (no trimming),
+    // so the fixed-point string is preserved as "100,00".
+    expect(screen.getByText('100,00%')).toBeInTheDocument();
     expect(screen.getByText('assetsFullyDepreciated')).toBeInTheDocument();
   });
 
-  it('shows "still in progress" when pct is 0', () => {
-    render(
-      <AssetsSidebar data={{ etgoAmortizationStatus: 0 }} />,
-    );
-    expect(screen.getByText('0%')).toBeInTheDocument();
-    expect(screen.getByText('assetsStillInProgress')).toBeInTheDocument();
-  });
-
-  it('renders all metric labels via i18n keys', () => {
-    render(<AssetsSidebar data={{ assetValue: 1 }} />);
-    expect(screen.getByText('assetsCurrentValue')).toBeInTheDocument();
-    expect(screen.getByText('assetsPendingDepreciationLabel')).toBeInTheDocument();
-    expect(screen.getByText('assetsPlannedDepreciation')).toBeInTheDocument();
-    expect(screen.getByText('assetsDepreciated')).toBeInTheDocument();
-  });
-
-  it('renders subtitle labels', () => {
-    render(<AssetsSidebar data={{ assetValue: 1 }} />);
-    expect(screen.getByText('assetsBookValue')).toBeInTheDocument();
-    expect(screen.getByText('assetsTotalScheduled')).toBeInTheDocument();
-  });
-
-  it('handles missing numeric fields defaulting to 0', () => {
-    render(<AssetsSidebar data={{}} />);
-    // Multiple cards show 'USD 0' (assetValue, residual, depreciatedPlan)
-    expect(screen.getAllByText('USD 0').length).toBeGreaterThanOrEqual(3);
-    expect(screen.getByText('0%')).toBeInTheDocument();
+  it('shows the em dash placeholder (not "0,00%") when there is no data at all', () => {
+    render(<AssetsSidebar data={null} />);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
   });
 });

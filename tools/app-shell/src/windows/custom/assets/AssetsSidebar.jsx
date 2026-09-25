@@ -1,6 +1,6 @@
 import { useUI } from '@/i18n';
 import { useCurrency } from '@/hooks/useCurrency';
-import { formatCurrency } from '@/lib/formatCurrency';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
 
 function MetricCard({ label, value, subtitle, tint = null }) {
   if (tint === 'green') {
@@ -67,7 +67,7 @@ export default function AssetsSidebar({ data }) {
             data-testid="MetricCard__b651ab" />
           <MetricCard
             label={ui('assetsDepreciated')}
-            value={hasData ? `${pct}%` : '—'}
+            value={hasData ? `${formatPlainDecimal(pct.toFixed(2))}%` : '—'}
             subtitle={hasData ? (isComplete ? ui('assetsFullyDepreciated') : ui('assetsStillInProgress')) : null}
             tint="amber"
             data-testid="MetricCard__b651ab" />
