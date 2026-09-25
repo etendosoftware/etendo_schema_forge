@@ -135,7 +135,7 @@
           "section": "principal",
           "readOnlyLogic": null,
           "required": false,
-          "reason": "Sequence assigned at process time (empty in drafts) — excluded from the add-line gate so + Add line works before processing",
+          "reason": "Assigned once on create from DocumentNo_M_Movement, same as Classic (not re-assigned on process) — excluded from the add-line gate so + Add line works before processing",
           "gridOrder": 3
         },
         "processNow": {
