@@ -20,7 +20,7 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
-  clampNegativeOverrides,
+  clampNegativeOverrides, showIaeActivityReminder,
 } from '../../fiscalModelsUtils.js';
 import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -500,12 +500,22 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // "Generar fichero 303" (this page) or after diving into "Registrar/Presentar" ->
   // "Presentación telemática AEAT" -> "Presentar" (AeatSubmitFlow.jsx's own modal). A
   // user only discovered the gap deep inside one of those flows — for the AEAT path,
-  // inside an already-open blocking modal — instead of upfront on the page, the way
-  // the duplicate-period and missing-required-fields banners already work below. Runs
-  // once per last-period declaration, mirrors `handleGenerate`'s own guard exactly
-  // (same endpoint, same fail-OPEN-on-error semantics: a flaky pre-check must never
-  // manufacture a false block), and only ever feeds the existing `genError` banner —
-  // it never blocks anything by itself.
+  // inside an already-open blocking modal — instead of upfront on the page. Runs once
+  // per last-period declaration, mirrors `handleGenerate`'s own guard exactly (same
+  // endpoint, same fail-OPEN-on-error semantics: a flaky pre-check must never
+  // manufacture a false block). IMPORTANT — this is purely a heads-up, exactly like
+  // the ETP-5187 reminder fired at activation/period-selection time: it must NEVER
+  // write `genError`/`missingIaeGuard` (that would surface it as the fixed inline
+  // banner below, which is reserved for the reactive hard block that actually runs
+  // right before "Generar"/"Presentar" hit the backend). A first attempt did exactly
+  // that (feeding the inline banner from this mount effect) and user feedback made
+  // clear that reads as a permanent page fixture, not a proactive nudge — so this
+  // reuses `showIaeActivityReminder`, the SAME floating-toast mechanism (sonner
+  // `toast.warning`, bottom-right, "Ir a Organización" CTA) already used by
+  // `FmCatalogPage.jsx` (activating Modelo 303) and `FmOverlays.jsx`'s `NewDeclModal`
+  // (selecting period T4/12), instead of building a second notification style. The
+  // actual hard block — `missingIaeGuard` gating `handleGenerate` below and the
+  // mirrored guard in `AeatSubmitFlow.jsx` — is untouched by this effect either way.
   useEffect(() => {
     let cancelled = false;
     if (!isLastPeriodOfYear(decl?.period) || !selectedOrg?.id) return undefined;
@@ -518,8 +528,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         if (cancelled || !iaeRes.ok) return;
         const iaeRows = (await iaeRes.json())?.response?.data ?? [];
         if (!cancelled && isMissingDefaultIaeActivity(iaeRows)) {
-          setMissingIaeGuard(true);
-          setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+          showIaeActivityReminder(t, navigate);
         }
       } catch (_) {
         // fail open — see comment above.
