@@ -178,6 +178,7 @@ re-test for replay protection.
 | --- | --- | --- |
 | `CURRENT` (`active`) | allowed | allowed |
 | `PAST_DUE` (`past_due`) with a due date | allowed | **402 `SUBSCRIPTION_REQUIRED`** |
+| `PAST_DUE` (`past_due`) with **no** due date | **402 `SUBSCRIPTION_REQUIRED`** (no anchor ⇒ no grace) | **402 `SUBSCRIPTION_REQUIRED`** |
 | `EXPIRED` (`canceled`, open or closed row) | **402 `SUBSCRIPTION_REQUIRED`** | **402 `SUBSCRIPTION_REQUIRED`** |
 | demo past its trial | — | **402 `DEMO_TRIAL_EXPIRED`** |
 
@@ -185,6 +186,11 @@ The platform-account endpoints (billing overview, the Stripe portal, purchases, 
 refuse, and entering the environment (`POST /sws/go/session/environment`) is not refused either —
 it answers with an informational, backend-only `accessDecision` — so a blocked customer always
 reaches the blocked screen (driven by the NEO 402) and the pay path. See "The 402 body and the kill switch" below.
+The webhook never stores `PAST_DUE` without a due date (it ignores the event as `missing period
+end`); only an R37-backfilled row can have that shape (`com.etendoerp.go`
+`docs/open-and-notable-topics.md` §3.11). For deploy order, switching enforcement off in a shared
+environment and what support sees for a blocked tenant, see "Operating environment-access
+enforcement" in `com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`.
 
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
@@ -213,7 +219,10 @@ reaches the blocked screen (driven by the NEO 402) and the pay path. See "The 40
   `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
 
 The out-of-order-delivery watermark (see below) is `LAST_EVENT_AT` on the row for a tenant with a
-row (ETP-5047), and the `ETGO_SubscriptionEventAt` `AD_Preference` only for a tenant without one.
+row (ETP-5047), and the `ETGO_SubscriptionEventAt` `AD_Preference` only for a tenant without one —
+with one read-only exception: while a row's `LAST_EVENT_AT` is still NULL (a row that predates the
+column), the preference is read as its watermark, and the first applied event moves it onto the
+column.
 Read preferences through the classic **Preference**
 window as System Administrator (filter by `Attribute` and the tenant's client), or call
 `TenantEnvironmentLifecycleService.resolve(clientId)` / `readSubscriptionState(clientId)` in a
@@ -674,10 +683,10 @@ post_event "$(printf '{"id":"evt_%s","type":"customer.subscription.deleted","dat
 # Stale delivery — an event whose "created" is OLDER than the watermark set by the last
 # APPLIED event is ignored (event_result=IGNORED, failure_reason="stale event") and never
 # overwrites the newer stored status. The hand-signed events above all omit "created", so none
-# of them ever set ETGO_SubscriptionEventAt; this pair sets it explicitly to demonstrate the
-# check. WATERMARK_AT below becomes the stored watermark (invoice.paid is applied); the second
-# event's "created" is deliberately one hour earlier, so it must be ignored, leaving CURRENT in
-# place instead of flipping to PAST_DUE.
+# of them ever set the watermark (LAST_EVENT_AT on a row, else ETGO_SubscriptionEventAt); this
+# pair sets it explicitly to demonstrate the check. WATERMARK_AT below becomes the stored
+# watermark (invoice.paid is applied); the second event's "created" is deliberately one hour
+# earlier, so it must be ignored, leaving CURRENT in place instead of flipping to PAST_DUE.
 WATERMARK_AT=$(date +%s)
 post_event "$(printf '{"id":"evt_%s","created":%s,"type":"invoice.paid","data":{"object":{"subscription":"%s"}}}' "$WATERMARK_AT" "$WATERMARK_AT" "$SUB")"
 post_event "$(printf '{"id":"evt_%s","created":%s,"type":"customer.subscription.updated","data":{"object":{"id":"%s","status":"past_due","current_period_start":1793750400}}}' "$(date +%s)" "$((WATERMARK_AT - 3600))" "$SUB")"
@@ -686,10 +695,11 @@ post_event "$(printf '{"id":"evt_%s","created":%s,"type":"customer.subscription.
 Check the outcome the same way as §1: `select event_id, event_type, event_result, failure_reason,
 request_id, etgo_checkout_request_id from etgo_billing_event order by received_at desc;` — expect
 `request_id` and `etgo_checkout_request_id` **empty** on every one of these rows (see "Correlation
-is different from the checkout path" above), and the stored state changed — the tenant's open
-`etgo_subscription` row when it has one, otherwise the **Preference** window for
-`ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` — plus `ETGO_SubscriptionEventAt` on the
-tenant's client (see "Where the outcome is stored" in §1).
+is different from the checkout path" above), and the stored state changed — the tenant's
+`etgo_subscription` rows when it has any (`status`, `end_date`, `grace_anchor`, the period,
+`last_event_at`), otherwise the **Preference** window for `ETGO_SubscriptionStatus` /
+`ETGO_SubscriptionDueAt` / `ETGO_SubscriptionEventAt` on the tenant's client (see "Where the
+outcome is stored" in §1).
 
 ## 5. Stripe Test Mode
 
@@ -841,6 +851,12 @@ due date when the row exists (with the pre-ETP-5047 `CURRENT_PERIOD_END` fallbac
 otherwise. The RESULT block prints a `Lifecycle store : row | preference` line saying which one it
 checked. `status` prints the row (status, grace anchor, billing period and the `LAST_EVENT_AT`
 watermark) or the three preferences.
+
+The script only looks for an **open** row. Once a cancellation has closed the tenant's row
+(SF-STRIPE-LOCAL-14, ETP-5047) it reports `Lifecycle store : preference` and shows the stale
+preferences, although the backend reads the closed row (`canceled`, blocked). Query the rows
+directly with the §1 query in that case; `fail` / `recover` are not meaningful on a canceled
+subscription anyway.
 
 `fail` and `recover` **mutate the Stripe Test Mode account** (a human runs them, not an agent, per
 this repo's automation guardrails); `status` never mutates anything. Both refuse to run against a
@@ -1030,8 +1046,9 @@ Expected once the projection is already `PAST_DUE` with a due date on file: a la
 past_due/unpaid `customer.subscription.updated` **keeps** that stored due date rather than
 recomputing one from the new payload's `current_period_start`. Only `invoice.payment_failed`
 (or the first past_due transition out of a non-`PAST_DUE` state) sets a new due date. Read the
-current due date (the open `etgo_subscription` row's `current_period_end`, or
-`ETGO_SubscriptionDueAt` from the **Preference** window for a tenant without one) before assuming the event was
+current due date (the open `etgo_subscription` row's `grace_anchor` — `current_period_end` on a
+`past_due` row from before ETP-5047 whose `grace_anchor` and `current_period_start` are NULL — or
+`ETGO_SubscriptionDueAt` from the **Preference** window for a tenant without a row) before assuming the event was
 dropped — it likely applied, and left the anchor exactly where it already was (§1 §3.1 of the
 design doc).
 
@@ -1042,8 +1059,9 @@ The event's own `created` (event-envelope level) was strictly older than
 client — so it was ignored rather than risk overwriting a newer, already-applied status with an
 older one delivered late. This is expected Stripe behavior (delivery order is not guaranteed),
 not a bug. If it fires on an event you expected to apply, compare the two `created` values (read
-`ETGO_SubscriptionEventAt` from the **Preference** window) rather than assuming the watermark is
-wrong — a hand-signed payload that omits `created` never reaches this check at all (§1).
+the watermark — the row's `last_event_at`, or `ETGO_SubscriptionEventAt` from the **Preference**
+window for a tenant without a row or a row whose `last_event_at` is still NULL) rather than
+assuming the watermark is wrong — a hand-signed payload that omits `created` never reaches this check at all (§1).
 
 ### `status` vs. the grace fields — read the right one
 
@@ -1086,8 +1104,13 @@ Confirm the Dashboard is in Test Mode, the session was created with the `sk_test
   `etgo_checkout_request_id`), captured after the restart replay, plus a screenshot of the row in
   the Classic **Billing Event** window or the **Checkout Request** child tab.
 - Etendo tenant/payment state before and after each scenario.
-- For subscription lifecycle scenarios (§1, §4, §7 SF-STRIPE-LOCAL-10..20): the `etgo_billing_event`
-  row per event id (`event_result`, `failure_reason`), and the stored state on the affected client,
-  before and after — its open `etgo_subscription` row (`status`, `current_period_end`) when it has
-  one, otherwise the **Preference** rows `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` — plus
+- For subscription lifecycle scenarios (§1, §4, §7 SF-STRIPE-LOCAL-10..26): the `etgo_billing_event`
+  row per event id (`event_result`, `failure_reason`, and for `invoice.*` the
+  `service_period_start/end` in `payload_summary`), and the stored state on the affected client,
+  before and after — its `etgo_subscription` rows (the §1 query: `status`, `end_date`,
+  `grace_anchor`, `current_period_start/end`, `last_event_at`) when it has any, otherwise the
+  **Preference** rows `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt` /
   `ETGO_SubscriptionEventAt`.
+- For the access scenarios (SF-STRIPE-LOCAL-24/25): the raw 402 response body from NEO and from
+  `POST /sws/mcp`, the `accessState` of the tenant in `GET /sws/go/environments`, and the INFO log
+  line with the kill switch on.
