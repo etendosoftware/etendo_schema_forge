@@ -1,1 +1,3 @@
 The `account` entity represents the company's OWN financial accounts (Etendo table FIN_Financial_Account): its bank, cash and card accounts (required fields: name, currency, type), including their IBAN, SWIFT/BIC and account number. These are NOT a contact's bank details — for a contact's (business partner / BP) bank account (C_BP_BankAccount) use the `contacts` spec (`bankAccount` entity) instead.
+
+Bank statements: create them with the named actions `createStatement`, `previewStatement` (parses a file, saves nothing) and `importStatement` (`neo_action`, id = the financial account); read them with neo_list/neo_get on `importedBankStatements` / `bankStatementLines`. Generic writes on those entities are refused with 405. Parameters: see neo_schema({view:"actions"}).
