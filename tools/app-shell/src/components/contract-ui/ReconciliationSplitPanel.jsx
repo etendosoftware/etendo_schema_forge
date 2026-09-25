@@ -261,14 +261,17 @@ function DateCell({ date, bcpLocale, cellClassName }) {
 }
 
 /**
- * Right-aligned money cell shared by both panels. When `secondaryValue` is given (a foreign
- * candidate's account-currency equivalent), it renders as a smaller line underneath — the
- * "show the EUR total alongside the other currency" requirement.
+ * Right-aligned stack of one amount plus, optionally, its account-currency equivalent. Shared by
+ * `MoneyCell`, the reconciled-line amount cell and the partial-line "conciliado" block, so a
+ * foreign-currency document shows the same EUR-on-top / original-below pair everywhere (ETP-5450).
+ * `primaryClassName` overrides the prominent line's typography (the block uses a 13px size).
  */
-function MoneyCell({
-  value, currency, cellClassName, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
+function DualAmount({
+  value, currency, bold = false, secondaryValue, secondaryCurrency, baseOnTop = false,
+  primaryClassName, baseTestId = 'recon-cand-amount-base',
 }) {
-  const primaryCls = cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
+  const primaryCls = primaryClassName
+    || cn('text-sm leading-5 text-[hsl(var(--foreground))]', bold ? 'font-semibold' : 'font-normal');
   const mutedCls = 'text-xs leading-4 text-[hsl(var(--muted-foreground))]';
   const hasBase = secondaryValue != null;
   // When `baseOnTop`, the account-currency (EUR) equivalent is shown ON TOP and prominent, with the
@@ -285,7 +288,7 @@ function MoneyCell({
   // MoneyAmount doesn't forward extra props (no data-testid), so the base testid goes on this
   // wrapping span (it always marks the account-currency amount, whichever position it's in).
   const baseLine = hasBase ? (
-    <span data-testid="recon-cand-amount-base">
+    <span data-testid={baseTestId}>
       <MoneyAmount
         value={Number(secondaryValue) || 0}
         currency={secondaryCurrency}
@@ -295,13 +298,24 @@ function MoneyCell({
     </span>
   ) : null;
   return (
+    <div className="flex flex-col items-end">
+      {baseOnTop && hasBase ? baseLine : foreignLine}
+      {baseOnTop && hasBase ? foreignLine : baseLine}
+    </div>
+  );
+}
+
+/**
+ * Right-aligned money cell shared by both panels. When `secondaryValue` is given (a foreign
+ * candidate's account-currency equivalent), it renders as a smaller line underneath — the
+ * "show the EUR total alongside the other currency" requirement.
+ */
+function MoneyCell({ cellClassName, ...amountProps }) {
+  return (
     <TableCell
       className={cn('h-[62px] px-3 text-right align-middle', cellClassName)}
       data-testid="TableCell__d0f4d5">
-      <div className="flex flex-col items-end">
-        {baseOnTop && hasBase ? baseLine : foreignLine}
-        {baseOnTop && hasBase ? foreignLine : baseLine}
-      </div>
+      <DualAmount {...amountProps} data-testid="DualAmount__d0f4d5" />
     </TableCell>
   );
 }
@@ -518,6 +532,42 @@ function CurrencyBadge({ code }) {
  * collapses/expands the list of already-reconciled documents, each with an "unlink" (desvincular)
  * button. Rendered above the candidate filters; the bar is neutral (no green). See ETP-4502 it.5.
  */
+/**
+ * A matched transaction of a partial line is in another currency when the backend emitted its
+ * stored original (`foreignAmount`/`foreignCurrency`, ETP-5450) for a currency other than the
+ * account's. `t.amount` always stays in the account currency.
+ */
+function isForeignTxn(t, currency) {
+  return !!t.foreignCurrency && t.foreignCurrency !== currency && t.foreignAmount != null;
+}
+
+/**
+ * Amount of one matched transaction in the "conciliado" block: the account-currency amount alone,
+ * or — for a foreign-currency document — the account-currency amount on top with the original
+ * document amount underneath, like the candidate rows. Magnitudes only (the block is unsigned).
+ */
+function MatchedTxnAmount({ txn, currency }) {
+  const base = Math.abs(Number(txn.amount) || 0);
+  if (!isForeignTxn(txn, currency)) {
+    return (
+      <span className="text-[13px] font-semibold tabular-nums text-[hsl(var(--foreground))]">
+        {formatCurrency(currency, base)}
+      </span>
+    );
+  }
+  return (
+    <DualAmount
+      value={Math.abs(Number(txn.foreignAmount) || 0)}
+      currency={txn.foreignCurrency}
+      secondaryValue={base}
+      secondaryCurrency={currency}
+      baseOnTop
+      primaryClassName="text-[13px] font-semibold leading-5 tabular-nums text-[hsl(var(--foreground))]"
+      baseTestId={`recon-matched-amount-base-${txn.transactionId}`}
+      data-testid="DualAmount__matched" />
+  );
+}
+
 function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle }) {
   const ui = useUI();
   const txns = line.txns || [];
@@ -566,12 +616,15 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle 
                     <span className="truncate text-[hsl(var(--muted-foreground))]">{t.contact}</span>
                   ) : null}
                 </div>
-                <StatusBadge kind="invoice" data-testid="StatusBadge__matched" />
+                <div className="flex items-center gap-1">
+                  <StatusBadge kind="invoice" data-testid="StatusBadge__matched" />
+                  {isForeignTxn(t, currency) ? (
+                    <CurrencyBadge code={t.foreignCurrency} data-testid="CurrencyBadge__matched" />
+                  ) : null}
+                </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-[13px] font-semibold tabular-nums text-[hsl(var(--foreground))]">
-                  {formatCurrency(currency, Math.abs(Number(t.amount) || 0))}
-                </span>
+                <MatchedTxnAmount txn={t} currency={currency} data-testid="MatchedTxnAmount__d0f4d5" />
                 <button
                   type="button"
                   onClick={() => onRemove(t)}
@@ -681,14 +734,18 @@ function CandidateOperationsPanel({
           data-testid="MoneyCell__d0f4d5" />
         {reconciledMode ? (
           // Reconciled line: amount + a per-row individual un-link ("−"). cand.id is the transaction id.
+          // A linked foreign-currency document keeps its original amount + the final EUR equivalent
+          // stored on the transaction (ETP-5450), shown like a pending foreign row.
           (<TableCell className="h-[62px] w-[140px] px-3 text-right align-middle" data-testid="TableCell__d0f4d5">
             <div className="flex items-center justify-end gap-2">
-              <MoneyAmount
-                value={Number(cand.amount) || 0}
+              <DualAmount
+                value={cand.amount}
                 currency={candCurrency}
-                tone="neutral"
-                className="text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
-                data-testid="MoneyAmount__d0f4d5" />
+                bold
+                secondaryValue={candForeign ? cand.amountBase : undefined}
+                secondaryCurrency={cand.baseCurrency || currency}
+                baseOnTop={hasBase}
+                data-testid="DualAmount__d0f4d5" />
               <button
                 type="button"
                 onClick={() => onRemoveOperation({ transactionId: cand.id })}

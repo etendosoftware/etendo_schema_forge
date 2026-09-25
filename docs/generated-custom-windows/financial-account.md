@@ -1878,6 +1878,29 @@ its own currency while booking the bank transaction(s) in the account currency:
   already-connected accounts. The guard now only fires on a link an administrator deliberately
   configured as single-currency.
 - **Same currency:** unchanged — rate ONE, standard flow.
+- **After reconciling (ETP-5450):** a reconciled line keeps showing its foreign-currency documents
+  the same way as while pending — amber `CurrencyBadge`, account-currency amount on top, original
+  document amount underneath — but with the **final** values of the reconciliation, not a fresh
+  preview. The source is the transaction itself: Core fills `FIN_Finacc_Transaction.Foreign_Currency_ID`,
+  `Foreign_Amount` (unsigned, the payment amount in the document currency) and
+  `Foreign_Convert_Rate` whenever the payment currency differs from the account currency.
+  - **Fully reconciled line** — the linked-documents list (`CandidatesSupport.buildLinkedTransactions`,
+    helper `appendForeignOriginal`) re-expresses a foreign row with the pending-row keys:
+    `amount`/`pendingBalance` = `Foreign_Amount` carrying the sign of `deposit − payment`,
+    `amountBase` = the signed account-currency amount, plus `currency`, `currencyId`,
+    `baseCurrency` and `rate` (= `Foreign_Convert_Rate`). The panel's reconciled "Importe" cell uses
+    the same `DualAmount` stack as `MoneyCell`, and `candidateBaseAmount` keeps summing
+    `amountBase`, so the "Desconciliar (N)" bar total stays in the account currency.
+  - **Partial line** — each `txns[]` entry (`BankStatementsSupport.buildLineTxns`, helper
+    `appendTxnForeignOriginal`) keeps `amount` in the **account** currency (the reconciled-txns
+    modal sums it against the statement line) and adds `foreignAmount` (signed like `amount`),
+    `foreignCurrency`, `currency` (account ISO) and `foreignRate`. The "conciliado" block shows the
+    badge and both amounts per document (`MatchedTxnAmount`); its header total stays in the account
+    currency.
+  - A same-currency transaction (no `Foreign_*` data, or a foreign currency equal to the account's)
+    keeps the previous single-amount shape in both places.
+  - The document number shown for a linked row is still the auto-created payment's, not the
+    invoice's (out of scope).
 
 #### Write off the invoice difference (ETP-4797)
 
@@ -1972,7 +1995,8 @@ used** and only becomes **CONCILIADA at 100 %**; partial lines keep showing in t
 - **Right panel — "conciliado" block** (`ReconciledOperationsSection`, above the filters) renders
   **only for a PARTIAL line**: a collapsible header (`% conciliado` + a short 90px bar + the
   reconciled amount + chevron), starting **collapsed**, that expands to one row per matched document
-  (nº, contact, "Factura" tag, amount, per-row **"−"** unlink). Expanding **freezes the candidate
+  (nº, contact, "Factura" tag, amount, per-row **"−"** unlink; a foreign-currency document adds its
+  currency badge and original amount — see "After reconciling (ETP-5450)" above). Expanding **freezes the candidate
   list below** (Holded parity). Below it, the candidate picker reconciles the **remaining** balance
   (a PARTIAL line is NOT read-only; the picker fetches candidates for the pending remainder sub-line
   — `remainderLineId` — and "Restante por conciliar" is computed on the pending amount). A FULLY
