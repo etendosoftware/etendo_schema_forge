@@ -20,7 +20,7 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
-  clampNegativeOverrides, showIaeActivityReminder,
+  clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder,
 } from '../../fiscalModelsUtils.js';
 import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -917,14 +917,31 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const missingRequiredFields = getMissingRequiredFields(
     decl?.year, decl?.period, withBox111NonZeroFlag(identChecks, liveBoxes),
   );
-  // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the toast
-  // helper below and the inline banner — a single non-nested template literal per field
-  // (javascript:S4624 flags nesting one template literal's `${}` inside another's).
+  // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the
+  // click-time toast helper below and the proactive mount-effect toast further down — a
+  // single non-nested template literal per field (javascript:S4624 flags nesting one
+  // template literal's `${}` inside another's).
   const missingFieldNames = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
 
   function missingRequiredFieldsToast(actionKey, fallback) {
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
+
+  // ETP-5432 pt.10 follow-up — proactive version of the required-field gate above: used to
+  // be a fixed inline banner (`fm.validation.missing_required_banner`), rendered
+  // unconditionally below the toolbar whenever `missingRequiredFields.length > 0`. User
+  // feedback was that no validation message on this page should be a page fixture — every
+  // one must be a toast, matching the missing-IAE guard's own toast (see the mount-effect
+  // above and `showMissingRequiredFieldsReminder`'s doc comment). Keyed on `missingFieldNames`
+  // (not `missingRequiredFields` itself, a fresh array every render) so this only re-fires
+  // when the actual SET of missing fields changes — filling the field then re-emptying it
+  // shows the toast again, but an unrelated re-render while the same field is still empty
+  // does not spam it.
+  useEffect(() => {
+    if (missingRequiredFields.length === 0) return;
+    showMissingRequiredFieldsReminder(t, missingFieldNames);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingFieldNames]);
 
   // Keeps `isManualDataEligible` current so a QUEUED explicit-save replay (see
   // `persistEditableFields`/`writeManualData`) can re-check the same preconditions right before
@@ -1157,25 +1174,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           {t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.'}
         </div>
       )}
-      {/* ── Missing required field(s) warning (ETP-5187) ────────────── */}
-      {missingRequiredFields.length > 0 && (
-        <div style={{
-          margin: '4px 20px 0',
-          padding: '8px 14px',
-          background: 'var(--status-warning-bg)',
-          border: '1px solid var(--status-warning-border)',
-          borderRadius: 8,
-          fontSize: 13,
-          color: 'var(--status-warning-fg)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__missingRequired" />
-          {t('fm.validation.missing_required_banner', { fields: missingFieldNames })
-            ?? `Hay campos obligatorios sin completar: ${missingFieldNames}.`}
-        </div>
-      )}
+      {/* ETP-5432 pt.10 follow-up — the fixed "missing required field(s)" banner that used to
+          render here (`fm.validation.missing_required_banner`) was removed: it now fires as
+          a toast instead (`showMissingRequiredFieldsReminder`, see the mount-effect above),
+          matching the missing-IAE guard's own toast-only feedback. */}
       {/* ── KPI bar ──────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
