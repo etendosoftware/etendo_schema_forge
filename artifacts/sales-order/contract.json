@@ -1,8 +1,8 @@
 {
-  "version": "0.31.0",
+  "version": "0.35.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-08-28T15:51:07.713Z",
-  "checksum": "97eef687e5308af9",
+  "updatedAt": "2026-09-25T14:58:12.701Z",
+  "checksum": "505ebe37b343203b",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -42,12 +42,16 @@
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
           "InvoiceStatus": "Estado de facturación",
+          "EM_ETGO_Delivery_Status": "Estado de entrega",
+          "EM_ETGO_Invoice_Status": "Estado de facturación",
           "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "DeliveryStatus": "Delivery Status",
-          "InvoiceStatus": "Invoicing Status"
+          "InvoiceStatus": "Invoicing Status",
+          "EM_ETGO_Delivery_Status": "Delivery Status",
+          "EM_ETGO_Invoice_Status": "Invoicing Status"
         }
       },
       "dateFilterKey": "orderDate",
@@ -549,10 +553,9 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 7,
             "validation": {
               "maxLength": 4
             }
@@ -566,10 +569,9 @@
             "tsType": "number",
             "visibility": "readOnly",
             "required": false,
-            "grid": true,
+            "grid": false,
             "form": false,
             "columnType": "percent",
-            "gridOrder": 6,
             "validation": {
               "maxLength": 4
             }
@@ -628,6 +630,48 @@
             "form": false,
             "validation": {
               "maxLength": 22
+            }
+          },
+          {
+            "name": "eTGODeliveryStatus",
+            "apiKey": "eTGODeliveryStatus",
+            "column": "EM_ETGO_Delivery_Status",
+            "label": "Shipment Status",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "columnType": "percent",
+            "gridOrder": 7,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 4
+            }
+          },
+          {
+            "name": "eTGOInvoiceStatus",
+            "apiKey": "eTGOInvoiceStatus",
+            "column": "EM_ETGO_Invoice_Status",
+            "label": "EM_ETGO_Invoice_Status",
+            "type": "integer",
+            "tsType": "number",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": true,
+            "form": false,
+            "columnType": "percent",
+            "gridOrder": 6,
+            "computed": {
+              "mode": "stored",
+              "refresh": "synchronous"
+            },
+            "validation": {
+              "maxLength": 4
             }
           }
         ],
@@ -1077,12 +1121,16 @@
           "C_BPartner_ID": "Contacto",
           "DeliveryStatus": "Estado de entrega",
           "InvoiceStatus": "Estado de facturación",
+          "EM_ETGO_Delivery_Status": "Estado de entrega",
+          "EM_ETGO_Invoice_Status": "Estado de facturación",
           "PriceList": "Precio"
         },
         "en_US": {
           "C_BPartner_ID": "Contact",
           "DeliveryStatus": "Delivery Status",
-          "InvoiceStatus": "Invoicing Status"
+          "InvoiceStatus": "Invoicing Status",
+          "EM_ETGO_Delivery_Status": "Delivery Status",
+          "EM_ETGO_Invoice_Status": "Invoicing Status"
         }
       },
       "dateFilterKey": "orderDate",
@@ -1934,6 +1982,30 @@
             "type": "button",
             "visibility": "discarded",
             "required": true
+          },
+          {
+            "name": "eTGODeliveryStatus",
+            "apiKey": "eTGODeliveryStatus",
+            "column": "EM_ETGO_Delivery_Status",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGODelivStatusPurchase",
+            "apiKey": "eTGODelivStatusPurchase",
+            "column": "EM_ETGO_Deliv_Status_Purchase",
+            "type": "integer",
+            "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGOInvoiceStatus",
+            "apiKey": "eTGOInvoiceStatus",
+            "column": "EM_ETGO_Invoice_Status",
+            "type": "integer",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "salesOrderHeaderHandler"
@@ -2977,12 +3049,16 @@
         "C_BPartner_ID": "Contacto",
         "DeliveryStatus": "Estado de entrega",
         "InvoiceStatus": "Estado de facturación",
+        "EM_ETGO_Delivery_Status": "Estado de entrega",
+        "EM_ETGO_Invoice_Status": "Estado de facturación",
         "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "DeliveryStatus": "Delivery Status",
-        "InvoiceStatus": "Invoicing Status"
+        "InvoiceStatus": "Invoicing Status",
+        "EM_ETGO_Delivery_Status": "Delivery Status",
+        "EM_ETGO_Invoice_Status": "Invoicing Status"
       }
     }
   },
@@ -3363,6 +3439,22 @@
         "description": "Field 'eTGOCurrencyRate' should be present in header"
       },
       {
+        "id": "t-field-presence-header-eTGODeliveryStatus",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGODeliveryStatus",
+        "runner": "node",
+        "description": "Field 'eTGODeliveryStatus' should be present in header"
+      },
+      {
+        "id": "t-field-presence-header-eTGOInvoiceStatus",
+        "category": "field-presence",
+        "entity": "header",
+        "field": "eTGOInvoiceStatus",
+        "runner": "node",
+        "description": "Field 'eTGOInvoiceStatus' should be present in header"
+      },
+      {
         "id": "t-field-presence-header-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "header",
@@ -3585,6 +3677,22 @@
         "field": "eTGOCurrencyRate",
         "runner": "node",
         "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
+      },
+      {
+        "id": "t-field-type-header-eTGODeliveryStatus",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGODeliveryStatus",
+        "runner": "node",
+        "description": "Field 'eTGODeliveryStatus' should have type 'number' in header"
+      },
+      {
+        "id": "t-field-type-header-eTGOInvoiceStatus",
+        "category": "field-type",
+        "entity": "header",
+        "field": "eTGOInvoiceStatus",
+        "runner": "node",
+        "description": "Field 'eTGOInvoiceStatus' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-etgoTotalDiscount",
@@ -6189,6 +6297,14 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for header"
       },
       {
+        "id": "t-system-field-header-eTGODelivStatusPurchase",
+        "category": "system-field",
+        "entity": "header",
+        "field": "eTGODelivStatusPurchase",
+        "runner": "node",
+        "description": "System field 'eTGODelivStatusPurchase' should exist in backend but not frontend for header"
+      },
+      {
         "id": "t-system-field-header-eTPRRemovePayment",
         "category": "system-field",
         "entity": "header",
@@ -7124,25 +7240,25 @@
       }
     ],
     "summary": {
-      "total": 549,
+      "total": 554,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 2,
         "default-value-type": 9,
         "displaylogic-evaluable": 3,
         "displaylogic-valid": 3,
-        "field-presence": 28,
-        "field-type": 28,
+        "field-presence": 30,
+        "field-type": 30,
         "readonlylogic-evaluable": 16,
         "readonlylogic-valid": 16,
         "rule-declared": 254,
         "searchable-filters": 5,
         "selector-endpoint": 10,
-        "system-field": 150,
+        "system-field": 151,
         "visibility": 2
       },
       "byRunner": {
-        "node": 549,
+        "node": 554,
         "junit": 0
       }
     }

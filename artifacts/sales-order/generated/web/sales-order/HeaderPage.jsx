@@ -434,12 +434,16 @@ export const api = {
       "C_BPartner_ID": "Contacto",
       "DeliveryStatus": "Estado de entrega",
       "InvoiceStatus": "Estado de facturación",
+      "EM_ETGO_Delivery_Status": "Estado de entrega",
+      "EM_ETGO_Invoice_Status": "Estado de facturación",
       "PriceList": "Precio"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "DeliveryStatus": "Delivery Status",
-      "InvoiceStatus": "Invoicing Status"
+      "InvoiceStatus": "Invoicing Status",
+      "EM_ETGO_Delivery_Status": "Delivery Status",
+      "EM_ETGO_Invoice_Status": "Invoicing Status"
     }
   }
 };
