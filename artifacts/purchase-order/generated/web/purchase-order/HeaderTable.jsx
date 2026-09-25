@@ -8,8 +8,8 @@ const columns = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', enumLabels: { 'AE': 'docStatusAe', 'CO': 'docStatusCo', 'CL': 'docStatusCl', 'ETGO_CI': 'docStatusEtgoCi', 'CA': 'docStatusCa', 'CJ': 'docStatusCj', 'DR': 'docStatusDr', 'ME': 'docStatusMe', 'NA': 'docStatusNa', 'NC': 'docStatusNc', 'WP': 'docStatusWp', 'RE': 'docStatusRe', 'TMP': 'docStatusTmp', 'UE': 'docStatusUe', 'IP': 'docStatusIp', '??': 'docStatus', 'VO': 'docStatusVo' }, required: true },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
-  { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'number', label: 'Invoice Status' },
-  { key: 'deliveryStatusPurchase', column: 'DeliveryStatusPurchase', type: 'number', label: 'Delivery Status' },
+  { key: 'eTGOInvoiceStatus', column: 'EM_ETGO_Invoice_Status', type: 'percent', label: 'EM_ETGO_Invoice_Status', computed: {"mode":"stored","refresh":"synchronous"} },
+  { key: 'eTGODelivStatusPurchase', column: 'EM_ETGO_Deliv_Status_Purchase', type: 'percent', label: 'EM_ETGO_Deliv_Status_Purchase', computed: {"mode":"stored","refresh":"synchronous"} },
 ];
 // @sf-generated-end columns:header
 

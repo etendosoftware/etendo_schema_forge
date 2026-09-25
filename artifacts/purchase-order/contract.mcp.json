@@ -1,8 +1,8 @@
 {
-  "version": "0.48.0",
+  "version": "0.50.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-08-13T16:50:51.856Z",
-  "contractChecksum": "ba952abe392278fa",
+  "updatedAt": "2026-09-24T17:11:15.857Z",
+  "contractChecksum": "88f4d68981b32ffc",
   "apiPrediction": {
     "specName": "purchase-order",
     "baseUrl": "/sws/neo/purchase-order",
@@ -1052,13 +1052,17 @@
         "DatePromised": "Fecha de entrega esperada",
         "DeliveryStatusPurchase": "Estado de recepción",
         "InvoiceStatus": "Estado de facturación",
+        "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
+        "EM_ETGO_Invoice_Status": "Estado de facturación",
         "PriceList": "Precio"
       },
       "en_US": {
         "C_BPartner_ID": "Contact",
         "DatePromised": "Expected Delivery Date",
         "DeliveryStatusPurchase": "Reception Status",
-        "InvoiceStatus": "Invoicing Status"
+        "InvoiceStatus": "Invoicing Status",
+        "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
+        "EM_ETGO_Invoice_Status": "Invoicing Status"
       }
     }
   },
@@ -1198,7 +1202,13 @@
             "readOnlyLogic": "@Processed@='Y'",
             "defaultValue": "A"
           },
-          "eTGOCurrencyRate": {}
+          "eTGOCurrencyRate": {},
+          "eTGODelivStatusPurchase": {
+            "readOnly": true
+          },
+          "eTGOInvoiceStatus": {
+            "readOnly": true
+          }
         }
       },
       "lines": {
@@ -1666,5 +1676,5 @@
       "confirmcancelandreplace"
     ]
   },
-  "checksum": "3348a38e09a00e43"
+  "checksum": "1005ee1ff3f7cb40"
 }

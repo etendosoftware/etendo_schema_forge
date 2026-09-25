@@ -1999,5 +1999,34 @@
     ],
     "author": "pipeline",
     "date": "2026-08-28"
+  },
+  {
+    "from": "0.48.0",
+    "to": "0.49.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGODeliveryStatus\" added to entity \"header\" in backend",
+      "Field \"eTGODelivStatusPurchase\" added to entity \"header\" in backend",
+      "Field \"eTGOInvoiceStatus\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-09-24"
+  },
+  {
+    "from": "0.49.0",
+    "to": "0.50.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGODelivStatusPurchase\" added to entity \"header\" in frontend",
+      "Field \"eTGOInvoiceStatus\" added to entity \"header\" in frontend",
+      "Field \"deliveryStatusPurchase\" property \"grid\" changed from \"true\" to \"false\" in frontend (patch)",
+      "Field \"deliveryStatusPurchase\" property \"gridOrder\" changed from \"7\" to \"undefined\" in frontend (additive)",
+      "Field \"invoiceStatus\" property \"grid\" changed from \"true\" to \"false\" in frontend (patch)",
+      "Field \"invoiceStatus\" property \"gridOrder\" changed from \"6\" to \"undefined\" in frontend (additive)",
+      "Field \"eTGODelivStatusPurchase\" property \"visibility\" changed from \"discarded\" to \"readOnly\" in backend (patch)",
+      "Field \"eTGOInvoiceStatus\" property \"visibility\" changed from \"discarded\" to \"readOnly\" in backend (patch)"
+    ],
+    "author": "pipeline",
+    "date": "2026-09-24"
   }
 ]
