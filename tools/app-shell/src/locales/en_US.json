@@ -20499,6 +20499,7 @@
     "backendError.shipmentNotFound": "Shipment not found: {id}.",
     "backendError.accountAlreadyExists": "Account {code} already exists.",
     "backendError.costNotCalculated": "The product cost has not been calculated yet. The system calculates it automatically; please try posting the document again in a few minutes. To avoid blocks, make sure all your products have an initial cost configured.",
+    "backendError.periodClosedForUnposting": "The period is closed. A document in a closed period cannot be unposted; reopen the period first.",
     "backendError.conversionRateNotDraft": "Cannot modify the document conversion rate when the invoice is not in draft status.",
     "backendError.cashCloseNoConcept": "This account has no accounting account configured for differences. Set one under Edit account before confirming a close that does not balance.",
     "backendError.cashCloseDateInFuture": "The close date cannot be in the future.",
