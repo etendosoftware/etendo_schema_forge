@@ -25,7 +25,7 @@ import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib
 import { useInstalledApps } from './hooks/useInstalledApps.js';
 import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStoreUnlock.js';
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
-import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
+import { readEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
@@ -186,20 +186,15 @@ export function __resetMenuAccessCacheForTest() {
   menuAccessInFlight = null;
 }
 
-// ETP-5443 follow-up — `NeoResponse.error()` (com.etendoerp.go) nests the human-readable
-// text under `error.message` on this path (the server-side `ensureTopLevelMessage`
-// normalization is not applied here); mirrors menuTree.js's own defensive `data?.error ||
-// data?.message` handling for a string `error`, and falls back to a top-level `message`
-// for forward compatibility. Used only to recover the `EnvironmentAccessPolicy.Decision`
-// name from a 402 — see lib/environmentAccessGate.js.
-async function readNeoErrorMessage(res) {
+// ETP-5443 follow-up / ETP-5047 — recovers the `EnvironmentAccessPolicy.Decision` name from
+// a NEO 402. The body shape (structured `error.decision`, with the older message-prefix
+// fallback) is interpreted by `readEnvironmentAccessDecision` in lib/environmentAccessGate.js;
+// this only turns an unreadable body into "no decision".
+async function readNeoAccessDecision(res) {
   try {
-    const data = await res.json();
-    if (typeof data?.error === 'string') return data.error;
-    if (data?.error && typeof data.error === 'object') return data.error.message || '';
-    return data?.message || '';
+    return readEnvironmentAccessDecision(await res.json());
   } catch {
-    return '';
+    return null;
   }
 }
 
@@ -241,7 +236,7 @@ export async function fetchWindowAccess(session) {
       // transient network failure does not replace the last server-confirmed block with a
       // misleading "your role has no access" screen.
       setEnvironmentAccessDecision(
-        res.status === 402 ? parseEnvironmentAccessDecision(await readNeoErrorMessage(res)) : null
+        res.status === 402 ? await readNeoAccessDecision(res) : null
       );
       return null;
     }

@@ -3,12 +3,16 @@
  *
  * When an environment's commercial access is cut — the demo trial expired or the
  * subscription's payment grace elapsed — `NeoAuthenticator.enforceEnvironmentAccess`
- * (com.etendoerp.go) answers HTTP 402 to EVERY NEO request, with a JSON body shaped
- * `{ error: { message: "Environment access is not available: <DECISION>" } }` where
- * `<DECISION>` is one of `EnvironmentAccessPolicy.Decision` — `DEMO_TRIAL_EXPIRED`,
- * `SUBSCRIPTION_REQUIRED`, or `MEMBERSHIP_REQUIRED` (that last one is a different kind of
- * "no access" — the caller isn't a member of the environment at all — and is deliberately
- * NOT treated as a commercial block here; see `isBlockingAccessDecision`).
+ * (com.etendoerp.go) answers HTTP 402 to EVERY NEO request. Since ETP-5047 the body is
+ * `EnvironmentAccessGuard.Denial.errorBody`:
+ * `{ error: { message: "Environment access is not available: <DECISION>", status: 402,
+ * code: "ENVIRONMENT_ACCESS_DENIED", decision: "<DECISION>" } }`, where `<DECISION>` is one of
+ * `EnvironmentAccessPolicy.Decision` — `DEMO_TRIAL_EXPIRED`, `SUBSCRIPTION_REQUIRED`, or
+ * `MEMBERSHIP_REQUIRED` (that last one is a different kind of "no access" — the caller isn't a
+ * member of the environment at all — and is deliberately NOT treated as a commercial block
+ * here; see `isBlockingAccessDecision`). `readEnvironmentAccessDecision` reads the structured
+ * `error.decision` first and falls back to the message prefix, which is all a pre-ETP-5047
+ * backend sends — keep the fallback for one release after ETP-5047 is deployed everywhere.
  *
  * Before this, nothing distinguished that 402 from any other fetch failure: it fell through
  * `fetchWindowAccess()`'s pre-existing `!res.ok -> null` branch (App.jsx), which
@@ -31,6 +35,8 @@
  */
 
 const ENVIRONMENT_ACCESS_ERROR_PREFIX = 'Environment access is not available:';
+// ETP-5047 — `EnvironmentAccessGuard.ERROR_CODE` (com.etendoerp.go).
+const ENVIRONMENT_ACCESS_ERROR_CODE = 'ENVIRONMENT_ACCESS_DENIED';
 
 // MEMBERSHIP_REQUIRED intentionally excluded — it means "you aren't a member of this
 // environment", not "this environment's commercial access was cut off". The existing
@@ -56,6 +62,26 @@ export function parseEnvironmentAccessDecision(message) {
   if (!text.startsWith(ENVIRONMENT_ACCESS_ERROR_PREFIX)) return null;
   const decision = text.slice(ENVIRONMENT_ACCESS_ERROR_PREFIX.length).trim();
   return decision || null;
+}
+
+/**
+ * ETP-5047 — extracts the `EnvironmentAccessPolicy.Decision` name from a parsed NEO 402 error
+ * body. Reads the structured `error.code` / `error.decision` first; when the body carries no
+ * structured decision (a pre-ETP-5047 backend), falls back to parsing the message text with
+ * `parseEnvironmentAccessDecision` — from `error` itself when it is a string, else from
+ * `error.message`, else from a top-level `message`. Returns `null` when neither yields a
+ * decision. Never throws on an unexpected shape.
+ */
+export function readEnvironmentAccessDecision(body) {
+  const error = body?.error;
+  if (error && typeof error === 'object'
+      && error.code === ENVIRONMENT_ACCESS_ERROR_CODE
+      && typeof error.decision === 'string' && error.decision.trim()) {
+    return error.decision.trim();
+  }
+  if (typeof error === 'string') return parseEnvironmentAccessDecision(error);
+  if (error && typeof error === 'object') return parseEnvironmentAccessDecision(error.message);
+  return parseEnvironmentAccessDecision(body?.message);
 }
 
 /** Whether `decision` should replace the normal UI with the blocked-access screen. */
