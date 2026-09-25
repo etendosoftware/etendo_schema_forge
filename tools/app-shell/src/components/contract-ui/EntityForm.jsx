@@ -264,7 +264,7 @@ function DependentSelect({ field, value, displayValue, onChange, catalogs, formD
       required={field.required}
       disabled={(!parentValue && !value) || loading}
       data-testid={"Select__" + field.id}>
-      <SelectTrigger id={field.key} data-testid={`field-${field.key}`} className="focus:ring-2 focus:ring-primary">
+      <SelectTrigger id={field.key} data-testid={`field-${field.key}`} className="text-text-primary focus:ring-2 focus:ring-primary">
         <SelectValue
           placeholder={selectPlaceholder}
           data-testid={"SelectValue__" + field.id} />
@@ -1316,8 +1316,8 @@ export function EntityForm({ entity, windowName, fields = [], data, onChange, ca
           className={[
             'flex w-full rounded-lg border border-[hsl(var(--border-control))] p-2 text-sm shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)]',
             `placeholder:text-muted-foreground resize-none${minHeightClass}`,
-            'focus:outline-none focus:ring-2 focus:ring-primary',
-            'disabled:bg-muted/50 disabled:cursor-not-allowed',
+            'hover:bg-[hsl(var(--field-hover))] focus:outline-none focus:ring-2 focus:ring-primary',
+            'disabled:bg-[hsl(var(--field-hover))] disabled:hover:bg-[hsl(var(--field-hover))] disabled:border-[hsl(var(--field-disabled-border))] disabled:cursor-not-allowed',
             getReadOnlyBgClass(isReadOnly),
           ].join(' ')}
         />

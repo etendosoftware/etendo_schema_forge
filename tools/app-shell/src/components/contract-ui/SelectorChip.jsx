@@ -40,7 +40,7 @@ export function SelectorChip({ label, onClick, onClear, clearAriaLabel, testId, 
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       data-testid={testId}
-      className={`flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm bg-transparent ${disabled ? 'text-[hsl(var(--text-disabled))] cursor-default' : 'text-[hsl(var(--muted-foreground))] cursor-text'}`}
+      className={`flex flex-1 self-stretch items-center gap-1 max-w-full min-w-0 text-sm bg-transparent ${disabled ? 'text-[hsl(var(--text-disabled))] cursor-default' : 'text-text-primary cursor-text'}`}
     >
       <span className="truncate" title={label}>{label}</span>
       {clearable && !disabled && (

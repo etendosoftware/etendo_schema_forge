@@ -7,6 +7,7 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUI } from '@/i18n';
 /**
  * CurrencyRatePicker — searchable currency selector for order header fields.
  *
@@ -52,6 +53,7 @@ export function CurrencyRatePicker({
   precision = 4,
 }) {
   const apiFetch = useApiFetch(apiBaseUrl);
+  const ui = useUI();
   const orgPrecision = useCurrencyPrecision();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -283,9 +285,15 @@ export function CurrencyRatePicker({
                 Seleccionar {resolvedLabel}...
               </span>
             )}
-            <ChevronDown
-              className="h-4 w-4 opacity-50 shrink-0 ml-1"
-              data-testid={"ChevronDown__" + field.id} />
+            {loading ? (
+              <Loader2
+                className="h-4 w-4 text-[hsl(var(--text-disabled))] animate-spin shrink-0 ml-1"
+                data-testid={"Loader2__trigger__" + field.id} />
+            ) : (
+              <ChevronDown
+                className="h-4 w-4 opacity-50 shrink-0 ml-1"
+                data-testid={"ChevronDown__" + field.id} />
+            )}
           </button>
           {/* The org's own currency is always returned by the currencyOptions action with
               rate exactly 1.0 (hardcoded server-side — see CurrencyOptionsHandler.java —
@@ -323,10 +331,8 @@ export function CurrencyRatePicker({
           </div>
           <div className="max-h-56 overflow-y-auto py-1">
             {loading && (
-              <div className="flex items-center justify-center p-4">
-                <Loader2
-                  className="h-4 w-4 animate-spin text-muted-foreground"
-                  data-testid={"Loader2__" + field.id} />
+              <div className="px-3 py-2 text-xs text-muted-foreground" data-testid={"Loading__" + field.id}>
+                {ui('loading')}
               </div>
             )}
             {!loading && filtered.length === 0 && (
