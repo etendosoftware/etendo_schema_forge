@@ -564,20 +564,19 @@ describe('AccountsHeaderTable — columns', () => {
     renderTable();
 
     const byKey = Object.fromEntries(tableProps.columns.map((c) => [c.key, c]));
-    expect(byKey.name.headClass).toContain('w-[480px]');
+    // ETP-5242 — final layout: every column pins a width, headClass and cellClass kept in
+    // step. The grid's min-width floor (see the source test) equals their sum plus the
+    // selection and actions cells, so a narrow window scrolls instead of squeezing columns.
+    const expected = {
+      name: 240, type: 230, currency: 80, country: 150, currentBalance: 130, eTGOPendingCount: 140,
+    };
+    for (const [key, px] of Object.entries(expected)) {
+      expect(byKey[key].headClass, `${key} headClass`).toContain(`w-[${px}px]`);
+      expect(byKey[key].cellClass, `${key} cellClass`).toContain(`w-[${px}px]`);
+    }
     // 40px, not the old 84px: NameCell's 44px drag-grip slot was removed in ETP-4921 and
     // this padding mirrors that cell's leading offset.
     expect(byKey.name.headClass).toContain('pl-[40px]');
-    expect(byKey.name.cellClass).toContain('w-[480px]');
-    expect(byKey.type.headClass).toContain('w-[340px]');
-    // ETP-5113 — the Moneda chip only ever holds a 3-letter ISO code.
-    expect(byKey.currency.headClass).toContain('w-[120px]');
-    expect(byKey.currency.cellClass).toContain('w-[120px]');
-    expect(byKey.country.headClass).toContain('w-[160px]');
-    expect(byKey.currentBalance.headClass).toContain('w-[200px]');
-    expect(byKey.currentBalance.cellClass).toContain('w-[200px]');
-    expect(byKey.eTGOPendingCount.headClass).toContain('w-[280px]');
-    expect(byKey.eTGOPendingCount.cellClass).toContain('w-[280px]');
   });
 
   // DataTable already appends `text-right tabular-nums` for every numeric column type

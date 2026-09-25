@@ -413,7 +413,40 @@ describe('AccountsHeaderTable — Moneda column chrome (ETP-5113)', () => {
   // code rather than in decisions.json (see COLUMN_CHROME's own comment). A missing entry
   // does not break the column — it silently loses its pinned width.
   it('pins a width for the currency column like every other data column', () => {
-    assert.match(src, /currency: \{ headClass: 'w-\[120px\][^']*', cellClass: 'w-\[120px\][^']*' \}/);
+    // ETP-5242 — narrowed from 120px to 80px: the chip only ever holds a 3-letter ISO code.
+    assert.match(src, /currency: \{ headClass: 'w-\[80px\][^']*', cellClass: 'w-\[80px\][^']*' \}/);
+  });
+
+  // ETP-5242 — every column pins a width, and the grid gets a floor equal to their sum plus the
+  // selection (40px) and actions (124px) cells: below it a narrow window scrolls horizontally
+  // instead of squeezing the columns. Applied to every table inside so the sticky header table
+  // and the body table keep identical widths.
+  it('gives the grid a min-width floor on the wrapper around DataTable', () => {
+    assert.match(src, /className="\[&_table\]:min-w-\[1134px\]"[\s\S]{0,200}?<DataTable/);
+  });
+
+  it('pins the Cuenta and Tipo widths with their exact chrome classes', () => {
+    assert.match(src, /name: \{ headClass: 'w-\[240px\] pl-\[40px\] pr-2', cellClass: 'w-\[240px\] p-0' \}/);
+    assert.match(src, /type: \{ headClass: 'w-\[230px\] px-2', cellClass: 'w-\[230px\] px-2 py-2' \}/);
+  });
+
+  it('keeps the min-width floor equal to the column widths plus the selection and actions cells', () => {
+    const chrome = src.match(/const COLUMN_CHROME = \{([\s\S]*?)\n\};/);
+    assert.ok(chrome, 'COLUMN_CHROME block not found');
+    const entries = [...chrome[1].matchAll(/(\w+): \{ headClass: '([^']*)', cellClass: '([^']*)' \}/g)];
+    assert.equal(entries.length, 6, 'expected six COLUMN_CHROME entries');
+    let sum = 0;
+    for (const [, key, head, cell] of entries) {
+      const headW = head.match(/w-\[(\d+)px\]/);
+      const cellW = cell.match(/w-\[(\d+)px\]/);
+      assert.ok(headW, `${key} headClass pins no width`);
+      assert.ok(cellW, `${key} cellClass pins no width`);
+      assert.equal(headW[1], cellW[1], `${key} headClass and cellClass widths drifted apart`);
+      sum += Number(headW[1]);
+    }
+    const floor = src.match(/\[&_table\]:min-w-\[(\d+)px\]"/);
+    assert.ok(floor, 'grid min-width floor not found');
+    assert.equal(sum + 40 + 124, Number(floor[1]));
   });
 
   it('keys the chrome off the contract field name, not the enriched row key', () => {
