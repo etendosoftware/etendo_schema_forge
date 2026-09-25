@@ -134,6 +134,8 @@ function groupWithSeparators(num, minFrac, maxFrac, thousandsSeparator, decimalS
  * @param {boolean} [options.compact=false] - Use compact notation (e.g. "12,5 mil €" instead of
  *   "12.500,00 €"). Additive/backward-compatible — omitting the third argument entirely keeps
  *   every existing call site's output unchanged.
+ * @param {number} [options.minimumFractionDigits=2] - Minimum decimal digits to display.
+ * @param {number} [options.maximumFractionDigits=2] - Maximum decimal digits to display.
  * @returns {string} Formatted currency string, or '—' for invalid/missing values.
  *
  * @example
@@ -194,10 +196,20 @@ export function formatPlainDecimal(value) {
   return String(value).split('.').join(decimalSeparator);
 }
 
-export function formatCurrency(currencyCode, value, { compact = false } = {}) {
+export function formatCurrency(currencyCode, value, {
+  compact = false,
+  minimumFractionDigits = 2,
+  maximumFractionDigits = 2,
+} = {}) {
   if (value == null || !Number.isFinite(Number(value))) return '—';
 
   const amount = Number(value);
+  const minFrac = Number.isInteger(minimumFractionDigits)
+    ? Math.max(0, Math.min(20, minimumFractionDigits))
+    : 2;
+  const maxFrac = Number.isInteger(maximumFractionDigits)
+    ? Math.max(minFrac, Math.min(20, maximumFractionDigits))
+    : Math.max(2, minFrac);
 
   if (compact) {
     // Deliberately still Intl-driven, es-ES fixed — compact notation (magnitude
@@ -212,8 +224,8 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
         style: 'currency',
         currency: currencyCode,
         currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: minFrac,
+        maximumFractionDigits: maxFrac,
         useGrouping: true,
         notation: 'compact',
       });
@@ -228,7 +240,7 @@ export function formatCurrency(currencyCode, value, { compact = false } = {}) {
   }
 
   const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
-  const formattedNumber = groupWithSeparators(amount, 2, 2, thousandsSeparator, decimalSeparator);
+  const formattedNumber = groupWithSeparators(amount, minFrac, maxFrac, thousandsSeparator, decimalSeparator);
 
   // Validate currencyCode the same way the old single combined Intl.NumberFormat
   // call did — an invalid/missing code throws here (e.g. undefined, or a

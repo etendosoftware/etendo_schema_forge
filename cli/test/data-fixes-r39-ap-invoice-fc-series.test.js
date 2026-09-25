@@ -163,7 +163,7 @@ describe('R39 FC data-fix — both halves are present', () => {
 
   it('records that either half alone is a silent no-op', () => {
     assert.match(rawText, /BOTH HALVES ARE REQUIRED/);
-    assert.match(rawText, /silent\s+no-op/i);
+    assert.match(rawText, /silent\s+(?:--\s+)?no-op/i);
   });
 });
 
@@ -223,12 +223,14 @@ describe('R39 FC data-fix — two-layer idempotency (mandatory framework rule)',
   });
 
   it('stamps updated/updatedby on every statement', () => {
-    // The two UPDATEs stamp by assignment; the INSERT stamps through its column list, so it is
-    // asserted positionally: `updated, updatedby` are columns 7-8 and take `now(), '0'`.
-    assert.equal((sqlApply.match(/updated = now\(\)/g) || []).length, 2);
-    assert.equal((sqlApply.match(/updatedby = '0'/g) || []).length, 2);
-    assert.match(sqlApply, /INSERT INTO ad_sequence \( ad_sequence_id, ad_client_id, ad_org_id, isactive, created, createdby, updated, updatedby,/);
-    assert.match(sqlApply, /SELECT '@uuid_R39APSEQ@', :client_id, '0', 'Y', now\(\), '0', now\(\), '0',/);
+    const [insert, ...updates] = sqlApply.split(';').filter((s) => s.trim().length > 0);
+    assert.match(insert, /createdby, updated, updatedby/);
+    assert.match(insert, /now\(\), '0', now\(\), '0'/);
+    assert.equal(updates.length, 2);
+    for (const update of updates) {
+      assert.match(update, /updated = now\(\)/);
+      assert.match(update, /updatedby = '0'/);
+    }
   });
 
   it('the @report re-asserts the post-condition, so a clean run reports nothing', () => {
@@ -251,7 +253,7 @@ describe('R39 FC data-fix — fiscal-premise documentation is load-bearing, not 
 
   it('states plainly that there is no guard that makes it safe once that changes', () => {
     assert.match(rawText, /DO NOT RUN THIS FIX/);
-    assert.match(rawText, /manual decision about the starting\s+number/);
+    assert.match(rawText, /manual decision about the starting\s+(?:--\s+)?number/);
   });
 
   it('explains why it is a new file instead of a widened R38', () => {

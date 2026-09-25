@@ -3,8 +3,14 @@
 const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ response: { data: [] } }) }));
 
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+// ETP-5395 Fix 3 follow-up: FiscalMonitorPage is now gated by useWindowAccess — default to
+// 'full' so this suite keeps exercising the window as before (mirrors financial-account's own
+// ETP-4658 test convention). Mutable so a dedicated test can flip it to 'none'.
+let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1', name: 'TestOrg' } }),
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));
@@ -107,6 +113,20 @@ const baseProps = {
 };
 
 describe('FiscalMonitorPage', () => {
+  beforeEach(() => {
+    currentWindowAccessTier = 'full';
+  });
+
+  // ETP-5395 Fix 3 follow-up — before this fix, a 'none' tier still fired the fetch (via
+  // useFiscalMonitor.js's shared fetchAllRows()), got a real backend 403, and rendered it
+  // raw under a generic "errorTitle" heading with no way to retry that could ever help.
+  it('renders WindowAccessGuard instead of the sections when the access tier is none', async () => {
+    currentWindowAccessTier = 'none';
+    render(<FiscalMonitorPage {...baseProps} />);
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('sii-section')).not.toBeInTheDocument();
+  });
+
   it('renders SII section for sii profile', async () => {
     render(<FiscalMonitorPage {...baseProps} />);
     await waitFor(() => {

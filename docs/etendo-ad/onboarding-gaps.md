@@ -28,6 +28,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
 | I1 | Inventory / Warehouse | Locators born with inventory status "Undefined-OverIssue" (allows negative stock) | Onboarding sampledata XML (`M_LOCATOR.xml`) — dataset-only, no new service | ETP-4761 |
+| I2 | Inventory / Warehouse | Default warehouse's address shows the GOClient sampledata placeholder street ("Avenida Siempreviva 44") instead of the fiscal address the tenant entered in the onboarding wizard | `OnboardingWarehouseAddressService` — new step in `ensureOnboardingDataset`, copies the fiscal address (`AD_ORGINFO.C_Location_ID`) field values onto the warehouse's own `C_Location`, right after `wireOrgInfo`. **Preventive only, by decision** — no corrective data-fix, no CUT bump | ETP-5444 |
 | J1 | Costing | New tenants get ZERO `M_Costing_Rule` rows (not Average, NOTHING) — `M_Transaction.iscostcalculated` stuck `'N'` forever | `M_COSTING_RULE` added to `OnboardingDatasetDefinition.INCLUDED_TABLES`; sample row fixed to Standard algorithm | ETP-4760 |
 | K1 | Accounting dimension display | `AD_Client.Acctdim_Centrally_Maintained` hardcoded to `'Y'` for every new client, permanently routing dimension-field visibility through a fine-grained matrix Etendo GO has no screen for, making the "Dimensiones contables" screen a no-op | `OnboardingAcctdimCentrallyMaintainedService` — backfill `C_AcctSchema_Element.isactive` then flip the flag to `'N'` | ETP-4854 |
 | K2 | Accounting dimension display | Product decision: Contacto (BP) and Producto (PR) accounting-dimension elements must always be `active` and are never editable/visible through "Dimensiones contables" — DB-confirmed `isactive` was already `'Y'` fleet-wide (no-op, kept as a correctness guard) but `ismandatory` was `'N'` for every BP/PR row (196/196), never forced before | Both fronts closed: code-side lock (`GeneralLedgerConfigurationHandler.LOCKED_DIMENSION_TYPES`, already shipped) + preventive dataset-only fix (`C_ACCTSCHEMA_ELEMENT.xml` `ISMANDATORY` N→Y for BP/PR, no new service, no CUT bump — new tenant already born correct) + corrective data-fix (`R37-acctdim-bp-pr-locked-active`) forces both flags fleet-wide | ETP-4879 |
@@ -1488,6 +1489,50 @@ ORDER BY l.value;
 runner's strict watermark never revisits a `PROCESSED` fix), a locator skipped for negative stock
 is not automatically retried once the stock is corrected by hand — an operator must force it with
 `--fix R19-locator-inventory-status --client <id>`.
+
+### I2 — Default warehouse address stuck on the GOClient sampledata placeholder (ETP-5444)
+
+**Symptom:** the default warehouse's Location/Address field ("Almacen Principal") shows an
+address unrelated to what the tenant entered when onboarding — traced to the GOClient sampledata
+placeholder street "Avenida Siempreviva 44".
+
+**Root cause:** the default warehouse's `C_Location` (`M_Warehouse.C_Location_ID`) is created by
+the GOClient sampledata import (step 1, `importOnboardingDataset`), with a fixed placeholder
+address baked into `referencedata/sampledata/GOClient/C_LOCATION.xml`. The organization's own
+fiscal address (`AD_ORGINFO.C_Location_ID`) is a completely different `C_Location` row, created
+later in the chain by `OnboardingOrgInfoService#ensureOrgInfoLocation` from the optional "Address"
+field of the "Details to start invoicing" wizard step (`OnboardingRequestData.address`). The two
+locations are unrelated, so the warehouse never reflects the fiscal address the tenant actually
+provided.
+
+**Verification (per tenant):**
+
+```sql
+SELECT w.name AS warehouse_name, wl.addressline1 AS warehouse_address,
+       oi.c_location_id AS fiscal_location_id, fl.addressline1 AS fiscal_address
+FROM m_warehouse w
+JOIN c_location wl ON wl.c_location_id = w.c_location_id
+LEFT JOIN ad_orginfo oi ON oi.ad_org_id = w.ad_org_id
+LEFT JOIN c_location fl ON fl.c_location_id = oi.c_location_id
+WHERE w.ad_client_id = '<CLIENT_ID>' AND w.isactive = 'Y';
+-- Gap present when warehouse_address still matches the sampledata placeholder and differs from
+-- fiscal_address (or fiscal_address is non-empty and warehouse_address is not aligned with it).
+```
+
+**Fronts:**
+
+| Front | Deliverable |
+|---|---|
+| **Preventive** | `OnboardingWarehouseAddressService` (new class, `com.etendoerp.go/.../onboarding/`) — copies the fiscal address's field values (`addressLine1`, `addressLine2`, `cityName`, `postalCode`, `postalAdd`, `region`, `regionName`, `city`) onto the warehouse's own, distinct `C_Location`. Country is left untouched (the sampledata warehouse location already carries the correct country). Wired as a new step, `wireWarehouseAddress`, right after `wireOrgInfo` in `ensureOnboardingDataset` (depends on the fiscal address already being located) and before the remaining steps. Unconditional overwrite on every onboarding run — no comparison against the placeholder string, so it stays correct even if the sampledata address text changes. An empty wizard "Address" results in an empty warehouse address too; this is expected, not an error. |
+| **Corrective** | **None, by explicit decision.** This gap only affects tenants onboarded before this fix ships; there is no corrective `.sql` and `ONBOARDING_PROVISIONED_THROUGH` is NOT bumped in `OnboardingBaselineService`. Post-creation sync (keeping the warehouse address in lockstep if the fiscal address changes later) is also out of scope. |
+
+**Preparatory dataset change (already applied, not part of this fix's Java):** the placeholder
+`<ADDRESS1>` line ("Avenida Siempreviva 44") was removed from
+`referencedata/sampledata/GOClient/C_LOCATION.xml` for the warehouse's `C_LOCATION_ID`
+(`A72B4E2D0E5A4369B45219D3D83E4FDC`), so a fresh GOClient import no longer seeds a street at all —
+verified: the warehouse now shows only "Spain" until `OnboardingWarehouseAddressService` fills it
+in from the fiscal address.
+
 ## J — Costing
 
 ### J1 — New tenants get ZERO `M_Costing_Rule` rows, not Average (ETP-4760, 2026-08-03)

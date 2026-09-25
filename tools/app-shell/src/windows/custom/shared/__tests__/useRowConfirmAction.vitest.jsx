@@ -33,20 +33,36 @@ vi.mock('@/auth/useApiFetch.js', () => ({
   useApiFetch: () => apiFetchMock,
 }));
 
+// Stubbed so the header assertions below are about THIS hook forwarding what buildHeaders
+// returned, not about buildHeaders' own (core-owned) header set — which is covered by the
+// auth-header-policy guardrail, not here.
+vi.mock('@/auth/api.js', () => ({
+  buildHeaders: (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'es-ES' }),
+}));
+
 const docActionExecute = vi.fn().mockResolvedValue({});
 vi.mock('@/hooks/useDocumentAction', () => ({
   useDocumentAction: () => ({ execute: docActionExecute, loading: false, error: null }),
 }));
 
+// ETP-5378 QA follow-up: the `docs` array is captured whole, not flattened into
+// `data-*` attributes. A DOM attribute cannot tell `null` from `undefined`, and that
+// distinction is exactly the contract under test — `ConfirmResultModal` compares
+// `doc.documentStatus === 'CO'`, so an absent key and an explicit null badge the same
+// but mean different things about who dropped the value.
+let resultDocs;
 vi.mock('@/components/contract-ui', () => ({
-  ConfirmResultModal: ({ title, docs, currency }) => (
-    <div
-      data-testid="result-modal"
-      data-title={title}
-      data-currency={currency}
-      data-route={docs?.[0]?.route}
-      data-num={docs?.[0]?.num} />
-  ),
+  ConfirmResultModal: ({ title, docs, currency }) => {
+    resultDocs = docs;
+    return (
+      <div
+        data-testid="result-modal"
+        data-title={title}
+        data-currency={currency}
+        data-route={docs?.[0]?.route}
+        data-num={docs?.[0]?.num} />
+    );
+  },
 }));
 
 import { act, render, screen } from '@testing-library/react';
@@ -103,6 +119,7 @@ describe('useRowConfirmAction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modalProps = null;
+    resultDocs = null;
     apiFetchMock.mockResolvedValue(jsonResponse({ response: { data: [DETAIL] } }));
     docActionExecute.mockResolvedValue({});
     toastLoading.mockReturnValue('toast-1');
@@ -135,6 +152,36 @@ describe('useRowConfirmAction', () => {
       expect(modalProps.data.linkedOrders).toHaveLength(1);
       expect(modalProps.data.resolvedPriceListId).toBe('pl-9');
       expect(modalProps.recordId).toBe('ship-1');
+    });
+
+    /**
+     * ETP-5378 QA follow-up (CP-10 / CP-15). The row-hover popup is a ConfirmInOutModal
+     * that runs its own `rectifiableInvoices` POST — it needs a bearer token of its own,
+     * not just the `headers` object. Before the fix this hook passed base/headers/
+     * recordId/data and stopped there, so buildReturnRowConfirmModal had no token to
+     * hand down, the picker's POST went out unauthenticated, and the confirm reached the
+     * backend with no `originInvoices` → HTTP 400 AFTER the documentAction CO had already
+     * committed. `token` is a required half of that fix; the URL is the other half
+     * (see buildReturnRowConfirmModal.vitest.jsx).
+     */
+    it('hands the modal the token alongside base, headers, recordId and data', async () => {
+      render(<Host />);
+      await clickConfirm();
+
+      expect(modalProps.token).toBe('tkn');
+      // apiBaseUrl is spec-scoped; the modals want the unscoped root.
+      expect(modalProps.base).toBe('/sws/neo');
+      expect(modalProps.headers).toEqual({ Authorization: 'Bearer tkn', 'Accept-Language': 'es-ES' });
+      expect(modalProps.recordId).toBe('ship-1');
+      expect(modalProps.data).toEqual(DETAIL);
+    });
+
+    it('propagates a different token verbatim rather than reading one from anywhere else', async () => {
+      render(<Host token="other-token" />);
+      await clickConfirm();
+
+      expect(modalProps.token).toBe('other-token');
+      expect(modalProps.headers.Authorization).toBe('Bearer other-token');
     });
 
     it('unwraps a bare record payload too', async () => {
@@ -188,6 +235,71 @@ describe('useRowConfirmAction', () => {
       // `confirmRecord?.currency$_identifier` in the popup would render empty.
       expect(result).toHaveAttribute('data-currency', 'EUR');
       expect(screen.queryByTestId('confirm-modal')).not.toBeInTheDocument();
+    });
+
+    /**
+     * ETP-5378 QA follow-up — the result modal's status badge.
+     *
+     * `ConfirmResultModal` badges each doc with `const confirmed = doc.documentStatus === 'CO'`
+     * and falls back to the warning "Borrador" (`statusDraft`) badge for anything else — it
+     * cannot be a blanket "always completed", because a shipment sitting in the same result
+     * modal genuinely IS still a draft. This row path built its `docs` array WITHOUT
+     * `documentStatus`, so `undefined === 'CO'` was false and a rectificative invoice the
+     * backend had already created AND confirmed was announced to the user as a draft. QA hit
+     * it live: REC-1000015 read "Borrador" here and "Completado" on its own detail page.
+     *
+     * Same form-vs-row asymmetry as the rectifiableInvoicesUrl defect — the form path
+     * (useConfirmWithCredit#buildInvoiceResultFromConfirm) always carried the field, and
+     * ConfirmInOutModal's `runConfirm()` already returns it, so nothing but this array was
+     * ever missing.
+     */
+    describe('result modal status badge (ETP-5378 QA)', () => {
+      it("hands ConfirmResultModal the invoice's own confirmed status", async () => {
+        render(<Host />);
+        await clickConfirm();
+        await act(async () => {
+          modalProps.onConfirmed({
+            invoice: { id: 'inv-7', documentNo: 'F-7', amount: 15.14, documentStatus: 'CO' },
+          });
+        });
+
+        expect(resultDocs).toHaveLength(1);
+        expect(resultDocs[0].documentStatus).toBe('CO');
+      });
+
+      it('degrades a status-less invoice to null, not undefined', async () => {
+        // `?? null` rather than a bare read: an absent key and an explicit null badge
+        // identically today, but only the second one says "we looked and the backend sent
+        // nothing", which is what makes a future regression here legible.
+        render(<Host />);
+        await clickConfirm();
+        await act(async () => {
+          modalProps.onConfirmed({ invoice: { id: 'inv-7', documentNo: 'F-7', amount: 15.14 } });
+        });
+
+        expect(resultDocs[0].documentStatus).toBeNull();
+        expect(resultDocs[0].documentStatus).not.toBeUndefined();
+        expect(Object.keys(resultDocs[0])).toContain('documentStatus');
+      });
+
+      it('never badges a just-confirmed rectificative invoice as a draft', async () => {
+        // The intent, asserted against ConfirmResultModal's REAL contract (`=== 'CO'`) rather
+        // than a snapshot of the docs array: these invoices are created and confirmed in one
+        // step (ETP-5381 — ReturnShipmentUtils#finalizeReturnInvoice completes the invoice
+        // before returning it), so "Borrador" was never a state this path could legitimately
+        // announce. If the field is ever dropped again, this is the assertion that says why
+        // it matters, not just that a key went missing.
+        render(<Host />);
+        await clickConfirm();
+        await act(async () => {
+          modalProps.onConfirmed({
+            invoice: { id: 'inv-7', documentNo: 'F-7', amount: 15.14, documentStatus: 'CO' },
+          });
+        });
+
+        const wouldBadgeAsConfirmed = resultDocs[0].documentStatus === 'CO';
+        expect(wouldBadgeAsConfirmed).toBe(true);
+      });
     });
 
     it('skips the result popup when no invoice was created and just refreshes', async () => {

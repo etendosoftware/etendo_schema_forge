@@ -147,10 +147,10 @@ describe('ProductCustomTable — identity cell & Advanced Filter fields (ETP-460
   // ETP-4603 — the stored-computed sale/purchase/stock columns declare a `render`
   // arrow returning the dedicated price/stock cell. DataTable is stubbed here, so
   // those arrows are never invoked by the stub; invoke them directly to cover them.
-  it('invokes the stored-computed sale/purchase/stock column render callbacks', () => {
+  it('invokes the stored-computed sale/purchase/cost/stock column render callbacks', () => {
     render(<ProductCustomTable data={[]} />);
-    const row = { eTGOSalePrice: 12.5, eTGOPurchasePrice: 7, eTGOStock: 3, 'currency$_identifier': 'USD' };
-    for (const key of ['salePrice', 'purchasePrice', 'stock']) {
+    const row = { eTGOSalePrice: 12.5, eTGOPurchasePrice: 7, eTGOCost: 4.25, eTGOStock: 3, 'currency$_identifier': 'USD' };
+    for (const key of ['salePrice', 'purchasePrice', 'productCost', 'stock']) {
       const col = capturedProps.columns.find((c) => c.key === key);
       expect(typeof col.render).toBe('function');
       expect(col.render(row)).toBeTruthy();

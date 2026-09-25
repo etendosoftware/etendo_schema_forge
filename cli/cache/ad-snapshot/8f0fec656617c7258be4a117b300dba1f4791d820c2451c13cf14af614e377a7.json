@@ -25296,7 +25296,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "661844af84cab59c035c5fde7fd88202736f86ea3307f14ab7dcf383d8c24872",
+      "checksum": "5a5258938d4e355e58fbb75e61086869368dd114825486f9ad17e70485d43caa",
       "params": [
         "140"
       ],
@@ -26128,6 +26128,12 @@
           "ad_table_id": "208",
           "columnname": "EM_ETGO_Stock",
           "position": "992"
+        },
+        {
+          "ad_column_id": "FB13EDA48A1D48B59002E1D84B096F03",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Cost",
+          "position": "993"
         },
         {
           "ad_column_id": "521F823119706C29E040007F01001B31",

@@ -7,6 +7,8 @@ const stableApiFetch = vi.fn(() => Promise.resolve({ ok: true, json: async () =>
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'org-1', name: 'TestOrg' } }),
+  useWindowAccess: () => 'full',
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u }));

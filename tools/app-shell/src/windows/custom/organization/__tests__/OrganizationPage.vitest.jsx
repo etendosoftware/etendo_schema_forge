@@ -6,8 +6,14 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${JSON.stringify(params)}` : key),
 }));
 
+// ETP-5395 Fix 3: OrganizationPage is now gated by useWindowAccess — default to 'full' so
+// this suite keeps exercising the window as before (mirrors financial-account's own
+// ETP-4658 test convention). Mutable so a dedicated test can flip it to 'none'.
+let currentWindowAccessTier = 'full';
 vi.mock('@/auth/AuthContext.jsx', () => ({
   useAuth: () => ({ selectedOrg: { id: 'ORG_1', name: 'Acme' }, token: 'test-token' }),
+  useWindowAccess: () => currentWindowAccessTier,
+  WindowAccessGuard: () => <div data-testid="window-access-guard" />,
 }));
 
 vi.mock('@/auth/useApiFetch.js', () => ({
@@ -69,6 +75,23 @@ function makeFetchMock(handlers) {
 describe('OrganizationPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    currentWindowAccessTier = 'full';
+  });
+
+  // ETP-5395 Fix 3 — before this fix, a 'none' tier still fired the fetch, got a real
+  // backend 403, and rendered it raw ("HTTP 403" + a Retry button that can never help).
+  it('renders WindowAccessGuard instead of the raw error box when the access tier is none', async () => {
+    currentWindowAccessTier = 'none';
+    globalThis.fetch = makeFetchMock([
+      [`/organization/organization/${ORG_ID}`, () => jsonResponse(null, false, 403)],
+      [`/organization/information/${ORG_ID}`, () => jsonResponse(null, false, 403)],
+    ]);
+
+    render(<OrganizationPage token="test-token" apiBaseUrl={API_BASE_URL} />);
+
+    expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__loading')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('OrganizationPage__error')).not.toBeInTheDocument();
   });
 
   it('renders the loaded header/info fields and hides the unsaved-changes banner until something changes', async () => {

@@ -71,6 +71,18 @@ function renderKebab(movement, overrides = {}) {
   return { onReload };
 }
 
+describe('MovementRowKebab — respects windowReadOnly (ETP-5205)', () => {
+  it('renders nothing when windowReadOnly is true, regardless of movement state', () => {
+    renderKebab(NOT_POSTED, { windowReadOnly: true });
+    expect(screen.queryByTestId(`movement-row-menu-${NOT_POSTED.id}`)).not.toBeInTheDocument();
+  });
+
+  it('regression: still renders the kebab trigger when windowReadOnly is false/absent', () => {
+    renderKebab(NOT_POSTED);
+    expect(screen.getByTestId(`movement-row-menu-${NOT_POSTED.id}`)).toBeInTheDocument();
+  });
+});
+
 describe('MovementRowKebab — Post action', () => {
   beforeEach(() => {
     toastSuccess.mockClear();

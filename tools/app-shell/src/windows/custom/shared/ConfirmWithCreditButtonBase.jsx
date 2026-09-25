@@ -1,36 +1,34 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Check } from 'lucide-react';
-import { Button } from '@/components/ui/button.jsx';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal';
 import ConfirmInOutModal from '@/components/contract-ui/ConfirmInOutModal';
 import CreateInvoiceConfirmModal from '@/components/contract-ui/CreateInvoiceConfirmModal';
-import { getButtonClass, getSaveBtnCls, maybeSaveBeforeConfirm } from '@/components/contract-ui/detailViewHelpers.jsx';
-import { GateTooltip } from '@/components/contract-ui/saveActions.jsx';
 import { useConfirmWithCredit } from './useConfirmWithCredit';
 
 /**
- * ETP-5408 — the DR "Confirm" button is the same kind of action as the generic
- * positive AD process button DetailView renders for Facturas / Pedidos / Albaranes,
- * so it must look the same: shared `Button` + a `<Check>` icon. It was a hand-rolled
- * `<button>` with inline styles and no icon, which is the whole bug.
+ * Confirm flow + completed-state actions shared by the two return windows
+ * (return-material-receipt, return-to-vendor-shipment), mounted in their `topbarRight` slot.
  *
- * Classes come from the same helpers DetailView uses (`getButtonClass` /
- * `getSaveBtnCls`, see DetailView.jsx's process-button map) rather than being
- * restated here, so a future restyle of the positive process button reaches this
- * button too. Both arguments are the values DetailView would pass for these windows:
- * `salesTheme` is undefined (neither return window declares one) and
- * `toolbarButtonSize` is DetailView's own default `'sm'` (neither window overrides
- * that prop). `p` is the positive-style process descriptor shape the helper reads.
+ * The Borrador "Confirmar" button is NOT rendered here: it is the generic draftMode Confirm
+ * (`saveActions.jsx` -> `renderDraftModeSaveActions`). That button owns every enablement
+ * rule (disabled while `saveGate.blocked`, and while the document has no lines via
+ * `draftMode.disableWhenEmpty`) and saves a dirty header before calling `draftMode.onConfirm`,
+ * which each window's index.jsx wires to dispatch `confirmEventName`.
+ *
+ * This component only listens for that event and opens ConfirmInOutModal (documentAction
+ * POST + optional rectificative invoice + result modal). It never saves. It also renders the
+ * CO-state "create return invoice" button, `extraActions` and `extraPortals`.
+ *
+ * History: before ETP-5408 this component rendered its own DR Confirm button and ran the
+ * save-before-confirm step itself (ETP-4940).
  */
-const CONFIRM_BTN_CLS = `${getButtonClass(undefined, { style: 'positive' }, true)} ${getSaveBtnCls('sm')}`.trim();
-
 export default function ConfirmWithCreditButtonBase({
   data, recordId, token, apiBaseUrl,
   entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   specName, entityName,
-  onSave, isDirty, saveGate, onRefresh,
+  confirmEventName,
+  saveGate, onRefresh, isDocumentReadOnly,
   confirmDrLabel,
   confirmModalTitle, infoRowPre, infoRowBold, infoRowPost, confirmWithInvoiceLabel,
   postConfirmButtonLabel,
@@ -42,7 +40,7 @@ export default function ConfirmWithCreditButtonBase({
   const navigate = useNavigate();
   const resultNavigatedRef = useRef(false);
   const {
-    ui, status, currency, confirmDisabled, hasReturnInvoice,
+    ui, status, currency, hasReturnInvoice,
     headers, base, showModal, setShowModal,
     creatingInvoice, result, setResult,
     handleCreateReturnInvoice, buildInvoiceResultFromConfirm,
@@ -51,54 +49,34 @@ export default function ConfirmWithCreditButtonBase({
     entitySegment, invoiceRoute, invoiceType, invoiceCreatedTitleKey,
   });
 
-  if (status !== 'DR' && status !== 'CO') return null;
+  // ETP-5408 — the generic draftMode Confirm button dispatches this event (see the doc
+  // comment above). The guard is only a backstop against an event dispatched outside that
+  // button: not in Borrador, or the required-field save gate is closed (ETP-4933). It
+  // deliberately does NOT re-check the lines count — the button's `disableWhenEmpty` reads
+  // the live lines, while the header's `linesCount` may lag right after the first line is
+  // added, and a disagreement would make an enabled Confirm silently do nothing.
+  // Registered before the early return below (Rules of Hooks) and re-bound whenever
+  // `status`/`saveGate.blocked` change, so the handler never reads a stale value.
+  const saveBlocked = Boolean(saveGate?.blocked);
+  useEffect(() => {
+    if (!confirmEventName) return undefined;
+    const handler = () => {
+      if (status !== 'DR' || saveBlocked || isDocumentReadOnly) return;
+      setShowModal(true);
+    };
+    window.addEventListener(confirmEventName, handler);
+    return () => window.removeEventListener(confirmEventName, handler);
+  }, [confirmEventName, status, saveBlocked, isDocumentReadOnly, setShowModal]);
 
-  // ETP-4933: this button PERSISTS before it confirms (maybeSaveBeforeConfirm below),
-  // so it must respect the same required-field rule as Save — otherwise Save being
-  // blocked means nothing: Confirm would save the incomplete record and advance the
-  // document. It inherits ONLY the required-field verdict, deliberately not the rest
-  // of Save's disabled condition: `!isDirty` must NOT block here, because confirming
-  // an already-saved, unmodified document is the normal path.
-  const confirmBlocked = confirmDisabled || Boolean(saveGate?.blocked);
+  if (status !== 'DR' && status !== 'CO') return null;
 
   const isFullyInvoiced = parseFloat(data?.invoiceStatus ?? 0) >= 100;
 
-  // ETP-5381: a rectificative invoice is now created AND confirmed in one step, and the
-  // completion is rejected outright unless it declares which invoice it rectifies. Both entry
-  // points below therefore load the candidates and make the user pick.
   const rectifiableInvoicesUrl =
     `${base}/${specName}/${entityName}/${data?.id || recordId}/action/rectifiableInvoices`;
 
   return (
     <>
-      {status === 'DR' && (
-        // A blocked button that does not say why is the bug we already hit once, and the
-        // shared `Button` carries `disabled:pointer-events-none`, so once `confirmBlocked`
-        // is true the element gets no hover and its own `title` never fires. GateTooltip
-        // (the very wrapper saveActions.jsx uses for Save/Confirm) restores it: the span is
-        // never disabled, so it does receive the hover, and it is only inserted when there
-        // IS a reason to explain — the DOM is unchanged on the normal path.
-        <GateTooltip title={saveGate?.blocked ? saveGate.title : undefined} data-testid="GateTooltip__f9608e"><Button type="button" data-testid="action-confirm-with-credit"
-          variant="default"
-          size="default"
-          className={CONFIRM_BTN_CLS}
-          onClick={async () => {
-            if (confirmBlocked) return;
-            // ETP-4940 follow-up: this button fires its own documentAction POST
-            // (inside ConfirmInOutModal) that never went through DetailView's
-            // draftMode/kebab save-before-confirm guards — an edit made without
-            // clicking Save first was silently discarded, confirming the
-            // last-persisted value. Persist any pending edit before opening the
-            // modal; abort on save failure (handleSave already surfaced the error).
-            if (!(await maybeSaveBeforeConfirm({ isDirty, handleSave: onSave }))) return;
-            setShowModal(true);
-          }}
-          disabled={confirmBlocked}
-          title={saveGate?.blocked ? saveGate.title : undefined}>
-          <Check size={16} className="mr-1" data-testid="Check__f9608e" />
-          {confirmDrLabel}
-        </Button></GateTooltip>
-      )}
       {status === 'CO' && !hasReturnInvoice && (
         <button type="button" data-testid="action-create-return-invoice" onClick={() => setShowModal(true)}
           style={{ padding: '5px 14px', borderRadius: 6, border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', fontWeight: 500, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
