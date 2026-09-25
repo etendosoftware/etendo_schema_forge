@@ -52,7 +52,7 @@ This folder is the entry point for documentation that describes how generated an
 | [product-category.md](product-category.md) | Generated product-category master/detail flow |
 | [physical-inventory.md](physical-inventory.md) | Generated physical-inventory flow with custom count-list actions |
 | [goods-movements.md](goods-movements.md) | Generated goods-movements flow for stock transfers |
-| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow: draftMode Complete + kebab Void, trimmed list view |
+| [internal-consumption.md](internal-consumption.md) | Generated internal-consumption flow: draftMode Confirm (gated on required fields + lines), kebab Void, Post/Unpost from detail/row/bulk (ETP-5445), trimmed list view |
 | [warehouse.md](warehouse.md) | Custom warehouse flow with products/transactions tabs |
 | [warehouse-storage-bins.md](warehouse-storage-bins.md) | Hidden route-only warehouse storage-bin master/detail window |
 

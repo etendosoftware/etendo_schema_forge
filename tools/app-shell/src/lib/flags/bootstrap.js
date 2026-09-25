@@ -3,6 +3,7 @@ import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
 
 import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
+import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js';
 /**
  * Feature-flag bootstrap.
  *
@@ -48,6 +49,7 @@ const ACCOUNT_EMAIL_KEY = 'sf_account_email';
  * runs on every session change including the automatic 401 logout.
  */
 export function clearAccountIdentity(storage = globalThis.localStorage) {
+  clearSessionIdentity();
   try {
     storage?.removeItem(ACCOUNT_ID_KEY);
     storage?.removeItem(ACCOUNT_EMAIL_KEY);
@@ -59,14 +61,17 @@ export function clearAccountIdentity(storage = globalThis.localStorage) {
 /**
  * Reads the identity flags are evaluated against.
  *
- * `sf_auth_user` / `sf_auth_client_id` are the same keys the observability
- * layer reports, so flag targeting and analytics agree on who the user is.
+ * Username and client come from the in-memory session identity, the same source the
+ * observability layer reports, so flag targeting and analytics agree on who the user is.
+ * ETP-5455: they used to come from the legacy sf_auth_user / sf_auth_client_id keys, which
+ * nothing writes since the cookie session, so every signed-in user was targeted as anonymous.
  */
 export function readSessionContext(storage = globalThis.localStorage) {
+  const { username, clientId } = getSessionIdentity();
   try {
     return {
-      username: storage?.getItem('sf_auth_user') || undefined,
-      clientId: storage?.getItem('sf_auth_client_id') || undefined,
+      username,
+      clientId,
       accountId: storage?.getItem(ACCOUNT_ID_KEY) || undefined,
       accountEmail: storage?.getItem(ACCOUNT_EMAIL_KEY) || undefined,
     };
@@ -297,10 +302,11 @@ export async function refreshAccountIdentity(
       // A storage failure only costs the cache, not the targeting below.
     }
 
+    const { username, clientId } = getSessionIdentity();
     await setFeatureFlagContext(
       {
-        username: storage?.getItem('sf_auth_user') || undefined,
-        clientId: storage?.getItem('sf_auth_client_id') || undefined,
+        username,
+        clientId,
         accountId,
         accountEmail,
       },

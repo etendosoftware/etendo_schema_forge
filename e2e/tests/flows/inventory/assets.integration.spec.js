@@ -1,0 +1,691 @@
+import { test, expect } from '@playwright/test';
+import { login } from '../../helpers/auth.js';
+import { openSelectorField, selectorFieldDisplay } from '../../helpers/selectors.js';
+
+/**
+ * Assets window — Test Plan "Activos y Amortizaciones" (REAL BACKEND).
+ *
+ * Consolidated real-mode suite. Requires:
+ *   - Etendo up (dev proxy → ETENDO_URL), E2E_USE_MOCK=0, E2E_PASSWORD set.
+ *   - An existing asset category named "Genérico".
+ *
+ * Cases covered:
+ *   - Case 1: create a non-depreciable asset — required validation, save, find.
+ *   - Case 2: depreciable by TIME → 2 monthly amortization lines (06/07-2026).
+ *   - Case 3: depreciable by PERCENTAGE → 2 annual amortization lines (2026/2027).
+ *   - Case 9: toggling "Depreciar" shows/hides the depreciation config.
+ *
+ * Tests that save use a unique timestamped name/searchKey so records never
+ * collide and the filter isolates exactly the one created.
+ */
+
+const DISABLED_HINT = 'La amortización está desactivada';
+
+// Toast 'El campo "<label>" es obligatorio.' for a field label.
+const requiredToast = (label) => new RegExp(`El campo\\s*"?${label}"?\\s*es obligatorio`, 'i');
+// Scope to the sonner toast so page content (title/breadcrumb) can't false-match.
+const toastByText = (page, re) => page.locator('[data-sonner-toast]').filter({ hasText: re });
+// "Crear Amortización" process button (label resolves via i18n).
+const crearAmortizacionBtn = (page) => page.getByRole('button', { name: /Crear Amortización|Create Amortization/i });
+
+/**
+ * Registers a wait for the real `POST .../assets/evaluate-display` round trip that
+ * `useAccountingDimensionFields` (via `useDisplayLogic`) fires whenever the asset
+ * form's field values change — in particular right after the "Depreciar" toggle is
+ * clicked. MUST be called BEFORE the action that triggers the change (the click),
+ * so Playwright starts listening before the response can arrive; the 300ms debounce
+ * inside `useDisplayLogic` guarantees the call hasn't already landed by then.
+ *
+ * Asserting `toBeVisible()` on "Dimensiones contables" right after the click (the
+ * previous approach) can pass purely on `useDisplayLogic`'s fail-open initial state
+ * (`{ visibility: {} }`, before the fetch resolves) even when the backend's real
+ * answer is `visibility.project: false` — exactly the boolean-serialization bug
+ * fixed under ETP-4914 in `NeoDisplayLogicHelper.buildJsObjectPreamble`. Awaiting
+ * this response before asserting makes the assertion depend on the real answer.
+ */
+function waitForDimensionEvaluateDisplay(page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('/assets/evaluate-display') && resp.request().method() === 'POST',
+    { timeout: 5_000 },
+  );
+}
+
+/**
+ * Asserts "Dimensiones contables" is shown/hidden consistently with the REAL
+ * `evaluate-display` response body, instead of hardcoding an assumed true/false.
+ * `project` is the only accounting-dimension candidate for the Assets header
+ * (AssetsDetailPanel.jsx's `dimensionFieldCandidates`); `useAccountingDimensionFields`
+ * treats any value other than an explicit `false` as visible (fail-open, same as the
+ * server-side evaluator) — mirrored here so the test stays correct regardless of
+ * which way this tenant's GL Configuration currently has the Project dimension set.
+ */
+async function assertDimensionsSectionMatchesResponse(page, evalResponse) {
+  const body = await evalResponse.json();
+  const projectVisible = body?.visibility?.project !== false;
+  if (projectVisible) {
+    await expect(page.getByText('Dimensiones contables')).toBeVisible();
+  } else {
+    await expect(page.getByText('Dimensiones contables')).toHaveCount(0);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/** Open Assets and start a new record (detail form in edit mode). */
+async function openNewAsset(page) {
+  await page.goto('/assets');
+  await expect(page.getByTestId('action-new')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('action-new').click();
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/cargando|loading/i)).toBeHidden({ timeout: 15_000 })
+    .catch(() => {}); // OK if spinner never appeared
+}
+
+/** Pick the real "Genérico" category in the Categoría de activo selector.
+ *
+ * ETP-4600 unified FK fields onto CreatableSearchSelect (chip + combobox model),
+ * but `assetCategory` carries an explicit `searchSelect: false` opt-out
+ * (AssetsDetailPanel.jsx) that keeps it on the OLD plain Radix SelectorInput —
+ * a temporary carve-out for a DetailView save→refetch/callout race the unified
+ * selector exposes (silently reverts `depreciate` on save, see EntityForm.jsx
+ * renderSelectorField). `openSelectorField` still opens it correctly (no chip
+ * testid present, so it falls through to clicking the plain trigger), but the
+ * old component has no chip — the selected value renders as plain text inside
+ * the same `field-assetCategory` trigger, so the post-selection assertion
+ * checks that trigger's text instead of a `-chip` testid. This is a legitimate
+ * adaptation to the field's real (old) component, not a weakened assertion. */
+async function selectCategoryOtros(page) {
+  await openSelectorField(page, 'assetCategory');
+  await page.getByRole('option', { name: /Gen[eé]rico|Otros|Others/i }).first().click();
+  // Original guarantee: a category is now selected — the trigger reflects the label.
+  const trigger = page.getByTestId('field-assetCategory');
+  await expect(trigger).toContainText(/Gen[eé]rico|Otros|Others/i, { timeout: 5_000 });
+}
+
+/** Click "Guardar" and wait for the asset PATCH/PUT to actually land, so the
+ *  next "Crear Amortización" runs against the persisted record (no save race). */
+async function saveAsset(page) {
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
+  // Nothing pending (form already clean) → skip; clicking a disabled button hangs.
+  if (await saveBtn.first().isDisabled().catch(() => false)) return;
+  const saved = page.waitForResponse(
+    (r) => /\/sws\/neo\/assets\/assets\/[^/?]+/.test(r.url())
+      && ['PUT', 'PATCH', 'POST'].includes(r.request().method())
+      && r.status() < 400,
+    { timeout: 12_000 },
+  ).catch(() => null);
+  await saveBtn.first().click();
+  await saved;
+}
+
+/** Parse a currency string like "-2.000,00 €" / "-100,00 €" / "—" to a number.
+ *  Spanish locale (ETP-4314): '.' is the thousands separator, ',' is decimal. */
+function parseCurrency(text) {
+  let cleaned = (text || '').replace(/[^\d.,-]/g, '');
+  if (!cleaned) return 0;
+  if (cleaned.includes(',') && cleaned.indexOf(',') > cleaned.lastIndexOf('.')) {
+    cleaned = cleaned.replaceAll('.', '').replace(',', '.');
+  }
+  return parseFloat(cleaned) || 0;
+}
+
+/** With Depreciar ON, the "Resumen de amortización" sidebar mirrors the live
+ *  editing state: Valor del activo in the form must equal Valor actual in the
+ *  sidebar. Run after each financial-field change and after creating the
+ *  amortization.
+ *
+ *  "Pendiente de Amortizar" is NOT a mirror of the form's "Valor residual"
+ *  field (ETP-5414 — that was the bug being fixed: the card used to read
+ *  `residualAssetValue` directly, so it froze at whatever that independently
+ *  editable field held, even mid-schedule). AssetsSidebar.jsx now computes it
+ *  as `depreciationAmt − (depreciatedValue + previouslyDepreciatedAmt)` — Valor
+ *  a Amortizar minus the accumulated amortized amount, the same accumulator
+ *  the DB trigger `ETGO_A_ASSET_AMORT_STATUS_TRG` uses for the amortization
+ *  percentage. `previouslyDepreciatedAmt` has no form field (`form: false` in
+ *  the contract, default "0") and `depreciatedValue` only moves once a line is
+ *  CONFIRMED (never just created) — every call site in this spec runs before
+ *  any confirmation, so both stay 0 and the expected value collapses to
+ *  `depreciationAmt` alone. */
+async function verifySidebarSync(page) {
+  // Scope to the sidebar's card container (no testids in the app): the
+  // "Resumen de amortización" heading → its card grid is the next sibling.
+  // Each card is <div>{label}</div><div>{value}</div>, so the value is the
+  // label's following sibling. Scoping avoids the form's identical residual label.
+  const cards = page.getByText('Resumen de amortización', { exact: true })
+    .locator('xpath=ancestor::div[1]/following-sibling::div[1]');
+  const sidebarValue = (label) =>
+    cards.getByText(label, { exact: true }).locator('xpath=following-sibling::div[1]').innerText();
+
+  // Both sides are read with parseCurrency because both are now LOCALIZED (ETP-5107): these two
+  // columns are AD `Amount` references, so the form input groups them exactly like the sidebar
+  // ("2.000,00"). A bare parseFloat stops at the group separator and reads that as 2, which is
+  // what made this assertion fail with "Expected: 2, Received: 2000" - the sidebar, the form and
+  // the database all agreed on 2000 and only the parser disagreed. Verified live: typing 2000
+  // shows "2.000,00" in both, saves 2000 to A_ASSET.assetvalueamt, and survives a reload.
+  const formAsset = parseCurrency(await page.getByTestId('field-assetValue').inputValue());
+  expect(parseCurrency(await sidebarValue('Valor actual'))).toBeCloseTo(formAsset, 2);
+  const formDepreciationAmt = parseCurrency(await page.getByTestId('field-depreciationAmt').inputValue());
+  expect(parseCurrency(await sidebarValue('Pendiente de Amortizar'))).toBeCloseTo(formDepreciationAmt, 2);
+}
+
+/** Set a field's value and retry until the form is actually dirty (save enabled).
+ *  A save triggers a refetch GET that resets `editing`; if it lands after a fill,
+ *  the fill is lost. Retrying the fill until the save button enables absorbs that
+ *  race deterministically. */
+async function setFieldUntilDirty(page, testId, value) {
+  const field = page.getByTestId(testId);
+  await expect(async () => {
+    await field.fill('');
+    await field.fill(value);
+    await field.blur();
+    await expect(page.getByTestId('action-save')).toBeEnabled({ timeout: 1_000 });
+  }).toPass({ timeout: 12_000 });
+}
+
+/** Persist current edits, then run "Crear Amortización" and expect a toast. */
+async function saveThenProcess(page, expectRe) {
+  await saveAsset(page);
+  // Drain the toast stack before triggering the next one. data-front="true"
+  // alone is NOT enough: it marks whichever toast is currently frontmost, and
+  // between saveAsset's own "Registro guardado" and the process result there is
+  // a window where the PREVIOUS cycle's toast is still mounted and still front.
+  // Under load that window widens and the assertion below reads the stale toast
+  // instead — observed twice on this file (Case 5, then Case 6 on the next run,
+  // the failure moving between adjacent cases being the giveaway that it was a
+  // race and not a real defect). Sonner auto-dismisses in 4s by default, so this
+  // converges on its own; waiting here means any toast that appears after the
+  // click can only be this cycle's.
+  await expect(page.locator('[data-sonner-toast]'),
+    'toasts from the previous cycle should have dismissed before the next process run',
+  ).toHaveCount(0, { timeout: 15_000 });
+  await crearAmortizacionBtn(page).click();
+  // Assert the FRONTMOST toast (newest = this cycle's result) so repeated
+  // identical errors (empty / 0 / negative) don't trip strict mode.
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(expectRe, { timeout: 12_000 });
+}
+
+/**
+ * Apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico,
+ * and assert the list narrows to exactly the created asset.
+ */
+/** Build and apply the conditional filter Nombre Es <name> AND Categoría de activo Es Genérico. */
+async function applyNameAndCategoryFilter(page, name) {
+  await page.getByTestId('filter-advanced').click();
+  const panel = page.getByRole('dialog');
+  await expect(panel).toBeVisible();
+
+  // The panel is not guaranteed to be blank: a persisted filter (localStorage,
+  // scoped per window) can survive a fresh `/assets` reload and repopulate the
+  // dialog with whatever was applied earlier in the same test (e.g. by
+  // `findByNameAndCategory` before this helper runs a second time from
+  // `verifyAssetNotInList`). "Limpiar" resets the draft back to exactly one
+  // blank row, matching the truly-first-use state, and it self-disables when
+  // there is nothing to clear — so this is a no-op on a genuinely blank panel.
+  const clearButton = panel.getByTestId('advanced-filter-clear');
+  if (await clearButton.isEnabled().catch(() => false)) {
+    await clearButton.click();
+  }
+
+  // Condition 1 — Nombre Es <name> (plain text value).
+  await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
+  await page.getByRole('option', { name: /^Nombre$|^Name$/ }).click();
+  await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
+  await page.getByRole('option', { name: 'Es', exact: true }).click();
+  await panel.getByRole('textbox').first().fill(name);
+
+  // Condition 2 — Categoría de activo Es Genérico (FK value = IdentifierMultiPicker).
+  await panel.getByRole('button', { name: 'Añadir condición' }).click();
+  await panel.locator('[role="combobox"]', { hasText: 'Selector de campo' }).first().click();
+  await page.getByRole('option', { name: /^Categoría de activo$|^Asset Group$/i }).click();
+  await panel.locator('[role="combobox"]', { hasText: 'Seleccionar condición' }).first().click();
+  await page.getByRole('option', { name: 'Es', exact: true }).click();
+  await panel.getByRole('button', { name: 'Seleccionar valor' }).click();
+  await page.getByRole('button', { name: /Genérico|Otros/i }).first().click();
+  await page.keyboard.press('Escape');
+
+  await panel.getByRole('button', { name: 'Aplicar' }).click();
+}
+
+/** Filter the list and assert it narrows to exactly the created asset. */
+async function findByNameAndCategory(page, name) {
+  await applyNameAndCategoryFilter(page, name);
+  await expect(page.locator('tbody tr')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.locator('tbody tr').first()).toContainText(name);
+}
+
+/** After deletion, filter the list by the asset's name + Categoría de activo and
+ *  assert it no longer appears. */
+async function verifyAssetNotInList(page, name) {
+  await page.goto('/assets');
+  await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 15_000 });
+  await applyNameAndCategoryFilter(page, name);
+  await expect(page.locator('tbody tr').filter({ hasText: name })).toHaveCount(0, { timeout: 10_000 });
+}
+
+/** Full-reload navigation to a deep SPA link (e.g. /assets/{id} or
+ *  /amortization/{id}). While the app boots it re-resolves the route, which can
+ *  abort the in-flight document load that `goto` waits on → `net::ERR_ABORTED`.
+ *  Retry with `waitUntil: 'commit'` so an aborted attempt is absorbed; the
+ *  caller's own waits (networkidle / detail-view) settle the rendered page. */
+async function gotoDeepLink(page, url) {
+  await expect(async () => {
+    await page.goto(url, { waitUntil: 'commit' });
+  }).toPass({ timeout: 30_000 });
+}
+
+/** Open the Amortization doc, select the asset's line (checkbox) and confirm it
+ *  (Confirmar → "Confirmar amortización" modal). */
+async function confirmAmortizationForAsset(page, amortizationUrl, name) {
+  await gotoDeepLink(page, amortizationUrl); // SPA period-link nav doesn't re-render; force load
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  await page.locator('tbody tr').filter({ hasText: name }).getByRole('checkbox').check();
+  await page.getByTestId('action-save').click(); // "Confirmar" → opens the confirm modal
+  // The modal's confirm button is disabled while it loads the totals, and the
+  // floating "lines" selection bar overlaps it — so wait until it's enabled, then
+  // dispatch the click directly and retry until the modal closes.
+  const modalConfirm = page.getByRole('button', { name: 'Confirmar amortización', exact: true });
+  await expect(modalConfirm).toBeEnabled({ timeout: 10_000 });
+  await expect(async () => {
+    await modalConfirm.dispatchEvent('click');
+    await expect(modalConfirm).toHaveCount(0, { timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
+  // Point 3: the document becomes "Procesado" (no longer "Borrador").
+  await expect(page.getByText('Procesado').first()).toBeVisible({ timeout: 15_000 });
+  // Point 2: once processed, the Moneda selector is read-only.
+  await expect(page.getByRole('textbox', { name: 'Moneda' })).toBeDisabled();
+}
+
+/** Open the Amortization doc and reactivate it via the kebab menu. */
+async function reactivateAmortization(page, amortizationUrl) {
+  await gotoDeepLink(page, amortizationUrl);
+  await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 15_000 });
+  await page.getByTestId('action-more').click();
+  await page.getByRole('button', { name: /reactivar|reactivate/i }).click();
+  // Reactivation returns the document to "Borrador" (no extra confirm).
+  await expect(page.getByText('Borrador').first()).toBeVisible({ timeout: 10_000 });
+}
+
+/** The sidebar "Amortizado" (Resumen de amortización) percentage, as a number. */
+async function depreciatedSidebarPct(page) {
+  const cards = page.getByText('Resumen de amortización', { exact: true })
+    .locator('xpath=ancestor::div[1]/following-sibling::div[1]');
+  const text = await cards.getByText('Amortizado', { exact: true })
+    .locator('xpath=following-sibling::div[1]').innerText();
+  return parseCurrency(text);
+}
+
+/** After confirming, on the asset detail: the "Confirmado" plan line percentage
+ *  must equal the sidebar "Amortizado" percentage. Reads the sidebar (form view)
+ *  first, then opens the plan tab to read the confirmed line. */
+async function verifyConfirmedLineMatchesSidebar(page) {
+  // Runs AFTER the confirm. The sidebar "Amortizado" reflects only CONFIRMED
+  // lines, so it recalculates with the confirm we just did: two pending 50% lines
+  // read 0%, and confirming one moves it to 50%. On reopen the recalc can lag, so
+  // wait until the sidebar reports the (non-zero) confirmed value before comparing.
+  let sidebarPct = 0;
+  await expect(async () => {
+    sidebarPct = await depreciatedSidebarPct(page);
+    expect(sidebarPct).toBeGreaterThan(0);
+  }).toPass({ timeout: 10_000 });
+  // It must equal the percentage of the now-"Confirmado" plan line.
+  await page.getByRole('button', { name: /Plan de amortización/ }).click();
+  const confirmedRow = page.locator('table tr').filter({ hasText: 'Confirmado' }).first();
+  await expect(confirmedRow).toBeVisible({ timeout: 10_000 });
+  const m = (await confirmedRow.innerText()).match(/([\d.,]+)\s*%/);
+  expect(m, 'the Confirmado plan line should show a percentage').not.toBeNull();
+  expect(parseFloat(m[1])).toBeCloseTo(sidebarPct, 1);
+}
+
+/** While its amortization is confirmed, deleting the asset is blocked: the
+ *  backend rejects it with "Documento ya procesado" and the record survives. */
+async function verifyDeleteBlockedWhileProcessed(page) {
+  await page.getByTestId('action-delete').click();
+  await page.getByTestId('action-delete-confirm').click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Documento ya procesado/i, { timeout: 10_000 });
+}
+
+/** In the filtered grid, the asset's row shows the amortization progress bar
+ *  (a width-styled fill) alongside its percentage. Optionally assert the exact %. */
+async function verifyGridAmortizationBar(page, expectedPct) {
+  const row = page.locator('tbody tr').first();
+  await expect(row.locator('div[style*="width"]').first()).toBeVisible();
+  await expect(row).toContainText(expectedPct != null ? `${expectedPct}%` : '%');
+}
+
+/** Wait until the sidebar "Amortizado" (Resumen de amortización) reports the
+ *  expected percentage (it recalculates after each confirm, with refetch lag). */
+async function verifyDepreciatedSidebar(page, expectedPct) {
+  await expect(async () => {
+    expect(await depreciatedSidebarPct(page)).toBeCloseTo(expectedPct, 1);
+  }).toPass({ timeout: 10_000 });
+}
+
+/** Delete the asset and expect the success toast. */
+async function deleteAsset(page) {
+  await page.getByTestId('action-delete').click();
+  await page.getByTestId('action-delete-confirm').click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro eliminado/i, { timeout: 10_000 });
+}
+
+/** From the asset's plan tab, capture the URL of each period's amortization
+ *  header (clicking the Period link, then going back). Creating an asset's plan
+ *  makes one header per period, each with a line for the asset. */
+async function captureAmortizationHeaderUrls(page, periods) {
+  const urls = [];
+  for (const period of periods) {
+    await page.getByRole('button', { name: /Plan de amortización/ }).click();
+    await page.getByRole('button', { name: period, exact: true }).click();
+    await expect(page).toHaveURL(/\/amortization\//, { timeout: 10_000 });
+    urls.push(page.url());
+    await page.goBack();
+    await expect(page.getByTestId('detail-view')).toBeVisible({ timeout: 10_000 });
+  }
+  return urls;
+}
+
+/** Test cleanup: delete the amortization headers created by the asset's plan via
+ *  the API. Deleting the asset removes its lines but NOT the headers — real usage
+ *  keeps empty headers (correct behavior), so the test removes them to stay atomic.
+ *  ETP-4429: the UI intentionally has no delete button on amortization documents,
+ *  so cleanup is performed via a direct DELETE request instead of UI interaction. */
+async function deleteAmortizationHeaders(page, headerUrls) {
+  for (const url of headerUrls) {
+    const id = url.split('/amortization/')[1]?.split(/[?#]/)[0];
+    if (!id) continue;
+    await page.evaluate(async (headerId) => {
+      try {
+        await fetch(`/sws/neo/amortization/header/${headerId}`, { method: 'DELETE' });
+      } catch (e) {
+        console.warn('Amortization header cleanup failed:', e.message);
+      }
+    }, id);
+  }
+}
+
+/** Create a depreciable asset with required fields + Depreciar ON, saved. */
+async function createDepreciableAsset(page, { stamp, name }) {
+  await openNewAsset(page);
+
+  await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
+  await page.getByTestId('field-name').fill(name);
+  await selectCategoryOtros(page);
+
+  // Activate "Depreciar" → financial + accounting-dimensions sections appear.
+  // Register the evaluate-display wait BEFORE the click (see helper docblock),
+  // then assert the dimensions section against the REAL resolved answer.
+  const evalPromise = waitForDimensionEvaluateDisplay(page);
+  await page.getByRole('switch').first().click();
+  await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
+  const evalResponse = await evalPromise;
+  await assertDimensionsSectionMatchesResponse(page, evalResponse);
+
+  // Save → record created; wait for the route to settle on /assets/{id} so the
+  // process has `selected.id`, then the "Crear Amortización" button is usable.
+  await page.getByTestId('action-save').click();
+  await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
+  await page.waitForURL(/\/assets\/(?!new)[^/?]+/, { timeout: 10_000 });
+  await expect(crearAmortizacionBtn(page)).toBeVisible({ timeout: 8_000 });
+}
+
+/** Create a depreciable asset and its amortization plan (2 lines/headers) for the
+ *  given mode ('monthly' | 'annual' | 'percentage'), mirroring Cases 2/3/4. Ends
+ *  on the asset detail with the amortization created. */
+async function setupDepreciableWithAmortization(page, { stamp, name, mode }) {
+  await createDepreciableAsset(page, { stamp, name });
+  await crearAmortizacionBtn(page).click();
+  await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+  await fillStartDate(page, mode === 'monthly' ? '01062026' : '01012026');
+  await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
+  await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
+  await verifySidebarSync(page);
+  await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+  if (mode === 'monthly') {
+    await openSelectorField(page, 'calculateType');
+    await page.getByRole('option', { name: 'Tiempo', exact: true }).click();
+    await expect(selectorFieldDisplay(page, 'depreciationType')).toContainText('Lineal');
+    await expect(selectorFieldDisplay(page, 'amortize')).toContainText('Mensual');
+    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await page.getByTestId('field-usableLifeMonths').fill('2');
+  } else if (mode === 'annual') {
+    await openSelectorField(page, 'calculateType');
+    await page.getByRole('option', { name: 'Tiempo', exact: true }).click();
+    await expect(selectorFieldDisplay(page, 'depreciationType')).toContainText('Lineal');
+    await openSelectorField(page, 'amortize');
+    await page.getByRole('option', { name: 'Anual', exact: true }).click();
+    await expect(page.getByTestId('field-usableLifeYears')).toBeVisible();
+    await saveThenProcess(page, /Vida útil - Años no puede estar vac/i);
+    await page.getByTestId('field-usableLifeYears').fill('2');
+  } else { // percentage
+    await expect(page.getByTestId('field-annualDepreciation')).toBeVisible();
+    await page.getByTestId('field-annualDepreciation').fill('50');
+  }
+  await saveAsset(page);
+  await crearAmortizacionBtn(page).click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Amortización creada/i, { timeout: 20_000 });
+  await verifySidebarSync(page);
+}
+
+/** Fill the depreciation start date (DateField) and commit it. */
+async function fillStartDate(page, digits) {
+  const dateInput = page.getByTestId('field-depreciationStartDate');
+  await dateInput.click();
+  await dateInput.fill('');
+  await dateInput.pressSequentially(digits);
+  await dateInput.blur(); // commit so the form becomes dirty
+}
+
+/** Save and assert the success toast, ARMING the toast expectation before the
+ *  click. A post-hoc assertion races the toast's own auto-dismiss: the DOM
+ *  captured on a failing run had zero toasts and a disabled Save button — the
+ *  save had landed and its toast was already gone. Declaring the expectation
+ *  first is the same pattern ETP-4903 applied to waitForResponse.
+ *
+ *  Save must be enabled here: `saveAsset` returns early on a clean form, which
+ *  would leave the caller waiting for a toast no save ever produced. Asserting
+ *  it enabled turns that into a loud, accurate failure instead. */
+async function saveAssetExpectingToast(page) {
+  const saveBtn = page.getByTestId('action-save')
+    .or(page.getByRole('button', { name: /guardar|save/i }));
+  await expect(saveBtn.first(),
+    'Save should be enabled — this call site always has pending edits',
+  ).toBeEnabled({ timeout: 10_000 });
+
+  const toastShown = expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro guardado/i, { timeout: 15_000 });
+  await saveAsset(page);
+  await toastShown;
+}
+
+/** Edit Descripción in place and save, expecting "Registro guardado". */
+async function editDescriptionInPlace(page, stamp) {
+  await setFieldUntilDirty(page, 'field-description', `Descripción de prueba ${stamp}`);
+  await saveAssetExpectingToast(page);
+}
+
+/** Edit Valor residual with negative / 0 / below / above Valor a amortizar
+ *  (2000), saving each and expecting "Registro guardado". Resets to 0 so the
+ *  amortization plan below isn't affected by the residual value. */
+async function editResidualValues(page) {
+  for (const value of ['-100', '0', '1000', '3000', '0']) {
+    await setFieldUntilDirty(page, 'field-residualAssetValue', value);
+    await verifySidebarSync(page);
+    await saveAssetExpectingToast(page);
+  }
+}
+
+/** From the filtered list, open the record, edit Descripción + save
+ *  ("Registro guardado"), then delete it ("Registro eliminado"). */
+async function editDescriptionAndDelete(page, stamp, name) {
+  await page.locator('tbody tr').first().click();
+  await expect(page.getByTestId('detail-view')).toBeVisible();
+  await page.getByTestId('field-description').fill(`Descripción de prueba ${stamp}`);
+  await page.getByTestId('action-save').click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro guardado/i, { timeout: 10_000 });
+
+  await page.getByTestId('action-delete').click();
+  await page.getByTestId('action-delete-confirm').click();
+  await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+    .toContainText(/Registro eliminado/i, { timeout: 10_000 });
+
+  // The deleted asset must no longer appear when filtered.
+  await verifyAssetNotInList(page, name);
+}
+
+// ---------------------------------------------------------------------------
+// Tests (run in plan order: 1 → 2 → 3 → 4 → 9)
+// ---------------------------------------------------------------------------
+
+test.describe('Assets (real backend)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    // Force the UI to Spanish (via the user menu) so the expected backend/UI
+    // messages match the assertions, regardless of the logged-in user's prefs.
+    // Wait for the dashboard to settle so the topbar menu is actionable.
+    await expect(page.getByTestId('topbar-user-menu')).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('topbar-user-menu').click();
+    await page.getByTestId('user-menu-language-es_ES').click();
+  });
+
+  // Case 1 — non-depreciable asset: save, find, and delete.
+  test('Case 1: non-depreciable asset — save, find via filter, and delete', async ({ page }) => {
+    const stamp = Date.now();
+    const name = `Activo E2E sin depreciar ${stamp}`;
+    await openNewAsset(page);
+
+    // Non-depreciable: no depreciation config shown.
+    await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
+
+    await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
+    await page.getByTestId('field-name').fill(name);
+    await selectCategoryOtros(page);
+    await page.getByTestId('action-save').click();
+    await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('action-cancel').click();
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    await findByNameAndCategory(page, name);
+
+    // Open it, edit Descripción + save, then delete the record.
+    await editDescriptionAndDelete(page, stamp, name);
+  });
+
+  // Case 5 — copy of Case 2 (by TIME, monthly) + Descripción/Valor residual edits
+  // + cascade delete (deleting the asset also removes its amortization lines).
+  test('Case 5: by time (monthly) — edit description/residual, then cascade delete', async ({ page }) => {
+    const stamp = Date.now();
+    const name = `Activo E2E residual ${stamp}`;
+    await createDepreciableAsset(page, { stamp, name });
+
+    await crearAmortizacionBtn(page).click();
+    await expect(toastByText(page, /fecha(?: de)? inicio es obligatorio/i)).toBeVisible({ timeout: 10_000 });
+    await fillStartDate(page, '01062026');
+    await saveThenProcess(page, /Valor a amortizar no puede estar vac/i);
+    await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
+    await verifySidebarSync(page);
+    await saveThenProcess(page, /Amortización Anual no puede estar vac/i);
+    await openSelectorField(page, 'calculateType');
+    await page.getByRole('option', { name: 'Tiempo', exact: true }).click();
+    await expect(selectorFieldDisplay(page, 'depreciationType')).toContainText('Lineal');
+    await expect(selectorFieldDisplay(page, 'amortize')).toContainText('Mensual');
+    await saveThenProcess(page, /Vida útil - Meses no puede estar vac/i);
+    await page.getByTestId('field-usableLifeMonths').fill('0');
+    // Client-side numeric validation (min: 1) intercepts before the backend.
+    await saveThenProcess(page, /debe ser al menos 1/i);
+    await page.getByTestId('field-usableLifeMonths').fill('-1');
+    await saveThenProcess(page, /debe ser al menos 1/i);
+    await page.getByTestId('field-usableLifeMonths').fill('2');
+
+    // NEW: edit Descripción and Valor residual (negative / 0 / below / above), saving each.
+    await editDescriptionInPlace(page, stamp);
+    await editResidualValues(page);
+
+    // The residual edits leave the form clean; re-touch Valor a amortizar so the
+    // create (save-and-process) persists and runs, then create the amortization.
+    await setFieldUntilDirty(page, 'field-depreciationAmt', '2000');
+    await saveAsset(page);
+    await crearAmortizacionBtn(page).click();
+    await expect(page.locator('[data-sonner-toast][data-front="true"]'))
+      .toContainText(/Amortización creada/i, { timeout: 20_000 });
+    await verifySidebarSync(page);
+
+    // Verify the plan (2 monthly lines).
+    await page.getByRole('button', { name: /Plan de amortización/ }).click();
+    await expect(page.getByText('06-2026')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('07-2026')).toBeVisible();
+    await expect(page.getByText('50,00%')).toHaveCount(2);
+    await expect(page.getByText('1.000,00 €')).toHaveCount(2);
+
+    // Capture both period headers (06-2026, 07-2026) for end-of-test cleanup.
+    const headerUrls = await captureAmortizationHeaderUrls(page, ['06-2026', '07-2026']);
+
+    // Delete the asset, verify it's gone, then clean up the (now empty) headers.
+    await deleteAsset(page);
+    await verifyAssetNotInList(page, name);
+    await deleteAmortizationHeaders(page, headerUrls);
+  });
+
+  // Case 9 — toggle Depreciar shows/hides sections; then edit description + delete.
+  test('Case 9: toggle Depreciar sections, then edit Descripción and delete', async ({ page }) => {
+    const stamp = Date.now();
+    const name = `Activo E2E caso 9 ${stamp}`;
+    await openNewAsset(page);
+
+    await page.getByTestId('field-searchKey').fill(`AS-E2E-${stamp}`);
+    await page.getByTestId('field-name').fill(name);
+    await selectCategoryOtros(page);
+
+    const depreciarToggle = page.getByRole('switch').first();
+
+    // OFF (default): disabled hint shown, config fields absent.
+    // assetValue lives in the always-visible header section (ETP-4539), so it
+    // stays present regardless of the Depreciar toggle state.
+    await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible();
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
+
+    // Activate → financial + accounting-dimensions sections appear. Register the
+    // evaluate-display wait BEFORE the click (see helper docblock), then assert the
+    // dimensions section against the REAL resolved answer, not the fail-open
+    // initial state — see ETP-4914.
+    const evalPromise = waitForDimensionEvaluateDisplay(page);
+    await depreciarToggle.click();
+    await expect(page.getByText('Información financiera')).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText('Configuración de amortización')).toBeVisible();
+    await expect(page.getByText('Fechas', { exact: true })).toBeVisible();
+    const evalResponse = await evalPromise;
+    await assertDimensionsSectionMatchesResponse(page, evalResponse);
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
+    await expect(page.getByText(DISABLED_HINT, { exact: false })).toHaveCount(0);
+
+    // Deactivate → all those sections hide, hint returns.
+    // assetValue stays visible — it lives outside the depreciation-only sections.
+    // No evaluate-display wait needed here: AssetsDetailPanel.jsx hides this section
+    // via the coarse `depreciate && dimensionFields.length > 0` gate, which flips
+    // synchronously with the toggle — it isn't waiting on a fresh server round trip
+    // (the previously-resolved `dimensionFields` value is irrelevant once `depreciate`
+    // itself is false), so there's no race to guard against on this path.
+    await depreciarToggle.click();
+    await expect(page.getByText(DISABLED_HINT, { exact: false })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId('field-assetValue')).toBeVisible();
+    await expect(page.getByText('Información financiera')).toHaveCount(0);
+    await expect(page.getByText('Dimensiones contables')).toHaveCount(0);
+
+    // Save the (non-depreciable) asset and find it via the filter.
+    await page.getByTestId('action-save').click();
+    await expect(toastByText(page, /Registro creado/i)).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('action-cancel').click();
+    await expect(page.getByTestId('list-view')).toBeVisible({ timeout: 10_000 });
+    await findByNameAndCategory(page, name);
+
+    // Open it, edit Descripción + save, then delete the record.
+    await editDescriptionAndDelete(page, stamp, name);
+  });
+
+});

@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "generatedAt": "2026-08-01T00:36:50.964Z",
-  "updatedAt": "2026-09-09T14:13:00.578Z",
-  "checksum": "6ec56135b6cfbfba",
+  "updatedAt": "2026-09-25T17:51:39.233Z",
+  "checksum": "d4411669d7459cef",
   "frontendContract": {
     "window": {
       "id": "110",
@@ -99,11 +99,17 @@
             "enumValues": [
               {
                 "value": "CO",
-                "name": "Company"
+                "name": "Company",
+                "labels": {
+                  "es_ES": "Company"
+                }
               },
               {
                 "value": "FL",
-                "name": "Freelancer"
+                "name": "Freelancer",
+                "labels": {
+                  "es_ES": "Freelancer"
+                }
               }
             ],
             "defaultValue": "CO",
