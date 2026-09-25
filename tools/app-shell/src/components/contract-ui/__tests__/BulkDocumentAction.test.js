@@ -214,7 +214,10 @@ describe('BulkDocumentAction — preUnpostActions prop (ETP-5302)', () => {
     // ETP-5414 — `execute` now receives `wireActionName` (the resolved wire name), not the
     // raw `selectedAction` (the dropdown's INTENT value) — see the `neoActionName` describe
     // block below for why the two can differ.
-    const exec = runRow.indexOf('await execute(row.id, wireActionName)');
+    // ETP-5445 — the call is now `await (wireActionBody === undefined ? execute(row.id,
+    // wireActionName) : execute(row.id, wireActionName, wireActionBody))`; anchor on the
+    // two-arg form, which is the first `execute(` inside the awaited expression.
+    const exec = runRow.indexOf('execute(row.id, wireActionName)');
     assert.ok(pre > -1 && exec > -1, 'runRow must contain both steps');
     assert.ok(pre < exec, 'the pre-unpost must be awaited before the document action');
   });
@@ -224,9 +227,31 @@ describe('BulkDocumentAction — preUnpostActions prop (ETP-5302)', () => {
   // existing caller relies on the fallback (`?? selectedAction`), so this is a source-level
   // guard that the fallback expression itself is still there, verbatim.
   it('resolves wireActionName from the selected action\'s neoActionName, defaulting to selectedAction itself', () => {
+    // ETP-5445 — the lookup was split into `selectedActionDef` so `neoActionBody` can be
+    // read from the same action definition.
     assert.match(
       src,
-      /const wireActionName = actions\.find\(\(a\) => a\.value === selectedAction\)\?\.neoActionName \?\? selectedAction;/,
+      /const selectedActionDef = actions\.find\(\(a\) => a\.value === selectedAction\);/,
+    );
+    assert.match(
+      src,
+      /const wireActionName = selectedActionDef\?\.neoActionName \?\? selectedAction;/,
+    );
+  });
+
+  // ETP-5445 — `neoActionBody` is read only in neoAction mode; documentAction's third
+  // parameter is an unrelated options bag and must never receive it.
+  it('reads neoActionBody only in neoAction mode', () => {
+    assert.match(
+      src,
+      /const wireActionBody = actionMode === 'neoAction' \? selectedActionDef\?\.neoActionBody : undefined;/,
+    );
+  });
+
+  it('keeps execute at two args when there is no body', () => {
+    assert.match(
+      src,
+      /wireActionBody === undefined\s*\?\s*execute\(row\.id, wireActionName\)\s*:\s*execute\(row\.id, wireActionName, wireActionBody\)/,
     );
   });
 });

@@ -152,6 +152,10 @@ const FIXES_WITH_REPORT = new Set([
   // post-condition shape: the @report lists a sequence whose description is STILL set after @apply
   // and is empty whenever nothing was written between the update and the read.
   '20260922T130000Z__R39-document-sequence-clear-descriptions',
+  // R40 (ETP-5445, gap A4b) activates C_AcctSchema_Table for M_Internal_Consumption (800168). The
+  // @report lists an accounting schema that still cannot post it after @apply (row still inactive,
+  // or no 800168 row at all) and is empty on every clean run.
+  '20260923T120000Z__R40-internal-consumption-table-active',
 ]);
 
 async function loadCatalogFiles() {

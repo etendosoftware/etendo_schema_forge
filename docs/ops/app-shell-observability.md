@@ -106,7 +106,7 @@ linking the Mixpanel device ID to the user profile so that subsequent events are
 attributed to the identified user rather than an anonymous `$device:…` ID. It then
 calls `group('account_id', clientId)` to associate the session with the Mixpanel
 group. When a client name is available — either from the `clientName` parameter or
-from `localStorage.getItem('sf_auth_client_name')` — it also calls
+from the in-memory session identity (`lib/sessionIdentity.js`) — it also calls
 `groupSet('account_id', clientId, { $name: clientName })`, which writes the `$name`
 property on the Mixpanel Group Profile so the account appears by its company name
 in Mixpanel → Users → Accounts. Finally it calls `flush()` to guarantee delivery
@@ -303,9 +303,13 @@ Do not pass free-form user-entered values to `track`, `page`, or future business
 events. Add new event fields to the allowlist only when they are stable,
 non-sensitive product metadata.
 
-The health event helpers read `account_id` and `username` from `localStorage`
-(`sf_auth_client_id`, `sf_auth_user`). These are low-cardinality tenant identifiers,
-not PII entered by the user.
+The health event helpers read `account_id` from the in-memory session identity
+(`lib/sessionIdentity.js`), which `trackSessionStarted` records on sign-in and
+`useAccountIdentity()` refreshes from `useAuth()` after a reload. It is a
+low-cardinality tenant identifier, not PII entered by the user. Until ETP-5455 it came
+from the legacy `sf_auth_client_id` key, which nothing writes since the cookie session,
+so events went out with no `account_id`. The identity is never persisted and is cleared
+on logout.
 
 ## Adding Business Events
 

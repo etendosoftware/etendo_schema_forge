@@ -45,8 +45,8 @@ describe('SelectorChip (ETP-4000 Figma chip)', () => {
     assert.match(src, /<X[\s\S]/);
   });
 
-  it('uses the semantic muted-foreground label token and a transparent background (the gray fill lives on the field wrapper hover, not the chip)', () => {
-    assert.match(src, /text-\[hsl\(var\(--muted-foreground\)\)\]/);
+  it('uses the same text-primary token as text inputs for the label and a transparent background (the gray fill lives on the field wrapper hover, not the chip)', () => {
+    assert.match(src, /text-text-primary/);
     assert.match(src, /bg-transparent/);
   });
 

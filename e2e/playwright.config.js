@@ -7,6 +7,9 @@ import { resolve } from 'node:path';
 // user on every Playwright invocation.
 const authCredentialsPath = resolve(import.meta.dirname, '.auth-credentials.json');
 const hasAuthCredentials = existsSync(authCredentialsPath);
+// Same switch onboarding-register.integration.spec.js checks: only then does the setup
+// actually register accounts and rewrite the credentials file.
+const RUN_ONBOARDING_SETUP = process.env.E2E_ONBOARDING_INTEGRATION === '1';
 
 /**
  * Playwright configuration for Schema Forge E2E tests.
@@ -113,7 +116,11 @@ export default defineConfig({
     {
       name: 'integration',
       testIgnore: ['**/*.mocked.spec.js', '**/onboarding-register.integration.spec.js'],
-      dependencies: hasAuthCredentials ? [] : ['onboarding-setup'],
+      // Depend on the setup whenever it will register new accounts in this run, not only when
+      // the credentials file is missing: with a stale file present, integration used to start
+      // in parallel with the setup, and every spec that reads the file at module load kept the
+      // PREVIOUS run's account — already gone from the DB — and failed its login with a 401.
+      dependencies: hasAuthCredentials && !RUN_ONBOARDING_SETUP ? [] : ['onboarding-setup'],
       use: { ...devices['Desktop Chrome'] },
       workers: 1,
     },

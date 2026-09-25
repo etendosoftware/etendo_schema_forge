@@ -56,7 +56,8 @@ export function buildMenuActionExecutedHandler(ui, onRefresh) {
     // reactivate) also gets its toast and list refresh.
     if (!action.neoAction && !action.documentAction) return;
     if (result?.success === false) {
-      toast.error(translateBackendError(result?.message, ui) || ui?.('actionFailed'));
+      // ETP-5360 — forward the AD_MESSAGE keys so translateBackendError can map by identity.
+      toast.error(translateBackendError(result?.message, ui, { messageKeys: result?.messageKeys }) || ui?.('actionFailed'));
     } else {
       toast.success((action.successKey ? ui?.(action.successKey) : action.successMessage) || ui?.('actionCompleted'));
     }

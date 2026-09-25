@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useMemo } from 'react';
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Download, Edit2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
@@ -74,9 +74,14 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // email-history card refetches instead of showing its pre-send state.
   const [emailsRefreshSignal, setEmailsRefreshSignal] = useState(0);
   const openEmailModal = useCallback(() => setShowSendModal(true), []);
+  // Cleared on unmount: an un-cleared timer firing after the component is gone updates state on a
+  // dead component and, in tests, can outlive the whole jsdom environment for the file that
+  // scheduled it, surfacing as a "window is not defined" crash in a LATER, unrelated test file.
+  const closeTimeoutRef = useRef(null);
+  useEffect(() => () => clearTimeout(closeTimeoutRef.current), []);
   const closeEmailModal = useCallback(() => {
     setSendModalClosing(true);
-    setTimeout(() => { setSendModalClosing(false); setShowSendModal(false); }, 280);
+    closeTimeoutRef.current = setTimeout(() => { setSendModalClosing(false); setShowSendModal(false); }, 280);
   }, []);
 
   // ETP-4315 follow-up (2026-08-18) — same tableName as attachmentConfig below; lets

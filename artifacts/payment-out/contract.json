@@ -1,8 +1,8 @@
 {
-  "version": "0.15.0",
+  "version": "0.16.0",
   "generatedAt": "2026-04-29T18:11:46.137Z",
-  "updatedAt": "2026-08-30T01:23:09.385Z",
-  "checksum": "2252c1252c0676ea",
+  "updatedAt": "2026-09-24T10:36:51.931Z",
+  "checksum": "7c16e6750ba55ca0",
   "frontendContract": {
     "window": {
       "id": "6F8F913FA60F4CBD93DC1D3AA696E76E",
@@ -147,7 +147,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -194,7 +194,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
@@ -227,7 +227,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -280,7 +280,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
@@ -317,7 +317,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
@@ -1335,7 +1335,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['docStatus'] === 'TMP'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['docStatus'] === 'TMP'"
             }
           },
           {
@@ -1382,7 +1382,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
