@@ -875,6 +875,7 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
     'backendError.ibanChecksumInvalid':
       'El IBAN no es válido: los dígitos de control no coinciden',
     'backendError.invalidCountry': 'País no válido',
+    'backendError.countryRequired': 'El país es obligatorio',
     'backendError.countryIban': 'Se necesita el País para una cuenta IBAN.',
   });
 
@@ -952,6 +953,8 @@ describe('translateBackendError — country/IBAN validation (ETP-4896)', () => {
       ['The IBAN is not valid: the check digits do not match.',
         'El IBAN no es válido: los dígitos de control no coinciden'],
       ['Invalid country', 'País no válido'],
+      // ETP-5473: the create-time "country is mandatory" 400 from FinancialAccountHandler.
+      ['Country is required', 'El país es obligatorio'],
       // Reuses the DB message's key: same rule, one Spanish phrasing.
       ['A bank account with an IBAN must have a country.',
         'Se necesita el País para una cuenta IBAN.'],

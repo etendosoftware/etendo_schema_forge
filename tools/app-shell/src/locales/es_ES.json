@@ -20695,6 +20695,7 @@
     "backendError.ibanTooShort": "El IBAN es demasiado corto",
     "backendError.ibanChecksumInvalid": "El IBAN no es válido: los dígitos de control no coinciden",
     "backendError.invalidCountry": "País no válido",
+    "backendError.countryRequired": "El país es obligatorio",
     "backendError.ibanInvalid": "El código IBAN introducido no es correcto. Por favor revise el código IBAN y el país definido para el banco",
     "backendError.swiftRequired": "Para generar la Cuenta Mostrada con Código SWIFT es necesario introducir un Código SWIFT y el Número de Cuenta Genérica",
     "backendError.invalidAccountBpAndGroup": "No se pudo encontrar una cuenta contable necesaria para contabilizar el documento. Revisar la configuración contable del esquema contable, del producto y de la categoría de tercero. (Documento de {bp}, categoría {group})",
