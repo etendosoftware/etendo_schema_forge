@@ -838,5 +838,152 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
         expect(screen.getAllByTestId('recon-cand-currency-badge')).toHaveLength(1);
       });
     });
+
+    // ── QA edge cases (Sentinel) ──────────────────────────────────────────────
+    describe('QA edge cases', () => {
+      // A 1:N match group whose linked documents mix a USD receipt, a EUR bank fee (no foreign
+      // data, as CandidatesSupport emits a payment-less movement) and a GBP payment.
+      const RECON_CAND_FEE_EUR = {
+        id: 'TE', date: '2026-06-03T00:00:00Z', documentNo: '', partnerName: '',
+        amount: -2.5, pendingBalance: -2.5, status: 'reconciled', linked: true, suggested: false,
+      };
+      const RECON_CAND_GBP_PAYMENT = {
+        id: 'TG', date: '2026-06-04T00:00:00Z', documentNo: 'PAY-GBP', partnerName: 'Wayne Corp',
+        amount: -10, pendingBalance: -10, status: 'reconciled', linked: true, suggested: false,
+        currency: 'GBP', currencyId: 'cur-gbp', amountBase: -12, baseCurrency: 'EUR', rate: 1.2,
+      };
+      const LINE_RECONCILED_MIXED = {
+        ...LINE_RECONCILED_FOREIGN, id: 'LRM', amount: 14.53, reconciledAmount: 14.53,
+      };
+
+      it('1:N group mixing USD, EUR and GBP documents: badge + base line only on the foreign rows', () => {
+        setLines([LINE_RECONCILED_MIXED]);
+        setCandidates([RECON_CAND_FOREIGN, RECON_CAND_FEE_EUR, RECON_CAND_GBP_PAYMENT]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LRM');
+
+        const usdRow = screen.getByTestId('recon-cand-row-TF');
+        expect(within(usdRow).getByTestId('recon-cand-currency-badge')).toHaveTextContent('USD');
+        within(usdRow).getAllByTestId('recon-cand-amount-base').forEach((base) =>
+          expectEurOnTopForeignBelow(base, EUR_29(), USD_42()));
+
+        const gbpRow = screen.getByTestId('recon-cand-row-TG');
+        expect(within(gbpRow).getByTestId('recon-cand-currency-badge')).toHaveTextContent('GBP');
+        within(gbpRow).getAllByTestId('recon-cand-amount-base').forEach((base) =>
+          expectEurOnTopForeignBelow(base, `-${formatCurrency('EUR', 12)}`, `-${formatCurrency('GBP', 10)}`));
+
+        const feeRow = screen.getByTestId('recon-cand-row-TE');
+        expect(within(feeRow).queryByTestId('recon-cand-currency-badge')).not.toBeInTheDocument();
+        expect(within(feeRow).queryByTestId('recon-cand-amount-base')).not.toBeInTheDocument();
+        const feeImporte = within(feeRow).getByTestId('recon-unlink-TE').closest('td');
+        expect(feeImporte.textContent).toContain(formatCurrency('EUR', 2.5));
+
+        expect(screen.getAllByTestId('recon-cand-currency-badge')).toHaveLength(2);
+      });
+
+      it('"Desconciliar (N)" on a mixed-currency group sends every transaction id, no amounts', async () => {
+        setLines([LINE_RECONCILED_MIXED]);
+        setCandidates([RECON_CAND_FOREIGN, RECON_CAND_FEE_EUR, RECON_CAND_GBP_PAYMENT]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LRM');
+
+        // All linked documents are pre-checked on a reconciled line.
+        ['TF', 'TE', 'TG'].forEach((id) => expect(candidateCheckbox(id)).toBeChecked());
+        fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+        fireEvent.click(screen.getByTestId('recon-remove-accept'));
+
+        await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+        const payload = removeState.removeOperation.mock.calls[0][0];
+        expect([...payload.transactionIds].sort()).toEqual(['TE', 'TF', 'TG']);
+        expect(payload.statementLineId).toBe('LRM');
+        expect(Object.keys(payload).sort()).toEqual(
+          ['financialAccountId', 'statementLineId', 'transactionIds']);
+      });
+
+      it('non-EUR account (USD) with a EUR document: nothing is EUR-hardcoded', () => {
+        // Mirrors a real Core row: USD account, EUR payment of 500 at rate 2.5 -> 1250 USD.
+        setLines([{
+          ...LINE_RECONCILED_FOREIGN, id: 'LUSD', amount: 1250, reconciledAmount: 1250,
+        }]);
+        setCandidates([{
+          ...RECON_CAND_FOREIGN, id: 'TU', amount: 500, pendingBalance: 500,
+          currency: 'EUR', currencyId: 'cur-eur', amountBase: 1250, baseCurrency: 'USD', rate: 2.5,
+        }]);
+        renderPanel({ currency: 'USD' });
+        selectLine('LUSD');
+
+        const row = screen.getByTestId('recon-cand-row-TU');
+        expect(within(row).getByTestId('recon-cand-currency-badge')).toHaveTextContent('EUR');
+        const bases = within(row).getAllByTestId('recon-cand-amount-base');
+        expect(bases).toHaveLength(2);
+        bases.forEach((base) => expectEurOnTopForeignBelow(
+          base, formatCurrency('USD', 1250), formatCurrency('EUR', 500)));
+      });
+
+      it('non-EUR account (USD): a same-currency USD document gets no badge', () => {
+        setLines([{ ...LINE_RECONCILED_SAME, id: 'LUS', amount: 50, reconciledAmount: 50 }]);
+        setCandidates([{ ...RECON_CAND_SAME, id: 'TUS' }]);
+        renderPanel({ currency: 'USD' });
+        selectLine('LUS');
+
+        const row = screen.getByTestId('recon-cand-row-TUS');
+        expect(within(row).queryByTestId('recon-cand-currency-badge')).not.toBeInTheDocument();
+        expect(within(row).queryByTestId('recon-cand-amount-base')).not.toBeInTheDocument();
+        expect(row.textContent).toContain(formatCurrency('USD', 50));
+      });
+
+      it('PARTIAL line on a USD account: a EUR matched document shows USD on top, EUR below', () => {
+        setLines([partialLine([{
+          ...TXN_FOREIGN, transactionId: 'TXU', amount: 29.03, currency: 'USD',
+          foreignAmount: 11.61, foreignCurrency: 'EUR', foreignRate: 2.5,
+        }])]);
+        renderPanel({ currency: 'USD' });
+        selectLine('LPF');
+
+        const toggle = screen.getByTestId('recon-matched-toggle');
+        expect(toggle.textContent).toContain(formatCurrency('USD', 29.03));
+        expandMatchedBlock();
+        const row = screen.getByTestId('recon-matched-row-TXU');
+        expect(within(row).getByTestId('recon-cand-currency-badge')).toHaveTextContent('EUR');
+        expectEurOnTopForeignBelow(
+          within(row).getByTestId('recon-matched-amount-base-TXU'),
+          formatCurrency('USD', 29.03), formatCurrency('EUR', 11.61));
+      });
+
+      it('PARTIAL line: two foreign documents of different currencies each keep their own badge', () => {
+        setLines([partialLine([
+          TXN_FOREIGN,
+          {
+            transactionId: 'TXG', documentNo: 'PAY-GBP', contact: 'Wayne Corp', amount: 12,
+            foreignAmount: 10, foreignCurrency: 'GBP', currency: 'EUR', foreignRate: 1.2,
+            autoCreated: true,
+          },
+        ], 41.03)]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LPF');
+        expandMatchedBlock();
+
+        expect(within(screen.getByTestId('recon-matched-row-TXF'))
+          .getByTestId('recon-cand-currency-badge')).toHaveTextContent('USD');
+        const gbpRow = screen.getByTestId('recon-matched-row-TXG');
+        expect(within(gbpRow).getByTestId('recon-cand-currency-badge')).toHaveTextContent('GBP');
+        expectEurOnTopForeignBelow(
+          within(gbpRow).getByTestId('recon-matched-amount-base-TXG'),
+          formatCurrency('EUR', 12), formatCurrency('GBP', 10));
+      });
+
+      it('PARTIAL line: per-row unlink of a foreign matched document sends only its transaction id', async () => {
+        setLines([partialLine([TXN_FOREIGN])]);
+        renderPanel({ currency: 'EUR' });
+        selectLine('LPF');
+        expandMatchedBlock();
+
+        fireEvent.click(screen.getByTestId('recon-unlink-TXF'));
+        fireEvent.click(screen.getByTestId('recon-remove-accept'));
+
+        await waitFor(() => expect(removeState.removeOperation).toHaveBeenCalledTimes(1));
+        expect(removeState.removeOperation.mock.calls[0][0].transactionIds).toEqual(['TXF']);
+      });
+    });
   });
 });
