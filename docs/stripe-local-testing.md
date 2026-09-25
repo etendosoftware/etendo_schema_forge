@@ -190,14 +190,18 @@ the pay path. See "The 402 body and the kill switch" below.
 
 - **Tenant with an `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
   older one once the R37 backfill has run: the event writes the row. `CURRENT` → `STATUS = active`,
-  `PAST_DUE` → `past_due`, `EXPIRED` → `canceled`, and the due date goes to `CURRENT_PERIOD_END`
-  (cleared → null). Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
+  `PAST_DUE` → `past_due`, `EXPIRED` → `canceled`, and the due date goes to `GRACE_ANCHOR`
+  (cleared → null; before ETP-5047 it was `CURRENT_PERIOD_END`, and a `past_due` row still in
+  that shape is read through a fallback). Since ETP-5047 `CURRENT_PERIOD_START/END` hold Stripe's
+  billing period (from `customer.subscription.*` and the `invoice.paid` lines) and `LAST_EVENT_AT`
+  the ordering watermark. Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
   `ended_at`, else `canceled_at`, else now); a closed row reads as `canceled` whatever `STATUS`
   says, so the tenant is `free` and `EXPIRED`, and a new checkout for the same tenant opens a
   **fresh** row. Query the tenant's rows, newest first:
 
   ```sql
-  select status, start_date, end_date, current_period_end, stripe_subscription_id,
+  select status, start_date, end_date, grace_anchor, current_period_start, current_period_end,
+         last_event_at, stripe_subscription_id,
          provider_price_id
     from etgo_subscription
    where environment_client_id = '<clientId>' and isactive = 'Y'
@@ -208,8 +212,9 @@ the pay path. See "The 402 body and the kill switch" below.
   `AD_Preference` projection, as ETP-5443 shipped it — `ETGO_SubscriptionStatus` and
   `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
 
-`ETGO_SubscriptionEventAt` (the out-of-order-delivery watermark, see below) stays an
-`AD_Preference` for **both** kinds of tenant. Read preferences through the classic **Preference**
+The out-of-order-delivery watermark (see below) is `LAST_EVENT_AT` on the row for a tenant with a
+row (ETP-5047), and the `ETGO_SubscriptionEventAt` `AD_Preference` only for a tenant without one.
+Read preferences through the classic **Preference**
 window as System Administrator (filter by `Attribute` and the tenant's client), or call
 `TenantEnvironmentLifecycleService.resolve(clientId)` / `readSubscriptionState(clientId)` in a
 debugger — both read the same store the event wrote to. The expected results in §7 name the
@@ -264,7 +269,8 @@ unsupported.
 
 **An older event delivered out of order is ignored as stale, not applied over a newer one.**
 Stripe does not guarantee delivery order, and a `FAILED` row is retried later on Stripe's own
-schedule. `ETGO_SubscriptionEventAt` (an `AD_Preference` on the client) stores the `created`
+schedule. The watermark — `ETGO_SUBSCRIPTION.LAST_EVENT_AT` for a tenant with a row,
+`ETGO_SubscriptionEventAt` (an `AD_Preference` on the client) otherwise — stores the `created`
 instant — from the event envelope's own top-level field, not the nested object — of the last
 **applied** lifecycle event. An incoming event whose `created` is strictly before that stored
 value is ignored with `failure_reason = "stale event"`, and the stored projection is left
@@ -823,11 +829,11 @@ tenant's **open `etgo_subscription` row** when it has one — every purchase sin
 tenant backfilled by R37 — and to the `ETGO_SubscriptionStatus` / `ETGO_SubscriptionDueAt`
 preferences only when it has none (§1, "Where the outcome is stored"). The script reads the same
 store, re-checked on every poll: the row's `STATUS` (reported as `CURRENT` / `PAST_DUE` / `EXPIRED`
-for `active` / `past_due` / `canceled`, so both stores compare alike) and `CURRENT_PERIOD_END` as the
-due date when the row exists, the preferences otherwise. The RESULT block prints a
-`Lifecycle store : row | preference` line saying which one it checked. `status` prints the row
-(plus the `ETGO_SubscriptionEventAt` ordering watermark, which stays a preference on both routes)
-or the three preferences.
+for `active` / `past_due` / `canceled`, so both stores compare alike) and `GRACE_ANCHOR` as the
+due date when the row exists (with the pre-ETP-5047 `CURRENT_PERIOD_END` fallback), the preferences
+otherwise. The RESULT block prints a `Lifecycle store : row | preference` line saying which one it
+checked. `status` prints the row (status, grace anchor, billing period and the `LAST_EVENT_AT`
+watermark) or the three preferences.
 
 `fail` and `recover` **mutate the Stripe Test Mode account** (a human runs them, not an agent, per
 this repo's automation guardrails); `status` never mutates anything. Both refuse to run against a
@@ -963,6 +969,7 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-23 | A dispute is an alert only (ETP-5047) | Test Mode card `4000000000000259`, or a hand-signed `charge.dispute.created` (§4) | `event_result=APPLIED`; a WARN `Billing alert: ... charge.dispute.created`; no status or due-date change | P1 |
 | SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
 | SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; remove the property → 402 again | P0 |
+| SF-STRIPE-LOCAL-26 | Period and grace anchor are separate columns (ETP-5047) | Test Mode `tools/stripe-subscription-past-due.sh fail` then `recover` (§5), on a tenant with a row | after `fail`: `STATUS=past_due`, `GRACE_ANCHOR` = end of the paid period, `CURRENT_PERIOD_START/END` = Stripe's current period (unchanged by the failure); after `recover`: `STATUS=active`, `GRACE_ANCHOR` NULL, period advanced; `LAST_EVENT_AT` moves forward with each applied event | P0 |
 
 ## 8. Troubleshooting
 

@@ -55,8 +55,8 @@
 --       already gate on this same marker (R31-force-test-mode-demo-tenants,
 --       R32-revert-test-mode-productive-tenants) use `visibleat_client_id` verbatim. Using
 --       `ad_client_id` here would disagree with both of them about which tenants are productive.
---     The two LIFECYCLE preferences statement 2 reads (ETGO_SubscriptionStatus and
---     ETGO_SubscriptionDueAt) are the exception, and are scoped by `ad_client_id = :client_id`:
+--     The three LIFECYCLE preferences statement 2 reads (ETGO_SubscriptionStatus,
+--     ETGO_SubscriptionDueAt, ETGO_SubscriptionEventAt) are the exception, scoped by `ad_client_id`:
 --     their writer sets the row's client to the tenant and their reader filters on it. See the
 --     comment on statement 2.
 --
@@ -272,13 +272,23 @@ WHERE c.ad_client_id = :client_id
 -- constraint allows. 'canceled' keeps end_date NULL, the decided ETP-5046 behaviour for a
 -- canceled subscription (free immediately, row stays open).
 --
--- current_period_end comes from ETGO_SubscriptionDueAt; current_period_start stays NULL, so
--- ETGO_SUB_PERIOD_CHK (end >= start, either side NULL passes) can never reject the insert. The
--- value is cast only when it has the ISO-8601 UTC shape Instant.toString() writes; anything else
--- becomes NULL -- the same "ignore an invalid due timestamp" the Java reader applies -- instead
--- of raising and failing the tenant on a cosmetic value.
+-- grace_anchor comes from ETGO_SubscriptionDueAt (ETP-5047: the grace anchor has its own column;
+-- current_period_start/current_period_end now hold the provider billing period only, which the
+-- preferences never knew, so both stay NULL and ETGO_SUB_PERIOD_CHK can never reject the insert).
+-- The value is cast only when it has the ISO-8601 UTC shape Instant.toString() writes; anything
+-- else becomes NULL -- the same "ignore an invalid due timestamp" the Java reader applies --
+-- instead of raising and failing the tenant on a cosmetic value.
 --
--- TIME ZONE ASSUMPTION. current_period_end is a TIMESTAMP (no zone). The CAST to timestamptz
+-- last_event_at comes from ETGO_SubscriptionEventAt, the webhook ordering watermark, with the same
+-- shape check (ETP-5047: the watermark is a column of the row, and the row route no longer reads
+-- the preference -- without the carry-over the first event after the backfill could not be
+-- recognised as stale).
+--
+-- A tenant R37 reached BEFORE ETP-5047 (this file then wrote the anchor into current_period_end
+-- and had no grace_anchor to write) is still read correctly: SubscriptionService#graceAnchorOf
+-- falls back to current_period_end for a past_due row with no grace_anchor and no period start.
+--
+-- TIME ZONE ASSUMPTION. grace_anchor is a TIMESTAMP (no zone). The CAST to timestamptz
 -- fixes the instant; assigning it to the TIMESTAMP column renders it in the DATABASE SESSION's
 -- TimeZone (the server's `timezone` setting for this runner). Java reads the column back through
 -- Date/Timestamp in the TOMCAT JVM's default zone. The two agree only when the DB server
@@ -291,9 +301,8 @@ WHERE c.ad_client_id = :client_id
 -- Both preferences are scoped by AD_CLIENT_ID, NOT by VISIBLEAT_CLIENT_ID: develop's
 -- TenantEnvironmentLifecycleService#setPreferenceValue creates them with setClient(tenant) and
 -- reads them back through Preference.PROPERTY_CLIENT, unlike the ETGO_TenantPlan marker above.
--- Neither preference is removed here: ETGO_SubscriptionEventAt (the webhook ordering watermark)
--- stays a preference by decision, and the status/due-at pair is simply no longer read once the
--- row exists.
+-- No preference is removed here: the status/due-at/event-at trio is simply no longer read once
+-- the row exists (the row route reads status, grace_anchor and last_event_at from the row).
 INSERT INTO etgo_subscription (
   etgo_subscription_id, ad_client_id, ad_org_id, isactive,
   created, createdby, updated, updatedby,
@@ -301,7 +310,8 @@ INSERT INTO etgo_subscription (
   start_date, end_date, current_period_start, current_period_end,
   stripe_customer_id, stripe_subscription_id,
   etgo_account_id, provider_price_id, snapshot_amount, snapshot_currency,
-  pending_plan_id, pending_effective_date
+  pending_plan_id, pending_effective_date,
+  grace_anchor, last_event_at
 )
 SELECT
   '@uuid_ETGOSUB@',
@@ -318,14 +328,18 @@ SELECT
     ELSE 'active'
   END,
   COALESCE(cr.paid_at, c.created, now()),
+  NULL, NULL, NULL,
+  cr.stripe_customer_id, cr.stripe_subscription_id,
+  NULL, cr.stripe_price_id, NULL, NULL,
   NULL, NULL,
   CASE
     WHEN du.due_at_value ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,9})?)?Z$'
       THEN CAST(du.due_at_value AS timestamptz)
   END,
-  cr.stripe_customer_id, cr.stripe_subscription_id,
-  NULL, cr.stripe_price_id, NULL, NULL,
-  NULL, NULL
+  CASE
+    WHEN ev.event_at_value ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,9})?)?Z$'
+      THEN CAST(ev.event_at_value AS timestamptz)
+  END
 FROM ad_client c
 LEFT JOIN LATERAL (
   SELECT r.stripe_customer_id, r.stripe_subscription_id, r.stripe_price_id, r.paid_at
@@ -354,6 +368,15 @@ LEFT JOIN LATERAL (
   ORDER BY dp.updated DESC
   LIMIT 1
 ) du ON TRUE
+LEFT JOIN LATERAL (
+  SELECT trim(ep.value) AS event_at_value
+  FROM ad_preference ep
+  WHERE ep.attribute = 'ETGO_SubscriptionEventAt'
+    AND ep.ad_client_id = :client_id
+    AND ep.isactive = 'Y'
+  ORDER BY ep.updated DESC
+  LIMIT 1
+) ev ON TRUE
 WHERE c.ad_client_id = :client_id
   AND EXISTS (
     SELECT 1 FROM ad_preference tp

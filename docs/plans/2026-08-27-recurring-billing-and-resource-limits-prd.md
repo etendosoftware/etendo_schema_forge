@@ -280,10 +280,12 @@ Only the last tier is development, and it is additive rather than a modification
 > What is delivered where: ETP-5443 — the four lifecycle webhooks, the grace rule, out-of-order
 > protection, NEO enforcement, the portal and `/upgrade` staying reachable. ETP-5046 — the state
 > on the `ETGO_SUBSCRIPTION` row. ETP-5047 — correlation to the open row, close on cancel and
-> re-subscription, the shared guard at MCP, the `JwtAuthUtils` servlets and `/login`, the structured 402, the kill switch, the
-> dispute alert, the invoice period in the billing-event ledger. **Not yet delivered:** the Stripe
-> billing period on the row and the event watermark as a row column (open-and-notable-topics
-> §3.7, §5.5 in `com.etendoerp.go`), quota enforcement (ETP-5051), reconciliation (ETP-5048).
+> re-subscription, the shared guard at MCP, the `JwtAuthUtils` servlets and `/login`, the
+> structured 402, the kill switch, the dispute alert, the invoice period in the billing-event
+> ledger, and on the row the grace anchor in its own column (`GRACE_ANCHOR`), Stripe's billing
+> period in `CURRENT_PERIOD_START/END` and the event watermark (`LAST_EVENT_AT`)
+> (open-and-notable-topics §3.7, §5.5 in `com.etendoerp.go`). **Not yet delivered:** quota
+> enforcement (ETP-5051), reconciliation (ETP-5048).
 
 ### 9.1 Subscription states
 

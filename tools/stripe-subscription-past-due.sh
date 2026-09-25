@@ -418,12 +418,16 @@ get_lifecycle_status() {
   fi
 }
 
-# get_lifecycle_due_at: the grace anchor -- the row's CURRENT_PERIOD_END when
-# there is a row, ETGO_SubscriptionDueAt otherwise. Empty when cleared.
+# get_lifecycle_due_at: the grace anchor -- the row's GRACE_ANCHOR when there is a
+# row (ETP-5047; the same CURRENT_PERIOD_END fallback SubscriptionService#graceAnchorOf
+# applies to a pre-ETP-5047 past_due row), ETGO_SubscriptionDueAt otherwise. Empty when
+# cleared.
 get_lifecycle_due_at() {
   if [[ "$(lifecycle_store)" == "row" ]]; then
     run_sql -At -c \
-      "select coalesce(to_char(current_period_end, 'YYYY-MM-DD\"T\"HH24:MI:SS'), '')
+      "select coalesce(to_char(coalesce(grace_anchor,
+                case when status = 'past_due' and current_period_start is null
+                     then current_period_end end), 'YYYY-MM-DD\"T\"HH24:MI:SS'), '')
          from etgo_subscription
         where environment_client_id = '${CREATED_CLIENT_ID}' and isactive = 'Y' and end_date is null
         order by created desc
@@ -498,15 +502,16 @@ print_lifecycle_projection() {
   if [[ -n "$subscription_id" ]]; then
     echo "Stored lifecycle state (open ETGO_SUBSCRIPTION row $subscription_id, client $CREATED_CLIENT_ID):"
     run_sql -At -F'|' -c \
-      "select status, coalesce(current_period_end::text, '')
+      "select status, coalesce(grace_anchor::text, ''), coalesce(current_period_start::text, ''),
+              coalesce(current_period_end::text, ''), coalesce(last_event_at::text, '')
          from etgo_subscription where etgo_subscription_id = '${subscription_id}';" |
-      while IFS='|' read -r row_status row_period_end; do
+      while IFS='|' read -r row_status row_anchor row_period_start row_period_end row_event_at; do
         echo "  STATUS                   : $row_status"
-        echo "  CURRENT_PERIOD_END       : ${row_period_end:-<empty>}"
+        echo "  GRACE_ANCHOR             : ${row_anchor:-<empty>}"
+        echo "  CURRENT_PERIOD_START/END : ${row_period_start:-<empty>} .. ${row_period_end:-<empty>}"
+        echo "  LAST_EVENT_AT            : ${row_event_at:-<empty>} (ordering watermark, ETP-5047)"
       done
-    echo "  ETGO_SubscriptionEventAt : $(get_preference_value ETGO_SubscriptionEventAt)" \
-      "(ordering watermark; stays a preference on both routes)"
-    echo "  (the ETGO_SubscriptionStatus / ETGO_SubscriptionDueAt preferences are not read once a row exists)"
+    echo "  (the ETGO_Subscription* lifecycle preferences are not read once a row exists)"
   else
     echo "Stored lifecycle projection (AD_Preference, client $CREATED_CLIENT_ID -- no open subscription row):"
     echo "  ETGO_SubscriptionStatus  : $(get_preference_value ETGO_SubscriptionStatus)"
