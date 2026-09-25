@@ -358,6 +358,22 @@ describe('runPaidOnboarding', () => {
     assert.equal(messages.length, 3);
   });
 
+  it('does not serialize an empty transfer selection for an independent productive environment', async () => {
+    declareCookieSession();
+    installFetch(ndjsonResponse([RESULT]));
+
+    await runPaidOnboarding('https://api.test', {
+      clientName: 'Second Productive',
+      paymentToken: 'req-2',
+      dataTransfer: {},
+    });
+
+    const body = JSON.parse(calls[0][1].body);
+    assert.equal(body.clientName, 'Second Productive');
+    assert.equal(Object.hasOwn(body, 'demoClientId'), false);
+    assert.equal(Object.hasOwn(body, 'dataTransfer'), false);
+  });
+
   it('reassembles a result split across chunk boundaries', async () => {
     // The reader is handed 8-byte chunks, so `{"type":"result"…}` is guaranteed to arrive in
     // pieces. A buffering bug here loses the terminal message and reports a successful run as a
@@ -566,12 +582,20 @@ describe('the account billing reads', () => {
 
   it('reads the server-owned billing offer', async () => {
     declareCookieSession();
-    installFetch(jsonResponse({ amountMinor: 4900, currency: 'EUR', interval: 'month' }));
+    const stripeOffer = { code: 'productive-tenant', amountMinor: 1000, currency: 'USD', interval: 'year' };
+    installFetch(jsonResponse(stripeOffer));
 
     const result = await getBillingOffer('https://api.test');
 
-    assert.equal(result.amountMinor, 4900);
+    assert.deepEqual(result, stripeOffer);
     assert.equal(calls[0][0], 'https://api.test/sws/go/billing/offers');
+  });
+
+  it('does not invent amount or interval when the billing offer omits them', async () => {
+    declareCookieSession();
+    installFetch(jsonResponse({ currency: 'EUR' }));
+
+    assert.deepEqual(await getBillingOffer('https://api.test'), { currency: 'EUR' });
   });
 
   it('escapes the purchase id into the path', async () => {
@@ -740,19 +764,33 @@ describe('the account subscription', () => {
 // ETP-5443 REVIEW N6: Stripe's zero-decimal currencies (JPY et al.) already carry the display
 // amount in `amountMinor` — dividing by 100 would understate them 100x.
 describe('minorUnitsToAmount', () => {
-  it('divides by 100 for an ordinary (non-zero-decimal) currency', () => {
-    assert.equal(minorUnitsToAmount('eur', 2900), 29);
-    assert.equal(minorUnitsToAmount('EUR', 100), 1);
+  it('divides by 100 and keeps two fraction digits for an ordinary currency', () => {
+    assert.deepStrictEqual(minorUnitsToAmount('eur', 2900), { amount: 29, fractionDigits: 2 });
+    assert.deepStrictEqual(minorUnitsToAmount('EUR', 100), { amount: 1, fractionDigits: 2 });
+    assert.deepStrictEqual(minorUnitsToAmount('usd', 1050), { amount: 10.5, fractionDigits: 2 });
   });
 
   it('does not divide for a zero-decimal currency, case-insensitively', () => {
-    assert.equal(minorUnitsToAmount('jpy', 100), 100);
-    assert.equal(minorUnitsToAmount('JPY', 100), 100);
+    assert.deepStrictEqual(minorUnitsToAmount('jpy', 100), { amount: 100, fractionDigits: 0 });
+    assert.deepStrictEqual(minorUnitsToAmount('JPY', 100), { amount: 100, fractionDigits: 0 });
+  });
+
+  // Stripe keeps two-digit API amounts for ISK and UGX for backward compatibility, but neither can
+  // be charged in fractional units, so the amount is normalized by 100 and shown with no decimals.
+  it('divides ISK by 100 but displays it as whole units', () => {
+    assert.deepStrictEqual(minorUnitsToAmount('ISK', 500000), { amount: 5000, fractionDigits: 0 });
+    assert.deepStrictEqual(minorUnitsToAmount('isk', 100), { amount: 1, fractionDigits: 0 });
+  });
+
+  it('divides UGX by 100 but displays it as whole units', () => {
+    assert.deepStrictEqual(minorUnitsToAmount('UGX', 3700000), { amount: 37000, fractionDigits: 0 });
+    assert.deepStrictEqual(minorUnitsToAmount('ugx', 100), { amount: 1, fractionDigits: 0 });
   });
 
   it('returns null for a missing or non-finite amount', () => {
     assert.equal(minorUnitsToAmount('eur', null), null);
     assert.equal(minorUnitsToAmount('eur', undefined), null);
     assert.equal(minorUnitsToAmount('eur', NaN), null);
+    assert.equal(minorUnitsToAmount('eur', Infinity), null);
   });
 });

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { authHeaders } from '@/auth/api.js';
+import { buildWriteHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
 import { AmbiguousWindowError, UnknownWindowError, assertInternalPath, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
@@ -206,7 +206,9 @@ function messageText(message) {
     .join('');
 }
 
-export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
+// No `token` prop: under the cookie session (ETP-4576) the client holds none, and the
+// request credential is resolved per request from the active scheme instead.
+export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
   const navigate = useNavigate();
   const menuLabel = useMenuLabel();
   // filterMenuGroupsByAccess() returns a fresh array on every AppLayout
@@ -353,11 +355,19 @@ export function useAiCopilotChat({ token, onOpenCopilot, menuGroups }) {
 
   const transport = useMemo(() => new DefaultChatTransport({
     api: '/api/ai/chat',
-    headers: {
-      ...authHeaders(token),
+    // The chat POST is an unsafe method, so it needs the ACTIVE scheme's write proof:
+    // `Authorization` under `bearer`, `X-Go-CSRF` under the `__Host-` cookie session.
+    // `authHeaders()` is the read-side helper and sends neither under `cookie`, which is
+    // what left the BFF with no credential at all (ETP-4576).
+    //
+    // Resolved per request rather than captured once: the CSRF proof arrives with the
+    // session, and a memo that ran during the boot window would freeze it as absent for
+    // the lifetime of the transport.
+    headers: () => ({
+      ...buildWriteHeaders(),
       'x-opencode-session': opencodeSessionRef.current,
-    },
-  }), [token]);
+    }),
+  }), []);
   const [input, setInput] = useState('');
   const handlePageHelpFinish = useCallback(({ message }) => {
     if (!pageHelpPendingRef.current) return;
