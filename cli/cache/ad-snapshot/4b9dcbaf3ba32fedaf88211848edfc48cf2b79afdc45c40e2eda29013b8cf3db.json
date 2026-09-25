@@ -1,5 +1,5 @@
 {
-  "sql": "SELECT co.AD_Callout_ID, co.Name, mo.Classname, col.ColumnName, col.AD_Table_ID FROM AD_Callout co JOIN AD_Column col ON col.AD_Callout_ID = co.AD_Callout_ID JOIN AD_Tab t ON col.AD_Table_ID = t.AD_Table_ID LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = co.AD_Callout_ID WHERE t.AD_Window_ID = $1 ORDER BY co.AD_Callout_ID COLLATE \"C\", col.AD_Table_ID COLLATE \"C\", col.ColumnName COLLATE \"C\"",
+  "sql": "SELECT co.AD_Callout_ID, co.Name, mo.Classname, col.ColumnName, col.AD_Table_ID FROM AD_Callout co JOIN AD_Column col ON col.AD_Callout_ID = co.AD_Callout_ID JOIN AD_Tab t ON col.AD_Table_ID = t.AD_Table_ID LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = co.AD_Callout_ID AND mo.Action = 'C' WHERE t.AD_Window_ID = $1 ORDER BY co.AD_Callout_ID COLLATE \"C\", col.AD_Table_ID COLLATE \"C\", col.ColumnName COLLATE \"C\"",
   "versions": {
     "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
       "checksum": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
@@ -1534,18 +1534,11 @@
       "rows": []
     },
     "7a7021f92d915e51e998b9560b17636c7f0484e0b332b42d81af899b72333123": {
-      "checksum": "2bc6ca85af1c9c340fb425e10e8fb40ba741b8d74dcb7a9d1c5a9bfd58b75ed0",
+      "checksum": "ee3a5a83d4f20e6d80a0519c5272bf913a5b59c5689c2643126a6f6ecb324f16",
       "params": [
         "118"
       ],
       "rows": [
-        {
-          "ad_callout_id": "8D7D52080CF3467093DDE410B7BB0A2F",
-          "ad_table_id": "188",
-          "classname": "org.openbravo.erpCommon.ad_callouts.SE_ElementValue_AccountSign",
-          "columnname": "AccountType",
-          "name": "SE_ElementValue_AccountSign"
-        },
         {
           "ad_callout_id": "8D7D52080CF3467093DDE410B7BB0A2F",
           "ad_table_id": "188",
