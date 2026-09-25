@@ -3366,3 +3366,32 @@ restart — but it argues for running this fix close to a restart.
   universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
   discriminator query returns. Guard verified read-only (no write transaction) by simulating the
   post-step-1 state in a CTE.
+
+- **2026-09-25 — REFUTED (ETP-5481): `AD_MODULE.STATUS='P'` does NOT gate whether `update.database`
+  reloads a module's `src-db/database/sourcedata/*.xml`.** Following up on the 2026-09-25 entry above
+  (root cause "NOT fully isolated"), tested the user-proposed hypothesis directly on the local dev DB
+  (`etendo_go_2`, Tomcat confirmed stopped first): `UPDATE ad_module SET status='P' WHERE
+  ad_module_id='94E1B433CF55451EABB764750AC5902A'` (com.etendoerp.go, already `isindevelopment='Y'`),
+  then `./gradlew update.database` → `BUILD SUCCESSFUL`. Verified by comparing PKs, not just row
+  counts: `AEATSII_CAUSE_EXEMPTION.xml`'s six rows carry hardcoded IDs (`F67899BE2D5A41FAA1...` for
+  E1, etc.) that do NOT collide with the six rows already present at `ad_client_id='0'` (inserted
+  earlier the same day by the `R40` data-fix, with different generated UUIDs, e.g.
+  `F8A55896498B4206...` for E1) — and the table has NO unique constraint on `(ad_client_id, key)`,
+  only a PK on the id column, so a genuine reload would have produced 12 rows (6 old + 6 new,
+  duplicated by key) rather than silently deduplicating. After the run, `ad_client_id='0'` still had
+  exactly 6 rows, still the R40 data-fix's original IDs — the sourcedata file was NOT loaded. Reverted
+  `STATUS` back to `'A'` afterward (confirmed unchanged: `isindevelopment='Y'` untouched throughout).
+  **Root cause, from reading `src-db/database/build.xml`:** `STATUS='P'`/`'A'`/`'I'` is module
+  *install-lifecycle* bookkeeping — `database.postupdate.POSTGRE` stamps brand-new modules
+  `STATUS IS NULL OR 'I'` to `'P'`, and a separate `setApplied` target later flips `STATUS='P'` back to
+  `'A'` — it is unrelated to sourcedata reload. The actual `update.database` target's
+  `alterdatabasedataall` Ant task (line ~82) runs over **every** module's `sourcedata` directory
+  unconditionally (`dataFilter="*/src-db/database/sourcedata"`, no per-module STATUS filter in the
+  call), gated instead by the `onlyIfModified="${onlyIfModified}"` and `force="${force}"` Ant
+  properties (supplied by the Etendo Gradle plugin, not resolvable in this checkout — defaults live in
+  the external plugin jar). **Apply:** don't reach for `AD_MODULE.STATUS` to force a local sourcedata
+  reload — it does nothing for this path. To force it, use `-Pforce=true` (already tried per the prior
+  entry, also inconclusive on this DB) or `-PonlyIfModified=false` on `update.database`, or fall back
+  to the data-fix as the reliable seeding path (as R40 already does) and treat the sourcedata XML as
+  effective on a fresh `install.source`/CI build, not as something verifiable by flag-flipping an
+  already-provisioned local dev DB.
