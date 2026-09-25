@@ -850,6 +850,13 @@ export function ListView({
   }, [favActive, hook.items.length, hideRecordCount]);
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
+  // ETP-5387 — bumped only by the toolbar Refresh button and forwarded to the headerTable as
+  // `userRefreshTrigger` (not to be confused with the `refreshTrigger` INPUT prop above, which a
+  // host bumps to make ListView reload). `hook.refresh()` reloads ListView's own paginated page, which a custom
+  // headerTable that self-fetches its full dataset (chart-of-accounts) never renders; the
+  // counter lets such a slot reload too and show its own loading state. Deliberately NOT
+  // bumped by `onDataMutated` refreshes (save, delete, toggle), which must stay quiet.
+  const [userRefreshCounter, setUserRefreshCounter] = useState(0);
   // ETP-4656 — partial bulk-delete outcome: bump deselectTrigger with the ids of
   // the rows that were successfully deleted so DataTable drops only those from
   // its internal selection Set, leaving the failed rows checked (see
@@ -1065,6 +1072,7 @@ export function ListView({
     rowFilter: effectiveRowFilter,
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
+    userRefreshTrigger: userRefreshCounter,
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
@@ -1290,7 +1298,10 @@ export function ListView({
                 <RefreshButton
                   RefreshIconComponent={RefreshIconComponent}
                   iconButtonHover={iconButtonHover}
-                  onRefresh={() => hook.refresh()}
+                  onRefresh={() => {
+                    hook.refresh();
+                    setUserRefreshCounter((n) => n + 1);
+                  }}
                   label={ui('refresh')}
                   data-testid="RefreshButton__620cbc" />
                 {/* ETP-4997 (SHELL-02) — the arrow tracks the direction the DATA travels, not
