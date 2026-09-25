@@ -1,8 +1,8 @@
 {
-  "version": "0.50.0",
+  "version": "0.51.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-09-24T17:11:15.857Z",
-  "checksum": "88f4d68981b32ffc",
+  "updatedAt": "2026-09-25T14:32:50.987Z",
+  "checksum": "dae59bda14496865",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -1230,50 +1230,6 @@
             "form": false,
             "validation": {
               "maxLength": 22
-            }
-          },
-          {
-            "name": "eTGODelivStatusPurchase",
-            "apiKey": "eTGODelivStatusPurchase",
-            "column": "EM_ETGO_Deliv_Status_Purchase",
-            "label": "EM_ETGO_Deliv_Status_Purchase",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": false,
-            "columnType": "percent",
-            "section": "other",
-            "gridOrder": 7,
-            "computed": {
-              "mode": "stored",
-              "refresh": "synchronous"
-            },
-            "validation": {
-              "maxLength": 4
-            }
-          },
-          {
-            "name": "eTGOInvoiceStatus",
-            "apiKey": "eTGOInvoiceStatus",
-            "column": "EM_ETGO_Invoice_Status",
-            "label": "EM_ETGO_Invoice_Status",
-            "type": "integer",
-            "tsType": "number",
-            "visibility": "readOnly",
-            "required": false,
-            "grid": true,
-            "form": false,
-            "columnType": "percent",
-            "section": "other",
-            "gridOrder": 6,
-            "computed": {
-              "mode": "stored",
-              "refresh": "synchronous"
-            },
-            "validation": {
-              "maxLength": 4
             }
           }
         ],
@@ -3659,36 +3615,12 @@
             "required": false
           },
           {
-            "name": "eTGODelivStatusPurchase",
-            "apiKey": "eTGODelivStatusPurchase",
-            "column": "EM_ETGO_Deliv_Status_Purchase",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
             "name": "eTPRRemovePayment",
             "apiKey": "eTPRRemovePayment",
             "column": "EM_Etpr_Remove_Payment",
             "type": "button",
             "visibility": "discarded",
             "required": true
-          },
-          {
-            "name": "eTGODeliveryStatus",
-            "apiKey": "eTGODeliveryStatus",
-            "column": "EM_ETGO_Delivery_Status",
-            "type": "integer",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
-            "name": "eTGOInvoiceStatus",
-            "apiKey": "eTGOInvoiceStatus",
-            "column": "EM_ETGO_Invoice_Status",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
           }
         ],
         "javaQualifier": "purchaseOrderHeaderHandler"
@@ -6283,22 +6215,6 @@
         "description": "Field 'eTGOCurrencyRate' should be present in header"
       },
       {
-        "id": "t-field-presence-header-eTGODelivStatusPurchase",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "eTGODelivStatusPurchase",
-        "runner": "node",
-        "description": "Field 'eTGODelivStatusPurchase' should be present in header"
-      },
-      {
-        "id": "t-field-presence-header-eTGOInvoiceStatus",
-        "category": "field-presence",
-        "entity": "header",
-        "field": "eTGOInvoiceStatus",
-        "runner": "node",
-        "description": "Field 'eTGOInvoiceStatus' should be present in header"
-      },
-      {
         "id": "t-field-presence-header-etgoTotalDiscount",
         "category": "field-presence",
         "entity": "header",
@@ -7049,22 +6965,6 @@
         "field": "eTGOCurrencyRate",
         "runner": "node",
         "description": "Field 'eTGOCurrencyRate' should have type 'string' in header"
-      },
-      {
-        "id": "t-field-type-header-eTGODelivStatusPurchase",
-        "category": "field-type",
-        "entity": "header",
-        "field": "eTGODelivStatusPurchase",
-        "runner": "node",
-        "description": "Field 'eTGODelivStatusPurchase' should have type 'number' in header"
-      },
-      {
-        "id": "t-field-type-header-eTGOInvoiceStatus",
-        "category": "field-type",
-        "entity": "header",
-        "field": "eTGOInvoiceStatus",
-        "runner": "node",
-        "description": "Field 'eTGOInvoiceStatus' should have type 'number' in header"
       },
       {
         "id": "t-field-type-header-etgoTotalDiscount",
@@ -10570,14 +10470,6 @@
         "description": "System field 'dropShipPartner' should exist in backend but not frontend for header"
       },
       {
-        "id": "t-system-field-header-eTGODeliveryStatus",
-        "category": "system-field",
-        "entity": "header",
-        "field": "eTGODeliveryStatus",
-        "runner": "node",
-        "description": "System field 'eTGODeliveryStatus' should exist in backend but not frontend for header"
-      },
-      {
         "id": "t-system-field-header-eTPRRemovePayment",
         "category": "system-field",
         "entity": "header",
@@ -11630,25 +11522,25 @@
       }
     ],
     "summary": {
-      "total": 769,
+      "total": 764,
       "byCategory": {
         "action-endpoint": 23,
         "crud-flags": 5,
         "default-value-type": 25,
         "displaylogic-evaluable": 1,
         "displaylogic-valid": 1,
-        "field-presence": 96,
-        "field-type": 96,
+        "field-presence": 94,
+        "field-type": 94,
         "readonlylogic-evaluable": 43,
         "readonlylogic-valid": 43,
         "rule-declared": 233,
         "searchable-filters": 5,
         "selector-endpoint": 38,
-        "system-field": 155,
+        "system-field": 154,
         "visibility": 5
       },
       "byRunner": {
-        "node": 769,
+        "node": 764,
         "junit": 0
       }
     }

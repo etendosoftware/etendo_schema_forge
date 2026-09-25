@@ -2028,5 +2028,33 @@
     ],
     "author": "pipeline",
     "date": "2026-09-24"
+  },
+  {
+    "from": "0.50.0",
+    "to": "0.51.0",
+    "level": "breaking",
+    "reasons": [
+      "Field \"eTGODelivStatusPurchase\" removed from entity \"header\" in frontend",
+      "Field \"eTGOInvoiceStatus\" removed from entity \"header\" in frontend",
+      "Field \"eTGODelivStatusPurchase\" removed from entity \"header\" in backend",
+      "Field \"eTGODeliveryStatus\" removed from entity \"header\" in backend",
+      "Field \"eTGOInvoiceStatus\" removed from entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-09-25"
+  },
+  {
+    "from": "0.51.0",
+    "to": "0.52.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"eTGODelivStatusPurchase\" added to entity \"header\" in frontend",
+      "Field \"eTGOInvoiceStatus\" added to entity \"header\" in frontend",
+      "Field \"eTGODeliveryStatus\" added to entity \"header\" in backend",
+      "Field \"eTGODelivStatusPurchase\" added to entity \"header\" in backend",
+      "Field \"eTGOInvoiceStatus\" added to entity \"header\" in backend"
+    ],
+    "author": "pipeline",
+    "date": "2026-09-25"
   }
 ]

@@ -1,8 +1,8 @@
 {
-  "version": "0.50.0",
+  "version": "0.52.0",
   "generatedAt": "2026-04-30T15:42:46.497Z",
-  "updatedAt": "2026-09-24T17:11:15.857Z",
-  "checksum": "88f4d68981b32ffc",
+  "updatedAt": "2026-09-25T14:58:12.563Z",
+  "checksum": "ea74642be4c8e162",
   "frontendContract": {
     "window": {
       "id": "181",
@@ -3659,14 +3659,6 @@
             "required": false
           },
           {
-            "name": "eTGODelivStatusPurchase",
-            "apiKey": "eTGODelivStatusPurchase",
-            "column": "EM_ETGO_Deliv_Status_Purchase",
-            "type": "integer",
-            "visibility": "readOnly",
-            "required": false
-          },
-          {
             "name": "eTPRRemovePayment",
             "apiKey": "eTPRRemovePayment",
             "column": "EM_Etpr_Remove_Payment",
@@ -3680,6 +3672,14 @@
             "column": "EM_ETGO_Delivery_Status",
             "type": "integer",
             "visibility": "discarded",
+            "required": false
+          },
+          {
+            "name": "eTGODelivStatusPurchase",
+            "apiKey": "eTGODelivStatusPurchase",
+            "column": "EM_ETGO_Deliv_Status_Purchase",
+            "type": "integer",
+            "visibility": "readOnly",
             "required": false
           },
           {

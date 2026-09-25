@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.35.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-09-24T17:11:16.146Z",
-  "checksum": "09d3a09bab06c5c0",
+  "updatedAt": "2026-09-25T14:58:12.701Z",
+  "checksum": "505ebe37b343203b",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -1984,19 +1984,19 @@
             "required": true
           },
           {
-            "name": "eTGODelivStatusPurchase",
-            "apiKey": "eTGODelivStatusPurchase",
-            "column": "EM_ETGO_Deliv_Status_Purchase",
-            "type": "integer",
-            "visibility": "discarded",
-            "required": false
-          },
-          {
             "name": "eTGODeliveryStatus",
             "apiKey": "eTGODeliveryStatus",
             "column": "EM_ETGO_Delivery_Status",
             "type": "integer",
             "visibility": "readOnly",
+            "required": false
+          },
+          {
+            "name": "eTGODelivStatusPurchase",
+            "apiKey": "eTGODelivStatusPurchase",
+            "column": "EM_ETGO_Deliv_Status_Purchase",
+            "type": "integer",
+            "visibility": "discarded",
             "required": false
           },
           {
