@@ -20752,6 +20752,7 @@
     "backendError.transactionsObtainedForAccount": "Movimientos obtenidos para la cuenta: {account}.",
     "backendError.noNewTransactionsForAccount": "No se encontraron movimientos nuevos para la cuenta: {account}.",
     "backendError.syncFetchFailed": "El banco reportó un error al sincronizar: {detail}.",
+    "backendError.foreignDraftReconciliation": "La conciliación {documentNo} es un borrador sin confirmar que ya contiene movimientos conciliados. Revísala antes de deshacer una conciliación en esta cuenta.",
     "backendError.psd2ConnectionWentInactive": "La conexión de la cuenta {account} se encontró inactiva durante la sincronización. Por favor, reconecta la cuenta.",
     "backendError.psd2ConsentExpired": "El consentimiento bancario de la cuenta {account} ha expirado. Por favor, reconecta la cuenta.",
     "backendError.psd2ImportDateBeyondMaxInterval": "La fecha de inicio solicitada supera el intervalo máximo de {days} días que soporta este proveedor. Sólo se sincronizarán los movimientos de ese período.",

@@ -672,6 +672,23 @@ function matchNoNewTransactionsFound(msg) {
   return account ? { account } : null;
 }
 
+// ETP-5468 — ReconciliationDraftGuard (com.etendoerp.go) refuses to undo a reconciliation while
+// another draft reconciliation of the account holds matches nobody confirmed in Etendo GO (left by
+// the Classic "Add Transaction" / "Match Statement" buttons or the pre-ETP-4951 "Reactivar").
+// The prefix/suffix are MSG_FOREIGN_DRAFT_PREFIX / MSG_FOREIGN_DRAFT_SUFFIX there — keep in sync.
+const FOREIGN_DRAFT_PREFIX = 'Reconciliation ';
+const FOREIGN_DRAFT_SUFFIX =
+  ' is an unconfirmed draft that already holds matched movements.'
+  + ' Review it before undoing a reconciliation on this account.';
+
+function matchForeignDraftReconciliation(msg) {
+  if (!msg.startsWith(FOREIGN_DRAFT_PREFIX) || !msg.endsWith(FOREIGN_DRAFT_SUFFIX)) {
+    return null;
+  }
+  const documentNo = msg.slice(FOREIGN_DRAFT_PREFIX.length, -FOREIGN_DRAFT_SUFFIX.length);
+  return documentNo ? { documentNo } : null;
+}
+
 const SYNC_FETCH_FAILED_PREFIX = 'The bank reported an error while synchronizing: ';
 const SYNC_FETCH_FAILED_SUFFIX = '.';
 
@@ -870,6 +887,7 @@ const PARAMETERIZED_MATCHERS = [
   [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
   [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
   [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+  [matchForeignDraftReconciliation, 'backendError.foreignDraftReconciliation'],
   [matchFieldTooLong, 'backendError.fieldTooLong'],
   [matchConnectionWentInactive, 'backendError.psd2ConnectionWentInactive'],
   [matchConsentExpired, 'backendError.psd2ConsentExpired'],
