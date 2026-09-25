@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/ui/date-field';
@@ -596,25 +596,7 @@ function DeferredInput({ f, committedValue, onCommit, onFieldBlur, onValidateBlu
   // user's draft wins and we ignore committed-value changes to avoid clobbering input.
   // Idle external changes also become the new "last value" baseline so they are not
   // mistaken for a user edit on the next blur.
-  //
-  // useLayoutEffect, NOT useEffect (ETP-5414). A sibling field's own commit-on-blur
-  // handler can synchronously recompute and write THIS field's value via a local
-  // setter (e.g. Assets' handleAmountChange/computeAssetAmounts, which rewrites
-  // assetValue/residualAssetValue/depreciationAmt together from a single blur on any
-  // one of them — ETP-4333). That write lands in `hook.editing` in the same render
-  // pass a plain, non-deferred consumer of the same data (e.g. AssetsSidebar, or any
-  // other field that renders `data[key]` directly) picks up immediately. A DeferredInput
-  // for an UNTOUCHED sibling field only reflects that new value once THIS effect runs
-  // and calls setBuffer — and a passive `useEffect` is scheduled to run AFTER the browser
-  // paints, one commit behind. In a real browser that gap is observable: the DOM briefly
-  // (and in an automated read, deterministically) shows the sidebar/other consumers
-  // already updated while this input's own value is still the previous committed value.
-  // `act()` in Vitest/RTL masks this — it flushes passive effects synchronously before
-  // any assertion runs, so this class of bug is invisible to component tests and only
-  // reproduces in real-browser E2E. `useLayoutEffect` runs synchronously after DOM
-  // mutations but before paint, closing the gap for every `calloutOn: 'blur'` field in
-  // every window, not just Assets.
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!focusedRef.current) {
       setBuffer(committedValue);
       lastUserValueRef.current = committedValue;
