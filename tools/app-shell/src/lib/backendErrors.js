@@ -191,8 +191,10 @@ const BACKEND_ERROR_MAP = {
   // literal `@Product@` / `@Date@` placeholders still unresolved; Etendo Go users should see the
   // same actionable retry-later copy as the other transient costing message, not costing internals.
   'There is no cost defined for the product: @Product@ on @Date@': 'backendError.costNotCalculated',
-  // ETP-5360 — core `NotCalculatedCost`, returned ALREADY resolved via messageBD by
-  // DocumentPostingService (com.etendoerp.go), in the session language: base + es_ES text.
+  // ETP-5360 / ETP-5445 — core `NotCalculatedCost`, returned ALREADY resolved via messageBD by
+  // DocumentPostingService's cost pre-check (com.etendoerp.go), in the session language, when
+  // posting a Physical Inventory or Internal Consumption whose line transactions are not costed
+  // yet. Both the en_US MSGTEXT and the es_ES AD_MESSAGE_TRL text are mapped, exact match.
   ...sameKeyEntries(
     'backendError.costNotCalculated',
     'Cost has not yet been calculated for all products in the document.',
@@ -346,7 +348,8 @@ const BACKEND_ERROR_KEY_MAP = {
   // translateBackendError resolves here.
   PeriodClosedForUnPosting: 'backendError.periodClosedForUnposting',
   // ETP-5360 — core `NotCalculatedCost` ("Cost has not yet been calculated for all products in
-  // the document."), returned by DocumentPostingService's Physical Inventory pre-check. Mapped to
+  // the document."), returned by DocumentPostingService's Physical Inventory / Internal
+  // Consumption pre-check (ETP-5445). Mapped to
   // the same generic retry-later copy as the other two costing messages in BACKEND_ERROR_MAP.
   NotCalculatedCost: 'backendError.costNotCalculated',
 };

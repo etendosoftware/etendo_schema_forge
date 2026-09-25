@@ -2450,3 +2450,39 @@ describe('translateBackendError — NotCalculatedCost (ETP-5360)', () => {
     assert.equal(translateBackendError('@NotCalculatedCost@', t), 'COST_NOT_CALCULATED');
   });
 });
+
+// ── ETP-5445: core `NotCalculatedCost` (document-level) on Internal Consumption posting ──
+//
+// Posting an Internal Consumption whose products have no calculated cost yet makes the core
+// posting engine return the `NotCalculatedCost` AD_MESSAGE, already resolved in the session's
+// AD language. Both the en_US and the es_ES literal must reach the same actionable
+// `backendError.costNotCalculated` copy instead of the raw core text.
+describe('translateBackendError — document-level NotCalculatedCost (ETP-5445)', () => {
+  const RAW_EN = 'Cost has not yet been calculated for all products in the document.';
+  const RAW_ES = 'El coste aún no ha sido calculado para todos los productos en el documento.';
+  const EN = 'The cost of the product could not be calculated.';
+  const ES = 'No se pudo calcular el costo del producto.';
+  const tEn = (k) => (k === 'backendError.costNotCalculated' ? EN : k);
+  const tEs = (k) => (k === 'backendError.costNotCalculated' ? ES : k);
+
+  it('maps the en_US core literal to backendError.costNotCalculated', () => {
+    assert.equal(translateBackendError(RAW_EN, tEn), EN);
+  });
+
+  it('maps the es_ES core literal to backendError.costNotCalculated', () => {
+    assert.equal(translateBackendError(RAW_ES, tEs), ES);
+  });
+
+  it('maps the en_US literal even when the UI locale is Spanish', () => {
+    assert.equal(translateBackendError(RAW_EN, tEs), ES);
+  });
+
+  it('tolerates surrounding whitespace on the core literal', () => {
+    assert.equal(translateBackendError(`  ${RAW_ES}\n`, tEs), ES);
+  });
+
+  it('returns the raw literal unchanged when the translation key is missing', () => {
+    assert.equal(translateBackendError(RAW_EN, (k) => k), RAW_EN);
+    assert.equal(translateBackendError(RAW_ES, (k) => k), RAW_ES);
+  });
+});

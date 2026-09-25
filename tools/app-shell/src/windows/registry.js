@@ -307,6 +307,8 @@ const customLoaders = {
   'purchase-order': () => import('./custom/purchase-order/index.jsx'),
   'goods-receipt': () => import('./custom/goods-receipt/index.jsx'),
   'physical-inventory': () => import('./custom/physical-inventory/index.jsx'),
+  // ETP-5445 — adds grid bulk Post/Unpost and the row-hover Post/Unpost kebab.
+  'internal-consumption': () => import('./custom/internal-consumption/index.jsx'),
   'goods-movements': () => import('./custom/goods-movements/index.jsx'),
   'payment-out': () => import('./custom/payment-out/index.jsx'),
   'payment-in': () => import('./custom/payment-in/index.jsx'),
