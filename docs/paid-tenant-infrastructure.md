@@ -25,6 +25,7 @@ The canonical sources are:
 | The scorer: dimensions, points, registry schema | `docs/flag-debt.md` |
 | How to record debt, and the protocols around it | `docs/technical-debt-playbook.md` |
 | The backend: server-side flags, paywall, plan marker | `com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md` |
+| After the purchase: subscription lifecycle, grace, blocking, the 402 and its kill switch | `com.etendoerp.go` → `docs/open-and-notable-topics.md` §3.7–§3.11; operator page: "Operating environment-access enforcement" in `docs/feature-flags-and-tenant-upgrade.md` |
 
 ---
 
@@ -412,6 +413,10 @@ checkout request ID is an internal correlation key, not proof of payment by itse
 
 ## 3.4 The plan marker
 
+> **Snapshot from before ETP-5046.** The subscription row (`ETGO_SUBSCRIPTION`) is now the record of
+> a paid tenant and the preference below is only a transitional fallback; see
+> `feature-flags-and-tenant-upgrade.md` §3 in `com.etendoerp.go`.
+
 A tenant created through the paid flow is marked **productive**; every other tenant is
 **free**.
 
@@ -492,6 +497,29 @@ New event property names must also be added to `SAFE_EVENT_PROPERTY_KEYS` in
 `events.js`. A property missing from that list is silently stripped from the payload before it
 reaches Mixpanel; the event still fires, just without the property. There is no error and no log
 line, so a report that looks empty for one property but not others is the symptom.
+
+## 3.7 After the purchase: grace, blocking and the pay path (ETP-5443, ETP-5047)
+
+*Snapshot; the canonical sources are named in the header table.*
+
+A paid tenant stays usable while its subscription is `active`. When a renewal payment fails, Stripe
+tells Etendo through a webhook and the subscription becomes `past_due`: the tenant keeps working
+for a **grace period** (`etendo.go.billing.grace.days`, default 15 days) counted from the end of
+the period the customer already paid for. After that — or at once when the subscription is
+canceled, or when a demo's trial runs out — the tenant is **blocked**.
+
+Blocked means every request into the tenant's data is refused with HTTP 402, whatever the door:
+the web app's API (NEO), an AI agent over MCP, the smaller tenant endpoints and the endpoint that
+hands out a login token. The customer can still enter the environment, sees a screen that explains
+why and offers the way out — *Manage subscription* (the Stripe Customer Portal on `/account`) or
+*Upgrade plan* (`/upgrade`) — and both pages keep working, because blocking the pay path would
+lock the customer out for good. Paying clears the block with the next `invoice.paid`; a canceled
+subscription is replaced by a new purchase.
+
+Operations has one lever: a backend-only kill switch, `environment-access-enforcement-off`, which
+lets blocked tenants in (for one tenant or for all) during an incident and logs what it would have
+refused. Enforcement is on by default and stays on when the switch is unset or the control plane
+is unreachable.
 
 ---
 

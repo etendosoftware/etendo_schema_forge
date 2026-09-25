@@ -565,7 +565,10 @@ as `true`, locally any of `true`, `Y`, `yes`, `1` (case-insensitive, trimmed; an
 enforcing) — and the would-be refusal is then logged at INFO. It
 can be targeted per tenant on ConfigCat through the `clientId` attribute. Owned paths and pending
 specs are in [`flags-registry.json`](../flags-registry.json) under
-`environment-access-enforcement-kill-switch`.
+`environment-access-enforcement-kill-switch`. How to flip it in a shared environment, the deploy
+order and what support sees for a blocked tenant: "Operating environment-access enforcement" in
+`com.etendoerp.go` `docs/feature-flags-and-tenant-upgrade.md`; locally, see
+[`stripe-local-testing.md`](stripe-local-testing.md) "The 402 body and the kill switch".
 
 ## Proof of Concept menu (`proof-of-concept-menu`)
 
