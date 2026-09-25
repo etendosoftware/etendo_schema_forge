@@ -7,11 +7,11 @@
   "title": { "en_US": "Aging of Payables", "es_ES": "Antigüedad de Pagos" },
   "orientation": "landscape",
   "neo": {
-    "endpoint": "/sws/neo/aging-receivable",
+    "endpoint": "/sws/neo/aging-payable",
     "method": "POST",
-    "body": { "recOrPay": "PAYABLES" },
+    "body": {},
     "dataPath": "response.data",
-    "handler": "agingReportHandler"
+    "handler": "agingPayableReportHandler"
   },
   "columns": [
     { "field": "bPartner", "label": { "en_US": "Contact", "es_ES": "Contacto" }, "type": "string", "width": "20%", "sortable": true },
