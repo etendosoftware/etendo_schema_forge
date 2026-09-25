@@ -68,8 +68,19 @@ export default function AttachmentsTab({
   onSaveHeader,
   onGoToSavedRecord,
   isDocumentReadOnly,
+  readOnly = false,
 }) {
   const ui = useUI();
+  // ETP-5432/ETP-5205 merge fix: `isDocumentReadOnly` (generic, wired by DetailView
+  // from the document's own lock/processed state) and `readOnly` (explicit, for
+  // bespoke callers outside DetailView — e.g. fiscal-models' "Justificante" tab,
+  // which is not rendered through DetailView) are two independent signals; either
+  // one should suppress delete. Losing either source silently re-enables delete on
+  // a record that must not allow it — this exact regression shipped once already:
+  // a develop merge kept `isDocumentReadOnly` and dropped `readOnly`, so both
+  // FmModel303Page's and FmModel349Page's `readOnly={status !== 'draft'}` silently
+  // stopped doing anything.
+  const effectiveReadOnly = !!isDocumentReadOnly || !!readOnly;
   const saveBeforeAttach = !!config.saveBeforeAttach;
   const [isSavingBeforeAttach, setIsSavingBeforeAttach] = useState(false);
 
@@ -160,13 +171,16 @@ export default function AttachmentsTab({
     }
   };
 
-  const onDeleteAll = !isDocumentReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
+  const onDeleteAll = !effectiveReadOnly && items.length > 0 ? () => setConfirmDeleteAll(true) : undefined;
 
   return (
     <div className="space-y-2" data-testid="attachments-tab-panel">
       <UploadDropzone
         onFiles={handleUpload}
         config={effectiveConfig}
+        // Upload stays gated by `isDocumentReadOnly` only — the bespoke `readOnly`
+        // prop is delete-only by contract (see JSDoc above: "download/upload stay
+        // available"), so it must not disable the dropzone.
         disabled={!recordId || isSavingBeforeAttach || isDocumentReadOnly}
         data-testid="UploadDropzone__281340" />
       <AttachmentsTable
@@ -174,7 +188,7 @@ export default function AttachmentsTab({
         loading={loading}
         uploadingFiles={uploadingFiles}
         onDownload={download}
-        onDelete={isDocumentReadOnly ? undefined : setDeletingAttachment}
+        onDelete={effectiveReadOnly ? undefined : setDeletingAttachment}
         onDownloadAll={items.length > 0 ? downloadAll : undefined}
         onDeleteAll={onDeleteAll}
         formatBytes={formatBytes}
