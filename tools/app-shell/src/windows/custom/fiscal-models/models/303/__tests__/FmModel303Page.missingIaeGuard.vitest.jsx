@@ -72,7 +72,23 @@ vi.mock('../FmBoxes303.jsx', () => ({
   default: () => React.createElement('div', { 'data-testid': 'fm-boxes-303' }, 'boxes'),
 }));
 vi.mock('../../../FmOverlays.jsx', () => ({
-  PresentModal: () => null,
+  // Exposes one "invoke onConfirm" button per PresentModal path (real bug found via live
+  // retest: 'submitted'/'submitted_ack' — the two DIRECT manual paths — never went through
+  // ANY missing-IAE check at all, only 'aeat_telematic' did via AeatSubmitFlow's own guard).
+  PresentModal: ({ onConfirm }) => React.createElement(
+    'div',
+    { 'data-testid': 'PresentModal-mock' },
+    React.createElement(
+      'button',
+      { 'data-testid': 'present-confirm-submitted', onClick: () => onConfirm?.({ status: 'submitted', acuseFile: null }) },
+      'confirm-submitted',
+    ),
+    React.createElement(
+      'button',
+      { 'data-testid': 'present-confirm-submitted-ack', onClick: () => onConfirm?.({ status: 'submitted_ack', acuseFile: null }) },
+      'confirm-submitted-ack',
+    ),
+  ),
   // Exposes an "invoke onConfirm" button so tests can drive handleGenerate directly,
   // same pattern as FmModel303Page.vitest.jsx.
   FileGenModal303: ({ onConfirm }) => React.createElement(
@@ -220,5 +236,107 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
     for (const call of showIaeActivityReminder.mock.calls) {
       expect(call[1]).toBe(navigateMock);
     }
+  });
+});
+
+// Real bug found via live retest (hard reload, not a stale build): choosing either of the
+// two DIRECT manual "Registrar/Presentar" paths ("Presentación con/sin Acuse de recibo",
+// PresentModal's LEFT column) skipped the missing-IAE guard entirely — only the
+// 'aeat_telematic' path ever reached a check (AeatSubmitFlow's own `checkMissingIaeGuard`,
+// deep inside a separate modal). `handlePresent` now runs the SAME guard (reused from
+// AeatSubmitFlow.jsx, not a 4th hand-rolled copy) up front, before `persistEditableFields`/
+// `handleStatusChange`, for every path uniformly.
+describe('FmModel303Page — missing default IAE activity guard covers the manual "Registrar/Presentar" paths too', () => {
+  async function openPresentAndConfirm(testId) {
+    const presentBtn = Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.submit'));
+    fireEvent.click(presentBtn);
+    fireEvent.click(await screen.findByTestId(testId));
+  }
+
+  it('blocks the "sin acuse" path (status "submitted") before any status change', async () => {
+    global.fetch = makeFetchMock({ iaeRows: [] });
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} onStatusChange={onStatusChange} />);
+
+    await openPresentAndConfirm('present-confirm-submitted');
+
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
+    expect(onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('blocks the "con acuse" path (status "submitted_ack") the same way', async () => {
+    global.fetch = makeFetchMock({ iaeRows: [] });
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} onStatusChange={onStatusChange} />);
+
+    await openPresentAndConfirm('present-confirm-submitted-ack');
+
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
+    expect(onStatusChange).not.toHaveBeenCalled();
+  });
+
+  it('lets a manual path through normally once a valid default IAE activity exists', async () => {
+    global.fetch = makeFetchMock({ iaeRows: [{ id: 'row-1', default: true, epiaeCode: 'C1' }] });
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} onStatusChange={onStatusChange} />);
+
+    await openPresentAndConfirm('present-confirm-submitted');
+
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalledWith(LAST_PERIOD_DECL.id, 'submitted', 'manual_no_receipt'));
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
+  });
+
+  it('non-last period: never checks actividadesDelIae and proceeds normally', async () => {
+    const fetchMock = makeFetchMock({ iaeRows: [] }); // would block if (wrongly) checked
+    global.fetch = fetchMock;
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={NOT_LAST_PERIOD_DECL} {...defaultProps} onStatusChange={onStatusChange} />);
+
+    await openPresentAndConfirm('present-confirm-submitted');
+
+    await waitFor(() => expect(onStatusChange).toHaveBeenCalled());
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
+  });
+
+  // ── Async-timing verification (this is the part a synchronous render/mock can't catch) ──
+  it('awaits the guard under a SLOW/delayed network response — no race, no fail-open on "not yet resolved"', async () => {
+    // Models a genuine hard-reload: the actividadesDelIae fetch (fired both by this page's
+    // own pt.10 mount effect AND by handlePresent's own guard call) stays PENDING until the
+    // test explicitly resolves it — mimicking real network latency the previous synchronous
+    // tests/mocks never modeled. If `handlePresent` read a not-yet-settled value instead of
+    // `await`ing the guard, or defaulted to "not blocked" while pending, `onStatusChange`
+    // would already have fired by the time we assert, BEFORE the network call ever resolves.
+    const pendingResolvers = [];
+    global.fetch = vi.fn((url) => {
+      if (url.includes('/organization/actividadesDelIae')) {
+        return new Promise((resolve) => {
+          pendingResolvers.push(() => resolve({ ok: true, json: async () => ({ response: { data: [] } }) }));
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    function resolveAllPendingIaeFetches() {
+      pendingResolvers.splice(0).forEach(resolve => resolve());
+    }
+
+    const onStatusChange = vi.fn();
+    render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} onStatusChange={onStatusChange} />);
+
+    const presentBtn = Array.from(document.querySelectorAll('button'))
+      .find(b => b.textContent.includes('fm.action.submit'));
+    fireEvent.click(presentBtn);
+    fireEvent.click(await screen.findByTestId('present-confirm-submitted'));
+
+    // The guard's own fetch is still in flight at this point — handlePresent must be
+    // suspended on it, not have already decided "not blocked" and moved on.
+    expect(onStatusChange).not.toHaveBeenCalled();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
+
+    // Now let the slow network response(s) resolve.
+    resolveAllPendingIaeFetches();
+
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
+    expect(onStatusChange).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,7 @@ import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
-import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.jsx';
+import AeatSubmitFlow, { isMissingDefaultIaeActivity, checkMissingIaeGuard } from './AeatSubmitFlow.jsx';
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -862,6 +862,31 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         "Completá {fields} antes de marcar la declaración como presentada.",
       );
       return;
+    }
+    // ETP-4975 / ETP-5432 pt.10 follow-up (real bug, found via live retest, not a race
+    // condition) — this guard was previously wired into "Generar fichero 303"
+    // (`handleGenerate`'s own inline check) and into `AeatSubmitFlow.jsx`'s "Submit to
+    // AEAT" (`checkMissingIaeGuard`, reused here rather than a 4th hand-rolled copy), but
+    // NEVER into this function — so choosing either of the two DIRECT manual paths in
+    // PresentModal's left column ("Presentación con Acuse de recibo" / "... sin Acuse de
+    // recibo", `newStatus` 'submitted_ack'/'submitted') skipped the guard entirely and fell
+    // straight through to `handleStatusChange` below, marking a last-period declaration
+    // as presented with no default IAE activity configured — no toast, no block. Checked
+    // here, covering ALL THREE paths uniformly (including 'aeat_telematic', which also
+    // still re-checks inside AeatSubmitFlow's own handleSubmit — a harmless belt-and-braces
+    // duplicate, same pattern as the `isSubmitted` double-check elsewhere in this file —
+    // but now fails fast at path-confirmation time instead of after opening that modal).
+    // Same fail-OPEN-on-error semantics as every other call site: a flaky pre-check must
+    // never manufacture a false block.
+    if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
+      const iaeGuard = await checkMissingIaeGuard({
+        decl, selectedOrg, t,
+        apiFetch: (path) => apiFetch(`${neoBase(apiBaseUrl)}${path}`),
+      });
+      if (iaeGuard.blocked) {
+        showIaeActivityReminder(t, navigate);
+        return;
+      }
     }
     const { ok: savedOk } = await persistEditableFields();
     if (!savedOk) {
