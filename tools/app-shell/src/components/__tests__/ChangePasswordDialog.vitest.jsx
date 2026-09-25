@@ -56,6 +56,10 @@ vi.mock('../copilot/copilotApi.js', () => ({
   detectBaseUrl: () => 'https://base',
 }));
 
+import {
+  resetSessionCredentials,
+  setSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { ChangePasswordDialog } from '../ChangePasswordDialog.jsx';
 
 async function fillForm(user, { current = 'old', next = 'new', confirm = 'new' } = {}) {
@@ -68,11 +72,17 @@ describe('ChangePasswordDialog', () => {
   beforeEach(() => {
     changePassword.mockReset();
     localStorage.clear();
+    // ETP-5455: the cookie session is the only credential the browser holds; the CSRF proof it
+    // issued is what changePassword's third argument carries.
+    setSessionCredentials({ mode: 'cookie', token: null, csrfToken: 'session-csrf' });
   });
 
-  it('changes the password with the platform token and triggers onSuccess (logout)', async () => {
+  afterEach(() => {
+    resetSessionCredentials();
+  });
+
+  it('changes the password with the session CSRF proof and triggers onSuccess (logout)', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     changePassword.mockResolvedValue({ token: 'rotated' });
     const onSuccess = vi.fn();
 
@@ -82,13 +92,32 @@ describe('ChangePasswordDialog', () => {
     await user.click(screen.getByTestId('change-password-submit'));
 
     await waitFor(() => {
-      expect(changePassword).toHaveBeenCalledWith(fetch, 'https://base', 'platform-token', {
+      expect(changePassword).toHaveBeenCalledWith(fetch, 'https://base', 'session-csrf', {
         currentPassword: 'old',
         newPassword: 'new',
         confirmPassword: 'new',
       });
     });
     expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * ETP-5455 (H3) — the dialog passed localStorage['sf_platform_token'] as changePassword's third
+   * argument, which is the X-Go-CSRF proof: under the cookie session nothing writes that key, so
+   * the request went out without CSRF and the backend answered 403 on every password change.
+   */
+  it('never sends a leftover sf_platform_token in place of the CSRF proof', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem('sf_platform_token', 'stale-platform-token');
+    changePassword.mockResolvedValue({});
+
+    render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={vi.fn()} />);
+
+    await fillForm(user);
+    await user.click(screen.getByTestId('change-password-submit'));
+
+    await waitFor(() => expect(changePassword).toHaveBeenCalled());
+    expect(changePassword.mock.calls[0][2]).toBe('session-csrf');
   });
 
   it('blocks submission and shows an error when passwords do not match', async () => {
@@ -107,7 +136,6 @@ describe('ChangePasswordDialog', () => {
 
   it('shows the server error and does not log out when the change fails', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     changePassword.mockRejectedValue({ userMessage: 'Wrong current password' });
     const onSuccess = vi.fn();
 
@@ -125,7 +153,6 @@ describe('ChangePasswordDialog', () => {
   // PasswordPolicy documenting it as "translate on the frontend".
   it('translates a coded error instead of showing the server English text', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     changePassword.mockRejectedValue({
       code: 'INVALID_CURRENT_PASSWORD',
       userMessage: 'The current password is not correct.',
@@ -179,7 +206,6 @@ describe('ChangePasswordDialog', () => {
 
   it('keeps the dialog state while a submission is in flight (close is a no-op)', async () => {
     const user = userEvent.setup();
-    localStorage.setItem('sf_platform_token', 'platform-token');
     let resolveChange;
     changePassword.mockImplementation(
       () => new Promise((resolve) => { resolveChange = resolve; }),
@@ -222,7 +248,6 @@ describe('ChangePasswordDialog', () => {
 
     it('still sends the current password when the account has one', async () => {
       const user = userEvent.setup();
-      localStorage.setItem('sf_platform_token', 'platform-token');
       changePassword.mockResolvedValue({ token: 'rotated' });
 
       render(<ChangePasswordDialog open onOpenChange={vi.fn()} onSuccess={vi.fn()} hasPassword />);
@@ -277,7 +302,6 @@ describe('ChangePasswordDialog', () => {
     it('sends a payload with no currentPassword key so the server takes the enrolling branch',
       async () => {
         const user = userEvent.setup();
-        localStorage.setItem('sf_platform_token', 'platform-token');
         changePassword.mockResolvedValue({ token: 'rotated' });
         const onSuccess = vi.fn();
 
@@ -288,10 +312,10 @@ describe('ChangePasswordDialog', () => {
         await user.click(screen.getByTestId('change-password-submit'));
 
         await waitFor(() => expect(changePassword).toHaveBeenCalledTimes(1));
-        const [fetchArg, baseUrl, token, payload] = changePassword.mock.calls[0];
+        const [fetchArg, baseUrl, csrf, payload] = changePassword.mock.calls[0];
         expect(fetchArg).toBe(fetch);
         expect(baseUrl).toBe('https://base');
-        expect(token).toBe('platform-token');
+        expect(csrf).toBe('session-csrf');
         expect(payload).not.toHaveProperty('currentPassword');
         expect(payload).toEqual({ newPassword: 'brand-new', confirmPassword: 'brand-new' });
         expect(onSuccess).toHaveBeenCalledTimes(1);
@@ -314,7 +338,6 @@ describe('ChangePasswordDialog', () => {
 
     it('shows the translated server refusal and does not sign the user out', async () => {
       const user = userEvent.setup();
-      localStorage.setItem('sf_platform_token', 'platform-token');
       changePassword.mockRejectedValue({
         code: 'WEAK_PASSWORD',
         userMessage: 'That password is too weak.',

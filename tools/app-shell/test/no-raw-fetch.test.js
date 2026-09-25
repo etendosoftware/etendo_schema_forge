@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SRC = join(__dirname, '..', 'src');
+const REPO_ROOT = join(__dirname, '..', '..', '..');
+const APP_SHELL_SRC = join(__dirname, '..', 'src');
+const ARTIFACTS = join(REPO_ROOT, 'artifacts');
 
 // Unauthenticated by design. Each entry names WHY, because "it was already there" is not
 // a reason and this list is the only place the exception is recorded.
@@ -33,6 +35,18 @@ const ALLOWED_FILES = new Map([
 ]);
 
 const OPT_OUT = 'raw-fetch-ok';
+
+function collectArtifactCustomRoots() {
+  return readdirSync(ARTIFACTS)
+    .map((entry) => join(ARTIFACTS, entry, 'custom'))
+    .filter((dir) => {
+      try {
+        return statSync(dir).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+}
 
 function collectSourceFiles(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
@@ -81,11 +95,18 @@ function rawFetchLines(source) {
 describe('request policy (ETP-5022)', () => {
   it('no source file calls fetch directly', () => {
     const offenders = [];
-    for (const file of collectSourceFiles(SRC)) {
-      if (ALLOWED_FILES.has(relative(SRC, file))) continue;
-      const lines = rawFetchLines(readFileSync(file, 'utf8'));
-      const name = relative(SRC, file).split(sep).join('/');
-      for (const line of lines) offenders.push(`${name}:${line}`);
+    const sourceRoots = [
+      { dir: APP_SHELL_SRC, allowedFiles: ALLOWED_FILES },
+      ...collectArtifactCustomRoots().map((dir) => ({ dir, allowedFiles: null })),
+    ];
+
+    for (const { dir, allowedFiles } of sourceRoots) {
+      for (const file of collectSourceFiles(dir)) {
+        if (allowedFiles?.has(relative(dir, file))) continue;
+        const lines = rawFetchLines(readFileSync(file, 'utf8'));
+        const name = relative(REPO_ROOT, file).split(sep).join('/');
+        for (const line of lines) offenders.push(`${name}:${line}`);
+      }
     }
 
     assert.deepEqual(
@@ -105,7 +126,7 @@ describe('request policy (ETP-5022)', () => {
   it('every allowed exception still exists and still needs the exception', () => {
     // A stale entry silently re-opens the hole for whatever later occupies that path.
     for (const [file, reason] of ALLOWED_FILES) {
-      const full = join(SRC, file);
+      const full = join(APP_SHELL_SRC, file);
       assert.doesNotThrow(() => statSync(full), `${file} is listed as an exception but no longer exists`);
       assert.ok(reason.length > 10, `${file} needs a real reason, got "${reason}"`);
     }

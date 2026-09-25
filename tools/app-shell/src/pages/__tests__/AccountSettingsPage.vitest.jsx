@@ -68,12 +68,25 @@ vi.mock('@/components/ChangePasswordDialog.jsx', () => ({
 // own load had resolved. The page's own contract for the section is just: mount it once
 // loaded, with the base URL and the composed test id.
 const subscriptionSectionRender = vi.fn();
+// ETP-5455 — the stand-in can report an expired session the way the real section does (it owns the
+// billing request), so the page's handling of that report is observable without Stripe.
 vi.mock('@/components/account/SubscriptionSection.jsx', () => ({
   SubscriptionSection: (props) => {
     subscriptionSectionRender(props);
-    return <div data-testid={props['data-testid'] || 'SubscriptionSection__account'} />;
+    return (
+      <div data-testid={props['data-testid'] || 'SubscriptionSection__account'}>
+        <button type="button" data-testid="subscription-report-session-expired"
+                onClick={() => props.onSessionExpired?.()} />
+      </div>
+    );
   },
 }));
+
+function httpError(status) {
+  const error = new Error(`HTTP ${status}`);
+  error.status = status;
+  return error;
+}
 
 function lastDialogProps() {
   const calls = changePasswordDialogRender.mock.calls;
@@ -218,6 +231,101 @@ describe('AccountSettingsPage', () => {
 
       expect(await screen.findByTestId('account-settings-retry')).toBeInTheDocument();
       expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * ETP-5455 — a 401 on /account used to be reported as a load failure: the security half showed
+   * "your sign-in methods could not be loaded" plus a Retry that can never succeed, and the
+   * subscription half "we couldn't load your subscription". Both are false — nothing is down, the
+   * session is — and the one action that helps, signing in again, was offered nowhere. The 401 that
+   * matters most in practice is billing's: it accepts only a platform credential (decision 1), so a
+   * legacy bearer session reads /me fine and is refused by billing.
+   */
+  describe('an expired session (ETP-5455)', () => {
+    it('shows the session-expired state, not the load error, when the account read answers 401',
+      async () => {
+        fetchAccount.mockRejectedValue(httpError(401));
+
+        render(<AccountSettingsPage />);
+
+        expect(await screen.findByTestId('account-settings-session-expired')).toBeInTheDocument();
+        expect(screen.getByText('accountSessionExpired')).toBeInTheDocument();
+        expect(screen.queryByTestId('account-settings-load-error')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('account-settings-retry')).not.toBeInTheDocument();
+        expect(toastError).not.toHaveBeenCalled();
+      });
+
+    it('hides both sections while the session is expired', async () => {
+      fetchAccount.mockRejectedValue(httpError(401));
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-settings-session-expired');
+
+      expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__account')).not.toBeInTheDocument();
+    });
+
+    it('keeps the generic load error for a server failure, which Retry can fix', async () => {
+      fetchAccount.mockRejectedValue(httpError(500));
+
+      render(<AccountSettingsPage />);
+
+      expect(await screen.findByTestId('account-settings-load-error')).toBeInTheDocument();
+      expect(screen.getByTestId('account-settings-retry')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-settings-session-expired')).not.toBeInTheDocument();
+      expect(toastError).toHaveBeenCalledWith('accountMethodsLoadFailed');
+    });
+
+    it('shows the same state when only billing refuses the session', async () => {
+      const user = userEvent.setup();
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-security-section');
+      await user.click(screen.getByTestId('subscription-report-session-expired'));
+
+      expect(await screen.findByTestId('account-settings-session-expired')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-security-section')).not.toBeInTheDocument();
+    });
+
+    it('shows ONE state when the account read and billing are both refused', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockRejectedValue(httpError(401));
+      let resolveFirst;
+      // Hold the account read so billing reports first, then let the account 401 land after it.
+      fetchAccount.mockImplementationOnce(() => new Promise((_, reject) => {
+        resolveFirst = () => reject(httpError(401));
+      }));
+
+      render(<AccountSettingsPage />);
+      await user.click(screen.getByTestId('subscription-report-session-expired'));
+      resolveFirst();
+
+      await screen.findByTestId('account-settings-session-expired');
+      await waitFor(() => expect(fetchAccount).toHaveBeenCalledTimes(1));
+      expect(screen.getAllByTestId('account-settings-session-expired')).toHaveLength(1);
+      expect(toastError).not.toHaveBeenCalled();
+      expect(logout).not.toHaveBeenCalled();
+    });
+
+    it('signs the user out to the login view from the call to action', async () => {
+      const user = userEvent.setup();
+      fetchAccount.mockRejectedValue(httpError(401));
+
+      render(<AccountSettingsPage />);
+      await user.click(await screen.findByTestId('account-settings-sign-in-again'));
+
+      expect(logout).toHaveBeenCalledTimes(1);
+      expect(localStorage.getItem('sf_onboarding_initial_view')).toBe('login');
+    });
+
+    it('does not sign the user out on its own', async () => {
+      fetchAccount.mockRejectedValue(httpError(401));
+
+      render(<AccountSettingsPage />);
+      await screen.findByTestId('account-settings-session-expired');
+
+      expect(logout).not.toHaveBeenCalled();
     });
   });
 

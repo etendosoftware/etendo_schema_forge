@@ -22,7 +22,7 @@ import {
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
   clampNegativeOverrides,
 } from '../../fiscalModelsUtils.js';
-import { getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
+import { getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -231,9 +231,38 @@ function buildIncidentVariants(blocking, warning, t) {
   return { tone, iconColor, badge };
 }
 
+// ── Submission snapshot helpers (ETP-5438) ────────────────────────
+// Pure, module-level — extracted from the component body to keep its cognitive complexity under
+// the SonarQube javascript:S3776 threshold. Exported for their unit tests only.
+
+// The snapshot the backend persisted when the declaration was presented, or `null` (drafts, and
+// legacy declarations presented before snapshots existed).
+export function submittedSnapshotOf(decl) {
+  const snapshot = decl?.submittedSnapshot;
+  return snapshot && typeof snapshot === 'object' ? snapshot : null;
+}
+
+// True when the page is served from the snapshot: a submitted declaration whose snapshot carries
+// the boxes figures.
+export function isSnapshotServed303(isSubmitted, snapshot) {
+  return isSubmitted && snapshot?.boxes != null;
+}
+
+// How many invoices back the declaration: the snapshot keeps only the COUNT (`sourceCount`), a
+// live compute keeps the rows themselves.
+export function invoiceCountFor(snapshotServed, snapshot, sources) {
+  return snapshotServed ? (Number(snapshot.sourceCount) || 0) : sources.length;
+}
+
+// The "Facturas" tab badge: the snapshot's invoice count, else the live rows' length (`null`
+// while nothing is loaded).
+export function sourcesTabBadge(snapshotServed, invoiceCount, sources) {
+  return snapshotServed ? invoiceCount : (sources?.length ?? null);
+}
+
 // ── Main page ─────────────────────────────────────────────────────
 
-export default function FmModel303Page({ decl, onBack, onStatusChange, onManualDataSaved, token, apiBaseUrl }) {
+export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmittedRemotely, onManualDataSaved, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
   // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
@@ -249,12 +278,20 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // auto-compute effect below, which reads it (ETP-5438) — and reused at the
   // action-bar gates further down. Mirrors FmModel349Page.jsx's identical hoist.
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
+  // ETP-5438 — the boxes payload the backend persisted when this declaration was presented
+  // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
+  // mount-time auto-compute effect below for how it is consumed.
+  const submittedSnapshot = submittedSnapshotOf(decl);
+  // ETP-5438 — the snapshot keeps only the figures (boxes + summary) and the invoice COUNT
+  // (`sourceCount`); the per-invoice `sources` drilldown is not kept (a period can hold tens of
+  // thousands of invoices). While this page is served from a snapshot the "Facturas" tab shows a
+  // note instead of a list, and nothing here recomputes to fill it.
+  const snapshotServed = isSnapshotServed303(isSubmitted, submittedSnapshot);
   // submissionMethod (ETP-4755) — distinguishes the 3 code paths that can lead to
   // "Presentado" (2 of which collide on the exact same submitted_ack status). Hydrated
   // from decl.submissionMethod (persisted, present for any declaration submitted after
   // this feature shipped) and updated locally by handlePresent's two manual paths; the
-  // AEAT telematic path sets it server-side only (see handleSubmit's onSuccess below) and
-  // does not update this local state until the declaration is next refetched.
+  // AEAT telematic path sets it server-side; `handleTelematicSuccess` below mirrors it locally.
   const [submissionMethod, setSubmissionMethod] = useState(decl.submissionMethod);
   const [activeTab, setActiveTab] = useState('boxes');
   const [showPresent, setShowPresent] = useState(false);
@@ -535,6 +572,30 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
   }
 
+  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
+  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
+  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same figures
+  // for the rest of the session. Read-only: it only feeds the display state `handleCompute`
+  // already feeds (no persistence, no `manualOverrides` mutation — those were hydrated from the
+  // saved declaration and are merged in by `applyComputeResult` exactly like the cached path).
+  // `noMockFallback` so a failed call leaves the tabs empty instead of freezing demo figures.
+  // `isCancelled` comes from the mount effect's cleanup: a response that resolves after unmount
+  // or after `decl.id` changed still freezes the cache under the id it was computed for, but
+  // must not paint that declaration's figures into whatever this page shows now.
+  async function computeSubmittedOnce(isCancelled = () => false) {
+    const declId = decl.id;
+    setComputing(true);
+    try {
+      const res = await computeBoxes303(decl, { token, apiBaseUrl, noMockFallback: true });
+      if (res?.boxes == null) return;
+      setCachedFiscalCompute(declId, res);
+      if (isCancelled()) return;
+      applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    } finally {
+      if (!isCancelled()) setComputing(false);
+    }
+  }
+
   // ETP-5338 (design decision) — "Calcular" is an explicit user click too, so — unlike the
   // automatic mount-time recompute above, and unlike `FmListPage`'s own `useFiscalAutoCompute`
   // polling hook (a wholly separate mechanism in a different component that recomputes LIST
@@ -581,6 +642,16 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // `decl.id` only (not `liveBoxes`/`decl._precomputed`) so it fires exactly once
   // per opened declaration instead of looping once `handleCompute` populates state.
   useEffect(() => {
+    // ETP-5438 — a declaration presented once snapshots existed carries the exact
+    // `GET /fiscal303/boxes` payload persisted server-side at submission time
+    // (`decl.submittedSnapshot`). It is the single source of truth for its figures: applied
+    // through the same `applyComputeResult` (so saved `manualOverrides` and the box 71
+    // derivation behave exactly as for a live compute), with no compute call and no
+    // sessionStorage involvement. Checked first so nothing below can ever recompute it.
+    if (isSubmitted && submittedSnapshot?.boxes != null) {
+      applyComputeResult(submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+      return;
+    }
     // ETP-5272 pt.6 — `decl._precomputed` is the RAW, override-free auto-compute result
     // `FmListPage`'s `useFiscalAutoCompute` already fetched for every draft declaration
     // before this page ever mounted. Route it through `applyComputeResult` (same helper
@@ -594,24 +665,43 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     }
     if (liveBoxes != null) return;
     if (!apiBaseUrl) return;
-    // ETP-5438 — once `isSubmitted`, never issue a live recompute here: `computeBoxes303`
+    // ETP-5438 — legacy fallback: a declaration presented BEFORE snapshots existed has none
+    // (no data-fix for those, product decision), so it keeps this once-per-session freeze.
+    // Once `isSubmitted`, compute at most ONCE per browser session: `computeBoxes303`
     // (= `GET /fiscal303/boxes`) always recomputes from whatever invoices exist RIGHT NOW,
     // regardless of who calls it or when — see FmModel349Page.jsx's identical fix and
     // comment for the full rationale (same bug class, "en todos los modelos tiene que
-    // funcionar de la misma manera" — every model must freeze once presented). Falls back
-    // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
-    // submitted-family bucket already populated this session, instead of a live compute.
+    // funcionar de la misma manera" — every model must freeze once presented). Reuses
+    // `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+    // submitted-family bucket populates; on a cold cache it computes once
+    // (`computeSubmittedOnce`) and writes that result back to the same cache entry.
     // (`!token` is deliberately NOT part of this gate — see the ETP-4576 comment above.)
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
       if (cached?.boxes != null) {
         applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+        return;
       }
-      return;
+      let cancelled = false;
+      computeSubmittedOnce(() => cancelled);
+      return () => { cancelled = true; };
     }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decl.id]);
+
+  // ETP-5438 QA BUG-2 — a snapshot can arrive AFTER mount: a telematic filing's snapshot is
+  // delivered by FiscalModelsPage's re-read of the declaration (`handleSubmittedRemotely`), which
+  // updates `decl.submittedSnapshot` without changing `decl.id`, so the mount effect above never
+  // sees it. Apply it whenever it changes — display only, no compute call. It also fires on
+  // mount, alongside the mount effect's own snapshot branch; re-applying is idempotent (same
+  // payload through the same `applyComputeResult`), so the double application is harmless.
+  useEffect(() => {
+    if (isSubmitted && submittedSnapshot?.boxes != null) {
+      applyComputeResult(submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submittedSnapshot]);
 
   async function handleGenerate({ filename } = {}) {
     // ETP-5438 — the button that opens FileGenModal303 is itself hidden once submitted, so
@@ -669,10 +759,23 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
 
   useEffect(() => { fetchOrgIdent(token, apiBaseUrl, setOrgIdent, apiFetch); }, [token, apiBaseUrl, apiFetch]);
 
+  // ETP-5438 — AEAT telematic success. The backend already persisted `submitted_ack`,
+  // `submissionMethod: 'aeat_telematic'` and the submission snapshot, so this must NOT go through
+  // `handleStatusChange`/`onStatusChange` (that PUTs the status, and a submitted -> submitted PUT
+  // is rejected with 409 by `rejectRepresentation`). Update local state and hand the refresh to
+  // the parent (`onSubmittedRemotely`), which patches the list and re-reads the declaration.
+  function handleTelematicSuccess(newStatus) {
+    setStatus(newStatus);
+    setSubmissionMethod('aeat_telematic');
+    onSubmittedRemotely?.(decl.id, newStatus);
+  }
+
+  // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
+  // caller can react to a rejected transition — see `handlePresent`.
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
     if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
-    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
+    return onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
   // ETP-5338 (architecture change) — the single write path for `identChecks`/`manualOverrides`,
@@ -855,9 +958,25 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // submissionMethod (ETP-4755): the two manual paths PresentModal can report here —
     // 'submitted_ack' always carries the uploaded acuse (see canConfirm in PresentModal),
     // 'submitted' never does. Neither collides with the AEAT telematic path's own
-    // 'aeat_telematic' value, set server-side only (see handleSubmit's onSuccess below).
+    // 'aeat_telematic' value, set server-side only (see handleTelematicSuccess above).
     const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
-    handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5438 — the backend rejects the presentation when it cannot compute the submission
+    // snapshot (nothing is written server-side). Roll the optimistic status back and say so,
+    // instead of leaving the page showing "Presentado" for a declaration that is still a draft.
+    const previous = { status, submissionMethod };
+    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    if (result?.ok === false) {
+      setStatus(previous.status);
+      setSubmissionMethod(previous.submissionMethod);
+      toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+      return;
+    }
+    // ETP-5438 — show exactly the figures the backend froze in this same request (the PUT
+    // echoes the snapshot), through the same helper a live compute uses, so the page matches
+    // what the list and every later reopen will show.
+    if (result?.submittedSnapshot?.boxes != null) {
+      applyComputeResult(result.submittedSnapshot, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources);
+    }
   }
 
   const blocking = incidents?.blocking ?? 0;
@@ -927,7 +1046,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // card already displays, via the single shared `deriveResultKind` also used by FmListPage.jsx,
   // so both screens agree on the same label for the same declaration.
   const sourcesForResult = liveSources ?? decl.sources ?? [];
-  const resultKind = deriveResultKind(summary, { hasInvoices: sourcesForResult.length > 0 });
+  const invoiceCount = invoiceCountFor(snapshotServed, submittedSnapshot, sourcesForResult);
+  const resultKind = deriveResultKind(summary, { hasInvoices: invoiceCount > 0 });
 
   // Derive result sublabel from kind
   const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
@@ -941,7 +1061,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     { id: 'boxes',     label: t('fm.tab.boxes') ?? 'Casillas',
       icon: <ClipboardCheck size={16} strokeWidth={1.75} data-testid="ClipboardCheck__4f6c0d" /> },
     { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
-      badge: (liveSources ?? decl.sources)?.length ?? null,
+      badge: sourcesTabBadge(snapshotServed, invoiceCount, liveSources ?? decl.sources),
       icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
     { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
       badge: incidentCount > 0 ? incidentCount : null,
@@ -1258,7 +1378,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       )}
       {activeTab !== 'boxes' && (
         <div className="fm-page__body" style={{ display: 'flex', flexDirection: 'column', overflowY: 'hidden', ...(activeTab === 'sources' || activeTab === 'incidents' ? { padding: 0 } : {}) }}>
-          {activeTab === 'sources' && (
+          {activeTab === 'sources' && snapshotServed && (
+            <div className="fm-snapshot-note" style={{ padding: 24, color: 'hsl(var(--muted-foreground))' }}
+              data-testid="fm-snapshot-no-invoice-detail">
+              {t('fm.snapshot.invoice_detail_not_kept') ?? 'El detalle por factura no se conserva en las declaraciones presentadas.'}
+            </div>
+          )}
+          {activeTab === 'sources' && !snapshotServed && (
             <SourcesTab
               decl={{ ...decl, sources: liveSources ?? decl.sources, incidents }}
               t={t}
@@ -1314,7 +1440,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           summary={summary}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          onSuccess={(newStatus) => handleStatusChange(newStatus)}
+          onSuccess={handleTelematicSuccess}
           onAttached={handleAeatAttached}
           onIncidentsChanged={refreshIncidents}
           onClose={() => setShowAeatFlow(false)}
