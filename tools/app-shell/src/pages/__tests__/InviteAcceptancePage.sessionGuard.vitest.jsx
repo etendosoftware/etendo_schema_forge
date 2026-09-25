@@ -219,9 +219,10 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
 
     renderPage('/invite?token=same-person');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('invite-shared-login')).toBeInTheDocument();
-    });
+    // The settled screen for the invitee's own session is the accept step (the login is skipped,
+    // see the next describe). Waiting for the login here only passed when it caught the single
+    // frame the login renders before the identity check starts — a flaky assertion (ETP-5488).
+    await screen.findByTestId('invite-authenticated-step');
     expect(screen.queryByTestId('invite-session-conflict')).not.toBeInTheDocument();
   });
 
@@ -251,19 +252,22 @@ describe('InviteAcceptancePage — ETP-5202 session guard', () => {
       expect(screen.queryByTestId('invite-session-conflict')).not.toBeInTheDocument();
     });
 
-    // The condition that keeps the shortcut honest: no platform token means nothing to accept
-    // with, so the login step is still the right answer.
-    it('still asks for the login when there is no platform token to accept with', async () => {
+    // ETP-4576 — under the cookie session the open session IS what `handleAcceptExisting`
+    // accepts with, so no platform token is needed for the shortcut. This case used to assert the
+    // opposite (a pre-cookie rule the page no longer has) and only passed when `findByTestId`
+    // happened to catch the single frame where the login renders before the identity check starts:
+    // a flaky test (ETP-5488). It now waits for the settled screen.
+    it('skips the login with an open invitee session even without a platform token', async () => {
       installFetch({
         resolve: jsonOk(existingBranch),
         session: () => jsonOk({ accountEmail: INVITED_EMAIL }),
       });
-      globalThis.localStorage.setItem('sf_auth_token', 'tenant-jwt');
 
       renderPage('/invite?token=no-platform-token');
 
-      await screen.findByTestId('invite-shared-login');
-      expect(screen.queryByTestId('invite-authenticated-step')).not.toBeInTheDocument();
+      await screen.findByTestId('invite-authenticated-step');
+      expect(screen.getByTestId('action-accept-invitation')).toBeInTheDocument();
+      expect(screen.queryByTestId('invite-shared-login')).not.toBeInTheDocument();
     });
 
     // The shortcut is scoped to `existing_account`. On `registration_required` the backend says

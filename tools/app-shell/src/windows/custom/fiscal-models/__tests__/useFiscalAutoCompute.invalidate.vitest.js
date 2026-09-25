@@ -11,7 +11,9 @@
 // requirement: a new array identity on every render re-runs the effect).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import useFiscalAutoCompute, { invalidateFiscalComputeCache } from '../useFiscalAutoCompute.js';
+import useFiscalAutoCompute, {
+  invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute,
+} from '../useFiscalAutoCompute.js';
 
 const DECL = { id: '349-2026-T1', model: '349', year: 2026, period: 'T1' };
 const DECL_LIST = [DECL];
@@ -104,5 +106,38 @@ describe('invalidateFiscalComputeCache — mechanics', () => {
       throw new Error('SecurityError');
     });
     expect(() => invalidateFiscalComputeCache(DECL.id)).not.toThrow();
+  });
+});
+
+// ETP-5438 follow-up — write-side counterpart used by the detail pages' cold-cache compute of a
+// submitted declaration, so FmListPage's submitted-family bucket (which trusts this cache via
+// `neverModifiedFn`) and the detail page freeze on the same payload.
+describe('setCachedFiscalCompute — mechanics', () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it('writes under the same key the hook reads, readable back via getCachedFiscalCompute', () => {
+    setCachedFiscalCompute(DECL.id, FRESH);
+    const raw = JSON.parse(sessionStorage.getItem(CACHE_KEY));
+    expect(raw.result).toEqual(FRESH);
+    expect(typeof raw.computedAt).toBe('number');
+    expect(getCachedFiscalCompute(DECL.id)).toEqual(FRESH);
+  });
+
+  it('is restored by the hook without calling computeFn when checkModifiedFn answers false', async () => {
+    setCachedFiscalCompute(DECL.id, FRESH);
+    const computeFn = vi.fn().mockResolvedValue(STALE);
+    const checkModifiedFn = vi.fn().mockResolvedValue(false);
+    const { result } = renderHook(() => useFiscalAutoCompute(DECL_LIST, {
+      token: 'tok', apiBaseUrl: 'http://host/neo/fiscal-models', enabled: true,
+      computeFn, checkModifiedFn,
+    }));
+    await waitFor(() => expect(result.current.computedMap[DECL.id]?.operators).toEqual(FRESH.operators));
+    expect(computeFn).not.toHaveBeenCalled();
+  });
+
+  it('ignores a null result or a null id (a failed compute is never frozen)', () => {
+    setCachedFiscalCompute(DECL.id, null);
+    setCachedFiscalCompute(null, FRESH);
+    expect(sessionStorage.length).toBe(0);
   });
 });

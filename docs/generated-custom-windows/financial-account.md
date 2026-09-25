@@ -1060,6 +1060,7 @@ options available.
 - POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then validates the `(IBAN, country)` pair (see below) and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
 - PUT/PATCH: name uniqueness (excluding self) + the same `(IBAN, country)` pair validation; a bare `{active}` PATCH (archive/unarchive) passes straight through since it only validates keys the body actually carries.
 - DELETE (ETP-4871): re-validates `deletable` server-side and 409s if any dependency exists, otherwise performs the real, permanent delete.
+- **Sub-endpoints are not account writes (ETP-5468).** Button actions (`POST /account/{id}/action/<button>`, MCP `neo_action`), callouts and display-logic evaluation reach the hook with `httpMethod=POST` too. `handle()` and `afterHandle()` now act only when `NeoContext.getEndpointType()` is `CRUD` (or `null`, which internal callers such as batch/clone leave unset) — see `FinancialAccountHandler.isCrudRequest`. Before, every button call on `account` first ran the create validation, so an agent had to invent a unique `name` and a `currency` to get its button through, and the post-hook could provision a "new" account off an action response.
 - `matchingAlgorithm` is declared `visibility: "system"` in `decisions.json` so its `ETGO_SF_FIELD` row stays **included** — required for the injected value to survive `NeoFieldFilter`. `country` is `visibility: "editable"` (ETP-4896, see below) — it was `"system"` before. `deletable`/`deleteBlockedReason` are virtual, handler-injected fields, the same shape as `hasTransactions`/`pendingCount`.
 
 ### Country field + IBAN↔country validation (ETP-4896)
@@ -1510,6 +1511,68 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
 - When a **reconciled** line is selected, the `Conciliar` button becomes `Desconciliar (N)`, acting on the checked documents. On success, the backend undoes the reconciliation and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel. Since ETP-5135 that is the **only** action offered there — see "ETP-5135" below.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
+
+#### Reconciliation happens only through `bank-reconciliation` (ETP-5468)
+
+**The two hidden Core APRM buttons are closed on `account`.** `EM_Aprm_Addtransactionpd` ("Add
+Transaction") and `EM_Aprm_Findtransactionspd` are `visibility: "discarded"` in
+`artifacts/financial-account/decisions.json`. AD hides both with a constant display logic `'false'`
+(they only exist to back Classic's Match Statement popup, and never appear in the Etendo GO UI), but
+NEO and MCP only honour `AD_Field.IsDisplayed = 'N'`, so as `editable` fields they were advertised by
+`neo_schema(view:"actions")` and executable through `neo_action` and
+`POST /sws/neo/financial-account/account/{id}/action/<button>`. "Add Transaction" matched a
+statement line into the account's existing **draft** reconciliation without processing it: the line
+ended with a transaction and no confirmed reconciliation, `pendingLines` showed it pending and
+`reconcileGroup` answered 409 "Statement line is already reconciled". Discarded means
+`ISINCLUDED = 'N'`: `neo_schema` reports them `invokable:false` with the curated-out reason and
+`NeoButtonActionHelper.findButtonColumn` answers 404 "Action not found".
+
+The **visible** Core buttons (`EM_APRM_MatchTransactions` "Match Statement",
+`EM_APRM_MatchTrans_Force`, `EM_APRM_Reconcile`) are deliberately left as they were: they are part
+of the generated account processes list, and this change must not alter anything the UI shows. They
+remain reachable over NEO/MCP (today they fail before doing anything — `_buttonValue` missing /
+unsupported Classic handler — see `docs/plans/2026-09-18-mcp-usage-batch-1-fixes.md` C2/M2). If they
+ever become executable, the draft guard below is what keeps them from being finalized silently.
+
+**Agents reconcile through the same routes as the UI (ETP-5468, front A).** The
+`bank-reconciliation` spec now publishes its actions to MCP: `neo_action(spec:"bank-reconciliation",
+entity:"bank-reconciliation", id:<financial account id>, action, parameters)`, with
+`neo_schema(..., view:"actions")` returning each action's parameter schema. Actions: `pendingLines`,
+`candidates`, `autoMatch` (read-only) and `reconcileGroup`, `reconcileDifference`,
+`applySuggestions`, `undoReconciliation` (the SPA's `reactivate`), `removeOperation`,
+`reactivateSelected`. Each one re-enters the exact `ReconciliationHandlerSupport` wrapper the SPA's
+`?action=` route uses, so validations, rollback and error messages are the UI's. The SPA routes are
+untouched: `ReconciliationHandler.handle` only diverts `NeoEndpointType.ACTION` contexts, which the
+SPA never produces (its calls are report-spec requests with no endpoint type). The contract,
+refusal shapes and parameter table live in `com.etendoerp.go/docs/neo-headless.md` §4.12.1.1; the
+`financial-account` spec prompt (`agent-prompts/financial-account/spec.md`) points agents there
+instead of at the account's Core buttons.
+
+**No Etendo GO action processes a draft it did not build** (`ReconciliationDraftGuard`). No GO
+action leaves a draft behind on success, so a draft that already holds transactions when an action
+starts came from elsewhere — the Classic buttons above, or the pre-ETP-4951 "Reactivar", which put a
+reconciliation back to draft on purpose while keeping its links. Nobody confirmed those matches:
+
+| Action | Before | Now |
+|---|---|---|
+| `applySuggestions` (Automatch "apply") | adopted the account's latest draft and processed it — folding the foreign matches into a completed reconciliation (CB-08: a split 2 € line read "fully reconciled") | adopts the latest draft only when it is **empty**; otherwise matches into a **fresh** draft, the same "process only what I matched" design as `ReconciliationFlowSupport.compose` (`reconcileGroup` / `reconcileDifference`) |
+| undo (`reactivate`, and `removeOperation` / `reactivateSelected` when the selection covers a whole reconciliation) | processed every draft of the account first (Core refuses to reactivate while one exists) | still processes **empty** drafts and the target reconciliation itself; refuses with a 400 when another draft holds transactions: *"Reconciliation {documentNo} is an unconfirmed draft that already holds matched movements. Review it before undoing a reconciliation on this account."* — translated in the SPA as `backendError.foreignDraftReconciliation`. The batch endpoints report it per transaction in their usual `failedTransactionIds` + reason |
+
+**What the user sees, and the escape route.** On an account that holds such a draft, *Desconciliar*
+fails with the translated refusal above (naming the draft's document number), while Automatch
+*Aplicar* and *Conciliar* keep working — they open a fresh draft and never adopt the foreign one.
+The Etendo GO UI has **no** screen to resolve that draft, and this change ships no data-fix, so
+for a pre-existing stuck draft the only way out is Classic: *Financial Account* window → the account → **Match Statement**, which resumes the
+account's open draft (Core allows one) with its matches pre-loaded → either **Reconcile** (confirm
+them) or unmatch the lines and close the popup. The draft is visible read-only in the account's
+*Reconciliation* tab (Document Status *Draft*). Once no draft with transactions remains, undo works
+again in Etendo GO. (Escape route derived from Core's APRM flow, not exercised end to end here.)
+
+Refusing (rather than processing or discarding) for the undo is deliberate: the undo cannot proceed
+while the draft exists, and both ways out — finalize or throw away someone else's matches — need a
+human decision. The Java literal is a wire contract with `lib/backendErrors.js`
+(`matchForeignDraftReconciliation`): reword both together. Drafts already stuck are
+not repaired by these actions (no data-fix ships with this change); see the Classic route above.
 
 #### Match with a difference — detection and automatic posting (ETP-4965)
 
@@ -2113,7 +2176,7 @@ The Reconciliation surface gained the automatic matching engine (backend `MatchR
 > **Rules are tenant-scoped (ETP-4950 QA round).** `MatchRuleEngine.loadRules` loads through the DAL, so only rules of the current client and of a readable organization are ever evaluated. It previously used raw JDBC with no `ad_client_id` filter, which made every tenant's account-less rules apply to every other tenant — see `match-rule.md` → "Engine integration".
 
 - **Automatch modal** (`components/contract-ui/AutoMatchSuggestionModal.jsx`, opened from the `Automatch` header action and from the Cuentas-list `Conciliar (N)` pill): runs the engine in preview (GET `?action=autoMatch`) and shows the suggested groups (statement line + its N operations) with per-group include/exclude checkboxes. Rule-origin groups carry a yellow **"Por regla {nombre}"** badge; candidates that would create a new payment carry a blue **"Nueva"** badge. Applying (POST `?action=applySuggestions`) reconciles only the ticked groups, creating payments for rule matches and incrementing each matched rule's count. On success the panel/list refresh. The 1:N signal matcher first tries the whole same-partner / same-reference block and, if that over-shoots, can now choose an exact subset inside that same signal block (for example two 13,20 receipts balancing a 26,40 statement line).
-  - **Cardinality: ONE `FIN_Reconciliation` per apply, not one per line.** Earlier, `applySuggestions` called `compose` per accepted group, so confirming N suggestions created N separate reconciliation documents — noisy (Classic's own "Match Statement" produces one per statement) and quadratic (`processReconciliation`'s `updateReconciliations` recomputes every later reconciliation's balance on each call). `ReconciliationHandler.applySuggestions` now runs two passes: `prepareGroup` validates every group first (an invalid group is reported in `results[]` without touching any reconciliation), then every valid group is matched via `matchInto` into ONE reconciliation obtained from `getOrCreateDraftReconciliation` (reuses the account's open draft — the same lookup Classic's `MatchStatementActionHandler` does — or creates one), which is processed once at the end. Not atomic across groups: Core's matching services commit mid-flow, so a failure on group *k* does not roll back groups `1..k-1` already matched into the shared document — the frontend surfaces this via a partial-success toast (`financeReconcileAutomatchToastPartial`) read off `results[]`, since the old code silently reported full success as long as the batch-level POST returned 2xx regardless of individual failures. The manual **`reconcileGroup`** path (single line, one click) is unaffected — it still creates its own dedicated reconciliation per call.
+  - **Cardinality: ONE `FIN_Reconciliation` per apply, not one per line.** Earlier, `applySuggestions` called `compose` per accepted group, so confirming N suggestions created N separate reconciliation documents — noisy (Classic's own "Match Statement" produces one per statement) and quadratic (`processReconciliation`'s `updateReconciliations` recomputes every later reconciliation's balance on each call). `ReconciliationHandler.applySuggestions` now runs two passes: `prepareGroup` validates every group first (an invalid group is reported in `results[]` without touching any reconciliation), then every valid group is matched via `matchInto` into ONE reconciliation obtained from `getOrCreateDraftReconciliation` (reuses the account's open draft — the same lookup Classic's `MatchStatementActionHandler` does — or creates one; **since ETP-5468 only an empty draft is reused**, a draft already holding transactions is left alone and a fresh one is created — see "Reconciliation happens only through `bank-reconciliation`"), which is processed once at the end. Not atomic across groups: Core's matching services commit mid-flow, so a failure on group *k* does not roll back groups `1..k-1` already matched into the shared document — the frontend surfaces this via a partial-success toast (`financeReconcileAutomatchToastPartial`) read off `results[]`, since the old code silently reported full success as long as the batch-level POST returned 2xx regardless of individual failures. The manual **`reconcileGroup`** path (single line, one click) is unaffected — it still creates its own dedicated reconciliation per call.
 - **A group states its type, and a near match previews the movement it will create (ETP-4965, QA round).** Until this round only rule groups were labelled, so an exact suggestion and a within-tolerance one looked identical even though the second posts an accounting entry; and the difference movement itself was invisible until it appeared in Movimientos.
   - **Backend.** `AutoMatchSupport.matchFallback` tags the near-match group with **`nearMatch: true`** (`AutoMatchSupport.KEY_NEAR_MATCH`, the same wire name the candidates payload already used — `ReconciliationHandler` now references that one constant). The flag exists **instead of testing `difference != 0`**: `buildMultiGroup` also emits a non-zero `difference` for the rounding slack `signalGroupTolerance` allows on a 1:N group, which is not a near match. The same branch now returns `{1, 1}` rather than `{1, 0}`, so the `willCreate` KPI counts the GL-item movement the apply will create. Failure entries in `applySuggestions`' `results[]` gained **`statementLineId`** (successes always had it): the array is not aligned with the submitted groups — failures are appended in pass 1, successes in pass 2 — so without it a client can count failures but cannot say which suggestion failed.
   - **Frontend.** `StatusBadge` moved out of `ReconciliationSplitPanel.jsx` into `components/contract-ui/reconciliationBadges.jsx` and is now rendered by the automatch modal too, so a line the left panel calls "Con diferencia" reads and looks the same when the modal proposes it — one palette, one set of labels (`automatchBadgeKind` maps a group to its kind: near match outranks rule origin). A near-match group appends a synthetic operation row naming the **accounting account** the leftover goes to, taken from the account's `glItemDifference` (threaded from `index.jsx`, the same `{id, name}` shape `ReconciliationTab` already hands the panel); with no account configured that row says so, in destructive tone and **without** the "Nueva" chip — promising a movement and then failing on apply is the behaviour this round removes. The footer's "se crearán N movimiento(s)" counts near-match groups (it previously promised one movement while the apply created two), and the KPI strip finally renders `willCreate` under "A crear", a key that was translated in all three locales and never shown.

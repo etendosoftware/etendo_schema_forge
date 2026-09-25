@@ -144,6 +144,32 @@ async function installAttachmentUploadMock(page) {
 }
 
 /**
+ * Mocks the client-side PDF pipeline the row-hover send flow runs before the
+ * modal settles: `POST /api/reports/{reportId}/render` (HTML) and then
+ * `POST /jsreport/api/report` (HTML → PDF).
+ *
+ * Since ETP-5460 the report server resolves identity from the COOKIE session
+ * (`resolveReportSession`) and answers 401 to any request without one. The
+ * mocked suite runs the bearer scheme, so the unmocked render always got a
+ * 401, and `apiFetch` treats a 401 as an expired session: it DELETEs the
+ * session and bounces to /onboarding before the To chip is ever rendered.
+ * A mocked spec must not reach the real report server or jsreport container
+ * anyway, so both are fulfilled here with minimal payloads.
+ */
+async function installReportRenderMock(page) {
+  await page.route('**/api/reports/*/render', (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<html><body>DOC-001</body></html>',
+  }));
+  await page.route('**/jsreport/api/report', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/pdf',
+    body: '%PDF-1.4\n%%EOF\n',
+  }));
+}
+
+/**
  * Capture + mock the send endpoint. Returns a getter for the parsed request
  * body so tests can assert the command shape. Responds 200 SENT.
  */
@@ -218,6 +244,7 @@ for (const spec of SPECS) {
       await installListMock(page, spec);
       await installContactsMock(page);
       await installAttachmentUploadMock(page);
+      await installReportRenderMock(page);
       await page.goto(`/${spec}`);
       await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     });

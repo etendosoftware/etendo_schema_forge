@@ -70,7 +70,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.equal(orderReference.readOnlyLogic.raw, "@EM_Aeatsii_Issent@='Y' & @IsSOTrx@='N'");
     assert.equal(
       orderReference.readOnlyLogic.js,
-      "record['aeatsiiIssent'] === true && record['salesTransaction'] !== true",
+      "(record['aeatsiiIssent'] === true || record['aeatsiiIssent'] === 'Y') && (record['salesTransaction'] !== true && record['salesTransaction'] !== 'Y')",
     );
     // Completion alone (`processed`/`documentStatus`) must NOT appear in the condition —
     // that is precisely the "editable when completed" half of the invariant.
@@ -101,7 +101,7 @@ describe('purchase-invoice contract integrity (ETP-3778 SIF regressions)', () =>
     assert.ok(orderReferenceBlock, 'expected orderReference field block in HeaderForm.jsx');
     assert.match(
       orderReferenceBlock[0],
-      /readOnlyLogic: \(record\) => record\['aeatsiiIssent'\] === true && record\['salesTransaction'\] !== true/,
+      /readOnlyLogic: \(record\) => \(record\['aeatsiiIssent'\] === true \|\| record\['aeatsiiIssent'\] === 'Y'\) && \(record\['salesTransaction'\] !== true && record\['salesTransaction'\] !== 'Y'\)/,
     );
     // Completion alone must not lock it — this stays the "editable when completed" half.
     assert.doesNotMatch(orderReferenceBlock[0], /record\['processed'\]|record\['documentStatus'\]/);

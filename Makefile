@@ -127,12 +127,22 @@ test-frontend: ## Run only frontend generator tests
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
 
+.PHONY: stripe-simulate
 stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe account needed)
 	tools/stripe-webhook-simulate.sh --status $(ARGS)
 
 CMD ?= fail
+.PHONY: stripe-past-due
 stripe-past-due: ## Drive a real Stripe test-mode subscription past due and back (ID=<checkout-request-or-billing-event-id> [CMD=fail|recover|status])
 	tools/stripe-subscription-past-due.sh $(CMD) $(ID) $(ARGS)
+
+.PHONY: logs
+logs: ## Tail CloudWatch logs (ENV=experimental|production|demo1, ARGS="--since 1h --all")
+	scripts/tail-logs.sh --env $(or $(ENV),experimental) $(ARGS)
+
+.PHONY: logs-check
+logs-check: ## Verify the AWS CLI setup used by `make logs`
+	scripts/tail-logs.sh --check
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10

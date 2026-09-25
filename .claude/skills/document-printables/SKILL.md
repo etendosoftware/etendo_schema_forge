@@ -198,4 +198,4 @@ Do not "discover" these again — they are tracked:
 | Draft documents are never cached (`storeCondition: documentStatus !== 'DR'`) | deliberate, not a workaround for the above — a draft has no document to attach yet, and caching one would upload a new attachment on every open |
 | `print-*` artifacts duplicate the in-app documents; 19 files hand-copied across repos | ETP-4980 |
 | All seven document windows are aligned across the five entry points | done (ETP-4912) — re-verify with §1 when adding a window |
-| A PDF was rendered on mount, unrequested | fixed for sales invoice (ETP-4912); other windows still call their hook eagerly |
+| A PDF was rendered on mount, unrequested | done (ETP-4912, ETP-5308) — all five topbar windows (sales-invoice, sales-order, purchase-order, sales-quotation, goods-shipment) gate their `use*Pdf` id on the Send modal being open |

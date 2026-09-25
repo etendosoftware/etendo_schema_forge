@@ -1,15 +1,15 @@
 {
-  "version": "0.33.0",
+  "version": "0.34.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-09-07T14:21:09.238Z",
-  "checksum": "48ddcfa5d2a89c50",
+  "updatedAt": "2026-09-25T17:52:05.711Z",
+  "checksum": "63faeda11cdc4fde",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
-      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -488,46 +488,6 @@
             }
           },
           {
-            "name": "aprmAddtransactionpd",
-            "apiKey": "aprmAddtransactionpd",
-            "column": "EM_Aprm_Addtransactionpd",
-            "label": "Add transaction process definition",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "validation": {
-              "maxLength": 1
-            },
-            "displayLogic": {
-              "raw": "false",
-              "evaluable": true,
-              "js": "false"
-            }
-          },
-          {
-            "name": "aprmFindtransactionspd",
-            "apiKey": "aprmFindtransactionspd",
-            "column": "EM_Aprm_Findtransactionspd",
-            "label": "EM_Aprm_Findtransactionspd",
-            "type": "button",
-            "tsType": "string",
-            "visibility": "editable",
-            "required": false,
-            "grid": false,
-            "form": true,
-            "validation": {
-              "maxLength": 1
-            },
-            "displayLogic": {
-              "raw": "false",
-              "evaluable": true,
-              "js": "false"
-            }
-          },
-          {
             "name": "aprmFundsTrans",
             "apiKey": "aprmFundsTrans",
             "column": "EM_Aprm_Funds_Trans",
@@ -990,7 +950,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1122,7 +1082,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1149,7 +1109,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1179,7 +1139,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1233,7 +1193,7 @@
             "readOnlyLogic": {
               "raw": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPW'",
               "evaluable": true,
-              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || record['processed'] === true || record['transactionType'] === 'BPW'"
+              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || (record['processed'] === true || record['processed'] === 'Y') || record['transactionType'] === 'BPW'"
             }
           },
           {
@@ -1267,7 +1227,7 @@
             "readOnlyLogic": {
               "raw": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
               "evaluable": true,
-              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || record['processed'] === true || record['transactionType'] === 'BPD'"
+              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || (record['processed'] === true || record['processed'] === 'Y') || record['transactionType'] === 'BPD'"
             }
           },
           {
@@ -1380,7 +1340,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1408,7 +1368,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1438,7 +1398,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1468,7 +1428,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1498,7 +1458,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1526,7 +1486,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1554,7 +1514,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1582,7 +1542,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1610,7 +1570,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1638,7 +1598,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -2167,7 +2127,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2190,7 +2150,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2215,7 +2175,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2243,7 +2203,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2271,7 +2231,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2292,7 +2252,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2816,7 +2776,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2838,7 +2798,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2866,7 +2826,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -3365,7 +3325,7 @@
       "name": "Accounts",
       "primaryEntity": "account",
       "category": "finance",
-      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead.",
+      "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters.",
       "hidePrint": true,
       "hideCreate": true,
       "hideMoreMenu": true,
@@ -3678,7 +3638,7 @@
             "apiKey": "aprmAddtransactionpd",
             "column": "EM_Aprm_Addtransactionpd",
             "type": "button",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -3686,7 +3646,7 @@
             "apiKey": "aprmFindtransactionspd",
             "column": "EM_Aprm_Findtransactionspd",
             "type": "button",
-            "visibility": "editable",
+            "visibility": "discarded",
             "required": false
           },
           {
@@ -6826,22 +6786,6 @@
         "description": "Display logic for 'accountNo' in account should have evaluable flag"
       },
       {
-        "id": "t-displaylogic-evaluable-account-aprmAddtransactionpd",
-        "category": "displaylogic-evaluable",
-        "entity": "account",
-        "field": "aprmAddtransactionpd",
-        "runner": "node",
-        "description": "Display logic for 'aprmAddtransactionpd' in account should have evaluable flag"
-      },
-      {
-        "id": "t-displaylogic-evaluable-account-aprmFindtransactionspd",
-        "category": "displaylogic-evaluable",
-        "entity": "account",
-        "field": "aprmFindtransactionspd",
-        "runner": "node",
-        "description": "Display logic for 'aprmFindtransactionspd' in account should have evaluable flag"
-      },
-      {
         "id": "t-displaylogic-evaluable-account-aprmFundsTrans",
         "category": "displaylogic-evaluable",
         "entity": "account",
@@ -7248,22 +7192,6 @@
         "field": "accountNo",
         "runner": "node",
         "description": "Display logic for 'accountNo' in account should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-account-aprmAddtransactionpd",
-        "category": "displaylogic-valid",
-        "entity": "account",
-        "field": "aprmAddtransactionpd",
-        "runner": "node",
-        "description": "Display logic for 'aprmAddtransactionpd' in account should be valid JS"
-      },
-      {
-        "id": "t-displaylogic-valid-account-aprmFindtransactionspd",
-        "category": "displaylogic-valid",
-        "entity": "account",
-        "field": "aprmFindtransactionspd",
-        "runner": "node",
-        "description": "Display logic for 'aprmFindtransactionspd' in account should be valid JS"
       },
       {
         "id": "t-displaylogic-valid-account-aprmFundsTrans",
@@ -7688,22 +7616,6 @@
         "field": "aprmAddMultiplePayments",
         "runner": "node",
         "description": "Field 'aprmAddMultiplePayments' should be present in account"
-      },
-      {
-        "id": "t-field-presence-account-aprmAddtransactionpd",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "aprmAddtransactionpd",
-        "runner": "node",
-        "description": "Field 'aprmAddtransactionpd' should be present in account"
-      },
-      {
-        "id": "t-field-presence-account-aprmFindtransactionspd",
-        "category": "field-presence",
-        "entity": "account",
-        "field": "aprmFindtransactionspd",
-        "runner": "node",
-        "description": "Field 'aprmFindtransactionspd' should be present in account"
       },
       {
         "id": "t-field-presence-account-aprmFundsTrans",
@@ -8560,22 +8472,6 @@
         "field": "aprmAddMultiplePayments",
         "runner": "node",
         "description": "Field 'aprmAddMultiplePayments' should have type 'string' in account"
-      },
-      {
-        "id": "t-field-type-account-aprmAddtransactionpd",
-        "category": "field-type",
-        "entity": "account",
-        "field": "aprmAddtransactionpd",
-        "runner": "node",
-        "description": "Field 'aprmAddtransactionpd' should have type 'string' in account"
-      },
-      {
-        "id": "t-field-type-account-aprmFindtransactionspd",
-        "category": "field-type",
-        "entity": "account",
-        "field": "aprmFindtransactionspd",
-        "runner": "node",
-        "description": "Field 'aprmFindtransactionspd' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-aprmFundsTrans",
@@ -11824,6 +11720,22 @@
         "description": "System field 'accountDigitcontrol' should exist in backend but not frontend for account"
       },
       {
+        "id": "t-system-field-account-aprmAddtransactionpd",
+        "category": "system-field",
+        "entity": "account",
+        "field": "aprmAddtransactionpd",
+        "runner": "node",
+        "description": "System field 'aprmAddtransactionpd' should exist in backend but not frontend for account"
+      },
+      {
+        "id": "t-system-field-account-aprmFindtransactionspd",
+        "category": "system-field",
+        "entity": "account",
+        "field": "aprmFindtransactionspd",
+        "runner": "node",
+        "description": "System field 'aprmFindtransactionspd' should exist in backend but not frontend for account"
+      },
+      {
         "id": "t-system-field-account-aprmIsfundstransEnabled",
         "category": "system-field",
         "entity": "account",
@@ -13010,25 +12922,25 @@
       }
     ],
     "summary": {
-      "total": 871,
+      "total": 865,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
-        "displaylogic-evaluable": 53,
-        "displaylogic-valid": 53,
-        "field-presence": 109,
-        "field-type": 109,
+        "displaylogic-evaluable": 51,
+        "displaylogic-valid": 51,
+        "field-presence": 107,
+        "field-type": 107,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
         "searchable-filters": 2,
         "selector-endpoint": 35,
-        "system-field": 143,
+        "system-field": 145,
         "visibility": 7
       },
       "byRunner": {
-        "node": 871,
+        "node": 865,
         "junit": 0
       }
     }

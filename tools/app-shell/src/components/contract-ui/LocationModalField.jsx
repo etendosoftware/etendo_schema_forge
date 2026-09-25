@@ -78,7 +78,7 @@ export default function LocationModalField({
         type="button"
         id={field.key}
         onClick={() => setOpen(true)}
-        className={`flex ${FIELD_HEIGHT} w-full items-center gap-2 rounded-lg border border-border-control bg-card px-2 text-left text-sm hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring`}
+        className={`flex ${FIELD_HEIGHT} w-full items-center gap-2 rounded-lg border border-border-control bg-card px-2 text-left text-sm hover:bg-[hsl(var(--field-hover))] focus:outline-none focus:ring-2 focus:ring-ring`}
         data-testid={'LocationModalField__' + field.id}>
         <MapPin size={15} className="shrink-0 text-muted-foreground" data-testid="MapPin__location-modal-field" />
         <span

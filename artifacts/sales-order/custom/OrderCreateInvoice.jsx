@@ -73,7 +73,10 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   // ETP-4372 — source the same client-rendered PDF the OrderPreview panel uses
   // so the form-view topbar Send modal shows the document instead of the
   // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
-  const { pdfUrl, loading: pdfLoading } = useOrderPdf(recordId, apiBaseUrl, token);
+  // Only fetch once the Send modal is actually open.
+  const { pdfUrl, loading: pdfLoading, error: pdfError } = useOrderPdf(showSend ? recordId : null, apiBaseUrl, token);
+  // Hook's loading flag lags one render behind showSend; treat the gap as loading too.
+  const sendPdfLoading = pdfLoading || (showSend && !pdfUrl && !pdfError);
 
 
   // draftMode confirm button (DetailView) dispatches this event to open the confirm modal
@@ -316,7 +319,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
           windowName="sales-order"
           token={token}
           pdfBlobUrl={pdfUrl}
-          pdfBlobLoading={pdfLoading}
+          pdfBlobLoading={sendPdfLoading}
           onClose={() => setShowSend(false)}
           data-testid="SendDocumentModal__18d1f0" />,
         document.body,

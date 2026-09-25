@@ -2,7 +2,7 @@
   "sql": "SELECT w.AD_Window_ID, w.Name AS window_name, t.AD_Tab_ID, t.Name AS tab_name, t.TabLevel, t.SeqNo AS tab_seq, t.UIPattern AS ui_pattern, t.WhereClause, t.OrderByClause, t.FilterClause, t.HQLWhereClause, t.HQLOrderByClause, t.HQLFilterClause, tbl.TableName, tbl.Classname AS entity_classname, tbl.Entity_Alias, pkg.JavaPackage AS entity_javapackage, f.AD_Field_ID, f.Name AS field_name, f.IsActive AS field_isactive, f.IsDisplayed, f.IsReadOnly, f.IsShownInStatusBar, f.DisplayLogic, f.DisplayLogic_Server, f.DisplayLogicGrid, f.SeqNo AS field_seq, c.ColumnName, c.Name AS obdal_name, c.AD_Reference_ID, c.IsMandatory, c.IsUpdateable, c.DefaultValue, c.FieldLength, c.ValueMin, c.ValueMax, c.AD_Val_Rule_ID, c.ReadOnlyLogic, c.AD_Reference_Value_ID, c.AD_Process_ID, c.EM_OBUIAPP_Process_ID, c.AD_Module_ID AS column_module_id, NULL AS table_module_id, r.Name AS reference_name, vr.Name AS val_rule_name, vr.Code AS val_rule_code, mo.Classname AS callout_class, -- Table/TableDir reference config rt_tgt.TableName AS ref_table_target, rt_disp.ColumnName AS ref_table_display, rt_key.ColumnName AS ref_table_key, rt.WhereClause AS ref_table_filter, rt.OrderByClause AS ref_table_orderby, -- Search reference config rs_tgt.TableName AS ref_search_target, rs_col.ColumnName AS ref_search_column, -- Selector reference config sel.Name AS ref_selector_name, sel_tgt.TableName AS ref_selector_target, sel.WhereClause AS ref_selector_filter, sel.HQL AS ref_selector_hql, f.OnChangeFunction, c.IsIdentifier, c.IsSelectionColumn, c.AllowFiltering AS IsFilterable, NULL AS Precision, c.IsTranslated, COALESCE(f.Help, c.Help) AS help_text, fg.Name AS field_group_name, f.Property, c.IsKey, c.Computation_Mode, c.Refresh_Mode, c.Computation_Function, tab_tbl.TableName AS tab_tablename FROM AD_Field f JOIN AD_Tab t ON f.AD_Tab_ID = t.AD_Tab_ID JOIN AD_Window w ON t.AD_Window_ID = w.AD_Window_ID JOIN AD_Column c ON f.AD_Column_ID = c.AD_Column_ID JOIN AD_Table tbl ON c.AD_Table_ID = tbl.AD_Table_ID JOIN AD_Table tab_tbl ON t.AD_Table_ID = tab_tbl.AD_Table_ID LEFT JOIN AD_Package pkg ON tbl.AD_Package_ID = pkg.AD_Package_ID LEFT JOIN AD_FieldGroup fg ON fg.AD_FieldGroup_ID = f.AD_FieldGroup_ID JOIN AD_Reference r ON c.AD_Reference_ID = r.AD_Reference_ID LEFT JOIN AD_Model_Object mo ON mo.AD_Callout_ID = c.AD_Callout_ID LEFT JOIN ad_ref_table rt ON c.ad_reference_value_id = rt.ad_reference_id LEFT JOIN ad_table rt_tgt ON rt.ad_table_id = rt_tgt.ad_table_id LEFT JOIN ad_column rt_key ON rt.ad_key = rt_key.ad_column_id LEFT JOIN ad_column rt_disp ON rt.ad_display = rt_disp.ad_column_id LEFT JOIN ad_ref_search rs ON c.ad_reference_value_id = rs.ad_reference_id LEFT JOIN ad_table rs_tgt ON rs.ad_table_id = rs_tgt.ad_table_id LEFT JOIN ad_column rs_col ON rs.ad_column_id = rs_col.ad_column_id LEFT JOIN ad_val_rule vr ON c.ad_val_rule_id = vr.ad_val_rule_id LEFT JOIN obuisel_selector sel ON sel.ad_reference_id = c.ad_reference_value_id LEFT JOIN ad_table sel_tgt ON sel.ad_table_id = sel_tgt.ad_table_id WHERE w.AD_Window_ID = $1 AND t.IsActive = 'Y' ORDER BY t.SeqNo, t.Name, t.AD_Tab_ID, f.SeqNo, f.AD_Field_ID",
   "versions": {
     "013cce9e3c48ab662237129c6c414b996ab7bf601feb890df423b973bf47bb4b": {
-      "checksum": "f833926ed8fdc49026e6afc7ae18969e9fee2b950596a2907779c209175bfb4d",
+      "checksum": "707b687aac5ecc83a61ee9f60263f68c7e6914810452715bba3f181c6ceea623",
       "params": [
         "24963D64E83B4543A7F6BD248CF944EE"
       ],
@@ -404,7 +404,7 @@
           "field_seq": "70",
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "References the transaction type catalog created inline from the selector.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -379884,7 +379884,7 @@
       ]
     },
     "f1f32f0509feee773effdbb65862db430528059f21afea44318bba93be395333": {
-      "checksum": "0a8defa258d8301b6a8550d7d8908b301b199a38389def5fc0ddbb486c69bcac",
+      "checksum": "ceaa6730d44e213d4f655cfcc17d865604df7a9c242b92cd3b4b2f0d18d0d2fa",
       "params": [
         "82922976BB524D1BAA3CF8462B9219FE"
       ],
@@ -379916,7 +379916,7 @@
           "field_seq": "10",
           "fieldlength": "60",
           "filterclause": null,
-          "help_text": "A search key allows for a fast method of finding a particular record.",
+          "help_text": "A search key allows for a fast method of finding a particular record. If you leave the search key empty, the system automatically creates a numeric number originating from a document sequence defined in the  \"Document Sequence\" window. The sequence naming convention follows a rule \"DocumentNo_TableName\", where TableName is the actual name of the database table (e.g. C_Order).\n\nUsually, company's internal identifiers for various records (products, customers, etc) are stored here.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -379990,7 +379990,7 @@
           "field_seq": "20",
           "fieldlength": "60",
           "filterclause": null,
-          "help_text": "Descriptive name of the transaction type shown in the rules list.",
+          "help_text": "A more descriptive identifier (that does need to be unique) of a record/document that is used as a default search option along with the search key (that is unique and mostly shorter). It is up to 60 characters in length.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -380064,7 +380064,7 @@
           "field_seq": "30",
           "fieldlength": "1",
           "filterclause": null,
-          "help_text": "A de-activated record is not available for selection, but available for reporting.",
+          "help_text": "There are two methods of making records unavailable in the system: One is to delete the record, the other is to de-activate the record. A de-activated record is not available for selection, but available for reporting. There are two reasons for de-activating and not deleting records: \n(1) The system requires the record for auditing purposes.\n(2) The record is referenced by other records. E.g., you cannot delete a Business Partner, if there are existing invoices for it. By de-activating the Business Partner you prevent it from being used in future transactions.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -380286,7 +380286,7 @@
           "field_seq": "60",
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "Internal ID of the bank-reconciliation transaction type.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
