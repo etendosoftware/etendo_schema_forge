@@ -209,9 +209,21 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
     )));
   }
 
-  /** `NeoResponse.error()`'s real shape: `{ error: { message: "..." } }` — see readNeoErrorMessage. */
+  /** The pre-ETP-5047 NEO shape: `{ error: { message: "..." } }`, parsed by message prefix. */
   function neoError(message) {
     return { error: { message } };
+  }
+
+  /** ETP-5047 — `EnvironmentAccessGuard.Denial.errorBody(402)`, the shared structured shape. */
+  function guardDenial(decision) {
+    return {
+      error: {
+        message: `Environment access is not available: ${decision}`,
+        status: 402,
+        code: 'ENVIRONMENT_ACCESS_DENIED',
+        decision,
+      },
+    };
   }
 
   beforeEach(() => {
@@ -239,6 +251,25 @@ describe('fetchWindowAccess — environment access gate (ETP-5443 follow-up)', (
 
     expect(result).toBeNull();
     expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  it('records the decision from the structured ETP-5047 402 body', async () => {
+    stubFetch(jsonResponse(guardDenial('SUBSCRIPTION_REQUIRED'), false, 402));
+
+    const result = await fetchWindowAccess({ token: 'tok' });
+
+    expect(result).toBeNull();
+    expect(getEnvironmentAccessDecision()).toBe('SUBSCRIPTION_REQUIRED');
+  });
+
+  it('trusts the structured decision over a message that disagrees with it', async () => {
+    const body = guardDenial('DEMO_TRIAL_EXPIRED');
+    body.error.message = 'Environment access is not available: SUBSCRIPTION_REQUIRED';
+    stubFetch(jsonResponse(body, false, 402));
+
+    await fetchWindowAccess({ token: 'tok' });
+
+    expect(getEnvironmentAccessDecision()).toBe('DEMO_TRIAL_EXPIRED');
   });
 
   // MEMBERSHIP_REQUIRED is a real EnvironmentAccessPolicy.Decision, but a DIFFERENT kind of "no

@@ -102,6 +102,61 @@ const SCOPE_PREDICATES = [
   /\benvironment_client_id = :client_id\b/, // etgo_subscription — System-owned at client '0'
 ];
 
+/**
+ * Split a comma-separated SQL list at its TOP level only: commas inside parentheses, inside a
+ * CASE … END expression or inside a string literal belong to the item they are in.
+ *
+ * @param {string} list
+ * @returns {string[]} trimmed items
+ */
+function splitTopLevel(list) {
+  const items = [];
+  let current = '';
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < list.length; i++) {
+    const ch = list[i];
+    if (inString) {
+      current += ch;
+      if (ch === "'") {
+        if (list[i + 1] === "'") { current += list[++i]; } else { inString = false; }
+      }
+      continue;
+    }
+    if (ch === "'") { inString = true; current += ch; continue; }
+    const word = /^[A-Za-z_]/.test(ch) && !/[A-Za-z0-9_]/.test(list[i - 1] || '')
+      ? (list.slice(i).match(/^[A-Za-z_][A-Za-z0-9_]*/) || [''])[0] : '';
+    if (word.toUpperCase() === 'CASE') { depth++; }
+    if (word.toUpperCase() === 'END') { depth--; }
+    if (word) { current += word; i += word.length - 1; continue; }
+    if (ch === '(') { depth++; }
+    if (ch === ')') { depth--; }
+    if (ch === ',' && depth === 0) { items.push(current.trim()); current = ''; continue; }
+    current += ch;
+  }
+  items.push(current.trim());
+  return items;
+}
+
+/**
+ * ETP-5047 — the backfill INSERT as a column → value-expression map, pairing the INSERT column
+ * list with the SELECT list positionally. Pinning each column to its expression is what catches a
+ * value shifted one slot over (the anchor landing in the period, a watermark in the anchor) — a
+ * failure that a substring match on the SELECT list lets through.
+ *
+ * @returns {Map<string, string>}
+ */
+function insertColumnValues() {
+  const insert = splitStatements(fix.apply).find(st => /^INSERT INTO etgo_subscription/.test(st));
+  const columns = insert.match(/^INSERT INTO etgo_subscription \( (.*?) \) SELECT /)[1];
+  const values = insert.match(/\) SELECT (.*?) FROM ad_client c /)[1];
+  const columnList = splitTopLevel(columns);
+  const valueList = splitTopLevel(values);
+  assert.equal(valueList.length, columnList.length,
+    `the INSERT names ${columnList.length} columns but selects ${valueList.length} values`);
+  return new Map(columnList.map((column, i) => [column, valueList[i]]));
+}
+
 describe('R37 data-fix — header metadata', () => {
   it('parses with the expected id and gap label', () => {
     assert.equal(fix.id, 'R37-tenant-subscription-backfill');
@@ -274,10 +329,22 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
     );
   });
 
-  it('writes an OPEN subscription (end_date and current_period_start NULL) so the constraints hold', () => {
-    // start_date, then end_date NULL (open) and current_period_start NULL (ETGO_SUB_PERIOD_CHK
-    // can never reject a row with one side NULL), then the seeded current_period_end.
-    assert.match(normApply, /END, COALESCE\(cr\.paid_at, c\.created, now\(\)\), NULL, NULL, CASE WHEN du\.due_at_value/);
+  it('writes an OPEN subscription (end_date NULL) with NO billing period, so the constraints hold', () => {
+    // ETP-5047 — current_period_start/end hold the provider billing period only, which the
+    // preferences never knew: both NULL (ETGO_SUB_PERIOD_CHK can never reject the row). The due
+    // date is a grace anchor and has its own column (see below).
+    const values = insertColumnValues();
+    assert.equal(values.get('start_date'), 'COALESCE(cr.paid_at, c.created, now())');
+    assert.equal(values.get('end_date'), 'NULL');
+    assert.equal(values.get('current_period_start'), 'NULL');
+    assert.equal(values.get('current_period_end'), 'NULL');
+    assert.match(normApply, /END, COALESCE\(cr\.paid_at, c\.created, now\(\)\), NULL, NULL, NULL, cr\.stripe_customer_id/);
+  });
+
+  it('pairs every INSERT column with exactly one selected value', () => {
+    const values = insertColumnValues();
+    assert.equal(values.size, 25);
+    assert.deepEqual([...values.keys()].slice(-2), ['grace_anchor', 'last_event_at']);
   });
 
   it('seeds status from ETGO_SubscriptionStatus instead of a flat active (ETP-5443)', () => {
@@ -296,9 +363,36 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
     assert.deepEqual([...new Set(written)].sort(), ['active', 'canceled', 'past_due']);
   });
 
-  it('seeds current_period_end from ETGO_SubscriptionDueAt, cast only when it is a UTC ISO instant', () => {
-    assert.match(normApply, /CASE WHEN du\.due_at_value ~ '\^\[0-9\]\{4\}-/);
-    assert.match(normApply, /Z\$' THEN CAST\(du\.due_at_value AS timestamptz\) END,/);
+  it('seeds grace_anchor (NOT current_period_end) from ETGO_SubscriptionDueAt, cast only when it is a UTC ISO instant', () => {
+    // ETP-5047 — the grace anchor left current_period_end for its own column.
+    const graceAnchor = insertColumnValues().get('grace_anchor');
+    assert.match(graceAnchor, /^CASE WHEN du\.due_at_value ~ '\^\[0-9\]\{4\}-/);
+    assert.match(graceAnchor, /Z\$' THEN CAST\(du\.due_at_value AS timestamptz\) END$/);
+    assert.doesNotMatch(insertColumnValues().get('current_period_end'), /due_at_value/);
+  });
+
+  it('seeds last_event_at from ETGO_SubscriptionEventAt with the same ISO-instant shape check (ETP-5047)', () => {
+    // The row route reads its ordering watermark from the row: without the carry-over the first
+    // event after the backfill could never be recognised as stale.
+    const lastEventAt = insertColumnValues().get('last_event_at');
+    assert.match(lastEventAt, /^CASE WHEN ev\.event_at_value ~ '([^']+)' THEN CAST\(ev\.event_at_value AS timestamptz\) END$/);
+    const eventShape = lastEventAt.match(/ev\.event_at_value ~ '([^']+)'/)[1];
+    const dueShape = normApply.match(/du\.due_at_value ~ '([^']+)'/)[1];
+    assert.equal(eventShape, dueShape, 'one shape rule for both instants');
+    const re = new RegExp(eventShape);
+    assert.match('2026-09-20T08:15:30Z', re);
+    assert.match('2026-09-20T08:15:30.123Z', re);
+    for (const bad of ['', '2026-09-20 08:15:30', '1790000000', '2026-09-20T08:15:30+02:00']) {
+      assert.doesNotMatch(bad, re, bad);
+    }
+  });
+
+  it('never writes an instant from one preference into another column', () => {
+    const values = insertColumnValues();
+    for (const [column, value] of values) {
+      if (column !== 'grace_anchor') assert.doesNotMatch(value, /due_at_value/, column);
+      if (column !== 'last_event_at') assert.doesNotMatch(value, /event_at_value/, column);
+    }
   });
 
   it('accepts exactly the shapes Instant.toString() writes and rejects anything else', () => {
@@ -313,7 +407,7 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
     }
   });
 
-  it('reads both lifecycle preferences by ad_client_id (their writer owns them at the tenant)', () => {
+  it('reads the three lifecycle preferences by ad_client_id (their writer owns them at the tenant)', () => {
     assert.match(
       normApply,
       /LEFT JOIN LATERAL \( SELECT upper\(trim\(sp\.value\)\) AS status_value FROM ad_preference sp WHERE sp\.attribute = 'ETGO_SubscriptionStatus' AND sp\.ad_client_id = :client_id AND sp\.isactive = 'Y' ORDER BY sp\.updated DESC LIMIT 1 \) st ON TRUE/,
@@ -322,7 +416,11 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
       normApply,
       /LEFT JOIN LATERAL \( SELECT trim\(dp\.value\) AS due_at_value FROM ad_preference dp WHERE dp\.attribute = 'ETGO_SubscriptionDueAt' AND dp\.ad_client_id = :client_id AND dp\.isactive = 'Y' ORDER BY dp\.updated DESC LIMIT 1 \) du ON TRUE/,
     );
-    assert.doesNotMatch(normApply, /[sd]p\.visibleat_client_id/);
+    assert.match(
+      normApply,
+      /LEFT JOIN LATERAL \( SELECT trim\(ep\.value\) AS event_at_value FROM ad_preference ep WHERE ep\.attribute = 'ETGO_SubscriptionEventAt' AND ep\.ad_client_id = :client_id AND ep\.isactive = 'Y' ORDER BY ep\.updated DESC LIMIT 1 \) ev ON TRUE/,
+    );
+    assert.doesNotMatch(normApply, /[sde]p\.visibleat_client_id/);
   });
 
   it('leaves the lifecycle preferences in place (only the ETGO_TenantPlan marker is retired)', () => {
@@ -341,8 +439,17 @@ describe('R37 data-fix — @apply statement 2 (the backfill INSERT)', () => {
 
   it('copies the charged Stripe price id from the same checkout request, NULL when unknown', () => {
     assert.match(normApply, /etgo_account_id, provider_price_id, snapshot_amount, snapshot_currency, pending_plan_id, pending_effective_date/);
-    // etgo_account_id NULL, provider_price_id from the request, snapshot amount/currency NULL.
-    assert.match(normApply, /NULL, cr\.stripe_price_id, NULL, NULL, NULL, NULL FROM ad_client c/);
+    // etgo_account_id NULL, provider_price_id from the request, snapshot amount/currency NULL,
+    // no pending plan change.
+    const values = insertColumnValues();
+    assert.equal(values.get('etgo_account_id'), 'NULL');
+    assert.equal(values.get('provider_price_id'), 'cr.stripe_price_id');
+    assert.equal(values.get('snapshot_amount'), 'NULL');
+    assert.equal(values.get('snapshot_currency'), 'NULL');
+    assert.equal(values.get('pending_plan_id'), 'NULL');
+    assert.equal(values.get('pending_effective_date'), 'NULL');
+    assert.equal(values.get('stripe_customer_id'), 'cr.stripe_customer_id');
+    assert.equal(values.get('stripe_subscription_id'), 'cr.stripe_subscription_id');
     // The LEFT JOIN makes it NULL for a tenant with no usable request, never a guessed value.
     assert.match(normApply, /\) cr ON TRUE/);
   });

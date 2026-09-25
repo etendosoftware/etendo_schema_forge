@@ -755,14 +755,12 @@
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessEnforcementFlagTest.java",
-            "expected": true,
-            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only an explicit true switches off; the clientId attribute reaches the evaluation context."
+            "note": "Unset flag, a non-boolean value and a provider failure all read as NOT switched off; only an explicit true switches off; the clientId attribute reaches the evaluation context (asserted on the FeatureFlagContext and end to end through a per-tenant stub provider)."
           },
           {
             "root": "backend",
             "path": "src-test/src/com/etendoerp/go/payment/EnvironmentAccessGuardTest.java",
-            "expected": true,
-            "note": "Decision x switch matrix: ALLOWED and null never consult the switch; a denial with the switch off is refused, with it on is allowed and logged; error body shape."
+            "note": "Decision x switch matrix: ALLOWED and null never consult the switch; a denial with the switch off is refused, with it on is allowed and logged at INFO; error body shape; checkAsSystem hands the caller its context back."
           }
         ],
         "e2e": []

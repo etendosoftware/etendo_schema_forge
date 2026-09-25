@@ -1,5 +1,6 @@
 import {
   parseEnvironmentAccessDecision,
+  readEnvironmentAccessDecision,
   isBlockingAccessDecision,
   setEnvironmentAccessDecision,
   getEnvironmentAccessDecision,
@@ -64,6 +65,92 @@ describe('environmentAccessGate', () => {
 
     it('returns null for an empty string', () => {
       expect(parseEnvironmentAccessDecision('')).toBeNull();
+    });
+  });
+
+  // ETP-5047 — the body reader fetchWindowAccess hands a parsed 402 to. Structured
+  // `error.code` / `error.decision` first (EnvironmentAccessGuard.Denial.errorBody), then the
+  // pre-ETP-5047 message-prefix fallback, never throwing on an unexpected shape.
+  describe('readEnvironmentAccessDecision', () => {
+    const PREFIX = 'Environment access is not available: ';
+    const denial = (decision, extra = {}) => ({
+      error: {
+        message: `${PREFIX}${decision}`,
+        status: 402,
+        code: 'ENVIRONMENT_ACCESS_DENIED',
+        decision,
+        ...extra,
+      },
+    });
+
+    it('reads the structured decision of the shared ETP-5047 body', () => {
+      expect(readEnvironmentAccessDecision(denial('SUBSCRIPTION_REQUIRED'))).toBe('SUBSCRIPTION_REQUIRED');
+      expect(readEnvironmentAccessDecision(denial('DEMO_TRIAL_EXPIRED'))).toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('prefers the structured decision over a message that says otherwise', () => {
+      const body = denial('DEMO_TRIAL_EXPIRED', { message: `${PREFIX}SUBSCRIPTION_REQUIRED` });
+      expect(readEnvironmentAccessDecision(body)).toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('trims the structured decision', () => {
+      expect(readEnvironmentAccessDecision(denial('  SUBSCRIPTION_REQUIRED  '))).toBe('SUBSCRIPTION_REQUIRED');
+    });
+
+    it('falls back to error.message when the body has no structured decision (pre-ETP-5047 backend)', () => {
+      expect(readEnvironmentAccessDecision({ error: { message: `${PREFIX}DEMO_TRIAL_EXPIRED` } }))
+        .toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    it('parses a string error', () => {
+      expect(readEnvironmentAccessDecision({ error: `${PREFIX}SUBSCRIPTION_REQUIRED` }))
+        .toBe('SUBSCRIPTION_REQUIRED');
+    });
+
+    it('parses a top-level message when there is no error at all', () => {
+      expect(readEnvironmentAccessDecision({ message: `${PREFIX}DEMO_TRIAL_EXPIRED` }))
+        .toBe('DEMO_TRIAL_EXPIRED');
+    });
+
+    // A decision under a foreign code is not the guard's: only the message may speak for it.
+    it('ignores the decision field under a different error code and reads the message instead', () => {
+      expect(readEnvironmentAccessDecision(denial('SUBSCRIPTION_REQUIRED', {
+        code: 'SOMETHING_ELSE', message: `${PREFIX}DEMO_TRIAL_EXPIRED`,
+      }))).toBe('DEMO_TRIAL_EXPIRED');
+      expect(readEnvironmentAccessDecision(denial('SUBSCRIPTION_REQUIRED', {
+        code: 'SOMETHING_ELSE', message: 'Rate limit exceeded',
+      }))).toBeNull();
+      expect(readEnvironmentAccessDecision({ error: { decision: 'SUBSCRIPTION_REQUIRED' } })).toBeNull();
+    });
+
+    it('falls back to the message when the structured decision is blank or not a string', () => {
+      expect(readEnvironmentAccessDecision(denial('   '))).toBeNull();
+      expect(readEnvironmentAccessDecision(denial('', { message: `${PREFIX}DEMO_TRIAL_EXPIRED` })))
+        .toBe('DEMO_TRIAL_EXPIRED');
+      expect(readEnvironmentAccessDecision(denial(null, { message: `${PREFIX}SUBSCRIPTION_REQUIRED` })))
+        .toBe('SUBSCRIPTION_REQUIRED');
+      expect(readEnvironmentAccessDecision(denial(42, { message: 'no prefix here' }))).toBeNull();
+    });
+
+    it('returns null for a body carrying no recognisable decision', () => {
+      expect(readEnvironmentAccessDecision({ error: { message: 'Rate limit exceeded' } })).toBeNull();
+      expect(readEnvironmentAccessDecision({ error: 'Rate limit exceeded' })).toBeNull();
+      expect(readEnvironmentAccessDecision({ message: 'internal error' })).toBeNull();
+      expect(readEnvironmentAccessDecision({})).toBeNull();
+    });
+
+    it('never throws on an unexpected shape', () => {
+      for (const body of [null, undefined, '', 'text', 42, [], { error: null }, { error: 42 },
+        { error: [] }, { error: { message: 42 } }]) {
+        expect(() => readEnvironmentAccessDecision(body)).not.toThrow();
+        expect(readEnvironmentAccessDecision(body)).toBeNull();
+      }
+    });
+
+    // Reading and blocking stay separate: MEMBERSHIP_REQUIRED is read verbatim, and it is
+    // isBlockingAccessDecision that keeps it off the blocked-access screen.
+    it('reads MEMBERSHIP_REQUIRED verbatim (blocking is decided elsewhere)', () => {
+      expect(readEnvironmentAccessDecision(denial('MEMBERSHIP_REQUIRED'))).toBe('MEMBERSHIP_REQUIRED');
     });
   });
 
