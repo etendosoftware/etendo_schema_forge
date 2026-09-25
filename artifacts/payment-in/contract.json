@@ -1,8 +1,8 @@
 {
-  "version": "0.13.0",
+  "version": "0.14.0",
   "generatedAt": "2026-04-29T19:05:52.312Z",
-  "updatedAt": "2026-08-24T22:21:35.228Z",
-  "checksum": "8a414984b40eee5c",
+  "updatedAt": "2026-09-24T10:36:51.791Z",
+  "checksum": "3d1b9a03d4173125",
   "frontendContract": {
     "window": {
       "id": "E547CE89D4C04429B6340FFA44E70716",
@@ -109,7 +109,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -152,7 +152,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
@@ -183,7 +183,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -232,7 +232,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
@@ -302,7 +302,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' & @status@!'RPAE'",
               "evaluable": true,
-              "js": "record['processed'] === true && record['status'] !== 'RPAE'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') && record['status'] !== 'RPAE'"
             }
           },
           {
