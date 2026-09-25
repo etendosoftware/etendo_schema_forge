@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Navigate } from 'react-router-dom';
 import { LogoutRoute } from '@etendosoftware/app-shell-core/auth';
+import { useLogout } from './auth/useLogout.js';
 import WindowLoader from './windows/WindowLoader.jsx';
 import PreviewPage from './preview/PreviewPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -36,6 +37,11 @@ const DevLifecyclePage = import.meta.env.DEV
 const PortalPage = lazy(() => import('./pages/PortalPage.jsx'));
 
 const LOADING_FALLBACK = <div className="p-8 text-muted-foreground">Loading...</div>;
+
+function RuntimeLogoutRoute() {
+  const logout = useLogout();
+  return <LogoutRoute cleanup={logout} safeDestination="/login" data-testid="LogoutRoute__e8c60d" />;
+}
 
 function lazyRoute(path, Component, extraProps = {}) {
   return {
@@ -75,8 +81,10 @@ export function buildRuntimeRoutes({ windowMap, apiBaseUrl }) {
     // "link no longer valid" state — a truncated link deserves that message rather than the
     // catch-all route's blank fallback, and it says nothing a probe could learn from.
     { path: 'portal', public: true, element: portalElement },
-    { path: 'login', public: true, element: <Navigate to="/onboarding" replace data-testid="Navigate__e8c60d" /> },
-    { path: 'logout', public: true, element: <LogoutRoute safeDestination="/onboarding" data-testid="LogoutRoute__e8c60d" /> },
+    { path: 'login', public: true, element: (
+        <Suspense fallback={LOADING_FALLBACK} data-testid="Suspense__e8c60d"><OnboardingPage data-testid="OnboardingPage__e8c60d" /></Suspense>
+      ) },
+    { path: 'logout', public: true, element: <RuntimeLogoutRoute data-testid="RuntimeLogoutRoute__e8c60d" /> },
     { path: 'financial-account/bank-connection-callback', public: true, element: <BankConnectionCallbackPage data-testid="BankConnectionCallbackPage__e8c60d" /> },
     { path: 'financial-account/pis-callback', public: true, element: <PisCallbackPage data-testid="PisCallbackPage__e8c60d" /> },
     { path: 'dashboard', public: false, element: <DashboardPage apiBaseUrl={apiBaseUrl} data-testid="DashboardPage__e8c60d" /> },
