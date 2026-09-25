@@ -107,24 +107,32 @@ export const api = {
     "importedBankStatements": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/importedBankStatements",
       "detailUrl": "/sws/neo/accounts/importedBankStatements/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "bankStatementLines": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/bankStatementLines",
       "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "reconciliations": {
       "get": true,

@@ -125,6 +125,7 @@
       }
     },
     "importedBankStatements": {
+      "readOnly": true,
       "fields": {
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "name": { "visibility": "editable", "grid": true, "gridOrder": 2 },
@@ -140,6 +141,7 @@
       }
     },
     "bankStatementLines": {
+      "readOnly": true,
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "description": { "visibility": "editable", "grid": true, "gridOrder": 2 },

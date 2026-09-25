@@ -1498,6 +1498,7 @@ The toolbar mirrors the Movements tab: back arrow, date range defaulting to **la
 **Entity-level write access.** `ETGO_SF_ENTITY` still has no `ISREADONLY`, but the six HTTP method flags (`ISGET`/`ISGETBYID`/`ISPOST`/`ISPUT`/`ISPATCH`/`ISDELETE`) *are* declarable from `decisions.json` since ETP-4254 — `entities.<key>.readOnly: true` resolves to `GET` + `GETBYID` only (see `lib/entity-methods.js` in `schema_forge_core`).
 
 - **`clearedItems` is now declared `"readOnly": true`.** It is a DB view (`FIN_ReconciliationLine_v`), so an INSERT was never possible; before, the contract advertised `POST`/`PUT`/`PATCH`/`DELETE` with zero writable fields behind them, and a write died on a raw DAL error instead of a clean `405`. The contract now carries `apiPrediction.crud.clearedItems.methods = ["GET","GETBYID"]`. Reads are unaffected.
+- **`importedBankStatements` and `bankStatementLines` are `"readOnly": true` since ETP-5469** — statements are written only through the `bank-statements` spec (see *Agents manage bank statements* below).
 - **`reconciliations` is deliberately left open.** It is a physical table (`FIN_Reconciliation`) whose rows are created by a process rather than by a plain INSERT, and every field being read-only may be over-curation rather than a genuine read-only entity. Closing it is a pending human decision, not an oversight.
 
 Until the next `make regen ONLY=financial-account PUSH_TO_NEO=1` + `./gradlew export.database`, the declaration lives only in `decisions.json`/`contract.json` — the live `ETGO_SF_ENTITY` row still grants the write verbs.
@@ -1547,6 +1548,31 @@ SPA never produces (its calls are report-spec requests with no endpoint type). T
 refusal shapes and parameter table live in `com.etendoerp.go/docs/neo-headless.md` §4.12.1.1; the
 `financial-account` spec prompt (`agent-prompts/financial-account/spec.md`) points agents there
 instead of at the account's Core buttons.
+
+**Agents manage bank statements through the same routes as the UI (ETP-5469).** Same mechanism,
+on the `bank-statements` spec (`BankStatementsHandler` → `BankStatementAgentActions`, entity
+`bank-statements`): `listStatements` and `statementLines` (read), `createStatement`,
+`importStatement`, `processStatement` and `reactivateStatement` (write). `id` is the financial
+account for list / create / import and the statement for lines / process / reactivate — each
+contract says which in its `idDescription`. They re-enter `handleList`, `handleGetLines`,
+`handleCreate`, `handleImport`, `handleProcess` and `handleReactivate`, the methods behind the
+Extractos tab's `?action=` routes, which stay untouched. The agent path adds the checks the UI does
+on the client before sending a manual statement (line date required, exactly one positive amount,
+no over-long texts, known contact / G/L item ids, only the declared line keys) and caps an
+imported file at 1 MiB; the SPA route keeps its current behaviour. Update and delete are not
+exposed. Before this, the only agent route was writing the generic `importedBankStatements` /
+`bankStatementLines` entities, which never processes the statement nor validates it like the UI.
+
+**Generic writes on `importedBankStatements` / `bankStatementLines` are closed (ETP-5469).** Both
+are declared `"readOnly": true` in `decisions.json`, so `ETGO_SF_ENTITY` (`495659D9…`,
+`6EFF323F…`) grants `GET` + `GETBYID` only: `POST`/`PUT`/`PATCH`/`DELETE` answer `405 "<METHOD>
+not enabled for <entity>"` on REST and on MCP (`neo_create` / `neo_update` / `neo_delete`), and
+reads are unchanged. The UI is unaffected: the Extractos tab never wrote through those entities —
+every statement hook calls `/sws/neo/bank-statements` — and the generated `AccountPage.jsx`'s
+`api.crud` flags for them (now `post/put/patch/delete: false`, `methods: ["GET","GETBYID"]`) are
+inert here, because the custom `index.jsx` renders `AccountPage` only for the list, never its detail
+branch (the only reader of `api.crud`). The spec prompt sends agents to the actions above. Full
+contract: `com.etendoerp.go/docs/neo-headless.md` §4.12.1.1.
 
 **No Etendo GO action processes a draft it did not build** (`ReconciliationDraftGuard`). No GO
 action leaves a draft behind on success, so a draft that already holds transactions when an action
