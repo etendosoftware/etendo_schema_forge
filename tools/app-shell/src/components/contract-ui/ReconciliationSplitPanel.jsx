@@ -47,6 +47,11 @@ import { translateBackendError } from '@/lib/backendErrors.js';
 import { getDateBounds, toDateParam } from '@/lib/dateRangeBounds';
 import { formatDate, formatSigned } from '@/lib/formatSigned';
 import { formatCurrency } from '@/lib/formatCurrency';
+import { useClientSort } from '@/hooks/useClientSort';
+import { SortableHeaderLabel } from '@/components/financial-accounts/SortableHeaderLabel.jsx';
+import {
+  LINE_SORT_ACCESSORS, buildCandidateSortAccessors, candidateBaseAmount,
+} from './reconciliationSort.js';
 import {
   usePendingStatementLines,
   useCandidateOperations,
@@ -371,6 +376,7 @@ function ProgressCell({ line, currency, cellClassName }) {
 function StatementLinesPanel({
   lines, total, loading, currency, bcpLocale, selectedLineId, onSelectLine, search, onSearchChange,
   status, onStatusChange, statusCounts, dateRange, onDateRangeChange, onBack,
+  sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
 
@@ -483,14 +489,49 @@ function StatementLinesPanel({
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
-          <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
-          <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDescription')}</TableHead>
-          <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColProgress')}</TableHead>
+          {/* The sort control sits INSIDE each header cell and never changes its width class:
+              the widths are load-bearing for `table-fixed` + `truncate` (see PanelTable). */}
+          <TableHead className="w-[108px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDate')}
+              sortKey="date"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDescription')}
+              sortKey="description"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="w-[90px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColProgress')}
+              sortKey="progress"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
           {/* Right-aligned to sit over its own figures: MoneyCell renders `text-right`, so a
               left-aligned header put the label at the opposite edge of the column from the
               amount it names — the same rule the generic DataTable applies to any numeric
               column, which this hand-rolled table does not inherit. */}
-          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+          <TableHead className="w-[139px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColAmount')}
+              sortKey="amount"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -595,6 +636,7 @@ function CandidateOperationsPanel({
   line, candidates, loading, currency, bcpLocale, selectedIds, onToggle, search, onSearchChange,
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
   onRemoveOperation, reconciledMode = false, differenceBanner = null,
+  sortKey = null, sortDirection = 'asc', onSort,
 }) {
   const ui = useUI();
   // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
@@ -661,8 +703,13 @@ function CandidateOperationsPanel({
               <span className="shrink-0 font-normal text-[hsl(var(--foreground))]">
                 {cand.documentNo || cand.description || '—'}
               </span>
+              {/* Same reveal-on-clip as the left panel's Descripción: the tooltip opens only when
+                  the partner name is actually cut off. */}
               {cand.partnerName ? (
-                <span className="truncate text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]">{cand.partnerName}</span>
+                <TruncatedText
+                  text={cand.partnerName}
+                  className="w-auto min-w-0 text-xs font-medium leading-4 text-[hsl(var(--muted-foreground))]"
+                  data-testid={`recon-cand-partner-${cand.id}`} />
               ) : null}
               {candForeign ? <CurrencyBadge code={cand.currency} data-testid="CurrencyBadge__d0f4d5" /> : null}
             </div>
@@ -767,12 +814,48 @@ function CandidateOperationsPanel({
       headCells={(
         <>
           <TableHead className="w-8 px-0 pl-2" data-testid="TableHead__d0f4d5" />
-          <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColDate')}</TableHead>
-          <TableHead className="px-3" data-testid="TableHead__d0f4d5">{ui('financeReconcileColInfo')}</TableHead>
+          <TableHead className="w-[104px] px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColDate')}
+              sortKey="date"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="px-3" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColInfo')}
+              sortKey="info"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
           {/* Both money columns render through MoneyCell (`text-right`) — see the left panel's
-              own Importe header for why these follow it. */}
-          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColPendingBalance')}</TableHead>
-          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">{ui('financeReconcileColAmount')}</TableHead>
+              own Importe header for why these follow it. They sort on the account-currency
+              equivalent, so a foreign-currency candidate is never ordered against a figure
+              denominated in another currency (see reconciliationSort.js). */}
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColPendingBalance')}
+              sortKey="pendingBalance"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
+          <TableHead className="w-[121px] px-3 text-right" data-testid="TableHead__d0f4d5">
+            <SortableHeaderLabel
+              label={ui('financeReconcileColAmount')}
+              sortKey="amount"
+              activeKey={sortKey}
+              direction={sortDirection}
+              onSort={onSort}
+              align="right"
+              data-testid="SortableHeaderLabel__d0f4d5" />
+          </TableHead>
         </>
       )}
       data-testid="PanelShell__d0f4d5" />
@@ -1077,6 +1160,23 @@ function resolveCandidateLineId(selectedLine) {
 }
 
 /**
+ * Rules 1 and 2 of `resolveVisibleCandidates` below — which candidates are shown — without the
+ * selected/suggested pinning. A user-chosen column sort orders THIS list: once the user picks a
+ * column, that order wins over the pin, so checking a row does not make it jump.
+ *
+ * @param {{ candidates: Array<object>, selectedLine: object|null, search: string }} args
+ * @returns {Array<object>}
+ */
+function filterCandidates({ candidates, selectedLine, search }) {
+  if (selectedLine?.status === 'reconciled') return candidates;
+  const q = search.trim().toLowerCase();
+  return q
+    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
+      .some((v) => (v || '').toLowerCase().includes(q)))
+    : candidates;
+}
+
+/**
  * Which candidate operations the right panel shows, and in what order.
  *
  * Three rules, in this order:
@@ -1100,11 +1200,7 @@ function resolveCandidateLineId(selectedLine) {
  */
 function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOpIds }) {
   if (selectedLine?.status === 'reconciled') return candidates;
-  const q = search.trim().toLowerCase();
-  const filtered = q
-    ? candidates.filter((c) => [c.documentNo, c.partnerName, c.description]
-      .some((v) => (v || '').toLowerCase().includes(q)))
-    : candidates;
+  const filtered = filterCandidates({ candidates, selectedLine, search });
   return [...filtered].sort((a, b) => {
     const sel = (selectedOpIds.has(b.id) ? 1 : 0) - (selectedOpIds.has(a.id) ? 1 : 0);
     if (sel !== 0) return sel;
@@ -1282,10 +1378,30 @@ export function ReconciliationSplitPanel({
     [visibleLines],
   );
 
-  const visibleCandidates = useMemo(
+  // Column sort, in memory: both lists are fetched whole (no paging, no `_sortBy`), so ordering
+  // the loaded rows orders the dataset and never refetches. Purely presentational — selection,
+  // the footer total and the action bar's running totals are all order-independent.
+  const {
+    sorted: sortedLines, sortKey: lineSortKey, sortDirection: lineSortDirection,
+    toggleSort: toggleLineSort,
+  } = useClientSort(visibleLines, { accessors: LINE_SORT_ACCESSORS });
+
+  const filteredCandidates = useMemo(
+    () => filterCandidates({ candidates, selectedLine, search: rightSearch }),
+    [candidates, rightSearch, selectedLine],
+  );
+  const candidateSortAccessors = useMemo(() => buildCandidateSortAccessors(currency), [currency]);
+  const {
+    sorted: sortedCandidates, sortKey: candSortKey, sortDirection: candSortDirection,
+    toggleSort: toggleCandSort,
+  } = useClientSort(filteredCandidates, { accessors: candidateSortAccessors });
+  const pinnedCandidates = useMemo(
     () => resolveVisibleCandidates({ candidates, selectedLine, search: rightSearch, selectedOpIds }),
     [candidates, rightSearch, selectedOpIds, selectedLine],
   );
+  // No column chosen → the default selected-then-suggested pin. A chosen column wins outright, so
+  // the order the user asked for holds while they tick rows.
+  const visibleCandidates = candSortKey ? sortedCandidates : pinnedCandidates;
 
   // Pre-select the candidates the standard algorithm suggests, so a clean match
   // is one click away. Depends on the line id + loading state (not the candidates
@@ -1308,22 +1424,16 @@ export function ReconciliationSplitPanel({
   // Summing `amountBase` for foreign rows (and the plain amount for same-currency ones, which is
   // already in the account currency) lets one statement line match several invoices of different
   // currencies at once: the same greedy allocation the same-currency flow always used, generalized.
-  const candidateBaseAmount = (cand) => {
-    const isForeign = !!cand?.currency && cand.currency !== currency;
-    if (!isForeign) return Number(cand?.amount) || 0;
-    return cand?.amountBase != null ? Number(cand.amountBase) : null;
-  };
-
+  // `candidateBaseAmount` lives in reconciliationSort.js, shared with the Importe column's sort.
   const selectedSum = useMemo(() => {
     let sum = 0;
     for (const c of candidates) {
       if (!selectedOpIds.has(c.id)) continue;
-      const base = candidateBaseAmount(c);
+      const base = candidateBaseAmount(c, currency);
       if (base == null) continue; // unknown rate — excluded from the total, stays "remaining"
       sum += base;
     }
     return Number(sum.toFixed(2));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidates, selectedOpIds, currency]);
 
   // For a PARTIAL line the user reconciles the REMAINDER, not the full line: base the balance /
@@ -1656,7 +1766,10 @@ export function ReconciliationSplitPanel({
       ) : null}
       <div className="flex flex-1 overflow-hidden">
         <StatementLinesPanel
-          lines={visibleLines}
+          lines={sortedLines}
+          sortKey={lineSortKey}
+          sortDirection={lineSortDirection}
+          onSort={toggleLineSort}
           total={visibleTotal}
           loading={linesLoading}
           currency={currency}
@@ -1675,6 +1788,9 @@ export function ReconciliationSplitPanel({
         <CandidateOperationsPanel
           line={selectedLine}
           candidates={visibleCandidates}
+          sortKey={candSortKey}
+          sortDirection={candSortDirection}
+          onSort={toggleCandSort}
           loading={candLoading}
           currency={currency}
           bcpLocale={bcpLocale}
