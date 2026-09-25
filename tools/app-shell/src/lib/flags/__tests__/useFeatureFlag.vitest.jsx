@@ -35,6 +35,7 @@ import {
   defaultForFlag,
 } from '../flag-keys.js';
 import { resetExposureCache } from '../flag-exposure.js';
+import { clearSessionIdentity, setSessionIdentity } from '../../sessionIdentity.js';
 
 const FLAG_ON = JSON.stringify({ [PROOF_OF_CONCEPT_MENU]: true });
 const silentLogger = { warn: vi.fn(), error: vi.fn() };
@@ -54,6 +55,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  clearSessionIdentity();
   // Mocks first: teardown calls the same OpenFeature methods some tests stub,
   // and a stubbed rejection reached from here surfaces as an unhandled rejection.
   vi.restoreAllMocks();
@@ -236,10 +238,17 @@ describe('buildInMemoryConfiguration', () => {
 });
 
 describe('evaluation context', () => {
-  it('reads identity from the observability storage keys', () => {
-    globalThis.localStorage.setItem('sf_auth_user', 'ada@example.com');
-    globalThis.localStorage.setItem('sf_auth_client_id', 'client-1');
+  // ETP-5455 — identity used to come from the legacy `sf_auth_user` / `sf_auth_client_id` keys,
+  // which nothing writes since the cookie session; it now comes from the session identity.
+  it('reads identity from the session identity', () => {
+    setSessionIdentity({ username: 'ada@example.com', clientId: 'client-1' });
     expect(readSessionContext()).toEqual({ username: 'ada@example.com', clientId: 'client-1' });
+  });
+
+  it('ignores the legacy sf_auth_user / sf_auth_client_id keys', () => {
+    globalThis.localStorage.setItem('sf_auth_user', 'stale@example.com');
+    globalThis.localStorage.setItem('sf_auth_client_id', 'stale-client');
+    expect(readSessionContext()).toEqual({});
   });
 
   it('returns an empty context when storage throws', () => {

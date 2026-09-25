@@ -16,7 +16,7 @@
       "rows": []
     },
     "1feda5e22cc22a1d4e3aac66d18b6389393ebc433e692b138a3feed155b5c6e1": {
-      "checksum": "eb0466b74bc3b1a6ec1b52c6a0ded4d7d4a6a3a6e764a99341f46403d122d0c0",
+      "checksum": "c339292f5cddbeb205ca16f74a37edcc1c10328587079bab404a07266aca94e9",
       "params": [
         "137"
       ],
@@ -25,7 +25,7 @@
           "ad_tab_id": "174",
           "name": "etvfac_has_conf_tax",
           "tab_name": "Tax",
-          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE (AD_ORG_ID=AD_GET_ORG_LE_BU(@AD_ORG_ID@, 'LE') OR @AD_ORG_ID@='0'))"
+          "validation_code": "@SQL=SELECT CASE WHEN COUNT(1) = 1 THEN 'Y' ELSE 'N' END FROM DUAL WHERE EXISTS (SELECT 1 FROM etvfac_verifactu_config WHERE (AD_ORG_ID=AD_GET_ORG_LE_BU(@AD_ORG_ID@, 'LE') OR @AD_ORG_ID@='0') AND isactive = 'Y')"
         },
         {
           "ad_tab_id": "174",

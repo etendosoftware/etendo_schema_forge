@@ -291,6 +291,49 @@ describe('InviteAcceptancePage', () => {
     });
   });
 
+  // ETP-5488 — register-and-accept creates the account but opens no session, so the new invitee
+  // used to land on the success screen signed out: "Entrar en <empresa>" returned before sending
+  // a single request and showed "No hemos podido abrir esa empresa", roles or not. The page now
+  // signs the new account in (POST /sws/go/session, the cookie session) right after registering,
+  // so entering the company asks the server for the environments like any signed-in user.
+  it('signs the new account in after registering so entering the company reaches the server', async () => {
+    const calls = [];
+    const fetchMock = vi.fn(async (url, options = {}) => {
+      const path = String(url);
+      calls.push({ path, method: options.method || 'GET', body: options.body });
+      const json = (body) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+      if (path.includes('/sws/go/company-invitations/register-and-accept')) {
+        return json({ status: 'success', token: 'legacy-token', clientName: 'Acme Corp',
+          account: { id: 'acc-1', email: 'new.user@example.com', name: 'New User' } });
+      }
+      if (path.includes('/sws/go/company-invitations')) {
+        return json({ status: 'SENT', clientName: 'Acme Corp', email: 'new.user@example.com',
+          maskedEmail: 'n***r@example.com', branch: 'registration_required', accountExists: false });
+      }
+      if (path.endsWith('/sws/go/session') && options.method === 'POST') {
+        return json({ status: 'success', csrfToken: 'csrf-new-user',
+          account: { id: 'acc-1', email: 'new.user@example.com', name: 'New User' } });
+      }
+      if (path.includes('/sws/go/environments')) return json({ environments: [] });
+      return { ok: false, status: 401, json: async () => ({}), text: async () => '' };
+    });
+    globalThis.fetch = fetchMock;
+
+    const { container } = renderPage('/invite?token=valid-token-789');
+    await waitFor(() => expect(screen.getByTestId('action-register-submit')).toBeInTheDocument());
+    fireEvent.change(container.querySelector('#reg-name'), { target: { value: 'New User' } });
+    fireEvent.change(container.querySelector('#reg-password'), { target: { value: 'Str0ng!Pass123' } });
+    fireEvent.click(screen.getByTestId('action-register-submit'));
+    await waitFor(() => expect(screen.getByTestId('invite-success-state')).toBeInTheDocument());
+
+    const login = calls.find((c) => c.path.endsWith('/sws/go/session') && c.method === 'POST');
+    expect(login).toBeTruthy();
+    expect(JSON.parse(login.body)).toEqual({ email: 'new.user@example.com', password: 'Str0ng!Pass123' });
+
+    fireEvent.click(screen.getByTestId('action-go-to-app'));
+    await waitFor(() => expect(calls.some((c) => c.path.includes('/sws/go/environments'))).toBe(true));
+  });
+
   it('renders already accepted state idempotently', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce({
       ok: true,

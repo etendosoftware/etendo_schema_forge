@@ -159,9 +159,19 @@ describe('FmListPage — non-draft "Resultado" auto-compute (ETP-4755, narrowed 
     assert.match(fnMatch[0], /return false;/);
   });
 
-  it('merges the "other" and "submitted" one-time-compute maps into computedMapOther303Merged/349Merged', () => {
-    assert.match(src, /computedMapOther303Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther303,\s*\.\.\.computedMapSubmitted303\s*\}\)/);
-    assert.match(src, /computedMapOther349Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther349,\s*\.\.\.computedMapSubmitted349\s*\}\)/);
+  // ETP-5438 — the persisted submission snapshots (`snapshotMap`) are spread LAST so a snapshot
+  // always wins over any computed entry for the same declaration.
+  it('merges the "other", "submitted" and snapshot maps into computedMapOther303Merged/349Merged', () => {
+    assert.match(src, /computedMapOther303Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther303,\s*\.\.\.computedMapSubmitted303,\s*\.\.\.snapshotMap\s*\}\)/);
+    assert.match(src, /computedMapOther349Merged\s*=\s*useMemo\(\s*\(\)\s*=>\s*\(\{\s*\.\.\.computedMapOther349,\s*\.\.\.computedMapSubmitted349,\s*\.\.\.snapshotMap\s*\}\)/);
+  });
+
+  it('submittedDecls303/submittedDecls349 exclude declarations that carry a persisted snapshot', () => {
+    for (const name of ['submittedDecls303', 'submittedDecls349']) {
+      const block = src.match(new RegExp(name + '\\s*=\\s*useMemo\\(\\s*\\(\\)\\s*=>[\\s\\S]*?\\[decls\\]\\s*\\);'));
+      assert.ok(block, `${name} useMemo must exist`);
+      assert.match(block[0], /!hasSubmittedSnapshot\(d\)/);
+    }
   });
 
   it('getComputedForDecl is called with the merged maps, not the raw "other" maps', () => {
