@@ -119,7 +119,7 @@ that already carries it is just as frozen as one presented through either curren
   non-draft compute for this decl.id", it does not care which of the two hooks produced it.
 - **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` is a new export
   that reads back the last payload this hook cached for one declaration, keyed
-  `fiscal_ac_v3_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
+  `fiscal_ac_v4_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
   was ever cached this session. It exists so a detail page that opens with no `decl._precomputed`
   handed down (a cold/direct navigation straight into a submitted declaration) can still show
   something by reading whatever `FmListPage`'s own submitted-family bucket already computed and
@@ -2404,7 +2404,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   the same `operators` array) move together. On failure it returns early — the displayed statuses
   are left exactly as they were, never blanked.
 - **Why the cache has to be invalidated**: `useFiscalAutoCompute` caches each declaration's
-  compute payload in `sessionStorage` (`fiscal_ac_v3_<declId>`) and, on every run of its mount
+  compute payload in `sessionStorage` (`fiscal_ac_v4_<declId>`) and, on every run of its mount
   effect, restores the cached payload whenever `checkModifiedFn` says nothing changed.
   `checkModified349` only asks whether the period's **invoices** changed, while a VIES
   revalidation updates **business partners** — so it answers `false`, the pre-validation payload
