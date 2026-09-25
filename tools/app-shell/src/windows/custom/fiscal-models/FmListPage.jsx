@@ -998,6 +998,14 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
+            const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
+              || decl.manualData?.identification?.sustitutiva === 'Y';
+            const declTypeLabel = decl.manualData?.identification?.rectificativa
+              ? t('fm.type.rectificative')
+              : isSustitutiva
+                ? t('fm.type.substitutive')
+                : t('fm.type.ordinary');
+
             return (
               <tr
                 key={decl.id}
@@ -1027,14 +1035,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     showed "Ordinaria". The two flags are mutually exclusive by construction (only
                     303 exposes `rectificativa`, only 349 exposes `sustitutiva`), so checking both
                     is safe without a `decl.model` guard. */}
-                <td>
-                  {decl.manualData?.identification?.rectificativa
-                    ? t('fm.type.rectificative')
-                    : (decl.manualData?.identification?.sustitutiva === true
-                        || decl.manualData?.identification?.sustitutiva === 'Y')
-                      ? t('fm.type.substitutive')
-                      : t('fm.type.ordinary')}
-                </td>
+                <td>{declTypeLabel}</td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>

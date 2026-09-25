@@ -91,7 +91,12 @@ function parseBoxInput(rawValue) {
 // render happen). Computed straight off the `manualOverrides` param (the same source
 // `mergedBoxes` itself was derived from just above) rather than re-read via a `prev =>`
 // updater, so the return value and what actually lands in state can never disagree.
-function applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes) {
+// ETP-5456 (S107 fix) — the five state setters are always passed together as a bundle from
+// every call site (there is no caller that supplies some but not others), so they are grouped
+// into a single `setters` object rather than five separate parameters. Pure refactor: each
+// setter is destructured immediately below and used exactly as before.
+function applyComputeResult(res, manualOverrides, identChecks, setters) {
+  const { setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, setOutOfRangeBoxes } = setters;
   if (!res) return manualOverrides;
   const mergedBoxes = recomputeDerivedBoxes(applyOverrides(res.boxes, manualOverrides), identChecks);
   setLiveBoxes(mergedBoxes);
@@ -257,6 +262,38 @@ function buildIncidentVariants(blocking, warning, t) {
   else if (warning > 0) badge = t('fm.incidents.severity.warn') ?? 'Advertencia';
 
   return { tone, iconColor, badge };
+}
+
+// ETP-5456 (S3776 fix on FmModel303Page) — extracted out of the main component, pure refactor,
+// no behavior change. Mirrors exactly the outOfRangeSubject/outOfRangeVerb ternary chain that
+// used to live inline at the top of the component body — see its own comment (preserved below)
+// for the singular/plural i18n-fragment rationale.
+function buildOutOfRangeMessageParts(outOfRangeBoxes, t) {
+  const outOfRangeFieldNames = outOfRangeBoxes.map(n => `[${n}]`).join(', ');
+  const isOutOfRangePlural = outOfRangeBoxes.length > 1;
+  const subject = t(
+    isOutOfRangePlural ? 'fm.validation.out_of_range_subject_other' : 'fm.validation.out_of_range_subject_one',
+    { boxes: outOfRangeFieldNames },
+  ) ?? (isOutOfRangePlural ? `las casillas ${outOfRangeFieldNames}` : `la casilla ${outOfRangeFieldNames}`);
+  const verb = t(
+    isOutOfRangePlural ? 'fm.validation.out_of_range_verb_other' : 'fm.validation.out_of_range_verb_one',
+  ) ?? (isOutOfRangePlural ? 'exceden' : 'excede');
+  return { subject, verb };
+}
+
+// ETP-5456 (S3776 fix, cont.) — extracted alongside buildOutOfRangeMessageParts. Mirrors the
+// exact liveBoxSummary ternary that used to live inline (see the call site's own comment for why
+// it's derived from liveBoxes rather than trusting a possibly-stale liveSummary).
+function deriveLiveBoxSummary(kpi27, kpi45, kpi71) {
+  if (kpi27 === null && kpi45 === null && kpi71 === null) return null;
+  return { accrued: kpi27, deductible: kpi45, result: kpi71 };
+}
+
+// ETP-5456 (S3776 fix, cont.) — extracted alongside the two helpers above. `resultKind` is
+// always truthy at the one call site (guarded by the ternary there), so this only ever needs
+// the translated-label-or-raw-kind fallback.
+function resolveResultSubLabelForKind(resultKind, t) {
+  return t(`fm.result.${resultKind}`) ?? resultKind;
 }
 
 // ── Main page ─────────────────────────────────────────────────────
@@ -602,7 +639,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     setComputing(true);
     try {
       const res = await computeBoxes303(decl, { token, apiBaseUrl });
-      return applyComputeResult(res, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes);
+      return applyComputeResult(res, manualOverrides, identChecks, { setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, setOutOfRangeBoxes });
     } finally {
       setComputing(false);
     }
@@ -671,7 +708,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // initial state above and the user's saved manual edits are invisible until they
     // manually re-run "Calcular". No new network call: this reuses the payload we already have.
     if (decl._precomputed?.boxes != null) {
-      applyComputeResult(decl._precomputed, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, identChecks, setOutOfRangeBoxes);
+      applyComputeResult(decl._precomputed, manualOverrides, identChecks, { setLiveBoxes, setLiveSummary, setLiveSources, setManualOverrides, setOutOfRangeBoxes });
       return;
     }
     if (liveBoxes != null) return;
@@ -687,7 +724,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
       if (cached?.boxes != null) {
-        applyComputeResult(cached, manualOverrides, setLiveBoxes, setLiveSummary, setLiveSources, undefined, undefined, setOutOfRangeBoxes);
+        applyComputeResult(cached, manualOverrides, undefined, { setLiveBoxes, setLiveSummary, setLiveSources, setOutOfRangeBoxes });
       }
       return;
     }
@@ -1020,20 +1057,13 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // format-length ceiling is a presentation constraint, not a fiscal rule: the declaration must
   // not be saved, filed or marked presented while any of its computed amounts can't legally fit
   // the AEAT record, since there is no correct way to round/truncate it into range.
-  const outOfRangeFieldNames = outOfRangeBoxes.map(n => `[${n}]`).join(', ');
   // ETP-5456 (copy correction) — subject/verb agreement: "la casilla [N] excede" for exactly one
   // offending box, "las casillas [N], [M] exceden" for more than one. Resolved via their own tiny
   // i18n fragments (`_one`/`_other`) rather than hand-picking Spanish text in JS, so the English
   // locale gets the same singular/plural agreement ("box {boxes} exceeds" / "boxes {boxes}
-  // exceed") instead of a fixed, possibly-wrong-count phrase.
-  const isOutOfRangePlural = outOfRangeBoxes.length > 1;
-  const outOfRangeSubject = t(
-    isOutOfRangePlural ? 'fm.validation.out_of_range_subject_other' : 'fm.validation.out_of_range_subject_one',
-    { boxes: outOfRangeFieldNames },
-  ) ?? (isOutOfRangePlural ? `las casillas ${outOfRangeFieldNames}` : `la casilla ${outOfRangeFieldNames}`);
-  const outOfRangeVerb = t(
-    isOutOfRangePlural ? 'fm.validation.out_of_range_verb_other' : 'fm.validation.out_of_range_verb_one',
-  ) ?? (isOutOfRangePlural ? 'exceden' : 'excede');
+  // exceed") instead of a fixed, possibly-wrong-count phrase. (S3776 fix — logic extracted to
+  // buildOutOfRangeMessageParts above, module scope, unchanged behavior.)
+  const { subject: outOfRangeSubject, verb: outOfRangeVerb } = buildOutOfRangeMessageParts(outOfRangeBoxes, t);
 
   function outOfRangeToast(actionKey, fallback) {
     toast.error(
@@ -1090,9 +1120,8 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   // liquidación"), not box 46 ("Resultado régimen general"), which is only an intermediate
   // figure. See applyComputeResult above for the full rationale.
   const kpi71 = getBoxValue(liveBoxes, 71);
-  const liveBoxSummary = (kpi27 !== null || kpi45 !== null || kpi71 !== null)
-    ? { accrued: kpi27, deductible: kpi45, result: kpi71 }
-    : null;
+  // S3776 fix — ternary extracted to deriveLiveBoxSummary above, module scope, same result.
+  const liveBoxSummary = deriveLiveBoxSummary(kpi27, kpi45, kpi71);
   const summary = liveSummary ?? liveBoxSummary ?? decl.summary ?? {};
   // ETP-5187 — was `decl.result?.kind`, which the backend never populates (declToJson has no
   // `result` field), so this always fell through to the generic "Resultado" label regardless of
@@ -1103,7 +1132,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const resultKind = deriveResultKind(summary, { hasInvoices: sourcesForResult.length > 0 });
 
   // Derive result sublabel from kind
-  const resultSubLabel = resultKind ? (t(`fm.result.${resultKind}`) ?? resultKind) : (t('fm.m303.summary.result_sub') ?? 'Resultado');
+  const resultSubLabel = resultKind
+    ? resolveResultSubLabelForKind(resultKind, t)
+    : (t('fm.m303.summary.result_sub') ?? 'Resultado');
   const resultColors = resolveResultColors(resultKind);
 
 

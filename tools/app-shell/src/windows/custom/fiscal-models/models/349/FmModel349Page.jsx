@@ -59,6 +59,25 @@ function declaredPeriodLabel(op) {
   return [period, year].filter(Boolean).join(' ');
 }
 
+// ETP-5456 — extracted out of the main component (S3776 cognitive-complexity fix, pure
+// refactor, no behavior change). Mirrors the exact monthNum/monthName/periodLabel logic that
+// used to live inline: a numeric two-digit `period` resolves to its localized month name
+// (explicit `bcpLocale`, not the runtime default — see the call site's own ETP-5338 comment);
+// anything else (quarters like "T1") falls back to the raw `year period` string.
+function buildPeriodLabel(decl, bcpLocale) {
+  const monthNum = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
+  if (!monthNum) return `${decl.year} ${decl.period}`;
+  const monthName = new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1));
+  return `${decl.year} / ${monthName}`;
+}
+
+// ETP-5456 — extracted alongside buildPeriodLabel (same S3776 fix). A filter only ever
+// applies to the tab it was created for; the other tab must read null even in the instant
+// before the clear lands (see the call sites' own comment, unchanged).
+function resolveOriginFilterForTab(originFilter, tab) {
+  return originFilter?.tab === tab ? originFilter : null;
+}
+
 // A regular row and a corrective row can describe the SAME operator+key, so
 // `bpId` alone is not unique once corrective rows are present.
 //
@@ -773,11 +792,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // so under an es-language OS the breadcrumb showed "octubre" even with the UI
   // set to English. Pass the resolved `bcpLocale` explicitly, same fix pattern as
   // `normDecl.updatedAt` in FmListPage.jsx.
-  const monthNum  = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
-  const monthName = monthNum
-    ? new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1))
-    : null;
-  const periodLabel = monthName ? `${decl.year} / ${monthName}` : `${decl.year} ${decl.period}`;
+  const periodLabel = buildPeriodLabel(decl, bcpLocale);
 
   // ETP-5456 — derived from `identChecks`, not `decl.manualData` directly, so an unsaved
   // edit is reflected immediately (same precedent as 303's `identChecks.rectificativa`).
@@ -1053,8 +1068,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
 
   // A filter only ever applies to the tab it was created for; the other tab reads null
   // even in the instant before the clear lands.
-  const invoiceOriginFilter = originFilter?.tab === 'invoices' ? originFilter : null;
-  const rectifOriginFilter  = originFilter?.tab === 'rectif'   ? originFilter : null;
+  const invoiceOriginFilter = resolveOriginFilterForTab(originFilter, 'invoices');
+  const rectifOriginFilter  = resolveOriginFilterForTab(originFilter, 'rectif');
 
 
   const TABS = [
