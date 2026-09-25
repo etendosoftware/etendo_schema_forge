@@ -40,6 +40,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | N9 | Initial dataset configuration | Three document series carry an internal, ticket-tagged `DESCRIPTION` — both rectificativas ship ETP-4737's `"ETP-4737: sequence for the unified ... rectificative invoice"` and the new purchase-invoice series briefly shipped `"ETP-5364: sequence ..."`. `artifacts/document-sequence/decisions.json` declares `description` as an **editable, grid-visible** column of the "Secuencia de documentos" window, so that engineering note is copy the tenant reads next to its own series | Both fronts closed: preventive is dataset-only (`GOClient/AD_SEQUENCE.xml` drops the `<DESCRIPTION>` element on all three rows); corrective data-fix (`R39-document-sequence-clear-descriptions`) nulls it on already-onboarded tenants. The text reaches a tenant by TWO routes — the dataset and `R17-rectificativa-doctype-sequence`, which is immutable and already applied — so the fix matches by NAME, and only on `description LIKE 'ETP-%'` so a tenant-authored description survives. CUT deliberately NOT bumped | ETP-5364 |
 | P1 | Scheduled processes | A GO-onboarded tenant has NO scheduled "Costing Background process" (`AD_PROCESS_REQUEST`, `CostingBackground`), so product costs are never calculated automatically — `M_Transaction.iscostcalculated` stays `'N'` forever unless an operator launches the process by hand. NOT the same as J1 (which was the missing `M_Costing_Rule`): here the rule exists and is validated, the engine that consumes it is simply never scheduled | **Split across two PRs.** Corrective only in ETP-5245: data-fix (`R36`) backfills already-onboarded tenants. The preventive half (an onboarding service; the `AD_PROCESS_REQUEST` dataset table is and must stay excluded) is closed by a **separate PR authored by someone else** — ETP-5245 touches `com.etendoerp.go` not at all. CUT deliberately NOT bumped: with no preventive front in this PR a newborn tenant is still born broken and must keep seeing `R36`; once the other PR lands, `R36`'s `@check` self-heals to 0 | ETP-5245 (corrective) + a separate PR (preventive) |
 | P2 | Scheduled processes | The costing schedule created by P1 runs every **5 minutes**, so a freshly onboarded user waits up to 5 minutes before their movements are costed; and some tenants carry more than one active `SCH` row for the process, so it fires twice. Target invariant: **exactly one active scheduled `CostingBackground` request per client, every 30 seconds** | Both fronts closed. Preventive: `OnboardingCostingScheduleService` builds the row as `frequency='1'` + `SECONDLY_INTERVAL=30` (the shape GOClient has run by hand since 2026-04-08). Corrective: **NOT a `.sql`** — a SQL `UPDATE` cannot change a live Quartz trigger, so it is `OnboardingCostingScheduleService#realignCadence`, run over every tenant by `CostingCadenceStartup` on application boot (the module's own deploy provides that boot, so no operator action is needed), plus the `SFCostingCadence` webhook as a per-tenant escape hatch. Re-arms the survivor with `OBScheduler.reschedule(...)`, unschedules the extras | ETP-5370 |
+| O1 | SII / Fiscal Master Data | The "Causa de exencion" (exemption cause) selector on the invoice SIF/SII tab was empty for every tenant except GOClient and one other tenant that had already received a private copy via `R17-sii-cause-exemption` (ETP-4751) — `AEATSII_CAUSE_EXEMPTION` had no `ad_client_id='0'` rows at all | **Redesigned mid-flight** (2026-09-25) from a per-tenant onboarding-dataset addition to SIX SHARED SYSTEM ROWS: preventive is `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (module system data, `ad_client_id='0'`, loaded independently of any tenant's onboarding run — no `OnboardingDatasetDefinition.INCLUDED_TABLES` entry); corrective is `R40-aeatsii-cause-exemption-catalog`, run once against the System pseudo-tenant (`--client 0`), never swept per-tenant. CUT not applicable — the fix targets the System client, which the watermark mechanism does not cover | ETP-5481 |
 
 > **Label history note:** the ETP-4736 costing gap above was originally mislabeled `H1` when
 > authored, colliding with the pre-existing `H1` (webhook access, ETP-4520, superseded) and `H2`
@@ -2798,6 +2799,81 @@ would leave the tenant permanently unscheduled. Both `findExistingRequest` and t
 gate on `SCH`.
 
 
+## O — SII / Fiscal Master Data
+
+### O1 — `AEATSII_CAUSE_EXEMPTION` catalog missing for tenants without their own private copy (ETP-5481, 2026-09-25)
+
+**Symptom.** The "Causa de exencion" (exemption cause) selector on the invoice SII tab
+(`tools/app-shell/src/windows/custom/shared/SifTab.jsx`, `header/selectors/aeatsiiCauseExemption`)
+comes back empty for any tenant that never received the six AEAT IVA exemption causes (E1-E6).
+Confirmed live on the shared dev DB (2026-09-24): exactly one `ad_client_id`
+(`802509E12436405C86BA1FD5B1DF508C`, GOClient) had rows before this ticket — every other tenant's
+selector was empty.
+
+**Relationship to R17 / ETP-4751.** `R17-sii-cause-exemption` (2026-08-03) already closed a version of
+this gap, but only for tenants matching its `@check` (SII-configured, proxied by `EXISTS
+aeatsii_description` for the client) that had not yet received their own copy — a **per-tenant**
+private-row design mirrored from the accounting `_acct` pattern. That fix is immutable and already
+`APPLIED`/shipped; it is not touched here.
+
+**Redesign — abandons the per-tenant approach mid-flight.** An earlier draft of this same ticket
+(same corrective filename, never applied to any tenant) repeated R17's private-copy pattern: add
+`AEATSII_CAUSE_EXEMPTION` to `OnboardingDatasetDefinition.INCLUDED_TABLES` (preventive) plus a
+per-`:client_id` corrective insert. That draft was reverted (`6bf198df`, "Revert per-tenant
+onboarding seed, use system rows instead") in favor of **six shared SYSTEM rows**
+(`ad_client_id='0'`), for three reasons:
+
+1. `AEATSII_CAUSE_EXEMPTION` does not forbid `ad_client_id='0'` — only `NOT NULL` is enforced at the
+   DB level, and System (`'0'`) is an ordinary, valid client.
+2. The selector is built through Etendo's standard DAL selector mechanism
+   (`SelectorQueryExecutor` → `OBDal.createQuery`), which already applies the framework's standard
+   client-visibility filter — `ad_client_id='0'` rows are visible to every tenant automatically, with
+   no selector code change needed.
+3. Etendo GO ships no maintenance window for this catalog — the six causes are always identical for
+   every tenant, so per-tenant copies only multiply identical rows with no customization benefit.
+
+**Preventive fix.** `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml`
+(commit `0416e874`) — six rows, `AD_CLIENT_ID`/`AD_ORG_ID` both `'0'`, `ISDEFAULT='N'` (matching R17's
+own no-default rationale: the legally correct cause is operation-specific, and GO ships no
+maintenance window to correct a baked-in default). This is module **system data**, loaded
+independently of any tenant's onboarding run — a newborn tenant is correct as soon as the module
+carrying the sourcedata is installed/updated, with nothing for onboarding itself to do. No
+`OnboardingDatasetDefinition.INCLUDED_TABLES` entry, and no `OnboardingBaselineService` /
+`ONBOARDING_PROVISIONED_THROUGH` bump — the watermark mechanism is per real tenant and does not apply
+to the System pseudo-tenant.
+
+**Corrective fix.** `20260924T120000Z__R40-aeatsii-cause-exemption-catalog.sql` — six independently
+guarded `INSERT`s (`NOT EXISTS` on `(ad_client_id, key)`), run once against the System pseudo-tenant:
+
+```bash
+node cli/src/data-fixes/run.js --fix R40-aeatsii-cause-exemption-catalog --client 0
+```
+
+It is a safety net for any instance where the module's own sourcedata load has not (yet) reached the
+running DB — see the environment note below — and is never picked up by the default per-tenant
+sweep (the runner's tenant-universe query excludes `ad_client_id='0'`).
+
+**Environment note confirmed 2026-09-25 (local dev DB, `etendo_go_2`).** On this already-provisioned
+local instance, neither `./gradlew update.database` (default or `-Pforce=true`) nor `./gradlew
+smartbuild` caused the new sourcedata file's rows to appear at `ad_client_id='0'` — despite
+`com.etendoerp.go` being `isindevelopment='Y'` and the file being syntactically valid (confirmed via
+the module's own `xml`/`junit` build checks on commit `0416e874`). Root cause not fully isolated
+(likely: this dev DB's module-data checksums were established at an earlier `install.source` and a
+plain incremental `update.database` does not force-reapply "own module data" for tables owned by
+*another* module, `org.openbravo.module.sii`, even when the shipping module is in development). This
+is exactly the scenario `R40` exists to cover — running it directly (`--fix R40... --client 0`)
+applied cleanly (`APPLIED`, 6 rows) with no duplication of GOClient's or the second tenant's private
+rows, and a re-run correctly reports `SKIPPED_NOT_NEEDED — kept prior success state`. Verify against
+a real CI/staging build or a fresh `install.source` before treating the preventive front as proven
+end-to-end on this class of environment.
+
+**Idempotency.** Two-layer, per the framework: `@check` returns rows only when the System pseudo-
+tenant is missing at least one of E1-E6; each `@apply` INSERT is independently guarded by `NOT EXISTS
+(ad_client_id, key)`, so a partial load (e.g. the module's own sourcedata load having already seeded
+some rows) converges safely to a complete six-row set.
+
+---
+
 ## Recommended Order of Operations
 
 Consolidated from the field checklist; covers A1–C2. D1 and E1 are addressed inside the Initial Client Setup process itself.
@@ -2839,5 +2915,7 @@ These areas are commonly required to provision a fully working new client but we
 |-----------|-------|
 | **ETP-4177** | NULL denormalized legal-entity columns (`AD_LegalEntity_Org_ID`, `AD_CalendarOwner_Org_ID`) on orgs provisioned via GO onboarding (finding D1) |
 | System-level taxes approach | `c_tax.ad_client_id='0'` — taxes defined at the system level are shared across all clients. With the `*_acct` tables correctly populated (A2), tax accounting resolves independently per client. |
+| **ETP-4751** | R17-sii-cause-exemption — the original PER-TENANT `AEATSII_CAUSE_EXEMPTION` seed, superseded (not replaced) by O1's shared SYSTEM rows |
+| **ETP-5481** | O1 — `AEATSII_CAUSE_EXEMPTION` catalog reseeded as six shared SYSTEM rows (`ad_client_id='0'`) instead of a per-tenant copy |
 | `../proposals/initial-organization-setup-accounting.md` | The proposal that automates A1 and A2 — introduces `resolveAccountingPackage`, `applyAccountingPackageWiring`, and `validateAccountingPackage` inside `InitialOrgSetup.java`. Its acceptance criteria require `C_ACCTSCHEMA_DEFAULT`, `C_ACCTSCHEMA_GL`, and the `*_acct` tables to be properly wired before `AD_Org_Ready` is called. |
 | `NeoAuthenticator` (E1) | A defensive guard already exists so the system resolves the correct org when `organization='0'` arrives from the JWT. The structural recommendation (E1) is to fix the root cause at user-creation time, not rely on the guard. |
