@@ -526,6 +526,17 @@ function fmListRowClassName({ selected, current }) {
   return current ? 'fm-table__row--current' : '';
 }
 
+// ETP-5456 — extracted to avoid a nested ternary (javascript:S3358). Mirrors the
+// mutually-exclusive rectificativa (303) / sustitutiva (349) precedence documented
+// at the `declTypeLabel` call site below.
+function resolveDeclTypeLabel(decl, t) {
+  if (decl.manualData?.identification?.rectificativa) return t('fm.type.rectificative');
+  const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
+    || decl.manualData?.identification?.sustitutiva === 'Y';
+  if (isSustitutiva) return t('fm.type.substitutive');
+  return t('fm.type.ordinary');
+}
+
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
@@ -998,6 +1009,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
+            const declTypeLabel = resolveDeclTypeLabel(decl, t);
+
             return (
               <tr
                 key={decl.id}
@@ -1016,19 +1029,18 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
                 <td><span className="fm-period">{decl.period}</span></td>
-                {/* ETP-5338 pt.3 — "Tipo" must reflect AEAT's rectificativa flag, which the
-                    user sets on the 303 detail page's "Autoliquidación Rectificativa" checkbox
-                    (`identChecks.rectificativa`, persisted as
-                    `manualData.identification.rectificativa`). `decl.type` (DECL_TYPE, ord/com)
-                    is a genuine but DIFFERENT AEAT concept (ordinaria/complementaria) that no UI
-                    flow currently sets to "com" — every declaration is created with DECL_TYPE=O,
-                    so deriving "Tipo" from it always showed "Ordinaria". 349 declarations have no
-                    rectificativa checkbox, so this correctly falls back to "Ordinaria" for them. */}
-                <td>
-                  {decl.manualData?.identification?.rectificativa
-                    ? t('fm.type.rectificative')
-                    : t('fm.type.ordinary')}
-                </td>
+                {/* ETP-5338 pt.3 / ETP-5456 — "Tipo" must reflect AEAT's rectificativa (303) and
+                    sustitutiva (349) flags, which the user sets on each model's own detail page
+                    ("Autoliquidación Rectificativa" / "Sustitutiva" checkboxes), both persisted
+                    under the same `manualData.identification` shape
+                    (`identChecks.rectificativa` / `identChecks.sustitutiva`). `decl.type`
+                    (DECL_TYPE, ord/com) is a genuine but DIFFERENT AEAT concept
+                    (ordinaria/complementaria) that no UI flow currently sets to "com" — every
+                    declaration is created with DECL_TYPE=O, so deriving "Tipo" from it always
+                    showed "Ordinaria". The two flags are mutually exclusive by construction (only
+                    303 exposes `rectificativa`, only 349 exposes `sustitutiva`), so checking both
+                    is safe without a `decl.model` guard. */}
+                <td>{declTypeLabel}</td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>

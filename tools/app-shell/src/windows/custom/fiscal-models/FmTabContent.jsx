@@ -40,6 +40,16 @@ export function SourcesTab({ decl, t }) {
     return str.split(',').map(b => b.trim().padStart(2, '0')).join(', ');
   }
 
+  // ETP-5456: backend now emits a stable machine key ('accrued' | 'deductible') derived from
+  // which side of the declaration the row's boxes belong to, instead of a hardcoded Spanish
+  // string — translate it here. Fall back to the raw value for rows from a backend that hasn't
+  // been redeployed yet (mirrors the `r.id ?? r.ref` fallback above).
+  function typeLabel(type) {
+    if (type === 'accrued') return t('fm.sources.type.accrued') ?? 'IVA Devengado';
+    if (type === 'deductible') return t('fm.sources.type.deductible') ?? 'IVA Deducible';
+    return type;
+  }
+
   return (
     <div style={{ flex: 1, overflow: 'auto', padding: '0', display: 'flex', flexDirection: 'column' }}>
       {incidentRowCount > 0 && (
@@ -98,7 +108,7 @@ export function SourcesTab({ decl, t }) {
                     <td className="strong">{fmtDate(r.date)}</td>
                     <td>{fmtDate(r.accountingDate)}</td>
                     <td>{r.ref}</td>
-                    <td>{r.type}</td>
+                    <td>{typeLabel(r.type)}</td>
                     <td>{r.party}</td>
                     <td className="num strong">{formatAmount(r.base)}</td>
                     <td className="num">{r.vat != null ? formatAmount(r.vat) : '—'}</td>

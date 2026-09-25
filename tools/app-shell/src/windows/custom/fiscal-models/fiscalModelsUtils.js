@@ -152,6 +152,218 @@ export const DECLARATION_TYPE_INGRESO = 'I';
 // never inherit a negative ceiling from it.
 export const NEGATIVE_NOT_ALLOWED_BOXES = new Set([111, 77, 70, 78, 109, 110]);
 
+// ETP-5456 (AEAT spec audit — "Casillas numéricas: revisar que no superen los caracteres
+// permitidos") — every AMOUNT box this window renders (`fm303Layouts.js`'s `cells` arrays, the
+// ones with `cellTypes` defaulting to 'amount', i.e. everything that isn't a percent box) is
+// declared `Lon = 17` in the official Modelo 303 "Diseño de registro" (DR303e26v101 v1.01,
+// sheets DP30301-DP30305, verified box-by-box for every box number this window actually
+// renders — 1-46, 59-78, 87, 89-92, 95, 97-98, 107-111, 120-128, 150-170 all come back
+// Lon=17). AEAT's own "Nota" footer: fields are A/An/Num (unsigned numeric)/N (signed numeric).
+// A Lon=17 numeric field is always 2 decimal digits + up to 15 integer digits for a `Num`
+// (unsigned — `NEGATIVE_NOT_ALLOWED_BOXES` members) box; for a signed `N` box the minus sign
+// itself consumes one of the 17 characters when the value is actually negative, leaving only 14
+// integer digits in that case (15 when the value is >= 0, same as Num). Percent boxes (Lon=5,
+// 3 integer digits + 2 decimals) are a SEPARATE, already-fully-enforced path — see
+// `clampPercentValue` in FmBoxes303.jsx, which caps at 100.00 (3+2) on every commit — so they
+// are deliberately NOT covered by this constant/helper.
+const AMOUNT_BOX_MAX_INTEGER_DIGITS = 15;
+
+// Splits a RAW, user-typed box string into its exact digit components — `{ sign, intDigits,
+// decDigits }` — via string parsing alone, no floating-point arithmetic at all. Returns `null`
+// when `raw` isn't a plain decimal literal (e.g. exponent notation, garbage) or carries no digits
+// at all; callers fall back to numeric-only handling in that case.
+//
+// This has to exist and run on the ORIGINAL string — not on whatever `parseBoxInput` already
+// parsed — because a Lon=17 amount (15 integer digits + 2 decimals) is a 17-significant-digit
+// decimal, past what float64 can carry through arithmetic intact: `parseBoxInput`'s own
+// `roundEur` (`Math.round(v * 100) / 100`) multiplies by 100 before rounding, and `v * 100`
+// already exceeds `Number.MAX_SAFE_INTEGER` (~9.007e15, 16 digits) once `v` has more than ~14
+// integer digits — confirmed empirically: `roundEur(999999999999999.99)` (a legitimately
+// 15-integer-digit amount) itself comes back as `1000000000000000`, 16 digits, BEFORE any
+// digit-length clamp ever runs. Reconstructing the integer-digit ceiling from the untouched raw
+// string sidesteps that upstream corruption entirely for the (overwhelming majority of) cases
+// that don't sit exactly on a float64 representable-value boundary.
+function splitRawBoxDigits(raw) {
+  const normalized = String(raw ?? '').trim().replace(',', '.');
+  const match = /^(-?)(\d*)(?:\.(\d*))?$/.exec(normalized);
+  if (!match) return null;
+  const [, signStr, intDigitsRaw, decDigitsRaw = ''] = match;
+  if (!intDigitsRaw && !decDigitsRaw) return null;
+  return {
+    isNegative: signStr === '-',
+    intDigits: (intDigitsRaw || '0').replace(/^0+(?=\d)/, ''), // drop leading zeros, keep a bare "0"
+    decDigits: decDigitsRaw,
+  };
+}
+
+// Rounds a decimal-fraction digit STRING (any length, e.g. "6789") to exactly 2 digits with
+// "round half up" on the 3rd digit, returning `{ decDigits: '00'-'99', carry: 0 | 1 }` — `carry`
+// is 1 only when rounding "..99" up overflows into the integer part (e.g. ".996" -> "00" + carry
+// into the integer part). Pure string/small-integer arithmetic (at most 3 digits ever examined),
+// so it never risks the large-magnitude float precision loss `roundEur` has at this scale.
+function roundFractionDigits(decDigitsRaw) {
+  const padded = `${decDigitsRaw}000`.slice(0, 3);
+  const twoDigits = padded.slice(0, 2);
+  if (padded[2] < '5') return { decDigits: twoDigits, carry: 0 };
+  if (twoDigits === '99') return { decDigits: '00', carry: 1 };
+  return { decDigits: String(Number(twoDigits) + 1).padStart(2, '0'), carry: 0 };
+}
+
+// Resolves the per-box/per-sign integer-digit ceiling from the spec table above.
+function maxIntegerDigitsFor(boxNum, isNegative) {
+  return isNegative && !NEGATIVE_NOT_ALLOWED_BOXES.has(boxNum)
+    ? AMOUNT_BOX_MAX_INTEGER_DIGITS - 1
+    : AMOUNT_BOX_MAX_INTEGER_DIGITS;
+}
+
+// ETP-5456 (UX refinement) — hard-stop used at KEYSTROKE/PASTE time by FmBoxes303.jsx's amount
+// cell input: "would committing this in-progress typed string push the INTEGER part past
+// `boxNum`'s ceiling?" Counts integer digit CHARACTERS only (no leading-zero stripping, no
+// rounding) — deliberately tolerant of a mid-edit, not-yet-complete string (a bare "-", a
+// trailing ".", an empty string) so it never throws or misfires while the user is still typing.
+// The decimal part is NEVER restricted here — only the integer digit count — so reaching the
+// integer ceiling never blocks typing the 2 decimal digits afterward. This is what makes an
+// out-of-range MANUAL value structurally impossible to type in the first place: there is no
+// "invalid but typed" state to reject or clamp after the fact (see this file's header comment on
+// why a post-hoc clamp/truncate was reverted for the AEAT record-length ceiling).
+export function exceedsTypedIntegerDigits(boxNum, rawStr) {
+  const trimmed = String(rawStr ?? '').trim();
+  const isNegative = trimmed.startsWith('-');
+  const maxIntDigits = maxIntegerDigitsFor(boxNum, isNegative);
+  const match = /^-?(\d*)/.exec(trimmed.replace(',', '.'));
+  const intDigitCount = match ? match[1].length : 0;
+  return intDigitCount > maxIntDigits;
+}
+
+// ETP-5456 (manual QA follow-up) — companion hard-stop for the DECIMAL side: a Lon=17 amount box
+// allows exactly 2 decimal digits, always, regardless of box/sign (the integer-digit ceiling is
+// the only part that varies by box/sign — see `exceedsTypedIntegerDigits` above). This was
+// missing entirely: only the integer part was ever guarded at keystroke time, so a 3rd+ decimal
+// digit typed into an amount cell (e.g. box 42, "...9012345.2057") went through uncaught — caught
+// in manual QA, not by the integer-digit check, whose name only ever promised to cover the
+// integer side. Counts digit CHARACTERS after the first decimal separator (accepts either '.' or
+// ',', same tolerance as `splitRawBoxDigits`) — tolerant of a mid-edit string with no decimal
+// point at all (returns `false`, nothing to block yet).
+export function exceedsTypedDecimalDigits(rawStr) {
+  const trimmed = String(rawStr ?? '').trim().replace(',', '.');
+  const dotIndex = trimmed.indexOf('.');
+  if (dotIndex === -1) return false;
+  return trimmed.length - dotIndex - 1 > 2;
+}
+
+// ETP-5456 (fiscal-advisory correction) — the AEAT record-length ceiling (Lon=17: 15 integer
+// digits + 2 decimals for `Num`, 14+2 for a negative `N`) is a PRESENTATION-FORMAT constraint on
+// how the file is written, not a fiscal rule that authorizes changing the declared amount. An
+// earlier version of this file CLAMPED/TRUNCATED an out-of-range value to make it "fit" — that is
+// wrong for a tax return: it silently declares a different amount than the real one, whether the
+// box was typed by hand or computed by a formula. This file now only ever VALIDATES a value
+// against its range and reports valid/invalid; it never rounds, truncates or saturates a result to
+// bring it into range. See `buildValidatedBoxValue` (manual input) and `recomputeDerivedBoxes`'s
+// `outOfRangeBoxes` (autocalculated boxes) below.
+//
+// Valid ranges, per the spec table above:
+//   Num (unsigned, `NEGATIVE_NOT_ALLOWED_BOXES` members): [0, 999999999999999.99]
+//   N   (signed):                                          [-99999999999999.99, 999999999999999.99]
+// (N's negative bound has one fewer integer digit than its positive bound — the minus sign
+// occupies one of the 17 Lon characters only when the value is actually negative.)
+
+// Builds the FINAL, EXACT box value from digit strings (sign + integer digits + exactly 2 decimal
+// digits — never touched by any `*100`/`Number()` round-trip up to this point). Prefers returning
+// a plain `Number` — every existing consumer (arithmetic in `recomputeDerivedBoxes`, numeric
+// `toBe(...)` test assertions, etc.) expects one, and the overwhelming majority of real box values
+// round-trip through `Number` perfectly fine. Falls back to returning the canonical STRING itself
+// only when `Number(canonical)` genuinely cannot hold it exactly — i.e. `Number(canonical).
+// toFixed(2)` no longer equals what was typed.
+//
+// This "string when float64 can't cope" fallback is NOT a cosmetic nicety: a legitimate, fully
+// in-range value like "123456789012345.35" (15 integer digits + 2 decimals — a 17-significant-
+// digit decimal) is silently corrupted to "...34" by the mere act of calling `Number(...)` on it —
+// confirmed in manual QA as real data corruption on a value nowhere near the ceiling. The only way
+// to show the user EXACTLY what they typed at that magnitude is to not coerce it to a float at all.
+//
+// Consumers that render this box's OWN value (`formatCurrency`/`formatAmount`, the pencil-editor
+// `<input>`'s `value={String(val)}`, `applyBoxParams`'s `String(v)` for AEAT submission) all
+// already accept `number|string` or call `String(...)` — a string flows through them exactly like
+// a formatted number would (`formatCurrency` has an explicit exact-decimal-string fast path for
+// this, see lib/formatCurrency.js). Consumers that need to do ARITHMETIC on this box's value
+// (`recomputeDerivedBoxes`'s `get()`) coerce via `Number(...)` themselves — accepting the
+// unavoidable float64 imprecision there, same as any formula would have anyway at this
+// magnitude, and orthogonal to preserving the box's OWN displayed digits.
+function buildExactDecimalValue(isNegative, intDigits, decDigits) {
+  const canonical = `${isNegative ? '-' : ''}${intDigits}.${decDigits}`;
+  const asNumber = Number(canonical);
+  // Compared against the UNSIGNED magnitude on both sides — `asNumber.toFixed(2)` carries its own
+  // '-' for a negative value, which would never match the (deliberately sign-less) `intDigits.
+  // decDigits` expected string and made every negative value fall back to a string needlessly.
+  const roundTrips = Number.isFinite(asNumber) && Math.abs(asNumber).toFixed(2) === `${intDigits}.${decDigits}`;
+  return roundTrips ? asNumber : canonical;
+}
+
+// Returns whether `value` (numeric, e.g. an already-computed derived box result) overflows
+// `boxNum`'s integer-digit ceiling. Digit-count-based on `value` itself — the only signal
+// available for an AUTOCALCULATED box, which has no "raw typed string" to fall back on. This is
+// exact for any genuinely out-of-range magnitude (the formulas in `recomputeDerivedBoxes` operate
+// on realistic tax amounts many orders of magnitude below this ceiling; float64 addition/
+// subtraction of such values is exact) — the float64 representable-value boundary only matters
+// exactly AT the ~15-digit edge, which no real declaration reaches. See `boxValueOutOfRange` below
+// for the raw-string-aware version used for manual input, where that boundary DOES matter (a
+// legitimately in-range typed value must never be misreported as out-of-range).
+function isDerivedValueOutOfRange(boxNum, value) {
+  if (value == null || !Number.isFinite(value)) return false;
+  const isNegative = value < 0;
+  const maxIntDigits = maxIntegerDigitsFor(boxNum, isNegative);
+  return Math.trunc(Math.abs(value)).toString().length > maxIntDigits;
+}
+
+// Returns whether a manually-typed box value's own RAW digit string is out of `boxNum`'s valid
+// range — the single source of truth `handleBoxChange` (FmModel303Page.jsx) uses to decide
+// whether to REJECT the edit (see `buildValidatedBoxValue` below, which performs the identical
+// check as part of building the value). Decided off the raw string's digit count, never off
+// `value`'s own — `value` (the `parseBoxInput`-parsed number) can already be corrupted at this
+// magnitude before this function ever runs (see `splitRawBoxDigits`'s doc comment): deciding off
+// `value` would misreport a genuinely in-range typed value (e.g. "999999999999999.99") as
+// out-of-range purely because of that unrelated upstream float artifact.
+export function boxValueOutOfRange(boxNum, value, rawValue) {
+  if (value == null || !Number.isFinite(value)) return false;
+  const isNegative = value < 0;
+  const maxIntDigits = maxIntegerDigitsFor(boxNum, isNegative);
+  const split = rawValue !== undefined ? splitRawBoxDigits(rawValue) : null;
+  const rawIntDigitsLength = split ? split.intDigits.length : Math.trunc(Math.abs(value)).toString().length;
+  return rawIntDigitsLength > maxIntDigits;
+}
+
+// Validates a manually-typed box value against its range and, ONLY when valid, builds the exact
+// value end to end (string/`BigInt` arithmetic, no lossy `Number()`/`*100` round-trip anywhere —
+// see `buildExactDecimalValue`'s doc comment for why this matters even for an in-range value).
+// Returns `{ value, valid }`:
+//   - `valid: true`  — `value` is the exact typed amount (`number` or, at the float64 boundary,
+//     the canonical decimal STRING) — safe to commit as-is.
+//   - `valid: false` — `value` is `null`; the caller MUST REJECT this edit (toast + do not write
+//     it to `manualOverrides`/`liveBoxes`) rather than substitute a rounded/truncated stand-in.
+//     Declaring a different amount than what was typed is not a valid response to a
+//     presentation-format ceiling — see this section's header comment.
+// `null`/non-finite `value` (a blank/cleared input) is always `valid: true` — nothing to
+// range-check.
+export function buildValidatedBoxValue(boxNum, value, rawValue) {
+  if (value == null || !Number.isFinite(value)) return { value, valid: true };
+  const isNegative = value < 0;
+  const maxIntDigits = maxIntegerDigitsFor(boxNum, isNegative);
+
+  const split = rawValue !== undefined ? splitRawBoxDigits(rawValue) : null;
+  if (!split) {
+    // No raw string available (e.g. some unit tests) — validate off `value`'s own digits, the
+    // only signal available; still exact for any genuinely out-of-range magnitude.
+    if (Math.trunc(Math.abs(value)).toString().length > maxIntDigits) return { value: null, valid: false };
+    return { value, valid: true };
+  }
+
+  const { decDigits, carry } = roundFractionDigits(split.decDigits);
+  const intDigitsWithCarry = carry ? (BigInt(split.intDigits || '0') + 1n).toString() : split.intDigits;
+  if (intDigitsWithCarry.length > maxIntDigits) return { value: null, valid: false };
+
+  return { value: buildExactDecimalValue(split.isNegative, intDigitsWithCarry, decDigits), valid: true };
+}
+
 // Silently zeroes any NEGATIVE_NOT_ALLOWED_BOXES entry in a box array. "Silent" is deliberate:
 // this runs on every boxArr regardless of how it got here (a fresh backend response, a value
 // hydrated from a declaration saved months before this rule existed, or a live typed edit
@@ -712,7 +924,16 @@ export function applyOverrides(boxes, overrides) {
 export function recomputeDerivedBoxes(boxArrRaw, identChecks) {
   const boxArr = clampNegativeBoxes(toBoxArray(boxArrRaw));
   const r2 = v => Math.round(v * 100) / 100;
-  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? (e.value ?? 0) : 0; };
+  // ETP-5456 — `e.value` can be a STRING for a box whose typed value is precise but past
+  // float64's exact-decimal range (see `buildValidatedBoxValue`/`buildExactDecimalValue` in this
+  // same file) — `Number(...)` coerces either shape safely for arithmetic. Using the bare `+`
+  // operator here instead (as `s + get(n)` does in box45's reduce below) would silently
+  // STRING-CONCATENATE once `get(n)` returns a string operand (`0 + "123...35"` ->
+  // `"0123...35"` -> NaN downstream), exactly the ETP-5393 Bug B class of bug `toBoxArray`'s own
+  // doc comment warns about. This `Number(...)` coercion is itself lossy at 15+ integer digits —
+  // an accepted trade-off for FORMULA arithmetic on realistic tax amounts (many orders of
+  // magnitude below that range), which never touches the box's OWN stored/displayed value.
+  const get = num => { const e = boxArr.find(b => b.num === num); return e != null ? Number(e.value ?? 0) : 0; };
   const box65entry = boxArr.find(b => b.num === 65);
   const box65 = box65entry != null ? (box65entry.value ?? 100) : 100;
   const box45 = r2([29,31,33,35,37,39,41,42,43,44].reduce((s, n) => s + get(n), 0));
@@ -733,12 +954,29 @@ export function recomputeDerivedBoxes(boxArrRaw, identChecks) {
     box70: box70Entry != null ? box70Entry.value : null,
     box71,
   });
+  const box111Rounded = box111 != null ? r2(box111) : null;
 
-  return [
+  const result = [
     ...boxArr.filter(b => !(b.num in derived) && b.num !== 111),
     ...Object.entries(derived).map(([num, value]) => ({ num: Number(num), value })),
-    ...(box111 != null ? [{ num: 111, value: r2(box111) }] : []),
+    ...(box111Rounded != null ? [{ num: 111, value: box111Rounded }] : []),
   ];
+
+  // ETP-5456 (fiscal-advisory correction) — an AUTOCALCULATED box can overflow the AEAT record
+  // length ceiling exactly like a manually-typed one can (e.g. [69] = 66+77-78+68+108, [71] =
+  // 69-70+109-112), and the same rule applies: the format ceiling is not a licence to round/
+  // truncate/saturate the computed result into a different (incorrect) declared amount. Instead,
+  // every derived box is checked here and any violation is surfaced via `.outOfRangeBoxes` on the
+  // returned array — `FmModel303Page.jsx` reads this to show a blocking error and refuse
+  // generation/presentation, mirroring the existing `missingRequiredFields` gate. The individual
+  // box VALUES themselves are left exactly as computed (never altered) — only their validity is
+  // reported; see this file's own header comment on why clamping was reverted.
+  result.outOfRangeBoxes = Object.entries(derived)
+    .filter(([num, value]) => isDerivedValueOutOfRange(Number(num), value))
+    .map(([num]) => Number(num))
+    .concat(box111Rounded != null && isDerivedValueOutOfRange(111, box111Rounded) ? [111] : []);
+
+  return result;
 }
 
 // Reads a single box's value out of the array shape (as returned by

@@ -3,7 +3,7 @@ import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility, isFieldRequired } from './fm303Layouts.js';
-import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
 
 const SECTION_ICON = {
   iva_devengado: <TrendingUp
@@ -158,7 +158,29 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
         step="any"
         className="fm-aeat-cell__input"
         value={pendingValues[boxNum] ?? (val != null ? String(val) : '')}
-        onChange={e => setPendingValues(prev => ({ ...prev, [boxNum]: e.target.value }))}
+        onChange={e => {
+          const next = e.target.value;
+          // ETP-5456 (UX refinement) — HARD STOP at keystroke/paste time, BOTH sides of the
+          // decimal point:
+          //  - INTEGER part: refused once it reaches boxNum's AEAT record-length ceiling (15
+          //    digits, or 14 once the value is already negative — the minus sign occupies one of
+          //    the 17 Lon characters).
+          //  - DECIMAL part: refused once a 3rd decimal digit would be typed — a Lon=17 amount
+          //    box always allows exactly 2 (`exceedsTypedDecimalDigits`, box/sign-independent,
+          //    unlike the integer ceiling). Added after manual QA caught a 4-decimal value
+          //    ("...9012345.2057") going through uncaught in box 42 — only the integer side had
+          //    ever been guarded here.
+          // Percent cells are exempt from both — they have their own, separate [0,100] range
+          // enforced on commit (`clampPercentValue` below). Reaching either ceiling never blocks
+          // typing on the OTHER side (an integer-ceiling amount can still get its 2 decimals; a
+          // decimal-ceiling amount can still extend its integer part). See
+          // `exceedsTypedIntegerDigits`/`exceedsTypedDecimalDigits`'s doc comments
+          // (fiscalModelsUtils.js) for why this must happen here, at the keystroke, rather than
+          // as a post-hoc validity check — an out-of-range MANUAL value must never be typeable in
+          // the first place, not merely rejected once typed.
+          if (!isPercent && (exceedsTypedIntegerDigits(boxNum, next) || exceedsTypedDecimalDigits(next))) return;
+          setPendingValues(prev => ({ ...prev, [boxNum]: next }));
+        }}
         onBlur={() => commitCellEdit(boxNum, isPercent)}
         onKeyDown={e => { if (e.key === 'Enter') { commitCellEdit(boxNum, isPercent); e.target.blur(); } if (e.key === 'Escape') { clearPendingValue(boxNum); setEditingCell(null); } }}
         autoFocus

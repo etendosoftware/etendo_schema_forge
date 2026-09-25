@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { SELECTABLE_YEARS } from './models/303/fm303Layouts';
 import { neoBase } from '@/components/related-documents/helpers.js';
@@ -192,7 +193,8 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 
         {/* Body — two columns divided by a vertical separator when the AEAT
             path is available; a single full-width column otherwise (349). */}
-        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px', display: 'flex', gap: 20 }}>
+        <div className="fm-config-modal__body" style={{ minHeight: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 20 }}>
           <PresentModalColumn
             icon={<FileText size={16} strokeWidth={1.75} data-testid="FileText__cda0bb" />}
             titleKey="fm.present.register_section.title"
@@ -223,6 +225,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
                 data-testid="PresentModalColumn__cda0bb" />
             </>
           )}
+          </div>
         </div>
 
         {/* Footer */}
@@ -246,23 +249,49 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
 
 // FileGenModal — despite the generic name, this is 349-specific (the 303 file-gen
 // flow uses FileGenModal303 below). Mirrors the classic "Parámetros de entrada del
-// generador de declaraciones" popup (OBTL_TaxReportLauncher) for Modelo 349: the 8
+// generador de declaraciones" popup (OBTL_TaxReportLauncher) for Modelo 349: the
 // `OBTL_Tax_Report_Parameter` rows with type=I (user input), rendered in ascending
-// `order` — FileName/Contact (10), Phone (20), Substitutive (30), FormerStatement
-// (40), RepresentativeTaxId (80), Navarra (90), Guipuzcoa (100). The type=O rows
-// (Año, org name/NIF) are auto-derived by the backend and intentionally never shown
-// here. No conditional show/hide — classic's callout never toggles these fields.
-export function FileGenModal({ decl, onConfirm, onClose }) {
+// `order` — FileName/Contact (10), Phone (20), RepresentativeTaxId (80), Navarra (90),
+// Guipuzcoa (100). The type=O rows (Año, org name/NIF) are auto-derived by the backend
+// and intentionally never shown here. No conditional show/hide — classic's callout
+// never toggles these fields.
+//
+// ETP-5456 — Substitutive (30) moved OUT of this modal and into the declaration form itself
+// (`FmModel349Page.jsx`'s `SubstitutiveSection`, next to the "Todas las claves" key filter),
+// persisted as `manualData.identification.sustitutiva`, the same way Modelo 303's
+// "Autoliquidación rectificativa" lives in ITS form rather than in a generation-time popup —
+// that decision is a durable property of the declaration, so it must be reflected elsewhere too
+// (the declarations list's "Tipo" column, in particular).
+//
+// FormerStatement (40) — the AEAT "Identificador de la declaración anterior" — is back here as
+// an editable input, gated on the `substitutive` prop (the persisted form value, read-only from
+// this modal's point of view): a substitute filing NEEDS this identifier to file, but the
+// identifier itself is a one-off value typed at generation time, not a durable property of the
+// declaration — it is not persisted, so it's asked again on every regeneration, same as before
+// ETP-5456 moved the checkbox out. `substitutive` alone decides whether the field renders at
+// all; when it's false the modal doesn't ask for it.
+export function FileGenModal({ decl, substitutive, onConfirm, onClose }) {
   const ui = useUI();
   const t = ui;
   const [fileName,            setFileName]            = React.useState('');
   const [phone,                setPhone]               = React.useState(decl?.phone   ?? '');
   const [contact,              setContact]             = React.useState(decl?.contact ?? '');
-  const [substitutive,         setSubstitutive]        = React.useState(false);
   const [formerStatement,      setFormerStatement]     = React.useState('');
   const [representativeTaxId,  setRepresentativeTaxId] = React.useState('');
   const [navarra,              setNavarra]             = React.useState(false);
   const [guipuzcoa,            setGuipuzcoa]           = React.useState(false);
+  // Only meaningful — and only checked — while `substitutive` is true; see this component's
+  // own comment above.
+  const missingFormerStatement = substitutive && !formerStatement.trim();
+  // ETP-5456 — `contact`/`phone` have a server-side fallback when left blank
+  // (`Fiscal349BoxesHandler#applyContactParams`: the logged-in AD_User's name / the org's
+  // resolved phone from AD_OrgInformation). A blank field only blocks the modal when NEITHER
+  // the typed value NOR that fallback resolves to anything — `decl.contactFallback`/
+  // `decl.phoneFallback` carry the fallback's live value (empty string when it doesn't
+  // resolve), computed identically server-side so this can never drift from what generation
+  // actually does. See FmModel349Page.jsx for where these are populated onto `decl`.
+  const missingContact = !contact.trim() && !decl?.contactFallback;
+  const missingPhone   = !phone.trim()   && !decl?.phoneFallback;
   const inputSt = {
     width: '100%', fontSize: 14, padding: '8px 12px',
     border: '1px solid hsl(var(--border-control))', borderRadius: 8, height: 40,
@@ -310,21 +339,21 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>{t('fm.filegen.contact_phone')}</div>
             <input style={inputSt} value={phone} onChange={e => setPhone(e.target.value)} placeholder={t('fm.filegen.contact_phone_placeholder')} />
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <label style={checkboxRowSt}>
-              <CheckboxField
-                checked={substitutive}
-                onToggle={val => setSubstitutive(val)}
-                data-testid="CheckboxField__cda0bb" />
-              {t('fm.filegen.substitutive')}
-            </label>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
-              {t('fm.filegen.former_statement')}
+          {/* ETP-5456 — editable only while the declaration is marked "Sustitutiva" on the form
+              (checkbox lives there now, see this component's own comment above); a regular
+              filing never sees this field. */}
+          {substitutive && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
+                {t('fm.filegen.former_statement')}
+              </div>
+              <input
+                style={inputSt}
+                value={formerStatement}
+                onChange={e => setFormerStatement(e.target.value)}
+                data-testid="FileGenModal__formerStatement" />
             </div>
-            <input style={inputSt} value={formerStatement} onChange={e => setFormerStatement(e.target.value)} />
-          </div>
+          )}
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 14, color: 'hsl(var(--foreground))', fontWeight: 400, marginBottom: 6 }}>
               {t('fm.filegen.representative_nif')}
@@ -359,9 +388,30 @@ export function FileGenModal({ decl, onConfirm, onClose }) {
           <button
             className="fm-btn fm-btn--save-pill fm-btn--save-pill--active"
             onClick={() => {
+              // ETP-5456 — the validation FmModel349Page used to run before even opening this
+              // modal now runs here, at the actual point of capture (see this component's own
+              // comment above). Reported as a toast (not an inline banner) to match the rest of
+              // this form's "missing required field" pattern — see FmModel303Page's
+              // missingRequiredFieldsToast for the same fields/message shape.
+              // ETP-5456 — all three checks combine into ONE toast listing every missing field
+              // (same "'Label A', 'Label B'" join pattern FmModel303Page.jsx's
+              // missingRequiredFieldsToast uses), rather than one toast per field, so a user
+              // missing contact+phone+identifier sees a single message, not three in a row.
+              const missingLabels = [];
+              if (missingContact) missingLabels.push(t('fm.filegen.contact_name'));
+              if (missingPhone) missingLabels.push(t('fm.filegen.contact_phone'));
+              if (missingFormerStatement) missingLabels.push(t('fm.filegen.former_statement'));
+              if (missingLabels.length > 0) {
+                const fieldsStr = missingLabels.map(label => `'${label}'`).join(', ');
+                toast.error(
+                  t('fm.validation.missing_required_banner', { fields: fieldsStr })
+                  ?? `Completa ${fieldsStr}.`,
+                );
+                return;
+              }
               onConfirm?.({
                 fileName: fileName.trim() || undefined,
-                phone, contact, substitutive,
+                phone, contact,
                 formerStatement: formerStatement.trim() || undefined,
                 representativeTaxId: representativeTaxId.trim() || undefined,
                 navarra, guipuzcoa,

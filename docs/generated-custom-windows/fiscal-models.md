@@ -119,7 +119,7 @@ that already carries it is just as frozen as one presented through either curren
   non-draft compute for this decl.id", it does not care which of the two hooks produced it.
 - **Session cache (`useFiscalAutoCompute.js`).** `getCachedFiscalCompute(declId)` is a new export
   that reads back the last payload this hook cached for one declaration, keyed
-  `fiscal_ac_v3_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
+  `fiscal_ac_v4_<declId>` in `sessionStorage`, without issuing a network call — `null` when nothing
   was ever cached this session. It exists so a detail page that opens with no `decl._precomputed`
   handed down (a cold/direct navigation straight into a submitted declaration) can still show
   something by reading whatever `FmListPage`'s own submitted-family bucket already computed and
@@ -464,6 +464,90 @@ used for the invoice-date column — `fmtDate` already treats a falsy input as "
 empty-state row's `colSpan` was bumped from 8 to 9 to match the new column count. `FmDebugPanel.jsx`'s
 `MOCK_SOURCES` fixture got a matching `accountingDate` field per row (including one explicit `null` to
 exercise the blank-render path in manual QA).
+
+### Sources tab — intra-EU acquisition invoices no longer double-counted (ETP-5456)
+
+**Confirmed bug, Modelo 303 only** — Modelo 349's `AEAT3492010ReportDao` already handled the
+equivalent case correctly, so this was a 303-only gap. A Spanish intra-EU acquisition (adquisición
+intracomunitaria) — and, identically in shape, a domestic reverse-charge/ISP operation — is
+reverse-charge: the SAME purchase invoice posts TWO `C_INVOICETAX` lines over the SAME taxable
+base — an output/devengado line (feeds boxes 10/11, `VAT_SALES_EU` in
+`Fiscal303BoxesHandler#fillSalesBoxes`) and an input/soportado deductible line (feeds boxes 36/37
+`Intracommunity_Goods`, or 38/39 `Intracommunity_Investments`, in `#fillPurchaseBoxes`). Before this
+fix, `Fiscal303SourcesSupport#accumulateInvoiceTax` summed every matching `C_INVOICETAX` line into
+ONE invoice row unconditionally, so an affected invoice showed base/vat/total exactly doubled —
+e.g. a real base 100,00€ / cuota 21,00€ (21%) / total 121,00€ invoice rendered as
+200,00€/42,00€/242,00€ in the "Facturas" tab.
+
+**Discarded intermediate fix — halving.** A first pass halved a tax line's base/tax contribution
+whenever its mapped boxes fell in a hardcoded `REVERSE_CHARGE_PAIRED_BOXES` set, mirroring
+`org.openbravo.module.aeat349.es.AEAT3492010ReportDao#getTaxBaseAmountPerBusinessPartner`. It
+shipped, then was discarded for three reasons found in code review/QA: (1) it silently halved an
+**unpaired** line too (a data-integrity edge case — only the devengado leg posted) to HALF its
+real amount instead of showing it in full or flagging it; (2) rounding to scale-2 after EACH
+accumulated line could push a halved total across a `.xx5` boundary and land on the wrong cent;
+(3) it collapsed the devengado and deducible sides into ONE row, so a user could never tell from
+the "Facturas" tab which side of the declaration an invoice's amount actually landed on — the two
+legs of an intra-EU acquisition are genuinely different declaration events, not duplicate views of
+the same one.
+
+**Final design — one row per (invoice, box set).** `Fiscal303SourcesSupport#collectSources` now
+groups by `(invoice id, display box set)` instead of by invoice alone. A line's box set comes from
+`rateToBoxes` (generic — already covers every tax family, no box list is hardcoded for this
+feature) redirected through `correctiveBoxesFor` when the invoice is corrective/rectificativa (see
+below). Two lines of the same invoice that resolve to the SAME box set still merge into one row;
+two lines that resolve to DIFFERENT box sets — the intra-EU/ISP devengado + deducible case —
+produce TWO rows, each showing the line's FULL (non-halved) amount, tagged with a machine `type`
+key: `"accrued"` (devengado, sales side) or `"deductible"` (soportado, purchase side) —
+`isPurchaseSideBoxes` decides which, generic over the box family via `PURCHASE_DEDUCTION_BOXES`/
+`PURCHASE_CORRECTIVE_BOXES`, not a fixed intra-EU list. The frontend (`FmTabContent.jsx`'s
+`SourcesTab`) translates the key via `typeLabel()` → `fm.sources.type.accrued` / `.deductible` (new
+`genericLabels` keys in `en_US.json`/`es_ES.json`: "Output VAT"/"IVA Devengado" and "Deductible
+VAT"/"IVA Deducible"), replacing the old hardcoded `"Venta"/"Compra"` label that used to be derived
+from the invoice's document category — a signal that no longer works once one invoice can produce
+rows on both sides.  **The casilla (box) computation path is untouched** —
+`fillGroupBoxes`/`applyPercentageSplit` (which feed boxes 10/11/36/37/38/39 themselves) still use
+each tax line's FULL individual amount, exactly once per box, which was always correct AEAT
+behavior; only this class's per-invoice `sources` row was ever over-summing.
+
+**Sign rule (separate PM-reported bug fixed in the same pass).** `accumulateInvoiceTax` used to
+`.abs()` both base and tax, which stripped the sign off a negative (rectificativa) row. It now
+keeps `taxableAmount`'s own sign on `base`, and re-signs `tax` (`.abs()`'d first, since a
+reverse-charge rate can be stored as e.g. `-21%`, an artifact of the rate itself, not a business
+sign) to match the base — mirroring `AEAT303CalculationsHelper#calculateNormalOperations` /
+`#calculateCorrectiveOperations` in the classic module, which is the source of truth for the real
+AEAT 303 file.
+
+**Corrective redirection.** When the invoice carrying a tax line is itself corrective (mirrors
+`AEAT303CalculationsHelper#calculateCorrectiveOperations` exactly — a reversal doc type or
+`ARC`/`APC` credit memo is always corrective; `ARI`/`API`/`ARI_RM` is corrective iff the line's
+taxable amount is negative), `correctiveBoxesFor` redirects the row's display boxes to the
+corrective pair the classic engine's aggregate totals actually use: régimen-general/EU/ISP sales
+(1/3/4/6/7/9/10/11/12/13/150/152/165/167) → 14/15; recargo de equivalencia
+(16/18/19/21/22/24/156/158/168/170) → 25/26; any purchase-deduction box (28/29 through 38/39) →
+40/41. This keeps the "Casillas" column consistent with what the AEAT file itself reports for a
+rectificativa, rather than diverging for a positive-amount corrective line.
+
+Regression coverage in `Fiscal303SourcesSupportTest`: paired intra-EU lines now assert 2 rows (one
+`accrued`, one `deductible`, each with the FULL amount); a domestic ISP reverse-charge case proves
+the grouping is generic over the box family, not hardcoded to intra-EU; a 3-lines-3-rows case and a
+mixed reverse-charge-pair-plus-normal-line case both confirm nothing merges across different box
+sets and nothing is halved; a negative rectificativa case confirms both rows keep their negative
+sign and land on the corrective box pair; the previously-documented "unpaired line silently halved"
+gap is now closed (full amount, single row). Full `Fiscal303*` suite re-run green.
+
+### Cache invalidation on Guardar/Calcular, Modelo 303 (ETP-5456 follow-up)
+
+Same root cause as the Modelo 349 VIES case documented further below (`useFiscalAutoCompute`'s
+`sessionStorage` cache is only invalidated by an invoice-change timestamp check, never by a change
+in the BACKEND's calculation logic itself) — but here the trigger is the row-per-side rewrite
+above: reopening a declaration after this backend deploy could still serve a stale cached payload
+computed under the OLD (doubled/halved) logic, since `checkModified303` has no way to detect a
+logic change. `FmModel303Page.jsx`'s `handleComputeClick` (Calcular) and `handleSave` (Guardar)
+both now call `invalidateFiscalComputeCache(decl.id)` — but only AFTER their own operation
+succeeds (after the `await` for Calcular, gated on `ok` for Guardar), so a failed compute/save
+leaves any existing cache entry untouched. Regression coverage:
+`models/303/__tests__/FmModel303Page.cacheInvalidation.vitest.jsx`.
 
 ### Duplicate-period warning and rectificativa gate (ETP-5187)
 
@@ -1537,6 +1621,202 @@ raw layout-data assertions for the 7 alphanumeric fields), and `FiscalDeclCrudHa
 (the widened box111/77 set plus the new oversized-field guard, mirroring the existing 111/77 test
 style).
 
+### Numeric box max-length enforcement (ETP-5456)
+
+The ETP-5438 audit above fixed the sign gap; a follow-up audit ("Casillas numéricas: revisar que
+no superen los caracteres permitidos") cross-referenced the `Lon` (length) column of the same
+official "Diseño de registro" (DR303e26v101 v1.01, sheets DP30301-DP30305) against every box
+number `fm303Layouts.js` renders, box by box (not assuming uniformity — the spec's own footer
+warns lengths can differ per box). The result turned out uniform in practice for this window:
+
+| Box class | `Lon` | Integer digits | Decimal digits | Sign |
+|---|---|---|---|---|
+| Amount box, `Num` (unsigned) — e.g. 111, 77, 70, 78, 109, 110 (the `NEGATIVE_NOT_ALLOWED_BOXES` set) | 17 | 15 | 2 | never negative |
+| Amount box, `N` (signed) — e.g. 27, 45, 46, 64, 66, 69, 71 and most other boxes | 17 | 15 (non-negative) / **14** (negative — the minus sign consumes one of the 17 characters) | 2 | may be negative |
+| Percent box — 65, 89, 90, 91, 92, 107 | 5 | 3 | 2 | never negative |
+
+Every one of the ~97 box numbers this window renders (1-46, 59-78, 87, 89-92, 95, 97-98, 107-111,
+120-128, 150-170) was checked individually against the excel and came back `Lon=17` for amount
+boxes / `Lon=5` for percent boxes — no box in this window's layout deviates from the general
+pattern above.
+
+**Percent boxes were already fully compliant, no code change needed.** `FmBoxes303.jsx`'s
+`clampPercentValue` (ETP-5391) already clamps every committed percent value to `[0, 100]` rounded
+to 2 decimals — its largest possible output, `"100.00"`, is exactly 3 integer digits + 2 decimals,
+so it can never overflow `Lon=5` regardless of what the user types.
+
+#### FINAL behavior — fiscal-advisory correction (supersedes an earlier clamp/truncate draft)
+
+Two earlier drafts of this fix (a numeric-constant clamp, then a raw-string truncate that forced
+decimals to `"00"` on overflow) were built, manually QA'd, and both **reverted mid-ticket** on
+explicit guidance from external fiscal advisory: **the AEAT record-length ceiling (`Lon`) is a
+PRESENTATION-FORMAT constraint on how the file is written, not a fiscal rule.** Rounding,
+truncating or saturating an out-of-range amount to make it "fit" declares a *different* amount
+than the real one — never acceptable for a tax return, whether the box is typed by hand or
+computed by a formula. The current, final design instead makes an out-of-range value
+**unreachable** for manual input, and **blocking-but-non-destructive** for computed values:
+
+**1. Manual input — keystroke/paste hard-stop, not a clamp.** `FmBoxes303.jsx`'s cell input
+(`renderCellInput`'s `onChange`) refuses the keystroke/paste outright, on BOTH axes independently:
+- **Integer part**: refused once it would reach `maxIntDigits` for that box/sign —
+  `exceedsTypedIntegerDigits(boxNum, rawStr)` in `fiscalModelsUtils.js`. 15 digits for a `Num` box
+  or a non-negative `N` box, 14 once the value is negative.
+- **Decimal part**: refused once a 3rd decimal digit would be typed —
+  `exceedsTypedDecimalDigits(rawStr)`, box/sign-independent (always exactly 2). Added after manual
+  QA caught a 4-decimal value ("...9012345.2057") going through uncaught on box 42 — the integer
+  guard's name only ever promised to cover the integer side, and no decimal-side guard existed at
+  all in the first drafts.
+
+Reaching one ceiling never blocks typing on the other side (an integer-ceiling amount can still
+get its 2 decimals; a decimal-ceiling amount can still extend its integer part). Percent cells are
+exempt from both — they keep their own, separate `[0, 100]` range enforced on commit
+(`clampPercentValue`). Because the hard-stop runs at every keystroke/paste, an out-of-range manual
+value is **structurally impossible to type in the first place** — there is no "invalid but typed"
+state left to reject, clamp, or revert after the fact. `handleBoxChange`
+(`FmModel303Page.jsx`) still calls `buildValidatedBoxValue(boxNum, value, rawValue)` on commit, but
+only to re-derive the EXACT value end to end (string/`BigInt` arithmetic, never a lossy
+`Number()`/`*100` round-trip) — see the "exact value preservation" note below — `valid: false`
+from that call should never happen from the real UI and is a silent no-op fallback only for a
+caller that bypasses the input entirely (e.g. a stale hydrated override).
+
+**2. Autocalculated boxes — blocking validation, value never altered.** A DERIVED box (45, 46, 64,
+66, 69, 71, and the box 111 formula) can overflow its range exactly like a manual value can (e.g.
+`[69] = 66+77-78+68+108`, `[71] = 69-70+109-112`). `recomputeDerivedBoxes` (fiscalModelsUtils.js)
+computes every derived box exactly as before (plain float arithmetic is exact for any realistic
+tax-amount magnitude — the precision concern only exists near the ~15-digit ceiling itself, which
+no real declaration reaches) and additionally attaches `.outOfRangeBoxes` — the list of derived
+box numbers whose result overflows its own ceiling, via `isDerivedValueOutOfRange` (same
+`NEGATIVE_NOT_ALLOWED_BOXES`-driven Num/N distinction as the manual-input guard). **The computed
+value itself is never rounded, truncated, or otherwise altered** — only its validity is reported.
+`FmModel303Page.jsx` surfaces this as `outOfRangeBoxes` state, updated from every
+`recomputeDerivedBoxes` call site (`handleBoxChange`, `handleIdentChange`, `applyComputeResult`'s
+three call sites), and:
+- **Blocks** Guardar (`handleSave`), Generar fichero 303 (`handleGenerate` + its button's
+  pre-modal-open check), and Registrar/Presentar (`handlePresent` + its button's pre-modal-open
+  check) — each with its own contextual toast (`fm.validation.out_of_range_{save,generate,present}`).
+- **Toasts** (not a persistent banner — see below) once per DISTINCT out-of-range box set, via a
+  `useEffect` on `outOfRangeBoxes` compared against a ref'd signature (`outOfRangeSignatureRef`),
+  so it fires when the set first appears or changes, not on every unrelated render/edit that
+  leaves the same boxes still out of range.
+- **Singular/plural agreement**: `"la casilla [N] excede"` for exactly one offending box,
+  `"las casillas [N], [M] exceden"` for more than one (`"box {boxes} exceeds"` /
+  `"boxes {boxes} exceed"` in English) — resolved via small shared i18n fragments
+  (`fm.validation.out_of_range_subject_one/other`, `_verb_one/other`), not hand-picked text in JS,
+  so the English locale gets correct agreement too.
+
+**UX history on this point (manual QA cycles):**
+- An early draft rendered a **persistent destructive banner** pinned above the action toolbar.
+  Manual QA reported this reading as fixed layout clutter, always occupying space — reverted to a
+  **toast**, same as every other box-level notice in this window (negative-value clamp, etc.). The
+  blocking itself was never in question, only how the user is informed.
+- A still-earlier draft (before the "no clamp" pivot above) clamped/truncated the computed value
+  — reverted for the same fiscal-advisory reason as the manual-input clamp.
+
+**3. Exact value preservation (float64 boundary).** A boundary-legal value (15 integer digits + 2
+decimals, e.g. `"123456789012345.35"`) is a 17-significant-digit decimal — past what IEEE 754
+double precision can hold exactly. `Number('123456789012345.35')` alone, no arithmetic at all,
+already rounds to `"...34"` — manual QA caught this as **silent data corruption on a value that
+was never even close to the ceiling**, not a clamp/truncate case at all.
+`buildValidatedBoxValue`/`buildExactDecimalValue` (fiscalModelsUtils.js) fix this by reconstructing
+the value from the RAW TYPED STRING via string/`BigInt` arithmetic and preferring a plain `Number`
+only when it round-trips exactly (`Number(canonical).toFixed(2) === canonical`); when it doesn't,
+the function returns the canonical **decimal STRING** itself instead of a lossy `Number`. Because a
+box's stored `value` can therefore be a string:
+- `recomputeDerivedBoxes`'s `get()` coerces via `Number(...)` for FORMULA arithmetic only (`s +
+  get(n)` on a raw string would silently STRING-CONCATENATE — the exact ETP-5393 Bug B class of
+  bug `toBoxArray`'s own comment warns about) — lossy at this magnitude, same as any arithmetic on
+  a number this size would be, and orthogonal to the box's own displayed digits.
+- `lib/formatCurrency.js`'s `formatCurrency`/`formatAmount` gained an exact-decimal-string fast
+  path (`EXACT_DECIMAL_STRING` regex + `groupExactDecimalString`) so a string box value displays
+  its literal digits with correct thousands grouping, never re-coerced through `Number()`
+  (`formatCurrency`'s own `toFixedHalfUp` display-rounding trick has an unrelated, separate float64
+  quirk one digit earlier than the storage-layer concern here — out of scope for this ticket, not
+  fixed).
+- `applyBoxParams`'s `String(v)` for AEAT submission already handles either shape correctly (a
+  no-op for a string, unchanged for a number) — this incidentally makes telematic submission MORE
+  accurate at this magnitude too, not just display.
+
+Regression tests: `fiscalModelsUtils.boxRange.vitest.js` (pure-function unit tests —
+`exceedsTypedIntegerDigits`/`exceedsTypedDecimalDigits`/`boxValueOutOfRange`/
+`buildValidatedBoxValue`, and `recomputeDerivedBoxes`'s `outOfRangeBoxes` including the cascade
+case), `FmBoxes303.hardStop.vitest.jsx` (the keystroke-level hard-stop on both axes through the
+real component, including the percent-cell exemption), `FmModel303Page.outOfRange.vitest.jsx`
+(mount-time and edit-triggered toasts with correct singular/plural wording, the "no re-toast on an
+unrelated edit" signature guard, and the Guardar/Generar fichero/Registrar-Presentar blocking
+gates), `FmModel303Page.exactValuePreservation.vitest.jsx` (the REAL, unmocked `FmBoxes303` grid —
+a boundary-legal value round-trips exactly), and two updated cases in `FmBoxes303.vitest.jsx`
+("percent cell input attributes" describe block) covering the new amount-cell decimal hard-stop
+and its digit-by-digit vs. one-shot-paste distinction.
+
+### Sticky sections while scrolling (ETP-5456, layout follow-up)
+
+The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes
+`.fm-page` itself (`overflow-y: auto`) the one real scrolling ancestor for the whole detail
+view, instead of each tab/panel scrolling independently. On both models, the tabs bar
+(`.fm-tabs-sticky`, `position: sticky; top: 0`, from the shared `Tabs` component in
+`FmCommon.jsx`) already stuck to the top of that scroll; the identification/liquidación
+navigation and the summary panels next to the tables did not, and would scroll away with the
+rest of the page — which for 303's 4-section box nav in particular meant losing your place
+while scrolling a long "Casillas" tab.
+
+**303 — `CasillasTab`'s left section-nav sidebar** (`FmModel303Page.jsx`) now has
+`position: sticky; top: 49` (49 = `.fm-tabs__tab`'s 48px height + 1px border, i.e. it docks
+directly under the tabs bar). Getting there also required removing redundant nested
+`overflow: auto` wrappers that used to sit between the sidebar and `.fm-page` — any of those
+would have created their own scroll container and made `.fm-page`'s ancestor-chain `sticky`
+resolve against the wrong box (a scrollport other than the one the user is actually scrolling).
+
+**349 — the Operadores tab's totals panel and filter/search row** (`FmModel349Page.jsx` +
+`.fm-349-totals` / the filter-row's inline style in `fiscal-models.css`). Two elements stack
+below the tabs bar here:
+1. The filter/search row (key dropdown + NIF-IVA search box) — `position: sticky; top: 49`,
+   `zIndex: 15`, an explicit `background` (needed so table rows scrolling underneath don't show
+   through once it's pinned). Its old `marginTop`/`marginBottom` were converted to
+   `paddingTop`/`paddingBottom` — for a sticky element `top` is measured from the *margin* edge,
+   so keeping a margin there would have shifted the actual stick point away from 49px.
+2. `TotalsCard` (`.fm-349-totals`) — `position: sticky; top: 97px` (97 = 49 for the tabs bar +
+   48 for the filter row's own rendered height: 8 paddingTop + 36 content + 4 paddingBottom), so
+   it docks below *both* sticky bars instead of overlapping either.
+
+**Why `alignItems: 'flex-start'` matters just as much as `position: sticky` itself.** Both
+sticky sidebars/panels are flex items in a `display: flex` row alongside the tall scrollable
+content next to them (303: nav + casillas content; 349: totals panel + operators table).
+Without `alignItems: 'flex-start'` on that row, the default `stretch` forces the sticky item to
+be exactly as tall as its sibling — a box that already spans virtually the whole scrollable
+range has no room left to visibly reposition itself, so `position: sticky` silently does
+nothing even though it's correctly declared. This bit 349 specifically because of one extra
+wrinkle (below); it is the same root cause behind "I added `position: sticky` and it isn't
+doing anything," so both rows in this window now set `alignItems: 'flex-start'` explicitly.
+
+**Why the old `padding-bottom: 100vh; margin-bottom: -100vh` hack had to go, not just be left
+alone.** `.fm-349-totals` used to carry that pair as a "full-height divider" trick — relying on
+a block box's `padding-bottom` and a following/own negative `margin-bottom` collapsing against
+each other so the visible divider border reaches the bottom of the viewport without the box's
+*layout* height actually growing. That collapse is a **block-formatting-context** behavior.
+`.fm-349-totals` is a **flex item** (child of the totals+table `display: flex` row), and the
+CSS Flexbox spec explicitly excludes flex items from margin collapsing — so inside this row the
+negative margin did **not** cancel the padding's contribution to the box's own rendered height.
+The box was actually rendering ~100vh+ tall (border-box, not just visually), which caused two
+distinct symptoms in manual QA before the fix: (1) a giant phantom vertical scroll even on an
+empty operators table, and (2) the sticky panel not visibly sticking at all — an item that
+already spans nearly the whole scrollable range has nothing left to reposition, same mechanism
+as the `alignItems` issue above, just caused by a stale hack instead of plain `stretch`. Fixed
+by removing the hack outright and relying on `alignItems: 'flex-start'` + a plain `border-right`
+(no artificial height) instead — the divider now only spans the panel's own natural content
+height. That's a deliberate visual trade-off versus the old "always reaches the bottom of the
+viewport" illusion; if a true full-row-height divider is wanted again later it needs a different
+mechanism entirely (e.g. an absolutely-positioned divider anchored to the row, which naturally
+stretches to match the table) — not a repeat of the padding/margin hack, which cannot coexist
+with `position: sticky` on a flex item.
+
+**If a future change reintroduces this bug class** (a sticky region that "isn't sticking"),
+check, in order: (1) every ancestor between it and `.fm-page` for `overflow` other than
+`.fm-page` itself, plus `transform`/`filter`/`contain` — any of those creates a new containing
+block or scrollport and breaks `position: sticky`; (2) whether its flex-row parent has
+`alignItems: 'flex-start'` — `stretch` (the default) silently defeats sticky the same way; (3)
+whether any sibling sticky element's `top` value still accounts for the combined height of
+everything stacked above it.
+
 ### Last-period-only sections — "Información adicional" (ETP-5391)
 
 The Modelo 303 detail page's "Información adicional" tab (`CASILLAS_SECTIONS`'s `info_adicional`
@@ -2124,7 +2404,7 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   the same `operators` array) move together. On failure it returns early — the displayed statuses
   are left exactly as they were, never blanked.
 - **Why the cache has to be invalidated**: `useFiscalAutoCompute` caches each declaration's
-  compute payload in `sessionStorage` (`fiscal_ac_v3_<declId>`) and, on every run of its mount
+  compute payload in `sessionStorage` (`fiscal_ac_v4_<declId>`) and, on every run of its mount
   effect, restores the cached payload whenever `checkModifiedFn` says nothing changed.
   `checkModified349` only asks whether the period's **invoices** changed, while a VIES
   revalidation updates **business partners** — so it answers `false`, the pre-validation payload
@@ -2184,23 +2464,89 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
 ### PDF preview and file generation
 
 - `use349Pdf` hook renders a Modelo 349 draft PDF via Handlebars + `renderPdf`. Declarant NIF and org name are read from `_precomputed.orgNif` / `_precomputed.orgName`. The object URL is revoked on unmount to avoid memory leaks.
-- File generation (`generate349File`) prompts for the 8 input fields the classic "Parámetros de entrada del generador de declaraciones" popup (`OBTL_TaxReportLauncher`) exposes for Modelo 349, via `FileGenModal`, before calling `POST /fiscal349/generate`. All 8 are sent in the POST body (`application/x-www-form-urlencoded`), never as query params, to avoid PII in server access logs. Field order in the modal — and each field's `OBTL_Tax_Report_Parameter.sequenceNumber` in classic — is:
+- File generation (`generate349File`) prompts for the input fields the classic "Parámetros de entrada del generador de declaraciones" popup (`OBTL_TaxReportLauncher`) exposes for Modelo 349, via `FileGenModal`, before calling `POST /fiscal349/generate`. All fields are sent in the POST body (`application/x-www-form-urlencoded`), never as query params, to avoid PII in server access logs. Field order in the modal — and each field's `OBTL_Tax_Report_Parameter.sequenceNumber` in classic — is:
 
   | Order | Param | Classic label | Type | Client behavior when blank |
   |------:|-------|----------------|:----:|------------------------------|
   | 10 | `fileName` | Nombre del Fichero | TEXT | omitted from the body → backend computes `349_<period>_<year>` (`resolveFileName`) |
-  | 10 | `contact` | Persona de contacto | TEXT | omitted from the body → backend falls back to the current user's display name (`applyContactParams`) |
-  | 20 | `phone` | Teléfono de contacto | TEXT | omitted from the body → backend falls back to `AD_OrgInformation`'s phone for the org (`applyContactParams`) |
-  | 30 | `substitutive` | Sustitutiva | CHECK | never omitted — see below |
-  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | omitted from the body → backend leaves the `FormerStatement` key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
-  | 80 | `representativeTaxId` | NIF del representante legal | TEXT | same as `formerStatement` — key omitted from `inputParams`, no fallback |
+  | 10 | `contact` | Persona de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
+  | 20 | `phone` | Teléfono de contacto | TEXT | blocked client-side unless a server-resolvable fallback exists — see **349 sustitutivas (ETP-5456)** below |
+  | 30 | `substitutive` | Sustitutiva | CHECK | **not asked in this modal since ETP-5456** — read from the declaration form's persisted checkbox, see below |
+  | 40 | `formerStatement` | Identificador declaración anterior | TEXT | rendered **only when `substitutive` is true**; blocked client-side when blank in that case — see below |
+  | 80 | `representativeTaxId` | NIF del representante legal | TEXT | omitted from the body → backend leaves the key **out** of `inputParams` entirely (`applyOptionalTextParams`, mirrors classic's TEXT-parameter omission convention — no fallback value exists) |
   | 90 | `navarra` | — | CHECK | never omitted — see below |
   | 100 | `guipuzcoa` | — | CHECK | never omitted — see below |
 
   `fileName`/`formerStatement`/`representativeTaxId` are additionally `.trim() || undefined`'d client-side in `FileGenModal`'s confirm handler before being handed to `generate349File`, so whitespace-only input is treated the same as blank. `phone`/`contact` are **not** trimmed (sent as-is if truthy) — a whitespace-only value would still reach the backend, unlike the other three text fields.
 
-  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
+  The 3 checkboxes (`substitutive`, `navarra`, `guipuzcoa`) are **always** sent as `'Y'`/`'N'`, never omitted — both sides enforce this independently: `generate349File` always calls `body.set(...)` for all three regardless of value, and `Fiscal349BoxesHandler#buildGenerateInputParams` re-derives each one with `"Y".equals(request.getParameter(...)) ? "Y" : "N"` rather than trusting the request unconditionally. The reason is `AEAT3492010Report.generateLine1()`, which calls `inputParams.get("Substitutive").equals("Y")` unconditionally — a missing `Substitutive` key throws an NPE. Since ETP-5456, `substitutive`'s value comes from the form's persisted checkbox (`FmModel349Page`'s `sustitutiva`), not from a field inside this modal — see below. The `Año` and org name/NIF parameters from the classic popup are auto-derived server-side (`type=O` in `OBTL_Tax_Report_Parameter`) and are intentionally never shown in this modal.
   - **Software vendor NIF (ETP-5187 point 6):** Modelo 303's and Modelo 390's `OBTL_Tax_Report_Parameter` seed data (`org.openbravo.module.aeat303.es`'s `303_Report_Tax_Parameters.xml` and `org.openbravo.module.aeat390.es`'s `390_Report_Tax_Parameters.xml`, respectively) both hardcode an `EDDNIF`/"NIF Empresa Desarrollo" constant identifying the software vendor, seeded to Openbravo's `B31733934`. **Only Modelo 303 was fixed under ETP-5187** — every `taxReportGroup`'s `constantValue` in `303_Report_Tax_Parameters.xml` was updated via a proper dataset export to Etendo's `B75117705`. **Modelo 390 was deliberately left unfixed** — `390_Report_Tax_Parameters.xml` still carries the old `B31733934` on every `taxReportGroup` row — per an explicit user decision to defer it out of this ticket's scope, not an oversight; do not assume it was fixed alongside 303, and do not edit `aeat390.es`. The Modelo 349 tax report definition (`org.openbravo.module.aeat349.es/referencedata/standard/349_Tax_Parameters.xml`) carries **no such parameter** — verified: no `EDDNIF` searchKey, no hardcoded `constantValue` matching a NIF pattern. Nothing to fix here; both `use349Pdf.js` (PDF preview) and `Fiscal349BoxesHandler#handleGenerate` (real `.349` file, via `OBTL_TaxReport_I#generateElectronicFile`) resolve the declarant's own NIF dynamically and never touch a vendor-identity constant.
+
+### 349 sustitutivas (ETP-5456)
+
+Before this ticket, "Sustitutiva" was a one-off checkbox inside `FileGenModal`, reset every time
+the modal reopened — a declaration had no durable memory of whether it was a substitute filing.
+ETP-5456 makes it a real property of the declaration, mirroring how Modelo 303's "Autoliquidación
+rectificativa" already works, and closes two related gaps (contact/phone fallback visibility, a
+sessionStorage cache-key bump) discovered while doing so.
+
+1. **"Sustitutiva" checkbox moved to the form.** It now lives in `FmModel349Page.jsx`'s
+   `SubstitutiveSection`, rendered inline in the Operadores tab toolbar next to the "Todas las
+   claves" key filter (not as its own banner). It is **persisted**, not ephemeral: stored under
+   `manualData.identification.sustitutiva`, the exact same `manualData.identification` shape and
+   PUT mechanism 303's `rectificativa` already uses. `FmModel349Page`'s `handleSave` — previously a
+   deliberate no-op confirmation (ETP-5338 pt.5, since 349 had no locally-edited persistable data
+   at all) — now does a real `persistManualData` PUT when there is a pending edit, and pushes the
+   saved value back into `FmListPage`'s cached row via `onManualDataSaved` (same precedent as
+   303's Bug A fix) so the list's "Tipo" column and a re-opened declaration both see it without a
+   full reload.
+
+2. **"Identificador declaración anterior" field moved into the "Generar fichero" modal**, gated on
+   the persisted checkbox above (passed into `FileGenModal` as the `substitutive` prop — read-only
+   from the modal's point of view). The field only renders, and is only required, while
+   `substitutive` is true. It is **not persisted** — it's a one-off value AEAT needs at generation
+   time, not a durable property of the declaration, so it is asked again on every regeneration.
+   It is **not** requested in `PresentModal` ("Registrar/Presentar") — that flow only marks the
+   declaration as presented locally; it never performs a real telematic presentation, so there is
+   no AEAT identifier to capture there.
+
+3. **List "Tipo" column** (`FmListPage.jsx`) now shows "Sustitutiva" (`fm.type.substitutive`) when
+   `manualData.identification.sustitutiva` is `true`/`'Y'`, alongside the pre-existing 303
+   "Rectificativa" check. The two flags are mutually exclusive by construction — only 303 ever sets
+   `rectificativa`, only 349 ever sets `sustitutiva` — so both can be checked in the same
+   expression without a `decl.model` guard.
+
+4. **Contact/phone fallback validation.** `Fiscal349BoxesHandler#computeOperators` now also
+   returns `contactFallback` (the logged-in `AD_User`'s display name, via the new
+   `resolveCurrentUserContactName()` helper) and `phoneFallback` (the org's resolved phone, via the
+   pre-existing `resolveOrgPhone`) — the **exact same values** `applyContactParams` falls back to
+   server-side when `Contact`/`Phone` are left blank at generation time, extracted into one shared
+   helper so the two call sites can never drift. `FmModel349Page` reads these off the compute
+   payload (`liveContactFallback`/`livePhoneFallback`, same `live* ?? decl._precomputed?` pattern
+   as every other computed field on this page) and passes them into `FileGenModal` on the `decl`
+   prop. The modal blocks submission — with a single combined toast, same
+   `missingRequiredFieldsToast` pattern as 303 — when a field is blank **and** its fallback is also
+   empty; if either resolves to something, the field is allowed to stay blank, matching exactly
+   what generation itself does.
+
+5. **sessionStorage cache-key bump.** `useFiscalAutoCompute.js`'s `sessionCacheKey()` moved from
+   `fiscal_ac_v3_` to `fiscal_ac_v4_` because `computeOperators`'s response shape changed
+   (`contactFallback`/`phoneFallback` added) without the cache version reflecting it — a cached v3
+   payload doesn't carry those fields, and an unbumped key would have silently served a payload
+   `FileGenModal`'s fallback check couldn't read.
+
+6. **Deployment trap worth knowing about (already resolved, no code fix needed).** After bumping
+   the cache key, a live deployment briefly kept showing the contact/phone block even for users who
+   should have had a working fallback. Root cause: the very first write under the new `v4` key
+   landed during the race window between the frontend having already reloaded with the new code and
+   the backend still finishing its Tomcat recompile/restart — so a "photo" taken *before* the
+   backend exposed `contactFallback`/`phoneFallback` got cached under the *new* key, and because
+   `sessionStorage` survives an ordinary reload (F5) and is only cleared by closing the tab, it kept
+   serving that stale snapshot indefinitely. No further code change was needed — closing the tab and
+   opening a new one cleared it. **Takeaway for future deploys that pair a cache-key bump with a
+   backend payload-shape change:** a plain reload is not enough to prove the fix landed if the
+   backend was still restarting when the first request under the new key went out; verify with a
+   fresh tab (or an explicit `sessionStorage.clear()`) rather than trusting an F5 during rollout.
 
 ### Generate error banner (`genError`)
 
