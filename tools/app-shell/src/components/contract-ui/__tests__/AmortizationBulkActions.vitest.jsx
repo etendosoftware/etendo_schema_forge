@@ -153,6 +153,13 @@ async function readPersistedResult() {
 }
 
 beforeEach(() => {
+  // The fallback reload timer (600/1500 ms, see the stub below) is armed AFTER the result is
+  // persisted, i.e. after `readPersistedResult` has already resolved — so it outlives the test
+  // and, on the last test of the file, can fire once jsdom has been torn down
+  // ("ReferenceError: window is not defined" as an unhandled error → Vitest exits 1).
+  // Fake timers let afterEach discard it; `shouldAdvanceTime` keeps fake time moving with real
+  // time so `waitFor`'s own polling/timeout timers still fire.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.clearAllMocks();
   sessionStorage.clear();
   mockNeoExecute.mockReset();
@@ -167,6 +174,12 @@ beforeEach(() => {
     writable: true,
     configurable: true,
   });
+});
+
+afterEach(() => {
+  // Drop any still-pending fallback reload timer so it can never fire after this test.
+  vi.clearAllTimers();
+  vi.useRealTimers();
 });
 
 describe('buildAmortizationActions — which dropdown actions are offered', () => {
