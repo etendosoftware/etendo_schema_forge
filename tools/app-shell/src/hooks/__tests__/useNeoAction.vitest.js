@@ -312,3 +312,65 @@ describe('useNeoAction', () => {
     });
   });
 });
+
+// ETP-5445 — optional third argument `requestBody`: JSON-stringified when given, the
+// literal '{}' when omitted (every pre-existing caller).
+describe('useNeoAction — requestBody (ETP-5445)', () => {
+  const baseOpts = { entityName: 'internalConsumption', apiBaseUrl: '/sws/neo/internal-consumption' };
+
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sends JSON.stringify(requestBody) when a body is given', async () => {
+    const requestBody = { fieldValues: { processNow: 'CO' }, action: 'CO' };
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => {
+      await result.current.execute('ic-1', 'processNow', requestBody);
+    });
+
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('/sws/neo/internal-consumption/internalConsumption/ic-1/action/processNow');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(JSON.stringify(requestBody));
+    expect(JSON.parse(init.body)).toEqual(requestBody);
+  });
+
+  it("sends '{}' when requestBody is omitted", async () => {
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => {
+      await result.current.execute('ic-1', 'post');
+    });
+    expect(globalThis.fetch.mock.calls[0][1].body).toBe('{}');
+  });
+
+  it("sends '{}' when requestBody is explicitly undefined", async () => {
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => {
+      await result.current.execute('ic-1', 'post', undefined);
+    });
+    expect(globalThis.fetch.mock.calls[0][1].body).toBe('{}');
+  });
+
+  it('stringifies an empty object body as {}', async () => {
+    const { result } = renderHook(() => useNeoAction(baseOpts));
+    await act(async () => {
+      await result.current.execute('ic-1', 'post', {});
+    });
+    expect(globalThis.fetch.mock.calls[0][1].body).toBe('{}');
+  });
+
+  it('does not call fetch when required params are missing, even with a body', async () => {
+    const { result } = renderHook(() => useNeoAction({ ...baseOpts, apiBaseUrl: undefined }));
+    let res;
+    await act(async () => {
+      res = await result.current.execute('ic-1', 'processNow', { action: 'CO' });
+    });
+    expect(res.success).toBe(false);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+});

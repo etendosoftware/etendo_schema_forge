@@ -1178,5 +1178,38 @@
     ],
     "author": "pipeline",
     "date": "2026-09-17"
+  },
+  {
+    "from": "0.35.0",
+    "to": "0.36.0",
+    "level": "additive",
+    "reasons": [
+      "Field \"documentNo\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"warehouse\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"businessPartner\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"partnerAddress\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"movementDate\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"description\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"project\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"etgoCurrency\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"lineNo\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"product\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"operativeQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"operativeUOM\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"movementQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"storageBin\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"orderQuantity\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"project\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"costcenter\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"asset\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"stDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)",
+      "Field \"ndDimension\" property \"readOnlyLogic\" changed from \"[object Object]\" to \"[object Object]\" in frontend (additive)"
+    ],
+    "author": "pipeline",
+    "date": "2026-09-24"
   }
 ]

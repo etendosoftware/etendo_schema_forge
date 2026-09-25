@@ -60,8 +60,10 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
   // ETP-4372 — source the same client-rendered delivery-note PDF the
   // GoodsShipmentPreview panel uses so the form-view topbar Send modal shows the
   // document instead of the "PDF not configured" fallback. Hook is called
-  // unconditionally at top level (rules of hooks).
-  const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading } = useShipmentPdf(recordId, apiBaseUrl, token);
+  // unconditionally (rules of hooks). Only fetch once the Send modal is open.
+  const { pdfUrl: shipmentPdfUrl, loading: shipmentPdfLoading, error: shipmentPdfError } = useShipmentPdf(showSend ? recordId : null, apiBaseUrl, token);
+  // Hook's loading flag lags one render behind showSend; treat the gap as loading too.
+  const sendPdfLoading = shipmentPdfLoading || (showSend && !shipmentPdfUrl && !shipmentPdfError);
 
   // ETP-5265 — when the shipment is already fully invoiced, Confirm skips the
   // intermediate "already invoiced" popup entirely and calls the document-action
@@ -482,7 +484,7 @@ export default function GoodsShipmentActions({ data, recordId, token, apiBaseUrl
           windowName="goods-shipment"
           token={token}
           pdfBlobUrl={shipmentPdfUrl}
-          pdfBlobLoading={shipmentPdfLoading}
+          pdfBlobLoading={sendPdfLoading}
           onClose={() => setShowSend(false)}
         />,
         document.body,

@@ -238,7 +238,7 @@ request function per render, and any effect depending on it re-fires forever.
 | Test | Fails when |
 |---|---|
 | `tools/app-shell/test/auth-header-policy.test.js` | a file hand-rolls an `Authorization` header, or calls a builder it never imported (an unresolved call is a runtime `ReferenceError` that the build does not catch) |
-| `tools/app-shell/test/no-raw-fetch.test.js` | a source file calls `fetch` directly |
+| `tools/app-shell/test/no-raw-fetch.test.js` | a production file in `tools/app-shell/src` or `artifacts/*/custom` calls `fetch` directly |
 
 Both blank out comments before matching, so prose that merely names a builder or spells out a
 header is not a hit.

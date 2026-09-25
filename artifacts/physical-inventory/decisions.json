@@ -312,7 +312,7 @@
       "type": "process",
       "entity": "inventory",
       "decision": "Keep",
-      "description": "Post/Unpost accounting — exposed via menuActions post (visible when processed=Y and not yet posted) and unpost (visible when posted=Y) actions, plus the row-hover kebab (Post only) and the grid bulk-select toolbar (Post and Unpost). ETP-5360."
+      "description": "Post/Unpost accounting — exposed via menuActions post (visible when processed=Y and not yet posted) and unpost (visible when posted=Y) actions, plus the row-hover kebab and the grid bulk-select toolbar (both Post and Unpost). ETP-5360."
     }
   },
   "discardPatterns": [

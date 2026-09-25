@@ -973,6 +973,19 @@ Without the adapter every failed row is silently counted as a success and the
 toast reports "N ok, 0 failed" while nothing happened. If you add a third
 `actionMode`, normalise its error contract the same way.
 
+In `'neoAction'` mode each action object returned by `buildActions` may also carry
+two optional keys:
+
+| Key | Effect |
+|---|---|
+| `neoActionName` (ETP-5414) | Wire action name used in the URL instead of `value`. Lets `value` stay the user's intent (what `rowFilter` receives) while the request hits the real AD button, e.g. `{ value: 'confirm', neoActionName: 'processNow' }`. |
+| `neoActionBody` (ETP-5445) | Plain object sent as the JSON request body, passed to `useNeoAction.execute(recordId, actionName, requestBody)`. Needed when the action is an AD process whose mandatory parameters are validated at the request root — without it NEO answers "Missing mandatory parameter". Absent → the body stays the literal `'{}'`, so every existing caller is byte-identical. Ignored in `'documentAction'` mode. |
+
+First user of `neoActionBody`: Internal Consumption's bulk **Confirmar**
+(`tools/app-shell/src/windows/custom/internal-consumption/index.jsx`), which sends
+`{ fieldValues: { processNow: 'CO' }, action: 'CO' }` to `processNow` — the exact
+body the form's draftMode Confirm sends.
+
 Pair it with `rowFilter` when a selection can legitimately mix states: returning
 a string from `rowFilter(row, action)` pre-blocks that row with that message
 (shown in the failure list) instead of sending a request the backend will reject

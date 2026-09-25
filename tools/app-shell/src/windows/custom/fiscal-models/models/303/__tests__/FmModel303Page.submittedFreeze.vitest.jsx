@@ -4,8 +4,11 @@
 //
 // These tests pin FmModel303Page's mount-time auto-compute effect's isSubmitted guard, mirroring
 // FmModel349Page.submittedFreeze.vitest.jsx exactly: once a declaration is in a submitted-family
-// status, opening its detail page must NEVER issue a live `computeBoxes303()` call (=
-// `GET /fiscal303/boxes`, which always recomputes from whatever invoices exist RIGHT NOW).
+// status, opening its detail page computes AT MOST ONCE per browser session. A warm session cache
+// (`fiscal_ac_v3_<id>`, shared with FmListPage's submitted-family bucket) is applied with zero
+// `computeBoxes303()` calls; a cold cache (new tab, reload, another browser) triggers exactly one
+// compute (`GET /fiscal303/boxes`, allowed server-side for submitted declarations since the
+// ETP-5438 follow-up), whose result is shown and written back to the same cache entry.
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -91,28 +94,87 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-describe('FmModel303Page — mount-time auto-compute is frozen once submitted (ETP-5438)', () => {
-  it('does NOT call computeBoxes303 on mount for a submitted declaration with no precomputed data', async () => {
-    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel303Page decl={makeDecl({ status: 'submitted' })} {...defaultProps} />);
+describe('FmModel303Page — mount-time auto-compute runs at most once per session once submitted (ETP-5438)', () => {
+  const cacheKeyFor = (declId) => `fiscal_ac_v3_${declId}`;
+  const serverPayload = {
+    boxes: { 27: 1309.98, 45: 36789.06, 46: -35479.08, 71: -35479.08 },
+    summary: { accrued: 1309.98, deductible: 36789.06, result: -35479.08 },
+    sources: [],
+  };
 
+  it.each(['submitted', 'submitted_ack', 'submitted_ext'])(
+    'cold cache + %s: computes exactly once (no mock fallback), shows it and writes the session cache',
+    async (status) => {
+      const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+      computeBoxes303.mockResolvedValueOnce(serverPayload);
+      const decl = makeDecl({ status });
+      const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+      await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(decl.id))).not.toBeNull());
+      expect(computeBoxes303).toHaveBeenCalledTimes(1);
+      expect(computeBoxes303).toHaveBeenCalledWith(
+        expect.objectContaining({ id: decl.id }),
+        expect.objectContaining({ noMockFallback: true }),
+      );
+      const cached = JSON.parse(sessionStorage.getItem(cacheKeyFor(decl.id)));
+      expect(cached.result).toEqual(serverPayload);
+      expect(typeof cached.computedAt).toBe('number');
+      await waitFor(() => {
+        const values = [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+        expect(values).toContain('1309.98');
+      });
+    },
+  );
+
+  it('cold cache + submitted: a failed compute caches nothing and is not retried', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    computeBoxes303.mockResolvedValueOnce(null);
+    const decl = makeDecl({ status: 'submitted' });
+    render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+    await waitFor(() => expect(computeBoxes303).toHaveBeenCalledTimes(1));
     await new Promise(r => setTimeout(r, 0));
-    expect(computeBoxes303).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(cacheKeyFor(decl.id))).toBeNull();
+    expect(computeBoxes303).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT call computeBoxes303 on mount for a submitted_ack declaration with no precomputed data', async () => {
+  it('cold cache + submitted: a late response for a previous decl.id is cached under its own id but never painted', async () => {
     const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel303Page decl={makeDecl({ status: 'submitted_ack' })} {...defaultProps} />);
+    let resolveFirst;
+    computeBoxes303
+      .mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }))
+      .mockResolvedValueOnce({
+        boxes: { 27: 222.22 }, summary: { accrued: 222.22, deductible: 0, result: 0 }, sources: [],
+      });
+    const first = makeDecl({ id: 'decl-303-first', status: 'submitted' });
+    const second = makeDecl({ id: 'decl-303-second', status: 'submitted' });
+    const { container, rerender } = render(<FmModel303Page decl={first} {...defaultProps} />);
+    await waitFor(() => expect(computeBoxes303).toHaveBeenCalledTimes(1));
 
+    rerender(<FmModel303Page decl={second} {...defaultProps} />);
+    await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(second.id))).not.toBeNull());
+    resolveFirst(serverPayload);
+    await waitFor(() => expect(sessionStorage.getItem(cacheKeyFor(first.id))).not.toBeNull());
     await new Promise(r => setTimeout(r, 0));
-    expect(computeBoxes303).not.toHaveBeenCalled();
+
+    const values = [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+    expect(values).toContain('222.22');
+    expect(values).not.toContain('1309.98');
+    expect(JSON.parse(sessionStorage.getItem(cacheKeyFor(first.id))).result).toEqual(serverPayload);
   });
 
-  it('does NOT call computeBoxes303 on mount for a submitted_ext declaration with no precomputed data', async () => {
+  it('warm cache + submitted: applies the cached payload with ZERO compute calls', async () => {
     const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
-    render(<FmModel303Page decl={makeDecl({ status: 'submitted_ext' })} {...defaultProps} />);
+    const decl = makeDecl({ status: 'submitted' });
+    sessionStorage.setItem(cacheKeyFor(decl.id), JSON.stringify({
+      result: serverPayload, computedAt: Date.now(),
+    }));
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
 
-    await new Promise(r => setTimeout(r, 0));
+    await waitFor(() => {
+      const values = [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+      expect(values).toContain('1309.98');
+    });
     expect(computeBoxes303).not.toHaveBeenCalled();
   });
 
@@ -141,5 +203,67 @@ describe('FmModel303Page — mount-time auto-compute is frozen once submitted (E
 
     await new Promise(r => setTimeout(r, 0));
     expect(computeBoxes303).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5438 (option 1) — a declaration presented once the backend persists a submission snapshot
+// carries it as `decl.submittedSnapshot`: the page renders it directly, with no compute call and
+// no sessionStorage dependency. Legacy submitted declarations (no snapshot) keep the
+// once-per-session path pinned above.
+describe('FmModel303Page — submitted declaration with a persisted submission snapshot (ETP-5438)', () => {
+  const cacheKeyFor = (declId) => `fiscal_ac_v3_${declId}`;
+  const snapshot = {
+    boxes: { 27: 500, 29: 100, 45: 100, 46: 400, 71: 400 },
+    summary: { accrued: 500, deductible: 100, result: 400 },
+    sources: [],
+  };
+  const kpiValues = (container) =>
+    [...container.querySelectorAll('.test-kpi303-value')].map(n => n.textContent);
+
+  it.each(['submitted', 'submitted_ack', 'submitted_ext'])(
+    '%s + snapshot: renders the snapshot with ZERO compute calls and never touches the session cache',
+    async (status) => {
+      const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+      const decl = makeDecl({ status, submittedSnapshot: snapshot });
+      const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+      await waitFor(() => expect(kpiValues(container)).toContain('500'));
+      await new Promise(r => setTimeout(r, 0));
+      expect(computeBoxes303).not.toHaveBeenCalled();
+      expect(sessionStorage.getItem(cacheKeyFor(decl.id))).toBeNull();
+    },
+  );
+
+  it('snapshot wins over a stale session cache entry for the same declaration', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    const decl = makeDecl({ status: 'submitted', submittedSnapshot: snapshot });
+    sessionStorage.setItem(cacheKeyFor(decl.id), JSON.stringify({
+      result: { boxes: { 27: 999 }, summary: { accrued: 999, deductible: 0, result: 999 }, sources: [] },
+      computedAt: Date.now(),
+    }));
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+    await waitFor(() => expect(kpiValues(container)).toContain('500'));
+    expect(kpiValues(container)).not.toContain('999');
+    expect(computeBoxes303).not.toHaveBeenCalled();
+  });
+
+  it('merges the saved manualOverrides and re-derives box 71 exactly like a live compute', async () => {
+    const decl = makeDecl({
+      status: 'submitted',
+      submittedSnapshot: snapshot,
+      manualData: { identification: { tipo_declaracion: 'I' }, manualOverrides: { 70: 50 } },
+    });
+    const { container } = render(<FmModel303Page decl={decl} {...defaultProps} />);
+
+    // box 71 = box 69 (400) - box 70 (50) — not the raw snapshot summary.result (400).
+    await waitFor(() => expect(kpiValues(container)).toContain('350'));
+  });
+
+  it('a draft never reads a snapshot: it still computes live', async () => {
+    const { computeBoxes303 } = await import('../../../fiscalModelsUtils.js');
+    render(<FmModel303Page decl={makeDecl({ status: 'draft', submittedSnapshot: snapshot })} {...defaultProps} />);
+
+    await waitFor(() => expect(computeBoxes303).toHaveBeenCalledTimes(1));
   });
 });

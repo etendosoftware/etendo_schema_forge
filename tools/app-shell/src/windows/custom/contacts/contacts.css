@@ -7,9 +7,9 @@
   background-color: hsl(var(--card));
 }
 
-/* Hover: light gray background, border stays hsl(var(--border-control)) */
+/* Hover: --field-hover background, border stays hsl(var(--border-control)) */
 .contacts-rows input.rounded-lg:not(:disabled):not(:focus-visible):hover {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--field-hover, 210 25% 96.9%));
 }
 
 /* ETP-4749: inputs wrapped by PrefixedInput (e.g. "Página web") intentionally drop
@@ -22,20 +22,20 @@
 }
 
 .contacts-rows input.prefixed-input-control:not(:disabled):not(:focus-visible):hover {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--field-hover, 210 25% 96.9%));
 }
 
-/* Focus: black double-border (1px border + 1px box-shadow inset = 2px visual weight) */
+/* Focus: 2px --focus-ring ring — same look as the selector/chip fields (focus-within:ring-2) */
 .contacts-rows input.rounded-lg:focus-visible {
   background-color: hsl(var(--card));
-  border-color: hsl(var(--foreground));
-  box-shadow: 0px 0px 0px 1px hsl(var(--foreground));
+  box-shadow: 0px 0px 0px 2px hsl(var(--focus-ring));
   outline: none;
 }
 
 /* Disabled: gray background, no drop shadow, full opacity (overrides Tailwind's disabled:opacity-50) */
 .contacts-rows input.rounded-lg:disabled {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--field-hover, 210 25% 96.9%));
+  border-color: hsl(var(--field-disabled-border, 222 12.2% 83.9%));
   box-shadow: none;
   opacity: 1;
 }
@@ -63,14 +63,14 @@
 }
 
 .contacts-rows button[role="combobox"].rounded-lg:focus {
-  border-color: hsl(var(--foreground));
-  box-shadow: 0px 0px 0px 1px hsl(var(--foreground));
+  box-shadow: 0px 0px 0px 2px hsl(var(--focus-ring));
   outline: none;
 }
 
 .contacts-rows button[role="combobox"].rounded-lg:disabled,
 .contacts-rows button[role="combobox"].rounded-lg[data-disabled] {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--field-hover, 210 25% 96.9%));
+  border-color: hsl(var(--field-disabled-border, 222 12.2% 83.9%));
   box-shadow: none;
   opacity: 1;
 }
@@ -86,13 +86,13 @@
 }
 
 .contacts-rows select.rounded-lg:focus-visible {
-  border-color: hsl(var(--foreground));
-  box-shadow: 0px 0px 0px 1px hsl(var(--foreground));
+  box-shadow: 0px 0px 0px 2px hsl(var(--focus-ring));
   outline: none;
 }
 
 .contacts-rows select.rounded-lg:disabled {
-  background-color: hsl(var(--muted));
+  background-color: hsl(var(--field-hover, 210 25% 96.9%));
+  border-color: hsl(var(--field-disabled-border, 222 12.2% 83.9%));
   box-shadow: none;
   opacity: 1;
 }
