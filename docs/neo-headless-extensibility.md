@@ -383,6 +383,78 @@ removes the whole spec from the agentic catalog with nothing in the UI to show i
 regardless keeps the catalog honest if the entity ever loses its tab. Full criteria:
 [`agentic-validation/agentic-write-exposure-criteria.md`](agentic-validation/agentic-write-exposure-criteria.md) §6.
 
+### 2.7.1 `declaredActions()`: declare your named actions (ETP-5447)
+
+`servesActions()` says *that* a handler answers ACTION requests. `declaredActions(spec, entity)`
+says *which* named actions it answers — the `/{spec}/{entity}/{id}/action/{name}` routes that are
+not AD buttons, e.g. `createDraftInvoice` / `listInvoices` in `CreateDraftInvoiceHandler`, or the
+bank-statement actions of `FinancialAccountHandler`.
+
+```java
+// Illustrative: a handler that answers GET previewTotals and POST addLines on its header entity.
+@Override
+public List<NeoActionContract> declaredActions(String specName, String entityName) {
+  if (!"header".equals(entityName)) {
+    return List.of();
+  }
+  return List.of(
+      NeoActionContract.builder("previewTotals")
+          .description("Totals the document would have after completion; changes nothing.")
+          .method(NeoActionContract.METHOD_GET)
+          .readOnly(true)
+          .build(),
+      NeoActionContract.builder("addLines")
+          .description("Append lines to the document; returns the created line ids.")
+          .param(NeoReportParam.required("lines", NeoReportParam.TYPE_ARRAY,
+              "The lines to add; each item is {product, quantity, unitPrice}."))
+          .build());
+}
+```
+
+**`NeoActionContract`** (`schemaforge/util`, immutable): `builder(name)` →
+`description(String)`, `method("GET"|"POST")` (default `POST`), `readOnly(boolean)` (default
+`false`), `param(NeoReportParam)` (repeatable, order kept), `build()` (rejects a blank name or
+any method other than `GET`/`POST`). Parameters reuse `NeoReportParam` — the same vocabulary as
+report parameters (§ `reportParameters()`), plus `TYPE_ARRAY` (rendered as an array of objects)
+and `TYPE_OBJECT` (rendered as a plain object). Describe the item/object shape in the
+description: the schema does not type it deeper.
+
+**A handler that fans out to delegates** (the order / shipment / invoice header handlers) must
+combine their declarations with `NeoHeaderActionRouter.declaredActions(spec, entity,
+delegate1, delegate2, …)`: concatenated in delegate order, de-duplicated by name, first delegate
+wins — the same precedence `NeoHeaderActionRouter.dispatch` applies at run time.
+
+**What reads it — the MCP only.** The REST path keeps dispatching on the method the client sent.
+
+- `neo_schema({view:"actions"})` appends one entry per declared action after the AD buttons:
+
+  ```json
+  {"name": "listInvoices", "action": "listInvoices", "source": "handler",
+   "method": "GET", "readOnly": true, "description": "...",
+   "parameters": {"type": "object", "properties": {...}, "required": [...]},
+   "invokeVia": "neo_action"}
+  ```
+
+  Declared entries count in `actionCount` and `invokableCount`. If a declared name equals an AD
+  button's `action`/`name`, the button entry is dropped and the declared one carries
+  `"shadows": "button"`. The handler lookup is fail-open: a CDI failure or a throwing declaration
+  costs only the handler entries, never the schema call.
+- `neo_action` looks the action name up in the declaration first. When found it (1) rejects a
+  missing required parameter with a 422 (`status`/`error:"validation_error"`/`detail`/
+  `missingParameters`/`hint`) **without calling the handler**, (2) runs the pre-hook with the
+  **declared** method — on `GET` the `parameters` object is both the request body and, flattened
+  to strings, the query-param map — and returns the handler's own payload as the result, and
+  (3) never falls through to the AD button path: a pre-hook that returns `null` is answered with
+  a 500 `Declared action '<x>' was not handled by its handler`. An undeclared name takes the
+  unchanged button path.
+
+**The rule — declare only what you answer.** Declare an action only if `handle()` demonstrably
+answers it for that spec/entity, with the method it compares and the parameters it reads. A
+declared-but-ignored action is the same silent lie as a declared-but-ignored report parameter: the
+catalog promises something that then ends in the 500 above. Before this existed the named actions
+were invisible in the catalog and every `GET`-only one answered `404 Action not found` over MCP,
+because `neo_action` hard-coded `POST` (IMP-49).
+
 ---
 
 ## 2.8 UsageResourceCounter: counting a billable resource (ETP-5050)
