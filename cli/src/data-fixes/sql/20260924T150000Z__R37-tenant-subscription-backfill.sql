@@ -284,9 +284,9 @@ WHERE c.ad_client_id = :client_id
 -- instead of raising and failing the tenant on a cosmetic value.
 --
 -- last_event_at comes from ETGO_SubscriptionEventAt, the webhook ordering watermark, with the same
--- shape check (ETP-5047: the watermark is a column of the row, and the row route no longer reads
--- the preference -- without the carry-over the first event after the backfill could not be
--- recognised as stale).
+-- shape check (ETP-5047: the watermark is a column of the row; the row route reads the
+-- preference only as a read-only fallback while last_event_at is NULL, so carrying it over here
+-- lets the row stand on its own column from the first event on).
 --
 -- A tenant R37 reached BEFORE ETP-5047 (this file then wrote the anchor into current_period_end
 -- and had no grace_anchor to write) is still read correctly: SubscriptionService#graceAnchorOf
@@ -305,8 +305,10 @@ WHERE c.ad_client_id = :client_id
 -- Both preferences are scoped by AD_CLIENT_ID, NOT by VISIBLEAT_CLIENT_ID: develop's
 -- TenantEnvironmentLifecycleService#setPreferenceValue creates them with setClient(tenant) and
 -- reads them back through Preference.PROPERTY_CLIENT, unlike the ETGO_TenantPlan marker above.
--- No preference is removed here: the status/due-at/event-at trio is simply no longer read once
--- the row exists (the row route reads status, grace_anchor and last_event_at from the row).
+-- No preference is removed here. Once the row exists, ETGO_SubscriptionStatus and
+-- ETGO_SubscriptionDueAt are no longer read (the row route reads status and grace_anchor from the
+-- row); ETGO_SubscriptionEventAt is still read, read-only, as the watermark fallback while the
+-- row's last_event_at is NULL.
 INSERT INTO etgo_subscription (
   etgo_subscription_id, ad_client_id, ad_org_id, isactive,
   created, createdby, updated, updatedby,

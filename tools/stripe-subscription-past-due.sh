@@ -511,7 +511,8 @@ print_lifecycle_projection() {
         echo "  CURRENT_PERIOD_START/END : ${row_period_start:-<empty>} .. ${row_period_end:-<empty>}"
         echo "  LAST_EVENT_AT            : ${row_event_at:-<empty>} (ordering watermark, ETP-5047)"
       done
-    echo "  (the ETGO_Subscription* lifecycle preferences are not read once a row exists)"
+    echo "  (shows the open row only; ETGO_SubscriptionStatus / ETGO_SubscriptionDueAt are not read once a row"
+    echo "   exists, but ETGO_SubscriptionEventAt is still read, read-only, while LAST_EVENT_AT is empty)"
   else
     echo "Stored lifecycle projection (AD_Preference, client $CREATED_CLIENT_ID -- no open subscription row):"
     echo "  ETGO_SubscriptionStatus  : $(get_preference_value ETGO_SubscriptionStatus)"
