@@ -21942,6 +21942,8 @@
     "fm.action.create": "Crear",
     "fm.action.save": "Guardar",
     "fm.action.save_error": "No se pudo guardar. Inténtalo de nuevo.",
+    "fm.action.present_error": "No se pudo presentar la declaración. Inténtalo de nuevo.",
+    "fm.snapshot.invoice_detail_not_kept": "El detalle por factura no se conserva en las declaraciones presentadas.",
     "fm.action.save_draft": "Guardar borrador",
     "fm.action.compare": "Comparar",
     "fm.action.recalc": "Recalcular",

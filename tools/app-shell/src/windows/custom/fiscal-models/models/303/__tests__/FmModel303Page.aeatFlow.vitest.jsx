@@ -125,17 +125,22 @@ describe('FmModel303Page — AEAT flow wiring (ETP-4456)', () => {
     expect(screen.queryByTestId('present-confirm-aeat')).not.toBeInTheDocument();
   });
 
-  it('propagates AeatSubmitFlow onSuccess through the normal status-change path', async () => {
+  // ETP-5438 — the filing already persisted submitted_ack, submissionMethod and the submission
+  // snapshot server-side (Fiscal303SubmissionSupport.persistSuccessfulSubmission). Routing it
+  // through onStatusChange would PUT a submitted -> submitted transition, which
+  // rejectRepresentation answers with 409 — so it goes to onSubmittedRemotely instead.
+  it('propagates AeatSubmitFlow onSuccess to onSubmittedRemotely, never to onStatusChange', async () => {
     const onStatusChange = vi.fn();
-    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange} />);
+    const onSubmittedRemotely = vi.fn();
+    render(<FmModel303Page decl={BASE_DECL} onBack={vi.fn()} onStatusChange={onStatusChange}
+      onSubmittedRemotely={onSubmittedRemotely} />);
 
     const btns = Array.from(document.querySelectorAll('button'));
     fireEvent.click(btns.find(b => b.textContent.includes('fm.action.submit')));
     fireEvent.click(screen.getByTestId('present-confirm-aeat'));
     fireEvent.click(await screen.findByTestId('aeat-flow-succeed'));
 
-    // AEAT telematic success never sends a submissionMethod from the frontend —
-    // it is set server-side by Fiscal303SubmissionSupport.persistSuccessfulSubmission.
-    expect(onStatusChange).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack', undefined);
+    expect(onSubmittedRemotely).toHaveBeenCalledWith('303-2026-T2', 'submitted_ack');
+    expect(onStatusChange).not.toHaveBeenCalled();
   });
 });
