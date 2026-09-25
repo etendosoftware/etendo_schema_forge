@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
+import { t } from '../../helpers/i18n.js';
 
 /**
  * Multi-role user assignment — smoke (mocked), ETP-4906.
@@ -83,13 +84,15 @@ const MENU_TREE = {
  * Playwright matches routes in reverse registration order.
  *
  * @param {import('@playwright/test').Page} page
- * @param {{ savedRoleIds?: string[] }} [opts] - the role ids `SFUserRoleAssignments`
- *   single-user mode returns on load, simulating whatever was persisted by a prior
- *   (real) save.
+ * @param {{ savedRoleIds?: string[], assignHoldMs?: number, assignFailCode?: string|null }} [opts]
+ *   `savedRoleIds`: the role ids `SFUserRoleAssignments` single-user mode returns on load,
+ *   simulating whatever was persisted by a prior (real) save. ETP-5278: `assignHoldMs` holds
+ *   each `SFAssignUserRoles` response open that long (a real one takes 11–21 s in
+ *   production); `assignFailCode` makes it answer `success:false` with that `code`.
  * @returns {{ assignCalls: {url: string, templateRoleIds: string[]}[], counts: Record<string, number> }}
  *   Mutable trackers the test body reads after interacting with the page.
  */
-async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
+async function installUserDetailMocks(page, { savedRoleIds = [], assignHoldMs = 0, assignFailCode = null } = {}) {
   const assignCalls = [];
   const counts = { rolesoverview: 0, systemroletemplates: 0, userroleassignments: 0, listmenu: 0, assignuserroles: 0 };
 
@@ -137,11 +140,26 @@ async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
     });
   });
 
-  await page.route('**/sws/neo/assignuserroles**', (route) => {
+  await page.route('**/sws/neo/assignuserroles**', async (route) => {
     const url = route.request().url();
     const params = new URL(url).searchParams;
     const templateRoleIds = (params.get('TemplateRoleIds') || '').split(',').filter(Boolean);
-    assignCalls.push({ url, templateRoleIds });
+    // ETP-5278 — appended on ARRIVAL with `finishedAt: null`, so `openOnArrival` records how
+    // many earlier writes were still unanswered (docs/e2e-testing-guide.md, "openOnArrival").
+    const entry = {
+      url, templateRoleIds, finishedAt: null,
+      openOnArrival: assignCalls.filter((c) => c.finishedAt == null).length,
+    };
+    assignCalls.push(entry);
+    if (assignHoldMs > 0) await new Promise((resolve) => { setTimeout(resolve, assignHoldMs); });
+    entry.finishedAt = Date.now();
+    if (assignFailCode) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: false, message: 'raw backend text', code: assignFailCode }),
+      });
+    }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -347,6 +365,67 @@ test.describe('User role assignment — detail form (existing user)', () => {
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-finance')).toBeVisible();
     await expect(page.getByTestId('AssignTemplateRolesControl__chip-role-sales')).toBeVisible();
+  });
+});
+
+// ETP-5278 (QA NO PASA, CP-6/CP-7) — while the role write runs, Guardar must stay disabled (a
+// second click used to start an overlapping write for the same user → backend HTTP 500), and the
+// click must end in ONE truthful toast: "Registro guardado" only after the roles were saved, or
+// only the "user saved, roles not" error — never success followed by error.
+test.describe('User role assignment — save serialization + single toast (ETP-5278)', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+  });
+
+  async function changeRolesAndSave(page) {
+    await page.goto(`/user/${USER_ROW.id}`);
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
+    await page.getByTestId('AssignTemplateRolesControl__toggle-role-sales').click();
+    await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
+    await expect(page.getByTestId('action-save')).toBeEnabled();
+    await page.getByTestId('action-save').click();
+  }
+
+  test('Guardar stays disabled while the role write is in flight, and the saved toast only appears after it', async ({ page }) => {
+    const { assignCalls } = await installUserDetailMocks(page, { savedRoleIds: ['role-finance'], assignHoldMs: 2_500 });
+
+    await changeRolesAndSave(page);
+    await expect.poll(() => assignCalls.length, { timeout: 5_000 }).toBe(1);
+
+    // Write still open: Save is busy and no success toast has been shown yet. A ONE-SHOT count,
+    // not `toHaveCount(0)`: that assertion retries, so it would just wait out a premature toast's
+    // ~4 s lifetime and pass against the exact bug.
+    await expect(page.getByTestId('action-save')).toBeDisabled();
+    expect(await page.getByText(t('recordSaved')).count()).toBe(0);
+    // A click on the disabled button must not start a second, overlapping write.
+    await page.getByTestId('action-save').click({ force: true });
+
+    await expect(page.getByText(t('recordSaved'))).toBeVisible({ timeout: 10_000 });
+    expect(assignCalls).toHaveLength(1);
+    expect(assignCalls[0].openOnArrival).toBe(0);
+    await expect(page.getByTestId('action-save')).toBeDisabled();
+  });
+
+  test('a CONCURRENT_MODIFICATION failure shows only the translated error toast, never "Registro guardado"', async ({ page }) => {
+    const { assignCalls } = await installUserDetailMocks(page, {
+      savedRoleIds: ['role-finance'], assignFailCode: 'CONCURRENT_MODIFICATION', assignHoldMs: 2_000,
+    });
+
+    await changeRolesAndSave(page);
+    await expect.poll(() => assignCalls.length, { timeout: 5_000 }).toBe(1);
+    // While the failing write is still open, no "saved" toast may have been shown. Checked here,
+    // not only at the end: the error toast reuses the record-save toast id, so a premature
+    // success toast would be REPLACED by the error and be invisible by the time it arrives.
+    // One-shot count (see the test above for why not `toHaveCount`).
+    expect(await page.getByText(t('recordSaved')).count()).toBe(0);
+
+    const detail = t('roleAssignmentConcurrentModification');
+    await expect(page.getByText(t('roleAssignmentSaveFailedAfterUserSaved', { detail }))).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(t('recordSaved'))).toHaveCount(0);
+    await expect(page.getByText('raw backend text')).toHaveCount(0);
+    // The selection is still unsaved, so the user can retry.
+    await expect(page.getByTestId('action-save')).toBeEnabled();
   });
 });
 

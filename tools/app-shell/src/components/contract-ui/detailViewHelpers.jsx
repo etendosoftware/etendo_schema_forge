@@ -1017,6 +1017,10 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
     children: hook.children,
+    // ETP-5278 — lets an action that writes the same record stay disabled while the record's
+    // own save (PATCH) is in flight, e.g. the Users window's promote/demote, which would
+    // otherwise be clickable in the gap before that window's follow-up role write starts.
+    isSaving: !!hook.isSaving,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
     // action (e.g. resend-invitation, admin promote/demote) the same way a

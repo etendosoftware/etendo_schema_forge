@@ -17590,6 +17590,7 @@
     "saveUserFirstForRoles": "Save the user first to assign roles",
     "adminRoleNoCompositionMessage": "This user already has the Admin role, which grants full access. Additional roles can't be composed for it.",
     "roleAssignmentSaveFailed": "Couldn't save the assigned roles",
+    "roleAssignmentConcurrentModification": "another change to this user's roles was being saved at the same time. Reload and try again",
     "roleAssignmentSaveFailedAfterUserSaved": "The user was saved, but the roles couldn't be updated: {detail}",
     "removeRoleAria": "Remove role",
     "newUser": "New user",
