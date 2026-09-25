@@ -13,6 +13,13 @@
 // mocked (unlike AeatSubmitFlow.vitest.jsx, which lets it fail-open via the
 // try/catch around the missing-provider case) so `selectedOrg.id` resolves and
 // the guard actually has a chance to run.
+//
+// ETP-5432 pt.10 follow-up — the guard's feedback is now `showIaeActivityReminder`
+// (a toast), never the old fixed inline `<Banner tone="danger">` + CTA. Mocked
+// (like FmModel303Page.missingIaeGuard.vitest.jsx / FmCatalogPage.iaeReminder.vitest.jsx
+// already do) so these tests assert the call, not sonner's actual DOM output — the
+// toast's own content/CTA-click-navigates behavior is unit-tested in
+// fiscalModelsUtils.iae.vitest.js.
 
 const stableApiFetch = vi.fn();
 const navigateMock = vi.fn();
@@ -22,6 +29,10 @@ vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => stableApiFetch }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
+vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, showIaeActivityReminder: vi.fn() };
+});
 vi.mock('lucide-react', () => ({
   Loader2: () => null,
   TriangleAlert: () => null,
@@ -33,6 +44,7 @@ vi.mock('lucide-react', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AeatSubmitFlow from '../AeatSubmitFlow.jsx';
+import { showIaeActivityReminder } from '../../../fiscalModelsUtils.js';
 
 const LAST_PERIOD_DECL = { id: 'decl-t4', year: 2026, period: 'T4', model: '303', result: { kind: 'N' } };
 const NOT_LAST_PERIOD_DECL = { id: 'decl-t2', year: 2026, period: 'T2', model: '303', result: { kind: 'N' } };
@@ -94,18 +106,23 @@ describe('AeatSubmitFlow — missing default IAE activity guard (ETP-4975)', () 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(submitCalls()).toHaveLength(1));
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 
-  it('last period + NO default row: blocks BEFORE calling /fiscal303/submit and shows the banner + CTA', async () => {
+  it('last period + NO default row: blocks BEFORE calling /fiscal303/submit and fires the toast, not a banner', async () => {
     mockApiFetch({ iaeRows: [] });
     renderFlow();
 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
-    await waitFor(() => expect(screen.getByText('fm.aeat.error.missingDefaultIae')).toBeInTheDocument());
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalledTimes(1));
+    expect(showIaeActivityReminder).toHaveBeenCalledWith(expect.any(Function), navigateMock);
     expect(submitCalls()).toHaveLength(0);
-    expect(screen.getByText('fm.aeat.action.go_to_organization')).toBeInTheDocument();
+    // ETP-5432 pt.10 follow-up — no fixed inline banner/CTA for this case anymore. The
+    // shared `connError` banner (IBAN/NRC/connection errors) is untouched and still
+    // exists — this just asserts the missing-IAE case no longer feeds it.
+    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(screen.queryByText('fm.aeat.action.go_to_organization')).not.toBeInTheDocument();
   });
 
   it('last period + a default row WITHOUT a code: still counts as missing and blocks', async () => {
@@ -114,7 +131,7 @@ describe('AeatSubmitFlow — missing default IAE activity guard (ETP-4975)', () 
 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
-    await waitFor(() => expect(screen.getByText('fm.aeat.error.missingDefaultIae')).toBeInTheDocument());
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalledTimes(1));
     expect(submitCalls()).toHaveLength(0);
   });
 
@@ -126,7 +143,7 @@ describe('AeatSubmitFlow — missing default IAE activity guard (ETP-4975)', () 
 
     await waitFor(() => expect(submitCalls()).toHaveLength(1));
     expect(iaeCalls()).toHaveLength(0);
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 
   it('fails OPEN when the actividadesDelIae fetch itself errors (network failure): submission still proceeds', async () => {
@@ -136,17 +153,6 @@ describe('AeatSubmitFlow — missing default IAE activity guard (ETP-4975)', () 
     fireEvent.click(screen.getByText('fm.aeat.action.submit'));
 
     await waitFor(() => expect(submitCalls()).toHaveLength(1));
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
-  });
-
-  it('clicking the "Go to Organization" CTA navigates to /organization', async () => {
-    mockApiFetch({ iaeRows: [] });
-    renderFlow();
-
-    fireEvent.click(screen.getByText('fm.aeat.action.submit'));
-    await waitFor(() => expect(screen.getByText('fm.aeat.action.go_to_organization')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('fm.aeat.action.go_to_organization'));
-    expect(navigateMock).toHaveBeenCalledWith('/organization');
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 });

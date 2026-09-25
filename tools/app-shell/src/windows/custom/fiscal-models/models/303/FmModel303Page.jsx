@@ -487,35 +487,24 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
   const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
-  const [genError,    setGenError]    = useState(null);
-  // The missing-default-IAE-activity pre-flight guard (ETP-4975) is now the ONLY path that
-  // still writes `genError` and renders the inline banner: every other generation failure
-  // (IBAN required, generic backend error) was moved to a toast in ETP-5027. This flag stays
-  // because the banner carries a "Go to Organization" CTA that is specific to that guard —
-  // mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
-  const [missingIaeGuard, setMissingIaeGuard] = useState(false);
 
-  // ETP-5432 pt.10 — proactive version of the same ETP-4975 guard above. Before this,
-  // the missing-default-IAE-activity check only ever ran REACTIVELY: after clicking
-  // "Generar fichero 303" (this page) or after diving into "Registrar/Presentar" ->
-  // "Presentación telemática AEAT" -> "Presentar" (AeatSubmitFlow.jsx's own modal). A
-  // user only discovered the gap deep inside one of those flows — for the AEAT path,
-  // inside an already-open blocking modal — instead of upfront on the page. Runs once
-  // per last-period declaration, mirrors `handleGenerate`'s own guard exactly (same
-  // endpoint, same fail-OPEN-on-error semantics: a flaky pre-check must never
-  // manufacture a false block). IMPORTANT — this is purely a heads-up, exactly like
-  // the ETP-5187 reminder fired at activation/period-selection time: it must NEVER
-  // write `genError`/`missingIaeGuard` (that would surface it as the fixed inline
-  // banner below, which is reserved for the reactive hard block that actually runs
-  // right before "Generar"/"Presentar" hit the backend). A first attempt did exactly
-  // that (feeding the inline banner from this mount effect) and user feedback made
-  // clear that reads as a permanent page fixture, not a proactive nudge — so this
-  // reuses `showIaeActivityReminder`, the SAME floating-toast mechanism (sonner
-  // `toast.warning`, bottom-right, "Ir a Organización" CTA) already used by
-  // `FmCatalogPage.jsx` (activating Modelo 303) and `FmOverlays.jsx`'s `NewDeclModal`
-  // (selecting period T4/12), instead of building a second notification style. The
-  // actual hard block — `missingIaeGuard` gating `handleGenerate` below and the
-  // mirrored guard in `AeatSubmitFlow.jsx` — is untouched by this effect either way.
+  // ETP-5432 pt.10 follow-up — the missing-default-IAE-activity guard (ETP-4975) used to be
+  // the last remaining producer of a fixed inline banner (`genError`/`missingIaeGuard` state,
+  // rendered below the KPI cards) — every OTHER generation failure (IBAN required, generic
+  // backend error) was already moved to a toast in ETP-5027. User feedback made clear that
+  // banner reads as a permanent page fixture rather than a warning tied to a specific action,
+  // across all three surfaces it could appear from: on mount (this effect), on "Generar
+  // fichero 303" (`handleGenerate` below), and on "Registrar/Presentar" -> "Presentación
+  // telemática AEAT" -> "Presentar" (`AeatSubmitFlow.jsx`'s own mirrored guard, which had its
+  // own `<Banner tone="danger">`). All three now fire `showIaeActivityReminder` instead — the
+  // SAME floating-toast mechanism (sonner `toast.warning`, bottom-right, "Ir a Organización"
+  // CTA) already used by `FmCatalogPage.jsx` (activating Modelo 303) and `FmOverlays.jsx`'s
+  // `NewDeclModal` (selecting period T4/12) — never a fixed banner, from any trigger. Since
+  // missing-IAE was the ONLY thing that ever fed the inline-banner state, that state and its
+  // JSX were removed outright rather than left dead. The underlying HARD BLOCK — this effect
+  // never blocks anything by itself; `handleGenerate` below still returns before calling
+  // `generate303File`, and `AeatSubmitFlow.jsx`'s `handleSubmit` still returns before
+  // submitting — is unchanged by any of this; only the visual feedback moved to a toast.
   useEffect(() => {
     let cancelled = false;
     if (!isLastPeriodOfYear(decl?.period) || !selectedOrg?.id) return undefined;
@@ -676,8 +665,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
       );
       return;
     }
-    setGenError(null);
-    setMissingIaeGuard(false);
     setGenerating(true);
     // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
     // (see that file for the full rationale). "Generar fichero 303" hits the exact same
@@ -686,6 +673,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
     // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
     // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
     // any fetch/network error (never blocks a generation that might otherwise succeed).
+    // ETP-5432 pt.10 follow-up — feedback (`showIaeActivityReminder` toast, not the old
+    // fixed inline banner); the hard block itself (`return` before `generate303File`) is
+    // unchanged.
     if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
       try {
         const iaeRes = await apiFetch(
@@ -695,8 +685,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
         if (iaeRes.ok) {
           const iaeRows = (await iaeRes.json())?.response?.data ?? [];
           if (isMissingDefaultIaeActivity(iaeRows)) {
-            setMissingIaeGuard(true);
-            setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+            showIaeActivityReminder(t, navigate);
             setGenerating(false);
             return;
           }
@@ -1243,41 +1232,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onManualD
           badgeColor={resultColors.badgeColor}
           data-testid="KpiWidget__4f6c0d" />
       </div>
-      {/* ── Inline generate error ────────────────────────────────── */}
-      {genError && (
-        <div style={{
-          margin: '4px 20px 0',
-          padding: '8px 14px',
-          background: 'var(--status-destructive-bg)',
-          border: '1px solid hsl(var(--destructive) / 0.3)',
-          borderRadius: 8,
-          fontSize: 13,
-          color: 'hsl(var(--destructive))',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexWrap: 'wrap',
-        }}>
-          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
-          {genError}
-          {/* CTA for the missing-default-IAE-activity guard, which is the only remaining
-              producer of `genError` (all other generation failures surface as toasts since
-              ETP-5027). Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. No
-              positioning style — a plain adjacent sibling already flows immediately after
-              `{genError}` given this container's `display:flex; flexWrap:wrap`; the previous
-              `marginLeft: 'auto'` was what pushed it to the far right instead. */}
-          {missingIaeGuard && (
-            <button
-              type="button"
-              className="fm-link-btn fm-link-btn--bold"
-              onClick={() => navigate('/organization')}
-              data-testid="Landmark__gen303GoToOrganization"
-            >
-              {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
-            </button>
-          )}
-        </div>
-      )}
+      {/* ETP-5432 pt.10 follow-up — the fixed inline "generate error" banner that used to
+          render here (genError/missingIaeGuard state + "Ir a Organización" CTA) was removed:
+          missing-default-IAE-activity was its only producer, and that guard now fires
+          `showIaeActivityReminder` (a toast) instead, from all three trigger points (mount,
+          "Generar fichero 303", and AeatSubmitFlow's "Presentar") — see the mount-effect
+          comment above and `handleGenerate` below. */}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
         <Tabs

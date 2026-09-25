@@ -5,7 +5,7 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { Loader2, TriangleAlert, OctagonAlert, CircleCheck, Download, Landmark } from 'lucide-react';
-import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO } from '../../fiscalModelsUtils.js';
+import { formatAmount, formatPeriod, triggerBase64Download, applyIdentParams, applyBoxParams, isBankIbanRequired, withBox111NonZeroFlag, DECLARATION_TYPE_INGRESO, showIaeActivityReminder } from '../../fiscalModelsUtils.js';
 import { isLastPeriodOfYear } from './fm303Layouts.js';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 
@@ -233,10 +233,6 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   const [step, setStep] = useState('confirm'); // 'confirm' | 'result'
   const [submitting, setSubmitting] = useState(false);
   const [connError, setConnError] = useState(null);
-  // Distinguishes the missing-default-IAE-activity pre-flight guard from every
-  // other `connError` so only ITS banner gets the "Go to Organization" CTA
-  // (see the guard in handleSubmit below and its render further down).
-  const [missingIaeGuard, setMissingIaeGuard] = useState(false);
   const [response, setResponse] = useState(null);
 
   const [testMode, setTestMode] = useState(false);
@@ -260,15 +256,19 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
   async function handleSubmit() {
     setSubmitting(true);
     setConnError(null);
-    setMissingIaeGuard(false);
     try {
       // ETP-4975 pre-flight guard — see checkMissingIaeGuard's docstring for
       // the full rationale (fail-open semantics, why it only runs on the last
-      // period, etc.).
+      // period, etc.). ETP-5432 pt.10 follow-up — feedback is the same
+      // `showIaeActivityReminder` toast used everywhere else this check
+      // appears (page mount, "Generar fichero 303"), not the `connError`
+      // banner below: that banner is shared with IBAN/NRC/connection errors,
+      // but user feedback was specifically that THIS message must never be a
+      // fixed inline banner. The hard block (`return` before submitting) is
+      // unchanged.
       const iaeGuard = await checkMissingIaeGuard({ decl, selectedOrg, apiFetch, t });
       if (iaeGuard.blocked) {
-        setMissingIaeGuard(true);
-        setConnError(iaeGuard.message);
+        showIaeActivityReminder(t, navigate);
         setSubmitting(false);
         return;
       }
@@ -448,28 +448,16 @@ export default function AeatSubmitFlow({ decl, orgIdent, identChecks, liveBoxes,
 
               {connError && (
                 <div style={{ marginTop: 12 }}>
+                  {/* ETP-5432 pt.10 follow-up — this banner used to grow a "Go to
+                      Organization" CTA specifically for the missing-default-IAE-activity
+                      guard (`missingIaeGuard`). That guard no longer feeds `connError` at
+                      all (see handleSubmit) — it fires a toast instead — so `connError`
+                      here is only ever IBAN-required/NRC-required/connection-failure,
+                      none of which have a dedicated settings screen to link to. */}
                   <Banner
                     tone="danger"
                     icon={<OctagonAlert size={16} data-testid="OctagonAlert__aeatConn" />}
-                    /* CTA only for the missing-default-IAE-activity guard — every other
-                       connError (connection failure, IBAN required) has no dedicated
-                       settings screen to send the user to. Composed into `title` (not a
-                       separate `children` block) so it reads as the tail of the same
-                       sentence instead of a line of its own — this local `Banner` renders
-                       `title` and `children` as separate stacked divs. */
-                    title={missingIaeGuard ? (
-                      <>
-                        {connError}{' '}
-                        <button
-                          type="button"
-                          className="fm-link-btn fm-link-btn--bold"
-                          onClick={() => navigate('/organization')}
-                          data-testid="Landmark__aeatGoToOrganization"
-                        >
-                          {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
-                        </button>
-                      </>
-                    ) : connError}
+                    title={connError}
                     data-testid="Banner__aeatConnError" />
                 </div>
               )}

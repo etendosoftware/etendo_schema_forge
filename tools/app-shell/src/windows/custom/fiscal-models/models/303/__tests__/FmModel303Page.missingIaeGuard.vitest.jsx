@@ -6,6 +6,15 @@
 // 303 code, reused via reflection, throws an untranslated
 // IndexOutOfBoundsException on the last period of the fiscal year when the
 // organization has no default IAE activity with a code).
+//
+// ETP-5432 pt.10 follow-up — the guard's user-facing feedback is now
+// `showIaeActivityReminder` (a toast), never the old fixed inline banner, on
+// EVERY trigger this component fires it from: the page-mount proactive check
+// AND this file's "Generar fichero 303" click path. Mocked here (like
+// `FmCatalogPage.iaeReminder.vitest.jsx`/`FmOverlays.iaeReminder.vitest.jsx`
+// already do) so these tests assert the call, not sonner's actual DOM output —
+// the toast's own content/CTA-click-navigates behavior is unit-tested in
+// `fiscalModelsUtils.iae.vitest.js`.
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -31,6 +40,7 @@ vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
     computeBoxes303: vi.fn().mockResolvedValue(null),
     generate303File: vi.fn().mockResolvedValue({ ok: true }),
     fetchDeclarationIncidents: vi.fn().mockResolvedValue({ blocking: 0, warning: 0, items: [] }),
+    showIaeActivityReminder: vi.fn(),
   };
 });
 vi.mock('@/components/related-documents/helpers.js', () => ({ neoBase: (u) => u ?? '' }));
@@ -87,7 +97,7 @@ vi.mock('lucide-react', () => ({
 }));
 
 import FmModel303Page from '../FmModel303Page.jsx';
-import { generate303File } from '../../../fiscalModelsUtils.js';
+import { generate303File, showIaeActivityReminder } from '../../../fiscalModelsUtils.js';
 
 const LAST_PERIOD_DECL = {
   id: '303-2026-T4', model: '303', year: 2026, period: 'T4', type: 'ord',
@@ -144,18 +154,25 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
     await openFileGenAndConfirm();
 
     await waitFor(() => expect(generate303File).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 
-  it('last period + NO default row: blocks BEFORE calling generate303File and shows the banner + CTA', async () => {
+  it('last period + NO default row: blocks BEFORE calling generate303File and fires the toast, not a banner', async () => {
     global.fetch = makeFetchMock({ iaeRows: [] });
     render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} />);
 
     await openFileGenAndConfirm();
 
-    await waitFor(() => expect(screen.getByText('fm.aeat.error.missingDefaultIae')).toBeInTheDocument());
+    // The mount-time proactive check (pt.10) may already have fired the toast once by
+    // the time the click resolves — this only asserts the click path ALSO uses the toast
+    // (never a banner), not an exact call count shared with the mount effect.
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
     expect(generate303File).not.toHaveBeenCalled();
-    expect(screen.getByText('fm.aeat.action.go_to_organization')).toBeInTheDocument();
+    // ETP-5432 pt.10 follow-up — no fixed inline banner/CTA for this case anymore, from
+    // any trigger. The toast's own CTA click-to-navigate is covered by
+    // fiscalModelsUtils.iae.vitest.js, not re-tested here.
+    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(screen.queryByText('fm.aeat.action.go_to_organization')).not.toBeInTheDocument();
   });
 
   it('last period + a default row WITHOUT a code: still counts as missing and blocks', async () => {
@@ -164,7 +181,7 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
 
     await openFileGenAndConfirm();
 
-    await waitFor(() => expect(screen.getByText('fm.aeat.error.missingDefaultIae')).toBeInTheDocument());
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
     expect(generate303File).not.toHaveBeenCalled();
   });
 
@@ -177,7 +194,7 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
 
     await waitFor(() => expect(generate303File).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls.some(([url]) => url.includes('/organization/actividadesDelIae'))).toBe(false);
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 
   it('fails OPEN when the actividadesDelIae fetch itself errors (network failure): generation still proceeds', async () => {
@@ -187,17 +204,21 @@ describe('FmModel303Page — missing default IAE activity guard (ETP-4975)', () 
     await openFileGenAndConfirm();
 
     await waitFor(() => expect(generate303File).toHaveBeenCalledTimes(1));
-    expect(screen.queryByText('fm.aeat.error.missingDefaultIae')).not.toBeInTheDocument();
+    expect(showIaeActivityReminder).not.toHaveBeenCalled();
   });
 
-  it('clicking the "Go to Organization" CTA navigates to /organization', async () => {
+  it('clicking "Generar fichero 303" with a missing IAE activity calls showIaeActivityReminder with the live navigate', async () => {
     global.fetch = makeFetchMock({ iaeRows: [] });
     render(<FmModel303Page decl={LAST_PERIOD_DECL} {...defaultProps} />);
 
     await openFileGenAndConfirm();
-    await waitFor(() => expect(screen.getByText('fm.aeat.action.go_to_organization')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByText('fm.aeat.action.go_to_organization'));
-    expect(navigateMock).toHaveBeenCalledWith('/organization');
+    await waitFor(() => expect(showIaeActivityReminder).toHaveBeenCalled());
+    // Every call must be wired to this page's real `navigate` (react-router's
+    // `useNavigate`, mocked at module level as `navigateMock`) — the toast's own
+    // CTA-click-to-navigate mechanics are unit-tested in fiscalModelsUtils.iae.vitest.js.
+    for (const call of showIaeActivityReminder.mock.calls) {
+      expect(call[1]).toBe(navigateMock);
+    }
   });
 });
