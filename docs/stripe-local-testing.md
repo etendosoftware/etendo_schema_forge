@@ -183,8 +183,8 @@ re-test for replay protection.
 
 The platform-account endpoints (billing overview, the Stripe portal, purchases, `/plans`) never
 refuse, and entering the environment (`POST /sws/go/session/environment`) is not refused either —
-it answers with `accessDecision` — so a blocked customer always reaches the blocked screen and
-the pay path. See "The 402 body and the kill switch" below.
+it answers with an informational, backend-only `accessDecision` — so a blocked customer always
+reaches the blocked screen (driven by the NEO 402) and the pay path. See "The 402 body and the kill switch" below.
 
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
@@ -337,10 +337,11 @@ endpoint to it in the Stripe Dashboard (or add it to `stripe listen --events`) t
 
 #### The invoice period is kept in the ledger (ETP-5047)
 
-For `invoice.*` events `payload_summary` also keeps `period_start` / `period_end` (epoch
-seconds), so `ETGO_BILLING_EVENT` holds the history of billed periods. On a subscription invoice
-Stripe's invoice-level period looks back one period; the service period is on the invoice lines
-(which is what `invoice.paid` uses internally, and which the summary does not keep).
+For `invoice.*` events `payload_summary` also keeps `service_period_start` /
+`service_period_end` (epoch seconds), so `ETGO_BILLING_EVENT` holds the history of billed periods.
+They are the invoice **line** period — the same one `invoice.paid` writes to the row — not the
+invoice's own `period_start` / `period_end`, which on a subscription invoice looks back one
+period.
 
 #### The 402 body and the kill switch (ETP-5047)
 
@@ -355,7 +356,8 @@ blocked tenant with **HTTP 402**:
 `message` is unchanged from ETP-5443; the SPA reads `error.decision` first and falls back to the
 message prefix. `POST /sws/go/session/environment` does not refuse, by decision — it adds
 `"accessDecision": "<DECISION>"` to its normal answer, so the blocked customer can still enter,
-see the blocked screen and reach `/account` / `/upgrade`.
+see the blocked screen and reach `/account` / `/upgrade`. `accessDecision` is informational and
+backend-only: the SPA does not read it; its blocked screen follows the NEO 402.
 
 The check has a backend-only kill switch, `environment-access-enforcement-off`. **It enforces
 unless the flag is explicitly `true`** (unset, unreachable ConfigCat or a bad value all keep

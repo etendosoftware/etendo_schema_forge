@@ -269,8 +269,12 @@ WHERE c.ad_client_id = :client_id
 -- 'active' would silently re-open a locked-out tenant. The last line mirrors the reader's own
 -- fallback: without a status preference the tenant reads as LEGACY_ENTITLEMENT (entitled), and a
 -- row status the reader maps back to CURRENT is the closest entitled value the STATUS check
--- constraint allows. 'canceled' keeps end_date NULL, the decided ETP-5046 behaviour for a
--- canceled subscription (free immediately, row stays open).
+-- constraint allows. A backfilled 'canceled' row is left OPEN (end_date NULL), deliberately --
+-- NOT closed the way ETP-5047 closes a subscription canceled live: this statement's idempotency
+-- guard is "no OPEN row", so a closed row would let a re-run insert a second one. It reads as
+-- canceled either way (STATUS canceled -> EXPIRED; the row makes the tenant productive whatever
+-- its ETGO_EnvironmentType marker says, TenantEnvironmentLifecycleService#resolve), and a later
+-- checkout for the tenant closes it and opens a fresh row (SubscriptionService#openSubscription).
 --
 -- grace_anchor comes from ETGO_SubscriptionDueAt (ETP-5047: the grace anchor has its own column;
 -- current_period_start/current_period_end now hold the provider billing period only, which the
