@@ -262,13 +262,13 @@ Only the last tier is development, and it is additive rather than a modification
 >   keeps access only for `etendo.go.billing.grace.days` (default 15) after the end of the period
 >   the customer already paid for, then answers HTTP 402 `SUBSCRIPTION_REQUIRED`. `EXPIRED` is
 >   402 at once. A demo past its trial is 402 `DEMO_TRIAL_EXPIRED`.
-> - **Enforcement is per request, not only at environment login.** Every NEO request and every MCP
->   request is checked (ETP-5443 NEO, ETP-5047 MCP and the legacy `GET /sws/go/login`), through one
->   class, `EnvironmentAccessGuard`. So the "already-issued NEO JWTs keep working until they
->   expire" window below does not exist for NEO and MCP: a blocked tenant's next request is
->   refused. Entering the
->   environment is deliberately *not* refused, so the blocked customer reaches the pay path; the
->   billing and portal endpoints never refuse.
+> - **Enforcement is per request, not only at environment login.** Every tenant request is
+>   checked (ETP-5443 NEO; ETP-5047 MCP, the `JwtAuthUtils` servlets and the legacy
+>   `GET /sws/go/login`), through one class, `EnvironmentAccessGuard`. So the "already-issued NEO
+>   JWTs keep working until they expire" window below does not exist: a blocked tenant's next
+>   request is refused. Entering the environment is deliberately *not* refused (decided
+>   2026-09-25), so the blocked customer reaches the pay path; the billing and portal endpoints
+>   never refuse.
 > - **Enforcement ships enabled, with a kill switch** (ETP-5047, decided by Martin 2026-09-25), not
 >   "ships disabled": the backend-only flag `environment-access-enforcement-off` stops the refusal
 >   only when explicitly `true`, per tenant or globally, and logs what it would have refused.
@@ -280,7 +280,7 @@ Only the last tier is development, and it is additive rather than a modification
 > What is delivered where: ETP-5443 — the four lifecycle webhooks, the grace rule, out-of-order
 > protection, NEO enforcement, the portal and `/upgrade` staying reachable. ETP-5046 — the state
 > on the `ETGO_SUBSCRIPTION` row. ETP-5047 — correlation to the open row, close on cancel and
-> re-subscription, the shared guard at MCP and `/login`, the structured 402, the kill switch, the
+> re-subscription, the shared guard at MCP, the `JwtAuthUtils` servlets and `/login`, the structured 402, the kill switch, the
 > dispute alert, the invoice period in the billing-event ledger. **Not yet delivered:** the Stripe
 > billing period on the row and the event watermark as a row column (open-and-notable-topics
 > §3.7, §5.5 in `com.etendoerp.go`), quota enforcement (ETP-5051), reconciliation (ETP-5048).

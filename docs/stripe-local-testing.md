@@ -171,7 +171,8 @@ re-test for replay protection.
 | `charge.dispute.created` (ETP-5047) | unchanged — alert only | unchanged |
 
 **Lifecycle matrix — what the tenant sees (ETP-5047).** The access decision is
-`EnvironmentAccessPolicy`'s, evaluated on every NEO and MCP request:
+`EnvironmentAccessPolicy`'s, evaluated on every NEO, MCP and `JwtAuthUtils`-servlet request
+(favorites, report selectors, survey config, fiscal test mode):
 
 | Stored state | Within grace (`due date + etendo.go.billing.grace.days`) | After grace |
 | --- | --- | --- |
@@ -337,7 +338,8 @@ Stripe's invoice-level period looks back one period; the service period is on th
 
 #### The 402 body and the kill switch (ETP-5047)
 
-NEO, MCP (`/sws/mcp`) and the legacy `GET /sws/go/login` answer a blocked tenant with **HTTP 402**:
+NEO, MCP (`/sws/mcp`), the `JwtAuthUtils` servlets and the legacy `GET /sws/go/login` answer a
+blocked tenant with **HTTP 402**:
 
 ```json
 { "error": { "message": "Environment access is not available: SUBSCRIPTION_REQUIRED",
@@ -345,8 +347,9 @@ NEO, MCP (`/sws/mcp`) and the legacy `GET /sws/go/login` answer a blocked tenant
 ```
 
 `message` is unchanged from ETP-5443; the SPA reads `error.decision` first and falls back to the
-message prefix. `POST /sws/go/session/environment` does not refuse — it adds
-`"accessDecision": "<DECISION>"` to its normal answer.
+message prefix. `POST /sws/go/session/environment` does not refuse, by decision — it adds
+`"accessDecision": "<DECISION>"` to its normal answer, so the blocked customer can still enter,
+see the blocked screen and reach `/account` / `/upgrade`.
 
 The check has a backend-only kill switch, `environment-access-enforcement-off`. **It enforces
 unless the flag is explicitly `true`** (unset, unreachable ConfigCat or a bad value all keep

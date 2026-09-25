@@ -550,8 +550,8 @@ ID. Owned paths, specs and remaining work are in
 
 ## Environment access kill switch (`environment-access-enforcement-off`, backend-only)
 
-ETP-5047's incident switch for the commercial access check — the HTTP 402 NEO, MCP and the legacy
-environment login answer once a demo trial expired or a subscription's payment grace elapsed. It is
+ETP-5047's incident switch for the commercial access check — the HTTP 402 NEO, MCP, the
+`JwtAuthUtils` servlets and the legacy environment login answer once a demo trial expired or a subscription's payment grace elapsed. It is
 evaluated **only** in `com.etendoerp.go` (`EnvironmentAccessEnforcementFlag`, see that repo's
 `docs/feature-flags-and-tenant-upgrade.md`) and, like `bp-portal-link`, has **no key in
 `flag-keys.js`, and none must be added**: the SPA follows the 402 it is given

@@ -723,7 +723,7 @@
     },
     {
       "id": "environment-access-enforcement-kill-switch",
-      "description": "Operational kill switch for commercial environment-access enforcement (ETP-5047): the HTTP 402 that NEO, MCP and the legacy GET /sws/go/login answer once a demo trial has expired or a subscription's payment grace has elapsed. Enforcement is ON by default and stays on when the flag is unset or the control plane is unreachable; only an explicit true switches the refusal off, and the would-be denial is then logged at INFO. The enforcement itself (EnvironmentAccessGuard, the 402 body, the entry-point checks) is unconditional and is not owned by this entry.",
+      "description": "Operational kill switch for commercial environment-access enforcement (ETP-5047): the HTTP 402 that NEO, MCP, the JwtAuthUtils servlets and the legacy GET /sws/go/login answer once a demo trial has expired or a subscription's payment grace has elapsed. Enforcement is ON by default and stays on when the flag is unset or the control plane is unreachable; only an explicit true switches the refusal off, and the would-be denial is then logged at INFO. The enforcement itself (EnvironmentAccessGuard, the 402 body, the entry-point checks) is unconditional and is not owned by this entry.",
       "owner": "mtaal",
       "jira": "ETP-5047",
       "created": "2026-09-25",
