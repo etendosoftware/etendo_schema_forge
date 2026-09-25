@@ -253,6 +253,38 @@ Only the last tier is development, and it is additive rather than a modification
 
 ## 9. Lifecycle, enforcement and reconciliation
 
+> **As delivered (ETP-5443, ETP-5046, ETP-5047) — read this before the original text below, which
+> is kept as written.** The vocabulary and three decisions changed on the way:
+>
+> - **Access vocabulary: `CURRENT` / `PAST_DUE` / `EXPIRED` plus a grace period**, not "`past_due`
+>   keeps access". The row stores Stripe's words (`active` / `past_due` / `canceled`); the access
+>   policy (`EnvironmentAccessPolicy`) maps them to `CURRENT` / `PAST_DUE` / `EXPIRED`. `PAST_DUE`
+>   keeps access only for `etendo.go.billing.grace.days` (default 15) after the end of the period
+>   the customer already paid for, then answers HTTP 402 `SUBSCRIPTION_REQUIRED`. `EXPIRED` is
+>   402 at once. A demo past its trial is 402 `DEMO_TRIAL_EXPIRED`.
+> - **Enforcement is per request, not only at environment login.** Every NEO request and every MCP
+>   request is checked (ETP-5443 NEO, ETP-5047 MCP and the legacy `GET /sws/go/login`), through one
+>   class, `EnvironmentAccessGuard`. So the "already-issued NEO JWTs keep working until they
+>   expire" window below does not exist for NEO and MCP: a blocked tenant's next request is
+>   refused. Entering the
+>   environment is deliberately *not* refused, so the blocked customer reaches the pay path; the
+>   billing and portal endpoints never refuse.
+> - **Enforcement ships enabled, with a kill switch** (ETP-5047, decided by Martin 2026-09-25), not
+>   "ships disabled": the backend-only flag `environment-access-enforcement-off` stops the refusal
+>   only when explicitly `true`, per tenant or globally, and logs what it would have refused.
+> - The 402 carries `error.code = ENVIRONMENT_ACCESS_DENIED` and `error.decision`; the period is
+>   advanced by `invoice.paid` (not `invoice.payment_succeeded`); `charge.dispute.created` is an
+>   alert only, as specified. A cancellation closes the subscription row and a later purchase opens
+>   a new one (ETP-5047).
+>
+> What is delivered where: ETP-5443 — the four lifecycle webhooks, the grace rule, out-of-order
+> protection, NEO enforcement, the portal and `/upgrade` staying reachable. ETP-5046 — the state
+> on the `ETGO_SUBSCRIPTION` row. ETP-5047 — correlation to the open row, close on cancel and
+> re-subscription, the shared guard at MCP and `/login`, the structured 402, the kill switch, the
+> dispute alert, the invoice period in the billing-event ledger. **Not yet delivered:** the Stripe
+> billing period on the row and the event watermark as a row column (open-and-notable-topics
+> §3.7, §5.5 in `com.etendoerp.go`), quota enforcement (ETP-5051), reconciliation (ETP-5048).
+
 ### 9.1 Subscription states
 
 `active`, `past_due`, `canceled`. Stripe Smart Retries own recovery; Etendo records outcomes. No dunning logic of our own.

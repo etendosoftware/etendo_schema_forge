@@ -166,24 +166,44 @@ re-test for replay protection.
 | `invoice.payment_failed` | `PAST_DUE` | end of the failed invoice's own period (`period_end`) |
 | `customer.subscription.updated`, `status` `active`/`trialing` | `CURRENT` | cleared |
 | `customer.subscription.updated`, `status` `past_due`/`unpaid` | `PAST_DUE` | end of the **already-paid** period (`current_period_start`) — kept unchanged if a `PAST_DUE` due date is already stored (see below) |
-| `customer.subscription.updated`, `status` `canceled` | `EXPIRED` | cleared |
-| `customer.subscription.deleted` | `EXPIRED` | cleared |
+| `customer.subscription.updated`, `status` `canceled` | `EXPIRED`, row **closed** (ETP-5047) | cleared |
+| `customer.subscription.deleted` | `EXPIRED`, row **closed** (ETP-5047) | cleared |
+| `charge.dispute.created` (ETP-5047) | unchanged — alert only | unchanged |
+
+**Lifecycle matrix — what the tenant sees (ETP-5047).** The access decision is
+`EnvironmentAccessPolicy`'s, evaluated on every NEO and MCP request:
+
+| Stored state | Within grace (`due date + etendo.go.billing.grace.days`) | After grace |
+| --- | --- | --- |
+| `CURRENT` (`active`) | allowed | allowed |
+| `PAST_DUE` (`past_due`) with a due date | allowed | **402 `SUBSCRIPTION_REQUIRED`** |
+| `EXPIRED` (`canceled`, open or closed row) | **402 `SUBSCRIPTION_REQUIRED`** | **402 `SUBSCRIPTION_REQUIRED`** |
+| demo past its trial | — | **402 `DEMO_TRIAL_EXPIRED`** |
+
+The platform-account endpoints (billing overview, the Stripe portal, purchases, `/plans`) never
+refuse, and entering the environment (`POST /sws/go/session/environment`) is not refused either —
+it answers with `accessDecision` — so a blocked customer always reaches the blocked screen and
+the pay path. See "The 402 body and the kill switch" below.
 
 **Where the outcome is stored depends on the tenant (ETP-5046).**
 
-- **Tenant with an open `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
+- **Tenant with an `ETGO_SUBSCRIPTION` row** — every tenant paid since ETP-5046, and every
   older one once the R37 backfill has run: the event writes the row. `CURRENT` → `STATUS = active`,
-  `PAST_DUE` → `past_due`, `EXPIRED` → `canceled` (the row stays open, `END_DATE` null, and the
-  tenant reads as `free` immediately), and the due date goes to `CURRENT_PERIOD_END` (cleared → null).
-  Query it directly:
+  `PAST_DUE` → `past_due`, `EXPIRED` → `canceled`, and the due date goes to `CURRENT_PERIOD_END`
+  (cleared → null). Since ETP-5047 a cancellation also **closes** the row (`END_DATE` = Stripe's
+  `ended_at`, else `canceled_at`, else now); a closed row reads as `canceled` whatever `STATUS`
+  says, so the tenant is `free` and `EXPIRED`, and a new checkout for the same tenant opens a
+  **fresh** row. Query the tenant's rows, newest first:
 
   ```sql
-  select status, current_period_end, provider_price_id, end_date
+  select status, start_date, end_date, current_period_end, stripe_subscription_id,
+         provider_price_id
     from etgo_subscription
-   where environment_client_id = '<clientId>' and isactive = 'Y' and end_date is null;
+   where environment_client_id = '<clientId>' and isactive = 'Y'
+   order by end_date desc nulls first, created desc;
   ```
 
-- **Tenant with no open row** (a pre-ETP-5046 tenant R37 has not reached): the
+- **Tenant with no row at all** (a pre-ETP-5046 tenant R37 has not reached): the
   `AD_Preference` projection, as ETP-5443 shipped it — `ETGO_SubscriptionStatus` and
   `ETGO_SubscriptionDueAt`, scoped to the tenant's `Client`.
 
@@ -260,16 +280,25 @@ Lifecycle events carry no `metadata.request_id` — that metadata travels only o
 session, so `CheckoutWebhookProcessor`'s `extractRequestId` finds nothing and claims the event
 with a null `request_id`. **A lifecycle event's `ETGO_BILLING_EVENT` row therefore never carries a
 `request_id` or an `etgo_checkout_request_id` link, applied or not** — unlike the checkout rows
-described above. Correlation instead walks the subscription, then the customer:
+described above. Correlation instead walks the subscription (ETP-5047: the open row first), then
+the checkout request, then the customer:
 
 ```
-invoice.*                  → data.object.subscription
+invoice.*                  → data.object.subscription (or parent.subscription_details)
 customer.subscription.*    → data.object.id
-     ↓ CheckoutRequestStore.findByStripeSubscription(...)
+     ↓ the OPEN etgo_subscription row with that stripe_subscription_id   (targetForSubscription)
+     ↓ (fallback) CheckoutRequestStore.findByStripeSubscription(...)
      ↓ (fallback) findByStripeCustomer(data.object.customer)
-     ↓ CheckoutRequest.createdClient
-     ↓ TenantEnvironmentLifecycleService.updateSubscriptionStatus(clientId, status, dueAt)
+     ↓ CheckoutRequest.createdClient → the tenant's latest row decides     (targetForTenant)
+     ↓ TenantEnvironmentLifecycleService.applySubscriptionEvent(target, outcome, created)
 ```
+
+`STRIPE_SUBSCRIPTION_ID` is not unique across rows (a plan change keeps the Stripe subscription
+and opens a successor row), only across open ones. When the fallback lands on a tenant, the event
+is **ignored** instead of written when the tenant's open row names a different subscription
+(`failure_reason = "event for another subscription"`) or the tenant has only closed rows
+(`"subscription closed"` for a late event of the canceled subscription, `"no open subscription
+row"` for the first event of a new purchase before onboarding opens its row).
 
 Both fields were captured once, at checkout time: `applyCheckoutPaid` calls
 `checkoutRequestStore.recordPaid(requestId, customer, subscription)` from the ONE event that
@@ -281,7 +310,7 @@ values instead.
 `failure_reason = "unresolved subscription"`. This covers both a subscription/customer that names
 no `ETGO_CHECKOUT_REQUEST` on this instance, and a matched request whose `createdClient` is null.
 A tenant with no subscription row is never blocked by a stray lifecycle event; that is what keeps
-grandfathered and free tenants safe. If `updateSubscriptionStatus` itself fails after a purchase
+grandfathered and free tenants safe. If the status write itself fails after a purchase
 *was* resolved, the row is marked `FAILED` (`"Could not store the subscription projection"`), not
 `IGNORED` — Stripe's retry schedule will re-claim and reprocess it, same as any other `FAILED` row
 (§1). Either failure exit — this one, or an exception propagating out of the handler entirely —
@@ -289,6 +318,48 @@ rolls back the DAL session (`EtendoGoDalHelper.rollbackDalChanges(...)`) before 
 commits, so a `FAILED` row never coexists with a half-written status/due-date. The billing-event
 claim row itself is unaffected: it was committed in its own transaction, earlier, by the
 idempotency claim.
+
+#### Disputes are an alert, never a block (ETP-5047)
+
+`charge.dispute.created` is claimed like any other event, recorded `event_result = APPLIED`, and
+logged at **WARN** — `Billing alert: Stripe event '<evt>' (charge.dispute.created) — dispute <dp_>
+on charge <ch_> (payment intent <pi_>), amount <n> <cur>, reason '<reason>'` — and nothing else
+happens: no status, due date or access change. Stripe is arbitrating the chargeback; a lost
+dispute reaches the subscription through the ordinary lifecycle events. Subscribe the webhook
+endpoint to it in the Stripe Dashboard (or add it to `stripe listen --events`) to receive it.
+
+#### The invoice period is kept in the ledger (ETP-5047)
+
+For `invoice.*` events `payload_summary` also keeps `period_start` / `period_end` (epoch
+seconds), so `ETGO_BILLING_EVENT` holds the history of billed periods. On a subscription invoice
+Stripe's invoice-level period looks back one period; the service period is on the invoice lines
+(which is what `invoice.paid` uses internally, and which the summary does not keep).
+
+#### The 402 body and the kill switch (ETP-5047)
+
+NEO, MCP (`/sws/mcp`) and the legacy `GET /sws/go/login` answer a blocked tenant with **HTTP 402**:
+
+```json
+{ "error": { "message": "Environment access is not available: SUBSCRIPTION_REQUIRED",
+             "status": 402, "code": "ENVIRONMENT_ACCESS_DENIED", "decision": "SUBSCRIPTION_REQUIRED" } }
+```
+
+`message` is unchanged from ETP-5443; the SPA reads `error.decision` first and falls back to the
+message prefix. `POST /sws/go/session/environment` does not refuse — it adds
+`"accessDecision": "<DECISION>"` to its normal answer.
+
+The check has a backend-only kill switch, `environment-access-enforcement-off`. **It enforces
+unless the flag is explicitly `true`** (unset, unreachable ConfigCat or a bad value all keep
+enforcing). To test both states locally, set it in `Openbravo.properties` and restart Tomcat:
+
+```properties
+etendo.go.flags.environment-access-enforcement-off=true
+```
+
+With it on, a blocked tenant is allowed and the log shows `Environment access enforcement is
+switched off: neo would have refused tenant <id> (SUBSCRIPTION_REQUIRED) and allowed it`. Remove
+the line (or set `false`) to enforce again. On ConfigCat it can be targeted per tenant through the
+`clientId` attribute.
 
 ### The two account endpoints (ETP-5443)
 
@@ -877,13 +948,18 @@ and the resulting tenant/payment state in Etendo.
 | SF-STRIPE-LOCAL-11 | `invoice.payment_failed` with no period end is never written half-way | offline recipe (§4), omit `period_end` | `event_result=IGNORED`, `failure_reason="missing period end"`; the previously stored status/due date are unchanged | P0 |
 | SF-STRIPE-LOCAL-12 | `invoice.paid` recovers the account | offline recipe (§4), after SF-STRIPE-LOCAL-10 | `ETGO_SubscriptionStatus=CURRENT`, `ETGO_SubscriptionDueAt` cleared | P0 |
 | SF-STRIPE-LOCAL-13 | `cancel_at_period_end=true` does not change the status | offline recipe (§4), `customer.subscription.updated` with `status:"active"` | Status stays `CURRENT`; the flag is not persisted anywhere | P1 |
-| SF-STRIPE-LOCAL-14 | `customer.subscription.deleted` ends access | offline recipe (§4), or Test Mode `stripe subscriptions cancel <real sub id>` (§5) | `ETGO_SubscriptionStatus=EXPIRED`, `ETGO_SubscriptionDueAt` cleared | P0 |
+| SF-STRIPE-LOCAL-14 | `customer.subscription.deleted` ends access | offline recipe (§4), or Test Mode `stripe subscriptions cancel <real sub id>` (§5) | `ETGO_SubscriptionStatus=EXPIRED`, `ETGO_SubscriptionDueAt` cleared; for a tenant with a row: `STATUS=canceled` and `END_DATE` set (row closed), NEO answers 402 `SUBSCRIPTION_REQUIRED` | P0 |
 | SF-STRIPE-LOCAL-15 | An unresolvable subscription/customer never blocks | offline recipe (§4), unknown ids; or `stripe trigger customer.subscription.deleted` (§5) | `200 {"received":true}`; `event_result=IGNORED`, `failure_reason="unresolved subscription"`; no tenant's stored status changes | P0 |
 | SF-STRIPE-LOCAL-16 | `GET /billing/subscription` for an account with no subscription | authenticated call, account with no `stripeSubscription` on file | `200 {"hasSubscription": false}`, never `404` | P1 |
 | SF-STRIPE-LOCAL-17 | `POST /billing/subscription/portal` returns a real Customer Portal session | authenticated call, account with a `stripeCustomer` on file | `200 {"url": "https://billing.stripe.com/..."}`; opening it lands back on `<appBaseUrl>/account` | P0 |
 | SF-STRIPE-LOCAL-18 | `customer.subscription.updated` past_due, from a `CURRENT` state, anchors on `current_period_start` | offline recipe (§4), `status:"past_due"` after a prior `invoice.paid` | `ETGO_SubscriptionStatus=PAST_DUE`, `ETGO_SubscriptionDueAt` = `current_period_start`, never `current_period_end` | P0 |
 | SF-STRIPE-LOCAL-19 | A second past_due `customer.subscription.updated` keeps the already-stored due date | offline recipe (§4), two consecutive `status:"past_due"` events with different `current_period_start` values | `ETGO_SubscriptionDueAt` unchanged from the first event; the second payload's `current_period_start` is not applied | P0 |
 | SF-STRIPE-LOCAL-20 | An out-of-order (older) lifecycle event is ignored as stale | offline recipe (§4), watermark pair with an older `created` on the second event | `event_result=IGNORED`, `failure_reason="stale event"`; the stored projection stays as the newer, already-applied event left it | P0 |
+| SF-STRIPE-LOCAL-21 | A late event for a canceled subscription does not revive it (ETP-5047) | after SF-STRIPE-LOCAL-14 on a tenant with a row, post `invoice.paid` for the same subscription | `event_result=IGNORED`, `failure_reason="subscription closed"`; the row stays closed and `canceled` | P0 |
+| SF-STRIPE-LOCAL-22 | Re-subscribing opens a fresh row (ETP-5047) | after SF-STRIPE-LOCAL-14, buy again for the same tenant (Test Mode, §5) | a second `etgo_subscription` row, `END_DATE` null, `STATUS=active`, the new `stripe_subscription_id`; the old row stays closed; NEO answers 200 again | P0 |
+| SF-STRIPE-LOCAL-23 | A dispute is an alert only (ETP-5047) | Test Mode card `4000000000000259`, or a hand-signed `charge.dispute.created` (§4) | `event_result=APPLIED`; a WARN `Billing alert: ... charge.dispute.created`; no status or due-date change | P1 |
+| SF-STRIPE-LOCAL-24 | Blocked tenant: structured 402 on NEO and MCP (ETP-5047) | a tenant past its grace (e.g. SF-STRIPE-LOCAL-10 with an old `period_end`); call any `/sws/neo/...` and `POST /sws/mcp` | 402 with `error.code=ENVIRONMENT_ACCESS_DENIED`, `error.decision=SUBSCRIPTION_REQUIRED`, `error.message` unchanged; `/account` and `/upgrade` still load; the SPA shows the blocked screen | P0 |
+| SF-STRIPE-LOCAL-25 | Kill switch on (ETP-5047) | SF-STRIPE-LOCAL-24 with `etendo.go.flags.environment-access-enforcement-off=true`, Tomcat restarted | 200 on NEO and MCP; INFO `Environment access enforcement is switched off: ... would have refused tenant` in the log; remove the property → 402 again | P0 |
 
 ## 8. Troubleshooting
 

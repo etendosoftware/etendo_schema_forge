@@ -548,6 +548,23 @@ can be repaired and retried. The job also rejects a source and destination with 
 ID. Owned paths, specs and remaining work are in
 [`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
 
+## Environment access kill switch (`environment-access-enforcement-off`, backend-only)
+
+ETP-5047's incident switch for the commercial access check — the HTTP 402 NEO, MCP and the legacy
+environment login answer once a demo trial expired or a subscription's payment grace elapsed. It is
+evaluated **only** in `com.etendoerp.go` (`EnvironmentAccessEnforcementFlag`, see that repo's
+`docs/feature-flags-and-tenant-upgrade.md`) and, like `bp-portal-link`, has **no key in
+`flag-keys.js`, and none must be added**: the SPA follows the 402 it is given
+(`lib/environmentAccessGate.js`, which reads the structured `error.decision` and falls back to the
+message prefix).
+
+The polarity is inverted on purpose. Every failure of the backend flag stack resolves to `false`,
+and `false` here means **enforcing** — so an unset key or an unreachable control plane never opens
+a blocked tenant; only an explicit `true` does, and the would-be refusal is then logged at INFO. It
+can be targeted per tenant on ConfigCat through the `clientId` attribute. Owned paths and pending
+specs are in [`flags-registry.json`](../flags-registry.json) under
+`environment-access-enforcement-kill-switch`.
+
 ## Proof of Concept menu (`proof-of-concept-menu`)
 
 This is a frontend-only, temporary reveal for the internal **Proof of Concept**
