@@ -25193,6 +25193,8 @@
     "accountMethodRemoveFailed": "No se pudo quitar el método de acceso.",
     "accountMethodRemoved": "Método de acceso quitado.",
     "accountMethodsLoadFailed": "No se pudieron cargar tus métodos de acceso.",
+    "accountSessionExpired": "Tu sesión ha caducado. Vuelve a iniciar sesión para ver tu cuenta.",
+    "accountSignInAgain": "Volver a iniciar sesión",
     "subscriptionTitle": "Suscripción",
     "subscriptionPlan": "Plan",
     "subscriptionStatus": "Estado",

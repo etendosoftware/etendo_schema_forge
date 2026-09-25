@@ -24955,6 +24955,8 @@
     "accountMethodRemoveFailed": "The sign-in method could not be removed.",
     "accountMethodRemoved": "Sign-in method removed.",
     "accountMethodsLoadFailed": "Your sign-in methods could not be loaded.",
+    "accountSessionExpired": "Your session has expired. Sign in again to see your account.",
+    "accountSignInAgain": "Sign in again",
     "subscriptionTitle": "Subscription",
     "subscriptionPlan": "Plan",
     "subscriptionStatus": "Status",
