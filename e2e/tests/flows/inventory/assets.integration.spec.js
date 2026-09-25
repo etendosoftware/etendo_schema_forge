@@ -620,7 +620,7 @@ test.describe('Assets (real backend)', () => {
     await page.getByRole('button', { name: /Plan de amortización/ }).click();
     await expect(page.getByText('06-2026')).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('07-2026')).toBeVisible();
-    await expect(page.getByText('50.00%')).toHaveCount(2);
+    await expect(page.getByText('50,00%')).toHaveCount(2);
     await expect(page.getByText('1.000,00 €')).toHaveCount(2);
 
     // Capture both period headers (06-2026, 07-2026) for end-of-test cleanup.
