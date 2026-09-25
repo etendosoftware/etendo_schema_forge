@@ -43,10 +43,6 @@ const processes = [
   { name: 'aPRMReconcile', label: 'Reconcile', style: 'positive',
     displayLogicRaw: "@Type@='C'|@FIN_Matching_Algorithm_ID@=''" },
   { name: 'aprmAddMultiplePayments', label: 'Add Multiple Payments', style: 'positive' },
-  { name: 'aprmAddtransactionpd', label: 'Add transaction process definition', style: 'positive',
-    displayLogicRaw: "false" },
-  { name: 'aprmFindtransactionspd', label: 'EM_Aprm_Findtransactionspd', style: 'positive',
-    displayLogicRaw: "false" },
   { name: 'aprmFundsTrans', label: 'Funds Transfer', style: 'positive',
     displayLogicRaw: "@EM_Aprm_Isfundstrans_Enabled@='Y'" },
   { name: 'pSD2GetConsent', label: 'Connect Account', style: 'positive',
@@ -111,24 +107,32 @@ export const api = {
     "importedBankStatements": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/importedBankStatements",
       "detailUrl": "/sws/neo/accounts/importedBankStatements/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "bankStatementLines": {
       "get": true,
       "getById": true,
-      "post": true,
-      "put": true,
-      "patch": true,
-      "delete": true,
+      "post": false,
+      "put": false,
+      "patch": false,
+      "delete": false,
       "listUrl": "/sws/neo/accounts/bankStatementLines",
       "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
-      "supportedFilters": []
+      "supportedFilters": [],
+      "methods": [
+        "GET",
+        "GETBYID"
+      ]
     },
     "reconciliations": {
       "get": true,

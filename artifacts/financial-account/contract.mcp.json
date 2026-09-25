@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.34.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-08-30T19:51:34.951Z",
-  "contractChecksum": "48ddcfa5d2a89c50",
+  "updatedAt": "2026-09-25T10:51:30.876Z",
+  "contractChecksum": "b9c5d0825e6afcae",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -46,24 +46,32 @@
       "importedBankStatements": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/importedBankStatements",
         "detailUrl": "/sws/neo/accounts/importedBankStatements/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "bankStatementLines": {
         "get": true,
         "getById": true,
-        "post": true,
-        "put": true,
-        "patch": true,
-        "delete": true,
+        "post": false,
+        "put": false,
+        "patch": false,
+        "delete": false,
         "listUrl": "/sws/neo/accounts/bankStatementLines",
         "detailUrl": "/sws/neo/accounts/bankStatementLines/{id}",
-        "supportedFilters": []
+        "supportedFilters": [],
+        "methods": [
+          "GET",
+          "GETBYID"
+        ]
       },
       "reconciliations": {
         "get": true,
@@ -1177,8 +1185,6 @@
           "branchCode": {},
           "partialAccountNo": {},
           "accountNo": {},
-          "aprmAddtransactionpd": {},
-          "aprmFindtransactionspd": {},
           "aprmFundsTrans": {},
           "psd2Provider": {
             "readOnlyLogic": "@EM_PSD2_Connection_Status@='CO'"
@@ -1595,7 +1601,7 @@
       "etprReactivateTransaction",
       "etprReactivateRecon"
     ],
-    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
+    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters. Never create or edit bank statements by writing the importedBankStatements / bankStatementLines entities (a statement written there is never processed and skips the UI's checks): create, import, process and reactivate them through the `bank-statements` spec with neo_action (entity `bank-statements`). neo_schema(spec:\"bank-statements\", entity:\"bank-statements\", view:\"actions\") lists its actions (listStatements, statementLines, createStatement, importStatement, processStatement, reactivateStatement), their parameters and what id means for each (the financial account id for listStatements/createStatement/importStatement, the statement id for the others). A statement's lines can only be reconciled once it is processed."
   },
-  "checksum": "7894a4d4b27d4c46"
+  "checksum": "aa27c0637dcabcc5"
 }
