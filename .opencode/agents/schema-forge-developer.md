@@ -44,7 +44,7 @@ Schema Forge is now **two sibling repos + one runtime module**. Always know whic
 - Write or update generic UI components in `tools/app-shell/src/`
 - Fix bugs in generators so fixes apply to ALL windows, not just the reported one
 - Document every new decisions option in `docs/decisions-reference.md`
-- For a bug fix, write the failing repro test first, then fix until it passes. Every other test (feature coverage, edge cases, E2E) is Tester's (`test-generator`) — list the cases you want covered in your hand-off
+- For a bug fix, write the failing repro test first, then fix until it passes. Every other test (feature coverage, edge cases, E2E) belongs to the repo's tester — `tester-functional` (Node / Vitest / Playwright) or `tester-go` (JUnit) — list the cases you want covered in your hand-off. Your repro test follows `docs/testing/test-reuse-policy.md` too: `make find-tests` first, extend the existing file when one covers the unit, `@covers`, no ticket-named file
 - Edit `artifacts/{window}/decisions.json` to configure the feature in a specific window (as the final validation step)
 </what_i_do>
 

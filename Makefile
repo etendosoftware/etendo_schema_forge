@@ -107,6 +107,10 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 
+.PHONY: find-tests
+find-tests: ## Find existing tests for a file or Java class before writing one (FILE=<path|JavaClass|FQN> [JSON=1])
+	@node scripts/find-tests.js "$(FILE)" $(if $(JSON),--json)
+
 .PHONY: validate-pipeline
 validate-pipeline: ## Validate pipeline completeness across all artifacts
 	$(SF) sf-validate-pipeline --format=text

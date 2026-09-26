@@ -102,7 +102,7 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 | `McpAuthorizationService.java` | OAuth2 scope validation | scope rejections |
 | `McpHookExecutor.java` | Runs `NeoHandler` hooks | window-specific behavior |
 
-**Tests** live in `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/mcp/` (e.g. `McpToolRouterTest`, `ToolRegistryTest`, `McpServletTest`). Every fix needs a regression test here — delegate test authoring per project policy when appropriate, but the MCP layer is JUnit/OBBaseTest.
+**Tests** live in `{etendo_root}/modules/com.etendoerp.go/src-test/src/com/etendoerp/go/mcp/` (e.g. `McpToolRouterTest`, `ToolRegistryTest`, `McpServletTest`). Every fix needs a regression test here. You write only the failing repro test for your own fix (inside the red-green loop); any further coverage goes to `tester-go`. Both follow `docs/testing/test-reuse-policy.md`: `make find-tests FILE=<Class>` first, extend the existing test class, `@covers` in the Javadoc, no ticket-named class. Mockito by default; `OBBaseTest` only when real DAL/persistence behavior is under test.
 
 **Generic-service rule (MANDATORY):** never add window/spec-specific branches to `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, or the generic MCP router. Window-specific behavior goes in a dedicated `NeoHandler` CDI bean keyed by `ETGO_SF_ENTITY.Java_Qualifier` (`@Named("...")` only — NEVER `@ApplicationScoped`). See `docs/neo-headless-extensibility.md`.
 
@@ -122,7 +122,7 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 4. **Classify the root cause** — one of the 6 categories (see rubric). Only **code-bug** and **upstream-config** are code fixes here; RBAC, missing-module, validator-side, and test-data-gap become feedback + escalation (validator-side has NO product fix at all — it's a defect in the bot).
 5. **Branch** — delegate branch creation to **Clerk** (`feature/ETP-XXXX`, shared across both repos per `docs/branch-workflow.md`). Never work on main/epic directly.
 6. **Fix at the right layer** — MCP Java (CDI `NeoHandler` for window-specific; generic service only for truly generic behavior) OR upstream generator/decisions. Follow the generic-service rule.
-7. **Test** — add/extend a regression test (JUnit in com.etendoerp.go for MCP; Vitest/Node for schema_forge generators). Per project policy, delegate substantial test authoring to the Tester agent.
+7. **Test** — write the failing repro test for the fix yourself, extending the existing test class found with `make find-tests` (JUnit in com.etendoerp.go for MCP). Every other test goes to the repo's tester: `tester-go` (JUnit) or `tester-functional` (Node / Vitest / Playwright in `etendo_schema_forge`).
 8. **Capture the feedback note** — fill the per-ticket entry in `docs/agentic-validation/ticket-feedback.md` (rubric gaps + the actual root-cause category). This is NOT optional.
 9. **Commit & PR** — delegate to Clerk. Commit message per Etendo Git Police (`Feature ETP-XXXX: ...`, ≤80 chars, no Co-Authored-By). PR references the ticket.
 10. **Remind** — if the fix changed `ETGO_SF_*` config or pushed to NEO, remind the user to run `./gradlew export.database` in Etendo root.
@@ -166,7 +166,7 @@ Before doing ANYTHING:
 - Fix at the correct layer — MCP Java (`NeoHandler` CDI bean for window-specific, generic service for truly generic) or upstream generator/decisions — and add a regression test.
 - On EVERY ticket, record the feedback note in `docs/agentic-validation/ticket-feedback.md` (missing rubric fields + root-cause category + concrete advice for the bot team).
 - Keep the distilled rubric / recommended ticket template up to date as the hand-off artifact.
-- Delegate ALL Jira/branch/PR ops to Clerk and substantial test authoring to Tester.
+- Delegate ALL Jira/branch/PR ops to Clerk, and every test beyond your own repro to `tester-go` / `tester-functional`.
 - Maintain the internal knowledge base (`mcp-ticket-knowledge.md`) with durable MCP facts and recurring patterns.
 </what_i_do>
 

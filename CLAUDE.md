@@ -32,9 +32,11 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | qa.md | Sentinel | QA | Methodical |
 | documentarian.md | Sage | DOCS | Comprehensive |
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
+| tester-functional.md | Tester (functional) | TESTS — writes and extends Node / Vitest / Playwright tests in `etendo_schema_forge`, reuse-first | Methodical |
+| tester-go.md | Tester (go) | TESTS — writes and extends JUnit tests in `com.etendoerp.go` (Mockito by default), reuse-first | Methodical |
 | merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER `develop`** (the block hits `develop` once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
 
-When spawning agents, pass the agent's frontmatter `name` as `subagent_type` (`workflow`, `schema-forge-developer`, `window-agent`, `alex`, `qa`, `documentarian`, `tenant-fixer`, `merge-block-helper`, `test-generator`); the definition file supplies the identity and rules, so the prompt only carries the task.
+When spawning agents, pass the agent's frontmatter `name` as `subagent_type` (`workflow`, `schema-forge-developer`, `window-agent`, `alex`, `qa`, `documentarian`, `tenant-fixer`, `merge-block-helper`, `tester-functional`, `tester-go`); the definition file supplies the identity and rules, so the prompt only carries the task.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
 
 ### Agent Dispatch Guide
@@ -57,6 +59,9 @@ Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `Sen
 | "Remediate accounting/period/org-tree gaps for an existing client" | **Remedy** | Corrective data-fix (`cli/src/data-fixes/`) scoped by `ad_client_id` |
 | "Fix the onboarding so new clients get a chart of accounts" | **Remedy** | Preventive onboarding-gap fix (root cause) |
 | "Write a tenant data-fix / migration SQL" | **Remedy** | Owns the data-fixes framework + SQL-first criterion |
+| "Cover this component / hook with tests" / "add the E2E flow" | **Tester (functional)** | Node, Vitest or Playwright in `etendo_schema_forge` |
+| "Cover this handler / service / servlet with tests" | **Tester (go)** | JUnit in `com.etendoerp.go` |
+| "QA found these missing edge cases" | **Tester of that repo** | Sentinel reports gaps; the testers write them |
 
 **Mixed tasks:** If a task requires both (e.g., "add a new layout type and apply it to sales"), split into two subtasks — developer first (build the feature), then window-agent (configure the window).
 </team>
@@ -323,9 +328,23 @@ Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OB
 Run `make test` for CLI tests. See `docs/e2e-testing-guide.md` for E2E setup, conventions, and `data-testid` patterns.
 Every process must declare >=3 edge cases. Every kept rule must have a behavioral test.
 
-**Delegation rule:** Tests — unit (Vitest / Node test runner), source-reading, or Playwright E2E — are written by the `test-generator` subagent (Tester); spawn it with `subagent_type="test-generator"`. The one exception: a developer writes the failing repro test for its own bug fix, inside its red-green loop. Every other test — feature coverage, edge cases, E2E flows — goes to Tester.
+**Delegation rule:** Tests are written by the tester of the repo that owns the code:
+- **`tester-functional`** — Node test runner, source-reading, Vitest and Playwright in `etendo_schema_forge`.
+- **`tester-go`** — JUnit (Mockito, `OBBaseTest`/`WeldBaseTest`) in `com.etendoerp.go`.
 
-Before writing or asking Tester to write a Playwright spec, the agent (and the coordinator) MUST read `docs/e2e-testing-guide.md` first; the canonical mocked-spec reference is `e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`.
+The one exception: a developer (or `mcp-ticket-resolver`) writes the failing repro test for its own bug fix, inside its red-green loop. Every other test — feature coverage, edge cases, E2E flows — goes to a tester. Sentinel (QA) writes no tests; it routes the gaps it finds to the right tester.
+
+**Reuse-first protocol:** every test author, the repro exception included, follows `docs/testing/test-reuse-policy.md` — `make find-tests FILE=<path|JavaClass>` first, extend before creating, `@covers` on every new or modified test file, no ticket-named files, the `Extended · Rewritten · New` report line. Alex rejects an unjustified new test file.
+
+**Dispatch format for test work:** a request to a tester states
+- **Unit** — the source file(s) or Java class(es) under test;
+- **Behavior** — what must be guarded;
+- **Kind** — repro, extension, or new coverage;
+- **Ticket** — context only, never the unit of work or the file name.
+
+Never dispatch "write tests for ETP-XXXX". The tester runs `make find-tests` itself.
+
+Before writing or asking `tester-functional` to write a Playwright spec, the agent (and the coordinator) MUST read `docs/e2e-testing-guide.md` first; the canonical mocked-spec reference is `e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`.
 
 ## Pipeline Validation
 

@@ -23,6 +23,8 @@
 
 | File | Description |
 |------|-------------|
+| [testing/test-reuse-policy.md](testing/test-reuse-policy.md) | **Test reuse policy** (reuse-first protocol): locate existing tests with `make find-tests`, Extend / Rewrite / New with justification, the `@covers` tag, no ticket-named files, stop-and-escalate on a correct failing test, and the `test-hygiene` CI checks in both repos. Single source for `tester-functional`, `tester-go`, the dev repro exception and Alex |
+| [testing/etendo-test-skill-review.md](testing/etendo-test-skill-review.md) | Where the `dev-assistant:etendo-test` skill conflicts with the test reuse policy, plus the upstream change request |
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
 | [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
 | [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) |

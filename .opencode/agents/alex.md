@@ -76,9 +76,10 @@ Use the file list to know what to read, then use the diff to understand exactly 
 2. Fetch changed files and diff via `gh` (see above)
 3. Read the changed files in full for context
 3. **Classify each changed file as source vs. generated (UI Change Survival Check — see `schema_forge_rules`)** — if any UI fix is directly in `artifacts/*/generated/` without a generator change, REJECT immediately before proceeding
-4. Run build and tests
-5. Classify remaining issues: BLOCKER / WARNING / SUGGESTION
-6. APPROVE if 0 blockers, REJECT if any blockers
+4. **Test reuse check** (see `### Unjustified New Test Files` below) — for every test file the PR adds
+5. Run build and tests
+6. Classify remaining issues: BLOCKER / WARNING / SUGGESTION
+7. APPROVE if 0 blockers, REJECT if any blockers
 
 ### Report Format
 ```
@@ -234,6 +235,26 @@ Equally a BLOCKER: feeding a list column by injecting a synthetic field into the
 handler's `afterHandle()`. Unfilterable, unsortable, and silently fatal on failure —
 `TbaiSyncStatusInjector` was dead for months behind a swallowed `MappingException` while every invoice
 rendered a client-side `?? 'Pendiente'` fallback (ETP-4391).
+
+### Unjustified New Test Files (BLOCKER — counts as a pipeline rejection cycle)
+Tests follow the reuse-first protocol in `docs/testing/test-reuse-policy.md`, in both repos
+(`etendo_schema_forge` and `com.etendoerp.go`). For every test file the PR **adds**:
+
+1. Find the tester's report line `Extended: N · Rewritten: N · New: N` (hand-off or PR description)
+   and the one-line justification of each new file. Missing line → BLOCKER.
+2. Run `make find-tests FILE=<unit>` (from `etendo_schema_forge`; it also takes Java classes) for the
+   unit the new file covers. If an existing file covers the same unit and the new cases could have
+   been added to it → BLOCKER, even if the justification says otherwise.
+3. The file must carry `@covers` pointing to something that exists (Java: FQN in the class Javadoc)
+   and must not be named after a ticket (`etp-?\d{4}`).
+
+Also BLOCKERS, for any test file added or modified: a test with no observable assertion; an
+expectation weakened, or a test skipped/disabled, to make a failing test pass; a deleted test that
+was not rewritten; a new source-reading test that checks behavior instead of wiring or a guardrail.
+
+The CI job `test-hygiene` annotates the mechanical part (it blocks from 2026-10-10); the reuse
+judgement in step 2 is yours. A REJECT here returns the work to the tester and counts as one of
+the 3 rejection cycles of the REVIEW phase.
 
 ### Decisions as Source of Truth (WARNING)
 Window-specific configuration (tab layout, secondary tabs, field overrides, entityLabel, detailEntity, etc.) must be declared in `decisions.json`, not hardcoded in generated components. Every configurable field must be documented in `docs/decisions-reference.md`.
