@@ -36,6 +36,8 @@ that has to be justified.
    expectation, do not skip or disable it. Report the suspected bug to the coordinator with the
    test as the repro. The coordinator decides whether it is fixed now or ticketed. Adjusting an
    expectation to match what the code happens to do is how tests end up codifying bugs.
+   Exception: when a tester is dispatched for a **repro**, the failing test is the expected
+   outcome — it is handed to the developer, who commits it together with the fix.
 7. **Source-reading is only for wiring contracts.** Reading a source file as text and matching it
    with a regex is allowed for imports, props forwarded to generated components, and policy
    guardrails (`no-raw-fetch`, `auth-header-policy`, …). Behavior is tested by executing it
@@ -74,7 +76,7 @@ class NeoCrudHandlerTest {
 Rules:
 
 - **Required on every new or modified test file** from ETP-5511 on. Existing untouched files are
-  backfilled later (Part 2 of the plan), not as a side effect of unrelated work.
+  backfilled in a separate, dedicated change, not as a side effect of unrelated work.
 - The path (or class) must exist. A `@covers` that points nowhere is flagged by CI.
 - A Playwright spec covers the component(s) or custom files whose behavior it drives; list the
   main ones, not every transitive import.
@@ -98,6 +100,7 @@ make find-tests FILE=../modules/com.etendoerp.go/src/com/etendoerp/go/rest/Etend
 | `@covers` | `// @covers <path>` equal to the file | `@covers <FQN>` equal to the class |
 | imports | `import` / `export … from` / dynamic `import()` / `require()` resolving to the file (relative, `@/`, `@generated/`); `vi.mock()` does **not** count | `import <FQN>;`, `import static <FQN>.…;`, or a reference to the simple name from a test in the same package |
 | `readFileSync` | a file that reads sources as text and names the file in a path literal | — |
+| `path` | a path literal that resolves exactly to the file, whatever it is handed to — a loader helper (`loadCustomModule(join(__dirname, '..', 'X.jsx'))`), a dynamic `import()` of a constant, `new URL('../X.jsx', import.meta.url)`; `vi.mock()` targets do **not** count | — |
 
 It works before any backfill because most tests are found through their imports, and it gets
 sharper as `@covers` spreads. Pass `--json` for machine-readable output. `com.etendoerp.go` is
@@ -128,9 +131,13 @@ warning is a false positive; rename the helper or assert in the block.
   `expect()` hides the finding.
 - In `com.etendoerp.go`, `make find-tests` only resolves Java classes; for scripts or other
   non-Java files, use `grep`.
+- A path assembled from variables (`join(__dirname, '..', FIX_FILE)`) or from a constant defined in
+  another module is not resolved; such a test is found only through `@covers` or an import.
 
 ## Related
 
+- Scope: `tester-functional` owns every test in `etendo_schema_forge`; `tester-go` owns every
+  test in `com.etendoerp.go`, JUnit and non-Java alike (e.g. `scripts/test_check_test_hygiene.py`).
 - `testing-delivery-gate` skill — delivery evidence; it already says "extend before creating".
 - `docs/coverage-gate.md` — why deleting a test fails the push.
 - `docs/request-policy.md` — how a test mocks `useApiFetch` / `apiFetch` and supplies a session.

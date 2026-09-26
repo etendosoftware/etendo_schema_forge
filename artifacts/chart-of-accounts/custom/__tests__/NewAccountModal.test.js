@@ -1,5 +1,6 @@
+// @covers artifacts/chart-of-accounts/custom/NewAccountModal.jsx
 // Node test runner, source-reading — see project conventions in
-// .claude/agents/test-generator.md. This replaces the sibling NewAccountModal.vitest.jsx
+// .claude/agents/tester-functional.md. This replaces the sibling NewAccountModal.vitest.jsx
 // (ETP-5101), which was never collected by any test runner: Vitest's `include` glob in
 // tools/app-shell/vitest.config.js is rooted at `src/**`, so nothing under the repo-root
 // `artifacts/` tree is ever picked up by that runner (see docs/feedback.md's ETP-4841

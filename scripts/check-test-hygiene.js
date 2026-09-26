@@ -15,13 +15,15 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { coversOnLine } from './find-tests.js';
+import { coversOnLine, isEntryPoint } from './find-tests.js';
 
 const ROOT = process.env.SF_ROOT || resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const TEST_FILE_RE = /\.(test|vitest|spec)\.[cm]?[jt]sx?$/;
 const TICKET_NAME_RE = /etp-?\d{4}/i;
-const ASSERTION_RE = /\b(expect|assert)\w*\s*[.(]/;
+// expect…/assert… calls, plus Testing Library queries that throw when nothing
+// matches (getBy/getAllBy/findBy/findAllBy). queryBy* never throws, so it is not one.
+const ASSERTION_RE = /\b(expect|assert)\w*\s*[.(]|\b(?:get|find)(?:All)?By[A-Z]\w*\s*\(/;
 const TEST_CALL_RE = /(^|[^\w.$])(it|test)((?:\.(?:only|skip|concurrent|fails))*)\s*\(/g;
 const EACH_CALL_RE = /(^|[^\w.$])(it|test)\.each\s*(\(|`)/g;
 
@@ -129,7 +131,7 @@ function lineOf(starts, index) {
  * `it`/`test` blocks whose body has no expect…/assert… call.
  * `.todo` and `.skip` blocks are ignored. With `addedLines`, only blocks that
  * start on an added line are reported (a modified file's untouched blocks are
- * Part 2 debt, not this PR's).
+ * pre-existing debt, not this PR's).
  */
 export function findAssertionlessBlocks(src, addedLines = null) {
   const found = [];
@@ -266,6 +268,6 @@ export function main(argv) {
   return findings.length && mode === 'block' ? 1 : 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntryPoint(import.meta.url)) {
   process.exitCode = main(process.argv.slice(2));
 }

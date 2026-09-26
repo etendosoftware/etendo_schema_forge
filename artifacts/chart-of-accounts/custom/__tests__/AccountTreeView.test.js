@@ -1,5 +1,6 @@
+// @covers artifacts/chart-of-accounts/custom/AccountTreeView.jsx
 // Node test runner, source-reading — see project conventions in
-// .claude/agents/test-generator.md. AccountTreeView.jsx is NOT collected by
+// .claude/agents/tester-functional.md. AccountTreeView.jsx is NOT collected by
 // `npx vitest run` today: Vitest's `include` glob in tools/app-shell/vitest.config.js
 // is rooted at `src/**`, so nothing under the repo-root `artifacts/` tree is ever
 // picked up by that runner (see docs/feedback.md's ETP-4841 entry — three sibling

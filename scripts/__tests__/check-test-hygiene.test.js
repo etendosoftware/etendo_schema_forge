@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -139,6 +139,22 @@ describe('findAssertionlessBlocks', () => {
       "test('chained', async () => { await expect(p).rejects.toThrow(); });",
     ].join('\n');
     assert.deepEqual(findAssertionlessBlocks(src), []);
+  });
+
+  it('accepts Testing Library queries that throw as assertions', () => {
+    const src = [
+      "it('get', () => { render(<X />); screen.getByTestId('root'); });",
+      "it('find', async () => { render(<X />); await screen.findByText('Hi'); });",
+      "it('all', () => { render(<X />); within(list).getAllByRole('row'); });",
+      "it('findAll', async () => { await screen.findAllByRole('row'); });",
+      "it('waitFor', async () => { await waitFor(() => screen.getByText('Done')); });",
+    ].join('\n');
+    assert.deepEqual(findAssertionlessBlocks(src), []);
+  });
+
+  it('does not count queryBy* as an assertion', () => {
+    const src = "it('query', () => { render(<X />); screen.queryByText('Hi'); });";
+    assert.deepEqual(findAssertionlessBlocks(src), [{ line: 1, name: 'query' }]);
   });
 
   it('ignores skip, todo and callback-less blocks', () => {
@@ -394,6 +410,18 @@ describe('main', () => {
       const res = run(['--base', 'no-such-ref', '--head', dirty, '--mode', 'block']);
       assert.equal(res.status, 1);
       assert.match(res.stdout, /::error title=test-hygiene\/git-error::/);
+    });
+
+    it('runs when invoked through a symlink in a path with spaces', () => {
+      const dir = join(tmp, 'dir with spaces');
+      mkdirSync(dir, { recursive: true });
+      const link = join(dir, 'check-test-hygiene.js');
+      symlinkSync(SCRIPT, link);
+      const env = { ...process.env, SF_ROOT: tmp };
+      delete env.TEST_HYGIENE_MODE;
+      const res = spawnSync(process.execPath, [link, '--base', base, '--head', dirty], { cwd: tmp, env, encoding: 'utf8' });
+      assert.equal(res.status, 0, res.stderr);
+      assert.match(res.stdout, /test-hygiene: 2 changed test file\(s\)/);
     });
 
     it('block mode exits 0 when the range is clean', () => {

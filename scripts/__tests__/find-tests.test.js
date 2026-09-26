@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +15,7 @@ import {
   javaPathToFqn,
   main,
   parseCovers,
+  pathLiteralMatch,
   parseImportSpecifiers,
   readFileSyncMatch,
   resolveSpecifier,
@@ -80,11 +81,23 @@ describe('resolveTarget', () => {
     assert.equal(resolveTarget(abs, opts()).relPath, 'tools/app-shell/src/lib/foo.js');
   });
 
-  it('treats a dotted class name as a Java FQN without touching the disk', () => {
-    assert.deepEqual(resolveTarget('com.etendoerp.go.Missing', opts()), {
+  it('resolves a dotted class name to its FQN when the class exists', () => {
+    assert.deepEqual(resolveTarget('com.etendoerp.go.rest.Bar', opts()), {
       repo: 'go',
-      classes: ['com.etendoerp.go.Missing'],
+      classes: ['com.etendoerp.go.rest.Bar'],
     });
+  });
+
+  it('resolves an FQN under src-util and a nested class to its outer file', () => {
+    assert.deepEqual(resolveTarget('com.etendoerp.go.modulescript.SetupScript', opts()).classes,
+      ['com.etendoerp.go.modulescript.SetupScript']);
+    assert.deepEqual(resolveTarget('com.etendoerp.go.rest.Bar.Inner', opts()).classes,
+      ['com.etendoerp.go.rest.Bar.Inner']);
+  });
+
+  it('returns an error for an FQN with no source file', () => {
+    assert.match(resolveTarget('com.etendoerp.go.DoesNotExist', opts()).error,
+      /no Java class com\.etendoerp\.go\.DoesNotExist/);
   });
 
   it('expands a simple class name to every matching FQN under src', () => {
@@ -274,6 +287,42 @@ describe('readFileSyncMatch', () => {
   });
 });
 
+describe('pathLiteralMatch', () => {
+  const test = 'artifacts/sales/custom/__tests__/Foo.test.js';
+  const target = 'artifacts/sales/custom/Foo.jsx';
+
+  it('matches a join(__dirname, ...) handed to a loader helper', () => {
+    const src = "const { helpers } = loadCustomModule(join(__dirname, '..', 'Foo.jsx'), {});";
+    assert.equal(pathLiteralMatch(src, test, target), 'path');
+  });
+
+  it('matches a path constant later passed to a dynamic import', () => {
+    const src = "const MOD = join(__dirname, '..', 'Foo.jsx');\nconst m = await import(MOD);";
+    assert.equal(pathLiteralMatch(src, test, target), 'path');
+  });
+
+  it('matches a new URL() relative to import.meta.url', () => {
+    assert.equal(pathLiteralMatch("await import(new URL('../Foo.jsx', import.meta.url));", test, target), 'path');
+  });
+
+  it('matches a bare relative literal that resolves to the target', () => {
+    assert.equal(pathLiteralMatch("const P = '../Foo.jsx';\nawait import(P);", test, target), 'path');
+  });
+
+  it('does not match a same-named file in another directory', () => {
+    const src = "loadCustomModule(join(__dirname, '..', '..', 'purchase', 'Foo.jsx'));\nconst p = 'Foo.jsx';";
+    assert.equal(pathLiteralMatch(src, test, target), null);
+  });
+
+  it('does not match a vi.mock or jest.mock target', () => {
+    assert.equal(pathLiteralMatch("vi.mock('../Foo.jsx');\njest.mock('../Foo.jsx', () => ({}));", test, target), null);
+  });
+
+  it('does not match a suffix-only literal without a read (no false positives)', () => {
+    assert.equal(pathLiteralMatch("const label = 'sales/custom/Foo.jsx';", test, target), null);
+  });
+});
+
 describe('javaMatchSources', () => {
   const fqn = 'com.etendoerp.go.rest.Foo';
   const sources = (src) => [...javaMatchSources(src, fqn)].sort();
@@ -316,6 +365,7 @@ describe('findFunctionalTests (injected files)', () => {
       'tools/app-shell/src/lib/__tests__/covers.vitest.jsx': '// @covers tools/app-shell/src/lib/foo.js\n',
       'tools/app-shell/test/reads.test.js': "readFileSync(join(ROOT, 'tools/app-shell/src/lib/foo.js'));\n",
       'tools/app-shell/src/lib/__tests__/mocked.vitest.jsx': "vi.mock('../foo.js');\n",
+      'tools/app-shell/src/lib/__tests__/loaded.test.js': "loadCustomModule(join(__dirname, '..', 'foo.js'));\n",
       'tools/app-shell/src/lib/helper.js': "import { foo } from './foo.js';\n",
       '.claude/worktrees/x/foo.test.js': '// @covers tools/app-shell/src/lib/foo.js\n',
     });
@@ -329,6 +379,7 @@ describe('findFunctionalTests (injected files)', () => {
       'tools/app-shell/src/lib/__tests__/foo.test.js',
       'tools/app-shell/src/lib/__tests__/covers.vitest.jsx',
       'tools/app-shell/src/lib/__tests__/mocked.vitest.jsx',
+      'tools/app-shell/src/lib/__tests__/loaded.test.js',
       'tools/app-shell/src/lib/helper.js',
       '.claude/worktrees/x/foo.test.js',
       'tools/app-shell/src/lib/__tests__/missing.test.js',
@@ -337,6 +388,7 @@ describe('findFunctionalTests (injected files)', () => {
       { file: 'tools/app-shell/src/lib/__tests__/covers.vitest.jsx', sources: ['covers'] },
       { file: 'tools/app-shell/src/lib/__tests__/foo.test.js', sources: ['import'] },
       { file: 'tools/app-shell/test/reads.test.js', sources: ['readFileSync'] },
+      { file: 'tools/app-shell/src/lib/__tests__/loaded.test.js', sources: ['path'] },
     ]);
   });
 
@@ -476,6 +528,16 @@ describe('main', () => {
       const res = run('nope.js');
       assert.equal(res.status, 2);
       assert.match(res.stderr, /find-tests: file not found: nope\.js/);
+    });
+
+    it('runs when invoked through a symlink in a path with spaces', () => {
+      const dir = join(tmp, 'dir with spaces');
+      mkdirSync(dir, { recursive: true });
+      const link = join(dir, 'find-tests.js');
+      symlinkSync(SCRIPT, link);
+      const res = spawnSync(process.execPath, [link, 'src/lib/foo.js'], { cwd: join(tmp, 'sf'), env, encoding: 'utf8' });
+      assert.equal(res.status, 0, res.stderr);
+      assert.match(res.stdout, /find-tests: src\/lib\/foo\.js \(functional\)/);
     });
   });
 });

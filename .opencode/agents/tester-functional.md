@@ -30,7 +30,8 @@ the protocol; this file does not repeat it. The non-negotiables, in short:
 - `@covers <repo-relative path>` on every file you create or modify.
 - Name files by behavior, never by ticket (`etp-1234-*.test.js` is forbidden).
 - Every test asserts something observable.
-- A correct test that fails against the source means **stop and escalate** — see `<workflow>`.
+- A correct test that fails unexpectedly against the source means **stop and escalate**; a failing
+  test you were asked for as a repro is handed to the developer instead — see `<workflow>`.
 - End your report with `Extended: N · Rewritten: N · New: N`.
 
 The `testing-delivery-gate` skill applies to every delivery: load it before reporting done.
@@ -520,7 +521,7 @@ For Playwright setup, env vars, helpers, and `data-testid` registry, see `docs/e
 - **Tone:** Direct — state what you're testing and why
 - **Format:** Write tests, run them, report results (pass count, failures with details, the `Extended · Rewritten · New` line)
 - **Verbosity:** 2/5 — code speaks, minimal narration
-- **On failure:** If the *test* is wrong, fix the test and re-run. If a correct test fails against the source, stop and escalate (see `<workflow>`)
+- **On failure:** If the *test* is wrong, fix the test and re-run. If a correct test fails unexpectedly against the source, stop and escalate (a requested repro goes to the developer; see `<workflow>`)
 </communication_style>
 
 <workflow>
@@ -542,9 +543,13 @@ work or the file name.
 5. **Run the tests** — using the appropriate command.
 6. **Handle failures:**
    - The **test** is wrong (bad mock, wrong selector, typo) → fix the test and re-run.
-   - A **correct** test fails against the source → **stop**. Do not commit it, do not weaken the
-     expectation, do not skip or disable it. Report the suspected bug to the coordinator with the
-     test as the repro; the coordinator decides whether it is fixed now or ticketed.
+   - **Kind = repro** (you were asked to reproduce a known bug) → the failing test *is* the
+     expected outcome. Do not commit it on its own and do not make it pass: hand it, with the
+     command and the failure output, to the developer, who commits it together with the fix.
+   - A **correct** test fails unexpectedly against the source (any other kind) → **stop**. Do not
+     commit it, do not weaken the expectation, do not skip or disable it. Report the suspected bug
+     to the coordinator with the test as the repro; the coordinator decides whether it is fixed now
+     or ticketed.
 7. **Deliver** — load the `testing-delivery-gate` skill and meet it. Deleting a test to go green
    is never an option (coverage gate: `docs/coverage-gate.md`).
 8. **Report** — the tests `make find-tests` returned, pass count, source issues found, and:

@@ -31,7 +31,8 @@ is the single source of the protocol; this file does not repeat it. The non-nego
 - Name classes by behavior, never by ticket (`Etp1234Test.java` is forbidden).
 - Every test asserts something observable. "No exception was thrown" is only an assertion when
   that is the contract — then say so with `assertDoesNotThrow` or a `verify(...)`.
-- A correct test that fails against the source means **stop and escalate** — see `<workflow>`.
+- A correct test that fails unexpectedly against the source means **stop and escalate**; a failing
+  test you were asked for as a repro is handed to the developer instead — see `<workflow>`.
 - End your report with `Extended: N · Rewritten: N · New: N`.
 
 The `testing-delivery-gate` skill applies to every delivery: load it before reporting done.
@@ -42,7 +43,7 @@ The `testing-delivery-gate` skill applies to every delivery: load it before repo
 
 | Repo | Location | Tests I write |
 |------|----------|---------------|
-| **com.etendoerp.go** | `{etendo_root}/modules/com.etendoerp.go` | JUnit under `src-test/src/com/etendoerp/go/...` |
+| **com.etendoerp.go** | `{etendo_root}/modules/com.etendoerp.go` | every test in the module: JUnit under `src-test/src/com/etendoerp/go/...`, and non-Java test code such as `scripts/test_check_test_hygiene.py` (Python `unittest`, run with `python3 -m unittest discover -s scripts`) |
 | etendo_schema_forge | sibling of `modules/` | none — I only run `make find-tests` from there |
 
 Layout: the test mirrors the production package. `src/com/etendoerp/go/rest/Foo.java` →
@@ -73,7 +74,7 @@ When a class already has several test classes split by behavior
 </what_i_never_do>
 
 <test_strategy>
-## Choosing the test kind (D19)
+## Choosing the test kind
 
 | The behavior under test | Kind |
 |---|---|
@@ -263,9 +264,13 @@ work or the class name.
 5. **Run them** — `./gradlew test --tests "<FQN>"` from the Etendo root.
 6. **Handle failures:**
    - The **test** is wrong (bad stub, unclosed `MockedStatic`, wrong matcher) → fix the test and re-run.
-   - A **correct** test fails against the source → **stop**. Do not commit it, do not weaken the
-     expectation, do not disable it. Report the suspected bug to the coordinator with the test as
-     the repro; the coordinator decides whether it is fixed now or ticketed.
+   - **Kind = repro** (you were asked to reproduce a known bug) → the failing test *is* the
+     expected outcome. Do not commit it on its own and do not make it pass: hand it, with the
+     command and the failure output, to the developer, who commits it together with the fix.
+   - A **correct** test fails unexpectedly against the source (any other kind) → **stop**. Do not
+     commit it, do not weaken the expectation, do not disable it. Report the suspected bug to the
+     coordinator with the test as the repro; the coordinator decides whether it is fixed now or
+     ticketed.
 7. **Deliver** — load the `testing-delivery-gate` skill and meet it. Deleting a test to go green
    is never an option (Sonar coverage runs on every PR).
 8. **Report** — the test classes `make find-tests` returned, the exact command and result, source
@@ -282,5 +287,5 @@ work or the class name.
 - **Tone:** Direct — state what you're testing and why
 - **Format:** Tests, the Gradle command and its result, the `Extended · Rewritten · New` line
 - **Verbosity:** 2/5
-- **On failure:** If the *test* is wrong, fix the test. If a correct test fails against the source, stop and escalate
+- **On failure:** If the *test* is wrong, fix the test. If a correct test fails unexpectedly against the source, stop and escalate (a requested repro goes to the developer)
 </communication_style>

@@ -10,9 +10,9 @@
 // Sources merged: `@covers` tags, import statements that resolve to the file
 // (Java: imports + same-package references), and `readFileSync` path literals.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, normalize, posix, relative, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 export const SF_ROOT = process.env.SF_ROOT || resolve(SCRIPT_DIR, '..');
@@ -24,7 +24,7 @@ const ALIASES = [
   ['@/', 'tools/app-shell/src/'],
   ['@generated/', 'artifacts/'],
 ];
-const SOURCE_ORDER = ['covers', 'import', 'same-package', 'readFileSync', 'readFileSync:basename'];
+const SOURCE_ORDER = ['covers', 'import', 'same-package', 'readFileSync', 'path', 'readFileSync:basename'];
 
 function toPosix(path) {
   return path.split('\\').join('/');
@@ -63,8 +63,11 @@ export function resolveTarget(arg, { sfRoot = SF_ROOT, goRoot = GO_ROOT, cwd = p
   const input = arg.trim();
 
   // Java FQN or bare class name: no slash, no extension, starts like a class.
-  if (!input.includes('/') && !/\.[a-z]+$/.test(input) && /^([a-z_][\w]*\.)*[A-Z]\w*$/.test(input)) {
-    if (input.includes('.')) return { repo: 'go', classes: [input] };
+  if (!input.includes('/') && !/\.[a-z]+$/.test(input) && /^([a-z_][\w]*\.)*[A-Z]\w*(\.[A-Z]\w*)*$/.test(input)) {
+    if (input.includes('.')) {
+      if (javaClassExists(goRoot, input)) return { repo: 'go', classes: [input] };
+      return { error: `no Java class ${input} under ${goRoot}/src or src-util` };
+    }
     const matches = gitLsFiles(goRoot, [`src/**/${input}.java`, `src-util/**/src/**/${input}.java`])
       .map(javaPathToFqn).filter(Boolean);
     if (matches.length === 0) return { error: `no Java class named ${input} under ${goRoot}/src or src-util` };
@@ -89,6 +92,31 @@ export function resolveTarget(arg, { sfRoot = SF_ROOT, goRoot = GO_ROOT, cwd = p
     return { repo: 'functional', relPath: toPosix(relative(sfRoot, abs)) };
   }
   return { error: `${input} is not inside schema_forge or com.etendoerp.go` };
+}
+
+/** `src` plus every `src-util/<name>/src` Java source root of com.etendoerp.go. */
+function javaSourceRoots(goRoot) {
+  const roots = ['src'];
+  const util = join(goRoot, 'src-util');
+  if (existsSync(util)) {
+    for (const name of readdirSync(util).sort()) {
+      if (existsSync(join(util, name, 'src'))) roots.push(`src-util/${name}/src`);
+    }
+  }
+  return roots;
+}
+
+/** True if the FQN (or its outer class, for a nested `Outer.Inner`) has a source file. */
+export function javaClassExists(goRoot, fqn) {
+  const roots = javaSourceRoots(goRoot);
+  let parts = fqn.replace(/\$/g, '.').split('.');
+  while (parts.length) {
+    const rel = `${parts.join('/')}.java`;
+    if (roots.some((root) => existsSync(join(goRoot, root, rel)))) return true;
+    if (parts.length < 2 || !/^[A-Z]/.test(parts[parts.length - 2])) return false;
+    parts = parts.slice(0, -1);
+  }
+  return false;
 }
 
 function isInside(abs, root) {
@@ -169,17 +197,7 @@ export function readFileSyncMatch(src, testRelPath, targetRelPath) {
   const targetBase = posix.basename(targetRelPath);
   if (!src.includes(targetBase)) return null;
 
-  // path.join / resolve / new URL calls: join their string literals and try
-  // both the test's directory and the repo root as the base.
-  const callRe = /\b(?:join|resolve|URL)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
-  for (const m of src.matchAll(callRe)) {
-    const literals = [...m[1].matchAll(/['"`]([^'"`$]+)['"`]/g)].map((l) => l[1]);
-    if (!literals.some((lit) => lit.includes(targetBase))) continue;
-    const joined = posix.join(...literals);
-    const fromTest = posix.normalize(posix.join(posix.dirname(testRelPath), joined));
-    const fromRoot = posix.normalize(joined);
-    if (fromTest === targetRelPath || fromRoot === targetRelPath) return 'readFileSync';
-  }
+  if (joinCallResolves(src, testRelPath, targetRelPath)) return 'readFileSync';
 
   // A literal that is a segment-aligned suffix of the target path. Import
   // specifiers are skipped: they are the `import` source, not a text read.
@@ -192,6 +210,44 @@ export function readFileSyncMatch(src, testRelPath, targetRelPath) {
       return 'readFileSync';
     }
     if (lit === targetBase) return 'readFileSync:basename';
+  }
+  return null;
+}
+
+/**
+ * path.join / resolve / new URL calls: join their string literals and try both
+ * the test's directory and the repo root as the base. The resolved path must be
+ * the target itself, so a same-named file elsewhere never matches.
+ */
+function joinCallResolves(src, testRelPath, targetRelPath) {
+  const targetBase = posix.basename(targetRelPath);
+  const callRe = /\b(?:join|resolve|URL)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+  for (const m of src.matchAll(callRe)) {
+    const literals = [...m[1].matchAll(/['"`]([^'"`$]+)['"`]/g)].map((l) => l[1]);
+    if (!literals.some((lit) => lit.includes(targetBase))) continue;
+    const joined = posix.join(...literals);
+    const fromTest = posix.normalize(posix.join(posix.dirname(testRelPath), joined));
+    const fromRoot = posix.normalize(joined);
+    if (fromTest === targetRelPath || fromRoot === targetRelPath) return true;
+  }
+  return false;
+}
+
+/**
+ * A path literal that resolves exactly to the target, whatever function it is
+ * handed to (a loader helper, a dynamic `import()` of a constant, …). Returns
+ * 'path' or null. Unlike readFileSyncMatch it needs no read call, so it only
+ * accepts exact resolutions — never a suffix or a bare file name.
+ */
+export function pathLiteralMatch(src, testRelPath, targetRelPath) {
+  if (!src.includes(posix.basename(targetRelPath))) return null;
+  if (joinCallResolves(src, testRelPath, targetRelPath)) return 'path';
+  // Import specifiers are the `import` source; mock targets are not covered at all.
+  const skipped = new Set(parseImportSpecifiers(src));
+  for (const m of src.matchAll(/\b(?:vi|jest)\.(?:do)?[mM]ock\s*\(\s*['"`]([^'"`]+)['"`]/g)) skipped.add(m[1]);
+  for (const m of src.matchAll(/['"`](\.\.?\/[^'"`$\n]+)['"`]/g)) {
+    if (skipped.has(m[1])) continue;
+    if (posix.normalize(posix.join(posix.dirname(testRelPath), m[1])) === targetRelPath) return 'path';
   }
   return null;
 }
@@ -209,7 +265,13 @@ export function findFunctionalTests(targetRelPath, { root = SF_ROOT, files } = {
       sources.add('import');
     }
     const rfs = readFileSyncMatch(src, rel, targetRelPath);
-    if (rfs) sources.add(rfs);
+    if (rfs === 'readFileSync') {
+      sources.add(rfs);
+    } else if (pathLiteralMatch(src, rel, targetRelPath)) {
+      sources.add('path');
+    } else if (rfs) {
+      sources.add(rfs);
+    }
     if (sources.size) hits.push({ file: rel, sources: sortSources(sources) });
   }
   return rankHits(hits);
@@ -302,7 +364,21 @@ export function main(argv) {
   return 0;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+/**
+ * True when the module at `metaUrl` is the script node was started with. Both
+ * sides go through realpath + file URL, so a symlink or a path with spaces
+ * still matches (node resolves the main module's symlink before loading it).
+ */
+export function isEntryPoint(metaUrl, argv1 = process.argv[1]) {
+  if (!argv1) return false;
+  try {
+    return metaUrl === pathToFileURL(realpathSync(argv1)).href;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint(import.meta.url)) {
   process.exitCode = main(process.argv.slice(2));
 }
 
