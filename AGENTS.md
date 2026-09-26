@@ -46,10 +46,8 @@ Agent definitions live in `.claude/agents/` — each agent wrote their own file 
 | tenant-fixer.md | Remedy | TENANT REMEDIATION — closes Etendo GO provisioning gaps on both fronts (preventive onboarding fixes for new tenants + corrective data-fixes for existing ones) | Diagnostic |
 | merge-block-helper.md | Blockie | MERGE BLOCK PRE-FLIGHT — given a dev task (ETP-XXXX), checks its `feature/ETP-XXXX` branch + PR across the 3 repos, verifies CI/review/mergeability/target/code-owner gate, reports a traffic-light readiness table. Merges (plain local `git merge`) ONLY the branches the human explicitly authorizes, and always **into the current merge-block branch, NEVER `develop`** (the block hits `develop` once later → one Jenkins run); never touches the PRs, never pushes | Diagnostic |
 
-When spawning agents, use `subagent_type="general-purpose"` and include the agent identity/role in the prompt.
+When spawning agents, pass the agent's frontmatter `name` as `subagent_type` (`workflow`, `schema-forge-developer`, `window-agent`, `alex`, `qa`, `documentarian`, `tenant-fixer`, `merge-block-helper`, `test-generator`); the definition file supplies the identity and rules, so the prompt only carries the task.
 Pass `name="developer-1"` (or 2/3/4) to address each slot independently via `SendMessage`.
-The `.claude/agents/` files are NOT valid `subagent_type` values — always use `"general-purpose"`.
-Include the agent's name, role, and key rules in the prompt passed to the subagent.
 
 ### Agent Dispatch Guide
 
@@ -92,14 +90,14 @@ Max rejection cycles per phase: 3
 
 <pipeline_rules>
 
-## Orientation Before Action (MANDATORY)
+## Orientation Before Action
 Before starting ANY task, agents MUST investigate their environment:
 1. **Where is the functional guide?** — If the task touches a window, start by locating its guide through `docs/generated-custom-windows/INDEX.md` and open `docs/generated-custom-windows/<window>.md`.
 2. **Where am I?** — Check the current branch, working directory, and repo state (`git branch --show-current`, `pwd`)
 3. **What exists?** — Read relevant existing files before modifying or creating anything. Never assume file contents or structure.
 4. **What's the DB state?** — If the task involves DB access, verify connectivity works (DB credentials auto-resolve from `gradle.properties` — see `cli/src/db.js`)
 5. **What's already done?** — Check `artifacts/` for existing work on the window/process. Check `docs/feedback.md` for known issues.
-6. **What are the IDs?** — Never hardcode or guess window/process/menu IDs. Always query the DB or use `resolve-menu.js --menu-name`.
+6. **What are the IDs?** — Never hardcode or guess window/process/menu IDs. Always query the DB or use `npx sf-menu-cache search "<name>"`.
 
 This prevents wasted cycles from wrong assumptions (wrong IDs, stale data, broken connections).
 
@@ -118,11 +116,11 @@ Delegate all branch operations to Clerk. See `docs/branch-workflow.md` for full 
 4. Returns to the phase that rejected (no skipping phases)
 5. Max 3 cycles per phase, then escalate to user
 
-## Documentation Freshness (MANDATORY)
-**CRITICAL POLICY:** Code change + doc update = one atomic unit. REVIEW must reject PRs that change behavior without updating docs. Full checklist and trigger list: `docs/self-documentation-policy.md`.
+## Documentation Freshness
+Code change + doc update = one atomic unit. REVIEW must reject PRs that change behavior without updating docs. Full checklist and trigger list: `docs/self-documentation-policy.md`.
 Window-specific changes MUST update the matching `docs/generated-custom-windows/<window>.md` guide in the same change.
 
-## Commit Conventions (MANDATORY)
+## Commit Conventions
 All commits MUST follow Etendo Git Police conventions as defined by the `/etendo-workflow-manager` skill.
 **This skill MUST be installed.** If it is not available, ask the user to install it before proceeding with any commits.
 
@@ -166,7 +164,7 @@ Create a Jira task inside the current epic, then delegate branch + PR creation t
 </what_i_never_do>
 
 <workflow_delegation>
-## MANDATORY: Delegate to Clerk for all of these
+## Delegate to Clerk for all of these
 
 | Operation | Delegate to Clerk |
 |-----------|---------------------|
@@ -177,7 +175,7 @@ Create a Jira task inside the current epic, then delegate branch + PR creation t
 | Check epic status | ✅ |
 
 Clerk agent file: `.claude/agents/workflow.md`
-Spawn with: `subagent_type="general-purpose"` and include full Clerk identity + the operation to perform.
+Spawn with: `subagent_type="workflow"` and the operation to perform.
 </workflow_delegation>
 
 <communication>
@@ -222,7 +220,7 @@ com.etendoerp.go at `{etendo_root}/modules/com.etendoerp.go/` (sibling of schema
 
 ## Menu Discovery
 
-Use `node cli/src/menu-cache.js search "<name>"` to find windows/processes/reports. Never guess IDs — always query.
+Use `npx sf-menu-cache search "<name>"` to find windows/processes/reports. Never guess IDs — always query.
 
 ## Core Domain Concepts
 
@@ -232,9 +230,9 @@ Use `node cli/src/menu-cache.js search "<name>"` to find windows/processes/repor
 - **System field derivations**: fromConfig, fromParent, fromField, lookup, computed, sequence
 - **OBDal transactions**: single DB transaction, all-or-nothing rollback. No Sagas.
 
-### Spec Naming Convention (MANDATORY)
+### Spec Naming Convention
 
-All spec names are **kebab-case** via `toSpecName()` in `cli/src/push-to-neo.js` (single source of truth).
+All spec names are **kebab-case** via `toSpecName()` in `push-to-neo.js` in `schema_forge_core` (published as `sf-push-neo`; single source of truth).
 Artifact directory name = spec name. **NEVER** guess — use `toSpecName()` or read from artifact dir.
 When referring to a window in code or config, use kebab-case (`purchase-order`), not PascalCase or display name.
 
@@ -250,7 +248,7 @@ All UI extensions are declared in `decisions.json → window.*` — the generato
 
 See `docs/window-templates.md` for layout types (kanban, calendar, custom), configuration, custom windows convention, and the registry/generator flow.
 
-## List Columns Must Be Real Columns (MANDATORY)
+## List Columns Must Be Real Columns
 
 **A list column whose value does not come from an AD column of the entity's table is a design bug, not a shortcut.** A synthetic `type: 'custom'` column with no `column` and no `backendFilterKey` is silently dropped from the advanced filter by `isFilterableColumn` (core `AdvancedFilterBuilder.jsx`) — no error, no warning, no log. The user simply never finds the field in "Filtro por condicionales", and nobody notices for months.
 
@@ -266,7 +264,7 @@ Before writing a `type: 'custom'` column with a `render:` callback in any `*Head
 If a column legitimately needs a `type: 'custom'` cell renderer AND must stay filterable, keep the AD column as the source and add `column:` (grid render and filter mode are resolved independently — see `transactionDocument` in `artifacts/sales-invoice/custom/InvoiceHeaderTable.jsx`, which pairs a badge renderer with `column: 'C_DocTypeTarget_ID'` and `filterMode: 'identifier'`).
 
 
-### Computed Column Policy (MANDATORY)
+### Computed Column Policy
 
 **Stored (`Computation_Mode = 'S'`) whenever possible; within stored, synchronous (`Refresh_Mode = 'S'`) whenever possible.**
 
@@ -291,7 +289,7 @@ A computed column that reads a table from **another module** needs that module d
 
 **Every user-visible string MUST be translated.** The app is primarily used in Spanish by real clients. Hardcoded English strings are treated as bugs. See `docs/i18n-guide.md` for the full reference (hooks, locale JSON structure, rules for adding keys). Key hooks: `useUI()` for generic labels, `useLabel()` for AD fields, `useMenuLabel()` for menus/tabs. All new keys must be added to BOTH `en_US.json` and `es_ES.json`.
 
-## Currency & Amount Formatting (MANDATORY)
+## Currency & Amount Formatting
 
 **Every monetary value MUST be formatted through the canonical currency utilities — never a hand-rolled `Intl.NumberFormat`/`toLocaleString` call.** A hardcoded locale (`'en-US'`, unpinned `undefined`) or a missing `useGrouping: true` silently drops the thousands separator or renders the wrong decimal comma — this exact bug shipped repeatedly across the codebase before ETP-4314 centralized it. Treat any new ad-hoc money formatter as a bug, not a style nit.
 
@@ -300,7 +298,7 @@ A computed column that reads a table from **another module** needs that module d
 - Both read the instance-wide thousands/decimal separators from one shared NEO config source (`GET /sws/neo/currency-format`, `currencyFormatConfig.js`) — see `docs/plans/2026-07-28-currency-format-centralization-proposal.md` for the full architecture.
 - Before adding a new component or report that displays an amount, **grep for `formatCurrency` first** — there is almost certainly an existing pattern to copy in a sibling window/component.
 
-## Date-Only Parsing & Formatting (MANDATORY)
+## Date-Only Parsing & Formatting
 
 **Every business/calendar date (invoice date, movement date, statement date, etc.) MUST be parsed through the canonical date-only utilities — never a hand-rolled `new Date(string)` on a date-only value.** `new Date("2026-08-10")` parses the string as UTC midnight; reading it back with local-time getters (`getDate()`/`getMonth()`/`getFullYear()`) or formatting it with `toLocaleDateString()`/`Intl.DateTimeFormat` without an explicit `timeZone` rolls the displayed day back one under a negative-UTC-offset timezone (e.g. `America/Argentina/Buenos_Aires`). This exact bug shipped repeatedly across the codebase — ETP-4031, then again as ETP-4850 across five unrelated components — before being centralized. Treat any new ad-hoc date-only parser as a bug, not a style nit.
 
@@ -309,7 +307,7 @@ A computed column that reads a table from **another module** needs that module d
 - A comparator that only orders full timestamp instants (no local-getter reads, no day-bucket keys) is timezone-independent and does not need this helper — don't over-apply the fix where the bug can't occur.
 - Before writing a new date formatter or date-bucketing comparator, **grep for `parseCalendarDate`/`formatCalendarDate` first** — there is almost certainly an existing pattern to copy in a sibling window/component (10+ call sites already use it).
 
-## CSV / Spreadsheet Output (MANDATORY)
+## CSV / Spreadsheet Output
 
 **Every CSV cell MUST go through the canonical neutralization policy — never a hand-rolled escape.** A value starting with `=`, `+`, `-`, `@`, TAB, CR, LF or a full-width variant is executed as a **formula** when the file is opened in Excel, Calc or Sheets (CWE-1236). The victim is not the user who exports, it is whoever opens the file — so this is an output-encoding problem, and quoting alone does not fix it. This shipped repeatedly (ETP-4559/4560 fixed two paths, then ETP-5032 found four more, including the list Print → CSV, which had no escaping at all, and nine accounting reports that had each hand-copied a quoting-only `csvField`). Treat any new ad-hoc CSV escaper as a bug, not a style nit.
 
@@ -317,7 +315,7 @@ A computed column that reads a table from **another module** needs that module d
 - **A builder that must keep its own quoting style** (e.g. fiscal-monitor's always-quote `buildCsvAndDownload`): use `neutralizeSpreadsheetCell(value)` from the same module — the policy without the quoting. Do NOT write a second policy.
 - **Handlebars / jsreport templates** (`template-csv.hbs`, `ReportDrawer.CSV_TEMPLATE`): the `csvField` helper from `templates/reports/helpers/report-html-helpers.js` is shipped automatically by `buildJsreportHelpersString()`. **Always TRIPLE-stash it** — `{{{csvField x}}}`, never `{{ }}`: double-stash HTML-escapes the helper's own `""` into `&quot;&quot;` and corrupts the file. Never declare a `csvField` in a per-report `helpers.js`; it is canonical, so a local copy is silently stripped and becomes dead code.
 - **xlsx / Excel exports are deliberately EXEMPT.** A workbook string cell is inert (a formula is a different cell type), so an apostrophe there is visible garbage, not a defence. See `NeoXlsxExportWriter.java` and `buildTemplateXlsx.js`.
-- The policy, the trigger set and the expected output for every input are normative: `{etendo_root}/modules/com.etendoerp.go/docs/security/csv-neutralization-fixtures.md` (contract) and `docs/adr/0004-csv-formula-neutralization.md` (rationale). Add a trigger to the table FIRST, then to all three implementations (Java, `csvSerializer.js`, the jsreport source text). Before writing anything that emits CSV, **grep for `csvField` first**.
+- The policy, the trigger set and the expected output for every input are normative: `{etendo_root}/modules/com.etendoerp.go/docs/security/csv-neutralization-fixtures.md` (contract) and `{etendo_root}/modules/com.etendoerp.go/docs/adr/0004-csv-formula-neutralization.md` (rationale). Add a trigger to the table FIRST, then to all three implementations (Java, `csvSerializer.js`, the jsreport source text). Before writing anything that emits CSV, **grep for `csvField` first**.
 
 ## Authenticated Requests (MANDATORY)
 
@@ -337,7 +335,9 @@ Contract tests (Node.js), Unit tests (JUnit in Etendo Go), Integration tests (OB
 Run `make test` for CLI tests. See `docs/e2e-testing-guide.md` for E2E setup, conventions, and `data-testid` patterns.
 Every process must declare >=3 edge cases. Every kept rule must have a behavioral test.
 
-**Delegation rule (MANDATORY):** Any task that writes, extends, or fixes tests — unit (Vitest / Node test runner), source-reading, or Playwright E2E — MUST be delegated to the `test-generator` subagent (Tester). Spawn it with `subagent_type="general-purpose"` and include Tester's identity from `.claude/agents/test-generator.md`. Before writing or asking Tester to write a Playwright spec, the agent (and the coordinator) MUST read `docs/e2e-testing-guide.md` first; the canonical mocked-spec reference is `e2e/tests/flows/row-quick-actions.mocked.spec.js`.
+**Delegation rule:** Tests — unit (Vitest / Node test runner), source-reading, or Playwright E2E — are written by the `test-generator` subagent (Tester); spawn it with `subagent_type="test-generator"`. The one exception: a developer writes the failing repro test for its own bug fix, inside its red-green loop. Every other test — feature coverage, edge cases, E2E flows — goes to Tester.
+
+Before writing or asking Tester to write a Playwright spec, the agent (and the coordinator) MUST read `docs/e2e-testing-guide.md` first; the canonical mocked-spec reference is `e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`.
 
 ## Pipeline Validation
 
@@ -366,6 +366,8 @@ live in `.claude/hooks/`.
 | Hook | Event | Effect |
 |---|---|---|
 | `block-push-no-verify.sh` | `PreToolUse` / `Bash` | **Denies** any `git push --no-verify` issued through the Bash tool |
+| `block-coverage-threshold-overrides.sh` | `PreToolUse` / `Bash` | **Denies** commands that override `COVERAGE_MINIMUM` / `COVERAGE_TOLERANCE` inline — threshold changes belong in reviewed config |
+| `check-detailview-growth.mjs` | `PreToolUse` / file edits | **Blocks** an edit that makes `DetailView.jsx` longer than its merge-base (override the base with `DETAILVIEW_BASE_REF`) |
 
 Why: `--no-verify` skips `.githooks/pre-push`, the only local gate that catches
 failing tests, coverage drops (`docs/coverage-gate.md`) and Sonar regressions
@@ -400,7 +402,7 @@ explicitly un-ignored via negation rules, so a new subdirectory needs its own.
 
 ## Static Analysis (SonarQube)
 
-Run `cli/sonar-check.sh` to analyze specific Java files with SonarQube and get results inline.
+Both Sonar scripts live in `schema_forge_core` (`../schema_forge_core/cli/`), not in this repo; run them from there. `cli/sonar-check.sh` analyzes specific Java files with SonarQube and gets results inline.
 Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc` or `~/.bashrc`, and `sonar-scanner` CLI installed.
 
 ```bash
@@ -420,7 +422,7 @@ Requires `SONAR_TOKEN` and `SONAR_HOST_URL` exported in `~/.zshrc` or `~/.bashrc
 The script scans, waits for the report to process, and prints issues sorted by severity. Exit code 0 = clean, 1 = issues found.
 **Delegate to Alex (Reviewer) or Sentinel (QA)** for running static analysis as part of the pipeline.
 
-### Per-file line coverage (`make sonar-file-coverage` / `cli/sonar-coverage.sh`)
+### Per-file line coverage (core: `make sonar-file-coverage` / `cli/sonar-coverage.sh`)
 
 `cli/sonar-coverage.sh` reads EXISTING SonarQube analysis (it does NOT run a scan) and reports, for given files, which lines remain uncovered — collapsed into ranges. It works for files in BOTH repos (schema_forge and com.etendoerp.go): each file's repo and project key are auto-detected from its on-disk location (override with `--project schema-forge|etendo-go`). Use `NEW_ONLY=1` to show only new-code uncovered lines — the "coverage dropped in this PR" review case. Other flags: `BRANCH=`, `PR=`, plus `--partial` (also list partial branches) and `-q`. Exit 0 = fully covered, 1 = uncovered lines found, 2 = error.
 
@@ -462,12 +464,12 @@ This runs: `decisions.json + schema-raw.json → contract.json → generated/web
 
 **Lower-level commands (use only when `make regen` does not fit):**
 ```bash
-node cli/src/resolve-curated.js --window <name> --write             # single phase, no extract, no push
-node cli/src/pipeline.js --menu-name "..." --skip-to resolve-curated --skip-interactive
-node cli/src/push-to-neo.js <spec> [--dry-run]                      # push only (after a regen without it)
-node cli/src/extract-from-db.js --menu-name "..."                   # re-extract raw schema only
+npx sf-resolve-curated --window <name> --write             # single phase, no extract, no push
+npx sf-pipeline --menu-name "..." --skip-to resolve-curated --skip-interactive
+npx sf-push-neo <spec> [--dry-run]                         # push only (after a regen without it)
+npx sf-extract-db --menu-name "..."                        # re-extract raw schema only
 ```
-Reach for these when debugging a single phase, dry-running, or using flags `make regen` does not expose (e.g. `--dry-run`, custom `--skip-to`). After any direct `push-to-neo.js`, remind the user to run `./gradlew export.database` in Etendo root — `make regen PUSH_TO_NEO=1` follows the same rule.
+Reach for these when debugging a single phase, dry-running, or using flags `make regen` does not expose (e.g. `--dry-run`, custom `--skip-to`). After any direct `sf-push-neo`, remind the user to run `./gradlew export.database` in Etendo root — `make regen PUSH_TO_NEO=1` follows the same rule.
 
 ### Step 3 — Verify contract integrity (MANDATORY after every --write)
 Run this and confirm **no field shows `false` for readOnly when it should be locked**:
@@ -518,7 +520,7 @@ Etendo AD findings go in `docs/etendo-ad/`, NOT in per-window artifacts.
 - Keys: `bbdd.host`, `bbdd.port`, `bbdd.user`, `bbdd.password`, `bbdd.sid`
 - Etendo root: parent directory of this repo (e.g., `../` relative to schema_forge)
 
-## Frontend Build & Deploy (MANDATORY final step)
+## Frontend Build & Deploy
 
 `make deploy` is deprecated. The UI is now compiled during commits and deployed in a separate container, so the target only prints a warning unless you pass `LEGACY_DEPLOY=1`.
 `make dev` is still used for hot reload at localhost:3100.
@@ -527,7 +529,7 @@ Legacy override: `make deploy LEGACY_DEPLOY=1 MODULE_WEB={path}`. No Tomcat rest
 
 ## NEO Headless
 
-**CRITICAL:** After running `push-to-neo.js`, always remind to run `./gradlew export.database` in Etendo root. Without this, NEO config only lives in DB and won't survive rebuild.
+After running `sf-push-neo` (or `make regen PUSH_TO_NEO=1`), always remind to run `./gradlew export.database` in Etendo root. Without this, NEO config only lives in DB and won't survive rebuild.
 
 ## Etendo AD Database Conventions
 
@@ -543,7 +545,7 @@ Legacy override: `make deploy LEGACY_DEPLOY=1 MODULE_WEB={path}`. No Tomcat rest
 make uuid
 ```
 
-This is the ONLY accepted way to generate a new ID. Existing IDs must always be looked up via `cli/src/menu-cache.js`, `resolve-menu.js --menu-name`, or a DB query — never guessed. Agents that fabricate UUIDs cause silent collisions and broken FK references.
+This is the ONLY accepted way to generate a new ID. Existing IDs must always be looked up via `npx sf-menu-cache search`, or a DB query — never guessed. Agents that fabricate UUIDs cause silent collisions and broken FK references.
 
 ## Knowledge Persistence
 

@@ -393,5 +393,5 @@ React components are extracted the same way, but with extra rules — flag these
   just simpler. If you cannot convince yourself a hunk is equivalent, it is RISKY.
 - Test commands and the full suite live in the project `Makefile` (`make test`) and root
   `package.json`. Targeted `node --test` / `vitest run` are preferred for fast iteration.
-- To compare cognitive-complexity metrics before/after, the user can run `./cli/sonar-check.sh`
+- To compare cognitive-complexity metrics before/after, the user can run `./cli/sonar-check.sh` from `schema_forge_core`
   on the changed Java files (this skill does not do that automatically).

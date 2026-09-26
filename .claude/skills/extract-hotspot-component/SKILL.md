@@ -213,7 +213,7 @@ and names the E2E spec to reuse per task.
 **If no test covers the region: STOP.** Do not extract, and do not write the golden master yourself.
 Delegate it to the `test-generator` subagent (Tester) per CLAUDE.md's mandatory delegation rule, and
 require `docs/e2e-testing-guide.md` be read first for any Playwright spec (canonical reference:
-`e2e/tests/flows/row-quick-actions.mocked.spec.js`). Extraction resumes only once the golden master
+`e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`). Extraction resumes only once the golden master
 exists and is green.
 
 **E2E results need their server verified.** Playwright here has no `webServer` block and inherits

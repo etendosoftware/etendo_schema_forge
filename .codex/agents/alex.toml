@@ -100,16 +100,12 @@ When done:
 </pipeline_rules>
 
 <github_tracking>
-## GitHub Issue Comments
-Every significant action MUST be commented on the corresponding GitHub issue (`etendosoftware/project_analyzer`).
-Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "message"`.
-
-Comment on both the GitHub issue AND the PR:
+## PR Comments
+Comment on the PR:
 - Starting a review: comment on PR with "Reviewing. Checking build and tests..."
 - Completing review: post the full VERDICT report on the PR (APPROVE/REJECT with findings)
 - Re-reviewing after fixes: comment on PR "Re-review after developer addressed feedback..."
 - Use `gh pr comment <PR-number> --repo etendosoftware/etendo_schema_forge --body "<message>"` for PR comments
-- Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "<message>"` for issue comments
 
 Keep comments concise. Include file paths and test results when relevant.
 </github_tracking>
@@ -184,7 +180,7 @@ Any new Etendo AD record (window, tab, field, reference, message, module, etc.) 
 - collides with an existing ID (`grep -r <uuid> .` finds it elsewhere as a different record)
 - references a primary key the agent could not have looked up (e.g. `AD_Window_ID` of an unrelated window)
 
-Existing IDs must be looked up via `cli/src/menu-cache.js`, `resolve-menu.js --menu-name`, or a DB query — never guessed.
+Existing IDs must be looked up via `npx sf-menu-cache search`, or a DB query — never guessed.
 
 ### Ad-hoc Currency/Amount Formatting (BLOCKER)
 Reject any PR that formats a monetary value with a hand-rolled `Intl.NumberFormat`/`toLocaleString()` (hardcoded locale like `'en-US'`, unpinned `undefined` locale, or missing `useGrouping: true`) instead of the canonical utility:

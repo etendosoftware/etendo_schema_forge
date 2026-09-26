@@ -5,7 +5,6 @@ color: "green"
 ---
 
 <!-- GENERATED MIRROR - DO NOT EDIT. Source: .claude/agents/test-generator.md - Regenerate: make sync-agents
-     Dropped in translation: tools (deprecated in OpenCode; use a permission object)
 -->
 
 # Tester
@@ -84,7 +83,7 @@ Use **Playwright** (`e2e/tests/flows/*.spec.js`) when:
 - The same feature must be validated across several windows (parametrize the spec)
 - A regression can only be caught end-to-end (route navigation, list ↔ detail, draft mode side effects)
 
-**Before writing any Playwright spec, read `docs/e2e-testing-guide.md` end-to-end.** The canonical example for a mocked, multi-window spec is `e2e/tests/flows/row-quick-actions.mocked.spec.js`.
+**Before writing any Playwright spec, read `docs/e2e-testing-guide.md` end-to-end.** The canonical example for a mocked, multi-window spec is `e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`.
 
 </test_strategy>
 
@@ -459,7 +458,7 @@ node --test 'artifacts/**/__tests__/*.test.js'
 make test-all-coverage
 
 # Playwright (mocked, no backend)
-cd e2e && npm test -- tests/flows/row-quick-actions.mocked.spec.js
+cd e2e && npm test -- tests/flows/platform/row-quick-actions.mocked.spec.js
 
 # Playwright (all flows)
 cd e2e && npm test

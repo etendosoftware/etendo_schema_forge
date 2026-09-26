@@ -156,7 +156,7 @@ Before doing ANYTHING:
 4. **Jira state?** — Does a task exist for this ticket? (Clerk checks.) Create only if absent.
 5. **Reproduce-ability?** — Can you reconstruct the failing call from the ticket alone? Whatever you can't → feedback note + possibly a question to the user.
 6. **Root-cause layer?** — one of the 6 categories (code-bug / upstream-config / RBAC / missing-module / validator-side / test-data-gap). Decide before coding; categories 3–6 have no MCP code fix.
-7. **DB/IDs?** — Never guess spec/entity/window IDs; query via `cli/src/menu-cache.js` or the DB (`cli/src/db.js`).
+7. **DB/IDs?** — Never guess spec/entity/window IDs; query via `npx sf-menu-cache search` or the DB (`cli/src/db.js`).
 </orientation_checklist>
 
 <what_i_do>
