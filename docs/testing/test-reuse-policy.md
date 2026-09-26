@@ -122,6 +122,13 @@ The assertion heuristic accepts any `expect…(` / `assert…(` call in the bloc
 helpers such as `expectRow(...)`. If the assertion lives in a helper with another name, the
 warning is a false positive; rename the helper or assert in the block.
 
+### Known limits
+
+- The no-assertion heuristic scans the raw block body, comments included, so a commented-out
+  `expect()` hides the finding.
+- In `com.etendoerp.go`, `make find-tests` only resolves Java classes; for scripts or other
+  non-Java files, use `grep`.
+
 ## Related
 
 - `testing-delivery-gate` skill — delivery evidence; it already says "extend before creating".
