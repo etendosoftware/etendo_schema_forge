@@ -93,7 +93,7 @@ make find-tests FILE=../modules/com.etendoerp.go/src/com/etendoerp/go/rest/Etend
 ```
 
 `scripts/find-tests.js` detects the repo from the argument (a `.java` path, a path under
-`com.etendoerp.go`, or a bare class name means Java) and merges three sources:
+`com.etendoerp.go`, or a bare class name means Java) and merges four sources:
 
 | Source | Functional repo | `com.etendoerp.go` |
 |---|---|---|
@@ -133,6 +133,37 @@ warning is a false positive; rename the helper or assert in the block.
   non-Java files, use `grep`.
 - A path assembled from variables (`join(__dirname, '..', FIX_FILE)`) or from a constant defined in
   another module is not resolved; such a test is found only through `@covers` or an import.
+
+## Deferred / known follow-ups
+
+Tracked here until each one lands; remove the line when it does.
+
+**Before the 2026-10-10 flip to `block`:**
+
+- Backfill `@covers` in the legacy tests. Otherwise the blocking check fails every PR that
+  touches a legacy test file for a reason unrelated to the PR.
+- Decide whether the `com.etendoerp.go` `test-hygiene` check becomes a *required* status. Its
+  workflow has a `paths:` filter, so a required check stays pending forever on PRs that touch no
+  test; making it required needs a job that always reports (e.g. a no-op pass when no test
+  changed).
+
+**Known low-severity gaps in the scripts** (`find-tests.js`, `check-test-hygiene.js`,
+`check-test-hygiene.py`):
+
+- Test file names with non-ASCII characters are skipped: without `-z`, git quotes such paths.
+- A `@covers` pointing at a directory is handled differently by the JS and the Python script.
+- An empty `--base` behaves differently in the two hygiene scripts.
+- `make find-tests` given a directory instead of a file returns spurious hits.
+- The `path` source of `find-tests` also matches relative paths written inside comments.
+- A pure rename (git `R100`) is treated as a new file, so it gets the new-file checks.
+
+**Separate, dedicated changes:**
+
+- Suite unification and cleanup: a shared mock harness, consolidating hotspot test files
+  (DetailView, DataTable, useEntity, `report-*`), migrating source-reading tests that actually
+  test behavior to executed tests, and running only the affected tests locally.
+- The upstream change request for the `dev-assistant:etendo-test` skill
+  (`docs/testing/etendo-test-skill-review.md`) still has to be filed by a human.
 
 ## Related
 

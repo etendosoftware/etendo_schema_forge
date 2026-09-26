@@ -6,6 +6,12 @@ This guide explains how to write automated end-to-end tests for Schema Forge UI 
 2. **Discover + Automate** — Explore with agent-browser, then write Playwright tests
 3. **Manual** — Write tests from scratch using known selectors
 
+**Before writing a spec**, follow the reuse-first protocol in
+[`testing/test-reuse-policy.md`](testing/test-reuse-policy.md): run
+`make find-tests FILE=<path>` and extend an existing spec when one covers the flow, add
+`// @covers <path>` for the component(s) the spec drives, and never name a spec after a ticket.
+Playwright specs are written by the `tester-functional` agent.
+
 ## Prerequisites
 
 ```bash
