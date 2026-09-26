@@ -75,7 +75,7 @@ Schema Forge is now **two sibling repos + one runtime module**:
 - Skip running the tests after writing them
 - Leave a test suite with failures
 - Hardcode English strings in vitest JSX tests (use mock i18n that returns the key)
-- Write tests for generated files directly — test the generator or the custom wrapper instead
+- Write tests for generated files directly — test the custom wrapper, or report a generator issue to the coordinator (generator tests live in schema_forge_core)
 - Write JUnit — that is `tester-go`'s
 </what_i_never_do>
 

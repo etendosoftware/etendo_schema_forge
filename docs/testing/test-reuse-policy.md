@@ -66,7 +66,7 @@ Java (`com.etendoerp.go`) — in the test class Javadoc, the fully qualified cla
 /**
  * Unit tests for {@link NeoCrudHandler}.
  *
- * @covers com.etendoerp.go.schemaforge.handlers.NeoCrudHandler
+ * @covers com.etendoerp.go.schemaforge.NeoCrudHandler
  */
 class NeoCrudHandlerTest {
 ```
@@ -111,7 +111,7 @@ it by opening the test.
 | Check | Functional (`ratchet-guards.yml` → `scripts/check-test-hygiene.js`) | `com.etendoerp.go` (`test-hygiene.yml` → `scripts/check-test-hygiene.py`) |
 |---|---|---|
 | New/modified test file without `@covers` | yes | yes (Javadoc) |
-| `@covers` pointing to a missing file or class | yes | yes |
+| `@covers` pointing to a missing file or class | yes | yes (class looked up under `src/` and `src-util/*/src/`) |
 | New test file named `etp-?\d{4}` (case-insensitive) | yes | yes |
 | New Vitest `it`/`test` block with no `expect(` (heuristic) | yes | — |
 

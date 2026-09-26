@@ -77,6 +77,24 @@ describe('parseCoversWithLines', () => {
   it('returns an empty list without tags', () => {
     assert.deepEqual(parseCoversWithLines('it("x", () => {});'), []);
   });
+
+  it('accepts a tag on a Javadoc-style continuation line', () => {
+    assert.deepEqual(parseCoversWithLines('/**\n * @covers a/b.js\n */'), [{ path: 'a/b.js', line: 2 }]);
+  });
+
+  it('ignores @covers inside a string literal', () => {
+    const src = [
+      "const src = '// @covers src/gone.js';",
+      "it('flags @covers pointing nowhere', () => {});",
+      'const t = `@covers src/also-gone.js`;',
+    ].join('\n');
+    assert.deepEqual(parseCoversWithLines(src), []);
+  });
+
+  it('ignores @covers mentioned in comment prose', () => {
+    const src = '// every file must carry @covers src/gone.js\n/* see the @covers tag */';
+    assert.deepEqual(parseCoversWithLines(src), []);
+  });
 });
 
 describe('findClosingParen', () => {
@@ -364,6 +382,18 @@ describe('main', () => {
     it('takes the mode from TEST_HYGIENE_MODE when no flag is given', () => {
       const res = run(['--base', base, '--head', dirty], { TEST_HYGIENE_MODE: 'block' });
       assert.equal(res.status, 1);
+    });
+
+    it('annotate mode turns a git error into a warning and exits 0', () => {
+      const res = run(['--base', 'no-such-ref', '--head', dirty]);
+      assert.equal(res.status, 0, res.stderr);
+      assert.match(res.stdout, /::warning title=test-hygiene\/git-error::/);
+    });
+
+    it('block mode still fails on a git error', () => {
+      const res = run(['--base', 'no-such-ref', '--head', dirty, '--mode', 'block']);
+      assert.equal(res.status, 1);
+      assert.match(res.stdout, /::error title=test-hygiene\/git-error::/);
     });
 
     it('block mode exits 0 when the range is clean', () => {

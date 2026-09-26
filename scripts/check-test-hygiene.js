@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coversOnLine } from './find-tests.js';
 
 const ROOT = process.env.SF_ROOT || resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -42,7 +43,8 @@ export function isTicketNamed(path) {
 export function parseCoversWithLines(src) {
   const out = [];
   src.split('\n').forEach((line, index) => {
-    for (const m of line.matchAll(/@covers\s+([^\s*]+)/g)) out.push({ path: m[1], line: index + 1 });
+    const path = coversOnLine(line);
+    if (path) out.push({ path, line: index + 1 });
   });
   return out;
 }
@@ -238,14 +240,25 @@ export function main(argv) {
     return 2;
   }
   const range = `${base}...${head}`;
-  const files = parseNameStatus(git(['diff', '--name-status', '-M', range]));
   const pathExists = (p) => existsSync(join(ROOT, p));
 
-  const findings = files.flatMap(({ path, status }) => {
-    const src = git(['show', `${head}:${path}`]);
-    const addedLines = status === 'M' ? parseAddedLines(git(['diff', '-U0', range, '--', path])) : null;
-    return checkFile({ path, status, src, addedLines }, pathExists);
-  });
+  let files;
+  let findings;
+  try {
+    files = parseNameStatus(git(['diff', '--name-status', '-M', range]));
+    findings = files.flatMap(({ path, status }) => {
+      const src = git(['show', `${head}:${path}`]);
+      const addedLines = status === 'M' ? parseAddedLines(git(['diff', '-U0', range, '--', path])) : null;
+      return checkFile({ path, status, src, addedLines }, pathExists);
+    });
+  } catch (error) {
+    // A git failure (shallow clone, missing ref) is an infrastructure problem, not a
+    // finding: it must not fail the job while the check is annotate-only.
+    const level = mode === 'block' ? 'error' : 'warning';
+    const reason = String(error.stderr || error.message).trim().split('\n')[0];
+    console.log(`::${level} title=test-hygiene/git-error::could not read the diff ${range}: ${reason}`);
+    return mode === 'block' ? 1 : 0;
+  }
 
   for (const finding of findings) console.log(formatAnnotation(finding, mode));
   console.log(`test-hygiene: ${files.length} changed test file(s), ${findings.length} finding(s) [mode: ${mode}]`);

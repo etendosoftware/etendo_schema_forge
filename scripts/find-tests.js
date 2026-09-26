@@ -65,8 +65,9 @@ export function resolveTarget(arg, { sfRoot = SF_ROOT, goRoot = GO_ROOT, cwd = p
   // Java FQN or bare class name: no slash, no extension, starts like a class.
   if (!input.includes('/') && !/\.[a-z]+$/.test(input) && /^([a-z_][\w]*\.)*[A-Z]\w*$/.test(input)) {
     if (input.includes('.')) return { repo: 'go', classes: [input] };
-    const matches = gitLsFiles(goRoot, [`src/**/${input}.java`]).map(javaPathToFqn).filter(Boolean);
-    if (matches.length === 0) return { error: `no Java class named ${input} under ${goRoot}/src` };
+    const matches = gitLsFiles(goRoot, [`src/**/${input}.java`, `src-util/**/src/**/${input}.java`])
+      .map(javaPathToFqn).filter(Boolean);
+    if (matches.length === 0) return { error: `no Java class named ${input} under ${goRoot}/src or src-util` };
     return { repo: 'go', classes: matches };
   }
 
@@ -103,9 +104,19 @@ export function javaPathToFqn(relPath) {
 
 // ── Functional repo ────────────────────────────────────────────────────────
 
+// A tag counts only when it opens a comment line (`// @covers x`, ` * @covers x`,
+// `/** @covers x */`), so a string literal or prose that mentions it is ignored.
+const COVERS_LINE_RE = /^\s*(?:\/\/|\/?\*+)\s*@covers\s+(\S+?)\s*(?:\*\/)?\s*$/;
+
+/** The `@covers` target declared on one source line, or null. */
+export function coversOnLine(line) {
+  const match = line.match(COVERS_LINE_RE);
+  return match ? match[1] : null;
+}
+
 /** Every `@covers <token>` in a file, in order. */
 export function parseCovers(src) {
-  return [...src.matchAll(/@covers\s+([^\s*]+)/g)].map((m) => m[1]);
+  return src.split('\n').map(coversOnLine).filter(Boolean);
 }
 
 /** Module specifiers that bring code into the test (vi.mock / jest.mock excluded). */

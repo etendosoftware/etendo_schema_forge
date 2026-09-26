@@ -52,6 +52,8 @@ describe('resolveTarget', () => {
       'src/com/etendoerp/go/rest/Foo.java': 'package com.etendoerp.go.rest;\nclass Foo {}\n',
       'src/com/etendoerp/go/other/Foo.java': 'package com.etendoerp.go.other;\nclass Foo {}\n',
       'src/com/etendoerp/go/rest/Bar.java': 'package com.etendoerp.go.rest;\nclass Bar {}\n',
+      'src-util/modulescript/src/com/etendoerp/go/modulescript/SetupScript.java':
+        'package com.etendoerp.go.modulescript;\nclass SetupScript {}\n',
       'docs/readme.md': '# go\n',
     });
     writeTree(tmp, { 'outside/x.js': '' });
@@ -92,6 +94,13 @@ describe('resolveTarget', () => {
       'com.etendoerp.go.other.Foo',
       'com.etendoerp.go.rest.Foo',
     ]);
+  });
+
+  it('expands a simple class name that lives under src-util/*/src', () => {
+    assert.deepEqual(resolveTarget('SetupScript', opts()), {
+      repo: 'go',
+      classes: ['com.etendoerp.go.modulescript.SetupScript'],
+    });
   });
 
   it('returns an error for a simple class name with no match', () => {
@@ -145,6 +154,15 @@ describe('parseCovers', () => {
 
   it('returns an empty list when there is no tag', () => {
     assert.deepEqual(parseCovers('import x from "y";'), []);
+  });
+
+  it('ignores @covers inside a string literal', () => {
+    const src = "const src = '// @covers src/gone.js';\nit('reads @covers tags', () => {});";
+    assert.deepEqual(parseCovers(src), []);
+  });
+
+  it('ignores @covers mentioned in comment prose', () => {
+    assert.deepEqual(parseCovers('// the @covers tag names src/gone.js\n * see @covers x.Y'), []);
   });
 });
 
