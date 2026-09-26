@@ -87,6 +87,57 @@ describe('computeBoxes303 — with token and apiBaseUrl', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// computeBoxes303 — noMockFallback option (ETP-5438)
+// The submitted-declaration cold-cache path freezes the result, so a failed
+// backend call must resolve null instead of demo figures. Periods 2026/T1 and
+// 2026/T2 are used on purpose: the mock DOES cover them, so a null result
+// proves the option suppressed the fallback.
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('computeBoxes303 — noMockFallback', () => {
+  const opts = { token: 'tok', apiBaseUrl: '/sws/neo/fiscal303' };
+
+  it('returns null (no mock figures) when the response is not ok', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 500 });
+    const result = await computeBoxes303(
+      { year: 2026, period: 'T1' },
+      { ...opts, noMockFallback: true }
+    );
+    assert.equal(result, null);
+  });
+
+  it('returns null (no mock figures) when fetch throws', async () => {
+    globalThis.fetch = async () => { throw new Error('network down'); };
+    const result = await computeBoxes303(
+      { year: 2026, period: 'T2' },
+      { ...opts, noMockFallback: true }
+    );
+    assert.equal(result, null);
+  });
+
+  it('still falls back to mock figures when the option is omitted', async () => {
+    globalThis.fetch = async () => ({ ok: false, status: 500 });
+    const result = await computeBoxes303({ year: 2026, period: 'T1' }, opts);
+    assert.ok(result !== null);
+    assert.equal(result.boxes[27], 682.08);
+    assert.deepEqual(result.summary, { accrued: 682.08, deductible: 3498.39, result: -2816.31 });
+  });
+
+  it('returns the parsed JSON when the response is ok', async () => {
+    const payload = { boxes: { 27: 99.5 }, summary: { accrued: 99.5 } };
+    globalThis.fetch = async (url) => {
+      assert.match(url, /\/fiscal303\/boxes\?year=2026&period=T1/);
+      return { ok: true, json: async () => payload };
+    };
+    const result = await computeBoxes303(
+      { year: 2026, period: 'T1' },
+      { ...opts, noMockFallback: true }
+    );
+    assert.deepEqual(result, payload);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // generate303File
 // ═══════════════════════════════════════════════════════════════════════════
 

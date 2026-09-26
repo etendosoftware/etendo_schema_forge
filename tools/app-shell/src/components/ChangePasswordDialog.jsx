@@ -13,16 +13,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog.jsx';
 import { changePassword, AUTH_ERROR_UI_KEYS } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { getSessionCsrfToken } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { detectBaseUrl } from './copilot/copilotApi.js';
 
 const EMPTY_FORM = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
-const PLATFORM_TOKEN_KEY = 'sf_platform_token';
-
 /**
  * Dialog that lets a signed-in user change their platform account password.
  *
- * On success the rotated platform token is intentionally discarded and
+ * On success the rotated session is intentionally discarded and
  * `onSuccess` is invoked so the caller can log the user out — they then sign
  * in again with the new password (the app routes unauthenticated users back to
  * the onboarding page automatically).
@@ -57,13 +56,15 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess, hasPasswor
     }
     setLoading(true);
     try {
-      const token = localStorage.getItem(PLATFORM_TOKEN_KEY);
       // Send no currentPassword at all when enrolling — the server reads it with optString and
       // skips verification precisely because there is nothing to verify.
       const payload = enrolling
         ? { newPassword: form.newPassword, confirmPassword: form.confirmPassword }
         : form;
-      await changePassword(fetch, detectBaseUrl(), token, payload);
+      // ETP-5455: the third argument is the X-Go-CSRF proof of the cookie session, the only
+      // credential the browser holds. It used to be localStorage['sf_platform_token'], which
+      // nothing writes since ADR-0001, so every password change went out without CSRF (403).
+      await changePassword(fetch, detectBaseUrl(), getSessionCsrfToken(), payload);
       // Rotated token is discarded on purpose: we sign the user out so they
       // re-authenticate with the new password.
       onSuccess?.();

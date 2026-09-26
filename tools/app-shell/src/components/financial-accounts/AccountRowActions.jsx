@@ -34,7 +34,7 @@ export function AccountRowActions({
           retaining its domain-specific Sync button and bank menu. The named group
           variant is load-bearing; the unnamed one keeps compatibility with a plain
           `group` host. */}
-      <div className="absolute right-0 inset-y-0 z-10 flex h-full flex-row items-center justify-center gap-0.5 px-3 opacity-0 group-hover:opacity-100 group-hover/row:opacity-100 focus-within:opacity-100">
+      <div className="absolute right-0 inset-y-0 z-10 flex h-full flex-row items-center justify-center gap-0.5 px-3 opacity-0 group-hover:opacity-100 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
         <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
           <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
             <button
