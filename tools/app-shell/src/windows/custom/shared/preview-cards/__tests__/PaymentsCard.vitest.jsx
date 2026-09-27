@@ -9,9 +9,14 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'en_US', setLocale: vi.fn() }),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (_raw, _locale, _opts) => '1 Jan 2026',
-}));
+// Spread the REAL module and override only the formatter: an exhaustive factory
+// silently becomes wrong the moment anything in this tree reaches for another
+// `@/lib/dateOnly` export, and vitest reports that as a render-time
+// `No "<name>" export is defined on the "@/lib/dateOnly" mock` (ETP-5046).
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return { ...actual, formatCalendarDate: (_raw, _locale, _opts) => '1 Jan 2026' };
+});
 
 vi.mock('@/lib/formatAmount.js', () => ({
   formatAmount: (n) => String(n),

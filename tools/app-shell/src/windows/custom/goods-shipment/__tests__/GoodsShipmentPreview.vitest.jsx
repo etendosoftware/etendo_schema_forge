@@ -10,9 +10,14 @@ vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/lib/dateOnly', () => ({
-  formatCalendarDate: (date) => date || '—',
-}));
+// Spread the REAL module and override only the formatter: an exhaustive factory
+// silently becomes wrong the moment anything in this tree reaches for another
+// `@/lib/dateOnly` export, and vitest reports that as a render-time
+// `No "<name>" export is defined on the "@/lib/dateOnly" mock` (ETP-5046).
+vi.mock('@/lib/dateOnly', async () => {
+  const actual = await vi.importActual('@/lib/dateOnly');
+  return { ...actual, formatCalendarDate: (date) => date || '—' };
+});
 
 vi.mock('../useShipmentPdf.js', () => ({
   useShipmentPdf: vi.fn(() => ({ pdfUrl: null, pdfBlob: null, loading: false, error: null })),
