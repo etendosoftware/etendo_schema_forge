@@ -153,6 +153,39 @@ describe('SourcesTab', () => {
     expect(emptyCell).toBeTruthy();
     expect(emptyCell.getAttribute('colspan')).toBe('9');
   });
+
+  // ── row-per-side "type" label (ETP-5456) ─────────────────────────────────
+
+  it('translates the "accrued" machine key via the i18n hook', () => {
+    const decl = {
+      sources: [{ id: 'r1', ref: 'REC-1', date: '', type: 'accrued', party: '', base: 0, total: 0, boxes: '10,11' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    const row = document.querySelector('tbody tr');
+    // `t` here is the identity mock `(key) => key`, so the translated cell shows the key itself.
+    expect(row.cells[3].textContent).toBe('fm.sources.type.accrued');
+  });
+
+  it('translates the "deductible" machine key via the i18n hook', () => {
+    const decl = {
+      sources: [{ id: 'r1', ref: 'REC-1', date: '', type: 'deductible', party: '', base: 0, total: 0, boxes: '36,37' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    const row = document.querySelector('tbody tr');
+    expect(row.cells[3].textContent).toBe('fm.sources.type.deductible');
+  });
+
+  it('falls back to the raw value for a row from a backend that predates the accrued/deductible keys', () => {
+    const decl = {
+      sources: [{ id: 'r1', ref: 'REC-1', date: '', type: 'Compra', party: '', base: 0, total: 0, boxes: '07' }],
+      incidents: { items: [] },
+    };
+    render(<SourcesTab decl={decl} t={t} />);
+    const row = document.querySelector('tbody tr');
+    expect(row.cells[3].textContent).toBe('Compra');
+  });
 });
 
 // ── IncidentsTab ────────────────────────────────────────────────────────────

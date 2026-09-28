@@ -11,6 +11,11 @@ import {
 // below, so these pre-ETP-5122 cases keep passing the (new) date gate.
 const TBAI_RECORD = { tbaisystemdate: '2020-01-01T00:00:00.000Z' };
 
+// ETP-5432 #3 — an SII cutover date (`useFiscalConfig().earliestSiiCutoverDate`)
+// safely in the past relative to the fixture invoice/accounting dates below, so
+// pre-ETP-5432 cases (written before the SII date gate existed) keep passing it.
+const SII_CUTOVER_DATE = '2020-01-01T00:00:00.000Z';
+
 describe('sifSending', () => {
   describe('getPendingSifTargets', () => {
     it('keeps only SII pending for purchase invoices with sii+tbai when nothing was sent yet', () => {
@@ -19,7 +24,8 @@ describe('sifSending', () => {
           aeatsiiIssent: false,
           tbaiIssent: false,
           invoiceDate: '2026-01-01',
-        }, null, TBAI_RECORD),
+          accountingDate: '2026-01-01',
+        }, null, TBAI_RECORD, SII_CUTOVER_DATE),
         { sendSii: true, sendTbai: false },
       );
     });
@@ -30,7 +36,8 @@ describe('sifSending', () => {
           aeatsiiIssent: false,
           tbaiIssent: false,
           invoiceDate: '2026-01-01',
-        }, null, TBAI_RECORD),
+          accountingDate: '2026-01-01',
+        }, null, TBAI_RECORD, SII_CUTOVER_DATE),
         { sendSii: true, sendTbai: true },
       );
     });
@@ -41,7 +48,8 @@ describe('sifSending', () => {
           aeatsiiIssent: true,
           tbaiIssent: false,
           invoiceDate: '2026-01-01',
-        }, null, TBAI_RECORD),
+          accountingDate: '2026-01-01',
+        }, null, TBAI_RECORD, SII_CUTOVER_DATE),
         { sendSii: false, sendTbai: true },
       );
     });
@@ -101,6 +109,65 @@ describe('sifSending', () => {
       });
     });
 
+    // ETP-5432 #3 — SII used to have NO date gate here at all, so "Enviar a SIF"
+    // offered to send an invoice dated before the org was ever SII-enrolled
+    // (live-tested on invoice 10000075: accountingDate 22/09/2026, fechaAcogidaSII
+    // 24/09/2026). This mirrors the TBAI adoption-date gate above, but keys off
+    // `accountingDate` (SII books by accounting date, not invoice date) and the
+    // `siiCutoverDate` 6th parameter (`useFiscalConfig().earliestSiiCutoverDate`).
+    describe('SII cutover-date gate (ETP-5432 #3)', () => {
+      it('keeps SII pending when the accounting date is after the cutover date', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: false,
+            accountingDate: '2026-09-25',
+          }, null, null, '2026-09-24T00:00:00.000Z'),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('keeps SII pending when the accounting date equals the cutover date (inclusive)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: false,
+            accountingDate: '2026-09-24',
+          }, null, null, '2026-09-24T00:00:00.000Z'),
+          { sendSii: true, sendTbai: false },
+        );
+      });
+
+      it('hides SII when the accounting date is before the cutover date (ETP-5432 live case: invoice 10000075)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('purchase-invoice', 'sii', {
+            aeatsiiIssent: false,
+            accountingDate: '2026-09-22',
+          }, null, null, '2026-09-24T00:00:00.000Z'),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+
+      it('hides SII when no SII cutover date is available at all (fail-safe)', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: false,
+            accountingDate: '2026-09-25',
+          }, null, null, null),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+
+      it('SII books by accountingDate, not invoiceDate — an invoice dated after cutover but accounted before it stays hidden', () => {
+        assert.deepEqual(
+          getPendingSifTargets('sales-invoice', 'sii', {
+            aeatsiiIssent: false,
+            invoiceDate: '2026-09-25',
+            accountingDate: '2026-09-22',
+          }, null, null, '2026-09-24T00:00:00.000Z'),
+          { sendSii: false, sendTbai: false },
+        );
+      });
+    });
+
     // ETP-5087: purchase-invoice TBAI eligibility follows the active TBAI config's territory.
     describe('TBAI territory gate (ETP-5087)', () => {
       it('includes TBAI for a purchase invoice when the TBAI territory is Bizkaia', () => {
@@ -109,7 +176,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, 'BIZKAIA', TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, 'BIZKAIA', TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: true },
         );
       });
@@ -120,7 +188,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, 'ARABA', TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, 'ARABA', TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -131,7 +200,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, 'GIPUZKOA', TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, 'GIPUZKOA', TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -142,7 +212,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, 'ARABA', TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, 'ARABA', TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: true },
         );
       });
@@ -153,7 +224,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -170,7 +242,8 @@ describe('sifSending', () => {
             aeatsiiIssent: true,
             aeatsiiErrorRegistral: true,
             invoiceDate: '2026-01-01',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -181,7 +254,8 @@ describe('sifSending', () => {
             aeatsiiIssent: 'Y',
             aeatsiiErrorRegistral: 'Y',
             invoiceDate: '2026-01-01',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -213,7 +287,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             aeatsiiErrorRegistral: true,
             invoiceDate: '2026-01-01',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -225,7 +300,8 @@ describe('sifSending', () => {
             aeatsiiErrorRegistral: true,
             tbaiIssent: true,
             invoiceDate: '2026-06-15',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-06-15',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
 
@@ -235,7 +311,8 @@ describe('sifSending', () => {
             aeatsiiErrorRegistral: true,
             tbaiIssent: false,
             invoiceDate: '2026-06-15',
-          }, null, TBAI_RECORD),
+            accountingDate: '2026-06-15',
+          }, null, TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: true },
         );
       });
@@ -247,7 +324,8 @@ describe('sifSending', () => {
             aeatsiiErrorRegistral: true,
             tbaiIssent: false,
             invoiceDate: '2026-01-01',
-          }, 'BIZKAIA', TBAI_RECORD),
+            accountingDate: '2026-01-01',
+          }, 'BIZKAIA', TBAI_RECORD, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: true },
         );
       });
@@ -266,7 +344,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-06-15',
-          }, 'BIZKAIA', ADOPTED),
+            accountingDate: '2026-06-15',
+          }, 'BIZKAIA', ADOPTED, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: true },
         );
       });
@@ -277,7 +356,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2025-12-31',
-          }, 'BIZKAIA', ADOPTED),
+            accountingDate: '2025-12-31',
+          }, 'BIZKAIA', ADOPTED, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -288,7 +368,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2026-06-15',
-          }, 'ARABA', ADOPTED),
+            accountingDate: '2026-06-15',
+          }, 'ARABA', ADOPTED, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
@@ -299,7 +380,8 @@ describe('sifSending', () => {
             aeatsiiIssent: false,
             tbaiIssent: false,
             invoiceDate: '2025-12-31',
-          }, null, ADOPTED),
+            accountingDate: '2025-12-31',
+          }, null, ADOPTED, SII_CUTOVER_DATE),
           { sendSii: true, sendTbai: false },
         );
       });
