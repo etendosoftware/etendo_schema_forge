@@ -142,7 +142,7 @@ function normalizeCreditTaxValue(fieldKey, value) {
   return value === '' ? null : value;
 }
 
-export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange }) {
+export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalogs, api, editing, onChange, onPersisted }) {
   const ui = useUI();
   const { invalidateBusinessPartner, invalidateFinanceKpis } = useContactsCacheInvalidation();
   const apiFetch = useApiFetch(apiBaseUrl);
@@ -228,8 +228,13 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
         draftRef.current = nextDraft;
         setCreditTaxDraft(nextDraft);
       }
-      if (saved && typeof onChange === 'function') {
-        onChange(fieldKey, finalValue);
+      // Tell the header the value is SAVED, not edited (QA F-1). `onChange` would mark it dirty:
+      // "Save" stayed enabled after this autosave and re-sent a copy of the field — a stale copy
+      // when clicked while the next autosave was still in flight, which then reverted it.
+      // `onChange` stays only as the fallback for a host that does not provide `onPersisted`.
+      if (saved) {
+        if (typeof onPersisted === 'function') onPersisted({ [fieldKey]: finalValue });
+        else if (typeof onChange === 'function') onChange(fieldKey, finalValue);
       }
       // Credit-limit / tax-id change affects the partner record and finance KPIs.
       invalidateBusinessPartner();
@@ -240,7 +245,7 @@ export default function ContactsFinancialPanel({ data, token, apiBaseUrl, catalo
     } finally {
       setSavingField(null);
     }
-  }, [apiFetch, onChange, invalidateBusinessPartner, invalidateFinanceKpis]);
+  }, [apiFetch, onChange, onPersisted, invalidateBusinessPartner, invalidateFinanceKpis]);
 
   /**
    * Serialises per BUSINESS PARTNER, not per field (ETP-5255).
