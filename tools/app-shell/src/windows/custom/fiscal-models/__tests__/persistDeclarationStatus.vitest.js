@@ -52,6 +52,21 @@ describe('persistDeclarationStatus', () => {
     expect(result).toEqual({ ok: false, error: 'http_404' });
   });
 
+  // ETP-5438 — a presentation echoes the snapshot the backend froze in the same request.
+  it('returns the echoed submittedSnapshot alongside ok: true', async () => {
+    const snapshot = { boxes: { 46: '123.45' }, summary: { result: '123.45' }, sources: [] };
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, submittedSnapshot: snapshot }) });
+    const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);
+    expect(result).toEqual({ ok: true, submittedSnapshot: snapshot });
+  });
+
+  it('stays { ok: true } when the body has no snapshot or cannot be parsed', async () => {
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
+    expect(await persistDeclarationStatus('a', 'draft', OPTS)).toEqual({ ok: true });
+    fetch.mockResolvedValueOnce({ ok: true, json: async () => { throw new SyntaxError('empty'); } });
+    expect(await persistDeclarationStatus('a', 'submitted', OPTS)).toEqual({ ok: true });
+  });
+
   it('returns { ok: false, error: "network" } when fetch throws', async () => {
     fetch.mockRejectedValueOnce(new Error('network down'));
     const result = await persistDeclarationStatus('303-2026-T2', 'submitted', OPTS);

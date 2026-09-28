@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.19.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-09-01T16:20:08.878Z",
-  "contractChecksum": "ff782f46b2d85db9",
+  "updatedAt": "2026-09-23T17:59:06.716Z",
+  "contractChecksum": "9b7931d9d3c64902",
   "apiPrediction": {
     "specName": "internal-consumption",
     "baseUrl": "/sws/neo/internal-consumption",
@@ -102,44 +102,6 @@
         "processType": "classic"
       },
       {
-        "name": "posted",
-        "actionType": "documentAction",
-        "entity": "internalConsumption",
-        "column": "Posted",
-        "requiresRecord": true,
-        "method": "POST",
-        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted",
-        "parameters": [
-          {
-            "name": "docAction",
-            "type": "string",
-            "required": true,
-            "description": "Document action code (e.g. CO=Complete, VO=Void, RE=Reactivate)"
-          }
-        ],
-        "preconditions": [
-          {
-            "field": "documentStatus",
-            "operator": "in",
-            "values": [
-              "DR",
-              "IP"
-            ],
-            "description": "Document must be in draft or in-progress state"
-          }
-        ],
-        "effects": [
-          "Updates document status",
-          "May trigger workflow transitions"
-        ],
-        "dryRunSupported": true,
-        "edgeCases": [
-          "Document is already completed or closed",
-          "Document has pending lines or missing required fields",
-          "User lacks permission to execute the action"
-        ]
-      },
-      {
         "name": "etblkpBulkposting",
         "actionType": "documentAction",
         "entity": "internalConsumption",
@@ -220,6 +182,11 @@
             "required": true,
             "readOnlyLogic": "@Processed@='Y'"
           },
+          "posted": {
+            "readOnly": true,
+            "required": true,
+            "defaultValue": "N"
+          },
           "status": {
             "required": true,
             "defaultValue": "DR"
@@ -247,7 +214,9 @@
         }
       }
     },
-    "requiredSessionVariables": [],
+    "requiredSessionVariables": [
+      "#ShowAcct"
+    ],
     "evaluationMode": "runtime"
   },
   "agentProfile": {
@@ -274,7 +243,6 @@
     "selectorContexts": [],
     "actions": [
       "processNow",
-      "posted",
       "etblkpBulkposting"
     ],
     "workflow": [
@@ -320,5 +288,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "8f12c733f884092c"
+  "checksum": "d544a4148d348715"
 }

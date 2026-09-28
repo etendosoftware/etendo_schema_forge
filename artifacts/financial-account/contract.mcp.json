@@ -1,8 +1,8 @@
 {
-  "version": "0.33.0",
+  "version": "0.34.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
   "updatedAt": "2026-08-30T19:51:34.951Z",
-  "contractChecksum": "48ddcfa5d2a89c50",
+  "contractChecksum": "63faeda11cdc4fde",
   "apiPrediction": {
     "specName": "accounts",
     "baseUrl": "/sws/neo/accounts",
@@ -1177,8 +1177,6 @@
           "branchCode": {},
           "partialAccountNo": {},
           "accountNo": {},
-          "aprmAddtransactionpd": {},
-          "aprmFindtransactionspd": {},
           "aprmFundsTrans": {},
           "psd2Provider": {
             "readOnlyLogic": "@EM_PSD2_Connection_Status@='CO'"
@@ -1595,7 +1593,7 @@
       "etprReactivateTransaction",
       "etprReactivateRecon"
     ],
-    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead."
+    "agentPrompt": "Company financial accounts (Etendo table FIN_Financial_Account): the bank, cash and card accounts owned by the company itself, together with their transactions, imported bank statements and reconciliations. The `account` entity represents the company's OWN accounts (required fields: name, currency, type). These are NOT a contact's bank details (a contact is the adopted term for what Etendo classic calls a business partner / BP). To store a contact's bank account (C_BP_BankAccount) use the `contacts` spec (bankAccount entity) instead. To reconcile bank statement lines, never press the account's Core buttons: use the `bank-reconciliation` spec through neo_action (entity `bank-reconciliation`, id = the financial account id). neo_schema(spec:\"bank-reconciliation\", entity:\"bank-reconciliation\", view:\"actions\") lists its actions (pendingLines, candidates, autoMatch, reconcileGroup, reconcileDifference, applySuggestions, undoReconciliation, removeOperation, reactivateSelected) and their parameters."
   },
-  "checksum": "7894a4d4b27d4c46"
+  "checksum": "7ef9a75a0b39f791"
 }

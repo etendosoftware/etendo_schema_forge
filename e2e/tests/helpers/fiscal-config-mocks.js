@@ -1,7 +1,7 @@
 /**
  * Shared mocks for the org-level fiscal configuration (`useFiscalConfig`).
  *
- * Extracted from `tests/flows/sif-buttons-fiscal-config.spec.js` (ETP-5087) so
+ * Originally extracted from the sif-buttons-fiscal-config spec (ETP-5087), which was
  * every spec that depends on the SII / TicketBAI / VERI*FACTU profile of the
  * globally-selected organization wires it the same way. Two things are needed,
  * and BOTH are easy to miss — a spec that forgets either one renders no fiscal

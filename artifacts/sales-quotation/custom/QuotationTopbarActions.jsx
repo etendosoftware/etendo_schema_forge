@@ -19,7 +19,10 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   // ETP-4372 — source the same client-rendered PDF the QuotationPreview panel
   // uses, so the form-view topbar Send modal shows the document instead of the
   // "PDF not configured" fallback. Hook is called unconditionally (rules of hooks).
-  const { pdfUrl, loading: pdfLoading } = useQuotationPdf(recordId, apiBaseUrl, token);
+  // Only fetch once the Send modal is actually open.
+  const { pdfUrl, loading: pdfLoading, error: pdfError } = useQuotationPdf(showSend ? recordId : null, apiBaseUrl, token);
+  // Hook's loading flag lags one render behind showSend; treat the gap as loading too.
+  const sendPdfLoading = pdfLoading || (showSend && !pdfUrl && !pdfError);
 
   // The framework's draftMode renders a "Confirmar" primary button after Save.
   // The wrapper at tools/app-shell/src/windows/custom/sales-quotation/index.jsx
@@ -93,7 +96,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           windowName="sales-quotation"
           token={token}
           pdfBlobUrl={pdfUrl}
-          pdfBlobLoading={pdfLoading}
+          pdfBlobLoading={sendPdfLoading}
           onClose={() => setShowSend(false)}
         />,
         document.body,

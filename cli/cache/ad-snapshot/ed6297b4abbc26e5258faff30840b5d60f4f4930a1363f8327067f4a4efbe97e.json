@@ -306,7 +306,7 @@
       ]
     },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "464544bc1362b3d5fc08facbd1024eac261b71c88a1ab6603a2c2df988f9a1ea",
+      "checksum": "22b8c2cadcbef6745cf9397f6596193302ea04f4e4d5d6e3c6d4d9803d7ac6a2",
       "params": [
         "144"
       ],
@@ -3577,6 +3577,80 @@
           "ad_window_id": "144",
           "callout_class": null,
           "column_module_id": "94E1B433CF55451EABB764750AC5902A",
+          "columnname": "EM_ETGO_Cost",
+          "computation_function": "etgo_product_cost",
+          "computation_mode": "S",
+          "defaultvalue": null,
+          "displaylogic": null,
+          "displaylogic_server": null,
+          "displaylogicgrid": null,
+          "em_obuiapp_process_id": null,
+          "entity_alias": null,
+          "entity_classname": "Product",
+          "entity_javapackage": "org.openbravo.model.common.plm",
+          "field_group_name": null,
+          "field_isactive": "Y",
+          "field_name": "EM_ETGO_Cost",
+          "field_seq": 99999,
+          "fieldlength": "22",
+          "filterclause": null,
+          "help_text": null,
+          "hqlfilterclause": null,
+          "hqlorderbyclause": null,
+          "hqlwhereclause": "e.productCategory.id=@ProductCategory.id@",
+          "isdisplayed": "N",
+          "isfilterable": "Y",
+          "isidentifier": "N",
+          "iskey": "N",
+          "ismandatory": "N",
+          "isreadonly": "Y",
+          "isselectioncolumn": "N",
+          "isshowninstatusbar": "N",
+          "istranslated": "N",
+          "isupdateable": "N",
+          "obdal_name": "EM_ETGO_Cost",
+          "onchangefunction": null,
+          "orderbyclause": null,
+          "precision": null,
+          "property": null,
+          "readonlylogic": null,
+          "ref_search_column": null,
+          "ref_search_target": null,
+          "ref_selector_filter": null,
+          "ref_selector_hql": null,
+          "ref_selector_name": null,
+          "ref_selector_target": null,
+          "ref_table_display": null,
+          "ref_table_filter": null,
+          "ref_table_key": null,
+          "ref_table_orderby": null,
+          "ref_table_target": null,
+          "reference_name": "Amount",
+          "refresh_mode": "S",
+          "tab_name": "Assigned Products",
+          "tab_seq": "30",
+          "tab_tablename": "M_Product",
+          "table_module_id": null,
+          "tablename": "M_Product",
+          "tablevel": "1",
+          "ui_pattern": "RO",
+          "val_rule_code": null,
+          "val_rule_name": null,
+          "valuemax": null,
+          "valuemin": null,
+          "whereclause": "M_Product.M_Product_Category_ID = @M_Product_Category_ID@",
+          "window_name": "Product Category"
+        },
+        {
+          "ad_field_id": null,
+          "ad_process_id": null,
+          "ad_reference_id": "12",
+          "ad_reference_value_id": null,
+          "ad_tab_id": "407",
+          "ad_val_rule_id": null,
+          "ad_window_id": "144",
+          "callout_class": null,
+          "column_module_id": "94E1B433CF55451EABB764750AC5902A",
           "columnname": "EM_ETGO_Purchase_Price",
           "computation_function": "etgo_product_purchase_price",
           "computation_mode": "S",
@@ -3594,7 +3668,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the standard price of the purchase-side (IsSOPriceList=N) default price-list version whose ValidFrom is on or before today, so it can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.productCategory.id=@ProductCategory.id@",
@@ -3668,7 +3742,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the standard price of the sales-side (IsSOPriceList=Y) default price-list version whose ValidFrom is on or before today, so it can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.productCategory.id=@ProductCategory.id@",
@@ -3742,7 +3816,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only aggregate kept up to date by the Etendo GO stored-computed-column engine. Sums M_Storage_Detail.QtyOnHand for the product so the figure can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.productCategory.id=@ProductCategory.id@",
@@ -8536,7 +8610,7 @@
       ]
     },
     "2f22ba4790bcdcf783b1573c321c1f35b01b170c50ad5e9ab9e0d33f72120f75": {
-      "checksum": "f3b95cf2862c9df3c67fcf5520ddd13cb1d9df6f08308b118ffc180b7a2ec97a",
+      "checksum": "b9a686f402c9cf8a179a4b86b5390c28bf53191f346c7ee1afea746a78306e97",
       "params": [
         "123"
       ],
@@ -12564,7 +12638,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "The Location / Address field defines the location of an entity.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -17818,7 +17892,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "The Location / Address field defines the location of an entity.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -24922,7 +24996,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "The Location / Address field defines the location of an entity.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -33210,7 +33284,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "The Location / Address field defines the location of an entity.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -35208,7 +35282,7 @@
           "field_seq": 99999,
           "fieldlength": "1",
           "filterclause": null,
-          "help_text": "Marks the tenant-owner AD_User for a client, auto-set on the first admin created during onboarding/registration. Any PUT/PATCH to an owner's AD_User record from anyone other than the owner is rejected. False/N for every existing user until the owner backfill data-fix runs.",
+          "help_text": "Marks the tenant-owner AD_User for a client, auto-set on the first admin created during onboarding/registration. Any PUT/PATCH to an owner's AD_User record from anyone other than the owner is rejected (see UserRoleAssignmentHandler / UserRoleCompositionService). False/N for every existing user until the owner backfill data-fix runs.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -37116,7 +37190,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "b488b505e2dd65fab3d38f877feeffa1abbfe6428ebed4382323b7f160c47674",
+      "checksum": "97ec76555698efff002d6af75aa21cd41a3f8c9e9da7ff4f8d2643c8e663960a",
       "params": [
         "143"
       ],
@@ -37444,7 +37518,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Copied to C_Conversion_Rate_Document when createDraftInvoice is called.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true AND e.transactionDocument.return= false AND e.transactionDocument.sOSubType NOT LIKE 'OB'",
@@ -43052,7 +43126,7 @@
       ]
     },
     "372af9720002cd00d7ab60cf2919961286c4022d7cae4da33f0586eff52202ca": {
-      "checksum": "e9e5813c578ea016adc822ab8dbd4d5e0fbc0fdaeb0d2bbea9c358e480516d31",
+      "checksum": "8cc7dd04fe31c07a1fd41958af3862f5b68dd31b6596e9f6af2291570f978c8e",
       "params": [
         "167"
       ],
@@ -44416,7 +44490,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true and e.documentStatus <> 'TEMP'",
@@ -44490,7 +44564,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true and e.documentStatus <> 'TEMP'",
@@ -46562,7 +46636,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true and e.documentStatus <> 'TEMP'",
@@ -55648,7 +55722,7 @@
       ]
     },
     "4bc12fadc3f4675f289d036b6b78cded78314e733c80834fa999e947d67ec251": {
-      "checksum": "76fceaa6803ee08b69abf52917cae67fe5f9f21dbe54cfbd6d6a6cdc9a8f20b2",
+      "checksum": "ba2864a009eb985c0646353f35c4611f382a528f51a5f50bc1abd21b90b0160b",
       "params": [
         "183"
       ],
@@ -56938,7 +57012,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false and e.documentStatus <> 'TEMP'",
@@ -57012,7 +57086,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false and e.documentStatus <> 'TEMP'",
@@ -60786,7 +60860,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false and e.documentStatus <> 'TEMP'",
@@ -69000,7 +69074,7 @@
       ]
     },
     "60408c7726b5b42a4b146fdcf73da0ebf7c500fdd630d2dd8848c6dab4b30290": {
-      "checksum": "2779f7b0aab8c54106a21557b410ab3aa9b1806865286d3e52b13bd0ca5be2a7",
+      "checksum": "c64446187f10bc6f8a7121810bd894f1edcce160ae774fffc737702c966844dd",
       "params": [
         "184"
       ],
@@ -69254,7 +69328,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "Currency of the document. Auto-proposed as the organization currency, editable while in draft, locked once the document is confirmed.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.movementType IN ('V-', 'V+') and e.logistic = 'N' and e.documentType.return=false",
@@ -71524,7 +71598,7 @@
       ]
     },
     "60a117d97d907d1b9ad13d34a698431e3c1eb6fb73ec08b0786ec0bf24f5d538": {
-      "checksum": "954498434ef9c85481c2bee1e59dbd572eafc669cfdd33f961be5e0c3d9d3f0a",
+      "checksum": "8ba79517bf2d651896a8c38b59ff8667f98c21975d0cb539785af441b4ada779",
       "params": [
         "FEF76C3E0F104F06A89AAD15A4A4A35C"
       ],
@@ -77106,7 +77180,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=true and e.documentStatus <> 'TEMP' and e.invoiceDate >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -77180,7 +77254,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=true and e.documentStatus <> 'TEMP' and e.invoiceDate >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -83248,7 +83322,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=true and e.documentStatus <> 'TEMP' and e.invoiceDate >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -87540,7 +87614,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=false and e.documentStatus <> 'TEMP' and e.aeatsiiFechaRegCont >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -87614,7 +87688,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=false and e.documentStatus <> 'TEMP' and e.aeatsiiFechaRegCont >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -93608,7 +93682,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(e.organization.id = @AD_Org_ID@ or AD_ISORGINCLUDED(e.organization.id, @AD_Org_ID@, e.client.id)<>-1) and e.salesTransaction=false and e.documentStatus <> 'TEMP' and e.aeatsiiFechaRegCont >= COALESCE((select c.monitordate from aeatsii_config c where c.id = @aeatsii_config_id@),to_date('2017-01-01','YYYY-MM-DD'))",
@@ -98566,7 +98640,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=true\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipo <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -98640,7 +98714,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=true\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipo <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -104708,7 +104782,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=true\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipo <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -109074,7 +109148,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Populated automatically from the source order's EM_ETGO_Currency_Rate when the invoice is created from an order, or set directly by the user via the CurrencyRatePicker on the invoice form.",
+          "help_text": "",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=false\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipoFc <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -109148,7 +109222,7 @@
           "field_seq": 99999,
           "fieldlength": "10",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the ESTADO of the most recent TBAI_SyncInvoice row of the invoice, so the fiscal status can be listed, sorted and filtered without a per-row fetch. 'Pendiente' means no resolved submission yet.",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=false\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipoFc <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -115142,7 +115216,7 @@
           "field_seq": 99999,
           "fieldlength": "0",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Date when the payment is due without deductions or discount",
           "hqlfilterclause": "e.aeatsiiEstado=null or e.aeatsiiEstado not in ('CO', 'AE', 'NR')",
           "hqlorderbyclause": "e.documentNo desc",
           "hqlwhereclause": "(\n\te.organization.id = @AD_Org_ID@\n\tor AD_ISORGINCLUDED(\n\t\te.organization.id,\n\t\t@AD_Org_ID@,\n\t\te.client.id\n\t)<>-1\n)\nand e.salesTransaction=false\nand e.documentStatus <> 'TEMP'\nand aeatsii_presii_invoice(e.id)='Y'\nand (\n\te.aeatsiiClaveTipoFc <> null\n\tand e.etsgDateOperation <> null\n)",
@@ -124358,7 +124432,7 @@
       ]
     },
     "9875b64b4d474916c9d42e3986d743e8a881ac53d52dca07ea47fb490bfea6df": {
-      "checksum": "d2c5a832cdc3def05522e9442996db3be6dd230749a128f4a04e51b9fe934c73",
+      "checksum": "05f57624080f2cdd17d040ef2e4a5b8b4617ddfab9c8e2c39d4d62f42fd1bc9f",
       "params": [
         "6CB5B67ED33F47DFA334079D3EA2340E"
       ],
@@ -125426,7 +125500,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Copied to C_Conversion_Rate_Document when createDraftInvoice is called.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true AND e.transactionDocument.sOSubType LIKE 'OB'",
@@ -129258,7 +129332,7 @@
       ]
     },
     "9af6c3647465867cc635696d802fced95ce307fa9ce43e002d8fff078398bc28": {
-      "checksum": "a83fbbe361b1a3205fd16490dedb9b165455c48d5e2c9021b31b6989b608c574",
+      "checksum": "a0ce6640c05e362a1300fd35f4eb2f0f0805ec0aa7276a74580e5dc47a3243a1",
       "params": [
         "273673D2ED914C399A6C51DB758BE0F9"
       ],
@@ -129586,7 +129660,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "Currency of the document. Auto-proposed as the organization currency, editable while in draft, locked once the document is confirmed.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.movementType IN ('V-', 'V+') and e.documentType.return=true",
@@ -137430,7 +137504,7 @@
       ]
     },
     "c0351cd0caf4edf2a56beaafd358fe05567a911a68c5ab90cd866d785e6a9dfc": {
-      "checksum": "c0c4cf57496982be40e112f24a5f48a2437d00a7e4aace35e6a0ad659298682d",
+      "checksum": "ac02a4814ac408df3bd5ee8a22b9cab38e8241632f7efedc0bb9e1450c39f7a4",
       "params": [
         "140"
       ],
@@ -137684,7 +137758,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the standard price of the purchase-side (IsSOPriceList=N) default price-list version whose ValidFrom is on or before today, so it can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -137758,7 +137832,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only value kept up to date by the Etendo GO stored-computed-column engine. Resolves the standard price of the sales-side (IsSOPriceList=Y) default price-list version whose ValidFrom is on or before today, so it can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -137832,7 +137906,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": null,
+          "help_text": "Read-only aggregate kept up to date by the Etendo GO stored-computed-column engine. Sums M_Storage_Detail.QtyOnHand for the product so the figure can feed list views, sorting and filtering without a per-row fetch.",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -147904,7 +147978,7 @@
       ]
     },
     "d8b3062e19579428542c960b281edd38c8b4c4bae753749e7360902192d4cec1": {
-      "checksum": "c9e17a5f50d1c7e9ca0541b75fd52dd1f3ccbc8aa191dad8062dd89f76b74b6e",
+      "checksum": "f211e80b4b2a1a5511f581ce801fbf4276e0db0b6a73e665b37fd5f66a408e00",
       "params": [
         "108"
       ],
@@ -148158,7 +148232,7 @@
           "field_seq": 99999,
           "fieldlength": "1",
           "filterclause": "(EXISTS (SELECT * FROM C_BPartner bp WHERE AD_User.C_BPartner_ID=bp.C_BPartner_ID AND (bp.IsEmployee='Y' OR bp.IsSalesRep='Y'))\nOR AD_User.C_BPartner_ID IS NULL)",
-          "help_text": "Marks the tenant-owner AD_User for a client, auto-set on the first admin created during onboarding/registration. Any PUT/PATCH to an owner's AD_User record from anyone other than the owner is rejected. False/N for every existing user until the owner backfill data-fix runs.",
+          "help_text": "Marks the tenant-owner AD_User for a client, auto-set on the first admin created during onboarding/registration. Any PUT/PATCH to an owner's AD_User record from anyone other than the owner is rejected (see UserRoleAssignmentHandler / UserRoleCompositionService). False/N for every existing user until the owner backfill data-fix runs.",
           "hqlfilterclause": "e.businessPartner is null or exists(select id from BusinessPartner bp where bp.id=e.businessPartner.id and (bp.employee='Y' or bp.salesRepresentative='Y'))",
           "hqlorderbyclause": null,
           "hqlwhereclause": null,
@@ -158444,7 +158518,7 @@
       ]
     },
     "e6e7092c8ed304923454f5454ff919ef51a4741eff92635779ea9eb232b00ae9": {
-      "checksum": "9dcff3c084b2c223c5f3fc51c20fbf4f992c03de491cc1a67d2bae56abdec544",
+      "checksum": "46ca2bbeded308b57a2920e88d10d290ea3134ea947b5c9ebbbe3842dfd7e883",
       "params": [
         "123271B9AD60469BAE8A924841456B63"
       ],
@@ -158772,7 +158846,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "Currency of the document. Auto-proposed as the organization currency, editable while in draft, locked once the document is confirmed.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.movementType IN ('C-', 'C+') and e.documentType.return=true",
@@ -160524,7 +160598,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "02a3fe1de086c4647095d8cc2c04cfd11db66b868e3c33357f27610ab9b6bd27",
+      "checksum": "91e6d62a59761b46a5fd30f2a27233cbff16a9e78f42e1cdc637cda36378ddef",
       "params": [
         "181"
       ],
@@ -161074,7 +161148,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Copied to C_Conversion_Rate_Document when createDraftInvoice is called.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false AND e.transactionDocument.return=false",
@@ -165490,7 +165564,7 @@
       ]
     },
     "e9796a297caefaf50550fd46b064e00862567eb728d3001bd2e77bcab7db7d3b": {
-      "checksum": "fa579944297f82b8383c5d10f41fca133cd034a692a5c72962eb2b90bdced539",
+      "checksum": "4e9577e6cf902f7898cbf8141fc82a3ab3bfa9cf0288a6e10c3ac8be61e38453",
       "params": [
         "94EAA455D2644E04AB25D93BE5157B6D"
       ],
@@ -167594,7 +167668,7 @@
           "field_seq": 99999,
           "fieldlength": "11",
           "filterclause": null,
-          "help_text": "Read-only aggregate kept up to date by Etendo GO. Counts the active FIN_BankStatementLine rows of this statement so the figure can feed list views, conditional filters and reports without recomputing it.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": "-transactionDate",
           "hqlwhereclause": null,
@@ -167668,7 +167742,7 @@
           "field_seq": 99999,
           "fieldlength": "11",
           "filterclause": null,
-          "help_text": "Read-only aggregate kept up to date by Etendo GO. Counts the active lines that already have a financial account transaction linked, so the status chip can show the partial detail (matched / total).",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": "-transactionDate",
           "hqlwhereclause": null,
@@ -167742,7 +167816,7 @@
           "field_seq": 99999,
           "fieldlength": "60",
           "filterclause": null,
-          "help_text": "Read-only status kept up to date by Etendo GO: DRAFT (not processed), PENDING (processed, no lines matched), PARTIAL (some lines matched) or RECONCILED (all lines matched). Feeds list views and conditional filters.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": "-transactionDate",
           "hqlwhereclause": null,
@@ -167816,7 +167890,7 @@
           "field_seq": 99999,
           "fieldlength": "12",
           "filterclause": null,
-          "help_text": "Read-only aggregate kept up to date by Etendo GO. Adds the cramount of the active statement lines so the inflow total can feed list views, conditional filters and reports without recomputing it.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": "-transactionDate",
           "hqlwhereclause": null,
@@ -167890,7 +167964,7 @@
           "field_seq": 99999,
           "fieldlength": "12",
           "filterclause": null,
-          "help_text": "Read-only aggregate kept up to date by Etendo GO. Adds the dramount of the active statement lines so the outflow total can feed list views, conditional filters and reports without recomputing it.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": "-transactionDate",
           "hqlwhereclause": null,
@@ -172486,7 +172560,7 @@
       ]
     },
     "f5c82198ac86de80bf99be0d705eefac22594c601c50713915de4d1b1920b676": {
-      "checksum": "606cc9599123c4dfe890a25313fdaf74716d7fb950e7e1643862fd881737ba76",
+      "checksum": "ec65677af0489ae37e73138ce3b24b5b3af6ce57f10aad98e978a63d848d1571",
       "params": [
         "169"
       ],
@@ -172666,7 +172740,7 @@
           "field_seq": 99999,
           "fieldlength": "32",
           "filterclause": null,
-          "help_text": "Currency of the document. Auto-proposed as the organization currency, editable while in draft, locked once the document is confirmed.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.movementType IN ('C-', 'C+') and e.logistic = 'N' and e.documentType.return=false",

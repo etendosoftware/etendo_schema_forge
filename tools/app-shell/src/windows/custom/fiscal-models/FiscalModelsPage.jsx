@@ -4,7 +4,7 @@ import FmModel303Page from './models/303/FmModel303Page';
 import FmModel349Page from './models/349/FmModel349Page';
 import FmDebugPanel from './FmDebugPanel.jsx';
 import { useDebugMode } from '../fiscal-monitor/useDebugMode.js';
-import { persistDeclarationStatus } from './fiscalModelsUtils.js';
+import { persistDeclarationStatus, fetchDeclaration } from './fiscalModelsUtils.js';
 
 export default function FiscalModelsPage({ token, apiBaseUrl }) {
   const [view, setView] = useState({ type: 'list' });
@@ -40,6 +40,29 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
     });
   }, []);
 
+  // ETP-5438 — a successful AEAT telematic filing already set `submitted_ack`,
+  // `submissionMethod: 'aeat_telematic'` and the submission snapshot SERVER-side
+  // (Fiscal303SubmissionSupport#persistSuccessfulSubmission). Sending the usual status PUT here
+  // would be a submitted -> submitted transition, which `rejectRepresentation` answers with 409
+  // — the list then never learned about the filing. Instead: patch the detail view and the list
+  // locally right away, then re-read the declaration so both pick up `submittedSnapshot` (the
+  // list's "Resultado" freezes on it without a manual reload).
+  const handleSubmittedRemotely = useCallback(async (id, newStatus) => {
+    const patchBoth = (patch) => {
+      setView(v => (v.decl?.id === id ? { ...v, decl: { ...v.decl, ...patch } } : v));
+      setDeclStatusPatch({ id, patch });
+    };
+    patchBoth({ status: newStatus, submissionMethod: 'aeat_telematic' });
+    const fresh = await fetchDeclaration(id, { token, apiBaseUrl });
+    if (fresh) {
+      patchBoth({
+        status: fresh.status,
+        submissionMethod: fresh.submissionMethod ?? 'aeat_telematic',
+        submittedSnapshot: fresh.submittedSnapshot ?? null,
+      });
+    }
+  }, [token, apiBaseUrl]);
+
   const inDetail = view.type === '303' || view.type === '349';
 
   return (
@@ -64,10 +87,15 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onStatusChange={async (id, newStatus, submissionMethod) => {
             const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
-              setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
-              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}) } });
+              // ETP-5438 — carry the snapshot the backend froze at submission into both the
+              // detail view and the list, so the list freezes on it without a refetch.
+              const snapshotPatch = result.submittedSnapshot ? { submittedSnapshot: result.submittedSnapshot } : {};
+              setView(v => v.type === '303' ? { ...v, decl: { ...v.decl, status: newStatus, ...snapshotPatch } } : v);
+              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}), ...snapshotPatch } });
             }
+            return result;
           }}
+          onSubmittedRemotely={handleSubmittedRemotely}
           onManualDataSaved={(id, manualData) => {
             setDeclManualDataPatch({ id, patch: { manualData } });
           }}
@@ -82,9 +110,13 @@ export default function FiscalModelsPage({ token, apiBaseUrl }) {
           onStatusChange={async (id, newStatus, submissionMethod) => {
             const result = await persistDeclarationStatus(id, newStatus, { token, apiBaseUrl, submissionMethod });
             if (result.ok) {
-              setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus } } : v);
-              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}) } });
+              // ETP-5438 — carry the snapshot the backend froze at submission into both the
+              // detail view and the list, so the list freezes on it without a refetch.
+              const snapshotPatch = result.submittedSnapshot ? { submittedSnapshot: result.submittedSnapshot } : {};
+              setView(v => v.type === '349' ? { ...v, decl: { ...v.decl, status: newStatus, ...snapshotPatch } } : v);
+              setDeclStatusPatch({ id, patch: { status: newStatus, ...(submissionMethod ? { submissionMethod } : {}), ...snapshotPatch } });
             }
+            return result;
           }}
           data-testid="FmModel349Page__ca1112" />
       )}
