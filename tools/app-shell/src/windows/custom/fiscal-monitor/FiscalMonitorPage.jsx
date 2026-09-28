@@ -101,7 +101,7 @@ function useDebugState(orgId, apiBaseUrl) {
   const {
     loading, error, profile: realProfile, kpis: realKpis, siiParentId,
     tbaiValidationResults: realTbaiValidationResults, refetch,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
   } = useFiscalMonitor(orgId, apiBaseUrl);
 
   // Debug panel gates: mock rows/KPIs and the profile override are only ever
@@ -129,7 +129,7 @@ function useDebugState(orgId, apiBaseUrl) {
   return {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -160,7 +160,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -342,6 +342,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
                   onInvoiceOpen={handleInvoiceOpen}
                   onBpClick={(bpId, invoiceId, invoiceSpec) => setBpPopup({ bpId, invoiceId, invoiceSpec })}
                   kpis={kpis}
+                  earliestCutoverDate={earliestSiiCutoverDate}
                   data-testid="SiiMonitorSection__884f90" />
               )}
               {systemTab === 'tbai' && (
@@ -377,6 +378,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             onInvoiceOpen={handleInvoiceOpen}
             onBpClick={(bpId, invoiceId, invoiceSpec) => setBpPopup({ bpId, invoiceId, invoiceSpec })}
             kpis={kpis}
+            earliestCutoverDate={earliestSiiCutoverDate}
             data-testid="SiiMonitorSection__884f90" />
         )}
 
