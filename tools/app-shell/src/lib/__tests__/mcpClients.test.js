@@ -9,7 +9,7 @@ describe('buildMcpClients', () => {
     const clients = buildMcpClients(MCP_URL);
     assert.deepEqual(
       clients.map((c) => c.id),
-      ['ClaudeDesktop', 'ClaudeCode', 'Cursor', 'VsCode', 'Codex', 'OpenCode', 'Antigravity', 'Other'],
+      ['ClaudeDesktop', 'ChatGptDesktop', 'ClaudeCode', 'Cursor', 'VsCode', 'Codex', 'OpenCode', 'Antigravity', 'Other'],
     );
   });
 
@@ -31,7 +31,7 @@ describe('buildMcpClients', () => {
   it('interpolates mcpUrl into the Claude Code install command', () => {
     const claudeCode = buildMcpClients(MCP_URL).find((c) => c.id === 'ClaudeCode');
     const codeItem = claudeCode.content.find((item) => item.code != null);
-    assert.match(codeItem.code, /claude mcp add --scope user --transport http etendo-go/);
+    assert.match(codeItem.code, /claude mcp add --scope user --transport http etendo-mcp/);
     assert.ok(codeItem.code.includes(MCP_URL));
   });
 
@@ -54,7 +54,7 @@ describe('buildMcpClients', () => {
       const installItem = cursor.content.find((item) => item.install);
       const href = installItem.install.href;
 
-      assert.match(href, /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install\?name=etendo-go&config=/);
+      assert.match(href, /^cursor:\/\/anysphere\.cursor-deeplink\/mcp\/install\?name=etendo-mcp&config=/);
 
       const configParam = new URL(href.replace('cursor://', 'https://placeholder/')).searchParams.get('config');
       const decoded = JSON.parse(atob(configParam));
@@ -72,58 +72,58 @@ describe('buildMcpClients', () => {
 
       const encoded = href.slice('vscode:mcp/install?'.length);
       const decoded = JSON.parse(decodeURIComponent(encoded));
-      assert.deepEqual(decoded, { name: 'etendo-go', type: 'http', url: MCP_URL });
+      assert.deepEqual(decoded, { name: 'etendo-mcp', type: 'http', url: MCP_URL });
     });
   });
 });
 
 describe('deriveServerName', () => {
-  it('derives etendo-go-local for a localhost URL', () => {
-    assert.equal(deriveServerName('http://localhost:3100/mcp'), 'etendo-go-local');
+  it('derives etendo-mcp-local for a localhost URL', () => {
+    assert.equal(deriveServerName('http://localhost:3100/mcp'), 'etendo-mcp-local');
   });
 
-  it('derives etendo-go-local for a 127.0.0.1 URL', () => {
-    assert.equal(deriveServerName('http://127.0.0.1:3100/mcp'), 'etendo-go-local');
+  it('derives etendo-mcp-local for a 127.0.0.1 URL', () => {
+    assert.equal(deriveServerName('http://127.0.0.1:3100/mcp'), 'etendo-mcp-local');
   });
 
-  it('derives etendo-go-staging for a staging URL', () => {
-    assert.equal(deriveServerName('https://staging.etendo.example.com/mcp'), 'etendo-go-staging');
+  it('derives etendo-mcp-staging for a staging URL', () => {
+    assert.equal(deriveServerName('https://staging.etendo.example.com/mcp'), 'etendo-mcp-staging');
   });
 
-  it('derives etendo-go-experimental for an experimental URL', () => {
+  it('derives etendo-mcp-experimental for an experimental URL', () => {
     assert.equal(
       deriveServerName('https://experimental.etendo.example.com/mcp'),
-      'etendo-go-experimental',
+      'etendo-mcp-experimental',
     );
   });
 
-  it('derives etendo-go for a plain production URL', () => {
-    assert.equal(deriveServerName('https://etendo.example.com/mcp'), 'etendo-go');
+  it('derives etendo-mcp for a plain production URL', () => {
+    assert.equal(deriveServerName('https://etendo.example.com/mcp'), 'etendo-mcp');
   });
 
-  it('falls back to etendo-go for empty input', () => {
-    assert.equal(deriveServerName(''), 'etendo-go');
+  it('falls back to etendo-mcp for empty input', () => {
+    assert.equal(deriveServerName(''), 'etendo-mcp');
   });
 
-  it('falls back to etendo-go for undefined input (no crash)', () => {
-    assert.equal(deriveServerName(undefined), 'etendo-go');
+  it('falls back to etendo-mcp for undefined input (no crash)', () => {
+    assert.equal(deriveServerName(undefined), 'etendo-mcp');
   });
 
-  it('is case-insensitive (uppercase LOCALHOST -> etendo-go-local)', () => {
-    assert.equal(deriveServerName('http://LOCALHOST:3100/mcp'), 'etendo-go-local');
+  it('is case-insensitive (uppercase LOCALHOST -> etendo-mcp-local)', () => {
+    assert.equal(deriveServerName('http://LOCALHOST:3100/mcp'), 'etendo-mcp-local');
   });
 });
 
 describe('buildMcpClients propagates the derived alias into config snippets', () => {
   const LOCAL_URL = 'http://localhost:3100/mcp';
-  const LOCAL_NAME = 'etendo-go-local';
+  const LOCAL_NAME = 'etendo-mcp-local';
 
   it('injects the derived alias into the Claude Code install command', () => {
     const claudeCode = buildMcpClients(LOCAL_URL).find((c) => c.id === 'ClaudeCode');
     const codeItem = claudeCode.content.find((item) => item.code != null);
     assert.match(
       codeItem.code,
-      /claude mcp add --scope user --transport http etendo-go-local/,
+      /claude mcp add --scope user --transport http etendo-mcp-local/,
     );
     assert.ok(codeItem.code.includes(LOCAL_URL));
   });
@@ -143,10 +143,10 @@ describe('buildMcpClients propagates the derived alias into config snippets', ()
     assert.equal(decoded.name, LOCAL_NAME);
   });
 
-  it('injects the derived alias into the Codex TOML section header and login command', () => {
+  it('injects the derived alias into the Codex mcp add and login commands', () => {
     const codex = buildMcpClients(LOCAL_URL).find((c) => c.id === 'Codex');
     const codeSnippets = codex.content.filter((item) => item.code != null).map((item) => item.code);
-    assert.ok(codeSnippets.some((code) => code.includes(`[mcp_servers.${LOCAL_NAME}]`)));
+    assert.ok(codeSnippets.includes(`codex mcp add ${LOCAL_NAME} --url ${LOCAL_URL}`));
     assert.ok(codeSnippets.some((code) => code.includes(`codex mcp login ${LOCAL_NAME}`)));
   });
 

@@ -24,13 +24,19 @@ import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
  * @param {string} [opts.entityName='header'] - entity segment of the action URL
  * @param {string}  opts.apiBaseUrl - base URL already scoped to the spec
  * @param {string}  opts.token      - bearer token
- * @returns {{ execute: (recordId: string, actionName: string) => Promise<{success: boolean, message?: string, messageKeys?: string[]}>, loading: boolean }}
+ * `execute`'s optional third argument `requestBody` (ETP-5445) is a plain object sent as the JSON
+ * request body. Omitted (`undefined`) the body stays the literal `'{}'` every caller has always
+ * sent. It exists for actions backed by an AD process with mandatory parameters validated at the
+ * request root — e.g. Internal Consumption's `processNow`, which needs `{ action: 'CO' }` — that
+ * would otherwise be rejected with "Missing mandatory parameter".
+ *
+ * @returns {{ execute: (recordId: string, actionName: string, requestBody?: object) => Promise<{success: boolean, message?: string, messageKeys?: string[]}>, loading: boolean }}
  */
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
   const apiFetch = useApiFetch(apiBaseUrl);
 
-  const execute = useCallback(async (recordId, actionName) => {
+  const execute = useCallback(async (recordId, actionName, requestBody) => {
     if (!apiBaseUrl || !recordId || !actionName) {
       return { success: false, message: `Missing required params: apiBaseUrl=${apiBaseUrl}, recordId=${recordId}, actionName=${actionName}` };
     }
@@ -38,7 +44,7 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
     try {
       const res = await apiFetch(
         `/${entityName}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(actionName)}`,
-        { method: 'POST', body: '{}' },
+        { method: 'POST', body: requestBody === undefined ? '{}' : JSON.stringify(requestBody) },
       );
       const body = await res.json().catch(() => null);
       const nested = body?.response?.data?.[0];

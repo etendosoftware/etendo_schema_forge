@@ -303,22 +303,32 @@ the main bundle.
 
 ## Evaluation context
 
-Set at startup from `localStorage`, re-applied on sign-in by `trackSessionStarted`
-in `lib/observability/health-events.js`, and re-applied again once the account
+Set at startup, re-applied on sign-in by `trackSessionStarted` in
+`lib/observability/health-events.js`, and re-applied again once the account
 identity resolves — `useAccountIdentity()` in `layout/AppLayout.jsx` calls
 `refreshAccountIdentity`, which reads `GET /sws/neo/session` and caches the result
-(ETP-4693):
+(ETP-4693).
+
+Who is signed in (username, client, client name) comes from the in-memory session
+identity in `lib/sessionIdentity.js`, fed by `trackSessionStarted` on sign-in and by
+`useAccountIdentity()` from `useAuth()` on every mount of the authenticated shell,
+so it survives a reload. It used to be read from the legacy `sf_auth_user` /
+`sf_auth_client_id` / `sf_auth_client_name` keys, which nothing writes since the
+cookie session (ADR-0001), so under that session targeting silently fell back to
+anonymous (ETP-5455). The account values are still cached in `localStorage`:
 
 | Context key | Source | Purpose |
 |-------------|--------|---------|
-| `targetingKey` | `sf_account_id`, falling back to `sf_auth_user` | OpenFeature's standard identity key. The account is preferred because it is what the backend targets on; the ERP username only stands in until the session answers. |
+| `targetingKey` | `sf_account_id`, falling back to the session username | OpenFeature's standard identity key. The account is preferred because it is what the backend targets on; the ERP username only stands in until the session answers. |
 | `accountId` | `sf_account_id` (`ETGO_ACCOUNT`) | Account-level targeting, opaque — no PII reaches the vendor |
 | `email` | `sf_account_email` | The attribute ConfigCat's `User.Email` rules and segments read. The provider maps OpenFeature's `email` onto `User.Email`; anything else would arrive as a custom attribute. |
-| `account_id` | `sf_auth_client_id` (tenant) | Tenant-level targeting; matches the Mixpanel group the analytics layer already sets. **A different identity from `accountId`** — this one is the `AD_Client`. |
+| `account_id` | the session client (tenant) | Tenant-level targeting; matches the Mixpanel group the analytics layer already sets. **A different identity from `accountId`** — this one is the `AD_Client`. |
 
-Both account values arrive only for sessions that carry a token and whose account
-resolves, so a rule keyed on the account or the email evaluates **once the session
-has answered**, not at first paint. Startup falls back to the ERP username, which
+Both account values arrive once the account resolves — for any signed-in session,
+cookie or bearer (until ETP-5455 `useAccountIdentity` only ran when
+`sf_platform_token` was present, so under the cookie session it never did) — so a
+rule keyed on the account or the email evaluates **once the session has answered**,
+not at first paint. Startup falls back to the ERP username, which
 the backend never sees.
 
 ## Swapping the control plane

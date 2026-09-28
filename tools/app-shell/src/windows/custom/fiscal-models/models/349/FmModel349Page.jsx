@@ -12,7 +12,7 @@ import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
 import { formatAmount, compute349Operators, generate349File, validate349Vies } from '../../fiscalModelsUtils.js';
-import { invalidateFiscalComputeCache, getCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
+import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
 
@@ -124,6 +124,13 @@ const RECTIF_KEY_BY_TYPE = {
 // mixed goods+services correction counts under both. A rectification whose two
 // bases are zero is a no-op correction and is attributed to no key (mirrors the
 // zero-base skip in `appendOperators`).
+// ETP-5438 — the Compra/Venta counts a submission snapshot folded into an operator row, or
+// `undefined` when the row carries none (live payloads, or no backing invoice).
+function snapshotOriginCounts(op) {
+  if (op?.originPurchases == null && op?.originSales == null) return undefined;
+  return { Compra: Number(op.originPurchases) || 0, Venta: Number(op.originSales) || 0 };
+}
+
 function rectificationKeys(r) {
   const byType = RECTIF_KEY_BY_TYPE[r?.type];
   if (!byType) return [];
@@ -621,6 +628,17 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
   );
 }
 
+// ETP-5438 — shown in place of the per-invoice tabs of a declaration served from its submission
+// snapshot, which keeps only the figures (see `snapshotServed`).
+function InvoiceDetailNotKept({ t }) {
+  return (
+    <div className="fm-snapshot-note" style={{ padding: 24, color: 'hsl(var(--muted-foreground))' }}
+      data-testid="fm-snapshot-no-invoice-detail">
+      {t('fm.snapshot.invoice_detail_not_kept') ?? 'El detalle por factura no se conserva en las declaraciones presentadas.'}
+    </div>
+  );
+}
+
 function DetailTabContent({
   activeTab, decl, liveInvoices, blocking, warning, t, onGoToSources, token, apiBaseUrl, status,
   originFilter, onClearOriginFilter,
@@ -661,6 +679,43 @@ function DetailTabContent({
   );
 }
 
+// ── Submission snapshot helpers (ETP-5438) ────────────────────────
+// Pure, module-level — extracted from the component body to keep its cognitive complexity under
+// the SonarQube javascript:S3776 threshold. Exported for their unit tests only.
+
+// The snapshot the backend persisted when the declaration was presented, or `null` (drafts, and
+// legacy declarations presented before snapshots existed).
+export function submittedSnapshotOf(decl) {
+  const snapshot = decl?.submittedSnapshot;
+  return snapshot && typeof snapshot === 'object' ? snapshot : null;
+}
+
+// True when the page is served from the snapshot: a submitted declaration whose snapshot carries
+// the operators.
+export function isSnapshotServed349(isSubmitted, snapshot) {
+  return isSubmitted && Array.isArray(snapshot?.operators);
+}
+
+// Rectification count: the snapshot keeps only the COUNT, a live payload keeps the rows (the
+// legacy/mock shape can carry a plain number instead of an array, which counts as 0 here).
+export function rectificationCountFor(snapshotServed, snapshot, rows) {
+  if (snapshotServed) return Number(snapshot.rectificationCount) || 0;
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+// The "Facturas origen" tab badge: the snapshot's invoice count, else the live rows' length
+// (`null` while nothing is loaded).
+export function invoicesTabBadge(snapshotServed, snapshot, liveInvoices) {
+  if (snapshotServed) return Number(snapshot.invoiceCount) || 0;
+  return liveInvoices?.length ?? null;
+}
+
+// The tab the shared DetailTabContent renders: none for a snapshot-served "Facturas origen" tab,
+// whose content is the "not kept" note instead.
+export function detailTabFor(snapshotServed, activeTab) {
+  return snapshotServed && activeTab === 'invoices' ? null : activeTab;
+}
+
 // ── Main ─────────────────────────────────────────────────────────
 export default function FmModel349Page({ decl, onBack, onStatusChange, token, apiBaseUrl }) {
   const ui = useUI();
@@ -678,6 +733,15 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // remount. Declared early — before the mount-time auto-compute effect below, which
   // reads it (ETP-5438) — and reused at the action-bar gates further down.
   const isSubmitted = ['submitted', 'submitted_ext', 'submitted_ack'].includes(status);
+  // ETP-5438 — the operators payload the backend persisted when this declaration was presented
+  // (`null` for drafts and for legacy declarations presented before snapshots existed). See the
+  // mount-time auto-compute effect below for how it is consumed.
+  const submittedSnapshot = submittedSnapshotOf(decl);
+  // ETP-5438 — the snapshot keeps operators and the key totals, plus the invoice/rectification
+  // COUNTS (`invoiceCount`, `rectificationCount`); the per-invoice `invoices`/`rectifications`
+  // rows are not kept. While served from a snapshot those two tabs show a note instead of a list;
+  // the operators' "Origen" counts come from `originPurchases`/`originSales` on each row.
+  const snapshotServed = isSnapshotServed349(isSubmitted, submittedSnapshot);
   const [activeTab,   setActiveTab]   = useState('operators');
   const [keyFilter,   setKeyFilter]   = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -746,12 +810,14 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     .reduce((s,o) => s + (parseFloat(o.base) || 0), 0);
   const rectifSummary = liveRectifSummary ?? decl.rectificativeSummary ?? null;
   const rectifRows     = liveRectifications ?? decl.rectifications ?? [];
-  const rectifications = Array.isArray(rectifRows) ? rectifRows.length : 0;
+  const rectifications = rectificationCountFor(snapshotServed, submittedSnapshot, rectifRows);
 
+  // Returns whatever `onStatusChange` returns (FiscalModelsPage resolves the PUT result), so a
+  // caller can react to a rejected transition — see `handlePresent`.
   function handleStatusChange(newStatus, newSubmissionMethod) {
     setStatus(newStatus);
     if (newSubmissionMethod) setSubmissionMethod(newSubmissionMethod);
-    onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
+    return onStatusChange?.(decl.id, newStatus, newSubmissionMethod);
   }
 
   // ETP-5338 pt.5 — 349's "Guardar", added for cross-model consistency once the requirement
@@ -782,26 +848,67 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // from. Fire-and-forget — useAttachments.upload() already toasts its
   // own errors and never rethrows, so a failed upload must not block the
   // status change the user explicitly confirmed.
-  function handlePresent({ status: newStatus, acuseFile }) {
+  async function handlePresent({ status: newStatus, acuseFile }) {
     if (newStatus === 'submitted_ack' && acuseFile) {
       uploadReceipt(acuseFile);
     }
     // submissionMethod (ETP-4755) — see FmModel303Page.jsx's handlePresent for the
     // identical rationale; 349 only ever exercises these two manual paths.
     const submissionMethodForPath = newStatus === 'submitted_ack' ? 'manual_ack' : 'manual_no_receipt';
-    handleStatusChange(newStatus, submissionMethodForPath);
+    // ETP-5438 — roll back a presentation the backend rejected (it could not compute the
+    // submission snapshot); see FmModel303Page.jsx's handlePresent.
+    const previous = { status, submissionMethod };
+    const result = await handleStatusChange(newStatus, submissionMethodForPath);
+    if (result?.ok === false) {
+      setStatus(previous.status);
+      setSubmissionMethod(previous.submissionMethod);
+      toast.error(t('fm.action.present_error') ?? 'No se pudo presentar la declaración. Inténtalo de nuevo.');
+      return;
+    }
+    // ETP-5438 — show exactly the operators the backend froze in this same request (the PUT
+    // echoes the snapshot), so the page matches what the list and every later reopen show.
+    if (result?.submittedSnapshot?.operators) {
+      applyOperatorsResult(result.submittedSnapshot);
+    }
+  }
+
+  function applyOperatorsResult(res) {
+    if (res?.operators) setLiveOperators(res.operators);
+    if (res?.invoices)  setLiveInvoices(res.invoices);
+    if (res?.rectifications) setLiveRectifications(res.rectifications);
+    if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
   }
 
   async function handleCompute() {
     setComputing(true);
     try {
       const res = await compute349Operators(decl, { token, apiBaseUrl });
-      if (res?.operators) setLiveOperators(res.operators);
-      if (res?.invoices)  setLiveInvoices(res.invoices);
-      if (res?.rectifications) setLiveRectifications(res.rectifications);
-      if (res?.rectificativeSummary) setLiveRectifSummary(res.rectificativeSummary);
+      applyOperatorsResult(res);
     } finally {
       setComputing(false);
+    }
+  }
+
+  // ETP-5438 follow-up — ONE compute for a submitted declaration opened on a cold session cache
+  // (new tab, reload, another browser/user), frozen into the same sessionStorage entry
+  // `FmListPage.jsx`'s submitted-family bucket reads, so list and detail show the same data for
+  // the rest of the session. Display-only: no persistence. `compute349Operators` already
+  // resolves `null` on a failed backend call (no mock fallback when `apiBaseUrl` is set), and a
+  // `null` result is never cached, so a failure leaves the tabs empty instead of freezing garbage.
+  // `isCancelled` comes from the mount effect's cleanup: a response that resolves after unmount
+  // or after `decl.id` changed still freezes the cache under the id it was computed for, but
+  // must not paint that declaration's operators into whatever this page shows now.
+  async function computeSubmittedOnce(isCancelled = () => false) {
+    const declId = decl.id;
+    setComputing(true);
+    try {
+      const res = await compute349Operators(decl, { token, apiBaseUrl });
+      if (!res?.operators) return;
+      setCachedFiscalCompute(declId, res);
+      if (isCancelled()) return;
+      applyOperatorsResult(res);
+    } finally {
+      if (!isCancelled()) setComputing(false);
     }
   }
 
@@ -853,19 +960,31 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   // `liveOperators`/`decl._precomputed`) so it fires exactly once per opened
   // declaration instead of looping once `handleCompute` populates state.
   //
-  // ETP-5438 — once `isSubmitted`, this effect must NEVER call `handleCompute()`
-  // (= a live `GET /fiscal349/operators`, which always recomputes from whatever
-  // invoices exist RIGHT NOW, regardless of who calls it or when — that live
-  // recompute silently picking up invoices added/removed after presentation was
-  // the actual "sigue tomando facturas aun presentada" bug). Instead it falls back
-  // to `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s
-  // own submitted-family bucket already populated once this session (see its
-  // `neverModifiedFn` comment) — network-free, so it can never observe a later
-  // invoice change. If nothing was ever cached (declaration opened cold, with no
-  // `_precomputed` AND no prior FmListPage compute this session), the tabs simply
-  // show no data — "Calcular" is itself hidden once submitted, so there is no
-  // in-page affordance to populate it, matching the frozen-once-presented intent.
+  // ETP-5438 — Legacy (no snapshot): for a submitted declaration presented before the
+  // backend persisted submission snapshots, this effect computes at most ONCE per browser
+  // session (a declaration WITH `submittedSnapshot` is served from it — first branch below —
+  // and never reaches any of this; a live `GET /fiscal349/operators` always recomputes from whatever
+  // invoices exist RIGHT NOW, regardless of who calls it or when — recomputing on
+  // every mount silently picked up invoices added/removed after presentation, the
+  // "sigue tomando facturas aun presentada" bug). It first reuses
+  // `getCachedFiscalCompute`, the same sessionStorage cache `FmListPage.jsx`'s own
+  // submitted-family bucket populates (see its `neverModifiedFn` comment) —
+  // network-free. Only on a cold cache (new tab, reload, another browser, with no
+  // `_precomputed` handed down) does it compute once (`computeSubmittedOnce`) and
+  // write the result back to that same cache entry, so later mounts and the list
+  // stay frozen on it. "Calcular" stays hidden once submitted. Legacy-only trade-off:
+  // a cold session recomputes from the invoice data as it is at that moment.
   useEffect(() => {
+    // ETP-5438 — a declaration presented once snapshots existed carries the exact
+    // `GET /fiscal349/operators` payload persisted server-side at submission time
+    // (`decl.submittedSnapshot`): the single source of truth for its data, applied through the
+    // same `applyOperatorsResult` with no compute call and no sessionStorage involvement.
+    // Checked first so nothing below can ever recompute it. Legacy declarations presented
+    // before snapshots existed have none and keep the once-per-session freeze below.
+    if (isSubmitted && submittedSnapshot?.operators) {
+      applyOperatorsResult(submittedSnapshot);
+      return;
+    }
     const hasPrecomputed = decl._precomputed?.operators != null || liveOperators != null;
     if (hasPrecomputed) return;
     if (!apiBaseUrl) return;
@@ -874,11 +993,13 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     // gate is permanently false and the request would simply never fire.
     if (isSubmitted) {
       const cached = getCachedFiscalCompute(decl.id);
-      if (cached?.operators) setLiveOperators(cached.operators);
-      if (cached?.invoices) setLiveInvoices(cached.invoices);
-      if (cached?.rectifications) setLiveRectifications(cached.rectifications);
-      if (cached?.rectificativeSummary) setLiveRectifSummary(cached.rectificativeSummary);
-      return;
+      if (cached?.operators) {
+        applyOperatorsResult(cached);
+        return;
+      }
+      let cancelled = false;
+      computeSubmittedOnce(() => cancelled);
+      return () => { cancelled = true; };
     }
     handleCompute();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -961,7 +1082,10 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
     // A rectificative row resolves ONLY against the rectifications lookup: no match
     // means "—", never a fallback to the regular-invoice count.
     const source = isRectificativeOp(op) ? originByRectification : originByNif;
-    const counts = source[`${op.nif}|${op.key ?? ''}`];
+    // ETP-5438 — a submission snapshot drops the invoice/rectification rows but folds the same
+    // per-operator counts into each operator row (`originPurchases`/`originSales`, computed
+    // server-side with the same nif|key grouping); use them when the rows are absent.
+    const counts = source[`${op.nif}|${op.key ?? ''}`] ?? snapshotOriginCounts(op);
     if (!counts) return null;
     const c = counts['Compra'] ?? 0;
     const v = counts['Venta']  ?? 0;
@@ -990,7 +1114,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
   const TABS = [
     { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
     { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: liveInvoices?.length ?? null, icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
     { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
@@ -1277,10 +1401,16 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
                           </td>
                           <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
                           <td>
-                            {formatOrigin(op)
-                              ? <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
-                              : <span style={{ color: 'var(--fm-fg-4)' }}>—</span>
-                            }
+                            {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
+                                invoice rows, so the link would land on the "not kept" note:
+                                plain text there, link everywhere else. */}
+                            {formatOrigin(op) && snapshotServed && (
+                              <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
+                            )}
+                            {formatOrigin(op) && !snapshotServed && (
+                              <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
+                            )}
+                            {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
                           </td>
                         </tr>
                       ))}
@@ -1292,7 +1422,8 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
           </div>
         )}
 
-        {activeTab === 'rectif' && (
+        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
+        {activeTab === 'rectif' && !snapshotServed && (
           <RectificationsTabContent
             rows={rectifRows}
             t={t}
@@ -1303,8 +1434,9 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, token, ap
 
       </div>
       {/* Shared tab content — same layout as 303 */}
+      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
       <DetailTabContent
-        activeTab={activeTab}
+        activeTab={detailTabFor(snapshotServed, activeTab)}
         decl={decl}
         liveInvoices={liveInvoices}
         blocking={blocking}

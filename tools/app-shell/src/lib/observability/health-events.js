@@ -2,6 +2,7 @@ import { track, group, groupSet, flush } from '../observability.js';
 import { extractWindowName } from './payload.js';
 import { HEALTH_EVENTS_MAP } from './health-events.map.js';
 import { setFeatureFlagContext } from '../flags/bootstrap.js';
+import { getSessionIdentity, setSessionIdentity } from '../sessionIdentity.js';
 
 function getWindowName() {
   try {
@@ -11,17 +12,16 @@ function getWindowName() {
   }
 }
 
+// ETP-5455: the account comes from the in-memory session identity. It used to be read from the
+// legacy sf_auth_client_id key, which nothing writes since the cookie session.
 function getSessionContext() {
-  try {
-    return {
-      account_id: localStorage.getItem('sf_auth_client_id') || undefined,
-    };
-  } catch {
-    return {};
-  }
+  const { clientId } = getSessionIdentity();
+  return clientId ? { account_id: clientId } : {};
 }
 
 export async function trackSessionStarted({ username, clientId, clientName } = {}) {
+  // Recorded first, so the flag context below and every later event see who signed in.
+  setSessionIdentity({ username, clientId, clientName });
   // Re-target feature flags on the signed-in identity so bucketing matches the
   // Mixpanel user this session reports as. This does NOT reintroduce identify() —
   // that call was removed entirely from the survey/session flow as part of the
@@ -30,7 +30,7 @@ export async function trackSessionStarted({ username, clientId, clientName } = {
   setFeatureFlagContext({ username, clientId });
   if (clientId) {
     void group('account_id', clientId);
-    const clientNameValue = clientName || localStorage.getItem('sf_auth_client_name') || undefined;
+    const clientNameValue = clientName || getSessionIdentity().clientName;
     if (clientNameValue) {
       void groupSet('account_id', clientId, { $name: clientNameValue });
     }
