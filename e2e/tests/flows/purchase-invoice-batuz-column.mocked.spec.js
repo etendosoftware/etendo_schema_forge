@@ -173,9 +173,13 @@ async function openList(page, { profile, territory }) {
   await login(page);
   await installFiscalProfileMocks(page, profile, { territory });
   // Overrides installFiscalProfileMocks()'s shared siiRecord fixture with an
-  // explicit `monitordate` — the AD column `useFiscalConfig`'s
-  // `earliestCutoverDate('sii', ...)` actually reads (CUTOVER_FIELD.sii), NOT
-  // the legacy `fechaAcogidaSII` name. Registered AFTER
+  // explicit `fechaAcogidaSII` — the AD column `useFiscalConfig`'s
+  // `earliestCutoverDate('sii', ...)` actually reads (CUTOVER_FIELD.sii).
+  // ETP-5432 #1 corrected that field from the wrong `monitordate` ("SII
+  // monitor start date", a separate cosmetic field) to the real enrollment
+  // date `fechaAcogidaSII` — this fixture used to set `monitordate` and
+  // silently stopped gating anything once the code moved on, so every row's
+  // SII cell fell back to a dash instead of its real status. Registered AFTER
   // installFiscalProfileMocks — Playwright matches routes in reverse
   // registration order, so this wins over the shared one. The SII badge IS
   // still date-gated (ETP-5229, corrected): `isSifEligibleByDate(row.
@@ -186,7 +190,7 @@ async function openList(page, { profile, territory }) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', monitordate: '2020-01-01' }]),
+      body: responseData([{ guipuzcoa: 'Y', taxtype: 'IVA', fechaAcogidaSII: '2020-01-01' }]),
     });
   });
   await installListMock(page);
