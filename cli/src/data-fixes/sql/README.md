@@ -104,6 +104,20 @@ physical-inventory correction first).
    ship a new dated `.sql` for those. See
    `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` (steps 0a/0b, ETP-4799) for a
    worked example.
+4. **Decide "paying or free" from `etgo_subscription`, never from the `ETGO_TenantPlan`
+   preference.** Since ETP-5046's R37 backfill the preference is retired per tenant as soon as the
+   tenant gains an open subscription, and a tenant paid after ETP-5046 never has it. "No productive
+   preference" therefore no longer means "a free tenant" — increasingly it means "a paying tenant
+   that has already been migrated". A fix keyed on the preference inverts its own intent, silently,
+   on exactly the tenants that pay; for a fix that forces test mode (as R31 does) that routes real
+   SII / TicketBAI / VeriFactu submissions to the tax authority's test endpoints. A tenant is paying
+   when it has a row with `environment_client_id = :client_id`, `end_date IS NULL`,
+   `isactive = 'Y'` and `status IN ('active', 'past_due')` — the same rule as
+   `TenantPlanService.resolvePlan`. The row itself is client `0`, so filter on
+   `environment_client_id`, never `ad_client_id` (R37's header explains how that still meets
+   rule 1). R31/R32 predate this and stay
+   safe only because the watermark keeps them from ever running after R37, and new tenants start
+   past them (`ONBOARDING_PROVISIONED_THROUGH`).
 
 ## Fixes that target the System pseudo-tenant (`--client 0`)
 

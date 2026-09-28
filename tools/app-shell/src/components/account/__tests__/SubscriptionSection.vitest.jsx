@@ -114,6 +114,66 @@ describe('SubscriptionSection', () => {
     expect(screen.queryByTestId('SubscriptionSection__loading')).not.toBeInTheDocument();
   });
 
+  /**
+   * ETP-5455 — billing accepts only a platform credential (decision 1), so a legacy bearer session
+   * is refused here while /me still answers. That 401 is not "we couldn't load your subscription":
+   * nothing is down and Retry can never succeed. The section reports it to its host instead.
+   */
+  describe('an expired session (ETP-5455)', () => {
+    function httpError(status) {
+      const error = new Error(`HTTP ${status}`);
+      error.status = status;
+      return error;
+    }
+
+    it('reports a 401 on the subscription read to its host instead of showing unavailable',
+      async () => {
+        const onSessionExpired = vi.fn();
+        getSubscription.mockRejectedValue(httpError(401));
+
+        renderSection({ onSessionExpired });
+
+        await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
+        expect(screen.queryByTestId('SubscriptionSection__unavailable')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('SubscriptionSection__retry')).not.toBeInTheDocument();
+      });
+
+    it('says the session expired when no host listens, rather than claiming an outage', async () => {
+      getSubscription.mockRejectedValue(httpError(401));
+
+      renderSection();
+
+      expect(await screen.findByTestId('SubscriptionSection__sessionExpired')).toBeInTheDocument();
+      expect(screen.getByText('accountSessionExpired')).toBeInTheDocument();
+      expect(screen.queryByTestId('SubscriptionSection__unavailable')).not.toBeInTheDocument();
+    });
+
+    it('keeps the unavailable state and Retry for a server failure', async () => {
+      const onSessionExpired = vi.fn();
+      getSubscription.mockRejectedValue(httpError(500));
+
+      renderSection({ onSessionExpired });
+
+      expect(await screen.findByTestId('SubscriptionSection__unavailable')).toBeInTheDocument();
+      expect(screen.getByTestId('SubscriptionSection__retry')).toBeInTheDocument();
+      expect(onSessionExpired).not.toHaveBeenCalled();
+    });
+
+    it('reports a 401 on the portal session instead of the manage error', async () => {
+      const user = userEvent.setup();
+      const onSessionExpired = vi.fn();
+      getSubscription.mockResolvedValue(ACTIVE);
+      createPortalSession.mockRejectedValue(httpError(401));
+
+      renderSection({ onSessionExpired });
+      await user.click(await screen.findByTestId('SubscriptionSection__manage'));
+
+      await waitFor(() => expect(onSessionExpired).toHaveBeenCalledTimes(1));
+      expect(screen.queryByTestId('SubscriptionSection__manageError')).not.toBeInTheDocument();
+      expect(assignMock).not.toHaveBeenCalled();
+    });
+  });
+
   describe('an active subscription', () => {
     it('shows plan, amount and status, and the next renewal date rather than a cancellation date', async () => {
       getSubscription.mockResolvedValue(ACTIVE);

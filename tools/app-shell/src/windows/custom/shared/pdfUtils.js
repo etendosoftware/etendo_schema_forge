@@ -420,6 +420,10 @@ export function usePdfGenerator(recordId, apiBaseUrl, token, buildBlobFn, cacheC
     return () => {
       cancelled = true;
       setPdfBlob(null);
+      // Clear url/loading too, not just the blob, so a later reopen starts from a clean slate.
+      setPdfUrl(null);
+      setError(null);
+      setLoading(false);
       if (prevUrlRef.current) {
         URL.revokeObjectURL(prevUrlRef.current);
         prevUrlRef.current = null;

@@ -18,6 +18,11 @@ import {
   trackSessionStarted,
 } from '@/lib/observability/health-events.js';
 import { track, flush, group, groupSet, identify } from '@/lib/observability.js';
+import {
+  clearSessionIdentity,
+  getSessionIdentity,
+  setSessionIdentity,
+} from '@/lib/sessionIdentity.js';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +39,7 @@ function setPathname(pathname) {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  clearSessionIdentity();
 });
 
 // ── trackDocumentCreated ───────────────────────────────────────────────────────
@@ -67,15 +73,28 @@ describe('trackDocumentCreated', () => {
     expect(track).not.toHaveBeenCalled();
   });
 
-  it('includes account_id from localStorage when sf_auth_client_id is set', () => {
+  // ETP-5455: the account comes from the session identity. It used to be read from the legacy
+  // sf_auth_client_id key, which nothing writes since the cookie session, so every event lost
+  // its account grouping.
+  it('includes account_id from the session identity', () => {
     setPathname('/sales-order/abc');
-    localStorage.setItem('sf_auth_client_id', 'client-42');
+    setSessionIdentity({ clientId: 'client-42' });
 
     trackDocumentCreated();
 
     expect(track).toHaveBeenCalledWith('document_created', expect.objectContaining({
       account_id: 'client-42',
     }));
+  });
+
+  it('ignores a leftover legacy sf_auth_client_id key', () => {
+    setPathname('/sales-order/abc');
+    localStorage.setItem('sf_auth_client_id', 'stale-client');
+
+    trackDocumentCreated();
+
+    const [, props] = track.mock.calls[0];
+    expect(props).not.toHaveProperty('account_id');
   });
 
   it('does NOT pass user_email in the payload', () => {
@@ -229,9 +248,10 @@ describe('trackTransactionPosted', () => {
     expect(props).not.toHaveProperty('document_id');
   });
 
-  it('includes account_id from localStorage when sf_auth_client_id is set', () => {
+  // ETP-5455: from the session identity (was the legacy sf_auth_client_id key).
+  it('includes account_id from the session identity', () => {
     setPathname('/sales-invoice/rec-id');
-    localStorage.setItem('sf_auth_client_id', 'tenant-99');
+    setSessionIdentity({ clientId: 'tenant-99' });
 
     trackTransactionPosted();
 
@@ -357,8 +377,10 @@ describe('trackSessionStarted', () => {
     expect(groupSet).toHaveBeenCalledWith('account_id', 'client-123', { $name: 'Acme Corp' });
   });
 
-  it('calls groupSet with $name from localStorage sf_auth_client_name when clientName not passed but localStorage is set', async () => {
-    localStorage.setItem('sf_auth_client_name', 'Stored Corp');
+  // ETP-5455: the fallback name comes from the session identity (was the legacy
+  // sf_auth_client_name key), for the same client only.
+  it('calls groupSet with $name from the session identity when clientName is not passed', async () => {
+    setSessionIdentity({ clientId: 'client-123', clientName: 'Stored Corp' });
 
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
@@ -370,5 +392,31 @@ describe('trackSessionStarted', () => {
     await trackSessionStarted({ username: 'alice', clientId: 'client-123' });
 
     expect(groupSet).not.toHaveBeenCalled();
+  });
+});
+
+// ── ETP-5455 — trackSessionStarted feeds and reads the session identity ─────────
+
+describe('trackSessionStarted and the session identity (ETP-5455)', () => {
+  it('records who signed in, so later events and flag targeting know it', async () => {
+    await trackSessionStarted({ username: 'ana', clientId: 'client-1', clientName: 'Acme' });
+
+    expect(getSessionIdentity()).toEqual({ username: 'ana', clientId: 'client-1', clientName: 'Acme' });
+  });
+
+  it('names the account group from the session identity when the caller has no client name', async () => {
+    setSessionIdentity({ clientId: 'client-1', clientName: 'Acme' });
+
+    await trackSessionStarted({ username: 'ana', clientId: 'client-1' });
+
+    expect(groupSet).toHaveBeenCalledWith('account_id', 'client-1', { $name: 'Acme' });
+  });
+
+  it('never falls back to the legacy sf_auth_client_name key', async () => {
+    localStorage.setItem('sf_auth_client_name', 'Stale Tenant');
+
+    await trackSessionStarted({ username: 'ana', clientId: 'client-9' });
+
+    expect(groupSet).not.toHaveBeenCalledWith('account_id', 'client-9', { $name: 'Stale Tenant' });
   });
 });

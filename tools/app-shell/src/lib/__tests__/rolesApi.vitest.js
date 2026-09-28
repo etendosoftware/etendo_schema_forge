@@ -1,3 +1,7 @@
+import {
+  resetSessionCredentials,
+  setSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { fetchRolesOverview } from '../rolesApi.js';
 
 // ETP-4513 — fetchRolesOverview() mirrors menuTree.js's fetchMenuTree()
@@ -15,6 +19,7 @@ describe('rolesApi', () => {
 
     afterEach(() => {
       vi.restoreAllMocks();
+      resetSessionCredentials();
       localStorage.clear();
     });
 
@@ -140,8 +145,11 @@ describe('rolesApi', () => {
       expect(url).toContain('/sws/neo/rolesoverview');
     });
 
-    it('wires the Authorization header from sf_auth_token when a token is present', async () => {
-      localStorage.setItem('sf_auth_token', 'test-token-123');
+    // ETP-5455 — the credential comes from the active session scheme. The module used to hand
+    // apiFetch `localStorage.sf_auth_token` as an explicit `token`, and an explicit token WINS over
+    // the session's in bearer mode — so a leftover key silently replaced the live bearer.
+    it('wires the Authorization header from the session bearer', async () => {
+      setSessionCredentials({ mode: 'bearer', token: 'test-token-123' });
       globalThis.fetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -152,6 +160,36 @@ describe('rolesApi', () => {
 
       const [, options] = globalThis.fetch.mock.calls[0];
       expect(options.headers.Authorization).toBe('Bearer test-token-123');
+    });
+
+    it('ignores a leftover legacy sf_auth_token instead of sending it over the session bearer', async () => {
+      setSessionCredentials({ mode: 'bearer', token: 'test-token-123' });
+      localStorage.setItem('sf_auth_token', 'stale-legacy-token');
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ roles: [] }),
+      });
+
+      await fetchRolesOverview();
+
+      const [, options] = globalThis.fetch.mock.calls[0];
+      expect(options.headers.Authorization).toBe('Bearer test-token-123');
+    });
+
+    it('sends no Authorization header under the cookie session', async () => {
+      setSessionCredentials({ mode: 'cookie', token: null, csrfToken: 'csrf-1' });
+      localStorage.setItem('sf_auth_token', 'stale-legacy-token');
+      globalThis.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ roles: [] }),
+      });
+
+      await fetchRolesOverview();
+
+      const [, options] = globalThis.fetch.mock.calls[0];
+      expect(options.headers.Authorization).toBeUndefined();
     });
 
     it('sends no Authorization header when no token is stored', async () => {

@@ -67,7 +67,7 @@ describe('goods-receipt contract integrity (ETP-5062 manual-add safety default)'
     const movementQuantity = lineField('movementQuantity');
     assert.equal(
       movementQuantity.readOnlyLogic.js,
-      "record['processed'] === true || record['uomManagement'] === 'Y'",
+      "(record['processed'] === true || record['processed'] === 'Y') || record['uomManagement'] === 'Y'",
     );
   });
 });

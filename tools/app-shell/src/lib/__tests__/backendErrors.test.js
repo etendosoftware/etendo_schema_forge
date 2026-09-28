@@ -2377,3 +2377,112 @@ describe('"tenant owner — only the owner can modify" exact match (UserRoleAssi
     );
   });
 });
+
+describe('translateBackendError — raw @Key@ token route (ETP-5360)', () => {
+  const t = (k) => ({
+    'backendError.periodClosedForUnposting': 'PERIOD_CLOSED_UNPOST',
+    'backendError.costNotCalculated': 'COST_NOT_CALCULATED',
+  }[k] ?? k);
+
+  it('maps a bare @PeriodClosedForUnPosting@ token with no options', () => {
+    assert.equal(translateBackendError('@PeriodClosedForUnPosting@', t), 'PERIOD_CLOSED_UNPOST');
+  });
+
+  it('maps the token when surrounded by whitespace or other text', () => {
+    assert.equal(translateBackendError('  @PeriodClosedForUnPosting@  ', t), 'PERIOD_CLOSED_UNPOST');
+    assert.equal(translateBackendError('Error: @PeriodClosedForUnPosting@', t), 'PERIOD_CLOSED_UNPOST');
+  });
+
+  it('explicit messageKeys win over tokens found in the message', () => {
+    assert.equal(
+      translateBackendError('@PeriodClosedForUnPosting@', t, { messageKeys: ['NotCalculatedCost'] }),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('leaves unknown tokens untouched', () => {
+    const msg = 'Missing value for @product@ here';
+    assert.equal(translateBackendError(msg, t), msg);
+  });
+
+  it('does not treat an email address as a token', () => {
+    const msg = 'Contact a@b.com for help';
+    assert.equal(translateBackendError(msg, t), msg);
+  });
+
+  it('keeps the existing @Product@ on @Date@ exact-match mapping', () => {
+    assert.equal(
+      translateBackendError('There is no cost defined for the product: @Product@ on @Date@', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('returns the original token when the translation is missing (t returns the key)', () => {
+    assert.equal(translateBackendError('@PeriodClosedForUnPosting@', (k) => k), '@PeriodClosedForUnPosting@');
+  });
+});
+
+describe('translateBackendError — NotCalculatedCost (ETP-5360)', () => {
+  const t = (k) => (k === 'backendError.costNotCalculated' ? 'COST_NOT_CALCULATED' : k);
+
+  it('maps the resolved English NotCalculatedCost text', () => {
+    assert.equal(
+      translateBackendError('Cost has not yet been calculated for all products in the document.', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps the resolved Spanish NotCalculatedCost text', () => {
+    assert.equal(
+      translateBackendError('El coste aún no ha sido calculado para todos los productos en el documento.', t),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps messageKeys: [NotCalculatedCost] regardless of the prose', () => {
+    assert.equal(
+      translateBackendError('Unrelated prose', t, { messageKeys: ['NotCalculatedCost'] }),
+      'COST_NOT_CALCULATED',
+    );
+  });
+
+  it('maps a bare @NotCalculatedCost@ token', () => {
+    assert.equal(translateBackendError('@NotCalculatedCost@', t), 'COST_NOT_CALCULATED');
+  });
+});
+
+// ── ETP-5445: core `NotCalculatedCost` (document-level) on Internal Consumption posting ──
+//
+// Posting an Internal Consumption whose products have no calculated cost yet makes the core
+// posting engine return the `NotCalculatedCost` AD_MESSAGE, already resolved in the session's
+// AD language. Both the en_US and the es_ES literal must reach the same actionable
+// `backendError.costNotCalculated` copy instead of the raw core text.
+describe('translateBackendError — document-level NotCalculatedCost (ETP-5445)', () => {
+  const RAW_EN = 'Cost has not yet been calculated for all products in the document.';
+  const RAW_ES = 'El coste aún no ha sido calculado para todos los productos en el documento.';
+  const EN = 'The cost of the product could not be calculated.';
+  const ES = 'No se pudo calcular el costo del producto.';
+  const tEn = (k) => (k === 'backendError.costNotCalculated' ? EN : k);
+  const tEs = (k) => (k === 'backendError.costNotCalculated' ? ES : k);
+
+  it('maps the en_US core literal to backendError.costNotCalculated', () => {
+    assert.equal(translateBackendError(RAW_EN, tEn), EN);
+  });
+
+  it('maps the es_ES core literal to backendError.costNotCalculated', () => {
+    assert.equal(translateBackendError(RAW_ES, tEs), ES);
+  });
+
+  it('maps the en_US literal even when the UI locale is Spanish', () => {
+    assert.equal(translateBackendError(RAW_EN, tEs), ES);
+  });
+
+  it('tolerates surrounding whitespace on the core literal', () => {
+    assert.equal(translateBackendError(`  ${RAW_ES}\n`, tEs), ES);
+  });
+
+  it('returns the raw literal unchanged when the translation key is missing', () => {
+    assert.equal(translateBackendError(RAW_EN, (k) => k), RAW_EN);
+    assert.equal(translateBackendError(RAW_ES, (k) => k), RAW_ES);
+  });
+});
