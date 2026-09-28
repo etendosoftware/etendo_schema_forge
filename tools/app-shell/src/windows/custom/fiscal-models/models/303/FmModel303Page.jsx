@@ -12,7 +12,7 @@ import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
-import AeatSubmitFlow, { isMissingDefaultIaeActivity } from './AeatSubmitFlow.jsx';
+import AeatSubmitFlow, { isMissingDefaultIaeActivity, checkMissingIaeGuard } from './AeatSubmitFlow.jsx';
 import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js';
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
@@ -20,7 +20,7 @@ import {
   formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
-  clampNegativeOverrides,
+  clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder,
 } from '../../fiscalModelsUtils.js';
 import { getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -524,13 +524,45 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const [liveSources, setLiveSources] = useState(decl._precomputed?.sources ?? null);
   const [computing,   setComputing]   = useState(false);
   const [generating,  setGenerating]  = useState(false);
-  const [genError,    setGenError]    = useState(null);
-  // The missing-default-IAE-activity pre-flight guard (ETP-4975) is now the ONLY path that
-  // still writes `genError` and renders the inline banner: every other generation failure
-  // (IBAN required, generic backend error) was moved to a toast in ETP-5027. This flag stays
-  // because the banner carries a "Go to Organization" CTA that is specific to that guard —
-  // mirrors `missingIaeGuard` in AeatSubmitFlow.jsx.
-  const [missingIaeGuard, setMissingIaeGuard] = useState(false);
+
+  // ETP-5432 pt.10 follow-up — the missing-default-IAE-activity guard (ETP-4975) used to be
+  // the last remaining producer of a fixed inline banner (`genError`/`missingIaeGuard` state,
+  // rendered below the KPI cards) — every OTHER generation failure (IBAN required, generic
+  // backend error) was already moved to a toast in ETP-5027. User feedback made clear that
+  // banner reads as a permanent page fixture rather than a warning tied to a specific action,
+  // across all three surfaces it could appear from: on mount (this effect), on "Generar
+  // fichero 303" (`handleGenerate` below), and on "Registrar/Presentar" -> "Presentación
+  // telemática AEAT" -> "Presentar" (`AeatSubmitFlow.jsx`'s own mirrored guard, which had its
+  // own `<Banner tone="danger">`). All three now fire `showIaeActivityReminder` instead — the
+  // SAME floating-toast mechanism (sonner `toast.warning`, bottom-right, "Ir a Organización"
+  // CTA) already used by `FmCatalogPage.jsx` (activating Modelo 303) and `FmOverlays.jsx`'s
+  // `NewDeclModal` (selecting period T4/12) — never a fixed banner, from any trigger. Since
+  // missing-IAE was the ONLY thing that ever fed the inline-banner state, that state and its
+  // JSX were removed outright rather than left dead. The underlying HARD BLOCK — this effect
+  // never blocks anything by itself; `handleGenerate` below still returns before calling
+  // `generate303File`, and `AeatSubmitFlow.jsx`'s `handleSubmit` still returns before
+  // submitting — is unchanged by any of this; only the visual feedback moved to a toast.
+  useEffect(() => {
+    let cancelled = false;
+    if (!isLastPeriodOfYear(decl?.period) || !selectedOrg?.id) return undefined;
+    (async () => {
+      try {
+        const iaeRes = await apiFetch(
+          `${neoBase(apiBaseUrl)}/organization/actividadesDelIae?parentId=${selectedOrg.id}&_limit=100`,
+          { baseUrl: '' },
+        );
+        if (cancelled || !iaeRes.ok) return;
+        const iaeRows = (await iaeRes.json())?.response?.data ?? [];
+        if (!cancelled && isMissingDefaultIaeActivity(iaeRows)) {
+          showIaeActivityReminder(t, navigate, { severity: 'error' });
+        }
+      } catch (_) {
+        // fail open — see comment above.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decl?.id, decl?.period, selectedOrg?.id]);
 
   // AEAT validation-error incidents (ETP-4456) — starts from whatever `decl.incidents` already
   // carries (list-load snapshot, or the demo mock in `FmListPage.jsx`'s DEMO_DECLARATIONS when no
@@ -723,8 +755,6 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
-    setGenError(null);
-    setMissingIaeGuard(false);
     setGenerating(true);
     // ETP-4975 pre-flight guard — mirrors the one in AeatSubmitFlow.jsx's handleSubmit
     // (see that file for the full rationale). "Generar fichero 303" hits the exact same
@@ -733,6 +763,9 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     // `IndexOutOfBoundsException` 500 instead of failing fast with a translated message.
     // Only runs for the last period, only when an org id is resolvable, and fails OPEN on
     // any fetch/network error (never blocks a generation that might otherwise succeed).
+    // ETP-5432 pt.10 follow-up — feedback (`showIaeActivityReminder` toast, not the old
+    // fixed inline banner); the hard block itself (`return` before `generate303File`) is
+    // unchanged.
     if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
       try {
         const iaeRes = await apiFetch(
@@ -742,8 +775,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
         if (iaeRes.ok) {
           const iaeRows = (await iaeRes.json())?.response?.data ?? [];
           if (isMissingDefaultIaeActivity(iaeRows)) {
-            setMissingIaeGuard(true);
-            setGenError(t('fm.aeat.error.missingDefaultIae') ?? 'This organization needs at least one IAE activity marked as default, with a code assigned, before filing the last period\'s declaration.');
+            showIaeActivityReminder(t, navigate, { severity: 'error' });
             setGenerating(false);
             return;
           }
@@ -934,6 +966,47 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
       );
       return;
     }
+    // ETP-4975 / ETP-5432 pt.10 follow-up (real bug, found via live retest, not a race
+    // condition) — this guard was previously wired into "Generar fichero 303"
+    // (`handleGenerate`'s own inline check) and into `AeatSubmitFlow.jsx`'s "Submit to
+    // AEAT" (`checkMissingIaeGuard`, reused here rather than a 4th hand-rolled copy), but
+    // NEVER into this function — so choosing either of the two DIRECT manual paths in
+    // PresentModal's left column ("Presentación con Acuse de recibo" / "... sin Acuse de
+    // recibo", `newStatus` 'submitted_ack'/'submitted') skipped the guard entirely and fell
+    // straight through to `handleStatusChange` below, marking a last-period declaration
+    // as presented with no default IAE activity configured — no toast, no block. Checked
+    // here, covering ALL THREE paths uniformly (including 'aeat_telematic', which also
+    // still re-checks inside AeatSubmitFlow's own handleSubmit — a harmless belt-and-braces
+    // duplicate, same pattern as the `isSubmitted` double-check elsewhere in this file —
+    // but now fails fast at path-confirmation time instead of after opening that modal).
+    // Same fail-OPEN-on-error semantics as every other call site: a flaky pre-check must
+    // never manufacture a false block.
+    //
+    // ETP-5432 pt.10 SECOND follow-up — the first version of this shim omitted `{ baseUrl:
+    // '' }` on the inner `apiFetch` call. This `apiFetch` (this component's own, bound to
+    // `apiBaseUrl` e.g. "/sws/neo/fiscal-models") ALWAYS re-prepends its own base unless
+    // told not to (see `createApiFetch`/`resolveApiUrl` in
+    // @etendosoftware/app-shell-core/auth/api.js — a plain string concat with only a
+    // same-prefix escape hatch, which a `neoBase(apiBaseUrl)`-prefixed path does not hit
+    // here since it diverges from `apiBaseUrl` after the shared "/sws/neo" segment). Without
+    // the override, the real request went out as
+    // "/sws/neo/fiscal-models" + "/sws/neo/organization/actividadesDelIae?..." — a
+    // double-prefixed 404 against the real backend — which the guard's own fail-OPEN
+    // semantics then silently swallowed as "not blocked". `handleGenerate`'s existing inline
+    // check (below) and the pt.10 mount effect (above) already pass this override correctly;
+    // this call site is the one that was missing it. A mocked test's `url.includes(...)`
+    // match did not catch the malformed URL — a real backend 404 would have; verify any
+    // future guard-URL fix against a URL-equality assertion, not a substring one.
+    if (isLastPeriodOfYear(decl?.period) && selectedOrg?.id) {
+      const iaeGuard = await checkMissingIaeGuard({
+        decl, selectedOrg, t,
+        apiFetch: (path) => apiFetch(`${neoBase(apiBaseUrl)}${path}`, { baseUrl: '' }),
+      });
+      if (iaeGuard.blocked) {
+        showIaeActivityReminder(t, navigate, { severity: 'error' });
+        return;
+      }
+    }
     const { ok: savedOk } = await persistEditableFields();
     if (!savedOk) {
       toast.error(t('fm.action.save_error') ?? 'No se pudo guardar. Inténtalo de nuevo.');
@@ -1004,14 +1077,31 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const missingRequiredFields = getMissingRequiredFields(
     decl?.year, decl?.period, withBox111NonZeroFlag(identChecks, liveBoxes),
   );
-  // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the toast
-  // helper below and the inline banner — a single non-nested template literal per field
-  // (javascript:S4624 flags nesting one template literal's `${}` inside another's).
+  // Shared "'Label A', 'Label B'" rendering of missingRequiredFields, used by both the
+  // click-time toast helper below and the proactive mount-effect toast further down — a
+  // single non-nested template literal per field (javascript:S4624 flags nesting one
+  // template literal's `${}` inside another's).
   const missingFieldNames = missingRequiredFields.map(f => `'${t(f.labelKey)}'`).join(', ');
 
   function missingRequiredFieldsToast(actionKey, fallback) {
     toast.error(t(actionKey, { fields: missingFieldNames }) ?? fallback.replace('{fields}', missingFieldNames));
   }
+
+  // ETP-5432 pt.10 follow-up — proactive version of the required-field gate above: used to
+  // be a fixed inline banner (`fm.validation.missing_required_banner`), rendered
+  // unconditionally below the toolbar whenever `missingRequiredFields.length > 0`. User
+  // feedback was that no validation message on this page should be a page fixture — every
+  // one must be a toast, matching the missing-IAE guard's own toast (see the mount-effect
+  // above and `showMissingRequiredFieldsReminder`'s doc comment). Keyed on `missingFieldNames`
+  // (not `missingRequiredFields` itself, a fresh array every render) so this only re-fires
+  // when the actual SET of missing fields changes — filling the field then re-emptying it
+  // shows the toast again, but an unrelated re-render while the same field is still empty
+  // does not spam it.
+  useEffect(() => {
+    if (missingRequiredFields.length === 0) return;
+    showMissingRequiredFieldsReminder(t, missingFieldNames);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingFieldNames]);
 
   // Keeps `isManualDataEligible` current so a QUEUED explicit-save replay (see
   // `persistEditableFields`/`writeManualData`) can re-check the same preconditions right before
@@ -1245,25 +1335,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
           {t('fm.duplicate_period.warning') ?? 'Ya existe otra declaración para el mismo período. Marca "Autoliquidación rectificativa" antes de presentar esta declaración.'}
         </div>
       )}
-      {/* ── Missing required field(s) warning (ETP-5187) ────────────── */}
-      {missingRequiredFields.length > 0 && (
-        <div style={{
-          margin: '4px 20px 0',
-          padding: '8px 14px',
-          background: 'var(--status-warning-bg)',
-          border: '1px solid var(--status-warning-border)',
-          borderRadius: 8,
-          fontSize: 13,
-          color: 'var(--status-warning-fg)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}>
-          <TriangleAlert size={14} strokeWidth={1.75} data-testid="TriangleAlert__missingRequired" />
-          {t('fm.validation.missing_required_banner', { fields: missingFieldNames })
-            ?? `Hay campos obligatorios sin completar: ${missingFieldNames}.`}
-        </div>
-      )}
+      {/* ETP-5432 pt.10 follow-up — the fixed "missing required field(s)" banner that used to
+          render here (`fm.validation.missing_required_banner`) was removed: it now fires as
+          a toast instead (`showMissingRequiredFieldsReminder`, see the mount-effect above),
+          matching the missing-IAE guard's own toast-only feedback. */}
       {/* ── KPI bar ──────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', flexDirection: 'row', alignItems: 'center',
@@ -1320,41 +1395,12 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
           badgeColor={resultColors.badgeColor}
           data-testid="KpiWidget__4f6c0d" />
       </div>
-      {/* ── Inline generate error ────────────────────────────────── */}
-      {genError && (
-        <div style={{
-          margin: '4px 20px 0',
-          padding: '8px 14px',
-          background: 'var(--status-destructive-bg)',
-          border: '1px solid hsl(var(--destructive) / 0.3)',
-          borderRadius: 8,
-          fontSize: 13,
-          color: 'hsl(var(--destructive))',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexWrap: 'wrap',
-        }}>
-          <OctagonAlert size={14} data-testid="OctagonAlert__gen_error" />
-          {genError}
-          {/* CTA for the missing-default-IAE-activity guard, which is the only remaining
-              producer of `genError` (all other generation failures surface as toasts since
-              ETP-5027). Mirrors AeatSubmitFlow.jsx's own CTA for the same guard. No
-              positioning style — a plain adjacent sibling already flows immediately after
-              `{genError}` given this container's `display:flex; flexWrap:wrap`; the previous
-              `marginLeft: 'auto'` was what pushed it to the far right instead. */}
-          {missingIaeGuard && (
-            <button
-              type="button"
-              className="fm-link-btn fm-link-btn--bold"
-              onClick={() => navigate('/organization')}
-              data-testid="Landmark__gen303GoToOrganization"
-            >
-              {t('fm.aeat.action.go_to_organization') ?? 'Go to Organization'}
-            </button>
-          )}
-        </div>
-      )}
+      {/* ETP-5432 pt.10 follow-up — the fixed inline "generate error" banner that used to
+          render here (genError/missingIaeGuard state + "Ir a Organización" CTA) was removed:
+          missing-default-IAE-activity was its only producer, and that guard now fires
+          `showIaeActivityReminder` (a toast) instead, from all three trigger points (mount,
+          "Generar fichero 303", and AeatSubmitFlow's "Presentar") — see the mount-effect
+          comment above and `handleGenerate` below. */}
       {/* ── Tabs bar ─────────────────────────────────────────────── */}
       <div className="fm-tabs-sticky">
         <Tabs
@@ -1417,6 +1463,10 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
               apiBaseUrl={apiBaseUrl}
               isActive={activeTab === 'receipt'}
               config={{ allowedMimeTypes: ['application/pdf'] }}
+              // ETP-5432 pt.3 — the justificante must only be deletable while the
+              // declaration is still a draft, same rule `FmRowActions`' own delete
+              // action already enforces for the declaration record itself.
+              readOnly={status !== 'draft'}
               key={`${status}-${receiptRefreshTick}`}
               data-testid="AttachmentsTab__303receipt" />)
           )}

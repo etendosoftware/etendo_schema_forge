@@ -4,8 +4,15 @@
 // a currently-visible required identification field (tipo_declaracion,
 // bank_iban) is blank. The pure logic (getMissingRequiredFields/matchesVisibility)
 // is covered directly in fm303Layouts.requiredFields.vitest.js; this file covers
-// the actual UI wiring: the persistent banner, the toast, and that the
+// the actual UI wiring: the proactive toast, the click-time toast, and that the
 // generate/present actions never reach the backend while blocked.
+//
+// ETP-5432 pt.10 follow-up — the persistent inline banner this suite used to assert
+// on (`fm.validation.missing_required_banner` rendered unconditionally below the
+// toolbar) was removed; that condition now fires `showMissingRequiredFieldsReminder`
+// (a toast) from a mount-time effect instead, matching the missing-IAE guard's own
+// toast-only feedback. `sonner` is mocked wholesale below (not just spied on), so
+// the proactive-toast assertions check the mocked `toast.warning` call, not the DOM.
 
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -118,20 +125,25 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('FmModel303Page — required-field gate banner', () => {
-  it('shows the missing-required banner when tipo_declaracion is blank', () => {
+describe('FmModel303Page — required-field gate proactive toast', () => {
+  it('fires the missing-required toast when tipo_declaracion is blank', async () => {
+    const { toast } = await import('sonner');
     render(<FmModel303Page decl={DECL_MISSING_TIPO} {...defaultProps} />);
-    expect(screen.getByText('fm.validation.missing_required_banner')).toBeInTheDocument();
-  });
-
-  it('shows the missing-required banner when bank_iban is blank and the bank section is visible', () => {
-    render(<FmModel303Page decl={DECL_MISSING_IBAN} {...defaultProps} />);
-    expect(screen.getByText('fm.validation.missing_required_banner')).toBeInTheDocument();
-  });
-
-  it('does NOT show the banner when every currently-required field is filled', () => {
-    render(<FmModel303Page decl={DECL_COMPLETE} {...defaultProps} />);
+    expect(toast.warning).toHaveBeenCalledWith('fm.validation.missing_required_banner');
+    // No fixed page fixture for this condition anymore, from any trigger.
     expect(screen.queryByText('fm.validation.missing_required_banner')).not.toBeInTheDocument();
+  });
+
+  it('fires the missing-required toast when bank_iban is blank and the bank section is visible', async () => {
+    const { toast } = await import('sonner');
+    render(<FmModel303Page decl={DECL_MISSING_IBAN} {...defaultProps} />);
+    expect(toast.warning).toHaveBeenCalledWith('fm.validation.missing_required_banner');
+  });
+
+  it('does NOT fire the toast when every currently-required field is filled', async () => {
+    const { toast } = await import('sonner');
+    render(<FmModel303Page decl={DECL_COMPLETE} {...defaultProps} />);
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 });
 

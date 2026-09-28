@@ -1289,27 +1289,57 @@ export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
   return decls.filter(d => isUpcomingDeadline(d, referenceDate)).length;
 }
 
-// ── IAE activity reminder (ETP-5187, adjacent scope) ──────────────────
+// ── Fiscal-models proactive toasts (ETP-5187 / ETP-5432 pt.10) ────────────────
 /**
- * Proactive, non-blocking heads-up that the organization needs a default IAE ("Impuesto de
- * Actividades Económicas") activity configured before Modelo 303 can be filed for the last
- * period of the year — shown at the two points where the user commits to a path that will
- * eventually hit that requirement:
+ * Single place that owns HOW a proactive fiscal-models message is presented (sonner
+ * `toast.warning`/`toast.error`, bottom-right) — every dedicated reminder in this section
+ * builds its own message (plain string or a composed `ReactNode` with an inline CTA) and
+ * calls this instead of a second hand-rolled `toast.warning(...)`/`toast.error(...)`, so a
+ * future style change (icon, duration, position) happens once. `severity` picks the sonner
+ * variant — `'warning'` (default, amber) for a purely informational heads-up, `'error'`
+ * (red/destructive) for a message that is the sole user-facing feedback for an ACTIVE hard
+ * block (user correction, ETP-5432 pt.10 third follow-up: "el error que aparece..." — she
+ * conceptually treats the missing-IAE guard's feedback as an error, not a warning, since it
+ * is standing between her and completing the action, unlike e.g. the catalog/new-declaration
+ * reminders below which fire well before any block could apply). Returns the toast id so a
+ * caller that needs to `toast.dismiss(id)` itself (e.g. a CTA's click-to-dismiss) still can.
+ */
+function showFiscalToast(message, severity = 'warning') {
+  return severity === 'error' ? toast.error(message) : toast.warning(message);
+}
+
+/**
+ * Proactive heads-up that the organization needs a default IAE ("Impuesto de Actividades
+ * Económicas") activity configured before Modelo 303 can be filed for the last period of the
+ * year — shown at points where the user commits to a path that will eventually hit that
+ * requirement:
  *   - `FmCatalogPage.jsx` — activating (not deactivating) Modelo 303 in the catalog.
  *   - `FmOverlays.jsx`'s `NewDeclModal` — selecting period T4 (quarterly) or 12 (monthly) in
  *     "Nueva declaración".
+ *   - `FmModel303Page.jsx` (page mount) and its "Generar fichero 303"/"Registrar-Presentar"
+ *     guards, and `AeatSubmitFlow.jsx`'s own mirrored guard (ETP-5432 pt.10 follow-up) —
+ *     see those files' own comments; this used to also feed a fixed inline banner there,
+ *     which user feedback rejected in favor of this same toast, on every trigger.
+ *
+ * The first two call sites above are purely informational — no guard is active yet at
+ * catalog-activation/period-selection time — and stay at the default `severity: 'warning'`.
+ * The `FmModel303Page.jsx`/`AeatSubmitFlow.jsx` call sites pass `{ severity: 'error' }`
+ * (ETP-5432 pt.10 third follow-up, user correction): those four ARE the sole user-facing
+ * feedback for an active hard block, and the user was explicit that this specific message
+ * must read as an error, not a warning, everywhere it stands between her and completing the
+ * action — see `showFiscalToast`'s own doc comment.
  *
  * This is deliberately NOT the same mechanism as the ETP-4975 hard guard in
  * `FmModel303Page.jsx`/`AeatSubmitFlow.jsx` (`isMissingDefaultIaeActivity` +
- * `missingIaeGuard`), which blocks "Generar fichero"/"Marcar como Presentado" for the actual
- * last-period declaration when no default IAE activity is configured, backed by a real
- * `GET /sws/neo/organization/actividadesDelIae` check. That guard is authoritative and runs
- * right before the backend call; this reminder is purely informational, fires earlier (at
- * activation/selection time, with no backend check of its own), and never blocks anything —
- * it exists only so the user isn't surprised later. Reuses the same
- * `fm.aeat.action.go_to_organization` CTA label as that guard's own "Go to Organization"
- * button. Navigates to `/organization` plain — `OrganizationPage.jsx` has no
- * section-anchor/deep-link support yet to land scrolled at "Actividades del IAE" directly.
+ * `checkMissingIaeGuard`), which blocks "Generar fichero"/"Marcar como Presentado" for the
+ * actual last-period declaration when no default IAE activity is configured, backed by a
+ * real `GET /sws/neo/organization/actividadesDelIae` check. That guard is authoritative and
+ * runs right before the backend call; this reminder never blocks anything itself — it exists
+ * so the user isn't surprised later, or (at the four error-severity call sites) knows why
+ * nothing happened. Reuses the same `fm.aeat.action.go_to_organization` CTA label as that
+ * guard's own "Go to Organization" button. Navigates to `/organization` plain —
+ * `OrganizationPage.jsx` has no section-anchor/deep-link support yet to land scrolled at
+ * "Actividades del IAE" directly.
  *
  * CTA placement (ETP-5187 follow-up): the CTA must read as the tail of the warning
  * sentence, in bold, not as a separate control. sonner's built-in `action` option was
@@ -1323,11 +1353,11 @@ export function countUpcomingDeadlines(decls, referenceDate = new Date()) {
  * immediately after the sentence text. `toast.action`'s automatic click-to-dismiss is
  * replicated manually via `toast.dismiss(id)` to keep the same UX as before.
  */
-export function showIaeActivityReminder(t, navigate) {
+export function showIaeActivityReminder(t, navigate, { severity = 'warning' } = {}) {
   const sentence = t('fm.aeat.reminder.iaeActivity')
     ?? 'Recordá configurar la actividad del IAE de tu organización para poder generar el Modelo 303 correctamente.';
   const cta = t('fm.aeat.action.go_to_organization') ?? 'Ir a Organización';
-  const id = toast.warning(
+  const id = showFiscalToast(
     createElement(
       'span',
       null,
@@ -1345,5 +1375,30 @@ export function showIaeActivityReminder(t, navigate) {
         cta,
       ),
     ),
+    severity,
   );
+}
+
+/**
+ * ETP-5432 pt.10 follow-up — proactive, non-blocking heads-up that required identification
+ * fields (e.g. "Tipo de declaración") are missing, fired from Modelo 303's own effect
+ * (`FmModel303Page.jsx` — Modelo 349 has no equivalent banner/gate today). Replaces the
+ * fixed inline banner that used to render unconditionally whenever
+ * `missingRequiredFields.length > 0` (`fm.validation.missing_required_banner`, per
+ * `docs/generated-custom-windows/fiscal-models.md`) — user feedback was that EVERY
+ * validation message on this page must be a toast, never a page fixture. Plain text (no
+ * CTA — there is no dedicated screen to send the user to for "fill in this field on THIS
+ * page"), unlike `showIaeActivityReminder`, and stays at `showFiscalToast`'s default
+ * `warning` severity (NOT corrected to `error` alongside the missing-IAE guard — the user's
+ * severity correction, ETP-5432 pt.10 third follow-up, named that specific message only).
+ * The CLICK-time messages for the same underlying condition ("Generar fichero 303"/
+ * "Registrar-Presentar" clicked while a required field is still empty) are a SEPARATE,
+ * pre-existing toast (`missingRequiredFieldsToast` in FmModel303Page.jsx,
+ * `fm.validation.missing_required_generate`/`_present`) and are untouched by this — this
+ * only replaces the passive, always-on banner.
+ */
+export function showMissingRequiredFieldsReminder(t, missingFieldNames) {
+  const message = t('fm.validation.missing_required_banner', { fields: missingFieldNames })
+    ?? `Hay campos obligatorios sin completar: ${missingFieldNames}.`;
+  showFiscalToast(message);
 }
