@@ -1,0 +1,585 @@
+import { test, expect } from '@playwright/test';
+import { login } from '../../helpers/auth.js';
+import { buildRectifiableInvoicesPayload } from '../../helpers/rectifiable-invoices-mock.js';
+
+/**
+ * Return Material Receipt — full flow smoke (mocked).
+ *
+ * Covers ETP-4033:
+ *   - List view: columns, row quick-actions (edit/delete for DR and CO; clone
+ *     is NOT a supported action for this window and stays hidden for both
+ *     statuses — ETP-5316 fixed it showing up for CO rows only)
+ *   - Preview panel: row click opens GenericPreviewModal, shows documentNo, closes
+ *   - DR detail: "Confirmar" is the GENERIC draftMode Confirm (`action-save`, with
+ *     the Check icon) next to the generic Save draft (`action-save-draft`) — ETP-5408;
+ *     it stays disabled until the lines request resolves with >=1 line
+ *     (draftMode.disableWhenEmpty). Print button absent on Draft (ETP-4714 /
+ *     ETP-5124 — decisions.json hidePrintWhen gates on documentStatus !== CO),
+ *     clicking Confirm opens ConfirmInOutModal (via the window's CONFIRM_EVENT),
+ *     Cancel dismisses it, Confirm fires documentAction POST
+ *   - CO detail (no invoice): "Crear factura de devolución" button visible,
+ *     Print button now VISIBLE on Completed (ETP-5124 —
+ *     hidePrintWhen changed from an unconditional true to a conditional gate,
+ *     matching sibling windows), clicking "Crear factura" opens modal, confirming
+ *     fires createReturnInvoice POST and shows ConfirmResultModal
+ *
+ * ETP-5381 (commit 0007e2019) — "which invoice does this rectify?" is now a MANDATORY
+ * step in both entry points. A rectificative invoice cannot be confirmed without a row in
+ * C_Invoice_Reverse (validation ETSG_CHECK_RECTIF_INV_DOC), and these invoices are now
+ * created AND confirmed in one step, so the choice has to be made up front. Both
+ * `ConfirmInOutModal` (DR flow) and `CreateInvoiceConfirmModal` (CO flow) therefore POST
+ * `{specName}/{entityName}/{id}/action/rectifiableInvoices`, render `RectifiableInvoiceField`,
+ * and keep their confirm button DISABLED until at least one invoice is selected
+ * (`rectify.isSatisfied` in the `canConfirm` expression). The two flows below drive that step
+ * for real and assert the resulting createReturnInvoice POST carries `originInvoices`:
+ *
+ *   - DR flow → `suggestedInvoiceIds: []` (nothing auto-detected): asserts the gate holds,
+ *     then picks an invoice by hand through the picker modal.
+ *   - CO flow → `suggestedInvoiceIds: ['rect-inv-a']`: asserts the chain-detected suggestion
+ *     arrives preselected and is what gets posted.
+ *
+ * The mirror-image split lives in return-to-vendor-shipment.mocked.spec.js (suggested on the
+ * DR side, manual on the CO side), so both modals cover both paths across the two specs.
+ *
+ * Mock mode only — no backend required.
+ */
+
+// ---------------------------------------------------------------------------
+// Shared mock data
+// ---------------------------------------------------------------------------
+
+const ROWS = [
+  {
+    id: 'ret-001',
+    documentNo: 'RD/00001',
+    documentStatus: 'DR',
+    'documentStatus$_identifier': 'Borrador',
+    'businessPartner$_identifier': 'Test Customer',
+    movementDate: '2026-05-01',
+    warehouse: 'wh-001',
+    'warehouse$_identifier': 'España Norte',
+    sourceShipmentDocNo: 'ALB/00042',
+    returnInvoices: [],
+    hasReturnInvoice: false,
+    sourceShipments: [{ id: 'ship-001', documentNo: 'ALB/00042' }],
+  },
+  {
+    id: 'ret-002',
+    documentNo: 'RD/00002',
+    documentStatus: 'CO',
+    'documentStatus$_identifier': 'Completado',
+    'businessPartner$_identifier': 'Test Customer',
+    movementDate: '2026-05-02',
+    warehouse: 'wh-001',
+    'warehouse$_identifier': 'España Norte',
+    sourceShipmentDocNo: 'ALB/00043',
+    returnInvoices: [{ id: 'inv-001', documentNo: 'FC/00099', documentStatus: 'CO' }],
+    hasReturnInvoice: true,
+    sourceShipments: [{ id: 'ship-002', documentNo: 'ALB/00043' }],
+  },
+  // CO row without existing invoice — used by the CO actions test
+  {
+    id: 'ret-003',
+    documentNo: 'RD/00003',
+    documentStatus: 'CO',
+    'documentStatus$_identifier': 'Completado',
+    'businessPartner$_identifier': 'Test Customer',
+    movementDate: '2026-05-03',
+    warehouse: 'wh-001',
+    'warehouse$_identifier': 'España Norte',
+    sourceShipmentDocNo: 'ALB/00044',
+    returnInvoices: [],
+    hasReturnInvoice: false,
+    sourceShipments: [{ id: 'ship-003', documentNo: 'ALB/00044' }],
+  },
+];
+
+// ETP-5408: one line under the DR record so the generic draftMode Confirm
+// (disableWhenEmpty) is enabled. Keyed by the `?parentId=` the lines fetch sends.
+const LINES_BY_PARENT = {
+  'ret-001': [
+    {
+      id: 'ret-001-line-1',
+      lineNo: 10,
+      product: 'prod-001',
+      'product$_identifier': 'Test Product',
+      movementQuantity: 1,
+    },
+  ],
+};
+
+// ETP-5381: candidates returned by the `rectifiableInvoices` action. Field names mirror
+// ReturnShipmentUtils#runInvoiceQuery exactly (id, documentNo, invoiceDate, grandTotalAmount,
+// currency, businessPartner) plus the `suggested` flag added in
+// #buildRectifiableInvoicesResponse. Note `businessPartner` carries the NAME here, not an id —
+// these rows come from a hand-built SQL projection, not the entity serializer, so there is no
+// `businessPartner$_identifier` (see InvoicePickerModal.jsx:54).
+const RECTIFIABLE_INVOICES = [
+  {
+    id: 'rect-inv-a',
+    documentNo: 'FC/00050',
+    invoiceDate: '2026-04-10',
+    grandTotalAmount: 150,
+    currency: 'EUR',
+    businessPartner: 'Test Customer',
+  },
+  {
+    id: 'rect-inv-b',
+    documentNo: 'FC/00051',
+    invoiceDate: '2026-04-20',
+    grandTotalAmount: 90,
+    currency: 'EUR',
+    businessPartner: 'Test Customer',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Route installation helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Install mocks for the list + detail endpoints.
+ * Must be called AFTER login() so Playwright's LIFO route matching lets
+ * these specific handlers win over the generic /sws/** stub from login().
+ *
+ * @param {object} [opts]
+ * @param {string[]} [opts.suggestedInvoiceIds] ids the backend auto-detected from the return
+ *        chain (M_InOutLine.Canceled_Inoutline_ID → original line → its invoice). These arrive
+ *        PRESELECTED in the picker; an empty array models a standalone return with no chain,
+ *        where the user must choose by hand.
+ * @param {object} [opts.state] capture bag — `state.invoicePosts` collects every
+ *        createReturnInvoice request body.
+ */
+async function installReturnReceiptMocks(page, { suggestedInvoiceIds = [], state } = {}) {
+  // NOTE: two page.route() registrations per endpoint, not the `{/**,}**`
+  // brace pattern — Playwright's glob→regex compiler only treats `**` as
+  // "crosses path separators" when it is immediately followed by `/` (or the
+  // glob's end); inside a brace group the `**` right before the `,` is
+  // followed by `,`, so it silently degrades to a single-segment `[^/]*`.
+  // That matched one-segment sub-paths (e.g. `/returnMaterialReceipt/ret-001`)
+  // but NOT the two-segments-deep `/returnMaterialReceipt/<id>/action/<name>`
+  // POSTs (`documentAction`, `createReturnInvoice`), which fell through to
+  // the generic `/sws/**` stub from login() and never returned the
+  // synthetic `CO`/invoice data the confirm flow needs. See
+  // docs/e2e-testing-guide.md for the full write-up.
+  // ETP-5408: the Borrador Confirm is the generic draftMode one with
+  // `disableWhenEmpty: true` — it reads `hook.children` (THIS request), not the header's
+  // linesCount, so the DR record must come back with at least one line or Confirm stays
+  // disabled forever. Other records keep an empty lines tab.
+  const linesHandler = async (route) => {
+    const parentId = new URL(route.request().url()).searchParams.get('parentId');
+    const data = LINES_BY_PARENT[parentId] ?? [];
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data, totalRows: data.length } }),
+    });
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine/**', linesHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceiptLine**', linesHandler);
+
+  // Header list + detail
+  const headerHandler = async (route) => {
+    const req = route.request();
+    const url = req.url();
+    const method = req.method();
+
+    // POST action/documentAction → complete the record
+    if (method === 'POST' && url.includes('/action/documentAction')) {
+      const idMatch = url.match(/\/returnMaterialReceipt\/([^/]+)\/action/);
+      const row = ROWS.find(r => r.id === idMatch?.[1]) ?? ROWS[0];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: {
+            data: [{ ...row, documentStatus: 'CO', 'documentStatus$_identifier': 'Completado' }],
+          },
+        }),
+      });
+      return;
+    }
+
+    // ETP-5381: POST action/rectifiableInvoices → the candidate list the picker shows.
+    // Search and paging are SERVER-SIDE (the picker renders the batch it is handed and never
+    // filters locally), so the payload is derived from the request body — see
+    // helpers/rectifiable-invoices-mock.js, shared with return-to-vendor-shipment so the two
+    // specs cannot drift into modelling the same endpoint differently. No flow in THIS file
+    // types in the picker today, so the body-aware mock changes nothing here; it is what makes
+    // adding a search assertion later honest instead of vacuous.
+    //
+    // MUST be checked before the generic detail/list branches below — the URL also matches
+    // `/returnMaterialReceipt/{id}/...`, and answering it with a header-shaped body leaves
+    // `data.invoices` undefined, which the hook reads as "nothing to rectify" and the confirm
+    // button stays disabled forever (exactly the pre-fix failure mode of this spec).
+    if (method === 'POST' && url.includes('/action/rectifiableInvoices')) {
+      const rectifyBody = req.postData() ? JSON.parse(req.postData()) : {};
+      state?.rectifiableRequests?.push(rectifyBody);
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: {
+            data: buildRectifiableInvoicesPayload({
+              invoices: RECTIFIABLE_INVOICES,
+              suggestedInvoiceIds,
+              body: rectifyBody,
+            }),
+          },
+        }),
+      });
+      return;
+    }
+
+    // POST action/createReturnInvoice → synthetic rectificativa invoice.
+    // ETP-4737: the generated invoice carries a NEGATIVE total (return flow) — the
+    // response key must be `grandTotalAmount` (not `grandTotal`), matching the field
+    // useConfirmWithCredit.js / ConfirmInOutModal.jsx actually read from the API.
+    if (method === 'POST' && url.includes('/action/createReturnInvoice')) {
+      state?.invoicePosts?.push(req.postData() ? JSON.parse(req.postData()) : {});
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: { data: { id: 'inv-new', documentNo: 'FC/00100', grandTotalAmount: -150 } },
+        }),
+      });
+      return;
+    }
+
+    // Detail GET — url contains /returnMaterialReceipt/{id} with no further path segments
+    if (method === 'GET' && /\/returnMaterialReceipt\/[^/?]+(\?|$)/.test(url)) {
+      const idMatch = url.match(/\/returnMaterialReceipt\/([^/?]+)/);
+      const found = ROWS.find(r => r.id === idMatch?.[1]) ?? ROWS[0];
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: [found] } }),
+      });
+      return;
+    }
+
+    // List GET
+    if (method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ response: { data: ROWS, totalRows: ROWS.length } }),
+      });
+      return;
+    }
+
+    route.fallback();
+  };
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt/**', headerHandler);
+  await page.route('**/sws/neo/return-material-receipt/returnMaterialReceipt**', headerHandler);
+}
+
+// ---------------------------------------------------------------------------
+// Test suite 1 — List view + preview panel
+// ---------------------------------------------------------------------------
+
+test.describe('return-material-receipt — list and preview', () => {
+  test.beforeEach(async ({ page }) => {
+    await login(page);
+    await installReturnReceiptMocks(page);
+    await page.goto('/return-material-receipt');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  });
+
+  test('list columns, quick-action overlay, and preview panel — full flow', async ({ page }) => {
+    // --- List heading ---
+    // The page title is rendered via i18n; verify the table body is present first
+    const tbody = page.locator('tbody');
+    await expect(tbody).toBeVisible({ timeout: 8_000 });
+
+    // --- Expected columns are visible ---
+    // The table renders at least documentNo and businessPartner$_identifier text
+    await expect(page.getByText('RD/00001')).toBeVisible();
+    await expect(page.getByText('RD/00002')).toBeVisible();
+    // Warehouse identifier column
+    await expect(page.getByText('España Norte').first()).toBeVisible();
+    // Source shipment column
+    await expect(page.getByText('ALB/00042')).toBeVisible();
+
+    // --- Row quick-actions for DR row (RD/00001) ---
+    const drRow = page.locator('tbody tr').filter({ hasText: 'RD/00001' }).first();
+    await expect(drRow).toBeVisible();
+    await drRow.hover();
+
+    const overlay = drRow.getByTestId('row-quick-actions');
+    await expect(overlay).toBeVisible();
+
+    // Edit and Delete are always present for DR
+    await expect(drRow.getByTestId('row-quick-action-edit')).toBeVisible();
+    await expect(drRow.getByTestId('row-quick-action-delete')).toBeVisible();
+
+    // Clone/duplicate is not a supported action for this window — hidden for DR
+    // (decisions.json / index.jsx duplicateAction={{ show: false }} — ETP-5316).
+    await expect(drRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
+
+    // --- Row quick-actions for CO row (RD/00002) — clone stays hidden too ---
+    const coRow = page.locator('tbody tr').filter({ hasText: 'RD/00002' }).first();
+    await expect(coRow).toBeVisible();
+    await coRow.hover();
+
+    const coOverlay = coRow.getByTestId('row-quick-actions');
+    await expect(coOverlay).toBeVisible();
+
+    // ETP-5316: Clone (duplicate) used to show up for CO rows only
+    // (visibleWhen="@documentStatus@='CO'"); it must now be hidden for CO too,
+    // matching the DR row above and sibling return-to-vendor-shipment.
+    await expect(coRow.getByTestId('row-quick-action-clone')).toHaveCount(0);
+
+    // Grid delete stays visible regardless of status (ETP-4656, commit 044edad45) —
+    // see e2e/tests/flows/platform/delete-visibility.mocked.spec.js for the dedicated regression guard.
+    await expect(coRow.getByTestId('row-quick-action-delete')).toBeVisible();
+
+    // --- Preview panel: click DR row ---
+    // Move away from CO row first (unhover) then click DR row
+    await drRow.click();
+
+    const previewModal = page.getByTestId('generic-preview-modal');
+    await expect(previewModal).toBeVisible({ timeout: 6_000 });
+
+    // Preview shows the document number (use first() — the title renders it twice)
+    await expect(previewModal.getByText('RD/00001').first()).toBeVisible();
+
+    // URL must NOT change (preview opens in-place)
+    await expect(page).toHaveURL(/\/return-material-receipt$/);
+
+    // --- Close preview ---
+    await previewModal.getByRole('button', { name: /cerrar|close/i }).click();
+    await expect(previewModal).toBeHidden({ timeout: 5_000 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test suite 2 — DR detail: ConfirmWithCreditButton flow
+// ---------------------------------------------------------------------------
+
+test.describe('return-material-receipt — DR form actions', () => {
+  // ETP-5408: Borrador renders the GENERIC draftMode Save draft + Confirm pair — the same
+  // buttons goods-receipt / invoices / orders render — not a bespoke Confirm.
+  // ETP-5381: no suggestion — this models a standalone return whose chain the backend could
+  // not walk, so the picker opens with nothing preselected and the user MUST choose.
+  let state;
+
+  test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [] };
+    await login(page);
+    await installReturnReceiptMocks(page, { suggestedInvoiceIds: [], state });
+  });
+
+  test('DR detail: Confirmar button, print button, modal cancel and confirm — full flow', async ({ page }) => {
+    test.setTimeout(120_000); // + the ETP-5381 rectify-picker round trip
+    await page.goto('/return-material-receipt/ret-001');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    // --- "Confirmar" is the generic draftMode Confirm, with its Check icon (ETP-5408) ---
+    const confirmBtn = page.getByTestId('detail-view').getByTestId('action-save');
+    await expect(confirmBtn).toBeVisible({ timeout: 8_000 });
+    await expect(confirmBtn.getByTestId('Check__fa3275')).toBeVisible();
+    await expect(confirmBtn).toHaveText(/confirmar|confirm/i);
+    // Enabled only once the lines request resolved with the mocked line (disableWhenEmpty).
+    await expect(confirmBtn).toBeEnabled({ timeout: 8_000 });
+    // Save is the generic Save draft (outline) button with its Save icon.
+    const saveDraftBtn = page.getByTestId('detail-view').getByTestId('action-save-draft');
+    await expect(saveDraftBtn).toBeVisible();
+    await expect(saveDraftBtn.getByTestId('Save__fa3275')).toBeVisible();
+    // Regression guard: the bespoke topbarRight Confirm is gone for good.
+    await expect(page.getByTestId('action-confirm-with-credit')).toHaveCount(0);
+
+    // --- Print button must NOT be rendered on a Draft document (ETP-4714 / ETP-5124) ---
+    // decisions.json's window.hidePrintWhen is now a conditional gate
+    // ({ documentStatus: { notEquals: 'CO' } }, matching sibling windows), so Print
+    // stays hidden while the document is still DR — it only appears once Completed.
+    const printBtn = page.getByRole('button', { name: /imprimir|print/i });
+    await expect(printBtn).toHaveCount(0);
+
+    // --- Click "Confirmar" → modal opens ---
+    await confirmBtn.click();
+
+    // Toggle card visible in modal (ConfirmInOutModal uses role="switch", not role="checkbox")
+    const modalInvoiceToggle = page.getByTestId('confirm-modal-invoice-toggle');
+    await expect(modalInvoiceToggle).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the toggle card must show the current "Crear Factura Rectificativa"
+    // wording (returnReceipt.createRectificativeInvoice) — regression guard for the
+    // Factura de Devolución → Factura Rectificativa rename.
+    await expect(
+      page.getByTestId('confirm-inout-modal').getByText('Crear Factura Rectificativa', { exact: true }),
+    ).toBeVisible();
+
+    // Cancel button via data-testid
+    const cancelBtn = page.getByTestId('confirm-modal-cancel-btn');
+    await expect(cancelBtn).toBeVisible();
+
+    // Confirm button via data-testid
+    const modalConfirmBtn = page.getByTestId('confirm-modal-confirm-btn');
+    await expect(modalConfirmBtn).toBeVisible();
+
+    // --- Cancel dismisses the modal ---
+    await cancelBtn.click();
+    await expect(page.getByTestId('confirm-inout-modal')).toBeHidden({ timeout: 5_000 });
+
+    // --- Re-open and actually confirm ---
+    await confirmBtn.click();
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toBeVisible({ timeout: 8_000 });
+
+    // Toggle is "on" by default (defaultCreateInvoice=true → aria-checked="true"); verify, then confirm
+    await expect(page.getByTestId('confirm-modal-invoice-toggle')).toHaveAttribute('aria-checked', 'true');
+
+    // ── ETP-5381: pick the invoice this rectificative invoice rectifies ──────────
+    // With the invoice toggle ON and nothing auto-detected, the gate must hold: a
+    // rectificative invoice with no C_Invoice_Reverse row cannot be confirmed, so the
+    // frontend refuses to send the request rather than creating a document stuck in draft.
+    const modalConfirmBtn2 = page.getByTestId('confirm-modal-confirm-btn');
+    await expect(modalConfirmBtn2).toBeDisabled();
+
+    // Open the picker (the field shows the empty "select invoices" trigger) and choose one.
+    await page.getByTestId('confirm-modal-rectify-open').click();
+    const picker = page.getByTestId('confirm-modal-rectify-picker-modal');
+    await expect(picker).toBeVisible({ timeout: 8_000 });
+
+    // Both candidates are offered; neither is badged as suggested (suggestedInvoiceIds is empty).
+    await expect(picker.getByTestId('confirm-modal-rectify-option-rect-inv-a')).toBeVisible();
+    await expect(picker.getByTestId('confirm-modal-rectify-option-rect-inv-b')).toBeVisible();
+    await expect(picker.getByTestId('confirm-modal-rectify-suggested-rect-inv-a')).toHaveCount(0);
+
+    await picker.getByTestId('confirm-modal-rectify-option-rect-inv-b').click();
+    await picker.getByTestId('confirm-modal-rectify-apply').click();
+    await expect(picker).toBeHidden({ timeout: 5_000 });
+
+    // The chosen invoice is now shown as selected in the host modal, and the gate opens.
+    await expect(page.getByTestId('confirm-modal-rectify-selected-rect-inv-b')).toBeVisible();
+    await expect(page.getByTestId('confirm-modal-rectify-selected-rect-inv-b')).toContainText('FC/00051');
+    await expect(modalConfirmBtn2).toBeEnabled({ timeout: 5_000 });
+
+    // Click Confirm → triggers documentAction POST → mock returns CO
+    await modalConfirmBtn2.click();
+
+    // After documentAction + createReturnInvoice, a ConfirmResultModal should appear
+    // with the invoice document number FC/00100 (from our mock)
+    // Wait for the result card or at minimum the modal to disappear and something to update
+    // The ConfirmResultModal shows rmrInvoiceCreatedTitle or the invoice card
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 8_000 });
+    await expect(resultModal).toContainText('FC/00100');
+
+    // ETP-4737: the rectificativa invoice is created with a negative total (return
+    // flow) — the result card must render the negative amount as returned by the
+    // backend (fmtAmount uses Number.toLocaleString, which keeps the minus sign).
+    await expect(page.getByText(/-150,00/)).toBeVisible();
+
+    // ETP-5381: the createReturnInvoice POST must carry the user's choice. Without
+    // originInvoices the backend falls back to the auto-detected chain and, with none
+    // detected (this fixture), answers 400 before writing anything — deliberately, since
+    // the alternative is a rectificative invoice that can never be confirmed.
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0].originInvoices).toEqual(['rect-inv-b']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test suite 3 — CO detail (no invoice): action buttons
+// ---------------------------------------------------------------------------
+
+test.describe('return-material-receipt — CO form actions (no existing invoice)', () => {
+  // ETP-5381: the backend walked the return chain and found FC/00050 — it arrives
+  // preselected, so this flow covers the auto-detected half of the picker.
+  let state;
+
+  test.beforeEach(async ({ page }) => {
+    state = { invoicePosts: [], rectifiableRequests: [] };
+    await login(page);
+    await installReturnReceiptMocks(page, { suggestedInvoiceIds: ['rect-inv-a'], state });
+  });
+
+  test('CO detail: create invoice button, print button, invoice modal confirm — full flow', async ({ page }) => {
+    test.setTimeout(120_000); // 3 navigations + modal flow can exceed 60s under full-suite load
+    // ret-003 is CO with hasReturnInvoice=false — "Crear Factura Rectificativa" must be visible
+    await page.goto('/return-material-receipt/ret-003');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    // --- "Crear Factura Rectificativa" button is visible ---
+    const createInvoiceBtn = page.getByTestId('action-create-return-invoice');
+    await expect(createInvoiceBtn).toBeVisible({ timeout: 8_000 });
+
+    // ETP-4737: the post-confirm button's label was ALSO fixed today — it used to fall
+    // back to the hardcoded, stale `createReturnInvoice` i18n key ("Crear Factura de
+    // Devolución") with no per-window override; ConfirmWithCreditButtonBase now accepts
+    // a `postConfirmButtonLabel` prop and this window wires it to
+    // returnReceipt.createRectificativeInvoice. Regression guard: same wording as the
+    // confirm-modal's toggle card (asserted above in the DR flow test).
+    await expect(createInvoiceBtn).toHaveText('Crear Factura Rectificativa');
+
+    // --- Print button IS rendered on this Completed document (ETP-5124) ---
+    // window.hidePrintWhen was changed from an unconditional `true` (ETP-4714) to
+    // { documentStatus: { notEquals: 'CO' } }, matching sibling windows
+    // (return-to-vendor-shipment / goods-shipment) — Print now shows once the
+    // document reaches CO, so ret-003 (Completed) must render it.
+    const printBtn = page.getByRole('button', { name: /imprimir|print/i });
+    await expect(printBtn).toBeVisible();
+
+    // Clone is a list-view row action (row-quick-action-clone), not a detail-view
+    // button — ConfirmWithCreditButtonBase renders no clone control here.
+
+    // --- ret-002 has hasReturnInvoice=true, so its button must be absent ---
+    await page.goto('/return-material-receipt/ret-002');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+    await expect(page.getByTestId('action-create-return-invoice')).toHaveCount(0);
+
+    // --- Back to ret-003: open create invoice modal and confirm ---
+    await page.goto('/return-material-receipt/ret-003');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+
+    const createInvoiceBtn2 = page.getByTestId('action-create-return-invoice');
+    await expect(createInvoiceBtn2).toBeVisible({ timeout: 8_000 });
+    await createInvoiceBtn2.click();
+
+    // Modal opens — verify via data-testid (CreateInvoiceConfirmModal)
+    const invoiceModal = page.getByTestId('create-invoice-confirm-modal');
+    await expect(invoiceModal).toBeVisible({ timeout: 8_000 });
+
+    // Cancel button inside the modal — the detail view has a separate action-cancel button,
+    // so use nth(1) to target the modal's own Cancelar button.
+    const cancelBtn = page.getByRole('button', { name: /^cancelar$|^cancel$/i }).nth(1);
+    await expect(cancelBtn).toBeVisible();
+
+    // ── ETP-5381: the auto-detected invoice arrives preselected ──────────────────
+    // suggestedInvoiceIds=['rect-inv-a'] → useRectifiableInvoices preselects it, so the
+    // user has nothing to do and the confirm button is enabled straight away. Asserting
+    // the chip (not just the enabled button) is what proves the preselection actually
+    // landed rather than the gate simply being absent.
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rect-inv-a'))
+      .toBeVisible({ timeout: 8_000 });
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rect-inv-a'))
+      .toContainText('FC/00050');
+    // The non-suggested candidate must NOT be preselected.
+    await expect(invoiceModal.getByTestId('invoice-confirm-rectify-selected-rect-inv-b')).toHaveCount(0);
+
+    // Confirm via the modal footer's primary button (soCreateDocsBtn renders
+    // "Crear →"). Scope to the modal and take its last button — the footer order
+    // is Cancelar then the confirm button — so this is independent of the label.
+    const footerConfirmBtn = invoiceModal.getByRole('button').last();
+    await expect(footerConfirmBtn).toBeVisible();
+    await expect(footerConfirmBtn).toBeEnabled({ timeout: 5_000 });
+    await footerConfirmBtn.click();
+
+    // createReturnInvoice POST returns FC/00100 → ConfirmResultModal shows it
+    const resultModal = page.getByTestId('confirm-result-modal');
+    await expect(resultModal).toBeVisible({ timeout: 8_000 });
+    await expect(resultModal).toContainText('FC/00100');
+
+    // ETP-4737: same negative-total contract applies from the CO (already confirmed)
+    // detail flow — useConfirmWithCredit.handleCreateReturnInvoice reads grandTotalAmount.
+    await expect(page.getByText(/-150,00/)).toBeVisible();
+
+    // ETP-5381: the preselected suggestion must reach the backend as originInvoices —
+    // CreateInvoiceConfirmModal.onConfirm(priceListId, originInvoices) →
+    // useConfirmWithCredit.handleCreateReturnInvoice(originInvoices).
+    expect(state.invoicePosts).toHaveLength(1);
+    expect(state.invoicePosts[0].originInvoices).toEqual(['rect-inv-a']);
+  });
+});

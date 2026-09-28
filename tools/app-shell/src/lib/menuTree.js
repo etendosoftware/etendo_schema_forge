@@ -22,10 +22,6 @@ function detectBase() {
 const BASE = detectBase();
 const NEO_BASE = `${BASE}/sws/neo`;
 
-function getToken() {
-  return localStorage.getItem('sf_auth_token');
-}
-
 // Deliberately NOT `useDiscovery.js`'s `callWebhook()` (admin token via
 // `adminAuthHeaders()`, POST) — this fetch must run as the CURRENT logged-in
 // user's own role (`sf_auth_token`), since SFListMenu's whole point here is
@@ -45,7 +41,6 @@ function getToken() {
 // changed.
 async function callMenuWebhook(params) {
   const url = `${NEO_BASE}/listmenu`;
-  const token = getToken();
   // apiFetch sets NO Content-Type on a bodyless request, preserving the reason these headers
   // were once hand-built: a GET has no body, and application/json isn't a CORS-safelisted
   // value, so setting it would trigger a preflight OPTIONS whenever VITE_API_BASE points at a
@@ -53,7 +48,9 @@ async function callMenuWebhook(params) {
   // so the preflight concern still doesn't apply — without which the menu labels came back in
   // the AD language (ETP-5022).
   const query = new URLSearchParams(params).toString();
-  const res = await apiFetch(query ? `${url}?${query}` : url, { baseUrl: '', token });
+  // ETP-5455: no explicit `token` (it was the dead legacy sf_auth_token read); apiFetch sends
+  // the current session's credential, so the tree is still scoped to the user's own role.
+  const res = await apiFetch(query ? `${url}?${query}` : url, { baseUrl: '' });
   const text = await res.text();
   let data;
   let parsed = true;

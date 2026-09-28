@@ -57,17 +57,32 @@ export function invalidateFiscalComputeCache(declId) {
  * Reads back the last compute payload this hook cached for ONE declaration, without issuing a
  * network call — `null` when nothing is cached (never computed this session, or evicted).
  *
- * ETP-5438: lets a caller that must NEVER auto-recompute a submitted-family declaration (e.g.
- * `FmModel349Page.jsx`'s mount effect) still show something when it opens with no
- * `decl._precomputed` handed down (a cold/direct navigation) — it reads whatever
- * `FmListPage.jsx`'s own submitted-family bucket already computed and cached this session,
- * instead of falling back to a fresh live `computeFn` call, which would silently pick up any
- * invoice added/removed after the declaration was presented.
+ * ETP-5438: lets a caller that must not keep recomputing a submitted-family declaration (e.g.
+ * `FmModel349Page.jsx`'s mount effect) reuse whatever `FmListPage.jsx`'s own submitted-family
+ * bucket already computed and cached this session, instead of issuing a fresh live `computeFn`
+ * call on every mount, which would pick up any invoice added/removed after the declaration was
+ * presented. On a cold cache the caller does ONE compute itself and stores it back with
+ * {@link setCachedFiscalCompute}, so list and detail freeze on the same payload.
  */
 export function getCachedFiscalCompute(declId) {
   if (declId == null) return null;
   const cached = readCache(sessionCacheKey(declId));
   return cached ? cached.result : null;
+}
+
+/**
+ * Stores a compute payload for ONE declaration under the exact same sessionStorage key this
+ * hook's own mount effect reads — the write-side counterpart of {@link getCachedFiscalCompute}.
+ *
+ * ETP-5438 follow-up: a submitted declaration opened on a cold session cache (new tab, reload,
+ * another browser) is computed once by the detail page; writing the result here freezes it for
+ * the rest of the session and keeps `FmListPage.jsx`'s "Resultado" column (whose submitted-family
+ * bucket trusts this cache via `neverModifiedFn`) consistent with what the detail page shows.
+ * A `null`/`undefined` result is ignored so a failed compute never freezes an empty payload.
+ */
+export function setCachedFiscalCompute(declId, result) {
+  if (declId == null || result == null) return;
+  writeCache(sessionCacheKey(declId), result, Date.now());
 }
 
 function readCache(key) {
