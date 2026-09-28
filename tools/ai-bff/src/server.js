@@ -5,6 +5,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createMCPClient } from '@ai-sdk/mcp';
 import { convertToModelMessages, pipeUIMessageStreamToResponse, stepCountIs, streamText, tool } from 'ai';
 import { z } from 'zod';
+import { createTurnRecorder, usageEndpoint } from './usage.js';
 
 const port = Number(process.env.BFF_PORT || 3400);
 const mcpUrl = process.env.ETENDO_MCP_URL || 'http://localhost:8080/etendo/sws/mcp';
@@ -254,6 +255,13 @@ export async function handleChat(req, res) {
   let mcpClient;
   const isPageHelpRequest = body.mode === 'page-help';
   const opencodeSession = opencodeSessionId(req.headers['x-opencode-session']);
+  const usage = createTurnRecorder({
+    url: usageEndpoint(mcpUrl),
+    authorization,
+    sessionKey: opencodeSession,
+    target: isPageHelpRequest ? 'page-help' : 'agent-chat',
+    modelId,
+  });
 
   try {
     // Page help already includes the sanitized DOM in the user message. It
@@ -294,7 +302,9 @@ export async function handleChat(req, res) {
       // never said so, so treat it as unproven.
       stopWhen: stepCountIs(20),
       abortSignal: AbortSignal.timeout(modelTimeoutMs),
-      onStepFinish: ({ text, toolCalls, toolResults, finishReason }) => {
+      onStepFinish: step => {
+        usage.track(step);
+        const { text, toolCalls, toolResults, finishReason } = step;
         trace('step', {
           finishReason,
           text: text?.slice(0, 400),
@@ -312,8 +322,14 @@ export async function handleChat(req, res) {
       },
       onError: ({ error }) => {
         console.error('[ai-bff] model stream error:', error instanceof Error ? error.stack : error);
+        usage.fail();
       },
-      onFinish: async () => mcpClient?.close(),
+      onAbort: event => usage.abort(event),
+      // Recording is fire-and-forget: usage.finish() never awaits the POST.
+      onFinish: async event => {
+        usage.finish(event);
+        await mcpClient?.close();
+      },
     });
     await pipeUIMessageStreamToResponse({ response: res, stream: result.toUIMessageStream() });
   } catch (error) {

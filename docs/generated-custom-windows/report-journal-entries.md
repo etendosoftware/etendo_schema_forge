@@ -22,7 +22,7 @@ Let finance users print the full journal book for a date range — every account
 - `acctSchemaId` (General Ledger) is required and lives in the primary section. `orgId` is required but hidden and defaulted from the session organization.
 - `dateFrom` defaults to the first day of the previous month (`__FIRST_OF_PREV_MONTH__`); `dateTo` defaults to today (`__TODAY__`). Both are optional — empty strings short-circuit the SQL guard for that bound.
 - Optional refinement filters live in two sidebar sections: `filters` (account range) and `dimensions` (business partner, product, project, all multi-select via `popup` selector).
-- Rows are sorted by `dateacct`, `fact_acct_group_id`, and the minimum `seqno` within the group so each group renders with its lines in original posting order.
+- Rows are sorted by `dateacct`, `fact_acct_group_id`, a debit/credit priority (`dc_priority` — debit lines before credit lines, matching standard accounting presentation), and the minimum `seqno` within the group as the final tiebreak (ETP-5376 follow-up: the `dc_priority` CASE expression existed in the `je` CTE's `GROUP BY` since the report's creation but was never projected or referenced in the outer `ORDER BY`, so it had no effect until this fix).
 
 ## Gap assessment
 - The report keeps `Journal Entries` as the English title — the IFRS/accounting standard equivalent is also "General Journal" but the contract uses the shorter form already used in the codebase.

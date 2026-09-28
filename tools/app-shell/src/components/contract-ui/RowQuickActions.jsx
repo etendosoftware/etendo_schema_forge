@@ -367,7 +367,7 @@ export default function RowQuickActions({
         // espacio" (a `right-3` gap here read as an unexplained sliver of
         // the reserved column left uncovered at the true edge). `px-3`
         // keeps the icons themselves off the very edge as inner padding.
-        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100',
+        'absolute right-0 inset-y-0 h-full flex flex-row items-center justify-center gap-0.5 px-3 z-10 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
       ].join(' ')}
       data-testid="row-quick-actions"
       onClick={stop}

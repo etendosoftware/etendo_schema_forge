@@ -6,6 +6,7 @@ const columns = [
   { key: 'movementDate', column: 'MovementDate', type: 'date', label: 'Movement Date', required: true, dot: false },
   { key: 'name', column: 'Name', type: 'string', label: 'Name', required: true, maxLength: 60 },
   { key: 'status', column: 'Status', type: 'status', label: 'Status', enumLabels: { 'DR': 'statusDr', 'CO': 'statusCo', 'VO': 'statusVo' }, required: true },
+  { key: 'posted', column: 'Posted', type: 'boolean', label: 'Posted', badge: true, badgeLabels: {"true":{"en_US":"Posted","es_ES":"Contabilizado"},"false":{"en_US":"Not posted","es_ES":"Sin contabilizar"}}, badgeVariants: {"true":"green","false":"orange"}, required: true },
 ];
 // @sf-generated-end columns:internalConsumption
 

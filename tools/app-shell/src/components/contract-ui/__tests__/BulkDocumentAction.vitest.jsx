@@ -1522,3 +1522,88 @@ describe('BulkDocumentAction — messageKeys reach the persisted failure (ETP-53
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
 });
+// ETP-5445 — optional per-action `neoActionBody`. Internal Consumption's `processNow` is
+// rejected with "Missing mandatory parameter" when sent the default `{}` body, so its action
+// definition carries the request body. It is forwarded as execute's THIRD argument, only in
+// neoAction mode and only when declared: every other caller must still see exactly two args,
+// and documentAction mode's third parameter (an unrelated options bag) must never receive it.
+describe('BulkDocumentAction — neoActionBody request body (ETP-5445)', () => {
+  const BODY = { fieldValues: { processNow: 'CO' }, action: 'CO' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseNeoAction.mockReturnValue({ execute: mockNeoExecute, loading: false });
+    mockNeoExecute.mockResolvedValue({ success: true });
+  });
+
+  const run = (props) => {
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-1', documentStatus: 'DR' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="internal-consumption"
+        refresh={vi.fn()}
+        {...props}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+  };
+
+  it('forwards neoActionBody as the third execute argument in neoAction mode', async () => {
+    run({
+      actionMode: 'neoAction',
+      buildActions: () => [{ value: 'confirm', labelKey: 'confirm', neoActionName: 'processNow', neoActionBody: BODY }],
+    });
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledTimes(1));
+    expect(mockNeoExecute.mock.calls[0]).toEqual(['row-1', 'processNow', BODY]);
+  });
+
+  it('calls execute with exactly two args when the action declares no neoActionBody', async () => {
+    run({
+      actionMode: 'neoAction',
+      buildActions: () => [{ value: 'post', labelKey: 'post' }],
+    });
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledTimes(1));
+    expect(mockNeoExecute.mock.calls[0]).toEqual(['row-1', 'post']);
+    expect(mockNeoExecute.mock.calls[0]).toHaveLength(2);
+  });
+
+  it('forwards the body once per selected row', async () => {
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-1' }, { id: 'row-2' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="internal-consumption"
+        refresh={vi.fn()}
+        actionMode="neoAction"
+        buildActions={() => [{ value: 'confirm', labelKey: 'confirm', neoActionName: 'processNow', neoActionBody: BODY }]}
+      />,
+    );
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(mockNeoExecute).toHaveBeenCalledTimes(2));
+    expect(mockNeoExecute.mock.calls).toEqual([
+      ['row-1', 'processNow', BODY],
+      ['row-2', 'processNow', BODY],
+    ]);
+  });
+
+  it('documentAction mode never passes neoActionBody (execute keeps two args)', async () => {
+    run({
+      // actionMode omitted → documentAction
+      buildActions: () => [{ value: 'CO', labelKey: 'confirm', neoActionBody: BODY }],
+    });
+
+    await waitFor(() => expect(mockDocExecute).toHaveBeenCalledTimes(1));
+    expect(mockDocExecute.mock.calls[0]).toEqual(['row-1', 'CO']);
+    expect(mockNeoExecute).not.toHaveBeenCalled();
+  });
+});

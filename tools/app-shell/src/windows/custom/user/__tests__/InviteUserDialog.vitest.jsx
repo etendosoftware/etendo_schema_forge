@@ -1,5 +1,13 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  registerApiSession,
+  resetApiSessionForTests,
+} from '@etendosoftware/app-shell-core/auth/api';
+import {
+  resetSessionCredentials,
+  setSessionCredentials,
+} from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import { InviteUserDialog } from '../InviteUserDialog.jsx';
 
 vi.mock('@/i18n', () => ({
@@ -122,5 +130,59 @@ describe('InviteUserDialog', () => {
       expect(screen.getByTestId('invite-user-error')).toHaveTextContent('invitePageInvalidDescription');
     });
     expect(screen.getByTestId('invite-user-error')).not.toHaveTextContent('boom from backend');
+  });
+});
+
+/**
+ * ETP-5455 — the dialog passed `token: localStorage['sf_auth_token'] || ['sf_platform_token'] || ''`
+ * to apiFetch. Nothing writes those keys since the cookie session, so the read was dead (the
+ * Authorization header comes from `sessionCredentials`, not from that override). Pinned as the
+ * non-regression guarantee for removing it: the invitation sends exactly the active scheme's
+ * credential.
+ */
+describe('InviteUserDialog — credential (ETP-5455)', () => {
+  const SESSION_TOKEN = 'session-bearer-token';
+
+  afterEach(() => {
+    resetApiSessionForTests();
+    resetSessionCredentials();
+    localStorage.clear();
+  });
+
+  async function submitInvitation() {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: 'success',
+        invitation: { id: 'inv-1', email: 'colleague@example.com', status: 'PENDING' },
+      }),
+    });
+    globalThis.fetch = fetchMock;
+    render(<InviteUserDialog open={true} onOpenChange={() => {}} />);
+    fireEvent.change(screen.getByTestId('invite-user-email'), {
+      target: { value: 'colleague@example.com' },
+    });
+    fireEvent.click(screen.getByTestId('invite-user-submit'));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    return new Headers(fetchMock.mock.calls[0][1]?.headers || {});
+  }
+
+  it('sends the session bearer under the bearer scheme', async () => {
+    registerApiSession({ getToken: () => SESSION_TOKEN });
+    setSessionCredentials({ mode: 'bearer', token: () => SESSION_TOKEN });
+
+    const headers = await submitInvitation();
+
+    expect(headers.get('Authorization')).toBe(`Bearer ${SESSION_TOKEN}`);
+  });
+
+  it('sends the CSRF proof and no Authorization under the cookie scheme', async () => {
+    registerApiSession({ getToken: () => null });
+    setSessionCredentials({ mode: 'cookie', token: null, csrfToken: 'csrf-1' });
+
+    const headers = await submitInvitation();
+
+    expect(headers.has('Authorization')).toBe(false);
+    expect(headers.get('X-Go-CSRF')).toBe('csrf-1');
   });
 });

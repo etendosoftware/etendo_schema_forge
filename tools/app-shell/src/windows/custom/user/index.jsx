@@ -176,8 +176,8 @@ function useResendInvitationExtraActions() {
  * the resolved id to classify the CURRENT record for promote/demote, never
  * the full roles/template catalog `AssignTemplateRolesControl` also fetches
  * for its picker. Fetches unconditionally on mount (no `token`/`apiBaseUrl`
- * gate): `fetchRolesOverview()` reads the auth token straight from
- * `localStorage` via `neoWebhookClient.js`'s `getToken()`, not from props.
+ * gate): `fetchRolesOverview()` authenticates with the current session through `apiFetch`, not
+ * with a token from props.
  */
 function useAdminRoleId() {
   const [adminRoleId, setAdminRoleId] = useState(null);
