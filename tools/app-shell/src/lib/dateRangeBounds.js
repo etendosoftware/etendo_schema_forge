@@ -7,6 +7,8 @@
  * Single source of truth — do NOT copy these into individual components.
  */
 
+import { todayCalendarISO } from './dateOnly.js';
+
 /**
  * Resolves a named preset id into `{ from, to }` Date bounds.
  *
@@ -64,14 +66,20 @@ export function getDateBounds(dateRange) {
 }
 
 /**
- * Formats a Date as an ISO `yyyy-mm-dd` string for a backend date param,
- * or `undefined` when the value is not a valid Date.
+ * Formats a Date as an ISO `yyyy-mm-dd` string for a backend date param, in the
+ * date's LOCAL calendar day, or `undefined` when the value is not a valid Date.
+ *
+ * `presetBounds` builds `from`/`to` as local midnight / local 23:59:59.999. Serializing
+ * with `toISOString()` converts to UTC first, which rolls the day forward west of UTC and
+ * backward east of UTC — e.g. at UTC-3, "yesterday" was sent as yesterday..today, so the
+ * filter silently included today's rows too (ETP-5449). Reuse `todayCalendarISO`, which despite
+ * its name just extracts the local calendar day of any reference Date.
  *
  * @param {Date} date
  * @returns {string | undefined}
  */
 export function toDateParam(date) {
   return date instanceof Date && !Number.isNaN(date.getTime())
-    ? date.toISOString().slice(0, 10)
+    ? todayCalendarISO(date)
     : undefined;
 }

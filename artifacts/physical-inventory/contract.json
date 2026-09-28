@@ -1,8 +1,8 @@
 {
-  "version": "0.36.0",
+  "version": "0.37.0",
   "generatedAt": "2026-07-29T14:51:09.380Z",
-  "updatedAt": "2026-09-21T15:55:32.687Z",
-  "checksum": "b57f67c1e0e16e24",
+  "updatedAt": "2026-09-24T10:36:52.142Z",
+  "checksum": "4526a1e213fef7b4",
   "frontendContract": {
     "window": {
       "id": "168",
@@ -109,7 +109,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -137,7 +137,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -296,7 +296,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === true"
+              "js": "(record['posted'] === true || record['posted'] === 'Y')"
             }
           },
           {
@@ -325,7 +325,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y'",
               "evaluable": true,
-              "js": "record['posted'] === true"
+              "js": "(record['posted'] === true || record['posted'] === 'Y')"
             }
           },
           {
@@ -440,7 +440,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -474,7 +474,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -513,7 +513,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -533,7 +533,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -583,7 +583,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -645,7 +645,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {

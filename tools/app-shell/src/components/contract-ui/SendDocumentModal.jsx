@@ -409,7 +409,8 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
   const [ownPdfUrl, setOwnPdfUrl] = useState(null);
   const [ownPdfLoading, setOwnPdfLoading] = useState(false);
   useEffect(() => {
-    if (pdfBlobUrl || pdfBlob || !documentId) return undefined;
+    // A caller-side build may be in flight before its url arrives.
+    if (pdfBlobUrl || pdfBlob || pdfBlobLoading || !documentId) return undefined;
     if (!hasClientPdf(windowName)) return undefined;
     let cancelled = false;
     let url = null;
@@ -424,7 +425,7 @@ export default function SendDocumentModal({ documentType = 'Document', documentN
       .finally(() => { if (!cancelled) setOwnPdfLoading(false); });
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowName, documentId, apiBaseUrl, token, pdfBlobUrl, pdfBlob]);
+  }, [windowName, documentId, apiBaseUrl, token, pdfBlobUrl, pdfBlob, pdfBlobLoading]);
 
   const effectivePdfUrl = pdfBlobUrl || ownPdfUrl;
   const effectivePdfLoading = pdfBlobLoading || ownPdfLoading;

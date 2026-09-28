@@ -66,14 +66,11 @@ export function InviteUserDialog({ open, onOpenChange, onSuccess, apiBase = '' }
 
     setLoading(true);
     try {
-      const token =
-        globalThis.localStorage?.getItem('sf_auth_token') ||
-        globalThis.localStorage?.getItem('sf_platform_token') ||
-        '';
-
+      // ETP-5455: no explicit `token`. It used to be read from the legacy sf_auth_token /
+      // sf_platform_token keys, which nothing writes since the cookie session; apiFetch sends the
+      // active scheme's credential on its own.
       const response = await apiFetch('/sws/go/company-invitations', {
         method: 'POST',
-        token,
         // ETP-5003 — without this the servlet reads an empty language, the contract's
         // Spanish branch never matches and every invitation goes out in English, whatever
         // locale the operator is working in.

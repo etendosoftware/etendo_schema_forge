@@ -167,7 +167,10 @@ function quickActionsColumnClassName(extraClassName) {
   return [
     // No `transition-colors` — "sacale la transicion del hover... que sea
     // 100% rapido cuando aparece": the mask/sticky toggle is instant, not a fade.
-    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[rgb(248,250,252)]',
+    // `has-[[data-state=open]]` keeps the cell sticky while a row kebab menu is open: the
+    // portaled menu takes the pointer, the row loses `group-hover/row`, and without this the
+    // cell falls back to its in-flow spot at the table's end and Radix re-anchors the menu there.
+    'relative right-0 z-10 group-hover/row:sticky group-hover/row:bg-[rgb(248,250,252)] has-[[data-state=open]]:sticky has-[[data-state=open]]:bg-[rgb(248,250,252)]',
     // Solid, not `bg-muted/50` — while floating this cell masks whatever row
     // content is scrolled underneath it, so it can't be translucent or that
     // content would show through. But a flat `bg-muted` (241/245/249) is
