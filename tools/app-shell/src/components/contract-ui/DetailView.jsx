@@ -2542,7 +2542,7 @@ export function DetailView({
   const favKey = windowName || windowTitle;
   const favActive = isFavorite(favKey);
 
-  const title = getRecordTitle(isNew, ui, data, titleField);
+  const title = getRecordTitle(isNew, ui, data, titleField, Form?.fields);
   const fullBreadcrumb = getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle);
 
   useSetPageMeta({
