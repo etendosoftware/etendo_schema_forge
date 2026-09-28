@@ -1764,6 +1764,48 @@ against `C_PeriodControl` — in a codebase whose rule is never to reimplement C
 would drift on the first Core change. Failing inside Core and reporting its message costs one
 harmless round trip (nothing is written) and stays correct by construction.
 
+#### "Already reconciled" refusals and partial feedback (ETP-5472)
+
+With a Spanish UI, `reconcileGroup` refusals used to toast raw English, some with an internal id
+glued on. `lib/backendErrors.js` now translates every wire form below, and never shows an internal id:
+
+| Backend text (com.etendoerp.go) | Key |
+|---|---|
+| `Statement line is already reconciled` (exact — `ReconciliationHandler.MSG_LINE_ALREADY_RECONCILED`) | `backendError.statementLineAlreadyReconciled` |
+| `Statement line is already reconciled: <statementLineId>` (`ReconciliationFlowSupport`) | `backendError.statementLineAlreadyReconciled` |
+| `Operation is already reconciled: <operationId>` (`ReconciliationFlowSupport`) | `backendError.operationAlreadyReconciled` |
+| `Reconciliation <documentNo> is an unconfirmed draft that already holds this line. Review it before reconciling the line again.` (409, `ReconciliationLineTargetSupport`) | `backendError.draftHoldsLine` |
+
+The two `: <id>` forms are prefix matchers (`matchStatementLineAlreadyReconciled`,
+`matchOperationAlreadyReconciled`) that return no params, so the UUID is dropped. The draft form is
+a prefix/suffix matcher (`matchDraftHoldsLine`) that interpolates `{documentNo}`; it shares the
+`Reconciliation ` prefix with `backendError.foreignDraftReconciliation` (ETP-5468) but not the
+suffix, so the two never cross-match. The Java text is a de facto wire contract: rewording it
+server-side silently brings the English back.
+
+**Partial reconciliation toast.** When the selected movements cover only part of the line, the 201
+response of `reconcileGroup` carries `partial: true`, `pendingAmount` (signed like the line) and
+`remainderLineId`. `ReconciliationSplitPanel.submitReconcile` then shows an info toast,
+`financeReconcileToastPartial` ("Conciliada parcialmente: quedan {amount} pendientes."), with the
+absolute pending amount formatted through `formatCurrency` in the account currency, instead of
+"Conciliación realizada". A response without those fields keeps the plain success toast.
+
+**Backend hardening, same ticket (com.etendoerp.go).** `reconcileGroup` now:
+
+- **auto-heals** only a statement line linked to a movement that has NO reconciliation at all: the
+  stale link is cleared and that movement becomes a match candidate again, instead of the line
+  being refused as "already reconciled";
+- **refuses** a line held by an unconfirmed draft reconciliation (e.g. one left by the Classic
+  "Match Statement" button) with a 409 and the translated `backendError.draftHoldsLine` message
+  naming the draft's document number. The draft is never discarded — the user reviews it first;
+- redirects a request aimed at a partial group's head to its pending remainder line;
+- reports `partial: true` only when a pending remainder line really exists, so the partial toast
+  above never fires for a fully covered line.
+
+When a reconcile is refused, the request's own pending writes are rolled back. That does not
+cover work Core commits mid-flow (e.g. inside a Core process it delegates to): such writes survive
+the refusal, so a failed reconcile is not guaranteed to leave zero trace.
+
 #### Posting the unreconciled remainder to an accounting account (ETP-4796)
 
 When a statement line is only PARTIALLY reconciled — statement of 12,50 € matched against a 12,00 €
