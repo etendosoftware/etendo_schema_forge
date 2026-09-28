@@ -4,8 +4,8 @@ import { login } from '../../helpers/auth.js';
 /**
  * Environment commercial access block — `BlockedAccessScreen` (ETP-5443 follow-up, ETP-5047).
  *
- * `NeoAuthenticator.enforceEnvironmentAccess` (com.etendoerp.go) answers every NEO request
- * with HTTP 402 once an environment's commercial access is cut off (demo trial expired /
+ * The shared `EnvironmentAccessGuard` (com.etendoerp.go), reached for NEO through the bind step
+ * of `EnvironmentRequestAuthenticator`, answers every NEO request with HTTP 402 once an environment's commercial access is cut off (demo trial expired /
  * subscription payment grace elapsed). Since ETP-5047 the body is the structured
  * `EnvironmentAccessGuard.Denial.errorBody`:
  *
