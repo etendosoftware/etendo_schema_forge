@@ -539,8 +539,11 @@ future year's patch is automatically covered by the gate — no gate-side change
 decl.period, identChecks)` and checks it — modeled the same way as `requiresRectificativa` above,
 a computed array + inline warning + toast-and-return-early on the actions:
 
-- **Inline banner** (same warning styling as the duplicate-period one) whenever
-  `missingRequiredFields.length > 0` — `fm.validation.missing_required_banner`.
+- **Proactive notice** whenever `missingRequiredFields.length > 0` — `fm.validation.missing_required_banner`.
+  Originally a fixed inline banner (same warning styling as the duplicate-period one); **converted to
+  a `toast.warning` in ETP-5432 pt.10** (`showMissingRequiredFieldsReminder`, fired from a mount
+  effect) — see "IAE-activity activation reminder" below for the full writeup of this and the
+  companion IAE-guard toast conversion. The key name is unchanged; only its presentation moved.
 - **"Generar fichero 303"** — checked both at the button `onClick` (so `FileGenModal303` never
   opens) and again at the top of `handleGenerate` (so a future direct call is still covered) —
   `fm.validation.missing_required_generate`: *"Completá {fields} antes de generar el fichero."*
@@ -1933,6 +1936,21 @@ invariant that test mode never alters `status`.
   Deferred — would need a lightweight count endpoint or a client-side list call just to render the
   badge, judged not worth it for this increment.
 
+### Justificante delete blocked outside draft status (ETP-5432 pt.3)
+
+**Rule:** the justificante attachment must only be deletable while the declaration is still a
+`draft` — same rule `FmRowActions`' own delete action already enforces for the declaration record
+itself (see "Row hover actions — Edit/Delete" under "List page toolbar" below). Applies to both
+Modelo 303's and Modelo 349's "Justificante" tab.
+
+**Frontend — `AttachmentsTab.jsx` gained a `readOnly` prop** (`tools/app-shell/src/components/attachments/AttachmentsTab.jsx`, shared by every window that uses this generic component, not fiscal-models-specific): when `true`, it hides the single-row and "delete all" delete actions (download/upload stay available). `FmModel303Page.jsx` and `FmModel349Page.jsx` both pass `readOnly={status !== 'draft'}` to their respective "Justificante" `AttachmentsTab` instance.
+
+**Merge-collision gotcha — this exact guard was silently dropped once already.** A prior merge from `develop` (ETP-5205) landed a DIFFERENT, generic `isDocumentReadOnly` prop on `AttachmentsTab.jsx` (wired by `DetailView` from a document's own lock/processed state) and, in reconciling the two, kept `isDocumentReadOnly` while dropping this window's bespoke `readOnly` prop entirely — `FmModel303Page`'s and `FmModel349Page`'s `readOnly={status !== 'draft'}` silently stopped doing anything, with no test failure (the fiscal-models pages aren't rendered through `DetailView`, so `isDocumentReadOnly` was never populated for them either — the delete button simply came back). Fixed by computing `effectiveReadOnly = !!isDocumentReadOnly || !!readOnly` inside `AttachmentsTab.jsx` — either signal suppresses delete, and losing either source in a future merge re-enables delete silently again. **Gotcha for future merges touching this file:** `AttachmentsTab.jsx` has two independent read-only signals now (`isDocumentReadOnly` for `DetailView`-rendered windows, `readOnly` for bespoke callers like this one) — a merge conflict resolution that keeps only one of them reintroduces this exact regression. Upload stays gated by `isDocumentReadOnly` only (`readOnly` is delete-only by contract).
+
+**Backend enforcement (`com.etendoerp.go`, `NeoAttachmentsHelper#handleDelete`) — was previously a pure UI convenience with no server-side check at all.** Before this fix, `DELETE /sws/neo/attachments/:id` had zero ownership/status check for ANY table's attachments — the frontend guard above was cosmetic, and a direct API call (or a stale client) could delete a justificante regardless of declaration status. Fixed narrowly: a new `rejectDeleteOfNonDraftFiscalDeclAttachment(attachment)` private helper inspects the attachment's OWN `AD_Table`/`AD_Record_ID` — short-circuiting immediately (returns `null`, delete proceeds) for any attachment whose table isn't `ETGO_Fiscal_Decl`, so every other window's attachments (goods-receipt, invoice, …) are completely unaffected. For a fiscal-declaration attachment, it resolves the owning `ETGO_Fiscal_Decl` record and rejects with `409` (`"Cannot delete an attachment of a fiscal declaration that is not in draft status: <declId>"`) when `DeclarationStatus` is set and is not `draft`. Mirrors the 409 shape `FiscalDeclCrudHandler#handleDeclDelete` already uses for the equivalent declaration-delete guard. This closes the gap the frontend `readOnly` prop above cannot: a direct `DELETE` call now gets a real `409`, not a silent success.
+
+**Automated evidence:** `AttachmentsTab.vitest.jsx`/equivalent covers the `readOnly`/`isDocumentReadOnly` OR-ing (`effectiveReadOnly`) and that upload stays enabled while delete is hidden; backend coverage for `rejectDeleteOfNonDraftFiscalDeclAttachment` lives in `com.etendoerp.go`'s own test suite for `NeoAttachmentsHelper`.
+
 ### "Incidencias" tab — persisted AEAT validation errors (ETP-4456)
 
 Previously the "Incidencias" tab (`IncidentsTab`, `FmTabContent.jsx`) only ever read
@@ -2216,7 +2234,11 @@ The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"
 
 ### Result in list view
 
-349 declarations show total intracomm volume (`totalE + totalS + totalA + totalI`) with `kind: 'info'` — no "a ingresar / a compensar" label, since 349 is informational only.
+349 declarations show total intracomm volume with `kind: 'info'` — no "a ingresar / a compensar" label, since 349 is informational only.
+
+**Bug fixed (ETP-5432 pt.2) — a rectification-only period showed `0`/"Informativa" even with real corrective operators.** `FmListPage.jsx`'s "Resultado" total for a 349 row used to be `['totalE','totalS','totalA','totalI'].reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0)` — `computed.summary` ONLY, never `computed.rectificativeSummary`. `Fiscal349BoxesHandler` always emits `summaryByKey` from the REGULAR aggregation alone, so a period with corrective operators but no regular ones has an all-zero `summary`, and the list showed `0`/"Informativa" even though the declaration has real (corrective) activity — a list-only gap, since the detail page's own `RectificativeSubtotalCard` (see "Rectificativas en Operadores" above) already renders `rectificativeSummary` correctly.
+
+**Fix:** a new `sumAbsKeyTotals(obj)` helper sums `totalE`/`totalS`/`totalA`/`totalI` via `Math.abs` on each key — the SAME anti-cancellation rule `RectificativeSubtotalCard` already applies to why E/S/A/I are never netted against each other (see "Rectificativas en Operadores" above): correctives are signed deltas, so without `Math.abs` a `-30` sales correction offset by a `+30` purchase correction would still sum to `0` and reproduce this exact bug. The list's total is now `sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary)` — both objects contribute, each internally anti-cancelled first. This is a magnitude-of-activity figure for the list's single "Resultado" cell, distinct from `RectificativeSubtotalCard`'s own per-key breakdown on the detail page (which deliberately has no grand total at all — see "Rectificativas en Operadores" above); the two are not meant to match numerically.
 
 ### Polling propagation
 
@@ -2547,18 +2569,47 @@ bold placement is used everywhere else this CTA appears — the `connError` bann
 `AeatSubmitFlow.jsx` (the NRC-required guard, described above under "Confirm screen") and the
 `genError` banner in `FmModel303Page.jsx` (the ETP-4975 pre-flight guard, see immediately below).
 
-**This is deliberately a different mechanism from the ETP-4975 hard guard** — `missingIaeGuard`/
-`isMissingDefaultIaeActivity` in `AeatSubmitFlow.jsx`/`FmModel303Page.jsx` — fully documented in
-`docs/generated-custom-windows/organization.md`'s "Modelo 303 pre-flight guard — both buttons"
-section, **not** in this file: this file's only section literally titled "Generate error banner
+**This is deliberately a different mechanism from the ETP-4975 hard guard** — `isMissingDefaultIaeActivity`/`checkMissingIaeGuard` in `AeatSubmitFlow.jsx`/`FmModel303Page.jsx` — fully documented in
+`docs/generated-custom-windows/organization.md`'s "Modelo 303 pre-flight guard — all four trigger
+points" section, **not** in this file: this file's only section literally titled "Generate error banner
 (`genError`)" is further below, under "Modelo 349 detail page", and covers a distinct, unrelated
 concern (`AEAT3492010Report`'s own validation exceptions on the 349 file-generation path) — do not
-confuse the two `genError` states, they belong to different pages and different guards. The ETP-4975
-guard is authoritative: it runs a real `GET /sws/neo/organization/actividadesDelIae` check right
-before "Generar fichero"/"Marcar como Presentado" for the actual last-period declaration, and blocks
-the action when nothing qualifies. This reminder never blocks anything and never checks the
-backend — it is purely an earlier, informational nudge so the user isn't surprised later by the
-hard guard.
+confuse that 349 `genError` with the 303 hard guard, they belong to different pages and different
+guards; the 303 guard's own `genError`/`missingIaeGuard` React state, in particular, was **removed
+outright** by ETP-5432 pt.10 (see below), so it no longer exists to be confused with anything. The
+ETP-4975 guard is authoritative: it runs a real `GET /sws/neo/organization/actividadesDelIae` check
+right before "Generar fichero"/"Marcar como Presentado"/the two manual "Registrar/Presentar" paths
+for the actual last-period declaration, and blocks the action when nothing qualifies. This reminder
+never blocks anything and never checks the backend — it is purely an earlier, informational nudge so
+the user isn't surprised later by the hard guard.
+
+**ETP-5432 pt.10 — the hard guard's own feedback also became a toast, at ALL four trigger points,
+plus 2 previously-uncovered ones found via live retest.** Full write-up — the proactive mount-time
+check, the two manual "Registrar/Presentar" paths that had NO guard at all before this (a real,
+pre-existing gap since the guard first shipped, not a regression from this ticket), the
+double-prefixed-URL bug found along the way, and the final `severity: 'error'` correction (user
+feedback: this message is the sole feedback for an ACTIVE block, so it should read as an error, not
+a warning, unlike this section's own `warning`-severity reminder above) — lives in
+`docs/generated-custom-windows/organization.md`'s "Modelo 303 pre-flight guard — all four trigger
+points" section. The shared toast helper itself, `showIaeActivityReminder(t, navigate, { severity })`,
+now accepts that 3rd options argument (default `{ severity: 'warning' }`, which is what this
+section's own two call sites keep using unchanged) via a new `showFiscalToast(message, severity)`
+primitive in `fiscalModelsUtils.js` that picks `toast.warning`/`toast.error`.
+
+**A separate, unrelated banner converted the same way (ETP-5432 pt.10) — `fm.validation.missing_required_banner`.**
+`FmModel303Page.jsx` also had a second, independent fixed inline banner — "Hay campos obligatorios
+sin completar: …" (see "Duplicate-period warning and rectificativa gate" above for
+`missingRequiredFields`) — rendered unconditionally below the toolbar whenever any currently-required
+identification field was blank. This is unrelated to the IAE guard (different condition, different
+banner, same page) but got the identical treatment: user feedback was that NO validation message on
+this page should be a permanent page fixture. It's now `showMissingRequiredFieldsReminder(t,
+missingFieldNames)`, fired from a mount effect keyed on the missing-field-names string (so it re-fires
+if the set of missing fields changes, but not on an unrelated re-render), reusing the same
+`showFiscalToast` primitive — but **stays at the default `warning` severity**: the user's
+error-severity correction named the IAE message specifically, not this one. The pre-existing,
+separate CLICK-time toast for the same underlying condition (`missingRequiredFieldsToast`,
+`fm.validation.missing_required_generate`/`_present`, fired from "Generar fichero"/"Registrar-Presentar")
+is untouched — only the passive, always-on banner was replaced.
 
 ### "Nueva declaración" respects the active catalog
 
