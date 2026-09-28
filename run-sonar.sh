@@ -381,7 +381,7 @@ project = os.environ["PROJECT_KEY"]
 # In PR mode every read must be scoped to the PR, or it reads the main branch
 # instead (the bug this replaces). Empty in --all-issues mode → reads default branch.
 pr_key = os.environ.get("SONAR_PR_KEY", "")
-PR_Q = f"&pullRequest={urllib.parse.quote(pr_key)}" if pr_key else ""
+PR_Q = f"&pullRequest={urllib.parse.quote_plus(pr_key)}" if pr_key else ""
 
 import base64 as b64
 credentials = b64.b64encode(f"{token}:".encode()).decode()
@@ -1019,7 +1019,7 @@ if hotspot_metrics:
     hs_url = f"{host}/security_hotspots?id={pkey}"
     # Scope the UI link the same way the analysis was scoped: PR > branch > newcode.
     if pr_key:
-        hs_url += f"&pullRequest={urllib.parse.quote(pr_key)}"
+        hs_url += f"&pullRequest={urllib.parse.quote_plus(pr_key)}"
     elif branch and branch != "this branch":
         hs_url += f"&branch={branch}&inNewCodePeriod=true"
     else:
@@ -1157,7 +1157,7 @@ def read_metric(doc, metric):
 tolerance = float(os.environ.get("COVERAGE_TOLERANCE") or "1")
 min_coverage = float(os.environ.get("COVERAGE_MINIMUM") or "70")
 
-pr_q = f"&pullRequest={urllib.parse.quote(pr_key)}" if pr_key else ""
+pr_q = f"&pullRequest={urllib.parse.quote_plus(pr_key)}" if pr_key else ""
 # Current branch OVERALL coverage.
 current = read_metric(
     api_get(f"/api/measures/component?component={project}&metricKeys=coverage{pr_q}"),
