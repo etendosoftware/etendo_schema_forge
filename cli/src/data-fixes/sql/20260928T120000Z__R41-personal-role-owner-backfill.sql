@@ -14,7 +14,7 @@
 -- and a user whose role carried a " (2)" suffix, or who was renamed, got a new empty role.
 --
 -- com.etendoerp.go now records the owner on every personal role it creates
--- (AD_Role.EM_ETGO_Personal_Owner_ID, a plain AD_User_ID with NO foreign key, set once) and
+-- (AD_Role.EM_ETGO_Personal_Owner_ID, a foreign key to AD_User with ON DELETE SET NULL, set once) and
 -- demote restores by owner. Roles created before that have a NULL owner. The runtime still
 -- handles them — a hardened name fallback that skips roles older than the user and records the
 -- owner it finds (self-heal) — but this fix attributes every role whose owner is provable now.

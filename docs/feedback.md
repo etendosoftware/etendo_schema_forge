@@ -2925,7 +2925,7 @@ variants) and accepted it when it had zero `AD_User_Roles` rows. A deleted user'
 orphan role looks exactly like a promoted user's dormant one. The same name builder also appended the collision
 suffix before truncating to 60 characters, so a user name of 47+ characters looped forever on the first collision.
 
-**Fix:** every personal role now stores its owner (`AD_Role.EM_ETGO_Personal_Owner_ID`, no foreign key, set once).
+**Fix:** every personal role now stores its owner (`AD_Role.EM_ETGO_Personal_Owner_ID`, FK to `AD_User`, `ON DELETE SET NULL`, set once).
 Demote restores by owner; a hardened name fallback (suffix variants, not older than the user, claims the owner it
 finds) covers legacy roles, and R41 backfills the unambiguous ones. The suffix is kept when truncating and the
 attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real DB, scenarios A–D + legacy),
