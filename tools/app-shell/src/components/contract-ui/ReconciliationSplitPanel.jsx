@@ -1217,6 +1217,27 @@ function resolveCandidateLineId(selectedLine) {
 }
 
 /**
+ * The toast for a successful reconcile (ETP-5472).
+ *
+ * A group that leaves part of the line uncovered splits it and answers `partial: true` +
+ * `pendingAmount` (signed like the line). Anything else — including a backend that predates these
+ * fields — keeps the plain success toast. Kept out of `submitReconcile` for Sonar S3776.
+ *
+ * @param {object|undefined} result the reconcile response data
+ * @param {function} ui the `useUI()` translator
+ * @param {string} currency the account's currency code
+ */
+function notifyReconcileResult(result, ui, currency) {
+  if (result?.partial === true) {
+    toast.info(ui('financeReconcileToastPartial', {
+      amount: formatCurrency(currency, Math.abs(Number(result.pendingAmount) || 0)),
+    }));
+    return;
+  }
+  toast.success(ui('financeReconcileToastSuccess'));
+}
+
+/**
  * Rules 1 and 2 of `resolveVisibleCandidates` below — which candidates are shown — without the
  * selected/suggested pinning. A user-chosen column sort orders THIS list: once the user picks a
  * column, that order wins over the pin, so checking a row does not make it jump.
@@ -1626,16 +1647,7 @@ export function ReconciliationSplitPanel({
       // `defaultDifferenceDescription`. Dropping it silently is what the read-only modal did.
       if (description) payload.description = description;
       const result = await reconcile(payload);
-      // ETP-5472: a group that leaves part of the line uncovered splits it and answers
-      // `partial: true` + `pendingAmount` (signed like the line). Anything else — including a
-      // backend that predates these fields — keeps the plain success toast.
-      if (result?.partial === true) {
-        toast.info(ui('financeReconcileToastPartial', {
-          amount: formatCurrency(currency, Math.abs(Number(result.pendingAmount) || 0)),
-        }));
-      } else {
-        toast.success(ui('financeReconcileToastSuccess'));
-      }
+      notifyReconcileResult(result, ui, currency);
       setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
