@@ -769,6 +769,23 @@ export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
       : windowTitle;
 }
 
+/**
+ * ETP-5504 — structured form of `getFullBreadcrumb` for the TopBar: same translated levels, but as
+ * `{ label, href? }` items so the TopBar can collapse the middle ones behind "⋯" and keep the
+ * window level navigable (back to its list). Menu folders have no route of their own, so they
+ * carry no href. The record title (current page) is always the last item.
+ */
+export function getBreadcrumbItems(breadcrumb, tMenu, title, windowTitle, windowName) {
+  if (!breadcrumb) return windowTitle;
+  const segments = breadcrumb.split(' / ').map((s) => tMenu(s.trim()));
+  const items = segments.map((label, index) => (
+    index === segments.length - 1 && windowName
+      ? { label, href: `/${windowName}` }
+      : { label }
+  ));
+  return title ? [...items, { label: title }] : items;
+}
+
 export function getOnAddToFavorites(favKey, toggleFavorite, entityLabel, breadcrumb, windowName) {
   return favKey ? () => toggleFavorite(favKey, entityLabel || breadcrumb?.split(' / ').at(-1).trim() || windowName) : undefined;
 }

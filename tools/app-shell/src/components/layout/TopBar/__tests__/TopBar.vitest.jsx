@@ -4,7 +4,7 @@
  * underneath the absolutely-centered search box instead of eliding, because nothing capped the
  * width of the title's container — `truncate` alone never got a chance to activate.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
@@ -15,8 +15,9 @@ vi.mock('@/components/CopilotContext', () => ({
   useCopilot: () => ({ toggle: vi.fn() }),
 }));
 
+const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
 }));
 
 // Mutable so the demo-banner tests can move the tenant off the trial. The DEFAULT is the
@@ -61,7 +62,7 @@ vi.mock('@/hooks/useVectorSearchContracts.js', () => ({
   ]),
 }));
 
-import TopBar from '../TopBar.jsx';
+import TopBar, { TOPBAR_COMPACT_BELOW_PX } from '../TopBar.jsx';
 
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
 
@@ -250,5 +251,215 @@ describe('TopBar demo banner — fiscal notice and colour (ETP-5364)', () => {
     expect(screen.getByTestId('topbar-demo-fiscal-notice')).toBeInTheDocument();
     expect(screen.getByTestId('topbar-demo-trial-indicator'))
       .toHaveTextContent('environmentDemoExpired');
+  });
+});
+
+// ETP-5504 — Top Bar responsive layout for the 1280×720 minimum resolution.
+
+/** Radix DropdownMenu opens on pointerdown, not click. */
+function openDropdown(trigger) {
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+}
+
+/** jsdom has no matchMedia; emulate a viewport width against max-width queries. */
+function mockViewport(width) {
+  window.matchMedia = vi.fn().mockImplementation((query) => {
+    const max = Number(/max-width:\s*([\d.]+)px/.exec(query)?.[1]);
+    return {
+      matches: Number.isFinite(max) ? width <= max : false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    };
+  });
+}
+
+describe('TopBar layout (ETP-5504)', () => {
+  const originalMatchMedia = window.matchMedia;
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    navigateMock.mockReset();
+  });
+
+  it('caps the title/breadcrumb block at 256px', () => {
+    render(<TopBar title={LONG_NAME} breadcrumb={`Finanzas / Cuentas / ${LONG_NAME}`} />);
+    const block = screen.getByTestId('topbar-title-block');
+    expect(block.className).toMatch(/max-w-\[256px\]/);
+    expect(block.className).not.toMatch(/max-w-\[320px\]/);
+    expect(block).toContainElement(screen.getByTestId('topbar-breadcrumb'));
+  });
+
+  it('keeps the search in the flex flow with a fixed 392px width (no absolute overlay)', () => {
+    render(<TopBar title="Plan de cuentas" />);
+    const trigger = screen.getByTestId('global-search-trigger');
+    expect(trigger.className).toMatch(/w-\[392px\]/);
+    const slot = screen.getByTestId('topbar-search-slot');
+    expect(slot.className).toMatch(/flex-1/);
+    expect(slot.className).not.toMatch(/absolute/);
+    expect(slot.className).not.toMatch(/inset-0/);
+  });
+
+  it('still lays out with a back button present', () => {
+    render(<TopBar title="Informe" onBack={vi.fn()} />);
+    expect(screen.getByTestId('topbar-back')).toBeInTheDocument();
+    expect(screen.getByTestId('global-search-trigger')).toBeInTheDocument();
+  });
+
+  // Hover needs pointer fidelity jsdom lacks, but Radix also opens a tooltip on keyboard focus,
+  // which jsdom does handle — so the tooltip's real open state is asserted here.
+  it('truncates the title and shows its full text in a tooltip', async () => {
+    render(<TopBar title={LONG_NAME} />);
+    const title = screen.getByText(LONG_NAME);
+    expect(title.className).toMatch(/truncate/);
+    await act(async () => { fireEvent.focus(title); });
+    expect(await screen.findByTestId('TooltipContent__topbar-title')).toHaveTextContent(LONG_NAME);
+  });
+
+  it('truncates the breadcrumb and shows its full text in a tooltip', async () => {
+    render(<TopBar title="Cuenta" breadcrumb={`Finanzas / Cuentas / ${LONG_NAME}`} />);
+    const breadcrumb = screen.getByTestId('topbar-breadcrumb');
+    expect(breadcrumb.className).toMatch(/truncate/);
+    expect(breadcrumb).toHaveTextContent(`Finanzas / Cuentas / ${LONG_NAME}`);
+    await act(async () => { fireEvent.focus(breadcrumb); });
+    expect(await screen.findByTestId('TooltipContent__topbar-breadcrumb'))
+      .toHaveTextContent(`Finanzas / Cuentas / ${LONG_NAME}`);
+  });
+
+  it('shows the full collapsed breadcrumb (hidden levels included) in its tooltip', async () => {
+    render(<TopBar title="Modelo" breadcrumb="Ajustes / Fiscal / Monitor / Modelo 303" />);
+    await act(async () => { fireEvent.focus(screen.getByTestId('topbar-breadcrumb')); });
+    expect(await screen.findByTestId('TooltipContent__topbar-breadcrumb'))
+      .toHaveTextContent('Ajustes / Fiscal / Monitor / Modelo 303');
+  });
+
+  it('renders a string breadcrumb with ≤3 levels unchanged, without overflow', () => {
+    render(<TopBar title="Factura de Compra" breadcrumb="Compras / Factura de Compra" />);
+    expect(screen.getByTestId('topbar-breadcrumb')).toHaveTextContent('Compras / Factura de Compra');
+    expect(screen.queryByTestId('topbar-breadcrumb-overflow')).not.toBeInTheDocument();
+  });
+
+  it('renders a structured breadcrumb with 3 levels without overflow', () => {
+    render(
+      <TopBar
+        title="FAC-001"
+        breadcrumb={[
+          { label: 'Ventas' },
+          { label: 'Factura de Venta', href: '/sales-invoice' },
+          { label: 'FAC-001' },
+        ]}
+      />,
+    );
+    const breadcrumb = screen.getByTestId('topbar-breadcrumb');
+    expect(breadcrumb).toHaveTextContent('Ventas / Factura de Venta / FAC-001');
+    expect(screen.queryByTestId('topbar-breadcrumb-overflow')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('Factura de Venta'));
+    expect(navigateMock).toHaveBeenCalledWith('/sales-invoice');
+  });
+
+  it('collapses >3 levels to first / ⋯ / current, with hidden levels in the dropdown', async () => {
+    render(
+      <TopBar
+        title="Canasta baloncesto 3x3 profesional"
+        breadcrumb={[
+          { label: 'Inventario' },
+          { label: 'Categorías', href: '/categories' },
+          { label: 'Equipamiento', href: '/categories/equipment' },
+          { label: 'Baloncesto', href: '/categories/equipment/basketball' },
+          { label: 'Canasta baloncesto 3x3 profesional' },
+        ]}
+      />,
+    );
+    const breadcrumb = screen.getByTestId('topbar-breadcrumb');
+    expect(breadcrumb).toHaveTextContent('Inventario');
+    expect(breadcrumb).not.toHaveTextContent('Categorías');
+    expect(breadcrumb).not.toHaveTextContent('Equipamiento');
+    expect(screen.getByTestId('topbar-breadcrumb-current'))
+      .toHaveTextContent('Canasta baloncesto 3x3 profesional');
+
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    const menu = await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    const items = screen.getAllByTestId('topbar-breadcrumb-overflow-item');
+    expect(items.map((item) => item.textContent)).toEqual(['Categorías', 'Equipamiento', 'Baloncesto']);
+    expect(menu).not.toHaveTextContent('Canasta baloncesto 3x3 profesional');
+    expect(menu).not.toHaveTextContent('Inventario');
+
+    fireEvent.click(items[1]);
+    expect(navigateMock).toHaveBeenCalledWith('/categories/equipment');
+  });
+
+  it('also collapses a legacy string breadcrumb with >3 levels', async () => {
+    render(<TopBar title="Modelo" breadcrumb="Ajustes / Fiscal / Monitor / Modelo 303" />);
+    expect(screen.getByTestId('topbar-breadcrumb-current')).toHaveTextContent('Modelo 303');
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    const items = screen.getAllByTestId('topbar-breadcrumb-overflow-item');
+    expect(items.map((item) => item.textContent)).toEqual(['Fiscal', 'Monitor']);
+  });
+
+  it('keeps the title ⋯ menu independent from the right quick-actions ⋯', () => {
+    mockViewport(1280);
+    render(<TopBar title="Almacen Principal" onAddToFavorites={vi.fn()} rightExtras={<button type="button">Extra</button>} />);
+    expect(screen.getByTestId('topbar-more-actions')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar-quick-actions-overflow')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar-more-actions'))
+      .not.toBe(screen.getByTestId('topbar-quick-actions-overflow'));
+  });
+
+  it('hides the right ⋯ when there is nothing to overflow (compact viewport)', () => {
+    mockViewport(1280);
+    render(<TopBar title="Plan de cuentas" />);
+    expect(screen.queryByTestId('topbar-quick-actions-overflow')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('aiAssistant')).toBeInTheDocument();
+  });
+
+  it('shows every quick action inline on wide screens, without the right ⋯', () => {
+    mockViewport(TOPBAR_COMPACT_BELOW_PX);
+    const onNotifications = vi.fn();
+    render(
+      <TopBar
+        title="Inicio"
+        quickActions={[
+          { id: 'notifications', label: 'Notificaciones', onClick: onNotifications },
+          { id: 'new', label: 'Nuevo', onClick: vi.fn() },
+        ]}
+        rightExtras={<button type="button" data-testid="page-extra">Extra</button>}
+      />,
+    );
+    const group = screen.getByTestId('topbar-quick-actions');
+    expect(group).toContainElement(screen.getByTestId('topbar-quick-action-notifications'));
+    expect(group).toContainElement(screen.getByTestId('topbar-quick-action-new'));
+    expect(group).toContainElement(screen.getByTestId('page-extra'));
+    expect(screen.queryByTestId('topbar-quick-actions-overflow')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('topbar-quick-action-notifications'));
+    expect(onNotifications).toHaveBeenCalled();
+  });
+
+  it('moves overflow actions into the right ⋯ at the compact breakpoint', async () => {
+    mockViewport(TOPBAR_COMPACT_BELOW_PX - 1);
+    const onNew = vi.fn();
+    render(
+      <TopBar
+        title="Inicio"
+        quickActions={[
+          { id: 'notifications', label: 'Notificaciones', onClick: vi.fn() },
+          { id: 'new', label: 'Nuevo', onClick: onNew },
+        ]}
+        rightExtras={<button type="button" data-testid="page-extra">Extra</button>}
+      />,
+    );
+    // Copilot stays inline; the rest is hidden until the menu opens.
+    expect(screen.getByLabelText('aiAssistant')).toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-quick-action-notifications')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('page-extra')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('topbar-quick-actions-overflow'));
+    const menu = await screen.findByTestId('topbar-quick-actions-overflow-menu');
+    expect(menu).toContainElement(screen.getByTestId('topbar-quick-action-notifications'));
+    expect(menu).toContainElement(screen.getByTestId('topbar-quick-action-new'));
+    expect(menu).toContainElement(screen.getByTestId('page-extra'));
+
+    fireEvent.click(screen.getByTestId('topbar-quick-action-new'));
+    expect(onNew).toHaveBeenCalled();
   });
 });

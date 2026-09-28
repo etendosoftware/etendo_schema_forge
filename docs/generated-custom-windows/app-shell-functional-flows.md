@@ -209,6 +209,53 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   2. Narrow the window and confirm the block wraps onto its own row instead of crushing the bar.
   3. On a productive tenant, confirm the whole bar is gone.
 
+#### 3.2b Global header layout at the 1280×720 minimum (ETP-5504)
+
+- **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and
+  `TopBar/breadcrumb.js` (breadcrumb normalization and the >3-level split).
+- **Three blocks, one flex row:** title block → search slot (`flex-1`) → quick actions.
+  - **Title / breadcrumb** (`topbar-title-block`): capped at `max-w-[256px]`. Title and
+    breadcrumb elide with an ellipsis and show their full text in a tooltip.
+  - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, centered in
+    the free space between the title block and the actions. It is in the normal flex flow, not an
+    `absolute inset-0` overlay, so it can never cover the title (rail expanded or collapsed).
+    `max-w-full` lets it shrink rather than overlap if the free space ever drops below 392px.
+  - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
+- **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
+  string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
+  more than 3: first level, `⋯` (`topbar-breadcrumb-overflow`), current page
+  (`topbar-breadcrumb-current`). The `⋯` dropdown (`topbar-breadcrumb-overflow-menu`) lists the
+  hidden intermediate levels (`topbar-breadcrumb-overflow-item`) — never the current page. Levels
+  with `href`/`onClick` navigate through the guarded navigate (unsaved-changes prompt applies);
+  levels without one (menu folders) render as plain text / disabled items.
+  - Producers: `DetailView` publishes an array via `getBreadcrumbItems` (menu path + record
+    title, with the window level linking back to `/<window>`). Every other producer still
+    publishes a string and gets the same overflow behavior with non-navigable levels.
+  - `useSetPageMeta` depends on `breadcrumbKey(meta.breadcrumb)` (content-based), because an
+    array breadcrumb is a new reference on every render.
+- **Quick actions** (`topbar-quick-actions`). Tutorials (`WalkthroughLauncher`) and Copilot are
+  always inline. Page-supplied `quickActions` (`[{ id, label, icon?, onClick, disabled? }]`,
+  rendered as `topbar-quick-action-<id>`) and the `rightExtras` node are inline on wide screens.
+  Below `TOPBAR_COMPACT_BELOW_PX` (currently **1366**, exported from `TopBar.jsx`, the only
+  place to change it) they move into a right-side `⋯` menu (`topbar-quick-actions-overflow` →
+  `topbar-quick-actions-overflow-menu`), which renders only when it has something to hold. This
+  is a different control from the title `⋯` (`topbar-more-actions`: Favorites / Page help).
+  - Why 1366: with the rail expanded (240px) the full bar needs ~1076px of header, which fits
+    from 1366 up but not at 1280 (1040px). Pending UX confirmation.
+- **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
+  — 256px cap, title and breadcrumb tooltips (opened via focus), search not absolute, back button
+  present, ≤3 levels without `⋯`, >3 levels collapsed with the dropdown excluding the current
+  page, legacy string breadcrumbs, right `⋯` hidden when empty, overflow items inside it below the
+  breakpoint, all inline above it.
+- **Manual verification path:**
+  1. At 1280×720 with the rail expanded, open a record with a long name: the title elides, the
+     search does not cover it, and hovering shows the full name.
+  2. Collapse the rail and confirm the search re-centers in the free space.
+  3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
+     `⋯` / record, and `⋯` lists the hidden levels.
+  4. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
+     disappears.
+
 #### 3.3 What a First Steps row can do (ETP-5364)
 
 - **Why it has its own section:** the checklist is a declarative catalogue. Anything a row does
