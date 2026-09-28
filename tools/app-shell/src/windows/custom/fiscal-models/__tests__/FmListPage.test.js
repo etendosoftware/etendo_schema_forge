@@ -46,7 +46,7 @@ describe('FmListPage — 349 auto-compute wiring', () => {
 describe('FmListPage — 349 result column computation', () => {
   it('sums totalE, totalS, totalA, totalI for 349 result (not summary.result)', () => {
     // The four keys must be reduced together — summary.result would be undefined for 349
-    assert.match(src, /\['totalE','totalS','totalA','totalI'\]/);
+    assert.match(src, /\['totalE',\s*'totalS',\s*'totalA',\s*'totalI'\]/);
     assert.match(src, /\.reduce\(/);
   });
 

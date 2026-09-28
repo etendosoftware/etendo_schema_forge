@@ -26,6 +26,10 @@ function renderButton(overrides = {}) {
       aeatsiiIssent: false,
       tbaiIssent: false,
       invoiceDate: '2026-06-15',
+      // ETP-5432 #3: SII books by accountingDate, not invoiceDate — see
+      // sifSending.js's getPendingSifTargets. Mirrors invoiceDate here so
+      // pre-existing tests (written before this gate existed) keep passing.
+      accountingDate: '2026-06-15',
     },
     recordId: 'INV_1',
     apiBaseUrl: '/sws/neo/sales-invoice',
@@ -38,10 +42,11 @@ describe('SendToSifButton', () => {
   beforeEach(() => {
     useFiscalConfigMock.mockReturnValue({
       profile: 'sii+tbai',
-      // Far-past adoption date + Bizkaia territory: neither gate interferes by
-      // default, so pre-existing tests (written before either gate existed)
-      // keep passing. Tests exercising a gate override this explicitly.
+      // Far-past adoption/cutover dates + Bizkaia territory: no gate interferes
+      // by default, so pre-existing tests (written before any of these gates
+      // existed) keep passing. Tests exercising a gate override this explicitly.
       tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+      earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
     });
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
@@ -88,7 +93,10 @@ describe('SendToSifButton', () => {
 
   it('shows only the SII confirmation copy when the invoice predates TBAI adoption', () => {
     renderButton({
-      data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15' },
+      data: {
+        aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15',
+        accountingDate: '2019-06-15',
+      },
     });
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
     expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -178,7 +186,11 @@ describe('SendToSifButton', () => {
       // ETP-5027: a purchase invoice's TBAI is always Batuz specifically, so the
       // combined-targets copy must be the purchase-specific key, never the
       // generic "SII + TicketBAI" wording sales invoices use.
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
@@ -186,7 +198,11 @@ describe('SendToSifButton', () => {
     });
 
     it('only offers SII (never TBAI) for a purchase invoice when the TBAI territory is Alava', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'ARABA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'ARABA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -195,7 +211,11 @@ describe('SendToSifButton', () => {
     });
 
     it('does not break when no TBAI config exists (tbaiRecord undefined) — territory falls back to null', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: undefined });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: undefined,
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -207,10 +227,14 @@ describe('SendToSifButton', () => {
       useFiscalConfigMock.mockReturnValue({
         profile: 'sii+tbai',
         tbaiRecord: { tbaisystemdate: '2026-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
       });
       renderButton({
         apiBaseUrl: '/sws/neo/purchase-invoice',
-        data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2025-12-31' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2025-12-31',
+          accountingDate: '2025-12-31',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -233,10 +257,17 @@ describe('SendToSifButton', () => {
     });
 
     it('still resolves territory/targets correctly when the invoice org differs from the selected org', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({
         apiBaseUrl: '/sws/neo/purchase-invoice',
-        data: { aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE', invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE', invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_INVOICE', '/sws/neo/purchase-invoice');
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
@@ -264,7 +295,10 @@ describe('SendToSifButton', () => {
       renderButton({
         onSave,
         isDirty: true,
-        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
@@ -282,7 +316,10 @@ describe('SendToSifButton', () => {
       renderButton({
         onSave,
         isDirty: false,
-        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));

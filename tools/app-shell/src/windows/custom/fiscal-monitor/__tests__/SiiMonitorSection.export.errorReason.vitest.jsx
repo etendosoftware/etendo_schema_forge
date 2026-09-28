@@ -67,6 +67,12 @@ vi.mock('../useFiscalMonitor.js', () => ({
   SII_RECIBIDAS_ENTITY: 'receivedInvoices',
   SII_EMITIDAS_ANT_ENTITY: 'issuedInvoices(previousPeriod)',
   SII_RECIBIDAS_ANT_ENTITY: 'receivedInvoices(previousPeriod)',
+  // ETP-5432 #9 — real implementation stubbed here rather than imported: this
+  // suite never passes earliestCutoverDate, so [] (no-op) is always correct.
+  buildCutoverCriteria: (cutoverDate, fieldName = 'invoiceDate') => (cutoverDate
+    ? [{ fieldName, operator: 'greaterOrEqual', value: cutoverDate.slice(0, 10) }]
+    : []),
+  SII_DATE_FIELD: 'invoiceDate',
 }));
 
 import { render, screen, waitFor } from '@testing-library/react';
