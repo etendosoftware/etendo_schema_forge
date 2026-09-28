@@ -103,8 +103,10 @@ export default function BulkDocumentAction({
   // Promise.allSettled's 'rejected' status. Without normalising to a throw, every failed
   // row would be silently counted as a success and the toast would report "N ok, 0 failed".
   const execute = actionMode === 'neoAction'
-    ? async (recordId, actionName) => {
-      const result = await neoAction.execute(recordId, actionName);
+    ? async (recordId, actionName, requestBody) => {
+      const result = await (requestBody === undefined
+        ? neoAction.execute(recordId, actionName)
+        : neoAction.execute(recordId, actionName, requestBody));
       if (!result?.success) {
         const err = new Error(result?.message || 'Unknown error');
         // ETP-5316 — carry the AD_MESSAGE keys across the resolve→throw normalisation too,
@@ -185,7 +187,15 @@ export default function BulkDocumentAction({
     // per-action override of the wire name, defaulting to `value` so every existing caller
     // (post/unpost, CO/RE, matched-invoice) — whose `value` already IS the real action name —
     // is unaffected.
-    const wireActionName = actions.find((a) => a.value === selectedAction)?.neoActionName ?? selectedAction;
+    const selectedActionDef = actions.find((a) => a.value === selectedAction);
+    const wireActionName = selectedActionDef?.neoActionName ?? selectedAction;
+    // ETP-5445 — OPTIONAL per-action request body, neoAction mode only: an action backed by an
+    // AD process whose mandatory parameters are validated at the request root (Internal
+    // Consumption's `processNow` needs `{ action: 'CO' }`) is rejected with "Missing mandatory
+    // parameter" when sent the default empty body. `undefined` — every existing caller —
+    // leaves useNeoAction sending its literal `'{}'`, and documentAction mode never receives
+    // one (its third parameter is an unrelated `{ onSuccess, onError }` options bag).
+    const wireActionBody = actionMode === 'neoAction' ? selectedActionDef?.neoActionBody : undefined;
 
     // ETP-5302 — each row runs the same two-step sequence the detail kebab runs for an
     // action flagged `preUnpost`: reverse the accounting first, then the document action.
@@ -204,7 +214,10 @@ export default function BulkDocumentAction({
       if (!pre.success) {
         throw new Error(translateBackendError(pre.message, ui) || ui('actionFailed'));
       }
-      await execute(row.id, wireActionName);
+      // Arity kept at two when there is no body, so every existing call is unchanged.
+      await (wireActionBody === undefined
+        ? execute(row.id, wireActionName)
+        : execute(row.id, wireActionName, wireActionBody));
       return row;
     };
 

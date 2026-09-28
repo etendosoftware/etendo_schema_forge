@@ -1,8 +1,8 @@
 {
-  "version": "0.34.0",
+  "version": "0.35.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-09-25T10:51:30.876Z",
-  "checksum": "b9c5d0825e6afcae",
+  "updatedAt": "2026-09-28T11:45:28.486Z",
+  "checksum": "64dffa45ecae3eb6",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -950,7 +950,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1082,7 +1082,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1109,7 +1109,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -1139,7 +1139,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1193,7 +1193,7 @@
             "readOnlyLogic": {
               "raw": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPW'",
               "evaluable": true,
-              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || record['processed'] === true || record['transactionType'] === 'BPW'"
+              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || (record['processed'] === true || record['processed'] === 'Y') || record['transactionType'] === 'BPW'"
             }
           },
           {
@@ -1227,7 +1227,7 @@
             "readOnlyLogic": {
               "raw": "(@Fin_Payment_ID@!''&@Fin_Payment_ID@!null)|@Processed@='Y'|@Trxtype@='BPD'",
               "evaluable": true,
-              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || record['processed'] === true || record['transactionType'] === 'BPD'"
+              "js": "((record['finPaymentID'] != null && record['finPaymentID'] !== '') && record['finPaymentID'] != null) || (record['processed'] === true || record['processed'] === 'Y') || record['transactionType'] === 'BPD'"
             }
           },
           {
@@ -1340,7 +1340,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1368,7 +1368,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1398,7 +1398,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1428,7 +1428,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1458,7 +1458,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1486,7 +1486,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1514,7 +1514,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1542,7 +1542,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1570,7 +1570,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -1598,7 +1598,7 @@
             "readOnlyLogic": {
               "raw": "@Posted@='Y' | @Fin_Payment_ID@!''",
               "evaluable": true,
-              "js": "record['posted'] === true || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
+              "js": "(record['posted'] === true || record['posted'] === 'Y') || (record['finPaymentID'] != null && record['finPaymentID'] !== '')"
             }
           },
           {
@@ -2127,7 +2127,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2150,7 +2150,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2175,7 +2175,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2203,7 +2203,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2231,7 +2231,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2252,7 +2252,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2776,7 +2776,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2798,7 +2798,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -2826,7 +2826,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {

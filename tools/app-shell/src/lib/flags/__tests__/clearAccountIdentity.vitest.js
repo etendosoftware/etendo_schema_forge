@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { afterEach } from 'vitest';
 import { clearAccountIdentity, readSessionContext } from '../bootstrap.js';
+import { clearSessionIdentity, getSessionIdentity, setSessionIdentity } from '../../sessionIdentity.js';
 
 /**
  * ETP-5202 — the cached account identity is not part of the core's session storage, so
@@ -74,5 +76,43 @@ describe('clearAccountIdentity', () => {
   it('does not throw when no storage is available', () => {
     expect(() => clearAccountIdentity(null)).not.toThrow();
     expect(() => clearAccountIdentity(undefined)).not.toThrow();
+  });
+});
+
+/**
+ * ETP-5455 — the flag evaluation context took username/clientId from the legacy sf_auth_user /
+ * sf_auth_client_id keys, which nothing writes since the cookie session: every signed-in user was
+ * targeted as anonymous. They now come from the in-memory session identity, which the logout
+ * clears together with the cached account.
+ */
+describe('readSessionContext and the session identity (ETP-5455)', () => {
+  afterEach(() => clearSessionIdentity());
+
+  it('takes username and clientId from the session identity', () => {
+    setSessionIdentity({ username: 'ana', clientId: 'client-1' });
+
+    expect(readSessionContext(makeStorage({ sf_account_id: 'ACC-1' }))).toEqual({
+      username: 'ana',
+      clientId: 'client-1',
+      accountId: 'ACC-1',
+      accountEmail: undefined,
+    });
+  });
+
+  it('ignores leftover legacy sf_auth_* keys', () => {
+    const storage = makeStorage({ sf_auth_user: 'stale-user', sf_auth_client_id: 'stale-client' });
+
+    const context = readSessionContext(storage);
+
+    expect(context.username).toBeUndefined();
+    expect(context.clientId).toBeUndefined();
+  });
+
+  it('clearAccountIdentity also forgets the session identity', () => {
+    setSessionIdentity({ username: 'ana', clientId: 'client-1' });
+
+    clearAccountIdentity(makeStorage());
+
+    expect(getSessionIdentity()).toEqual({});
   });
 });

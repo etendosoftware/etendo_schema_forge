@@ -19,6 +19,34 @@
     },
     "customListIcons": true,
     "noHeaderBorder": true,
+    "menuActions": [
+      {
+        "key": "post",
+        "label": "Post",
+        "labelKey": "post",
+        "action": "post",
+        "visibleWhenFieldFalse": "posted",
+        "successKey": "documentPosted",
+        "visibleWhenFieldTrue": "processed"
+      },
+      {
+        "key": "unpost",
+        "label": "Unpost",
+        "labelKey": "unpost",
+        "action": "unpost",
+        "visibleWhenFieldTrue": "posted",
+        "successKey": "documentUnposted",
+        "destructive": true
+      }
+    ],
+    "statusPills": [
+      {
+        "field": "posted",
+        "trueKey": "postedStatus",
+        "falseKey": "notPostedStatus",
+        "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+      }
+    ],
     "labelOverrides": {
       "en_US": { "M_Locator_ID": "Warehouse" },
       "es_ES": { "M_Locator_ID": "Almacén" },
@@ -28,11 +56,13 @@
   "entities": {
     "header": {
       "name": "internalConsumption",
+      "javaQualifier": "internal-consumption",
       "draftMode": {
         "enabled": true,
         "processField": "processNow",
         "processValue": "CO",
-        "label": "internalConsumptionProcess",
+        "label": "confirm",
+        "disableWhenEmpty": true,
         "extraParams": { "action": "CO" }
       },
       "fields": {
@@ -52,6 +82,7 @@
         "status": {
           "visibility": "editable",
           "grid": true,
+          "gridOrder": 3,
           "form": false,
           "columnType": "status",
           "label": "Status",
@@ -66,8 +97,21 @@
           "reason": "Action endpoint must be active (system); button rendered via moreMenuContent with flat { action: 'CO' } body"
         },
         "posted": {
-          "visibility": "system",
-          "reason": "Internal Consumption does not support posting to accounting"
+          "visibility": "readOnly",
+          "type": "boolean",
+          "form": false,
+          "grid": true,
+          "gridOrder": 4,
+          "badge": true,
+          "badgeLabels": {
+            "true":  { "en_US": "Posted",     "es_ES": "Contabilizado"   },
+            "false": { "en_US": "Not posted", "es_ES": "Sin contabilizar" }
+          },
+          "badgeVariants": {
+            "true": "green",
+            "false": "orange"
+          },
+          "reason": "ETP-5445 — accounting status badge in the list (mirrors physical-inventory). Post/Unpost handled by the internal-consumption NeoHandler via DocumentPostingService."
         },
         "trxOrganization": {
           "visibility": "discarded",
@@ -241,8 +285,8 @@
     "PROCESS_Posted": {
       "type": "process",
       "entity": "internalConsumption",
-      "decision": "Omit",
-      "description": "Internal Consumption does not support posting to accounting — post action removed."
+      "decision": "Keep",
+      "description": "Post/Unpost accounting — exposed via menuActions post (visible when processed=Y and not yet posted) and unpost (visible when posted=Y) actions, plus the row-hover kebab and the grid bulk-select toolbar (Post and Unpost). Backed by the internal-consumption NeoHandler delegating to DocumentPostingService. ETP-5445."
     }
   },
   "discardPatterns": [

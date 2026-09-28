@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AuthShell, LoginStep, RegisterStep } from '@etendosoftware/etendo-go-core/onboarding';
-import { fetchEnvironments } from '@etendosoftware/etendo-go-core/onboarding/api';
+import { fetchEnvironments, loginAccount } from '@etendosoftware/etendo-go-core/onboarding/api';
 import { LAST_ENVIRONMENT_KEY } from '@etendosoftware/etendo-go-core/onboarding/state';
 import { useAuthOptional } from '@/auth/AuthContext.jsx';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -430,6 +430,25 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     }
   };
 
+  // ETP-5488 — register-and-accept creates the account and joins the company but opens no
+  // session, so the new invitee reached the success screen signed out and "Entrar en <empresa>"
+  // gave up before sending a request. Sign the new account in with the password just chosen,
+  // the same session login LoginStep uses, and keep the credential the way the existing-account
+  // branch does. A failed sign-in leaves the success screen as is: the invitation is accepted and
+  // the "go to app" fallback still reaches the login screen.
+  const signInRegisteredAccount = async (email, accountPassword) => {
+    if (!email || !accountPassword) return;
+    try {
+      const data = await loginAccount(fetch, getApiBase(), { email, password: accountPassword });
+      const credential = data?.csrfToken ?? data?.token;
+      if (!credential) return;
+      setSessionCredential(credential);
+      setCredentialScheme(data.csrfToken ? 'cookie' : 'bearer');
+    } catch {
+      // Kept signed out; see above.
+    }
+  };
+
   const handleRegisterAndAccept = async (e) => {
     e.preventDefault();
     setActionError(null);
@@ -478,6 +497,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       // racing the purge. Under the cookie session the session arrives as the `__Host-` cookie the
       // browser installs on its own, and the screen below enters the company through
       // `enterByClientName`, which reads the credential from the active scheme — never from here.
+      await signInRegisteredAccount(invitationData?.email, password);
 
       clearTokenFromUrl();
       setSuccessData({
@@ -490,7 +510,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     }
   };
 
-  const registerInvitationAccount = async ({ name: accountName, password: accountPassword }) => {
+  const registerInvitationAccount = async ({ name: accountName, email: accountEmail, password: accountPassword }) => {
     // ETP-5022: anonymous registration (pre-login); on401: 'ignore' keeps the
     // domain error handling below instead of an automatic logout.
     const res = await apiFetch('/sws/go/company-invitations/register-and-accept', {
@@ -512,6 +532,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
       error.code = data.code || 'INVITATION_ERROR';
       throw error;
     }
+    await signInRegisteredAccount(accountEmail || invitationData?.email, accountPassword);
     return data;
   };
 

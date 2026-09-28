@@ -3,6 +3,7 @@ import { ListView } from '@/components/contract-ui/ListView.jsx';
 import { DetailView } from '@/components/contract-ui/DetailView.jsx';
 import { useWindowAccess, WindowAccessGuard } from '@/auth/AuthContext.jsx';
 import { SortIcon, RefreshIcon } from '@/components/ui/custom-icons';
+import { toast } from 'sonner';
 import InternalConsumptionTable from './InternalConsumptionTable';
 import InternalConsumptionForm from './InternalConsumptionForm';
 import InternalConsumptionLineTable from './InternalConsumptionLineTable';
@@ -26,7 +27,7 @@ const statusField = 'status';
 
 // @sf-generated-start extraBadges:internalConsumption
 const extraBadges = [
-
+  { key: 'posted', type: 'statusPill', trueKey: 'postedStatus', falseKey: 'notPostedStatus' },
 ];
 // @sf-generated-end extraBadges:internalConsumption
 
@@ -41,7 +42,8 @@ const draftMode = {
   "enabled": true,
   "processField": "processNow",
   "processValue": "CO",
-  "label": "internalConsumptionProcess",
+  "label": "confirm",
+  "disableWhenEmpty": true,
   "extraParams": {
     "action": "CO"
   }
@@ -137,12 +139,6 @@ export const api = {
     },
     {
       "entity": "internalConsumption",
-      "field": "posted",
-      "column": "Posted",
-      "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted"
-    },
-    {
-      "entity": "internalConsumption",
       "field": "etblkpBulkposting",
       "column": "EM_Etblkp_Bulkposting",
       "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
@@ -217,6 +213,10 @@ export default function InternalConsumptionPage({ windowName, recordId, ...props
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_Internal_Consumption", config: {} } }]}
         bottomSection={InternalConsumptionBottomPanel}
         customMenuContent={InternalConsumptionActions}
+        menuActions={({ data, status }) => [
+          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
+        ]}
         draftMode={draftMode}
         requiredHeaderFields={requiredHeaderFields}
         labelOverrides={labelOverrides}

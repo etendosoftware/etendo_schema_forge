@@ -35,42 +35,12 @@ const CORE_SESSION_SRC_PATH = join(
 
 const OPT_OUT = 'legacy-auth-ok';
 
-// Pre-existing offenders, already on `origin/develop` before this guard was written (verified
-// with `git show origin/develop:<path>` — byte-identical at the time this test was added).
-// Every one of these reads a LEGACY_AUTH_KEYS value directly from `localStorage` instead of
-// going through the cookie-session-aware auth helpers, so every one of them is a candidate for
-// the SAME class of bug as the ChangePasswordDialog/billing gaps below — see the coordinator
-// report this test shipped with for which look like live bugs vs. genuinely dead reads.
-const ALLOWED_FILES = new Map([
-  [join('components', 'ChangePasswordDialog.jsx'),
-    'reads sf_platform_token to authorize the change-password request; under cookie sessions '
-    + 'nothing writes this key any more, so the token is always empty — same class of bug as '
-    + 'the billing sf_platform_token gap this test guards against, not yet fixed (ETP-5443).'],
-  [join('lib', 'flags', 'useAccountIdentity.js'),
-    'reads sf_platform_token to retry ConfigCat account-identity resolution with the account '
-    + 'token; under cookie sessions the key is always empty, so the retry path is silently dead.'],
-  [join('lib', 'observability', 'health-events.js'),
-    'reads sf_auth_client_id/sf_auth_client_name to group Mixpanel session-started events by '
-    + 'account; under cookie sessions both are always empty, so account grouping is silently lost.'],
-  [join('windows', 'custom', 'user', 'InviteUserDialog.jsx'),
-    'reads sf_auth_token / sf_platform_token as a fallback token for the invite POST; under '
-    + 'cookie sessions both are always empty, so the fallback never contributes a token.'],
-  [join('explorer', 'useDiscovery.js'),
-    'reads sf_auth_token for the internal Schema Forge Explorer tooling\'s own webhook calls '
-    + '(schema-explorer admin UI, not the shipped Etendo Go app) — same stale-key exposure, '
-    + 'scoped to a dev/admin-only surface.'],
-  [join('lib', 'neoWebhookClient.js'),
-    'reads sf_auth_token as the shared token accessor for the NEO pseudo-spec bridge webhook '
-    + 'family (rolesApi.js, userRoleAssignmentsApi.js) — same stale-key exposure as the other '
-    + 'entries, shared by two production webhooks.'],
-  [join('lib', 'menuTree.js'),
-    'reads sf_auth_token as the token accessor for the SFListMenu webhook that backs '
-    + 'useRoleMenu()/App.jsx menu-access resolution — the same feature area as ETP-5443\'s '
-    + 'blocked-access screen, so a stale token here is worth checking first if that regresses.'],
-  [join('lib', 'flags', 'bootstrap.js'),
-    'reads sf_auth_user/sf_auth_client_id to build the feature-flag evaluation context; under '
-    + 'cookie sessions both are always empty, so flag targeting silently falls back to defaults.'],
-]);
+// ETP-5455 emptied this list: every pre-existing offender now reads the session through the
+// cookie-aware helpers (the CSRF proof from sessionCredentials, the credential from apiFetch's
+// ambient session, the signed-in identity from lib/sessionIdentity.js). It must stay empty — a
+// new reader belongs behind those helpers, and a genuine exception carries a `legacy-auth-ok:`
+// comment on its line instead of an entry here.
+const ALLOWED_FILES = new Map([]);
 
 /**
  * `LEGACY_AUTH_KEYS` is internal to the core package (not part of its public export surface —

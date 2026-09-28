@@ -30,7 +30,7 @@ The **enabled** column reflects two mechanisms combined:
 | `GLJ` | G/L Journal              | `GL_Journal`              | `224` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `GR`  | Goods Receipt            | `M_InOut`                 | `319` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `GS`  | Goods Shipment           | `M_InOut`                 | `319` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
-| `IC`  | Internal Consumption     | `M_Internal_Consumption`  | `800168` | ❌ Not present | ❌ N/A | ❌ | No accounting schema entry |
+| `IC`  | Internal Consumption     | `M_Internal_Consumption`  | `800168` | ✅ isactive=Y once activated (row always existed, shipped `N`) | ✅ Postable (ETP-5445) | ✅ | **ETP-5445** — see below. Dynamic: appears only on tenants whose `800168` row is active (GOClient reference data for new tenants, data-fix R40 for existing ones) |
 | `INV` | Inventory                | `M_Inventory`             | `321` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `LC`  | Landed Cost              | `M_LandedCost`            | `082F967CDF7245EB9A150941F326C45C` | ✅ isactive=Y | ✅ Working (N records) | ❌ | **Globally excluded (ETP-4452)** — see below |
 | `LCC` | Landed Cost Cost         | `M_LC_Cost`               | `55A984C314FD4C4FB5E7C32DE36BB07B` | ✅ isactive=Y | ✅ Working (N records) | ❌ | **Globally excluded (ETP-4452)** — see below |
@@ -75,6 +75,23 @@ integration" section for the full three-map picture (a third, `ROW_DOC_TYPE_LABE
 the frontend, only affects display text, not posting).
 
 **When onboarding a new document type here, check BOTH maps**, not just the dropdown.
+
+**ETP-5445 — Internal Consumption (`IC`), the same two-map trap plus a data gap.** `IC` already
+had its `DOCUMENT_TYPE_CODE_TO_TABLE_ID` entry, but two things kept it out: (1) every tenant's
+`c_acctschema_table` row for `800168` shipped `ISACTIVE='N'` from
+`GOClient/C_ACCTSCHEMA_TABLE.xml`, so the dynamic check hid the filter option; and (2)
+`DOCUMENT_TYPE_TO_TABLE_ID` had no `"Internal Consumption"` entry (the label
+`NoPostedDocumentDS`/bulk.posting emits), so any row that did surface had `tableId = null` and
+`postRow()` failed client-side. ETP-5445 added
+`DOCUMENT_TYPE_TO_TABLE_ID.put("Internal Consumption", "800168")`, flipped the GOClient reference
+data to `'Y'` (new tenants), and shipped data-fix R40 (gap A4b,
+`docs/etendo-ad/onboarding-gaps.md`) for existing tenants. Posting an `IC` row also goes through
+`DocumentPostingService`'s cost-calculated pre-check, so an uncosted document answers with the
+translated `backendError.costNotCalculated` message, and voiding a posted Internal Consumption
+creates an unposted `VO: <name>` reversal that then shows up here to be posted. The row badge shows
+the raw label "Internal Consumption" untranslated — `ROW_DOC_TYPE_LABEL_KEYS` in
+`NotPostedDocumentsPage.jsx` only renames Matched Invoices, so this is the same pre-existing gap
+every other type has. Window-side details: [`internal-consumption.md`](internal-consumption.md).
 
 Verification queries:
 ```sql
@@ -296,7 +313,8 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 
 ## Manual verification
 
-1. Open `/not-posted-documents` — filter dropdowns populate; document type list has exactly 12 entries (no payments, no bank statements, no reconciliation, no work effort, no internal consumption, no doubtful debt, no cost adjustment, no bill of materials production, no landed cost, no landed cost cost).
+1. Open `/not-posted-documents` — filter dropdowns populate; on a tenant whose `c_acctschema_table` row for `800168` is active (GOClient, or any tenant after data-fix R40) the document type list has exactly 13 entries, including **Internal Consumption** (ETP-5445); on a tenant still missing R40 it has 12 and Internal Consumption is absent. Never present: payments, bank statements, reconciliation, work effort, doubtful debt, cost adjustment, bill of materials production, landed cost, landed cost cost.
+1b. (ETP-5445) Filter by Internal Consumption, post one row and confirm it succeeds (the row carries `tableId = 800168`). Post a row whose products have no calculated cost and confirm the toast reads "No se pudo calcular el costo del producto.".
 2. Initial table loads with rows (defaults to N+E+C+i+p statuses — no Apply needed).
 3. Filter by document type → only that type appears.
 4. Filter by accounting status → only selected statuses appear.
@@ -312,6 +330,6 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 - `tools/app-shell/src/windows/registry.js` — `not-posted-documents` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx` — main component.
 - `tools/app-shell/src/windows/custom/not-posted-documents/not-posted-documents.css` — scoped `npd-*` CSS.
-- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DOCUMENT_TYPE_TO_TABLE_ID` grid-row enrichment map; `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
+- `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DOCUMENT_TYPE_TO_TABLE_ID` grid-row enrichment map (includes `"Internal Consumption"` → `800168` since ETP-5445, covered by `NotPostedDocumentsHandlerTest`); `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
 - `modules/com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` — `isget=Y, ispost=Y`.
 - i18n keys: `notPostedDocuments`, `postSelected`, `postingComplete`, `postingPartial`, `postingFailed`, `filterDocumentType`, `filterAccountingStatus`, `accountingDate` in `en_US.json` / `es_ES.json`.
