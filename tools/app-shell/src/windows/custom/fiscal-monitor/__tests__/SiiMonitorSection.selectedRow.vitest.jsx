@@ -22,6 +22,7 @@
 // suites that mock it with exhaustive hand-written factories stay untouched.
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import { buildCutoverCriteria, SII_DATE_FIELD } from './testHelpers/siiCutoverStub.js';
 
 const ROWS = [
   { id: 'sii-1', documentNo: 'F-001', invoiceDate: '2026-05-10', aeatsiiEstado: 'CO', grandTotalAmount: 100 },
@@ -53,6 +54,8 @@ vi.mock('../useFiscalMonitor.js', () => ({
   SII_RECIBIDAS_ENTITY: 'receivedInvoices',
   SII_EMITIDAS_ANT_ENTITY: 'issuedInvoices(previousPeriod)',
   SII_RECIBIDAS_ANT_ENTITY: 'receivedInvoices(previousPeriod)',
+  buildCutoverCriteria,
+  SII_DATE_FIELD,
 }));
 // FmPrimitives is stubbed the same way its sibling suites stub it — with ONE
 // difference that is the whole point of this file: `useFmSelection` is a real,

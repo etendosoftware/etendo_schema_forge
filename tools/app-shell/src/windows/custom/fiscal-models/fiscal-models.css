@@ -1061,12 +1061,64 @@
 .fm-key-pill--active { background: var(--fm-bg-subtle); border-color: var(--fm-gray-900); color: var(--fm-fg-1); font-weight: 600; }
 
 /* ─── 349 Totals panel (sidebar) ──────────────────────────────────── */
+/* ETP-5456 (layout follow-up) — `position: sticky` so this panel stays fixed under the tabs bar
+   while the operators table scrolls, same treatment as the 303 casillas nav (FmModel303Page.jsx's
+   CasillasTab). `top: 49px` matches `.fm-tabs__tab { height: 48px }` + 1px border (the same tabs
+   bar component, `Tabs` from FmCommon.jsx, used by both 303 and 349) so the panel docks directly
+   under the sticky tabs bar instead of overlapping it. `.fm-page` (overflow-y: auto) is the real,
+   uninterrupted scrolling ancestor here — no nested `overflow`/`transform`/`filter`/`contain` sits
+   between it and this panel (checked FmModel349Page.jsx's full ancestor chain: `.fm-page` >
+   `.fm-page__body` [overflow: visible in freeflow mode] > the operators-tab wrapper > the
+   totals+table flex row > this panel — none of them set anything but `display`/`flex`/spacing).
+   303's CasillasTab needed its OWN redundant `overflow: auto` wrappers removed for this same
+   reason; 349 never had that problem.
+
+   ETP-5456 [bug follow-up] — the FIRST version of this change kept the pre-existing
+   `padding-bottom: 100vh; margin-bottom: -100vh` "full-height divider" trick below, assuming it
+   was inert w.r.t. sticky. It was not, and manual QA caught two symptoms from the same root cause:
+   1. A giant phantom vertical scroll even on an EMPTY operators table.
+   2. The panel not visibly sticking at all — it just scrolled away with everything else.
+   Root cause: `.fm-349-totals` is a FLEX ITEM (child of the `display:flex` "totals + table" row
+   in FmModel349Page.jsx) — and CSS Flexbox spec §margins says flex items NEVER collapse margins
+   with anything, unlike ordinary block boxes. The classic "padding-bottom: 100vh; margin-bottom:
+   -100vh" trick relies on that collapse to cancel itself out visually; inside a flex row, the
+   negative margin does NOT cancel the padding's contribution to the box's own rendered height, so
+   `.fm-349-totals` was actually rendering ~100vh+ tall (border-box, not just visually) with a
+   default `align-items: stretch` row forced to match it — that oversized box is (1) what made
+   `.fm-page` scrollable ~100vh past any real content (bug 1), and (2) what left `position: sticky`
+   with no meaningful range to visibly float within — a box that already spans virtually the whole
+   scrollable area doesn't visibly need to reposition itself, which reads as "not sticking at all"
+   (bug 2). This is the SAME underlying issue `alignItems: 'flex-start'` fixed for 303's
+   CasillasTab sidebar (stretch making a sticky sidebar as tall as its scrollable content leaves
+   nothing to stick), except here a broken height hack was the direct cause instead of plain
+   content stretch. Fixed by (a) removing the hack entirely below, and (b) FmModel349Page.jsx's
+   "Layout: totals panel + table" row now also sets `alignItems: 'flex-start'`, matching 303's fix,
+   so this panel keeps its own short, natural height instead of stretching to the table's.
+   `border-right` is kept as a PLAIN border (no artificial height) — it now honestly spans only the
+   panel's own content height, the same way 303's sticky sidebar has no full-height divider either.
+   That is a visible, deliberate trade-off vs. the old (broken) "divider always reaches the bottom
+   of the viewport" illusion — flag it back if a true full-row-height divider still matters; it
+   would need a different mechanism (e.g. an absolutely-positioned divider anchored to the row
+   itself, which naturally stretches to match the table), not a repeat of the padding/margin hack.
+   (A temporary revert of this removal was tried and confirmed sticky broke again as predicted
+   above, then re-removed once manual QA validated `position: sticky` + `alignItems: 'flex-start'`
+   against a real, multi-operator declaration — see git history if the back-and-forth matters.)
+
+   ETP-5456 [layout follow-up #2] — `top` bumped from 49px to 97px. The filter/search row above
+   the operators table (FmModel349Page.jsx, right above the "Full-width separator" div) is now
+   ALSO sticky, stacked directly below the tabs bar (see that row's own comment in
+   FmModel349Page.jsx) — it was previously not sticky and scrolled up to peek out half-hidden
+   under the (already-sticky) tabs bar. 97 = 49 (tabs bar) + 48 (the filter row's own rendered
+   height: 8px paddingTop + 36px content row + 4px paddingBottom). This panel must dock below
+   BOTH sticky bars, not just the tabs bar, or it would render underneath/overlapping the filter
+   row instead of below it.
+*/
 .fm-349-totals {
   width: 292px; flex-shrink: 0;
   padding: 8px 12px 8px 0;
-  padding-bottom: 100vh;
-  margin-bottom: -100vh;
   border-right: 1px solid hsl(var(--border-subtle));
+  position: sticky;
+  top: 97px;
 }
 .fm-349-totals__card {
   background: hsl(var(--muted)); border-radius: 8px; padding: 12px;

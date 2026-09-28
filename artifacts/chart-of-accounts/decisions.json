@@ -41,7 +41,6 @@
         "accountingElement":     { "visibility": "system" },
         "accountSign":           { "visibility": "discarded" },
         "elementLevel":          { "visibility": "discarded" },
-        "accountType2":          { "visibility": "discarded" },
         "showValueCondition":    { "visibility": "discarded" },
         "elementShown":          { "visibility": "discarded" },
         "titleNode":             { "visibility": "discarded" },

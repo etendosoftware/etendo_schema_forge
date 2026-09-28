@@ -44,23 +44,29 @@ describe('SiiMonitorSection — tab state', () => {
   });
 });
 
-describe('SiiMonitorSection — period segmented control', () => {
+// ETP-5432: the "Periodo anterior" selector UI was intentionally hidden —
+// AEATSII_PRESII_INVOICE (org.openbravo.module.sii) doesn't implement a real
+// rolling previous-period window, only a pre-SII-enrollment bootstrap check,
+// so showing it produced duplicate/wrong data. The `period` state and the
+// issuedPrevious/receivedPrevious entity-key plumbing are kept (root cause
+// deferred), just unreachable from the UI. See SiiMonitorSection.jsx comments.
+describe('SiiMonitorSection — period state (UI hidden, ETP-5432)', () => {
   it('defaults to the current period', () => {
     assert.match(src, /useState\(['"]current['"]\)/);
   });
 
-  it('renders current and previous period buttons inside fm-filter-pills', () => {
+  it('compact mode renders an invoice-type segmented control inside fm-filter-pills, without a period toggle', () => {
     assert.match(src, /fm-filter-pills/);
-    assert.match(src, /fiscalMonitor\.sii\.period\.current/);
-    assert.match(src, /fiscalMonitor\.sii\.period\.previous/);
+    assert.doesNotMatch(src, /fiscalMonitor\.sii\.period\.current/);
+    assert.doesNotMatch(src, /fiscalMonitor\.sii\.period\.previous/);
   });
 
-  it('marks the active period with the active CSS class', () => {
-    assert.match(src, /period === ['"]current['"] \? .* active/);
-    assert.match(src, /period === ['"]previous['"] \? .* active/);
+  it('does not render an active-period CSS class toggle (no period buttons left)', () => {
+    assert.doesNotMatch(src, /period === ['"]current['"] \? .* active/);
+    assert.doesNotMatch(src, /period === ['"]previous['"] \? .* active/);
   });
 
-  it('combines tab and period into an entity key (issued/received + Previous)', () => {
+  it('keeps the tab+period entity-key plumbing (issued/received + Previous) even though unreachable', () => {
     assert.match(src, /issuedPrevious/);
     assert.match(src, /receivedPrevious/);
   });

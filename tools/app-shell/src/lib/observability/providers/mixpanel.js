@@ -148,6 +148,16 @@ export function createMixpanelProvider({
       const client = await getClient();
       if (!client || typeof client.set_group !== 'function') return;
       client.set_group(groupKey, groupId);
+      // mixpanel-browser's set_group() always wraps group_ids in an array before
+      // registering it as a super-property (see mixpanel-core.js), even when a
+      // single scalar id is passed. That array-shaped super-property then leaks
+      // as the fallback value on every future event whose explicit account_id
+      // property gets stripped (e.g. undefined at track time). Group membership
+      // here is 1:1 by design — one account_id, not several — so force the
+      // super-property back to the scalar value right after set_group().
+      if (typeof client.register === 'function') {
+        client.register({ [groupKey]: groupId });
+      }
     },
 
     async groupSet(groupKey, groupId, properties = {}) {
