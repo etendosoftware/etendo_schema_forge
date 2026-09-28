@@ -2486,3 +2486,130 @@ describe('translateBackendError — document-level NotCalculatedCost (ETP-5445)'
     assert.equal(translateBackendError(RAW_ES, (k) => k), RAW_ES);
   });
 });
+
+// ── ETP-5472: reconcileGroup refuses an already-reconciled line / movement ──
+//
+// ReconciliationHandler / ReconciliationFlowSupport (com.etendoerp.go) answer with the bare
+// "Statement line is already reconciled" or the same text plus ": <statementLineId>", and
+// "Operation is already reconciled: <operationId>". The internal UUID means nothing to the user,
+// so it is DROPPED — never interpolated into the translated copy. Values below are the real
+// es_ES locale strings.
+describe('translateBackendError — already-reconciled line / movement (ETP-5472)', () => {
+  const LINE_ES = 'Esta línea del extracto ya está conciliada.';
+  const OP_ES = 'Este movimiento ya está conciliado.';
+  const es = fakeUiTranslator({
+    'backendError.statementLineAlreadyReconciled': LINE_ES,
+    'backendError.operationAlreadyReconciled': OP_ES,
+  });
+  const ID = '95E2A8B50A254B2AAE6774B8C2F28120';
+
+  const CASES = [
+    { raw: 'Statement line is already reconciled', expected: LINE_ES },
+    { raw: `Statement line is already reconciled: ${ID}`, expected: LINE_ES },
+    { raw: `Operation is already reconciled: ${ID}`, expected: OP_ES },
+    { raw: `  Statement line is already reconciled: ${ID}\n`, expected: LINE_ES },
+  ];
+
+  CASES.forEach(({ raw, expected }) => {
+    it(`maps ${JSON.stringify(raw)}`, () => {
+      assert.equal(translateBackendError(raw, es), expected);
+    });
+  });
+
+  it('drops the internal id from the translated text', () => {
+    assert.ok(!translateBackendError(`Statement line is already reconciled: ${ID}`, es).includes(ID));
+    assert.ok(!translateBackendError(`Operation is already reconciled: ${ID}`, es).includes(ID));
+  });
+
+  it('does not match the prefix with an empty id (trimmed to a trailing colon)', () => {
+    const blankLine = 'Statement line is already reconciled: ';
+    const blankOp = 'Operation is already reconciled: ';
+    assert.equal(translateBackendError(blankLine, es), blankLine);
+    assert.equal(translateBackendError(blankOp, es), blankOp);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    const raw = `Operation is already reconciled: ${ID}`;
+    assert.equal(translateBackendError(raw, (k) => k), raw);
+    assert.equal(
+      translateBackendError('Statement line is already reconciled', (k) => k),
+      'Statement line is already reconciled',
+    );
+  });
+
+  it('leaves an unrelated reconciliation message untouched', () => {
+    const unrelated = 'Operation is not reconciled yet';
+    assert.equal(translateBackendError(unrelated, es), unrelated);
+  });
+});
+
+// ── ETP-5472: reconcileGroup refuses a line held by an unconfirmed draft ──
+//
+// ReconciliationLineTargetSupport (com.etendoerp.go) answers 409 with "Reconciliation <documentNo>
+// is an unconfirmed draft that already holds this line. …". It shares the "Reconciliation " prefix
+// with the ETP-5468 foreign-draft guard message but not the suffix, so each must reach its own key
+// and neither matcher may swallow the other's text. Values below are the real es_ES strings.
+describe('translateBackendError — draft reconciliation holds the line (ETP-5472)', () => {
+  const HOLDS_ES = 'La conciliación {documentNo} es un borrador sin confirmar que ya contiene esta línea. '
+    + 'Revísala antes de volver a conciliarla.';
+  const FOREIGN_ES = 'La conciliación {documentNo} es un borrador sin confirmar que ya contiene movimientos '
+    + 'conciliados. Revísala antes de deshacer una conciliación en esta cuenta.';
+  const es = fakeUiTranslator({
+    'backendError.draftHoldsLine': HOLDS_ES,
+    'backendError.foreignDraftReconciliation': FOREIGN_ES,
+  });
+  const keyOnly = (key, params = {}) => `${key}|${JSON.stringify(params)}`;
+
+  const HOLDS_SUFFIX = ' is an unconfirmed draft that already holds this line.'
+    + ' Review it before reconciling the line again.';
+  const FOREIGN_SUFFIX = ' is an unconfirmed draft that already holds matched movements.'
+    + ' Review it before undoing a reconciliation on this account.';
+  const HOLDS_RAW = `Reconciliation 1000123${HOLDS_SUFFIX}`;
+  const FOREIGN_RAW = `Reconciliation 1000123${FOREIGN_SUFFIX}`;
+
+  it('translates the draft-holds-line refusal, interpolating the documentNo', () => {
+    assert.equal(
+      translateBackendError(HOLDS_RAW, es),
+      HOLDS_ES.replace('{documentNo}', '1000123'),
+    );
+  });
+
+  it('keeps a documentNo that contains spaces or slashes intact', () => {
+    const raw = `Reconciliation REC/2026 07${HOLDS_SUFFIX}`;
+    assert.equal(translateBackendError(raw, es), HOLDS_ES.replace('{documentNo}', 'REC/2026 07'));
+  });
+
+  it('still maps the ETP-5468 foreign-draft text to its own key', () => {
+    assert.equal(
+      translateBackendError(FOREIGN_RAW, es),
+      FOREIGN_ES.replace('{documentNo}', '1000123'),
+    );
+  });
+
+  it('routes each text to its own key — neither matcher catches the other', () => {
+    assert.equal(
+      translateBackendError(HOLDS_RAW, keyOnly),
+      'backendError.draftHoldsLine|{"documentNo":"1000123"}',
+    );
+    assert.equal(
+      translateBackendError(FOREIGN_RAW, keyOnly),
+      'backendError.foreignDraftReconciliation|{"documentNo":"1000123"}',
+    );
+  });
+
+  it('falls through when the documentNo is empty', () => {
+    const blankHolds = `Reconciliation ${HOLDS_SUFFIX}`;
+    const blankForeign = `Reconciliation ${FOREIGN_SUFFIX}`;
+    assert.equal(translateBackendError(blankHolds, es), blankHolds);
+    assert.equal(translateBackendError(blankForeign, es), blankForeign);
+  });
+
+  it('does not match a truncated suffix', () => {
+    const truncated = 'Reconciliation 1000123 is an unconfirmed draft that already holds this line.';
+    assert.equal(translateBackendError(truncated, es), truncated);
+  });
+
+  it('returns the original message unchanged when the translation key is missing (guard)', () => {
+    assert.equal(translateBackendError(HOLDS_RAW, (k) => k), HOLDS_RAW);
+  });
+});
