@@ -9,10 +9,23 @@ const TBAI_ENTITY     = 'header';
 const VERIFACTU_ENTITY = 'cabeceraDeConfiguraciónVerifactu';
 
 // ETP-5229 — the field each system's config row carries its cutover/"acogida"
-// timestamp under. Confirmed against the AD columns: aeatsii_config.monitordate,
-// tbai_config.tbaisystemdate, etvfac_verifactu_config.IN_Vfactu_System.
+// timestamp under. Confirmed against the AD columns: aeatsii_config.insiisystemdate
+// (Java property FechaAcogidaSII — NEO apiKey `fechaAcogidaSII`), tbai_config.tbaisystemdate,
+// etvfac_verifactu_config.IN_Vfactu_System.
+//
+// ETP-5432 #1 — SII previously read `monitordate` ("SII monitor start date", a
+// separate, cosmetic field — see docs/generated-custom-windows/sii-config.md)
+// instead of `fechaAcogidaSII` ("SII enrollment date", the real "fecha de
+// acogida"). Classic's own gate — `UpdateInvoicesPreSii.java`'s
+// `siiConfig.getFechaAcogidaSII()` and the `AEATSII_PreSII_Invoice` auxiliary
+// input, both reading `aeatsii_config.insiisystemdate` — never looks at
+// `monitordate` for this purpose. Using `monitordate` let an org whose SII
+// monitor happened to start earlier than its real enrollment date show a live
+// SII status (and offer "Enviar a SIF") for invoices dated before it was ever
+// SII-enrolled — live-tested on invoice 10000075 (accountingDate 22/09/2026,
+// fechaAcogidaSII 24/09/2026).
 const CUTOVER_FIELD = {
-  sii: 'monitordate',
+  sii: 'fechaAcogidaSII',
   tbai: 'tbaisystemdate',
   verifactu: 'inVfactuSystem',
 };

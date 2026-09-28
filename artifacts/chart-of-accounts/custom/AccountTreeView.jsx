@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { ChevronRight, ChevronDown, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
@@ -439,7 +439,16 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
         {accountTypeLabel(ui, item.accountType)}
       </span>
 
-      {/* Active/inactive toggle — leaf rows only, disabled for protected placeholders */}
+      {/* Active/inactive toggle — leaf rows only, disabled for protected placeholders.
+          Folder rows keep an empty cell of the same width (ETP-5399): without it the
+          flex-1 name cell grows and pushes Element Level / Account Type out of line. */}
+      {item.isVirtual && (
+        <span
+          className="shrink-0 w-10"
+          aria-hidden="true"
+          data-testid={`account-tree-active-placeholder-${item.id}`}
+        />
+      )}
       {!item.isVirtual && (
         <span
           className="shrink-0 flex items-center justify-center w-10"
@@ -510,6 +519,9 @@ export default function AccountTreeView({
   clearSelectionTrigger: _clearSelectionTrigger,
   rowQuickActions: _rowQuickActions,
   hiddenColumns: _hiddenColumns,
+  // Bumped by ListView's toolbar Refresh button only (ETP-5387). Destructured so it never
+  // reaches the DOM through `...rest`.
+  userRefreshTrigger = 0,
   ...rest
 }) {
   const ui = useUI();
@@ -530,6 +542,12 @@ export default function AccountTreeView({
   // first load would wipe the already-visible fallback tree and re-show the
   // full-page skeleton for what should be a quiet background refresh.
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  // ETP-5387 — true while a refetch the USER asked for (toolbar Refresh) is in flight. Unlike
+  // the quiet background refetches (save, active toggle), it blocks the tree with the same
+  // skeleton as the first load, so pressing Refresh visibly does something. Cleared when that
+  // fetch settles; on failure the previous tree comes back (fetchedData is only replaced on
+  // success) alongside the error toast.
+  const [isUserRefreshing, setIsUserRefreshing] = useState(false);
 
   useEffect(() => {
     if (!apiBaseUrl) return undefined;
@@ -558,6 +576,7 @@ export default function AccountTreeView({
         if (!cancelled) {
           setIsFetchingFull(false);
           setHasLoadedOnce(true);
+          setIsUserRefreshing(false);
         }
       }
     })();
@@ -572,6 +591,18 @@ export default function AccountTreeView({
   // whatever `onDataMutated` triggers on the caller's side (ListView's own
   // one-page refresh).
   const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
+
+  // React to ListView's Refresh button. The initial value is the baseline, not a request —
+  // the mount-time fetch above already covers it. Without `apiBaseUrl` there is nothing to
+  // refetch, so the flag must not be raised (it would never be cleared).
+  const lastUserRefreshTriggerRef = useRef(userRefreshTrigger);
+  useEffect(() => {
+    if (userRefreshTrigger === lastUserRefreshTriggerRef.current) return;
+    lastUserRefreshTriggerRef.current = userRefreshTrigger;
+    if (!apiBaseUrl) return;
+    setIsUserRefreshing(true);
+    refetchFull();
+  }, [userRefreshTrigger, apiBaseUrl, refetchFull]);
 
   const [optimisticActiveToggles, setOptimisticActiveToggles] = useState({});
   const [savingActiveToggles, setSavingActiveToggles] = useState({});
@@ -604,6 +635,7 @@ export default function AccountTreeView({
   // the tree render so the partial `data` prop is never painted while the real
   // dataset is still in flight — see the component docblock and ETP-5387.
   const showInitialSkeleton = !!apiBaseUrl && !hasLoadedOnce && isFetchingFull;
+  const showBlockingSkeleton = showInitialSkeleton || isUserRefreshing;
 
   const { tree, indexById } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
@@ -693,7 +725,7 @@ export default function AccountTreeView({
   }, [onDataMutated, refetchFull]);
 
   let treeBody;
-  if (showInitialSkeleton) {
+  if (showBlockingSkeleton) {
     treeBody = <AccountTreeSkeleton />;
   } else if (effectiveData.length === 0) {
     treeBody = (
