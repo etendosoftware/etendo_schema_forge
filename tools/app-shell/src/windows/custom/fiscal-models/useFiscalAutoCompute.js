@@ -23,9 +23,9 @@ import { useEffect, useRef, useState } from 'react';
  */
 
 function sessionCacheKey(declId) {
-  // v3: 349 compute payload gained per-operator `vies` and per-invoice `key`
-  // (ETP-4755) — bump invalidates cached v2 results that lack these fields
-  return `fiscal_ac_v3_${declId}`;
+  // v4: 349 compute payload gained `contactFallback`/`phoneFallback` on
+  // computeOperators (ETP-5456) — bump invalidates cached v3 results that lack these fields
+  return `fiscal_ac_v4_${declId}`;
 }
 
 /**
