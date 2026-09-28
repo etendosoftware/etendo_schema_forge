@@ -28,6 +28,12 @@ export default function AccountSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState(null);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  // ETP-5455 — a 401 from either request on this page. It is a state of the session, not of a
+  // section, so it replaces the whole page rather than one card: nothing here is down, Retry can
+  // never succeed, and signing in again is the only thing that helps. Setting it twice (the account
+  // read and billing are refused together) is idempotent, so the user sees one state, not two.
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const markSessionExpired = useCallback(() => setSessionExpired(true), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,14 +49,20 @@ export default function AccountSettingsPage() {
       if (!account?.authMethods) throw new Error('The account response carried no authMethods');
       setAuthMethods(account.authMethods);
       setLoadFailed(false);
-    } catch {
+    } catch (err) {
       setAuthMethods(null);
+      // The core client stamps the HTTP status on the error. A 401 is not a load failure: the
+      // toast and the Retry block would both say the methods "could not be loaded", which is false.
+      if (err?.status === 401) {
+        markSessionExpired();
+        return;
+      }
       setLoadFailed(true);
       toast.error(ui('accountMethodsLoadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [ui]);
+  }, [ui, markSessionExpired]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -84,6 +96,14 @@ export default function AccountSettingsPage() {
     logout();
   };
 
+  // Signing out is what lands the user on the login view; the session it clears is already dead
+  // server-side, so this cannot loop back into another 401. Never done automatically: the user
+  // reads why before being taken away from the page they asked for.
+  const handleSignInAgain = () => {
+    localStorage.setItem('sf_onboarding_initial_view', 'login');
+    logout();
+  };
+
   // The loaded half of the SECURITY body only, named so the JSX below carries one ternary
   // instead of two nested. A failed load must not fall through to the section: with no
   // authMethods it would render its `{ enabled: false }` default and tell the user their
@@ -111,6 +131,20 @@ export default function AccountSettingsPage() {
       data-testid="SecuritySection__account" />
   );
 
+  if (sessionExpired) {
+    return (
+      <div className="mx-auto w-full max-w-3xl p-6" data-testid="account-settings-page">
+        <h1 className="text-xl font-semibold">{ui('accountSettingsTitle')}</h1>
+        <div className="mt-6 space-y-3" role="alert" data-testid="account-settings-session-expired">
+          <p className="text-sm text-muted-foreground">{ui('accountSessionExpired')}</p>
+          <Button size="sm" onClick={handleSignInAgain} data-testid="account-settings-sign-in-again">
+            {ui('accountSignInAgain')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl p-6" data-testid="account-settings-page">
       <h1 className="text-xl font-semibold">{ui('accountSettingsTitle')}</h1>
@@ -122,6 +156,7 @@ export default function AccountSettingsPage() {
 
         <SubscriptionSection
           apiBaseUrl={detectBaseUrl()}
+          onSessionExpired={markSessionExpired}
           data-testid="SubscriptionSection__account" />
       </div>
 

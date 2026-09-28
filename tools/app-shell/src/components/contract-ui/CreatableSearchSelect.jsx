@@ -846,8 +846,10 @@ export function CreatableSearchSelect({
   // full-field hover, whether or not a value is selected as a chip) — an empty
   // enabled field must highlight on hover just like a populated one.
   let stateClasses;
+  let borderColorClass = 'border-[hsl(var(--border-control))]';
   if (isDisabled) {
-    stateClasses = ' bg-muted text-text-disabled cursor-not-allowed';
+    stateClasses = ' bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed';
+    borderColorClass = 'border-[hsl(var(--field-disabled-border))]';
   } else {
     stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
   }
@@ -860,7 +862,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border border-[hsl(var(--border-control))] shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${stateClasses}`}
+      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border ${borderColorClass} shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${stateClasses}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (

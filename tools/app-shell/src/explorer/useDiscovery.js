@@ -12,12 +12,10 @@ const BASE = detectBase();
 const NEO_BASE = `${BASE}/sws/neo`;
 const WEBHOOK_BASE = `${BASE}/webhooks`;
 
-function getToken() {
-  return localStorage.getItem('sf_auth_token');
-}
-
+// ETP-5455: without an explicit admin token the call runs on the current session's own credential
+// (it used to fall back to the dead legacy sf_auth_token read).
 function getAdminToken() {
-  return localStorage.getItem('sf_admin_token') || getToken();
+  return localStorage.getItem('sf_admin_token') || undefined;
 }
 
 // ── Discovery hooks ──
@@ -31,7 +29,7 @@ export function useSpecs({ useAdmin = false } = {}) {
   const refresh = useCallback(() => {
     setLoading(true);
     setError(null);
-    neoFetch('/', { token: useAdmin ? getAdminToken() : getToken() })
+    neoFetch('/', useAdmin ? { token: getAdminToken() } : {})
       .then(r => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -56,7 +54,7 @@ export function useSpecDetail(specName) {
     if (!specName) { setSpec(null); return; }
     setLoading(true);
     setError(null);
-    neoFetch(`/${specName}`, { token: getToken() })
+    neoFetch(`/${specName}`)
       .then(r => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         return r.json();
@@ -78,7 +76,7 @@ export function useNeoFetch() {
   return useCallback(async (path, options = {}) => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     const start = performance.now();
-    const res = await neoFetch(normalizedPath, { ...options, token: getToken() });
+    const res = await neoFetch(normalizedPath, options);
     const elapsed = Math.round(performance.now() - start);
     let body;
     const ct = res.headers.get('content-type') || '';

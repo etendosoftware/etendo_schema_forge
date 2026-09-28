@@ -80,6 +80,32 @@ Each browser conversation sends a stable `x-opencode-session` value to the BFF,
 which forwards it to OpenCode Go for request routing and prompt caching. The
 BFF generates a fallback session ID for older clients that omit the header.
 
+## Token usage recording
+
+Every model turn — agent chat and page help — is recorded as one
+`ai.agent.message` event in `ETGO_USAGE_EVENT` (`src/usage.js`). The BFF posts it
+to `POST /sws/neo/usage` with the **caller's own Bearer token**, the same one it
+forwards to the MCP endpoint, so the row lands under the right user, role and
+tenant; the body cannot name them. The URL is derived from `ETENDO_MCP_URL`
+(`…/sws/mcp` → `…/sws/neo/usage`); set `ETENDO_USAGE_URL` to override it.
+
+| Field | Value |
+|---|---|
+| `source` / `action` | `ai-bff` / `reply` |
+| `target` | `agent-chat`, or `page-help` for the floating page-help request |
+| `outcome` | `ok` from `onFinish`; `error` from `onError` or `onAbort` (timeout), with the usage summed over the steps that did finish |
+| `sessionKey` | the `x-opencode-session` value (or the BFF fallback ID) |
+| `durationMs` | from the moment the BFF read the request |
+| `properties` | `model`, `inputTokens`, `outputTokens`, `cachedInputTokens` (only when the provider reports cache reads), `steps`, `toolCalls`, `finishReason` |
+
+The token keys are shared with the support chat's `ai.support.message`, so both
+aggregate with the same `(properties::jsonb ->> 'inputTokens')::numeric`.
+
+Recording never touches the chat: the POST is fire-and-forget (never awaited
+before the stream ends), bounded by a 3 s timeout, counted at most once per
+turn, and any failure is a single `[ai-bff:usage] not recorded: …` line on
+stdout. A missing row is therefore silent in the UI — check the BFF log first.
+
 ## Navigation tools and the window allow-list
 
 `navigate_to` and `open_form` accept either an internal path (`/sales-order`,
