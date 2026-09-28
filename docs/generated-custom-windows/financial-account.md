@@ -114,6 +114,37 @@ fixes rather than UX:
 - **A statement belonging to a PSD2 bank-connected account is now rejected with 409**
   (`BankStatementsHandler.handleDelete`). Previously enforced in the frontend only.
 
+## Statements on a bank-connected account: no manual create, import or delete (ETP-5471)
+
+On an account whose `EM_PSD2_Connection_Status` is connected, statements come from the bank sync.
+The UI already hides Import / Create there (`StatementsToolbar` shows only Sincronizar), but until
+ETP-5471 the backend refused only `?action=delete`. An MCP agent created a statement on a connected
+account in test pass CB-46. The rule is now enforced server-side, on every path, with one predicate:
+`BankStatementsSupport.isBankConnected` (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`).
+
+| Path | Refused with 409 when the account is connected |
+|---|---|
+| `bank-statements?action=create` (manual statement) | `BankStatementsHandler.handleCreate`, before anything is saved |
+| `bank-statements?action=import` / `?action=preview` (C43 / CSV) | `BankStatementsHandler.parseUploadInput`, before the file is decoded |
+| Generic `financial-account/importedBankStatements` POST (REST, MCP `neo_create`, `neo_batch`) | `BankStatementWriteGuardHandler` |
+| Generic `financial-account/bankStatementLines` POST (adding a line to that account's statement) | `BankStatementWriteGuardHandler` |
+| Generic `financial-account/importedBankStatements` DELETE | `BankStatementWriteGuardHandler`, same text as `?action=delete` |
+
+- **Why the generic entities needed a handler.** `importedBankStatements` and `bankStatementLines`
+  had no Java qualifier, so REST, MCP and batch writes went straight to the default DAL persist and
+  skipped `BankStatementsHandler` entirely, including its existing delete guard. Both now declare
+  `"javaQualifier": "bankStatementWriteGuard"` in `decisions.json`. The SPA never writes through
+  these entities (it reads them for the grids), so the guard only answers API clients.
+- **Edits are not blocked.** Only create, import and delete are in scope; PUT/PATCH pass through
+  unchanged.
+- **The bank sync is unaffected.** It creates statements through OBDal
+  (`BankStatementHelper.createBankStatement`, PSD2 module) and never reaches a NEO handler. That is
+  also why this is not an `EntityPersistenceEventObserver`: one would block the sync itself.
+- **Message.** "This account is synchronized with the bank; statements cannot be created or imported
+  manually." translated through `backendError.statementBankConnectedNotCreatable`
+  (`lib/backendErrors.js`, exact-text match; keep the Java constant
+  `BankStatementsHandler.MSG_STATEMENT_BANK_CONNECTED_NOT_CREATABLE` byte-for-byte in sync).
+
 ## Accepted consequence
 
 Bulk-deleting **processed** movements used to work — `useBatchDeleteDialog` ran one Payment Removal

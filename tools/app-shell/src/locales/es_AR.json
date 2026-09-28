@@ -19886,6 +19886,7 @@
     "backendError.receiptMovementNotReactivatable": "Este movimiento está asociado a un cobro, así que no es posible reactivarlo. Para hacerlo, reactivá el cobro desde la ventana de Cobros.",
     "backendError.movementProcessedNotDeletable": "El movimiento ya está procesado o contabilizado. Seleccionalo solo para eliminarlo.",
     "backendError.statementBankConnectedNotDeletable": "Los extractos de una cuenta conectada al banco no se pueden eliminar.",
+    "backendError.statementBankConnectedNotCreatable": "La cuenta se sincroniza con el banco: no se pueden crear ni importar extractos manualmente.",
     "backendError.accountHasLinkedRecords": "Esta cuenta tiene registros vinculados, así que no se puede eliminar.",
     "backendError.statementNotDraft": "No es posible eliminar un extracto procesado. Reactivalo para poder eliminarlo.",
     "backendError.statementHasMatchedLines": "No es posible eliminar un extracto con líneas conciliadas. Deshacé la conciliación de esas líneas para poder eliminarlo.",

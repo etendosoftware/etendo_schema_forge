@@ -1,8 +1,8 @@
 {
   "version": "0.34.0",
   "generatedAt": "2026-08-21T16:17:27.627Z",
-  "updatedAt": "2026-09-25T17:52:05.711Z",
-  "checksum": "63faeda11cdc4fde",
+  "updatedAt": "2026-09-28T14:44:03.422Z",
+  "checksum": "5e4769f81ee96ac9",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -2494,7 +2494,8 @@
               "source": "N"
             }
           }
-        ]
+        ],
+        "javaQualifier": "bankStatementWriteGuard"
       },
       "bankStatementLines": {
         "tableName": "FIN_BankStatementLine",
@@ -2744,7 +2745,8 @@
               "source": "0"
             }
           }
-        ]
+        ],
+        "javaQualifier": "bankStatementWriteGuard"
       },
       "reconciliations": {
         "tableName": "FIN_Reconciliation",
@@ -4665,7 +4667,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "bankStatementWriteGuard"
       },
       "bankStatementLines": {
         "tableName": "FIN_BankStatementLine",
@@ -4880,7 +4883,8 @@
             "visibility": "system",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "bankStatementWriteGuard"
       },
       "reconciliations": {
         "tableName": "FIN_Reconciliation",
