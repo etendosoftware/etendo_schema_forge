@@ -225,8 +225,8 @@ column), the preference is read as its watermark, and the first applied event mo
 column.
 Read preferences through the classic **Preference**
 window as System Administrator (filter by `Attribute` and the tenant's client), or call
-`TenantEnvironmentLifecycleService.resolve(clientId)` / `readSubscriptionState(clientId)` in a
-debugger — both read the same store the event wrote to. The expected results in §7 name the
+`TenantEnvironmentLifecycleService.resolve(clientId)` /
+`targetForTenant(clientId, null).storedState()` in a debugger — both read the same store the event wrote to. The expected results in §7 name the
 preference values; for a tenant with a row, read them through the mapping above.
 
 **The grace anchor is the end of the paid period, never the moment the charge failed — and each
@@ -354,8 +354,10 @@ period.
 
 #### The 402 body and the kill switch (ETP-5047)
 
-NEO, MCP (`/sws/mcp`), the `JwtAuthUtils` servlets and the legacy `GET /sws/go/login` answer a
-blocked tenant with **HTTP 402**:
+NEO (every credential scheme), the `NEO_DATA` surfaces (favorites, fiscal test mode, report
+selectors), MCP (`/sws/mcp`), the `/sws/go` tenant-session endpoints and the legacy
+`GET /sws/go/login?userId=` answer a blocked tenant with **HTTP 402** (the OAuth2 API-key endpoints
+refuse through the same check, in the OAuth2 servlet's own error envelope):
 
 ```json
 { "error": { "message": "Environment access is not available: SUBSCRIPTION_REQUIRED",
