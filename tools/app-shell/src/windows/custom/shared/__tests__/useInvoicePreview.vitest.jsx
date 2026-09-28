@@ -230,9 +230,11 @@ describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)',
     // arg) for the adoption-date gate, ANDed with the territory gate above.
     // ETP-5432 #3: and earliestSiiCutoverDate (6th arg) for the SII date gate —
     // undefined here since this test's useFiscalConfig mock doesn't set it.
+    // ETP-5432 QA: and earliestTbaiCutoverDate (7th arg) for the TBAI earliest-
+    // cutover gate — also undefined here for the same reason.
     expect(getPendingSifTargetsMock).toHaveBeenCalledWith(
       'purchase-invoice', 'sii+tbai', expect.anything(), 'BIZKAIA', { etsgSifTerritory: 'BIZKAIA' },
-      undefined,
+      undefined, undefined,
     );
   });
 
@@ -245,7 +247,7 @@ describe('useInvoicePreview — territory resolution and forwarding (ETP-5087)',
 
     expect(result.current.territory).toBeNull();
     expect(getPendingSifTargetsMock).toHaveBeenCalledWith(
-      'purchase-invoice', 'sii+tbai', expect.anything(), null, null, undefined,
+      'purchase-invoice', 'sii+tbai', expect.anything(), null, null, undefined, undefined,
     );
   });
 });
