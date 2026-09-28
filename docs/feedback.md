@@ -2907,3 +2907,30 @@ equivalent) call before assuming the wiring is complete, and confirm the field t
 visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
 action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
 error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).
+
+---
+
+## [2026-09-28] ETP-5502 — Removing Admin restored another user's personal role (same name)
+
+**Component:** `com.etendoerp.go` `UserRoleCompositionService#demoteFromAdmin` and
+`PersonalRoleAccessProvisioningService#buildPersonalRoleName`; data-fix
+`cli/src/data-fixes/sql/20260928T120000Z__R41-personal-role-owner-backfill.sql`.
+
+**Symptom:** a user created after a same-named user was deleted, promoted to Admin and then demoted, came back
+with the deleted user's permissions. A user whose personal role was `"Personal – X (2)"`, or who had been renamed,
+came back with an empty role instead of their own.
+
+**Root cause:** demote found the dormant personal role by name only (`"Personal – <name>"`, never the `" (n)"`
+variants) and accepted it when it had zero `AD_User_Roles` rows. A deleted user's rows cascade away, so their
+orphan role looks exactly like a promoted user's dormant one. The same name builder also appended the collision
+suffix before truncating to 60 characters, so a user name of 47+ characters looped forever on the first collision.
+
+**Fix:** every personal role now stores its owner (`AD_Role.EM_ETGO_Personal_Owner_ID`, no foreign key, set once).
+Demote restores by owner; a hardened name fallback (suffix variants, not older than the user, claims the owner it
+finds) covers legacy roles, and R41 backfills the unambiguous ones. The suffix is kept when truncating and the
+attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real DB, scenarios A–D + legacy),
+`PersonalRoleAccessProvisioningServiceTest`.
+
+**Lesson:** a display name is not an identity. When a row must be found again later by "who it belongs to",
+store that link when the row is created. "Nobody else is assigned to it" is not proof it is yours: deletion leaves
+the same state behind.
