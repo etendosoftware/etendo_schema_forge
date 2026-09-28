@@ -98,6 +98,9 @@
   margin-bottom: 16px;
 }
 .fm-kpis.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* ETP-5432 — SII's "Periodo anterior" KPI cards were hidden (see FiscalKpiCards.jsx),
+   leaving 2 cards; without this the default 4-column grid stretches them to 1/4 width. */
+.fm-kpis.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
 .fm-kpi {
   background: var(--fm-bg-card); border: 1px solid var(--fm-border-1); border-radius: 12px;

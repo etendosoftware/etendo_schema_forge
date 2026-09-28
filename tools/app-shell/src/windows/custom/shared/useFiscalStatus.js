@@ -107,26 +107,44 @@ export const mapVfStatus = (raw) => VF_STATUS_MAP[raw] ?? raw;
  * "no date on file" (fail-safe: not eligible) so existing callers that have not been
  * updated yet still degrade to dashes rather than throwing.
  *
- * ETP-5216/ETP-5229 (TBAI only): the TBAI branch below no longer applies its own
- * eligibility date check — that gate now lives INSIDE the stored function backing
+ * ETP-5216/ETP-5229 (TBAI): the TBAI branch below trusts the stored function backing
  * `eTGOTbaiStatus` (`ETGO_GET_TBAI_STATUS`, gated on the EARLIEST `tbai_config`
- * cutover across ALL rows for the invoice's org, active or not). The DB answers the
- * literal `'NoAplica'` when the gate isn't open, translated to `null` (dash) here via
- * `isTbaiStatusNotApplicable`, exactly mirroring `InvoiceHeaderTable.jsx` /
- * `PurchaseInvoiceHeaderTable.jsx`'s list column. SII and Verifactu have no equivalent
- * stored column and keep their own client-side `earliestCutoverDate` gating below,
- * unchanged.
+ * cutover across ALL rows for the invoice's org, active or not) as the primary source
+ * of truth. The DB answers the literal `'NoAplica'` when the gate isn't open,
+ * translated to `null` (dash) here via `isTbaiStatusNotApplicable`, exactly mirroring
+ * `InvoiceHeaderTable.jsx` / `PurchaseInvoiceHeaderTable.jsx`'s list column.
+ *
+ * ETP-5432 #5 (defense-in-depth): a stored computed column only ever answers
+ * `'NoAplica'` if its recompute trigger actually ran. Its `AD_COLUMN_COMP_DEPENDENCY`
+ * rows only watch `tbai_config` and `tbai_syncinvoice` — there is no dependency on
+ * `c_invoice` itself, so a NEWLY CREATED invoice's `eTGOTbaiStatus` stays NULL
+ * (never computed) until the org's tbai_config changes again or a sync attempt is
+ * made — confirmed in a live environment (`SELECT tgname FROM pg_trigger WHERE
+ * tgrelid='c_invoice'::regclass` returns no `ad_scd_*` row for this column, while
+ * `tbai_config`/`tbai_syncinvoice` both have one). A NULL value is indistinguishable
+ * from "not sent yet" and previously fell straight into the `isSent()`/`'Pendiente'`
+ * fallback below regardless of the invoice's own date — showing "Pendiente" for an
+ * invoice that predates the org's TBAI enrollment entirely, which is what it never
+ * belonged to. This is a real backend gap (a missing dependency row in
+ * `com.etendoerp.go`) that still needs its own fix; the check below is a client-side
+ * safety net so the BADGE degrades correctly even before that lands. It only kicks
+ * in when `eTGOTbaiStatus` is genuinely `null`/`undefined` (never computed) — any
+ * REAL value the DB already produced (including a literal `'Pendiente'` it wrote
+ * itself) is trusted as-is and never second-guessed here. SII and Verifactu have no
+ * equivalent stored column and keep their own client-side `earliestCutoverDate`
+ * gating below, unchanged.
  *
  * @param {object|null|undefined} invoice the invoice's own header record (e.g. `p.displayInvoice`)
  * @param {string} specName 'sales-invoice' | 'purchase-invoice'
  * @param {string} profile fiscal profile ('sii' | 'tbai' | 'sii+tbai' | 'verifactu' | ...)
  * @param {string|null} [territory] TBAI territory gate (Batuz/Bizkaia only for purchases)
- * @param {{sii?: string|null, verifactu?: string|null}} [cutoverDates]
- *   `useFiscalConfig`'s `earliestSiiCutoverDate` / `earliestVerifactuCutoverDate` for the
- *   invoice's org. A `tbai` key is accepted but ignored — TBAI's gate lives in the DB now.
+ * @param {{sii?: string|null, tbai?: string|null, verifactu?: string|null}} [cutoverDates]
+ *   `useFiscalConfig`'s `earliestSiiCutoverDate` / `earliestTbaiCutoverDate` /
+ *   `earliestVerifactuCutoverDate` for the invoice's org. `tbai` is only consulted
+ *   as the ETP-5432 #5 fallback described above, when `eTGOTbaiStatus` is null.
  */
 export function useFiscalStatus(invoice, specName, profile, territory = null, cutoverDates = {}) {
-  const { sii: siiCutover = null, verifactu: verifactuCutover = null } = cutoverDates;
+  const { sii: siiCutover = null, tbai: tbaiCutover = null, verifactu: verifactuCutover = null } = cutoverDates;
 
   return useMemo(() => {
     if (!invoice) {
@@ -136,14 +154,18 @@ export function useFiscalStatus(invoice, specName, profile, territory = null, cu
     const targets = getInvoiceFiscalTargets(specName, profile, territory);
 
     // SII books by accounting date, not invoice date (mirrors isSifEligibleByDate's
-    // doc). VERI*FACTU uses `created` — see fiscalTargets.js. TBAI has no client-side
-    // date check anymore (see the class doc above).
+    // doc). VERI*FACTU uses `created` — see fiscalTargets.js.
     const siiEligible = targets.showSii && isSifEligibleByDate(invoice.accountingDate, siiCutover);
     const verifactuEligible = targets.showVerifactu && isVerifactuEligibleByDate(invoice.created, verifactuCutover);
 
     const sii = siiEligible ? (invoice.aeatsiiEstado ?? 'PE') : null;
 
-    const tbaiEligible = targets.showTbai && !isTbaiStatusNotApplicable(invoice.eTGOTbaiStatus);
+    // ETP-5432 #5 — only consulted when the DB never computed a value at all
+    // (see the class doc above). A real DB value (including 'NoAplica', handled
+    // separately below) is never overridden by this client-side check.
+    const tbaiUncomputed = invoice.eTGOTbaiStatus == null;
+    const tbaiDateEligible = !tbaiUncomputed || isSifEligibleByDate(invoice.invoiceDate, tbaiCutover);
+    const tbaiEligible = targets.showTbai && tbaiDateEligible && !isTbaiStatusNotApplicable(invoice.eTGOTbaiStatus);
     let tbai = null;
     if (tbaiEligible) {
       if (invoice.eTGOTbaiStatus != null) {
@@ -156,5 +178,5 @@ export function useFiscalStatus(invoice, specName, profile, territory = null, cu
     const verifactu = verifactuEligible ? mapVfStatus(invoice.etvfacInvoiceStatus ?? 'PE') : null;
 
     return { sii, tbai, verifactu, loading: false };
-  }, [invoice, specName, profile, territory, siiCutover, verifactuCutover]);
+  }, [invoice, specName, profile, territory, siiCutover, tbaiCutover, verifactuCutover]);
 }

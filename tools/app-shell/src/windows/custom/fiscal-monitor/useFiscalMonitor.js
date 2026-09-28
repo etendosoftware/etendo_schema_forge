@@ -44,23 +44,12 @@ async function get(apiFetch, spec, entity, params) {
   return (await res.json())?.response ?? {};
 }
 
-async function fetchConfigRecord(apiFetch, spec, entity, orgId) {
-  try {
-    // NEO reads with NO_ACTIVE_FILTER=true; prefer the active row so a
-    // deactivated ("Change SIF") trace row never masks a live config.
-    const resp = await get(apiFetch, spec, entity, { organization: orgId, _limit: '10' });
-    const rows = resp.data ?? [];
-    if (rows.length === 0) return null;
-    return rows.find(isActiveRecord) ?? rows[0];
-  } catch {
-    // 404 = spec/module not installed for this org → treat as not configured
-    return null;
-  }
-}
-
 // ETP-5229 — safe wrapper around the shared fetchAllRows() (useFiscalConfig.js):
-// a 404 (module not installed for this org) resolves to [] instead of throwing,
-// matching fetchConfigRecord's own fallback above.
+// a 404 (module not installed for this org) resolves to [] instead of
+// throwing. ETP-5432 #9: SII now uses this too (previously it used a
+// since-removed single-active-row `fetchConfigRecord` helper), so all three
+// systems (SII/TBAI/Verifactu) fetch ALL config rows the same way and derive
+// their earliest-ever cutover date via earliestCutoverDate() below.
 async function fetchAllConfigRowsSafe(apiFetch, spec, entity, orgId) {
   try {
     return await fetchAllRows(apiFetch, spec, entity, orgId);
@@ -77,6 +66,16 @@ async function fetchAllConfigRowsSafe(apiFetch, spec, entity, orgId) {
 // earliest-ever TBAI cutover, so pre-enrollment noise is excluded while
 // invoices sent under an old/deactivated config still count (ETP-5229 #13).
 const TBAI_DATE_FIELD = 'invoiceDate';
+
+// ETP-5432 #9 — unlike TBAI (which needed a projected HQL alias, ETP-5229 #13)
+// and Verifactu (which needed a NEW AD_Column, ETP-5229 #17), SII's own 4
+// entities already declare a REAL, contract-backed `invoiceDate` field
+// (apiKey `invoiceDate`, AD column `DateInvoiced` — confirmed against
+// artifacts/sii-monitor/contract.json for issuedInvoices, receivedInvoices,
+// and both `(previousPeriod)` siblings). No backend/decisions.json change
+// needed — this constant only documents the field name for reuse alongside
+// TBAI_DATE_FIELD/VF_DATE_FIELD.
+const SII_DATE_FIELD = 'invoiceDate';
 
 // ETP-5229 #17 — the ETVFAC_INV_SENT_STATUS_V view (backing monitor-verifactu's
 // entities) previously projected NO date column at all. Fixed on the
@@ -109,7 +108,7 @@ async function fetchSiiParentId(apiFetch, orgId) {
   //
   // NEO reads with NO_ACTIVE_FILTER=true, so an org can carry an inactive
   // ("Change SIF") trace row alongside a live one. Pull a small page and prefer
-  // the active row — same pattern as fetchConfigRecord() above — instead of
+  // the active row — same pattern as fetchAllConfigRowsSafe()'s callers use — instead of
   // blindly taking index 0 (ETP-5229): resolving to a stale/deactivated config
   // row's monitordate desynced the current/previous period buckets shown here
   // from the org's real active config, which is what Classic's SII monitor uses.
@@ -123,12 +122,22 @@ async function fetchSiiParentId(apiFetch, orgId) {
   return row.configuracinSII ?? null;
 }
 
-async function fetchSiiMonitorData(apiFetch, orgId) {
+/**
+ * @param {string|null} cutoverDate earliest-ever SII cutover date for this org
+ * (across ALL aeatsii_config rows, active or not — earliestCutoverDate() in
+ * useFiscalConfig.js). Applied as a lower bound on invoiceDate the same way
+ * TBAI (#13) and Verifactu (#17) already gate their own counts — SII's 4
+ * entities already expose a real invoiceDate field, so no backend change was
+ * needed (ETP-5432 #9).
+ */
+async function fetchSiiMonitorData(apiFetch, orgId, cutoverDate) {
   const parentId = await fetchSiiParentId(apiFetch, orgId);
   if (!parentId) {
     return { counts: { issued: { totalCount: 0 }, received: { totalCount: 0 }, issuedPrevious: { totalCount: 0 }, receivedPrevious: { totalCount: 0 } }, parentId: null };
   }
+  const cutoverCriteria = buildCutoverCriteria(cutoverDate, SII_DATE_FIELD);
   const siiParams = { parentId };
+  if (cutoverCriteria.length) siiParams.criteria = JSON.stringify(cutoverCriteria);
   const [issued, received, issuedPrev, receivedPrev] = await Promise.all([
     fetchCount(apiFetch, SII_SPEC, SII_EMITIDAS_ENTITY,      siiParams),
     fetchCount(apiFetch, SII_SPEC, SII_RECIBIDAS_ENTITY,     siiParams),
@@ -226,6 +235,7 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
     kpis: {},
     siiParentId: null,
     tbaiValidationResults: [],
+    earliestSiiCutoverDate: null,
     earliestTbaiCutoverDate: null,
     earliestVerifactuCutoverDate: null,
   });
@@ -234,24 +244,27 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
     if (!orgId) {
       setState({
         loading: false, error: null, profile: 'unconfigured', monitorData: {}, kpis: {},
-        siiParentId: null, tbaiValidationResults: [], earliestTbaiCutoverDate: null,
-        earliestVerifactuCutoverDate: null,
+        siiParentId: null, tbaiValidationResults: [], earliestSiiCutoverDate: null,
+        earliestTbaiCutoverDate: null, earliestVerifactuCutoverDate: null,
       });
       return;
     }
     setState(s => ({ ...s, loading: true, error: null }));
     try {
-      // TBAI and Verifactu both fetch ALL config rows (not just the active one)
-      // in the same request used for profile detection — see
+      // SII, TBAI and Verifactu all fetch ALL config rows (not just the active
+      // one) in the same request used for profile detection — see
       // fetchAllConfigRowsSafe above — so the earliest-ever cutover date
-      // (ETP-5229 #13/#17) is derived without a second round trip.
-      const [siiCfg, tbaiCfgRows, vfCfgRows] = await Promise.all([
-        fetchConfigRecord(apiFetch, SII_CFG_SPEC, SII_CFG_ENTITY, orgId),
+      // (ETP-5229 #13/#17, ETP-5432 #9 for SII) is derived without a second
+      // round trip.
+      const [siiCfgRows, tbaiCfgRows, vfCfgRows] = await Promise.all([
+        fetchAllConfigRowsSafe(apiFetch, SII_CFG_SPEC, SII_CFG_ENTITY, orgId),
         fetchAllConfigRowsSafe(apiFetch, TBAI_CFG_SPEC, TBAI_CFG_ENTITY, orgId),
         fetchAllConfigRowsSafe(apiFetch, VF_CFG_SPEC, VF_CFG_ENTITY, orgId),
       ]);
+      const siiCfg = siiCfgRows.find(isActiveRecord) ?? siiCfgRows[0] ?? null;
       const tbaiCfg = tbaiCfgRows.find(isActiveRecord) ?? tbaiCfgRows[0] ?? null;
       const vfCfg = vfCfgRows.find(isActiveRecord) ?? vfCfgRows[0] ?? null;
+      const earliestSiiCutoverDate = earliestCutoverDate(siiCfgRows, 'sii');
       const earliestTbaiCutoverDate = earliestCutoverDate(tbaiCfgRows, 'tbai');
       const earliestVerifactuCutoverDate = earliestCutoverDate(vfCfgRows, 'verifactu');
       // Gate on active before profile resolution (see useFiscalConfig): an
@@ -262,7 +275,7 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
       let siiParentId = null;
       let tbaiValidationResults = [];
       if (profile === 'sii' || profile === 'sii-navarra' || profile === 'sii+tbai') {
-        const siiResult = await fetchSiiMonitorData(apiFetch, orgId);
+        const siiResult = await fetchSiiMonitorData(apiFetch, orgId, earliestSiiCutoverDate);
         monitorData.sii = siiResult.counts;
         siiParentId = siiResult.parentId;
       }
@@ -290,6 +303,7 @@ export function useFiscalMonitor(orgId, apiBaseUrl) {
         kpis: computeKpis(profile, monitorData),
         siiParentId,
         tbaiValidationResults,
+        earliestSiiCutoverDate,
         earliestTbaiCutoverDate,
         earliestVerifactuCutoverDate,
       });
@@ -311,8 +325,9 @@ export {
   VF_RECHAZADAS_ENTITY, VF_INVALIDAS_ENTITY,
   TBAI_SPEC, TBAI_ENTITY, TBAI_VALIDATION_ENTITY,
 };
-// ETP-5229 — shared by TbaiMonitorSection.jsx / VerifactuMonitorSection.jsx so
-// their list/export queries apply the SAME earliest-cutover lower bound as the
-// KPI counts above (#13/#17). VF_DATE_FIELD is exported so callers don't need
-// to hardcode 'invoiceDate' a second time.
-export { buildCutoverCriteria, VF_DATE_FIELD };
+// ETP-5229/ETP-5432 — shared by SiiMonitorSection.jsx / TbaiMonitorSection.jsx /
+// VerifactuMonitorSection.jsx so their list/export queries apply the SAME
+// earliest-cutover lower bound as the KPI counts above (#13/#17/#9).
+// SII_DATE_FIELD/VF_DATE_FIELD are exported so callers don't need to hardcode
+// 'invoiceDate' a second time.
+export { buildCutoverCriteria, SII_DATE_FIELD, VF_DATE_FIELD };
