@@ -153,6 +153,12 @@ const BACKEND_ERROR_MAP = {
   // was reactivated in another tab between opening the suggestions and applying them.
   'The bank statement is in draft; process it before reconciling its lines':
     'backendError.statementDraftNotReconcilable',
+  // ETP-5472 — ReconciliationHandler.MSG_LINE_ALREADY_RECONCILED (com.etendoerp.go), now emitted
+  // via ReconciliationLineTargetSupport / ReconciliationDifferenceSupport.alreadyReconciled: the
+  // bare form, no id appended. Its `: <statementLineId>` sibling is a parameterized matcher further down
+  // (matchStatementLineAlreadyReconciled) and resolves to this same key. The Java text is a de
+  // facto wire contract — rewording it there silently drops this translation.
+  'Statement line is already reconciled': 'backendError.statementLineAlreadyReconciled',
   // Funds-transfer leg delete guard (FinancialAccountTransactionsHandler.handleDelete, ETP-5085).
   // The two legs of a transfer reference each other through RESTRICT self-FKs, so removing either
   // one is rejected with a 409 instead of the JDBC constraint violation that used to surface as an
@@ -689,6 +695,46 @@ function matchForeignDraftReconciliation(msg) {
   return documentNo ? { documentNo } : null;
 }
 
+// ETP-5472 — wire contract with com.etendoerp.go ReconciliationLineTargetSupport (its MSG prefix /
+// suffix constants): reconcileGroup answers 409 when the statement line is held by an unconfirmed
+// draft reconciliation (e.g. left by Classic "Match Statement"), instead of discarding that draft.
+// It shares the "Reconciliation " prefix with matchForeignDraftReconciliation but not the suffix;
+// both matchers require the full suffix, so neither can match the other's text.
+const DRAFT_HOLDS_LINE_PREFIX = 'Reconciliation ';
+const DRAFT_HOLDS_LINE_SUFFIX =
+  ' is an unconfirmed draft that already holds this line.'
+  + ' Review it before reconciling the line again.';
+
+function matchDraftHoldsLine(msg) {
+  if (!msg.startsWith(DRAFT_HOLDS_LINE_PREFIX) || !msg.endsWith(DRAFT_HOLDS_LINE_SUFFIX)) {
+    return null;
+  }
+  const documentNo = msg.slice(DRAFT_HOLDS_LINE_PREFIX.length, -DRAFT_HOLDS_LINE_SUFFIX.length);
+  return documentNo ? { documentNo } : null;
+}
+
+// ETP-5472 — com.etendoerp.go refuses a reconcileGroup whose line or movement is already
+// reconciled, appending the internal id: "Statement line is already reconciled: " +
+// statementLineId (ReconciliationFlowSupport.prepareGroup) and "Operation is already
+// reconciled: " + operationId (ReconciliationFlowSupport.validateOperation). The id is DROPPED,
+// never interpolated: it is a 32-char UUID that means nothing to the user. Matching on the literal
+// Java text makes these prefixes a de facto wire contract — keep them in sync with the Java side.
+const STATEMENT_LINE_ALREADY_RECONCILED_PREFIX = 'Statement line is already reconciled: ';
+
+function matchStatementLineAlreadyReconciled(msg) {
+  if (!msg.startsWith(STATEMENT_LINE_ALREADY_RECONCILED_PREFIX)) return null;
+  const id = msg.slice(STATEMENT_LINE_ALREADY_RECONCILED_PREFIX.length);
+  return id ? {} : null;
+}
+
+const OPERATION_ALREADY_RECONCILED_PREFIX = 'Operation is already reconciled: ';
+
+function matchOperationAlreadyReconciled(msg) {
+  if (!msg.startsWith(OPERATION_ALREADY_RECONCILED_PREFIX)) return null;
+  const id = msg.slice(OPERATION_ALREADY_RECONCILED_PREFIX.length);
+  return id ? {} : null;
+}
+
 const SYNC_FETCH_FAILED_PREFIX = 'The bank reported an error while synchronizing: ';
 const SYNC_FETCH_FAILED_SUFFIX = '.';
 
@@ -887,11 +933,14 @@ const PARAMETERIZED_MATCHERS = [
   [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
   [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
   [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+  [matchDraftHoldsLine, 'backendError.draftHoldsLine'],
   [matchForeignDraftReconciliation, 'backendError.foreignDraftReconciliation'],
   [matchFieldTooLong, 'backendError.fieldTooLong'],
   [matchConnectionWentInactive, 'backendError.psd2ConnectionWentInactive'],
   [matchConsentExpired, 'backendError.psd2ConsentExpired'],
   [matchImportDateBeyondMaxInterval, 'backendError.psd2ImportDateBeyondMaxInterval'],
+  [matchStatementLineAlreadyReconciled, 'backendError.statementLineAlreadyReconciled'],
+  [matchOperationAlreadyReconciled, 'backendError.operationAlreadyReconciled'],
 ];
 
 function resolveParameterizedMatch(msg) {

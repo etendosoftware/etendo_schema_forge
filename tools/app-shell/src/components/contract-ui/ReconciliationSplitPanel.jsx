@@ -1458,8 +1458,17 @@ export function ReconciliationSplitPanel({
       // Names the difference movement in Movimientos; without it the backend falls back to
       // `defaultDifferenceDescription`. Dropping it silently is what the read-only modal did.
       if (description) payload.description = description;
-      await reconcile(payload);
-      toast.success(ui('financeReconcileToastSuccess'));
+      const result = await reconcile(payload);
+      // ETP-5472: a group that leaves part of the line uncovered splits it and answers
+      // `partial: true` + `pendingAmount` (signed like the line). Anything else — including a
+      // backend that predates these fields — keeps the plain success toast.
+      if (result?.partial === true) {
+        toast.info(ui('financeReconcileToastPartial', {
+          amount: formatCurrency(currency, Math.abs(Number(result.pendingAmount) || 0)),
+        }));
+      } else {
+        toast.success(ui('financeReconcileToastSuccess'));
+      }
       setSelectedLineSel(null);
       setSelectedOpIds(new Set());
       setMethodModalOpen(false);
