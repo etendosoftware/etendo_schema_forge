@@ -63,6 +63,12 @@ vi.mock('@/hooks/useVectorSearchContracts.js', () => ({
 }));
 
 import TopBar, { TOPBAR_COMPACT_BELOW_PX } from '../TopBar.jsx';
+import {
+  confirmPendingNavigation,
+  resetUnsavedChangesForTests,
+  setUnsavedChanges,
+  subscribeNavigationPrompt,
+} from '@/lib/unsavedChanges.js';
 
 const LONG_NAME = 'Banco Santander S.A (Sandbox) - PT50018000354378591102009';
 
@@ -461,5 +467,218 @@ describe('TopBar layout (ETP-5504)', () => {
 
     fireEvent.click(screen.getByTestId('topbar-quick-action-new'));
     expect(onNew).toHaveBeenCalled();
+  });
+});
+
+/**
+ * A matchMedia whose single compact query can be flipped at runtime, firing the registered
+ * `change` listeners the way a real MediaQueryList does when the window is resized.
+ */
+function mockResizableViewport(initialWidth) {
+  const listeners = new Set();
+  const mql = {
+    matches: false,
+    media: '',
+    addEventListener: vi.fn((type, fn) => { if (type === 'change') listeners.add(fn); }),
+    removeEventListener: vi.fn((type, fn) => { if (type === 'change') listeners.delete(fn); }),
+  };
+  let width = initialWidth;
+  const apply = () => { mql.matches = width < TOPBAR_COMPACT_BELOW_PX; };
+  apply();
+  window.matchMedia = vi.fn().mockImplementation((query) => {
+    mql.media = query;
+    return mql;
+  });
+  return {
+    mql,
+    listeners,
+    resize(next) {
+      width = next;
+      apply();
+      act(() => { listeners.forEach((fn) => fn({ matches: mql.matches, media: mql.media })); });
+    },
+  };
+}
+
+describe('TopBar compact breakpoint — live resize (ETP-5504)', () => {
+  const originalMatchMedia = window.matchMedia;
+  const QUICK_ACTIONS = [{ id: 'new', label: 'Nuevo', onClick: () => {} }];
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it('switches from full to compact when the viewport shrinks below 1366px', () => {
+    const viewport = mockResizableViewport(1440);
+    render(<TopBar title="Inicio" quickActions={QUICK_ACTIONS} />);
+    expect(screen.queryByTestId('topbar-quick-actions-overflow')).not.toBeInTheDocument();
+    viewport.resize(1280);
+    expect(screen.getByTestId('topbar-quick-actions-overflow')).toBeInTheDocument();
+  });
+
+  it('hides the inline quick action once compact', () => {
+    const viewport = mockResizableViewport(1440);
+    render(<TopBar title="Inicio" quickActions={QUICK_ACTIONS} />);
+    expect(screen.getByTestId('topbar-quick-action-new')).toBeInTheDocument();
+    viewport.resize(1280);
+    expect(screen.queryByTestId('topbar-quick-action-new')).not.toBeInTheDocument();
+  });
+
+  it('switches back from compact to full when the viewport grows to 1366px', () => {
+    const viewport = mockResizableViewport(1280);
+    render(<TopBar title="Inicio" quickActions={QUICK_ACTIONS} />);
+    expect(screen.getByTestId('topbar-quick-actions-overflow')).toBeInTheDocument();
+    viewport.resize(TOPBAR_COMPACT_BELOW_PX);
+    expect(screen.queryByTestId('topbar-quick-actions-overflow')).not.toBeInTheDocument();
+  });
+
+  it('shows the quick action inline again after growing back', () => {
+    const viewport = mockResizableViewport(1280);
+    render(<TopBar title="Inicio" quickActions={QUICK_ACTIONS} />);
+    viewport.resize(1920);
+    expect(screen.getByTestId('topbar-quick-action-new')).toBeInTheDocument();
+  });
+
+  it('queries a max-width strictly below the 1366px breakpoint', () => {
+    const viewport = mockResizableViewport(1440);
+    render(<TopBar title="Inicio" />);
+    const max = Number(/max-width:\s*([\d.]+)px/.exec(viewport.mql.media)?.[1]);
+    expect(max < TOPBAR_COMPACT_BELOW_PX && max > TOPBAR_COMPACT_BELOW_PX - 1).toBe(true);
+  });
+
+  it('subscribes to change events on mount', () => {
+    const viewport = mockResizableViewport(1440);
+    render(<TopBar title="Inicio" />);
+    expect(viewport.listeners.size).toBeGreaterThan(0);
+  });
+
+  it('removes its change listener on unmount', () => {
+    const viewport = mockResizableViewport(1440);
+    const { unmount } = render(<TopBar title="Inicio" />);
+    unmount();
+    expect(viewport.listeners.size).toBe(0);
+  });
+
+  it('removes the exact listener it added', () => {
+    const viewport = mockResizableViewport(1440);
+    const { unmount } = render(<TopBar title="Inicio" />);
+    const added = viewport.mql.addEventListener.mock.calls.filter(([type]) => type === 'change').map(([, fn]) => fn);
+    unmount();
+    const removed = viewport.mql.removeEventListener.mock.calls.filter(([type]) => type === 'change').map(([, fn]) => fn);
+    expect(removed).toEqual(added);
+  });
+
+  it('does not crash when matchMedia is unavailable', () => {
+    window.matchMedia = undefined;
+    render(<TopBar title="Inicio" quickActions={QUICK_ACTIONS} />);
+    expect(screen.getByTestId('topbar-quick-action-new')).toBeInTheDocument();
+  });
+});
+
+describe('TopBar breadcrumb navigation goes through the unsaved-changes guard (ETP-5504)', () => {
+  let promptListener;
+  let unsubscribe;
+
+  beforeEach(() => {
+    resetUnsavedChangesForTests();
+    promptListener = vi.fn();
+    unsubscribe = subscribeNavigationPrompt(promptListener);
+  });
+
+  afterEach(() => {
+    unsubscribe?.();
+    resetUnsavedChangesForTests();
+    navigateMock.mockReset();
+  });
+
+  const COLLAPSED = [
+    { label: 'Inventario' },
+    { label: 'Categorías', href: '/categories' },
+    { label: 'Equipamiento', href: '/categories/equipment' },
+    { label: 'Canasta' },
+  ];
+
+  it('holds an inline breadcrumb click while a form is dirty', () => {
+    setUnsavedChanges('form', true);
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    fireEvent.click(screen.getByText('Factura'));
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('raises the unsaved-changes prompt for an inline breadcrumb click', () => {
+    setUnsavedChanges('form', true);
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    fireEvent.click(screen.getByText('Factura'));
+    expect(promptListener).toHaveBeenCalledWith(true);
+  });
+
+  it('navigates to the held href once the user confirms', () => {
+    setUnsavedChanges('form', true);
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Ventas' }, { label: 'Factura', href: '/sales-invoice' }, 'FAC-1']} />);
+    fireEvent.click(screen.getByText('Factura'));
+    act(() => { confirmPendingNavigation(); });
+    expect(navigateMock).toHaveBeenCalledWith('/sales-invoice');
+  });
+
+  it('holds a dropdown (hidden level) navigation while a form is dirty', async () => {
+    setUnsavedChanges('form', true);
+    render(<TopBar title="Canasta" breadcrumb={COLLAPSED} />);
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    fireEvent.click(screen.getAllByTestId('topbar-breadcrumb-overflow-item')[1]);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('raises the prompt for a dropdown navigation and completes it on confirm', async () => {
+    setUnsavedChanges('form', true);
+    render(<TopBar title="Canasta" breadcrumb={COLLAPSED} />);
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    fireEvent.click(screen.getAllByTestId('topbar-breadcrumb-overflow-item')[1]);
+    expect(promptListener).toHaveBeenCalledWith(true);
+    act(() => { confirmPendingNavigation(); });
+    expect(navigateMock).toHaveBeenCalledWith('/categories/equipment');
+  });
+
+  it('navigates straight away when nothing is dirty', async () => {
+    render(<TopBar title="Canasta" breadcrumb={COLLAPSED} />);
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    fireEvent.click(screen.getAllByTestId('topbar-breadcrumb-overflow-item')[0]);
+    expect(promptListener).not.toHaveBeenCalled();
+  });
+
+  it('disables a hidden level that has neither href nor onClick', async () => {
+    render(
+      <TopBar
+        title="D"
+        breadcrumb={[{ label: 'A' }, { label: 'B' }, { label: 'C', href: '/c' }, { label: 'D' }]}
+      />,
+    );
+    openDropdown(screen.getByTestId('topbar-breadcrumb-overflow'));
+    await screen.findByTestId('topbar-breadcrumb-overflow-menu');
+    expect(screen.getAllByTestId('topbar-breadcrumb-overflow-item')[0]).toHaveAttribute('data-disabled');
+  });
+
+  it('calls an item onClick instead of navigating', () => {
+    const onClick = vi.fn();
+    render(<TopBar title="X" breadcrumb={[{ label: 'Custom', onClick }, 'X']} />);
+    fireEvent.click(screen.getByText('Custom'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render the current page as a navigable button', () => {
+    render(<TopBar title="FAC-1" breadcrumb={[{ label: 'Factura', href: '/sales-invoice' }, { label: 'FAC-1', href: '/x' }]} />);
+    expect(screen.getByTestId('topbar-breadcrumb-current').querySelector('button')).toBeNull();
+  });
+
+  it('renders a React node breadcrumb as-is (legacy escape hatch)', () => {
+    render(<TopBar title="X" breadcrumb={<em data-testid="custom-crumb">Custom</em>} />);
+    expect(screen.getByTestId('topbar-breadcrumb')).toContainElement(screen.getByTestId('custom-crumb'));
+  });
+
+  it('renders nothing for an empty array breadcrumb', () => {
+    render(<TopBar title="X" breadcrumb={[]} />);
+    expect(screen.queryByTestId('topbar-breadcrumb')).not.toBeInTheDocument();
   });
 });
