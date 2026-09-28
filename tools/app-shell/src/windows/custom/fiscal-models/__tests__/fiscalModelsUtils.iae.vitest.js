@@ -8,7 +8,7 @@
 // the same diff and are exercised only indirectly (if at all) by their callers.
 
 vi.mock('sonner', () => ({
-  toast: { warning: vi.fn(() => 'toast-id-1'), dismiss: vi.fn() },
+  toast: { warning: vi.fn(() => 'toast-id-1'), error: vi.fn(() => 'toast-id-2'), dismiss: vi.fn() },
 }));
 
 import { deriveResultKind, showIaeActivityReminder } from '../fiscalModelsUtils.js';
@@ -128,5 +128,39 @@ describe('showIaeActivityReminder', () => {
     showIaeActivityReminder(echoT, vi.fn());
     showIaeActivityReminder(echoT, vi.fn());
     expect(toast.warning).toHaveBeenCalledTimes(2);
+  });
+
+  // ETP-5432 pt.10 third follow-up (user correction) — the missing-IAE guard's own callers
+  // (FmModel303Page.jsx/AeatSubmitFlow.jsx) pass `{ severity: 'error' }`; the catalog/
+  // new-declaration reminders (unaffected by this correction) keep calling with no options
+  // at all, which must still default to `warning`.
+  describe('severity option', () => {
+    it('defaults to toast.warning when no options are passed', () => {
+      showIaeActivityReminder(echoT, vi.fn());
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('calls toast.error instead of toast.warning when severity is "error"', () => {
+      showIaeActivityReminder(echoT, vi.fn(), { severity: 'error' });
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('still builds the same CTA-augmented message node under toast.error', () => {
+      const navigate = vi.fn();
+      showIaeActivityReminder(echoT, navigate, { severity: 'error' });
+      const node = toast.error.mock.calls[0][0];
+      const [, buttonChild] = node.props.children;
+      buttonChild.props.onClick();
+      expect(navigate).toHaveBeenCalledWith('/organization');
+      expect(toast.dismiss).toHaveBeenCalledWith('toast-id-2');
+    });
+
+    it('an explicit severity: "warning" behaves the same as the default', () => {
+      showIaeActivityReminder(echoT, vi.fn(), { severity: 'warning' });
+      expect(toast.warning).toHaveBeenCalledTimes(1);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
   });
 });

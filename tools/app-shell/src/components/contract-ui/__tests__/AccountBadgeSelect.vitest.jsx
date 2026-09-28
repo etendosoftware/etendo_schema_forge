@@ -159,3 +159,33 @@ describe('AccountBadgeSelect', () => {
     expect(within(root).queryByRole('button')).toBeNull();
   });
 });
+
+// ETP-5399 (QA) — used inside the chart-of-accounts "Nueva subcuenta" dialog.
+describe('AccountBadgeSelect — dialog usage (ETP-5399)', () => {
+  it('shows the full option name as a tooltip on each option and on the selected value', async () => {
+    const user = userEvent.setup();
+    render(<AccountBadgeSelect value="acc-5723" options={OPTIONS} data-testid="sel" />);
+    const root = screen.getByTestId('sel');
+    expect(within(root).getByText('Bancos, cuenta puente')).toHaveAttribute('title', 'Bancos, cuenta puente');
+
+    await user.click(within(root).getByRole('button'));
+    const option = await screen.findByText('Servicios bancarios');
+    expect(option).toHaveAttribute('title', 'Servicios bancarios');
+  });
+
+  it('stays non-modal by default, so existing non-dialog callers are unaffected', async () => {
+    const user = userEvent.setup();
+    render(<AccountBadgeSelect options={OPTIONS} data-testid="sel" />);
+    await user.click(within(screen.getByTestId('sel')).getByRole('button'));
+    await screen.findByText('Bancos c/c');
+    expect(document.body.style.pointerEvents).not.toBe('none');
+  });
+
+  it('opens in Radix modal mode when `modal` is set (lets the list scroll inside a Dialog)', async () => {
+    const user = userEvent.setup();
+    render(<AccountBadgeSelect options={OPTIONS} modal data-testid="sel" />);
+    await user.click(within(screen.getByTestId('sel')).getByRole('button'));
+    await screen.findByText('Bancos c/c');
+    expect(document.body.style.pointerEvents).toBe('none');
+  });
+});
