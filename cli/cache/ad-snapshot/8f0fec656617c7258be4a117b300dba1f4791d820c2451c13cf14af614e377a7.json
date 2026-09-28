@@ -130,7 +130,7 @@
       ]
     },
     "1e3e96b5dc79b4c7366315de5249e070d2a81279761af45c7ea30b5365d1ed85": {
-      "checksum": "579383eb8eec9ced73af772e77ed9866451449fa089460a1ecff25c5cfe6b580",
+      "checksum": "6d07291520e4f52d3e4ef4e1ed830c5c8c4a13269317e27a2ae8ab10ad21a012",
       "params": [
         "144"
       ],
@@ -884,6 +884,12 @@
           "ad_table_id": "208",
           "columnname": "EM_ETGO_Stock",
           "position": "992"
+        },
+        {
+          "ad_column_id": "FB13EDA48A1D48B59002E1D84B096F03",
+          "ad_table_id": "208",
+          "columnname": "EM_ETGO_Cost",
+          "position": "993"
         },
         {
           "ad_column_id": "2020",

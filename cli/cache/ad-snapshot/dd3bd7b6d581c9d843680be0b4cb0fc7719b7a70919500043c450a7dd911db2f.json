@@ -7229,7 +7229,7 @@
       ]
     },
     "7f2e773ac3dc6c98a3afce1787a549a48607aa6aa44274b7fb2193bcc6cde8d2": {
-      "checksum": "b05b12731d9755b263651256c4d54f1fa048a44aa3d7f1067ef413da23196893",
+      "checksum": "d122f60cbef8071f3d2dc42f193a9acd6efe0726015cc9b35dce38a96261d182",
       "params": [
         [
           "A6BDFA712FF948CE903C4C463E832FC1",
@@ -7652,7 +7652,7 @@
         {
           "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
           "name": "Draft",
-          "name_es": null,
+          "name_es": "Draft",
           "value": "DRAFT"
         },
         {
@@ -7850,7 +7850,7 @@
         {
           "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
           "name": "Partial",
-          "name_es": null,
+          "name_es": "Partial",
           "value": "PARTIAL"
         },
         {
@@ -7868,7 +7868,7 @@
         {
           "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
           "name": "Pending",
-          "name_es": null,
+          "name_es": "Pending",
           "value": "PENDING"
         },
         {
@@ -7934,7 +7934,7 @@
         {
           "ad_reference_id": "734D872F58664531B2F67B729E10BD58",
           "name": "Reconciled",
-          "name_es": null,
+          "name_es": "Reconciled",
           "value": "RECONCILED"
         },
         {
@@ -8350,7 +8350,7 @@
       ]
     },
     "910d24c5e04bd0653472a12dc47eccd73e36338057fe0dd184d4e20cf35a31f5": {
-      "checksum": "0c0586698b2c63d23929822db536f2d6c659c07e5599cafb75ffaab54decc99e",
+      "checksum": "58f1722a752eb274b7b9686acf0db427f8f0f6427aaf7e64ab9421bb4c3afdce",
       "params": [
         [
           "CBC18A0BBD564AB5916A9D9D14D02B7A",
@@ -8648,7 +8648,7 @@
         {
           "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
           "name": "Company",
-          "name_es": null,
+          "name_es": "Company",
           "value": "CO"
         },
         {
@@ -8732,7 +8732,7 @@
         {
           "ad_reference_id": "CBC18A0BBD564AB5916A9D9D14D02B7A",
           "name": "Freelancer",
-          "name_es": null,
+          "name_es": "Freelancer",
           "value": "FL"
         },
         {
@@ -10959,7 +10959,7 @@
       ]
     },
     "cb1d36345a95e5fcce1b2f9e422683ce6d05f02303a478da5524fc857e79de1e": {
-      "checksum": "f4d766a90535524371daa93b59ea5bcf34d45e9e2193805c40c7c95dd985e53f",
+      "checksum": "dcb1232d822c9b01ed4eefd69c84797835bfc51aa43b9c2b3d7ee25ac52e8658",
       "params": [
         [
           "5E528AD89E6C44929EF9C6E6274247CA"
@@ -10969,19 +10969,19 @@
         {
           "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
           "name": "Contains",
-          "name_es": null,
+          "name_es": "Contains",
           "value": "C"
         },
         {
           "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
           "name": "Regex",
-          "name_es": null,
+          "name_es": "Regex",
           "value": "R"
         },
         {
           "ad_reference_id": "5E528AD89E6C44929EF9C6E6274247CA",
           "name": "Starts with",
-          "name_es": null,
+          "name_es": "Starts with",
           "value": "S"
         }
       ]

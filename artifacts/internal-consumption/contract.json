@@ -1,8 +1,8 @@
 {
-  "version": "0.17.0",
+  "version": "0.19.0",
   "generatedAt": "2026-06-26T00:48:58.290Z",
-  "updatedAt": "2026-09-01T16:56:21.623Z",
-  "checksum": "ff782f46b2d85db9",
+  "updatedAt": "2026-09-25T17:52:13.902Z",
+  "checksum": "9b7931d9d3c64902",
   "frontendContract": {
     "window": {
       "id": "800076",
@@ -18,6 +18,26 @@
         "moreMenuContent": "InternalConsumptionActions",
         "bottomSection": "InternalConsumptionBottomPanel"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
       "statusField": "status",
       "labelOverrides": {
         "en_US": {
@@ -36,7 +56,15 @@
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
       "layoutType": "default",
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "internalConsumption": {
@@ -65,7 +93,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -87,7 +115,52 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
+            }
+          },
+          {
+            "name": "posted",
+            "apiKey": "posted",
+            "column": "Posted",
+            "label": "Posted",
+            "type": "boolean",
+            "tsType": "boolean",
+            "visibility": "readOnly",
+            "required": true,
+            "grid": true,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            },
+            "defaultValue": "N",
+            "explicitType": true,
+            "badge": true,
+            "badgeLabels": {
+              "true": {
+                "en_US": "Posted",
+                "es_ES": "Contabilizado"
+              },
+              "false": {
+                "en_US": "Not posted",
+                "es_ES": "Sin contabilizar"
+              }
+            },
+            "badgeVariants": {
+              "true": "green",
+              "false": "orange"
+            },
+            "gridOrder": 4,
+            "validation": {
+              "required": true,
+              "maxLength": 60
+            },
+            "displayLogic": {
+              "raw": "@Processed@='Y' & @#ShowAcct@='Y'",
+              "evaluable": false,
+              "reason": "session-preference",
+              "js": null
             }
           },
           {
@@ -131,6 +204,7 @@
               }
             ],
             "defaultValue": "DR",
+            "gridOrder": 3,
             "validation": {
               "required": true,
               "maxLength": 60
@@ -142,6 +216,13 @@
         ],
         "computedFields": [
           {
+            "name": "posted",
+            "derivation": {
+              "type": "computed",
+              "source": "'N'"
+            }
+          },
+          {
             "name": "status",
             "derivation": {
               "type": "computed",
@@ -149,11 +230,13 @@
             }
           }
         ],
+        "javaQualifier": "internal-consumption",
         "draftMode": {
           "enabled": true,
           "processField": "processNow",
           "processValue": "CO",
-          "label": "internalConsumptionProcess",
+          "label": "confirm",
+          "disableWhenEmpty": true,
           "extraParams": {
             "action": "CO"
           }
@@ -321,6 +404,26 @@
         "moreMenuContent": "InternalConsumptionActions",
         "bottomSection": "InternalConsumptionBottomPanel"
       },
+      "menuActions": [
+        {
+          "key": "post",
+          "label": "Post",
+          "labelKey": "post",
+          "action": "post",
+          "visibleWhenFieldFalse": "posted",
+          "successKey": "documentPosted",
+          "visibleWhenFieldTrue": "processed"
+        },
+        {
+          "key": "unpost",
+          "label": "Unpost",
+          "labelKey": "unpost",
+          "action": "unpost",
+          "visibleWhenFieldTrue": "posted",
+          "successKey": "documentUnposted",
+          "destructive": true
+        }
+      ],
       "statusField": "status",
       "labelOverrides": {
         "en_US": {
@@ -338,7 +441,15 @@
       },
       "dateFilterKey": "movementDate",
       "noHeaderBorder": true,
-      "linesLayout": "inlineEditable"
+      "linesLayout": "inlineEditable",
+      "statusPills": [
+        {
+          "field": "posted",
+          "trueKey": "postedStatus",
+          "falseKey": "notPostedStatus",
+          "_note": "Accounting status pill — visible to financial+admin roles only (permissions enforcement pending)"
+        }
+      ]
     },
     "entities": {
       "internalConsumption": {
@@ -470,8 +581,8 @@
             "name": "posted",
             "apiKey": "posted",
             "column": "Posted",
-            "type": "button",
-            "visibility": "system",
+            "type": "boolean",
+            "visibility": "readOnly",
             "required": true
           },
           {
@@ -538,7 +649,8 @@
             "visibility": "discarded",
             "required": true
           }
-        ]
+        ],
+        "javaQualifier": "internal-consumption"
       },
       "internalConsumptionLine": {
         "tableName": "M_Internal_ConsumptionLine",
@@ -837,12 +949,6 @@
       },
       {
         "entity": "internalConsumption",
-        "field": "posted",
-        "column": "Posted",
-        "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/posted"
-      },
-      {
-        "entity": "internalConsumption",
         "field": "etblkpBulkposting",
         "column": "EM_Etblkp_Bulkposting",
         "url": "/sws/neo/internal-consumption/internalConsumption/{id}/action/etblkpBulkposting",
@@ -889,14 +995,6 @@
         "description": "Action endpoint for 'etblkpBulkposting' in internalConsumption should exist"
       },
       {
-        "id": "t-action-endpoint-internalConsumption-posted",
-        "category": "action-endpoint",
-        "entity": "internalConsumption",
-        "field": "posted",
-        "runner": "node",
-        "description": "Action endpoint for 'posted' in internalConsumption should exist"
-      },
-      {
         "id": "t-action-endpoint-internalConsumption-processNow",
         "category": "action-endpoint",
         "entity": "internalConsumption",
@@ -917,6 +1015,14 @@
         "entity": "internalConsumptionLine",
         "runner": "node",
         "description": "CRUD flags for 'internalConsumptionLine' should all be booleans"
+      },
+      {
+        "id": "t-default-value-type-internalConsumption-posted",
+        "category": "default-value-type",
+        "entity": "internalConsumption",
+        "field": "posted",
+        "runner": "node",
+        "description": "Default value for 'posted' in internalConsumption should be a string"
       },
       {
         "id": "t-default-value-type-internalConsumption-status",
@@ -943,6 +1049,22 @@
         "description": "Default value for 'movementQuantity' in internalConsumptionLine should be a string"
       },
       {
+        "id": "t-displaylogic-evaluable-internalConsumption-posted",
+        "category": "displaylogic-evaluable",
+        "entity": "internalConsumption",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in internalConsumption should have evaluable flag"
+      },
+      {
+        "id": "t-displaylogic-valid-internalConsumption-posted",
+        "category": "displaylogic-valid",
+        "entity": "internalConsumption",
+        "field": "posted",
+        "runner": "node",
+        "description": "Display logic for 'posted' in internalConsumption should be valid JS"
+      },
+      {
         "id": "t-field-presence-internalConsumption-movementDate",
         "category": "field-presence",
         "entity": "internalConsumption",
@@ -957,6 +1079,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should be present in internalConsumption"
+      },
+      {
+        "id": "t-field-presence-internalConsumption-posted",
+        "category": "field-presence",
+        "entity": "internalConsumption",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should be present in internalConsumption"
       },
       {
         "id": "t-field-presence-internalConsumption-status",
@@ -1021,6 +1151,14 @@
         "field": "name",
         "runner": "node",
         "description": "Field 'name' should have type 'string' in internalConsumption"
+      },
+      {
+        "id": "t-field-type-internalConsumption-posted",
+        "category": "field-type",
+        "entity": "internalConsumption",
+        "field": "posted",
+        "runner": "node",
+        "description": "Field 'posted' should have type 'boolean' in internalConsumption"
       },
       {
         "id": "t-field-type-internalConsumption-status",
@@ -1330,14 +1468,6 @@
         "description": "System field 'organization' should exist in backend but not frontend for internalConsumption"
       },
       {
-        "id": "t-system-field-internalConsumption-posted",
-        "category": "system-field",
-        "entity": "internalConsumption",
-        "field": "posted",
-        "runner": "node",
-        "description": "System field 'posted' should exist in backend but not frontend for internalConsumption"
-      },
-      {
         "id": "t-system-field-internalConsumption-processed",
         "category": "system-field",
         "entity": "internalConsumption",
@@ -1529,23 +1659,25 @@
       }
     ],
     "summary": {
-      "total": 83,
+      "total": 86,
       "byCategory": {
-        "action-endpoint": 3,
+        "action-endpoint": 2,
         "crud-flags": 2,
-        "default-value-type": 3,
-        "field-presence": 8,
-        "field-type": 8,
+        "default-value-type": 4,
+        "displaylogic-evaluable": 1,
+        "displaylogic-valid": 1,
+        "field-presence": 9,
+        "field-type": 9,
         "readonlylogic-evaluable": 2,
         "readonlylogic-valid": 2,
         "rule-declared": 13,
         "searchable-filters": 2,
         "selector-endpoint": 3,
-        "system-field": 35,
+        "system-field": 34,
         "visibility": 2
       },
       "byRunner": {
-        "node": 83,
+        "node": 86,
         "junit": 0
       }
     }

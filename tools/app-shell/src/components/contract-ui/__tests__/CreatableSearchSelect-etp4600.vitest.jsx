@@ -244,7 +244,7 @@ describe('CreatableSearchSelect — disabled state classes (dependsOn parent uns
     );
     const input = screen.getByTestId('field-location');
     const wrapper = input.closest('div');
-    expect(wrapper.className).toMatch(/bg-muted/);
+    expect(wrapper.className).toMatch(/field-hover/);
     expect(wrapper.className).toMatch(/text-text-disabled/);
     expect(wrapper.className).toMatch(/cursor-not-allowed/);
     expect(input).toBeDisabled();

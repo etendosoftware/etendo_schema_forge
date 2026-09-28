@@ -1,7 +1,7 @@
 # Connecting an MCP client to the Etendo GO MCP server
 
-How to connect an MCP client (e.g. Claude Code) to the Etendo GO MCP server, for **two
-environments**:
+How to connect an MCP client (Claude Code or OpenAI Codex CLI) to the Etendo GO MCP server, for
+**two environments**:
 
 - **LOCAL** — the MCP running on your own machine (Tomcat `:8080` behind the Vite dev server `:3100`).
 - **EXPERIMENTAL** — the shared cloud server at `go.experimental.etendo.cloud`.
@@ -9,8 +9,8 @@ environments**:
 These let a developer drive the MCP tools (`neo_*`, `generate_*`) from their PC, either against
 their own build or against the experimental server for testing.
 
-> **Always name the registered server after its environment** (`etendo-go-local` vs
-> `etendo-go-exp`). The same client can have both configured at once — distinct names are
+> **Always name the registered server after its environment** (`etendo-mcp-local` vs
+> `etendo-mcp-experimental`). The same client can have both configured at once — distinct names are
 > the only thing that stops you from testing locally while accidentally hitting experimental (or
 > vice-versa). Throughout this doc, every command and property is labelled with its environment.
 
@@ -32,7 +32,8 @@ shapes locally.
 
 ```bash
 # LOCAL — register against the dev-server edge, never :8080
-claude mcp add --transport http etendo-go-local http://localhost:3100/mcp
+claude mcp add --transport http etendo-mcp-local http://localhost:3100/mcp   # Claude Code
+codex mcp add etendo-mcp-local --url http://localhost:3100/mcp               # Codex CLI
 ```
 
 ```properties
@@ -42,8 +43,8 @@ etgo.mcp.public.url=http://localhost:3100/mcp       # WITH /mcp
 ```
 
 Then **restart Tomcat**, make sure `make dev` (the `:3100` server) is running and you are **logged
-into the PWA** at `http://localhost:3100`, and authenticate: `/mcp` → `etendo-go-local` →
-Authenticate.
+into the PWA** at `http://localhost:3100`, and authenticate: `/mcp` → `etendo-mcp-local` →
+Authenticate (Claude Code) or `codex mcp login etendo-mcp-local` (Codex CLI).
 
 ### Why it fails against `:8080` directly (the URL-shape mismatch)
 
@@ -104,10 +105,15 @@ Put them in **`gradle.properties`** (persistent, gitignored). For immediate effe
 3. **Restart Tomcat** so the backend picks up the new public URLs.
 4. **Register the MCP server** against the edge, not the backend:
    ```bash
-   claude mcp add --transport http etendo-go-local http://localhost:3100/mcp
+   # Claude Code
+   claude mcp add --transport http etendo-mcp-local http://localhost:3100/mcp
+   # Codex CLI (writes [mcp_servers.etendo-mcp-local] url = "..." to ~/.codex/config.toml)
+   codex mcp add etendo-mcp-local --url http://localhost:3100/mcp
    ```
 5. **Log into the PWA** at `http://localhost:3100` (the OAuth consent page needs your session).
-6. **Authenticate** — in the client: `/mcp` → `etendo-go-local` → Authenticate → ✔ Connected.
+6. **Authenticate** — Claude Code: `/mcp` → `etendo-mcp-local` → Authenticate → ✔ Connected.
+   Codex CLI: `codex mcp login etendo-mcp-local` (opens the browser OAuth flow; add
+   `--no-browser` to print the authorization URL instead).
 
 ### What does NOT work locally (and why)
 
@@ -135,27 +141,34 @@ deployment) and you do not run a local dev server.
 
 1. **Register the MCP server** against the public CloudFront URL:
    ```bash
-   claude mcp add --transport http etendo-go-exp https://go.experimental.etendo.cloud/mcp
+   # Claude Code
+   claude mcp add --transport http etendo-mcp-experimental https://go.experimental.etendo.cloud/mcp
+   # Codex CLI
+   codex mcp add etendo-mcp-experimental --url https://go.experimental.etendo.cloud/mcp
    ```
-2. **Authenticate** — `/mcp` → `etendo-go-exp` → Authenticate. You will be sent through
-   the experimental login + OAuth consent in the browser, then ✔ Connected.
+2. **Authenticate** — Claude Code: `/mcp` → `etendo-mcp-experimental` → Authenticate. Codex CLI:
+   `codex mcp login etendo-mcp-experimental`. You will be sent through the experimental login + OAuth
+   consent in the browser, then ✔ Connected.
 
 That's it — no properties, no Tomcat restart, no `make dev`. The CloudFront edge already presents
 the RFC-compliant surface (see `docs/ops/cloudfront-alb-routing.md` for how the edge rewrites paths
 and fixes the `Host`/`resource_metadata` URLs).
 
-> Use `etendo-go-exp` as the name so it never gets confused with `etendo-go-local`. They
+> Use `etendo-mcp-experimental` as the name so it never gets confused with `etendo-mcp-local`. They
 > can both be registered at the same time; the name is how you (and the client) tell them apart.
 
 ---
 
 ## Which one am I hitting?
 
-Run `claude mcp list` (or `claude mcp get <name>`) and read the URL:
+Run `claude mcp list` (or `claude mcp get <name>`) — or, in Codex CLI, `codex mcp list` (or
+`codex mcp get <name>`) — and read the URL:
 
 - `http://localhost:3100/mcp` → **LOCAL** (your machine, via the dev-server edge).
 - `https://go.experimental.etendo.cloud/mcp` → **EXPERIMENTAL** (shared cloud server).
 
-If a server is registered as a bare `etendo-go` with no environment suffix, rename it
-(`claude mcp remove etendo-go` then re-add with the suffixed name) so the environment is always
-explicit — re-authentication will be required after a rename.
+A bare `etendo-mcp` (no suffix) is reserved for **production** — it is the name the in-app
+"Connect AI agent" page suggests for a production URL. Servers registered under the old
+`etendo-go*` names still work; to align them, remove and re-add with the new name
+(`claude mcp remove etendo-go-local` / `codex mcp remove etendo-go-local`, then `mcp add` as
+above) — re-authentication will be required after a rename.

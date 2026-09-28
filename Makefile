@@ -127,12 +127,22 @@ test-frontend: ## Run only frontend generator tests
 test-stripe-local: ## Start Stripe Test Mode forwarding and smoke-test hosted Checkout
 	tools/stripe-local-smoke.sh
 
+.PHONY: stripe-simulate
 stripe-simulate: ## Simulate a signed Stripe checkout webhook locally (no Stripe account needed)
 	tools/stripe-webhook-simulate.sh --status $(ARGS)
 
 CMD ?= fail
+.PHONY: stripe-past-due
 stripe-past-due: ## Drive a real Stripe test-mode subscription past due and back (ID=<checkout-request-or-billing-event-id> [CMD=fail|recover|status])
 	tools/stripe-subscription-past-due.sh $(CMD) $(ID) $(ARGS)
+
+.PHONY: logs
+logs: ## Tail CloudWatch logs (ENV=experimental|production|demo1, ARGS="--since 1h --all")
+	scripts/tail-logs.sh --env $(or $(ENV),experimental) $(ARGS)
+
+.PHONY: logs-check
+logs-check: ## Verify the AWS CLI setup used by `make logs`
+	scripts/tail-logs.sh --check
 HOTSPOT_FILE ?= tools/app-shell/src/components/contract-ui/DetailView.jsx
 HOTSPOT_DAYS ?= 15
 HOTSPOT_LIMIT ?= 10
@@ -245,7 +255,7 @@ test-e2e-headless: ## Build a no-PWA E2E bundle, serve+test+teardown on its own 
 
 .PHONY: test-e2e-purchase-sales
 test-e2e-purchase-sales: ## Run only the failing Sales Order and Purchase Order integration specs
-	E2E_FILES=tests/flows/sales-order-happy-path.integration.spec.js,tests/flows/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
+	E2E_FILES=tests/flows/sales/sales-order-happy-path.integration.spec.js,tests/flows/purchases/purchase-order-full-flow.integration.spec.js ./scripts/run-e2e-last-failed.sh
 
 .PHONY: test-e2e-last-failed
 test-e2e-last-failed: ## Rerun only failed integration tests recorded by the previous Playwright run
@@ -275,7 +285,7 @@ test-e2e-record: ## Record a test flow (opens browser, generates code)
 
 .PHONY: test-e2e-onboarding-integration
 test-e2e-onboarding-integration: ## Run the live onboarding integration spec; e2e/onboarding-accounts.json controls repeated account fixtures. Needs the backend pointed at the email sink (docs/e2e-testing-guide.md)
-	cd e2e && E2E_ONBOARDING_INTEGRATION=1 E2E_EMAIL_SINK=$${E2E_EMAIL_SINK:-1} npx playwright test tests/flows/onboarding-register.integration.spec.js
+	cd e2e && E2E_ONBOARDING_INTEGRATION=1 E2E_EMAIL_SINK=$${E2E_EMAIL_SINK:-1} npx playwright test tests/flows/onboarding/onboarding-register.integration.spec.js
 
 .PHONY: install-e2e
 install-e2e: ## Install E2E dependencies + browsers
