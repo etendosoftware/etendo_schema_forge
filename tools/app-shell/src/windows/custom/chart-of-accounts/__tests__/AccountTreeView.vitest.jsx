@@ -38,7 +38,7 @@ vi.mock('@generated/chart-of-accounts/custom/NewAccountModal', () => ({
 
 // --- Import under test ---
 
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { toast } from 'sonner';
 import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
@@ -437,6 +437,20 @@ describe('AccountTreeView', () => {
       // Root folder "A" is visible without expanding; its ancestor entry carries elementLevel: 'E'.
       const row = screen.getByTestId('account-tree-row-group-A');
       expect(within(row).getByText('elementLevelHeading')).toBeInTheDocument();
+    });
+
+    it('keeps folder rows on the same column grid as leaf rows (empty active cell)', () => {
+      render(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expandFullAncestorChain();
+      const folder = screen.getByTestId('account-tree-row-group-A');
+      const leaf = screen.getByTestId('account-tree-row-acc-20000000');
+      // Without the placeholder the folder row had one cell fewer, so its flex-1 name cell
+      // grew and pushed Element Level / Account Type right (QA: "Epígrafe" looked right-aligned).
+      expect(within(folder).getByTestId('account-tree-active-placeholder-group-A')).toHaveAttribute('aria-hidden', 'true');
+      expect(within(leaf).queryByTestId(/account-tree-active-placeholder-/)).toBeNull();
+      // Same number of cells once the depth-dependent indent spacer is set aside.
+      const cells = (row) => [...row.children].filter((el) => !el.style.minWidth);
+      expect(cells(folder)).toHaveLength(cells(leaf).length);
     });
 
     it('falls back to the raw code when elementLevel has no mapped label', () => {
@@ -958,6 +972,77 @@ describe('AccountTreeView', () => {
       // this is the regression test for that.
       expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+    });
+
+    // ── ETP-5387 QA: the toolbar Refresh button (ListView → userRefreshTrigger) ──
+
+    function deferredFetch() {
+      const pending = [];
+      globalThis.fetch = vi.fn(() => new Promise((resolve, reject) => pending.push({ resolve, reject })));
+      return {
+        resolveLast: (rows) => pending.at(-1).resolve({ ok: true, json: async () => ({ response: { data: rows } }) }),
+        rejectLast: () => pending.at(-1).reject(new Error('network down')),
+      };
+    }
+
+    async function renderLoaded(fetchCtl, props = {}) {
+      const utils = render(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} userRefreshTrigger={0} {...props} />);
+      await act(async () => fetchCtl.resolveLast(FULL_DATASET));
+      await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
+      return utils;
+    }
+
+    it('does not refetch on mount just because a userRefreshTrigger value is present', async () => {
+      const fetchCtl = deferredFetch();
+      await renderLoaded(fetchCtl, { userRefreshTrigger: 3 });
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Refresh press refetches and shows the skeleton until the full chart arrives', async () => {
+      const fetchCtl = deferredFetch();
+      const { rerender } = await renderLoaded(fetchCtl);
+      expect(screen.getByTestId('account-tree-row-group-PYG')).toBeInTheDocument();
+
+      rerender(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} userRefreshTrigger={1} />);
+
+      await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2));
+      expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-group-PYG')).not.toBeInTheDocument();
+
+      await act(async () => fetchCtl.resolveLast([...FULL_DATASET, rootFixture('N', 'NUEVA', 'acc-n')]));
+      await waitFor(() => expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument());
+      // The refreshed data is what renders — a record added elsewhere shows up.
+      expect(screen.getByTestId('account-tree-row-group-N')).toBeInTheDocument();
+    });
+
+    it('a failed Refresh brings the previous tree back with the error toast (no stuck skeleton)', async () => {
+      const fetchCtl = deferredFetch();
+      const { rerender } = await renderLoaded(fetchCtl);
+
+      rerender(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} userRefreshTrigger={1} />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-skeleton')).toBeInTheDocument());
+
+      await act(async () => fetchCtl.rejectLast());
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('accountTreeFetchError'));
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-PYG')).toBeInTheDocument();
+    });
+
+    it('ignores a Refresh press when there is no apiBaseUrl (nothing to refetch, no stuck skeleton)', () => {
+      globalThis.fetch = vi.fn();
+      const { rerender } = render(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} userRefreshTrigger={0} />);
+      rerender(<AccountTreeView {...defaultProps} apiBaseUrl={undefined} userRefreshTrigger={1} />);
+
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('account-tree-skeleton')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
+    });
+
+    it('never forwards userRefreshTrigger to the DOM', async () => {
+      const fetchCtl = deferredFetch();
+      await renderLoaded(fetchCtl, { userRefreshTrigger: 2 });
+      expect(screen.getByTestId('account-tree')).not.toHaveAttribute('userrefreshtrigger');
+      expect(screen.getByTestId('account-tree')).not.toHaveAttribute('userRefreshTrigger');
     });
   });
 });
