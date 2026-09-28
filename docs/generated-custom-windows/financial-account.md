@@ -1508,6 +1508,17 @@ The Reconciliation tab renders `ReconciliationSplitPanel` (`tools/app-shell/src/
 
 - **Left panel — pending statement lines** (`usePendingStatementLines(accountId, filters)`): a movements-style toolbar with **back arrow** + status dropdown + date-range picker + search. The current T6 backend only exposes pending lines, so the status dropdown is wired but currently contains `Pendiente (N)` only. Below it, a table with **radio single-select** rows (Fecha · Descripción + status badge · Importe with sign tone) and a `Total: X,XX €` footer.
 - **Right panel — candidate operations** (`useCandidateOperations(accountId, lineId, docType)` — does NOT fetch while no line is selected): an empty state (`Selecciona un movimiento` / hint) until a line is picked, then a `SelectedLineHeader` (line metadata + amount in red/green), a real docType/date/search toolbar, and a table with **checkbox multi-select** rows (Fecha · Información = documentNo + partnerName + badge · Saldo pendiente · Importe). Backend-suggested candidates carry a blue **"Con sugerencia"** badge (ETP-4923, shared label with the left panel's status filter chip); the rest "Pendiente".
+- **Column sort (ETP-5242)**: both tables sort client-side from their headers. The left panel sorts by Fecha, Descripción, Progreso and Importe; the right panel by Fecha, Información, Saldo pendiente and Importe. Each header is a `SortableHeaderLabel` and the state comes from `useClientSort`. Clicks cycle ascending → descending → none, only one column per panel is active, and the active one shows its arrow. `data-testid` is `column-header-sort-<key>`, scoped by panel.
+  - **No backend involved.** `usePendingStatementLines` and `useCandidateOperations` fetch the whole result set, with no paging and no `_sortBy`, so sorting the loaded rows sorts the dataset and never refetches.
+  - **Selection and totals are untouched.** Sorting only reorders what is shown; the selection, the footer total and the action bar's running totals do not depend on order.
+  - **What each column sorts by** is defined in `components/contract-ui/reconciliationSort.js`:
+    - Dates use `parseCalendarDate`, never `new Date(str)`, so a row dated the 1st keeps its day under a negative UTC offset.
+    - Descripción and Información use the text the cell shows.
+    - Progreso uses `reconciledPct`, not the rendered bar.
+    - Amounts are compared as numbers. For the right panel's money columns that means the **account-currency** equivalent: `amountBase` for a foreign-currency invoice, and the pending balance scaled by the same rate. A candidate whose rate is unknown sorts last instead of being compared against a figure in another currency.
+  - **The right panel's default order is the pin.** With no column chosen, selected candidates come first, then the suggested ones (`resolveVisibleCandidates`). Once a column is chosen it orders the whole filtered list (`filterCandidates`) and takes precedence over the pin, so ticking a checkbox no longer moves the row. A third click returns to the pinned order.
+  - **Column widths and `table-fixed` are unchanged.** The sort control sits inside each existing `<TableHead>`, so the ETP-4921 truncation contract still holds.
+- **Información tooltip (ETP-5242)**: the right panel's partner name now renders through `TruncatedText` (`recon-cand-partner-<id>`), like the left panel's Descripción. A clipped value shows the full text on hover; one that fits shows no tooltip.
 - **Action bar**: `Documentos seleccionados: ±X,XX €` · `Restante por conciliar: ±X,XX €` · `[Cancelar selección] [Transferir] [Nuevo documento] [Conciliar (N)]`. `Conciliar` is enabled only when `|line.amount − sum(selected ops)| ≤ 0.01`. On click → `useReconcileGroup().reconcile({ financialAccountId, statementLineId, operationIds })` → success toast (`sonner`) + `onReconcileSuccess()` (reloads the account so the tab badge `pendingCount` decrements, and reloads movements) + clears the selection.
 - When a **reconciled** line is selected, the `Conciliar` button becomes `Desconciliar (N)`, acting on the checked documents. On success, the backend undoes the reconciliation and, for ETGO-created 1:N groups, collapses the split sub-lines back into a single physical pending bank-statement line before reloading the panel. Since ETP-5135 that is the **only** action offered there — see "ETP-5135" below.
 - The right-side header action is the `Automatch` button while the Reconciliation tab is active (T7 — see below). `Transferir` / `Nuevo documento` render but fire a "próximamente" toast (follow-up).
@@ -3934,10 +3945,11 @@ hand-written, reached through a wrapper that branches on `recordId`. Its grids r
 The account-name cell has a strict flex-shrink contract. Its avatar is `shrink-0`; every flex
 ancestor between the fixed-width grid cell and the name carries `min-w-0`; and the name/badge row is
 `w-fit max-w-full`. That row uses its intrinsic width when it fits and is capped by the cell when it
-does not. Within it, the name is `w-auto min-w-0 flex-1` and the connection badge is
-`shrink-0 whitespace-nowrap`. A short name therefore keeps the badge immediately beside it with the
-small gap shown in Figma, while a long name shrinks and ellipsises instead of compressing the avatar or
-pushing the badge outside the Cuenta column. `TruncatedText` reveals the complete name on hover only
+does not. Within it, the name is `w-auto max-w-full shrink-0` and the connection badge is
+`shrink-0 whitespace-nowrap`, in a `flex-wrap` row (ETP-5242). A short name therefore keeps the badge
+immediately beside it with the small gap shown in Figma. When the two do not fit, the badge wraps to its
+own line. A name longer than the column itself ellipsises instead of compressing the avatar or pushing
+the badge outside the Cuenta column. `TruncatedText` reveals the complete name on hover only
 when the text is actually clipped (`scrollWidth > clientWidth + 1`), so short account names do not
 produce a redundant tooltip.
 
@@ -3952,6 +3964,57 @@ collapsing structural controls, badges or amount columns.
 This is presentation-only. The field set and renderer bindings remain owned by
 `artifacts/financial-account/decisions.json`; no decision, contract, generated output or NEO
 configuration changes are required.
+
+### Cuentas column widths and their tooltips (ETP-5242)
+
+Before this change, every data column carried a fixed width in `COLUMN_CHROME`, and those widths
+added up to 1580px. Cuenta, Moneda and País were also wider than their content needed.
+
+A width is a **floor**, not a ratio. Under `DataTable`'s `table-layout: fixed; width: 100%`, declared
+widths are only stretched when their sum is smaller than the container. Once the sum is larger, the
+table grows and scrolls. The layout is now built on that rule:
+
+- **Every column declares a width.** Together they are the grid's floor:
+  - Cuenta `240px`.
+  - Tipo & IBAN `230px`.
+  - Moneda `80px`.
+  - País `150px`.
+  - Saldo `130px`.
+  - Por conciliar `140px`.
+- **The floor is set on the scrolling wrapper.** It carries `[&_table]:min-w-[1134px]`: the 970px of
+  data columns plus the selection (40px) and actions (124px) cells. The class applies to both the sticky
+  header table and the body table, so they stay aligned.
+- **Wider container: extra space is spread in proportion to the declared widths.** Cuenta and Tipo &
+  IBAN keep their balance, and no single column absorbs everything. Measured live at 1920px:
+
+  | App sidebar | Cuenta | Tipo & IBAN |
+  |---|---|---|
+  | Expanded | 291px | 278px |
+  | Collapsed | 330px | 316px |
+
+- **Narrower container: the grid scrolls horizontally** instead of squeezing any column. This happens in
+  a narrow window or with the app sidebar expanded, for example at 1280px.
+- **Earlier iterations and why they were dropped:**
+  - A single width-less Cuenta made it huge and left Tipo & IBAN cramped.
+  - Width-less columns with no floor collapsed to a few pixels while the app sidebar was open.
+- **Changing a width means updating the wrapper's `min-w` too.**
+
+Each column keeps its `headClass` and `cellClass` identical.
+
+When the name and the "Sin conexión" badge do not fit side by side, the badge wraps to its own line.
+The name is `shrink-0 max-w-full` inside a `flex-wrap` row, so it never gives up width to the badge,
+and a name longer than the column still truncates.
+
+Narrower columns clip more text, so the cells that can overflow reveal the full value on hover through
+`TruncatedText`, following the same flex-shrink contract as the name cell above:
+
+- `NameCell`: the account name (already done in ETP-5388).
+- `CountryCell`: the country name (`account-row-country-<id>`).
+- `TypeCell`: the IBAN line (`account-row-iban-<id>`). Its `inline-flex` wrapper is
+  `min-w-0 max-w-full` and the copy button is `shrink-0`, so only the IBAN text shrinks and the button
+  keeps its size.
+
+A value that fits shows no tooltip.
 
 ### Advanced ("by conditions") filter on the Cuentas list (ETP-5113)
 

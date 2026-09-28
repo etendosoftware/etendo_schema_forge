@@ -54,10 +54,15 @@ export function NameCell({ account, ui, onConnect }) {
         <AccountLogoAvatar account={account} data-testid="AccountLogoAvatar__dc050f" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-2">
-        <div className="flex w-fit max-w-full min-w-0 items-center gap-1">
+        {/* When name + badge do not fit side by side (Cuenta shares the leftover width), the
+            badge wraps to its own line rather than squeezing the name: the name is `shrink-0`
+            so it never gives up width to the badge, and `max-w-full` caps it at the column so
+            a name longer than the column itself still truncates (and TruncatedText reveals it
+            on hover). */}
+        <div className="flex w-fit max-w-full min-w-0 flex-wrap items-center gap-1">
           <TruncatedText
             text={account.name || '—'}
-            className="w-auto min-w-0 flex-1 text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
+            className="w-auto max-w-full shrink-0 text-sm font-semibold leading-5 text-[hsl(var(--foreground))]"
             data-testid={`account-row-name-${account.id}`} />
           {isDisconnected ? (
             <span
@@ -86,17 +91,23 @@ export function TypeCell({ account, ui }) {
     }
   };
   return (
-    <div className="flex flex-col justify-center">
+    <div className="flex min-w-0 flex-col justify-center">
         <span className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]">{typeLabel}</span>
         {account.iban && (
-          <span className="inline-flex items-center gap-1 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
-            {chunkIban(account.iban)}
+          // `min-w-0 max-w-full` lets the IBAN shrink inside the fixed-width column so
+          // TruncatedText can clip it (and reveal it on hover), while the copy button keeps
+          // its size instead of being pushed out of the cell.
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-xs leading-4 text-[hsl(var(--muted-foreground))]">
+            <TruncatedText
+              text={chunkIban(account.iban)}
+              className="w-auto min-w-0"
+              data-testid={`account-row-iban-${account.id}`} />
             <button
               type="button"
               onClick={copyIban}
               aria-label={ui('financeAccountsCopyIban')}
               data-testid={`account-row-copy-iban-${account.id}`}
-              className="rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100 group-hover/row:opacity-100"
+              className="shrink-0 rounded-full p-0.5 text-[hsl(var(--text-disabled))] opacity-0 transition-opacity hover:bg-[hsl(var(--border-subtle))] group-hover:opacity-100 group-hover/row:opacity-100"
             >
               <Copy className="h-3.5 w-3.5" data-testid="Copy__dc050f" />
             </button>
@@ -118,9 +129,10 @@ export function TypeCell({ account, ui }) {
 export function CountryCell({ account }) {
   const label = account.countryName || account.countryIso || '';
   return (
-    <span className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]">
-      {label || '—'}
-    </span>
+    <TruncatedText
+      text={label || '—'}
+      className="text-sm font-normal leading-5 text-[hsl(var(--foreground))]"
+      data-testid={`account-row-country-${account.id}`} />
   );
 }
 
