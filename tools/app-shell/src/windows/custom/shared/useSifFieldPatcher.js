@@ -3,7 +3,7 @@ import { useUI } from '@/i18n';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import { useFiscalConfig } from '@/windows/custom/fiscal-config/useFiscalConfig.js';
 import { normalizeDateInputValue } from '@/windows/custom/fiscal-config/fiscalConfig.utils.js';
-import { getInvoiceFiscalTargets } from '@/windows/custom/shared/fiscalTargets.js';
+import { getInvoiceFiscalTargets, isSifEligibleByDate } from '@/windows/custom/shared/fiscalTargets.js';
 import { resolveInvoiceOrgId } from '@/windows/custom/shared/resolveInvoiceOrgId.js';
 
 export const CLAVE_TIPO_OPTIONS = [
@@ -79,9 +79,19 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
   const orgId = resolveInvoiceOrgId(data, selectedOrg?.id);
   const specName = apiBaseUrl?.split('/').filter(Boolean).pop() || 'sales-invoice';
 
-  const { profile, tbaiRecord } = useFiscalConfig(orgId, apiBaseUrl);
+  const { profile, tbaiRecord, earliestSiiCutoverDate } = useFiscalConfig(orgId, apiBaseUrl);
   const territory = tbaiRecord?.etsgSifTerritory ?? null;
   const { showSii, showTbai, showVerifactu } = getInvoiceFiscalTargets(specName, profile, territory);
+  // ETP-5432: `showSii` only says the SII SYSTEM applies to this org/territory —
+  // it says nothing about whether THIS invoice's date predates the org's
+  // earliest-ever SII cutover. `PurchaseInvoiceHeaderTable.jsx`'s list column and
+  // `useFiscalStatus.js` (InvoicePreview's "Estado SII" InfoRow) both already gate
+  // on this (ETP-5229); the SIF tab's own SII panel badge (`SiiStatusBadge` in
+  // SifTab.jsx) never did, so an invoice dated before the org's SII adoption
+  // always showed a "Pendiente" pill here instead of the dash the other two
+  // surfaces correctly render. SII books by accounting date, not invoice date —
+  // see `isSifEligibleByDate`'s doc and `useFiscalStatus.js`.
+  const siiEligible = showSii && isSifEligibleByDate(data?.accountingDate, earliestSiiCutoverDate);
   const isPurchaseInvoice = specName === 'purchase-invoice';
   const siiTypeField = isPurchaseInvoice ? 'aeatsiiClaveTipoFc' : 'aeatsiiClaveTipo';
   const siiDescriptionMasterIdentifier = isPurchaseInvoice
@@ -179,6 +189,7 @@ export function useSifFieldPatcher({ data, recordId, apiBaseUrl, onChange }) {
     showSii,
     showTbai,
     showVerifactu,
+    siiEligible,
     isDraft,
     isSentToSii,
     isProcessed,

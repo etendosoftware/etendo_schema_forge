@@ -1501,12 +1501,25 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     if (!autoParams.length) return;
     Promise.all(
       autoParams.map(p => {
-        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency
-        // (ad_org.c_currency_id, same field /organization shows as "Moneda"), not just
-        // the client's base currency — a multi-org client can have orgs in different
-        // currencies. report-api.js's 'currency' selector already prefers the org's
-        // currency in its ORDER BY when selectedOrgId is passed; without it, it falls
-        // back to the client's base currency.
+        // currencyId's autoDefault must follow the ACTIVE ORGANIZATION's currency, not just
+        // the client's base currency — a multi-org client can have orgs booked in different
+        // currencies. This `/sws/report-selectors/currency` call is served by TWO different
+        // backends depending on environment, and (ETP-5483) BOTH now honor selectedOrgId in
+        // their ORDER BY, though via slightly different notions of "the org's currency":
+        //   - dev (Vite): tools/app-shell/vite-plugins/report-api.js's 'currency' selector
+        //     prefers the org's own currency field (ad_org.c_currency_id, same field
+        //     /organization shows as "Moneda").
+        //   - a real Etendo deployment: this `/sws/` path is served by the Java
+        //     ReportSelectorsServlet (com.etendoerp.go), NOT the Node report-api.js/
+        //     report-server mock — whose buildCurrencyQuery() used to ignore selectedOrgId
+        //     entirely (always ordering by the client's currency only) despite the SPA
+        //     already sending it. It now prefers the org's general-ledger/accounting-schema
+        //     currency first (ad_org.c_acctschema_id -> c_acctschema.c_currency_id, falling
+        //     back to ad_org_acctschema) — the same precedence TaxReportHandler's own
+        //     currencyId default follows, so the report's filter default and the amounts it
+        //     actually converts to agree.
+        // Either way, without selectedOrgId this still falls back to the client's base
+        // currency.
         const orgParam = (p.selector === 'currency' && selectedOrgId)
           ? `&selectedOrgId=${encodeURIComponent(selectedOrgId)}`
           : '';

@@ -57,8 +57,12 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
 
   if (variant === 'sii') {
     const sii = kpis?.sii ?? {};
+    // "Periodo anterior" cards hidden — AEATSII_PRESII_INVOICE
+    // (org.openbravo.module.sii) doesn't implement a real rolling
+    // previous-period window, only a pre-SII-enrollment bootstrap check;
+    // showing it produces duplicate/wrong data. Deferred, see ETP-5432.
     return (
-      <div className="fm-kpis">
+      <div className="fm-kpis two">
         <FmKpi
           label={ui('fiscalMonitor.kpi.sii.issued')}
           num={sii.issued}
@@ -69,15 +73,6 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
           onClick={() => onPick('issued')}
           data-testid="FmKpi__d77e5d" />
         <FmKpi
-          label={`${ui('fiscalMonitor.kpi.sii.issued')} · ${ui('fiscalMonitor.kpi.sii.sub.previous')}`}
-          num={sii.issuedPrevious}
-          icon={icons.upload}
-          tone="info"
-          sub={ui('fiscalMonitor.kpi.sii.sub.previous')}
-          active={activeKey === 'issued-previous'}
-          onClick={() => onPick('issued-previous')}
-          data-testid="FmKpi__d77e5d" />
-        <FmKpi
           label={ui('fiscalMonitor.kpi.sii.received')}
           num={sii.received}
           icon={icons.download}
@@ -85,15 +80,6 @@ export default function FiscalKpiCards({ variant, kpis, activeKey, onPick }) {
           sub={ui('fiscalMonitor.kpi.sii.sub.current')}
           active={activeKey === 'received'}
           onClick={() => onPick('received')}
-          data-testid="FmKpi__d77e5d" />
-        <FmKpi
-          label={`${ui('fiscalMonitor.kpi.sii.received')} · ${ui('fiscalMonitor.kpi.sii.sub.previous')}`}
-          num={sii.receivedPrevious}
-          icon={icons.download}
-          tone="info"
-          sub={ui('fiscalMonitor.kpi.sii.sub.previous')}
-          active={activeKey === 'received-previous'}
-          onClick={() => onPick('received-previous')}
           data-testid="FmKpi__d77e5d" />
       </div>
     );
