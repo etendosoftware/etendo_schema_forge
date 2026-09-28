@@ -121,7 +121,11 @@ export function useInvoicePreview({ invoice, apiBaseUrl, specName = 'purchase-in
 
   // ETP-5432 #3: SII target must also be gated on the org's earliest SII cutover
   // date, same as TBAI already is — see sifSending.js.
-  const pendingTargets = getPendingSifTargets(specName, profile, invoiceData, territory, tbaiRecord, earliestSiiCutoverDate);
+  // ETP-5432 QA: TBAI must be gated on the earliest-ever cutover too, not just the
+  // active config row's own date — see sifSending.js.
+  const pendingTargets = getPendingSifTargets(
+    specName, profile, invoiceData, territory, tbaiRecord, earliestSiiCutoverDate, earliestTbaiCutoverDate,
+  );
   const hasPendingTargets = pendingTargets.sendSii || pendingTargets.sendTbai;
   const canSendToSif = invoiceData?.documentStatus === 'CO' && hasPendingTargets;
   const sifBodyKey = getSifBodyKey(specName, pendingTargets);

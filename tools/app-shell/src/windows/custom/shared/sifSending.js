@@ -32,14 +32,22 @@ export function isSent(value) {
  *   invoice 10000075 (accountingDate 22/09/2026, fechaAcogidaSII 24/09/2026). Mirrors
  *   the TBAI gate above: without a cutover date on file, SII is never pending
  *   (fail-safe, same as `isSifEligibleByDate`'s own default).
+ * @param {string|null} [tbaiCutoverDate] `useFiscalConfig().earliestTbaiCutoverDate` — the
+ *   org's earliest-ever TBAI enrollment date, across all config rows (active or
+ *   deactivated). ETP-5432 QA: the TBAI gate used to read `tbaiRecord?.tbaisystemdate`
+ *   (the currently ACTIVE row's own date), so a "Change SIF" config swap could hide a
+ *   genuinely-eligible invoice — dated after the org's TRUE earliest enrollment but
+ *   before the new active row's later date — behind the wrong cutover. Mirrors the SII
+ *   fix above: prefer the earliest-ever date, fall back to the active record's own date
+ *   only when no earliest date is on file (e.g. tests/callers that don't thread it yet).
  */
-export function getPendingSifTargets(specName, profile, invoice, territory = null, tbaiRecord = null, siiCutoverDate = null) {
+export function getPendingSifTargets(specName, profile, invoice, territory = null, tbaiRecord = null, siiCutoverDate = null, tbaiCutoverDate = null) {
   const { showSii, showTbai } = getInvoiceFiscalTargets(specName, profile, territory);
   // SII books by accounting date, not invoice date — mirrors isSifEligibleByDate's
   // own doc and useFiscalStatus.js's siiEligible check.
   const siiEligibleByDate = showSii && isSifEligibleByDate(invoice?.accountingDate, siiCutoverDate);
   const tbaiEligibleByDate = showTbai
-    && isSifEligibleByDate(invoice?.invoiceDate, tbaiRecord?.tbaisystemdate);
+    && isSifEligibleByDate(invoice?.invoiceDate, tbaiCutoverDate ?? tbaiRecord?.tbaisystemdate);
 
   // ETP-5272: a registry-error correction (`aeatsiiErrorRegistral = 'Y'`/`true`) needs
   // a fresh SII send even when the invoice was already sent once (`aeatsiiIssent` stays
