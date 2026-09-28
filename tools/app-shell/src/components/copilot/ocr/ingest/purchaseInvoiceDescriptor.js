@@ -39,7 +39,25 @@ export function toIsoDate(value) {
  * client-side and embed it in the header body.
  */
 async function findBpLocation({ token, apiBaseUrl, bpId }) {
-  if (!apiBaseUrl || !bpId) return null;
+  const { locationId } = await lookupBpLocation({ token, apiBaseUrl, bpId });
+  return locationId;
+}
+
+/**
+ * Whether the BP has an active address, told apart from "could not ask". A BP with none
+ * cannot carry a purchase invoice (partnerAddress is NOT NULL), so the review modal stops
+ * there instead of posting a batch that is certain to fail (ETP-5289).
+ *
+ * @returns {Promise<'present'|'missing'|'unknown'>}
+ */
+export async function checkBpHasLocation({ token, apiBaseUrl, bpId }) {
+  const { locationId, known } = await lookupBpLocation({ token, apiBaseUrl, bpId });
+  if (locationId) return 'present';
+  return known ? 'missing' : 'unknown';
+}
+
+async function lookupBpLocation({ token, apiBaseUrl, bpId }) {
+  if (!apiBaseUrl || !bpId) return { locationId: null, known: false };
   const contactsBase = apiBaseUrl.replace(/\/[^/]+$/, '/contacts');
   const where = encodeURIComponent(`businessPartner.id = '${bpId}' and active = true`);
   const url = `${contactsBase}/locationAddress?_neoWhere=${where}&limit=1`;
@@ -47,14 +65,15 @@ async function findBpLocation({ token, apiBaseUrl, bpId }) {
     const res = await apiFetch(url, { baseUrl: '', token });
     if (!res.ok) {
       console.warn('[OCR][findBpLocation] non-OK', res.status, url);
-      return null;
+      return { locationId: null, known: false };
     }
     const json = await res.json().catch(() => null);
+    if (!json) return { locationId: null, known: false };
     const data = json?.response?.data ?? json?.data ?? [];
-    return data[0]?.id || null;
+    return { locationId: data[0]?.id || null, known: true };
   } catch (e) {
     console.warn('[OCR][findBpLocation] fetch failed', e);
-    return null;
+    return { locationId: null, known: false };
   }
 }
 

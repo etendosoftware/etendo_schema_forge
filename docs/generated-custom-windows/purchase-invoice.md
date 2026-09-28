@@ -1942,7 +1942,7 @@ went back to the dashboard".
 
 | Step | Before | Now |
 |---|---|---|
-| Upload + extract (`/sws/copilot/file`, `/sws/copilot/executeTool`) | 401: `CopilotJwtServlet` accepts only a Bearer SWS JWT | `CopilotSessionBridgeFilter` (com.etendoerp.go) resolves the cookie session and injects a server-minted JWT. See ADR-0001, D1 addendum |
+| Upload + extract (`/sws/copilot/file`, `/sws/copilot/executeTool`) | 401: `CopilotJwtServlet` accepts only a Bearer SWS JWT | `CopilotSessionBridgeFilter` (com.etendoerp.go) resolves the cookie session, builds `OBContext` from it and dispatches to Copilot's `RestService`. No JWT is minted: `generateToken` NPEs when the environment's only warehouse belongs to org `0`. See ADR-0001, D1 addendum |
 | Post-commit attachment | `POST /webhooks/?name=AttachFile` + list + `PATCH …/main`, where the webhook answered 401 | one `POST /sws/neo/attachments/C_Invoice/{id}?markAsMain=true` (`uploadAndMarkMainAttachment`) |
 
 This replaces the "OCR post-commit — `attachFile`" row of the ETP-4855 table above. `attachFile.js`
@@ -1977,3 +1977,10 @@ navigates to the created invoice.
 - **Skipped lines are omitted, not failed.** A line left without a product in "Match products" is
   reported under `omitted`, so the toast reads "N registros omitidos". A per-line failure cannot
   happen on a created invoice: the batch is atomic, so any failure aborts the whole document.
+- **Vendor without an address.** The invoice header cannot be saved without one
+  (`C_Invoice.C_BPartner_Location_ID` is NOT NULL). A contact created from the review popup
+  without filling its Dirección tab has none, and so may an existing vendor. The batch used to
+  post anyway and failed with "La acción falló" after the lines review. Now the review modal
+  checks the chosen vendor (`checkBpHasLocation` in `purchaseInvoiceDescriptor.js`). When it has
+  no address, the modal says so under Proveedor, offers "Volver a verificar", and keeps
+  **Continuar** disabled. A failed lookup (`unknown`) does not block the modal.

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import KindRenderer from './kinds/KindRenderer.jsx';
 import { CREATE_COMPONENTS } from './strategies.js';
+import { checkBpHasLocation } from './ingest/purchaseInvoiceDescriptor.js';
 
 /* eslint-disable react/prop-types */
 
@@ -30,7 +31,7 @@ function Toggle({ checked, onChange, disabled }) {
   );
 }
 
-function FieldRow({ labelText, valueText, checked, onToggle, toggleDisabled, expanded, children }) {
+function FieldRow({ labelText, valueText, checked, onToggle, toggleDisabled, expanded, notice, children }) {
   return (
     <div className="rounded-xl">
       <div className="flex items-center justify-between gap-3 py-2">
@@ -43,6 +44,7 @@ function FieldRow({ labelText, valueText, checked, onToggle, toggleDisabled, exp
           disabled={toggleDisabled}
           data-testid="Toggle__80a87a" />
       </div>
+      {notice}
       {expanded && <div className="pb-2">{children}</div>}
     </div>
   );
@@ -71,6 +73,51 @@ function hasUsableValue(field, value) {
   if (value == null) return false;
   if (field.kind === 'entity') return Boolean(value?.id);
   return value !== '';
+}
+
+/**
+ * Tracks whether the chosen vendor has an address. The invoice header cannot be saved without
+ * one (C_Invoice.C_BPartner_Location_ID is NOT NULL), and a contact created from this modal
+ * without filling its Dirección tab has none, so continuing would only end in "La acción
+ * falló" after the lines review (ETP-5289). 'unknown' (the lookup itself failed) does not
+ * block: the batch still reports a real failure if there is one.
+ */
+function useVendorAddressStatus({ vendorId, token, apiBaseUrl }) {
+  const [status, setStatus] = useState({ vendorId: null, value: 'idle' });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    if (!vendorId) return undefined;
+    let cancelled = false;
+    setStatus({ vendorId, value: 'checking' });
+    checkBpHasLocation({ token, apiBaseUrl, bpId: vendorId })
+      .then((value) => { if (!cancelled) setStatus({ vendorId, value }); });
+    return () => { cancelled = true; };
+  }, [vendorId, token, apiBaseUrl, attempt]);
+
+  const value = vendorId && status.vendorId === vendorId ? status.value : 'idle';
+  return { status: value, recheck: () => setAttempt(n => n + 1) };
+}
+
+function VendorAddressNotice({ status, onRecheck }) {
+  const ui = useUI();
+  if (status !== 'missing') return null;
+  return (
+    <div className="mb-2 flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" data-testid="AlertCircle__80a87a" />
+      <div className="min-w-0 flex-1">
+        <p>{ui('ocrReviewVendorNoAddress')}</p>
+        <button
+          type="button"
+          onClick={onRecheck}
+          className="mt-1 font-medium underline underline-offset-2"
+          data-testid="ocr-review-vendor-recheck"
+        >
+          {ui('ocrReviewVendorRecheck')}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function formatValue(value) {
@@ -109,6 +156,11 @@ export default function OcrReviewModal({
     }));
   };
 
+  const vendorEntry = state.vendor;
+  const vendorId = vendorEntry?.enabled ? vendorEntry?.value?.id || null : null;
+  const vendorAddress = useVendorAddressStatus({ vendorId, token, apiBaseUrl });
+  const vendorAddressBlocks = vendorAddress.status === 'checking' || vendorAddress.status === 'missing';
+
   const handleSubmit = () => {
     const result = { vendor: null, documentNo: null, invoiceDate: null, dueDate: null };
     for (const field of fields) {
@@ -119,7 +171,7 @@ export default function OcrReviewModal({
     onSubmit(result);
   };
 
-  const canSubmit = fields.every((field) => {
+  const canSubmit = !vendorAddressBlocks && fields.every((field) => {
     if (field.key !== 'vendor') return true;
     const entry = state[field.key];
     return entry?.enabled && hasUsableValue(field, entry?.value);
@@ -159,6 +211,14 @@ export default function OcrReviewModal({
                 onToggle={(checked) => updateField(field.key, { enabled: checked, editing: checked ? state[field.key]?.editing : false })}
                 toggleDisabled={(field.key === 'vendor' && resolving) || !hasResolvedValue}
                 expanded={!entry.enabled || !hasResolvedValue || entry.editing}
+                notice={field.key === 'vendor'
+                  ? (
+                    <VendorAddressNotice
+                      status={vendorAddress.status}
+                      onRecheck={vendorAddress.recheck}
+                      data-testid="VendorAddressNotice__80a87a" />
+                  )
+                  : null}
                 data-testid={"FieldRow__" + field.id}>
                 <KindRenderer
                   mode="field"

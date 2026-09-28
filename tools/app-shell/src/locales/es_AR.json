@@ -16951,6 +16951,8 @@
     "ocrReviewVendorCreate": "Crear nuevo contacto",
     "ocrReviewVendorNoMatches": "Sin coincidencias",
     "ocrReviewVendorChecking": "Verificando...",
+    "ocrReviewVendorNoAddress": "Este contacto no tiene dirección y la factura la necesita. Agregala en Contactos, en la pestaña Dirección del contacto.",
+    "ocrReviewVendorRecheck": "Volver a verificar",
     "ocrReviewSubmit": "Completar automáticamente",
     "ocrReviewContinue": "Continuar",
     "ocrReviewCancel": "Cancelar",
