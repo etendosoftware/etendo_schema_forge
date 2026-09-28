@@ -1,8 +1,8 @@
 {
-  "version": "0.35.0",
+  "version": "0.36.0",
   "generatedAt": "2026-05-12T16:47:39.614Z",
-  "updatedAt": "2026-09-25T14:58:12.701Z",
-  "checksum": "505ebe37b343203b",
+  "updatedAt": "2026-09-28T12:18:04.830Z",
+  "checksum": "eab2107975d42688",
   "frontendContract": {
     "window": {
       "id": "143",
@@ -100,7 +100,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -133,7 +133,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -163,7 +163,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -203,7 +203,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -239,7 +239,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @DocStatus@='TMP'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['documentStatus'] === 'TMP'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['documentStatus'] === 'TMP'"
             }
           },
           {
@@ -269,7 +269,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -294,7 +294,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -318,7 +318,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -526,7 +526,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -767,7 +767,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -816,7 +816,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | (@IsSOTrx@='Y' & @ISLINKEDTOPRODUCT@='Y' & @PRODUCTTYPE@='S') | @UomManagement@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true || (record['salesTransaction'] === true && record['iSLINKEDTOPRODUCT'] === 'Y' && record['pRODUCTTYPE'] === 'S') || record['uomManagement'] === 'Y'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || ((record['salesTransaction'] === true || record['salesTransaction'] === 'Y') && record['iSLINKEDTOPRODUCT'] === 'Y' && record['pRODUCTTYPE'] === 'S') || record['uomManagement'] === 'Y'"
             }
           },
           {
@@ -848,7 +848,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -882,7 +882,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -927,7 +927,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true"
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -978,7 +978,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @GROSSPRICE@='Y'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['gROSSPRICE'] === 'Y'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['gROSSPRICE'] === 'Y'"
             }
           },
           {
@@ -1010,7 +1010,7 @@
             "readOnlyLogic": {
               "raw": "@Processed@='Y' | @GROSSPRICE@='N'",
               "evaluable": true,
-              "js": "record['processed'] === true || record['gROSSPRICE'] === 'N'"
+              "js": "(record['processed'] === true || record['processed'] === 'Y') || record['gROSSPRICE'] === 'N'"
             }
           },
           {
