@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
@@ -97,6 +98,7 @@ export default function PurchaseOrderWindow(props) {
   const { recordId, windowName, token, apiBaseUrl } = props;
   const [cloneTargets, setCloneTargets] = useState(null);
   const tMenu = useMenuLabel();
+  const [searchParams] = useSearchParams();
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
@@ -169,6 +171,21 @@ export default function PurchaseOrderWindow(props) {
     );
   }
 
+  // ETP-5487 — the dashboard "Recepciones" card drills down into this exact
+  // criterion: completed purchase orders (Estado doc. = Completado) whose
+  // reception is not yet finished (Estado de recepcion < 100). Mirrors the
+  // `?filter=overdue`/`paymentsDue` pattern in purchase-invoice/index.jsx.
+  const isPendingReception = searchParams.get('filter') === 'pendingReception';
+  const initialAdvancedFilter = isPendingReception
+    ? {
+        rowOperator: 'and',
+        conditions: [
+          { field: 'documentStatus', operator: 'equals', value: 'CO' },
+          { field: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
+        ],
+      }
+    : null;
+
   return (
     <>
       <ListView
@@ -187,6 +204,8 @@ export default function PurchaseOrderWindow(props) {
         renderPreview={renderPreview}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
+        initialAdvancedFilter={initialAdvancedFilter}
+        initialFiltersFromUrl={isPendingReception}
         {...props}
         window={effectiveWindow}
         data-testid="ListView__b7ace5" />

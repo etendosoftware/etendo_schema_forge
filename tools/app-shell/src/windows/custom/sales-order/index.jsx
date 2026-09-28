@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import GeneratedApp from '@generated/sales-order/generated/web/sales-order/index.jsx';
 import HeaderTable from '@generated/sales-order/generated/web/sales-order/HeaderTable';
 import OrderReactivateBulkAction from '@generated/sales-order/custom/OrderReactivateBulkAction';
@@ -75,6 +76,7 @@ const SO_MANAGE_LABELS = {
 export default function SalesOrderWindow({ windowName, recordId, token, apiBaseUrl, ...rest }) {
   const [cloneTargets, setCloneTargets] = useState(null);
   const tMenu = useMenuLabel();
+  const [searchParams] = useSearchParams();
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'sale' });
@@ -149,6 +151,21 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
     );
   }
 
+  // ETP-5487 — the dashboard "Envios" card drills down into this exact
+  // criterion: completed sales orders (Estado doc. = Completado) whose
+  // delivery is not yet finished (Estado de entrega < 100). Mirrors the
+  // `?filter=overdue`/`paymentsDue` pattern in purchase-invoice/index.jsx.
+  const isPendingDelivery = searchParams.get('filter') === 'pendingDelivery';
+  const initialAdvancedFilter = isPendingDelivery
+    ? {
+        rowOperator: 'and',
+        conditions: [
+          { field: 'documentStatus', operator: 'equals', value: 'CO' },
+          { field: 'deliveryStatus', operator: 'lessThan', value: 100 },
+        ],
+      }
+    : null;
+
   return (
     <>
       <ListView
@@ -162,6 +179,8 @@ export default function SalesOrderWindow({ windowName, recordId, token, apiBaseU
         rowQuickActions={rowQuickActions}
         token={token}
         apiBaseUrl={apiBaseUrl}
+        initialAdvancedFilter={initialAdvancedFilter}
+        initialFiltersFromUrl={isPendingDelivery}
         hideLink
         bulkActions={(ctx) => (
           <>
