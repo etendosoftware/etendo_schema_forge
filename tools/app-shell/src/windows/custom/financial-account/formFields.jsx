@@ -17,9 +17,21 @@ export const textareaClass =
  * Label + control stacked vertically. The control fills the cell width via the
  * flex-column's default `align-items: stretch`.
  *
- * @param {{ label: string, required?: boolean, optional?: string, children: React.ReactNode }} props
+ * When `error` is set, an inline message is rendered under the control with the
+ * same markup the generated forms use (EntityForm `renderFieldWithError`): a
+ * `role="alert"` paragraph in the destructive color. The red border on the
+ * control itself is the caller's job, since only it knows the control type.
+ *
+ * @param {{
+ *   label: string,
+ *   required?: boolean,
+ *   optional?: string,
+ *   error?: string | null,
+ *   errorTestId?: string,
+ *   children: React.ReactNode,
+ * }} props
  */
-export function FieldRow({ label, required, optional, children }) {
+export function FieldRow({ label, required, optional, error, errorTestId, children }) {
   return (
     <label className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs font-medium text-[hsl(var(--muted-foreground))]">
@@ -28,6 +40,14 @@ export function FieldRow({ label, required, optional, children }) {
         {optional ? <span className="font-normal text-[hsl(var(--muted-foreground))]"> {optional}</span> : null}
       </span>
       {children}
+      {error ? (
+        <p role="alert" className="text-xs text-destructive mt-0.5" data-testid={errorTestId}>
+          {error}
+        </p>
+      ) : null}
     </label>
   );
 }
+
+/** Border class that flags a control as invalid; merge it with `cn` so it wins over the default border color. */
+export const invalidControlClass = 'border-destructive';
