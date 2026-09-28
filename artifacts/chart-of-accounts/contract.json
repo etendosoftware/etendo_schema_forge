@@ -1,8 +1,8 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-09-02T19:12:04.395Z",
-  "checksum": "2c0ec515e76b6107",
+  "updatedAt": "2026-09-25T12:47:55.330Z",
+  "checksum": "4592e4b920259c83",
   "frontendContract": {
     "window": {
       "id": "118",
@@ -284,14 +284,6 @@
             "column": "AccountType",
             "type": "enum",
             "visibility": "editable",
-            "required": true
-          },
-          {
-            "name": "accountType2",
-            "apiKey": "accountType2",
-            "column": "AccountType",
-            "type": "enum",
-            "visibility": "discarded",
             "required": true
           },
           {
@@ -887,14 +879,6 @@
         "description": "System field 'accountSign' should exist in backend but not frontend for elementValue"
       },
       {
-        "id": "t-system-field-elementValue-accountType2",
-        "category": "system-field",
-        "entity": "elementValue",
-        "field": "accountType2",
-        "runner": "node",
-        "description": "System field 'accountType2' should exist in backend but not frontend for elementValue"
-      },
-      {
         "id": "t-system-field-elementValue-bankAccount",
         "category": "system-field",
         "entity": "elementValue",
@@ -1087,7 +1071,7 @@
       }
     ],
     "summary": {
-      "total": 68,
+      "total": 67,
       "byCategory": {
         "crud-flags": 1,
         "default-value-type": 2,
@@ -1098,11 +1082,11 @@
         "readonlylogic-evaluable": 4,
         "readonlylogic-valid": 4,
         "rule-declared": 18,
-        "system-field": 26,
+        "system-field": 25,
         "visibility": 1
       },
       "byRunner": {
-        "node": 68,
+        "node": 67,
         "junit": 0
       }
     }
