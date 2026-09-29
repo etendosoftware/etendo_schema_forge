@@ -1076,6 +1076,30 @@ describe('ListView — refresh and paging', () => {
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 
+  // ETP-5387 — a headerTable that self-fetches its whole dataset (chart-of-accounts) never
+  // renders ListView's own page, so it needs its own signal that the USER pressed Refresh.
+  it('forwards a userRefreshTrigger to the table that the refresh button bumps', async () => {
+    const user = userEvent.setup();
+    render(<ListView {...defaultProps} />);
+    expect(tableProps.userRefreshTrigger).toBe(0);
+
+    await user.click(screen.getByTestId('refresh-icon').closest('button'));
+    expect(tableProps.userRefreshTrigger).toBe(1);
+
+    await user.click(screen.getByTestId('refresh-icon').closest('button'));
+    expect(tableProps.userRefreshTrigger).toBe(2);
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not bump userRefreshTrigger for host-driven or data-mutation reloads', () => {
+    const { rerender } = render(<ListView {...defaultProps} refreshTrigger={0} />);
+    rerender(<ListView {...defaultProps} refreshTrigger={1} />);
+    act(() => { tableProps.onDataMutated(); });
+
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+    expect(tableProps.userRefreshTrigger).toBe(0);
+  });
+
   it('refetches once per change of the external refreshTrigger, never for a repeat', () => {
     const { rerender } = render(<ListView {...defaultProps} refreshTrigger={0} />);
     expect(refreshMock).not.toHaveBeenCalled();

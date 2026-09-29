@@ -82,9 +82,10 @@ describe('FmOverlays interactive coverage', () => {
     const onClose = vi.fn();
     render(<FileGenModal decl={{ model: '303', year: 2026, period: 'T2', phone: '111', contact: 'Ana' }} onConfirm={onConfirm} onClose={onClose} />);
 
-    // Textbox order: FileName, Contact, Phone, FormerStatement, RepresentativeTaxId.
+    // Textbox order (not substitutive, ETP-5456): FileName, Contact, Phone,
+    // RepresentativeTaxId — FormerStatement only renders when `substitutive` is true.
     const inputs = screen.getAllByRole('textbox');
-    expect(inputs).toHaveLength(5);
+    expect(inputs).toHaveLength(4);
     await user.clear(inputs[1]);
     await user.type(inputs[1], 'Bea');
     await user.clear(inputs[2]);
@@ -93,8 +94,10 @@ describe('FmOverlays interactive coverage', () => {
 
     expect(onConfirm).toHaveBeenCalledWith({
       // fileName/formerStatement/representativeTaxId are untouched here, so
-      // `field.trim() || undefined` yields undefined, not ''.
-      fileName: undefined, phone: '222', contact: 'Bea', substitutive: false,
+      // `field.trim() || undefined` yields undefined, not ''. `substitutive` is no
+      // longer part of the payload (ETP-5456 — the checkbox moved to the declaration
+      // form; this modal only reads it via the `substitutive` prop, not passed here).
+      fileName: undefined, phone: '222', contact: 'Bea',
       formerStatement: undefined, representativeTaxId: undefined, navarra: false, guipuzcoa: false,
     });
     expect(onClose).toHaveBeenCalled();

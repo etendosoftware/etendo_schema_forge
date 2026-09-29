@@ -165,9 +165,15 @@ describe('useFiscalStatus', () => {
 
   // ETP-5216/ETP-5229: TBAI's eligibility gate moved OUT of this hook and into
   // the stored computed column `EM_ETGO_Tbai_Status` (`eTGOTbaiStatus` on the
-  // invoice record). This hook no longer applies any date check for TBAI — it
-  // only translates the literal `'NoAplica'` to a dash and otherwise mirrors
-  // the list column's fallback chain (eTGOTbaiStatus ?? isSent(tbaiIssent) ? 'Enviada' : 'Pendiente').
+  // invoice record) — once the DB has computed a value (including the literal
+  // `'NoAplica'`), this hook never re-gates it by date.
+  // ETP-5432 #5: as a SAFETY NET for the window before that column has ever
+  // been computed for a given invoice (`eTGOTbaiStatus == null`), the hook
+  // falls back to its OWN client-side date check (`invoiceDate` vs.
+  // `cutoverDates.tbai`) rather than defaulting to "eligible" — otherwise an
+  // uncomputed pre-adoption invoice would briefly show "Pendiente" instead of
+  // a dash. Tests below that omit `eTGOTbaiStatus` must pass a `cutoverDates.tbai`
+  // for this fallback to resolve as eligible.
   describe('TBAI', () => {
     it('prefers eTGOTbaiStatus over the tbaiIssent fallback when both are present', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
@@ -182,7 +188,9 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: true, invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2020-01-01T00:00:00.000Z',
+      }));
 
       expect(result.current.tbai).toBe('Enviada');
     });
@@ -191,7 +199,9 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: 'Y', invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2020-01-01T00:00:00.000Z',
+      }));
 
       expect(result.current.tbai).toBe('Enviada');
     });
@@ -202,7 +212,9 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { tbaiIssent: 'N', invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2020-01-01T00:00:00.000Z',
+      }));
 
       expect(result.current.tbai).toBe('Pendiente');
     });
@@ -211,9 +223,36 @@ describe('useFiscalStatus', () => {
       getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
       const invoice = { invoiceDate: '2026-06-15' };
 
-      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2020-01-01T00:00:00.000Z',
+      }));
 
       expect(result.current.tbai).toBe('Pendiente');
+    });
+
+    // ETP-5432 #5 fallback gate itself: when eTGOTbaiStatus has never been
+    // computed AND the invoice predates the org's tbai cutover, the fallback
+    // must render a dash (null) rather than fabricating "Pendiente".
+    it('returns null (dash) via the fallback gate when eTGOTbaiStatus is uncomputed and invoiceDate predates the tbai cutover', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiIssent: false, invoiceDate: '2019-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai', null, {
+        tbai: '2020-01-01T00:00:00.000Z',
+      }));
+
+      expect(result.current.tbai).toBeNull();
+    });
+
+    // Same fallback gate, but with NO cutover date on file at all — fails
+    // safe (dash), mirroring isSifEligibleByDate's own default.
+    it('returns null (dash) via the fallback gate when eTGOTbaiStatus is uncomputed and no tbai cutover is on file', () => {
+      getInvoiceFiscalTargets.mockReturnValue(ONLY_TBAI);
+      const invoice = { tbaiIssent: false, invoiceDate: '2026-06-15' };
+
+      const { result } = renderHook(() => useFiscalStatus(invoice, SPEC, 'tbai'));
+
+      expect(result.current.tbai).toBeNull();
     });
 
     // The DB function answers this literal when the invoice predates the
