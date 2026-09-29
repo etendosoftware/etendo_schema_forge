@@ -20,6 +20,25 @@
 .stock-card-head { display: flex; align-items: center; gap: 3mm; background: var(--color-accent-highlight-muted); color: var(--color-accent-highlight-foreground); padding: 2mm 4mm; font-size: 9pt; }
 .stock-card-head .value { font-weight: 700; font-size: 10.5pt; }
 .stock-card-head .chip { display: inline-block; line-height: 1; font-size: 8pt; font-weight: 600; color: var(--color-primary); background: var(--color-bg-stripe); border: 1px solid rgba(18,18,23,0.15); border-radius: 3mm; padding: 1mm 3mm; }
+/* ETP-5492: same auto-layout overflow already fixed on aging-receivable/
+   aging-payable (ETP-4900) — an auto-layout table's <th style="width:X%">
+   is only a floor, not a cap, so a long "Clave" (product search key) value
+   pushes that column past its nominal 12% and steals width from every
+   other column, "Producto" included. table-layout: fixed (below, on both
+   the grouped and ungrouped tables) makes those widths authoritative.
+   That alone still isn't enough for THIS report specifically: a search key
+   with no spaces (e.g. "NOMBRE_LARGO_PARA_ROMPER_PDF_MAS_LARGO") has no
+   word-break opportunity, so even inside a fixed-width column it would
+   still spill past the cell edge — cell-key's overflow-wrap forces a break
+   inside the word itself when there is nowhere else to break. */
+.report-table td.cell-key { overflow-wrap: anywhere; }
+/* ETP-5492 follow-up: base.css's thead th is white-space: nowrap, which was
+   harmless while every header fit its column at "UdM" width — now that the
+   uom header is the full "Unidad de medida" / "Unit of Measure", nowrap
+   forces it past its own 8% column and it renders on top of the next
+   header ("Stock Disponible"). Same fix as aging-receivable/aging-payable
+   (ETP-4900): let a header wrap onto a 2nd line instead of overflowing. */
+.report-table thead th { white-space: normal; line-height: 1.2; }
 </style>
 </head>
 <body><div class="report-container">
@@ -55,7 +74,7 @@
         {{#unless @first}}</tbody></table></div>{{/unless}}
     <div class="stock-card">
       <div class="stock-card-head"><span class="chip">{{@root.meta.dimensionLabel}}</span><span class="value">{{lookup this @root.meta.dimensionField}}</span></div>
-      <table class="report-table">
+      <table class="report-table" style="table-layout: fixed;">
         <thead><tr>
           <th style="width: 12%">{{@root.meta.labels.productSearchKey}}</th>
           {{#unless (eq @root.meta.dimensionField 'product')}}<th style="width: 18%">{{@root.meta.labels.product}}</th>{{/unless}}
@@ -69,7 +88,7 @@
         <tbody>
       {{/if}}
           <tr>
-            <td>{{lookup this 'productSearchKey'}}</td>
+            <td class="cell-key">{{lookup this 'productSearchKey'}}</td>
             {{#unless (eq @root.meta.dimensionField 'product')}}<td>{{lookup this 'product'}}</td>{{/unless}}
             {{#unless (eq @root.meta.dimensionField 'warehouse')}}<td>{{lookup this 'warehouse'}}</td>{{/unless}}
             {{#unless (eq @root.meta.dimensionField 'category')}}<td>{{lookup this 'category'}}</td>{{/unless}}
@@ -84,7 +103,7 @@
     </div>
   </div>
   {{else}}
-  <table class="report-table">
+  <table class="report-table" style="table-layout: fixed;">
     <thead><tr>
       <th style="width: 12%">{{meta.labels.productSearchKey}}</th>
       <th style="width: 18%">{{meta.labels.product}}</th>
@@ -98,7 +117,7 @@
     <tbody>
       {{#each rows}}
       <tr>
-        <td>{{lookup this 'productSearchKey'}}</td>
+        <td class="cell-key">{{lookup this 'productSearchKey'}}</td>
         <td>{{lookup this 'product'}}</td>
         <td>{{lookup this 'warehouse'}}</td>
         <td>{{lookup this 'category'}}</td>
