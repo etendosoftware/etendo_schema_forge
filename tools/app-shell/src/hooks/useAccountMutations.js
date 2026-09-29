@@ -65,6 +65,11 @@ function toDalBody(payload) {
   // to the account so a later bank connect can preselect that bank.
   if (payload.providerCode) body.providerCode = payload.providerCode;
   if (payload.providerName) body.providerName = payload.providerName;
+  // Its logo (ETP-5521), only when non-blank. The backend keeps it only when it is an https URL on
+  // the Salt Edge logo CDN host, and only to fill a provider that has no logo yet (never replaces).
+  if (typeof payload.providerLogoUrl === 'string' && payload.providerLogoUrl.trim()) {
+    body.providerLogoUrl = payload.providerLogoUrl;
+  }
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
   // DAL property names per contract.json: the custom columns are `EM_ETGO_Date_Tolerance` /
   // `EM_ETGO_Amount_Tolerance`, but Etendo derives the bean property by dropping the "EM_"

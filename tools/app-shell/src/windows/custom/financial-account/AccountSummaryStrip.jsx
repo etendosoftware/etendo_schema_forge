@@ -41,8 +41,11 @@ export function AccountSummaryStrip({ account, totals, loading }) {
   const isCash = account?.type === ACCOUNT_TYPE.CASH;
   const isCard = account?.type === ACCOUNT_TYPE.CARD;
   // Cash has no IBAN; a card shows its masked card number instead of an IBAN.
-  // Hide the whole identifier block for cash, and for a card without a PAN.
+  // The identifier text is hidden for cash, and for a card without a PAN.
   const showIdentifier = !isCash && (!isCard || !!account?.maskedPan);
+  // ETP-5521: an offline card (no PAN) can still carry the bank logo picked at creation — show
+  // just the logo then. A card with neither PAN nor logo keeps the whole block hidden.
+  const showLogoOnly = isCard && !showIdentifier && Boolean(account?.providerLogoUrl?.trim());
 
   const handleCopyIban = () => {
     if (account?.iban) {
@@ -73,38 +76,41 @@ export function AccountSummaryStrip({ account, totals, loading }) {
       <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
 
         {/* Avatar + identifier — fixed width, never grows or shrinks. Hidden for
-            cash accounts (no IBAN) and for cards without a masked PAN. Banks show
-            the IBAN (with "—" when none stored); cards show their card number. */}
-        {showIdentifier ? (
+            cash accounts (no IBAN) and for cards with neither a masked PAN nor a bank
+            logo. Banks show the IBAN (with "—" when none stored); cards show their card
+            number, or only the bank logo when there is no PAN (ETP-5521). */}
+        {showIdentifier || showLogoOnly ? (
           <div className="flex w-[364px] shrink-0 items-center gap-2">
             <AccountLogoAvatar
               account={account}
               className="shrink-0"
               data-testid="AccountLogoAvatar__748dd1" />
-            <div className="flex min-w-0 flex-col">
-              <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
-                {isCard ? ui('financeAccountDetailCardNumber') : 'IBAN'}
-              </span>
-              <div className="flex items-center gap-0.5">
-                <span
-                  data-testid="iban-text"
-                  className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
-                >
-                  {isCard ? account?.maskedPan : formatIban(account?.iban)}
+            {showIdentifier ? (
+              <div className="flex min-w-0 flex-col">
+                <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
+                  {isCard ? ui('financeAccountDetailCardNumber') : 'IBAN'}
                 </span>
-                {!isCard && account?.iban ? (
-                  <button
-                    type="button"
-                    onClick={handleCopyIban}
-                    data-testid="iban-copy-button"
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
-                    aria-label={ui('financeAccountDetailIbanCopyAria')}
+                <div className="flex items-center gap-0.5">
+                  <span
+                    data-testid="iban-text"
+                    className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
                   >
-                    <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
-                  </button>
-                ) : null}
+                    {isCard ? account?.maskedPan : formatIban(account?.iban)}
+                  </span>
+                  {!isCard && account?.iban ? (
+                    <button
+                      type="button"
+                      onClick={handleCopyIban}
+                      data-testid="iban-copy-button"
+                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
+                      aria-label={ui('financeAccountDetailIbanCopyAria')}
+                    >
+                      <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
           </div>
         ) : null}
 

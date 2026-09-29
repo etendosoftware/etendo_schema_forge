@@ -169,9 +169,12 @@ else to `B`; the frontend `ACCOUNT_TYPE.CARD` is `'CA'`.
 
 ### Bank picker (BANK step)
 
-- Flag-area input field: left side shows `<Landmark>` + `<ChevronDown>` in a 60 px border-right box; right side is a plain `<input>` that filters `bankCatalog.js`.
-- Popular grid: 3-column, `gap-5` (20 px). Each card is 104 px tall: 40 px icon button + bank name. No bank logo yet — uses `<Landmark>` placeholder.
-- "Continue without selecting a bank" link skips BANK → INSTITUTION and sets `selectedBank = null`.
+- Flag-area input field: left side shows the country flag (`BANK_COUNTRIES`, Spain only for now) + `<ChevronDown>` in a border-right box; right side is a plain `<input>` that filters the bank list by name.
+- Bank source: the live Salt Edge provider catalog for the selected country (`useBankConnectionActions().fetchProviders(country)` → `GET ?action=providers`). While it loads, a skeleton grid is shown; when the call fails or returns nothing (e.g. no PSD2 API key) the picker falls back to the static `bankCatalog.js`.
+- Bank grid: 3-column, `gap-5` (20 px), 124 px cards. A Salt Edge provider card shows the provider's `logoUrl` as a 40 px `<img>`; a static-catalog bank (no logo) shows the `<Landmark>` placeholder.
+- Picking a Salt Edge provider goes straight to the form (providers have no institution sub-list); picking a static-catalog bank goes to INSTITUTION.
+- **The picked provider — including its logo — is stored on submit (ETP-5521), for bank and card accounts alike** (both go through this picker; cash never reaches it). `handleCreate` adds `providerCode`, `providerName` and `providerLogoUrl` (`selectedBank.logoUrl`) to the create payload; `useAccountMutations.toDalBody` forwards `providerLogoUrl` only when it is non-blank. On the backend `FinancialAccountHandler.enrichProvider` upserts the shared `PSD2_PROVIDER` row and links it via the `psd2Provider` FK, so the Cuentas list and the account header render the bank logo (`providerLogoUrl`, `LEFT JOIN` in `FinancialAccountsPageHandler`) instead of the placeholder. The client-sent logo is only trusted to **fill a missing logo**, and only from the Salt Edge logo CDN — it never replaces a logo already stored. See "Provider memory" below for the trust model. Static-catalog banks carry no Salt Edge code, so nothing is sent for them.
+- "Continue without selecting a bank" link skips BANK → FORM with `selectedBank = null`; no provider keys are sent.
 
 ### Institution step (INSTITUTION step)
 
@@ -790,9 +793,37 @@ native app-shell UI; only the bank login is an external popup.
   `useBankConnectionFlow().startConnect(account)`.
 - **Connect with creation** (no account yet): the New Account wizard "Con conexión" card →
   `startCreate(type)` (creates the FA from the chosen bank account, then links).
-- **Provider memory:** creating an account offline with a real Salt Edge provider selected stores
-  that provider on the FA (`psd2Provider` FK, metadata only — the account stays offline). A later
+- **Provider memory:** creating a bank **or card** account offline with a real Salt Edge provider
+  selected stores that provider on the FA (`psd2Provider` FK, metadata only — the account stays
+  offline). `FinancialAccountHandler.supportsProvider` accepts types `B` and `CA`; a cash (`C`)
+  create ignores the provider keys and only strips them. This matches the online link, which
+  already sets `psd2Provider` on any linked account regardless of type. A later
   connect then preselects that bank, so the Salt Edge widget skips the bank picker.
+  - **The provider logo is stored too (ETP-5521) — fill-only, Salt Edge CDN only.** The create
+    body carries a transient `providerLogoUrl`. Because it comes from the client and
+    `PSD2_PROVIDER` is **shared across tenants by provider code**, `FinancialAccountHandler` treats
+    it as untrusted:
+    1. `sanitizeProviderLogoUrl` keeps it only when it is non-blank, at most 255 chars (the column
+       size) and parses with `java.net.URI` as `https` (case-insensitive), no user-info (so
+       `https://<cdn-host>@evil.tld` is rejected), default port, and a host in
+       `TRUSTED_PROVIDER_LOGO_HOSTS` — today only `d1uuj3mi6rzwpm.cloudfront.net`, the Salt Edge
+       logo CDN every stored `LOGO_URL` points at (`/logos/providers/<cc>/<code>.svg`). Anything
+       else becomes `null`.
+    2. `fillOnlyLogo` then passes it to `ProviderCatalogUtils.upsertProvider(code, name, null, logoUrl)`
+       **only when the provider does not exist yet or its stored `LOGO_URL` is blank**; otherwise
+       it passes `null`, so an existing logo is never replaced. (`upsertProvider` itself overwrites
+       with any non-blank value — that is what `SyncBankProviders` relies on — so the fill-only
+       guard lives in the handler, not in the utility.)
+    
+    An unusable logo is dropped silently; it never fails the create. The transient `providerCode` /
+    `providerName` / `providerLogoUrl` keys are always stripped from the body — on create (also for
+    cash accounts or without a provider code) and on update, where they are ignored entirely.
+  - **Remediation for accounts created before ETP-5521:** those created a `PSD2_PROVIDER` row
+    without a logo, so their row shows the `<Landmark>` placeholder. The catalog is shared per
+    provider code and fill-only still writes a blank row, so the logo heals on its own the next
+    time any offline account is created with the same bank, or immediately by running the psd2
+    `SyncBankProviders` process (which refreshes the whole provider catalog, logos included). No
+    data-fix is needed.
 - **Sandbox/fake banks are offered to Demo tenants only (ETP-5344).** Whether the Salt Edge widget
   lists test banks alongside the real ones is decided by `handleConnect` and passed down as the
   `includeSandboxes` argument of `SaltEdgeConnectionBuilder.createSaltEdgeConnection`, which is the only
@@ -1003,10 +1034,25 @@ connect-flow bank picker (`action=providers`) and account selector (`action=acco
 already showed the logo before this but by hitting Salt Edge on every request. Blank when the
 account has no bank provider, or the provider has no logo on record yet.
 
-`AccountLogoAvatar` renders it when present, falling back to the generic per-type icon (unchanged
-default) for cash/card accounts and for any bank account without a logo — including a logo URL
+`AccountLogoAvatar` renders it whenever it is present, whatever the account type (so a card
+created with a provider shows the bank logo too, ETP-5521), falling back to the generic per-type
+icon (unchanged default) for any account without a logo — including a logo URL
 that fails to load, caught via the `<img>`'s `onError`, so a dead or 403 URL degrades to the icon
 instead of showing a broken image.
+
+In the account detail's `AccountSummaryStrip` the avatar sits in the fixed-width (364 px) identifier
+block, which follows these rules (ETP-5521):
+
+| Account | Identifier block |
+|---|---|
+| Bank | Avatar + "IBAN" label + chunked IBAN (em dash when none) + copy button |
+| Card with masked PAN | Avatar + card-number label + masked PAN |
+| Card without PAN, with a non-blank `providerLogoUrl` | **Avatar only** (the bank logo) — no label, no empty number line |
+| Card with neither PAN nor logo | Hidden (no generic icon is added) |
+| Cash | Hidden |
+
+The logo-only case exists because an offline card created from the bank picker now remembers its
+provider and logo but has no PAN until it is connected.
 
 ## Archive / Unarchive / Delete Dialogs
 
@@ -1295,7 +1341,7 @@ Display the full detail of a financial account: a summary strip with KPIs, and t
 
 - Navigate to `/financial-account/:id` from the Cuentas list (row click).
 - Topbar shows `{accountName}` as title and `Finanzas / Cuentas / {accountName}` as breadcrumb via `useSetPageMeta` (inlined in `index.jsx` — no per-window header bar).
-- Account Summary Strip (single horizontal bar inside the Movements tab body): avatar + IBAN (chunked in groups of 4, with copy-to-clipboard) | Saldo total | Entradas (30D) | Salidas (30D). The three KPI sections use `flex-1` so they spread evenly.
+- Account Summary Strip (single horizontal bar inside the Movements tab body): avatar + IBAN (chunked in groups of 4, with copy-to-clipboard) — or card number, or the bank logo alone for an offline card; see the `AccountSummaryStrip` rules under `AccountLogoAvatar` | Saldo total | Entradas (30D) | Salidas (30D). The three KPI sections use `flex-1` so they spread evenly.
 - Three tabs with counts: Movements (live data), Reconciliation (live data — manual reconciliation split panel, T6 + automatch engine, T7), Imported Statements (live data).
 - **Editar** button (ETP-4530) sits to the left of the contextual tab-strip action, always visible regardless of the active tab — opens `EditAccountModal` (see below) so editing no longer requires going back to the Cuentas list.
 - Right-side tab-strip action is contextual. On **Movements** and **Imported Statements** it shows the Export button and performs a CSV download. On **Reconciliation** it shows the **Automatch** button, which opens the automatch suggestions modal (T7). **All exports go through the generic backend CSV flow** (`?export=csv`, see `neo-headless.md` §4.3) via the shared `useCsvExport` hook, so the server streams the file and large lists never get assembled in the browser:
