@@ -936,7 +936,7 @@ export default function UpgradePage() {
         setPhase('recovery');
       },
       onExistingProvisioning: purchase => {
-        if (!cancelled) void waitForExistingProvisioning(purchase);
+        if (!cancelled) waitForExistingProvisioning(purchase);
       },
       onReady: () => setPhase('running'),
     }).catch(error => {
@@ -1200,7 +1200,7 @@ export default function UpgradePage() {
             <p className="font-semibold">{ui('upgradeProvisioningWaitingTitle')}</p>
             <p className="text-sm text-muted-foreground">{ui('upgradeProvisioningWaitingBody')}</p>
             <Button type="button" onClick={() => {
-              if (provisioningPurchaseId) void waitForExistingProvisioning({
+              if (provisioningPurchaseId) waitForExistingProvisioning({
                 purchaseId: provisioningPurchaseId,
                 clientName: form.tenantName,
               });
