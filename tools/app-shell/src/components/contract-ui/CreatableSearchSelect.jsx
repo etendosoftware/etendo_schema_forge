@@ -851,7 +851,8 @@ export function CreatableSearchSelect({
     stateClasses = ' bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed';
     borderColorClass = 'border-[hsl(var(--field-disabled-border))]';
   } else {
-    stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
+    // --field-hover (not --muted): the one hover fill every field shares (ETP-5479).
+    stateClasses = ' bg-card hover:bg-[hsl(var(--field-hover))]';
   }
 
   return (
