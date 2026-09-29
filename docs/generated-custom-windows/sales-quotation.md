@@ -266,8 +266,12 @@ running `C_Order_Post` with `DocAction = 'RE'` through `OrderDocActionSupport`.
 That is the same procedure the UI's DocAction button reaches. So the SPA and
 the MCP (`neo_action Convertquotation`) both end with a Draft order; before
 ETP-5528 an order created through the MCP stayed Completed. The step is
-best-effort: if the reactivation fails, the conversion is kept, the order stays
-Completed and the failure is logged.
+best-effort only for **reported** failures. If `C_Order_Post` reports a failure,
+or the role has no access to it, the conversion is kept, the order stays
+Completed and the failure is logged. A thrown error is different: a failed
+flush, a DB exception or a statement timeout leaves the transaction aborted.
+It is not swallowed, so the whole request fails and nothing is persisted. The
+client never gets a `salesOrderId` for an order that was rolled back.
 
 The backend action response body is
 `{ "salesOrderId": "<id>", "documentStatus": "DR" }`. The frontend
