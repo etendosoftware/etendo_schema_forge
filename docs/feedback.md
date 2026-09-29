@@ -2907,3 +2907,35 @@ equivalent) call before assuming the wiring is complete, and confirm the field t
 visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
 action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
 error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).
+
+---
+
+## Dashboard Pending-Tasks Cards Moved from Draft M_InOut to Completed C_Order (ETP-5487) — Known Debt Flagged, Not Fixed
+
+**Component:** `WidgetPendingTasksHandler.java` + `useDashboardData.js` + `docs/widget-endpoints.md`
+
+**Context (not a bug in this entry, a documentation flag):** ETP-5487 changed the "Recepciones"
+and "Envíos" dashboard cards from counting draft (`DocStatus='DR'`) `M_InOut` records to counting
+completed (`docstatus='CO'`) `C_Order` rows whose delivery/reception percentage is below 100%
+(core virtual columns `DeliveryStatusPurchase`/`DeliveryStatus`), and changed the click-through
+navigation from `/goods-receipt?DocStatus=DR` / `/goods-shipment?DocStatus=DR` to
+`/purchase-order?filter=pendingReception` / `/sales-order?filter=pendingDelivery` (legacy fallback
+preserved for rolling deploy). `docs/widget-endpoints.md` in both `schema_forge` and
+`schema_forge_core` was updated to match during this same review cycle.
+
+**Two pre-existing gaps found while verifying doc freshness for ETP-5487 — neither introduced by
+this ticket, neither fixed here, flagged so they are not lost:**
+
+1. **`schema_forge_core/docs/widget-endpoints.md`'s Task Inventory table is missing the
+   `paymentsOverdue` row** (added to `schema_forge/docs/widget-endpoints.md` by ETP-5012, never
+   back-ported to the core repo's duplicate copy). The two files already drift outside of this
+   ticket's scope; the core copy needs its own follow-up sync pass.
+2. **No E2E spec exists for the "Recepciones" (pending-reception) pending-tasks card** — only
+   `e2e/tests/flows/dashboard/pending-shipments-card.mocked.spec.js` exists, covering "Envíos"
+   (pending-delivery). The receptions side of ETP-5487 has no equivalent mocked spec.
+
+**Lesson:** When two repos keep independent copies of the same reference doc
+(`schema_forge/docs/widget-endpoints.md` and `schema_forge_core/docs/widget-endpoints.md` per the
+repo-split topology), a review that only checks the copy it touched can miss that the other copy
+was already stale for an unrelated, older reason. Diff both copies against each other, not just
+each one against the code, when auditing freshness.
