@@ -4,6 +4,7 @@
   "window": {
     "category": "settings",
     "name": "Document Sequence",
+    "titleField": "name",
     "detailEntity": null,
     "hideDetailForm": false,
     "listSortBy": "name asc",

@@ -756,10 +756,16 @@ export function getWindowTitle(breadcrumb, tMenu, windowName) {
       : tMenu(windowName) || windowName || '';
 }
 
-export function getRecordTitle(isNew, ui, data, titleField) {
-  return isNew
-      ? ui('newRecord')
-      : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+// ETP-5285: a title field declared with `enumValues` carries i18n keys in its
+// form `options`, so the title reads the same translated label as the grid and
+// the form instead of the stored value.
+export function getRecordTitle(isNew, ui, data, titleField, formFields) {
+  if (isNew) return ui('newRecord');
+  const raw = `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+  const option = formFields
+      ?.find(f => f.key === titleField)
+      ?.options?.find(o => String(o.value) === raw);
+  return option?.label ? ui(option.label) : raw;
 }
 
 export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
