@@ -174,9 +174,17 @@ export function FinancialTrendChart({
   const fmtLong  = new Intl.DateTimeFormat(numberLocale, { month: 'short', year: 'numeric' });
   const getDate = (i) => new Date(new Date().getFullYear(), new Date().getMonth() - (labels.length - 1 - i), 1);
 
+  // Every axis label carries a stable, unique React key: the bucket start date (ISO) or, on the
+  // legacy path, its year-month. Never the label text (month labels repeat: lastYear has two "Sep").
   const axisLabels = dateLabels
-    ? dateLabels.axis
-    : labels.map((_, i) => capitalize(fmtShort.format(getDate(i)).replace('.', '')));
+    ? dateLabels.axis.map((label, i) => ({ key: dates[i], label }))
+    : labels.map((_, i) => {
+      const bucket = getDate(i);
+      return {
+        key: `${bucket.getFullYear()}-${bucket.getMonth() + 1}`,
+        label: capitalize(fmtShort.format(bucket).replace('.', '')),
+      };
+    });
   const tooltipLabel = (i) => (dateLabels ? dateLabels.tooltip[i] : capitalize(fmtLong.format(getDate(i))));
 
   const labelStep = axisLabelStep(values.length, chartW - PAD_X - PAD_RIGHT, dateLabels ? granularity : GRANULARITY_MONTH);
@@ -516,15 +524,15 @@ export function FinancialTrendChart({
               <path d={toBezierPath(revPts)} fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
               {/* X-axis month labels */}
-              {axisLabels.map((m, i) => (axisLabelVisible(i) && (
+              {axisLabels.map(({ key, label }, i) => (axisLabelVisible(i) && (
                 <text
-                  key={i}
+                  key={key}
                   x={PAD_X + (i / Math.max(axisLabels.length - 1, 1)) * plotW}
                   y={CHART_H - 5}
                   textAnchor={i === axisLabels.length - 1 ? 'end' : 'middle'}
                   fill="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}
-                >{m}</text>
+                >{label}</text>
               )))}
 
               {/* Invisible hover columns */}
@@ -602,7 +610,7 @@ export function FinancialTrendChart({
                     {hasExpenses && (
                       <rect x={gx + barW + innerGap} y={PAD_Y + plotH - expH} width={barW} height={expH} rx="3" fill="url(#bar-expense-gradient)" />
                     )}
-                    <text x={cx} y={CHART_H - 5} textAnchor="middle" fill="hsl(var(--muted-foreground))" style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}>{axisLabelVisible(i) ? axisLabels[i] : ''}</text>
+                    <text x={cx} y={CHART_H - 5} textAnchor="middle" fill="hsl(var(--muted-foreground))" style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}>{axisLabelVisible(i) ? axisLabels[i].label : ''}</text>
                   </g>
                 );
               })}
