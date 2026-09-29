@@ -14,8 +14,10 @@ export const NOT_POSTED_DOCUMENTS_PROCESS_ID = 'D6AB95CE52D34E1599590526115E26C6
  */
 export default function NotPostedDocumentsRoute(props) {
   return (
-    <ProcessAccessGuard processId={NOT_POSTED_DOCUMENTS_PROCESS_ID}>
-      <NotPostedDocumentsPage {...props} />
+    <ProcessAccessGuard
+      processId={NOT_POSTED_DOCUMENTS_PROCESS_ID}
+      data-testid="ProcessAccessGuard__adfd18">
+      <NotPostedDocumentsPage {...props} data-testid="NotPostedDocumentsPage__adfd18" />
     </ProcessAccessGuard>
   );
 }

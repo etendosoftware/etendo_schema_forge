@@ -410,7 +410,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     );
   }
 
-  if (accessDenied) return <AccessDeniedMessage />;
+  if (accessDenied) return <AccessDeniedMessage data-testid="AccessDeniedMessage__b28bb1" />;
 
   return (
     <div className="npd-page">

@@ -49,5 +49,5 @@ export default function ProcessAccessGuard({ processId, children = null }) {
     );
   }
   if (allowedIds === null || allowedIds.has(String(processId))) return children;
-  return <AccessDeniedMessage />;
+  return <AccessDeniedMessage data-testid="AccessDeniedMessage__f596b7" />;
 }
