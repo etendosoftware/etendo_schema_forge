@@ -1571,6 +1571,23 @@ export function useEntity(entity, childEntity, {
         setEditing(prev => (prev ? { ...prev, ...patch } : prev));
     }, []);
 
+    // ETP-5255 — adopt header values that ANOTHER write path has already persisted (a panel
+    // that autosaves its own field, e.g. the contacts credit-limit stepper). Written into BOTH
+    // `selected` and `editing`, so the field is not dirty: it is saved, not pending.
+    //
+    // Routing such a value through `handleChange` instead marked it dirty, which kept "Save"
+    // enabled after the panel had already stored it — and made "Save" re-send it. Clicked while
+    // the panel's NEXT autosave was still in flight, that re-send carried the superseded value;
+    // the per-record write chain queued it behind the autosave and sent it with the refreshed
+    // `updated`, so the server accepted it and silently reverted the user's last edit (QA F-1).
+    // Unlike `handleChange`, this deliberately fires no callout and does not touch
+    // `userChangedKeysRef`: nothing here is a user edit awaiting a save.
+    const applyPersistedFields = useCallback((patch) => {
+        if (!patch || typeof patch !== 'object') return;
+        setSelected(prev => (prev ? { ...prev, ...patch } : prev));
+        setEditing(prev => (prev ? { ...prev, ...patch } : prev));
+    }, []);
+
     // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
     // protection above, scoped to ONE known cross-surface-sync case (see call site
     // in DetailView.jsx: the Exchange Rates secondary tab on sales-invoice /
@@ -2436,7 +2453,7 @@ export function useEntity(entity, childEntity, {
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
-        handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
+        handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved, applyPersistedFields,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         invalidateEntityCache,
         // ETP-5366: exposed for the callers that write a child collection OUTSIDE this hook

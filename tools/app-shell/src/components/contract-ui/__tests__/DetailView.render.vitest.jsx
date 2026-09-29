@@ -94,6 +94,7 @@ const mockHook = {
   refreshChildren: vi.fn(),
   isSaving: false,
   primeSaved: vi.fn(),
+  applyPersistedFields: vi.fn(),
 };
 
 vi.mock('@/hooks/useEntity', () => ({
@@ -333,6 +334,32 @@ describe('DetailView render integration', () => {
     const tabs = [{ key: 'general', label: 'General' }, { key: 'extra', label: 'Extra' }];
     const { container } = renderDetailView({ primaryTabs: tabs });
     expect(container).toBeTruthy();
+  });
+
+  // ETP-5255 (QA F-1): a panel that autosaves its own field must be able to report it as SAVED.
+  // Without `onPersisted` it can only reach the header through `onChange`, which marks the field
+  // dirty and makes "Save" re-send (and, racing the next autosave, revert) it.
+  it('hands the active primary-tab Panel onPersisted = hook.applyPersistedFields', async () => {
+    const user = userEvent.setup();
+    const received = [];
+    const FinancialPanel = (props) => {
+      received.push(props);
+      return <div data-testid="financial-panel" />;
+    };
+    const tabs = [
+      { key: 'general', label: 'General' },
+      { key: 'financial', label: 'Financial', Panel: FinancialPanel },
+    ];
+    renderDetailView({ primaryTabs: tabs });
+
+    await user.click(screen.getByText('Financial'));
+
+    expect(screen.getByTestId('financial-panel')).toBeInTheDocument();
+    const props = received.at(-1);
+    expect(props.onPersisted).toBe(mockHook.applyPersistedFields);
+    // …and it is a distinct channel from the edit one, not an alias of it.
+    expect(props.onPersisted).not.toBe(props.onChange);
+    expect(props.onPersisted).not.toBe(props.onLocalChange);
   });
 
   it('renders with secondaryTabs', () => {
