@@ -50,12 +50,21 @@ export function unsavedMessages(uiMessages, savedIds) {
   return out;
 }
 
+const ASSISTANT_ROLES = ['assistant', 'copilot', 'bot'];
+
+/** Maps a backend role to a UIMessage role; anything unknown (error/system) yields null. */
+function toUiRole(role) {
+  if (role === 'user') return 'user';
+  if (ASSISTANT_ROLES.includes(role)) return 'assistant';
+  return null;
+}
+
 /** Backend message -> UIMessage for `chat.setMessages`. Unknown roles (error/system) are dropped. */
 export function toUiMessages(backendMessages) {
   const out = [];
   for (const msg of backendMessages || []) {
     const role = String(msg.role || '').toLowerCase();
-    const uiRole = role === 'user' ? 'user' : (['assistant', 'copilot', 'bot'].includes(role) ? 'assistant' : null);
+    const uiRole = toUiRole(role);
     const text = msg.text || msg.content || msg.message || '';
     if (!uiRole || !text) continue;
     out.push({ id: msg.id, role: uiRole, parts: [{ type: 'text', text }] });
