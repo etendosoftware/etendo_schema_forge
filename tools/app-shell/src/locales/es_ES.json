@@ -20719,6 +20719,7 @@
     "backendError.receiptMovementNotReactivatable": "Este movimiento está asociado a un cobro, así que no es posible reactivarlo. Para hacerlo, reactiva el cobro desde la ventana de Cobros.",
     "backendError.movementProcessedNotDeletable": "El movimiento ya está procesado o contabilizado. Selecciónalo solo para eliminarlo.",
     "backendError.statementBankConnectedNotDeletable": "Los extractos de una cuenta conectada al banco no se pueden eliminar.",
+    "backendError.statementBankConnectedNotCreatable": "La cuenta se sincroniza con el banco: no se pueden crear ni importar extractos manualmente.",
     "backendError.accountHasLinkedRecords": "Esta cuenta tiene registros vinculados, así que no se puede eliminar.",
     "backendError.matchRulePriorityRequired": "La prioridad es obligatoria",
     "backendError.matchRulePriorityNotInteger": "La prioridad debe ser un número entero",

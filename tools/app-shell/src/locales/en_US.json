@@ -20483,6 +20483,7 @@
     "backendError.receiptMovementNotReactivatable": "This movement belongs to a receipt, so it cannot be reactivated. To do so, reactivate the receipt from the Receipts window.",
     "backendError.movementProcessedNotDeletable": "The movement is already processed or posted. Select it on its own to delete it.",
     "backendError.statementBankConnectedNotDeletable": "Statements from a bank-connected account cannot be deleted.",
+    "backendError.statementBankConnectedNotCreatable": "This account is synchronized with the bank; statements cannot be created or imported manually.",
     "backendError.accountHasLinkedRecords": "This account has linked records, so it cannot be deleted.",
     "backendError.matchRulePriorityRequired": "Priority is required",
     "backendError.matchRulePriorityNotInteger": "Priority must be a whole number",

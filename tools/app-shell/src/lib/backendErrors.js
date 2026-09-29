@@ -178,6 +178,9 @@ const BACKEND_ERROR_MAP = {
   // The two statement refusals, in the order a user meets them.
   'Statements from a bank-connected account cannot be deleted.': 'backendError.statementBankConnectedNotDeletable',
   'The statement has matched lines; unreconcile them before deleting': 'backendError.statementHasMatchedLines',
+  // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
+  // financial-account statement entities).
+  'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
