@@ -968,6 +968,67 @@ export function buildSavePayload({
 }
 
 /**
+ * ETP-5537 — network-level safety net for a read-only field the frontend's own filters missed.
+ *
+ * buildSavePayload's exclusions (buildCreateFieldExclusion / buildPatchFieldExclusion) are
+ * frontend-metadata-driven, and that metadata is only as complete as what the generator emitted
+ * into a mounted form's field list (`formFieldsRef`) or the window's declared field list
+ * (`contractFields`, DetailView's `gateFields` = `Form.fields`) — never the full contract. A
+ * field can be readOnly in `contract.json` yet absent from every generated form the frontend
+ * actually renders (a stale/orphaned generated form, a field the generator never emitted into
+ * any header form), in which case both filters see it as "unknown" rather than "read-only" and
+ * it still reaches the wire. That happened for real: `priceIncludesTax` is readOnly in
+ * `artifacts/purchase-order/contract.json` but the currently-imported `HeaderForm.jsx` never
+ * declares it at all — the only generated form that does (`OrderForm.jsx`) is an orphaned older
+ * artifact nothing imports.
+ *
+ * ETP-5347's 422 `read_only_field` response names the exact offending key with total certainty
+ * — it is the backend's own metadata, strictly more authoritative than anything the frontend can
+ * infer. And a field the backend refuses as read-only was never something the user needed
+ * persisted: pre-ETP-5347 that same value was silently discarded by the backend and the save
+ * still succeeded. So dropping exactly the field a 422 names and retrying reproduces that exact
+ * pre-ETP-5347 behavior, just reactively instead of preemptively — it can never guess a field to
+ * drop, only remove one the backend has just, unambiguously named.
+ *
+ * Deliberately NOT another rule inside buildSavePayload/buildPatchPayload/
+ * buildCreateFieldExclusion: those stay the first line of defense (they avoid the round-trip
+ * entirely for every case they already cover); this is the network-level fallback for whatever
+ * escapes them, and it needs no per-field or per-window logic to stay safe.
+ *
+ * `maxAttempts` caps retries (default 5) so a backend that never stops naming new read-only
+ * fields cannot loop forever — on exhaustion the last (still-failing) response is returned for
+ * the normal error path to handle, same as any other unretriable failure.
+ */
+export async function saveWithReadOnlyFieldRetry(apiFetch, url, method, payload, { maxAttempts = 5 } = {}) {
+    let currentPayload = payload;
+    let lastRes = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const body = JSON.stringify(currentPayload);
+        const res = await apiFetch(url, { method, body, baseUrl: '' });
+        lastRes = res;
+        if (res.ok) return res;
+        let rejectedField = null;
+        try {
+            const parsed = await res.clone().json();
+            if (res.status === 422 && parsed?.error === 'read_only_field' && typeof parsed?.field === 'string') {
+                rejectedField = parsed.field;
+            }
+        } catch {
+            // Not JSON, or the body was already consumed — nothing retriable to learn here.
+        }
+        // Only retry when the named field is actually present in what we just sent — otherwise
+        // this isn't the case we exist to fix (a different 422 shape, a stale-record conflict,
+        // a validation error), and the response is handed back as-is for the normal error path.
+        if (!rejectedField || !Object.prototype.hasOwnProperty.call(currentPayload, rejectedField)) {
+            return res;
+        }
+        const { [rejectedField]: _dropped, ...rest } = currentPayload;
+        currentPayload = rest;
+    }
+    return lastRes;
+}
+
+/**
  * Stable id for the concurrency-conflict notice (ETP-5073).
  *
  * Without it every failed save adds ANOTHER toast, and because this one is deliberately
@@ -2107,12 +2168,13 @@ export function useEntity(entity, childEntity, {
             calloutAppliedKeysRef,
             contractFields,
         });
-        // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
-        const body = JSON.stringify(payload);
         try {
             // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
-            // keeps it from being prefixed a second time.
-            const res = await apiFetch(url, { method, body, baseUrl: '' });
+            // keeps it from being prefixed a second time. NEO Headless expects flat field
+            // values — NeoServlet handles wrapping for JsonDataService. saveWithReadOnlyFieldRetry
+            // builds the JSON body itself per attempt (ETP-5537): a read-only field the frontend
+            // filters missed gets dropped and the save retried once the backend names it.
+            const res = await saveWithReadOnlyFieldRetry(apiFetch, url, method, payload);
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);

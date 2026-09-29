@@ -36,6 +36,7 @@ import {
   getNumericFieldViolation,
   buildSavePayload,
   isUserAuthoredKey,
+  saveWithReadOnlyFieldRetry,
 } from '../useEntity';
 import { numericFieldToastId, resetSaveBlockToastTracking } from '@/lib/numericValidation.js';
 
@@ -1937,6 +1938,102 @@ describe('useEntity helpers', () => {
         { id: '1', businessPartner: 'bp-1', businessPartner$_identifier: 'Old label' },
       );
       expect(payload).toEqual({});
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ETP-5537 — network-level retry when the backend names a read-only field
+  // -------------------------------------------------------------------
+  // Safety net for a read-only field that escapes buildSavePayload's frontend-metadata-driven
+  // filters entirely (observed for real: priceIncludesTax is readOnly in contract.json but the
+  // currently-imported HeaderForm.jsx never declares it, so buildRegisteredFieldReadOnly reads
+  // it as "unknown" rather than "read-only" and it still reaches the wire). The backend's 422
+  // read_only_field response names the exact offending key with total certainty, so dropping
+  // exactly that key and retrying is safe — it can never guess, only react to what the backend
+  // just said.
+  describe('saveWithReadOnlyFieldRetry (ETP-5537)', () => {
+    const okRes = (data) => ({ ok: true, status: 200, json: async () => data });
+    const readOnlyFieldRes = (field) => ({
+      ok: false,
+      status: 422,
+      clone() { return this; },
+      json: async () => ({ status: 422, error: 'read_only_field', field }),
+    });
+    const otherErrorRes = (status, body) => ({
+      ok: false,
+      status,
+      clone() { return this; },
+      json: async () => body,
+    });
+
+    it('drops the field the backend names and succeeds on retry', async () => {
+      const calls = [];
+      const apiFetch = vi.fn(async (url, opts) => {
+        calls.push(JSON.parse(opts.body));
+        return calls.length === 1
+          ? readOnlyFieldRes('priceIncludesTax')
+          : okRes({ response: { data: [{ id: '1' }] } });
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/sws/neo/purchase-order/header/1', 'PATCH',
+        { priceIncludesTax: 'N', description: 'edited' },
+      );
+      expect(res.ok).toBe(true);
+      expect(calls).toEqual([
+        { priceIncludesTax: 'N', description: 'edited' },
+        { description: 'edited' },
+      ]);
+    });
+
+    it('drops multiple named fields across successive retries', async () => {
+      const calls = [];
+      const apiFetch = vi.fn(async (url, opts) => {
+        calls.push(JSON.parse(opts.body));
+        if (calls.length === 1) return readOnlyFieldRes('a');
+        if (calls.length === 2) return readOnlyFieldRes('b');
+        return okRes({ response: { data: [{ id: '1' }] } });
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/url', 'PATCH', { a: 1, b: 2, c: 3 },
+      );
+      expect(res.ok).toBe(true);
+      expect(calls).toEqual([{ a: 1, b: 2, c: 3 }, { b: 2, c: 3 }, { c: 3 }]);
+    });
+
+    it('gives up after maxAttempts and returns the last failing response, without looping forever', async () => {
+      // A pathological backend that always names a NEW field: with 5 keys and a cap of 5
+      // attempts, retries exhaust before the payload could ever become clean.
+      const apiFetch = vi.fn(async (url, opts) => {
+        const body = JSON.parse(opts.body);
+        const [firstKey] = Object.keys(body);
+        return readOnlyFieldRes(firstKey);
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/url', 'PATCH', { a: 1, b: 2, c: 3, d: 4, e: 5 }, { maxAttempts: 5 },
+      );
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(5);
+    });
+
+    it('does not retry a read_only_field error naming a key that is not in the payload', async () => {
+      const apiFetch = vi.fn(async () => readOnlyFieldRes('someUnrelatedField'));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { a: 1 });
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a non-read_only_field error (e.g. stale_record conflict)', async () => {
+      const apiFetch = vi.fn(async () => otherErrorRes(409, { error: 'stale_record' }));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { a: 1 });
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('succeeds on the first attempt with no retry when the write is accepted', async () => {
+      const apiFetch = vi.fn(async () => okRes({ response: { data: [{ id: '1' }] } }));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'POST', { a: 1 });
+      expect(res.ok).toBe(true);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
     });
   });
 
