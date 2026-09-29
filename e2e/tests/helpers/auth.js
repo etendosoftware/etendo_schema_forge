@@ -370,7 +370,20 @@ export async function login(page, {
 
   await page.locator('#login-email').fill(user);
   await page.locator('#login-password').fill(password);
+  const sessionResponsePromise = page.waitForResponse(
+    response => response.request().method() === 'POST'
+      && new URL(response.url()).pathname.endsWith('/sws/go/session'),
+    { timeout: 30_000 },
+  );
   await page.getByTestId('action-login-submit').click();
+  const sessionResponse = await sessionResponsePromise;
+  if (sessionResponse.status() === 401) {
+    throw new Error('E2E login rejected by POST /sws/go/session (HTTP 401). '
+      + 'Check the selected E2E_USER/E2E_PASSWORD pair or refresh onboarding credentials.');
+  }
+  if (!sessionResponse.ok()) {
+    throw new Error(`E2E login failed at POST /sws/go/session (HTTP ${sessionResponse.status()}).`);
+  }
 
   await expectAnyEnvironmentOrDashboard(page);
 

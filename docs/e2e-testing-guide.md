@@ -144,6 +144,55 @@ Like the contextual-selector smoke above, they get a bearer JWT through
 
 ---
 
+## Paid Provisioning Failure Integration (ETP-5548)
+
+`e2e/tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js` runs in the
+ordinary integration project through `scripts/run-e2e-full.sh`, including the local
+`make test-e2e-headless` run and the pre-push E2E gate. The runner sets
+`E2E_PROVISIONING_FAILURE=1`. A CI job that invokes this runner includes the same spec;
+the current Jenkins pipeline does not invoke the runner.
+The spec creates a paid checkout through a local backend fixture, follows the real
+`/upgrade?checkout=success` browser path, checks that the UI sends onboarding with the
+same request ID, verifies the durable `provisioning_failed` state and visible recovery
+control, then deletes the fixture checkout and returns its dedicated pool row to
+`READY`. It never contacts Stripe or deletes an `AD_Client`.
+
+The Etendo GO backend running behind the frontend must use the local runtime:
+
+```properties
+etendo.go.runtime.environment=local
+```
+
+This belongs in the properties read by the running Tomcat (or the equivalent JVM
+system property/environment variable `ETGO_RUNTIME_ENVIRONMENT=local`). The fixture provisions or
+reuses its own dedicated pool client; no client ID is configured in Playwright.
+If the backend is missing this setup, the integration spec fails at fixture creation
+with the HTTP status and response body instead of reporting a skipped test.
+
+To run this spec alone with the same built frontend and real backend as the full
+integration suite:
+
+```bash
+E2E_SUITE=integration \
+E2E_FILES=tests/flows/system/tenant-upgrade-provisioning-failure.integration.spec.js \
+make test-e2e-headless
+```
+
+For this spec, a targeted `E2E_FILES` run starts onboarding setup unless both
+`E2E_USER` and `E2E_PASSWORD` are explicitly set. A complete explicit pair takes
+priority over `e2e/.auth-credentials.json`; otherwise setup refreshes that file
+before the fixture test. Setting only `E2E_USER` fails before the frontend build,
+since the runner cannot safely pair it with its default password. This avoids
+reusing an account from an older local database.
+The fixture endpoint accepts requests only when the backend environment is `local`,
+and the spec requires a local frontend `BASE_URL`.
+
+The companion `.mocked.spec.js` validates the recovery control and same-token retry
+without a live backend. The real integration spec stops after the failed attempt so
+its fixture cleanup can restore the pooled client safely.
+
+---
+
 ## Onboarding Register Integration Smoke
 
 `e2e/tests/flows/onboarding-register.integration.spec.js` registers a real new user against a live Etendo GO backend, completes the profile step, selects the "Autónomo" business type, and verifies provisioning finishes and redirects to the dashboard. It also covers 5 corner cases (duplicate email, empty fields, invalid email format, empty profile name, and a mocked provisioning failure). The successful registration test is repeatable: `e2e/onboarding-accounts.json` contains a JSON count (`2` by default), and the test runs that same happy path sequentially for each account, writing `.auth-credentials-1.json`, `.auth-credentials-2.json`, and so on for downstream cross-tenant E2E setup. Set `E2E_ONBOARDING_ACCOUNT_COUNT` or `E2E_ONBOARDING_ACCOUNTS_FILE` to override it. It is skipped by default because it needs a live backend and performs real user/tenant provisioning — it is **not run by any CI job**; it is manual/on-demand only.

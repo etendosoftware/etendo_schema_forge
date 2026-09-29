@@ -118,6 +118,14 @@ Two consequences follow, and neither is hypothetical:
     The backend uses a fenced provisioning claim and reruns the idempotent reconciliation chain,
     so a retry continues the paid request instead of creating another purchase. Legacy paid
     records without a recorded selection fail closed and need support-assisted resolution.
+    When the checkout status reports `provisioning_failed` or `stalled`, `/upgrade` shows a
+    payment-confirmed recovery panel instead of the new-purchase form. Its retry reads the
+    account-scoped purchase and calls the existing onboarding endpoint with the same purchase ID
+    as `paymentToken`. The retry button is shown only when the status says `retryAllowed`.
+    A return reporting `provisioning` follows the existing purchase until it completes or fails;
+    a return reporting `provisioned` waits for the purchased client to appear in the environment
+    selector. A bounded poll ends in a status check action, without starting another onboarding
+    request while the existing claim remains active.
 14. **The page waits for the canonical environment selector to catch up.** Provisioning returns
     the new Etendo `clientId`; the page refreshes the account environment list and matches that
     exact ID. It does not treat a matching name as proof that the new environment is present. If
@@ -345,7 +353,7 @@ The paid flow has separate contracts for the commercial purchase and environment
 | `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
-| `GET /sws/go/checkout/sessions/{requestId}` | Returns whether the backend has confirmed payment for this account's checkout request. Unknown or foreign IDs are indistinguishable from pending. |
+| `GET /sws/go/checkout/sessions/{requestId}` | Returns the derived payment and provisioning state, including `retryAllowed`. Unknown or foreign IDs are indistinguishable from pending. |
 | `POST /sws/go/onboarding` | Starts the existing NDJSON provisioning stream using the paid checkout request ID as `paymentToken`. |
 
 The payment decision remains server-authoritative. Stripe's signed webhook records payment

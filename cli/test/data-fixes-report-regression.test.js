@@ -156,6 +156,9 @@ const FIXES_WITH_REPORT = new Set([
   // @report lists an accounting schema that still cannot post it after @apply (row still inactive,
   // or no 800168 row at all) and is empty on every clean run.
   '20260923T120000Z__R40-internal-consumption-table-active',
+  // R41 initializes the explicit legacy demo transition start timestamp. Its @report lists the
+  // preference created for the tenant so operators can verify the transition marker after apply.
+  '20260929T180000Z__R41-demo-legacy-trial-start',
 ]);
 
 async function loadCatalogFiles() {
