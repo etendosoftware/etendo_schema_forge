@@ -557,7 +557,7 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
     }
 
     // ETP-5537 — generic replacement for the old Contacts-only
-    // `CONTACTS_PRECREATE_BILLING_FIELDS` allowlist (com.etendoerp.go PR #1220 / ETP-5347
+    // `CONTACTS_PRECREATE_BILLING_FIELDS` allowlist (com.etendoerp.go PR 1220 / ETP-5347
     // now rejects a create/update write that touches a field the entity does not expose as
     // writable, instead of silently discarding it). `isFieldExcluded` — built once per save
     // in `buildCreateFieldExclusion` — answers "is this key currently registered by one of
@@ -773,7 +773,7 @@ export function buildPatchPayload(editing, selected) {
  * ETP-5537 — builds the create-time field-exclusion predicate that replaces the old
  * per-window allowlist (`CONTACTS_PRECREATE_BILLING_FIELDS`).
  *
- * com.etendoerp.go PR #1220 (ETP-5347) made NeoServlet reject, at the REST write boundary,
+ * com.etendoerp.go PR 1220 (ETP-5347) made NeoServlet reject, at the REST write boundary,
  * any field the target entity does not expose as writable — a static, intentional
  * enforcement of the contract's own `readOnly`/`system` metadata (see the ticket: "REST
  * writes must reject fields marked read-only"), not a bug to route around per-field.
