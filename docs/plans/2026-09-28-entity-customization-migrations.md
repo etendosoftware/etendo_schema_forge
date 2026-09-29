@@ -74,9 +74,13 @@ is** rather than on **what shape it has**.
 | `ReportSelectorsServlet` | 1 |
 | `NeoExtension` (javadoc example) | 1 |
 
-**The criterion.** Branching on structure is allowed (`dalEntity.hasProperty("unitPrice")`,
-whether an AD column is mandatory). Branching on identity is not (`"sales-order"`,
-`"C_OrderLine"`). The first two files hold half the total and are the best starting point.
+**The criterion.** Branching on structure is allowed — generic AD metadata that names no
+entity (`column.isMandatory()`, `!column.isUpdatable()`). Branching on identity is not
+(`"sales-order"`, `"C_OrderLine"`). A business property name (`dalEntity.hasProperty("unitPrice")`,
+"declares a `uOM`") is identity in disguise and is migrated too: the behaviour moves to the
+entities that have the property. The 29 counted above are only the explicit literals; the
+property-name guards are covered by M4. The first two files hold half the total and are the
+best starting point.
 
 **The guardrail (E1) is part of this migration, not a prerequisite.** A test forbidding
 identity literals is born red with these 29 entries, so it needs an allowlist that empties
@@ -111,9 +115,11 @@ This migration came out of a discussion during the ticket and is recorded as **T
 **The classes:** `McpLinePriceInjector`, `McpBillToInjector`, `NeoCommercialLinePolicy`,
 `DocTypeResolver`.
 
-**Where they stand.** None branches on identity — they apply behind a structural guard
-(`dalEntity.hasProperty("unitPrice") && hasProperty("listPrice")`, whether the `BillTo_ID`
-column is mandatory in AD). So today they are formally correct.
+**Where they stand.** None compares a spec or table name, but most apply behind a
+business property-name guard (`dalEntity.hasProperty("unitPrice") && hasProperty("listPrice")`),
+which is identity in disguise: it names the group of entities that have those properties.
+Only a generic AD flag (whether the `BillTo_ID` column is mandatory) is genuine structure.
+The property-name guards are tolerated until this migration; no new one may be added.
 
 **Why migrate them anyway.** They work because *every* matching entity wants the same
 behaviour. The day one needs a different rule, shared code has nowhere to put it: the two

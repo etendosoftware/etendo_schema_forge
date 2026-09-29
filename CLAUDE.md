@@ -543,13 +543,14 @@ Auto-memory (NOT committed) only for: GitHub usernames, local paths, personal pr
 **Never add window-specific logic to shared Java code.** Any behavior belonging to a specific entity must live in that entity's own customization. This applies to **every channel** — REST single (`/sws/neo/*`), REST batch (`/sws/neo/batch`) and MCP — because all three resolve customizations through the one `NeoExtensionDispatcher`. A fix made on the REST side is subject to this rule exactly as an MCP fix is.
 
 **The criterion: structure yes, identity no.**
-- Shared code MAY branch on **structure** — `dalEntity.hasProperty("unitPrice")`, whether an AD column is mandatory, whether the entity declares a `uOM`.
+- Shared code MAY branch on **structure** — generic AD metadata that means the same on every entity and names none: `column.isMandatory()`, `!column.isUpdatable()`.
 - Shared code MUST NOT branch on **identity** — a spec name (`"sales-order"`), a table name (`"C_OrderLine"`), or any comparison that names one entity. An identity literal in shared code is a review BLOCKER whatever it is guarding.
+- **A business property name is identity in disguise.** `dalEntity.hasProperty("unitPrice")` or "does the entity declare a `uOM`" looks structural but is an indirect way of naming a group of entities. That behaviour belongs in the customization of each entity that has the property (calling a shared util explicitly if several do the same — T12). The existing guards of this kind in the compensations below are tolerated until migration M4; do not write a new one.
 
 **What counts as shared code** (longer than the obvious services — being outside this list is not a licence; ask "would another entity want this exact behaviour?" and if the honest answer is no, it is a customization):
 - services: `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, `NeoSubEndpointDispatcher`, `NeoHookDispatcher`, `McpToolRouter(Support)`;
 - the batch path: `BatchService` and its `OperationPreprocessor` hook;
-- the write-path compensations and policies: `McpLinePriceInjector`, `McpBillToInjector`, `McpWriteRequestSupport`, `NeoCommercialLinePolicy`, `DocTypeResolver`. These already hold behaviour selected by a structural guard. **Do not add a new one there, and do not add an entity name to an existing one.**
+- the write-path compensations and policies: `McpLinePriceInjector`, `McpBillToInjector`, `McpWriteRequestSupport`, `NeoCommercialLinePolicy`, `DocTypeResolver`. These already hold behaviour selected by a property-name guard, pending migration M4. **Do not add a new one there, and do not add an entity name to an existing one.**
 
 **A divergence between paths must be declared, not discovered.** If two channels must genuinely behave differently, record it in `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.9 in the same change. Precedent: `neo_batch` persisted order lines at price 0 while `neo_create` priced them correctly, for months — the injection was present and simply ran too early to see the parent, and nothing in any response or log said so.
 

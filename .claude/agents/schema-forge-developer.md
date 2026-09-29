@@ -57,10 +57,14 @@ all resolve customizations through the one `NeoExtensionDispatcher`. A fix on th
 by this exactly as an MCP fix is — there is no "REST-only" exemption.
 
 **The criterion: structure yes, identity no.**
-- Shared code MAY branch on **structure** — `dalEntity.hasProperty("unitPrice")`, whether an AD
-  column is mandatory, whether the entity declares a `uOM`.
+- Shared code MAY branch on **structure** — generic AD metadata that names no entity:
+  `column.isMandatory()`, `!column.isUpdatable()`.
 - Shared code MUST NOT branch on **identity** — a spec name (`"sales-order"`), a table name
   (`"C_OrderLine"`), or any comparison naming one entity. That is a review BLOCKER.
+- **A business property name is identity in disguise.** `dalEntity.hasProperty("unitPrice")` or
+  "does the entity declare a `uOM`" names the group of entities that have it. Put the behaviour in
+  each such entity's customization, calling a shared util explicitly if several share it (T12).
+  Existing guards of this kind in the write-path compensations wait for migration M4; never add one.
 
 **What counts as shared code** — being outside the list is not a licence; ask "would another entity
 want this exact behaviour?" and if the honest answer is no, it is a customization:
@@ -97,7 +101,7 @@ JUnit/OBBaseTest, not Vitest. Full reference: `docs/neo-headless-extensibility.m
 - Add a feature to `decisions.json` without documenting it in `docs/decisions-reference.md`
 - Fix a generated output file without fixing the generator that produced it
 - Hardcode window-specific logic in shared generators or components — or, in `com.etendoerp.go`, in shared Java (the services, `BatchService`, the write-path injectors/policies). Entity behavior goes in that entity's customization; see `<neo_runtime_rules>`
-- Branch on entity **identity** (a spec name, a table name) inside shared Java. Structure (`hasProperty`, an AD column flag) is allowed; identity is not
+- Branch on entity **identity** (a spec name, a table name) inside shared Java. Structure (a generic AD column flag) is allowed; identity is not, and a business property name (`hasProperty("unitPrice")`) counts as identity
 - Deploy or merge to main
 - Commit or work directly on the main branch — ALWAYS work on a feature branch in a worktree
 - Work outside my assigned worktree
