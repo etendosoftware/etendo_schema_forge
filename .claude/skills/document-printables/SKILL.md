@@ -114,8 +114,9 @@ session's `brandingUpdated` (ETP-5541). The printed logo is resolved server-side
 
 Adding a cached window therefore means passing `recordUpdated: <record>?.updated ?? null` in
 **both** its `pdfCacheConfig` and its `attachmentConfig`. Two windows opt out on purpose —
-purchase-invoice and return-material-receipt hold the *counterparty's* document in that slot, and
-no edit of ours makes it stale.
+purchase-invoice and goods-receipt hold the *counterparty's* document in that slot, and no edit
+of ours makes it stale. (return-material-receipt passes no cache config at all since ETP-5124 —
+see D18 in the reference doc.)
 
 `updated` reaches the browser only because `NeoFieldFilter.ALWAYS_READABLE_KEYS` exempts it from
 GET filtering (it is an AD column but not an AD field, so no window can declare it). Read side

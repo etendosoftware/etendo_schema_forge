@@ -164,7 +164,9 @@ export function isRenderedByOlderBundle(attachment, buildEpochMs = RENDERER_BUIL
  * `brandingUpdated` is the session's field of the same name. Fail-open like the rest of
  * this module: an absent or unparseable value (a backend that predates it, a failed
  * session fetch) or an unusable attachment timestamp yields `false`. Strict comparison,
- * for the same whole-second reason as `isAttachmentStale`.
+ * for the same whole-second reason as `isAttachmentStale`: the backend truncates
+ * `brandingUpdated` to whole seconds (`NeoSessionService`), matching the attachment's
+ * `updatedAt`, so a branding change in the same second as the upload reads as fresh.
  *
  * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
  * @param {string|number|Date|null} brandingUpdated  the session's `brandingUpdated`
