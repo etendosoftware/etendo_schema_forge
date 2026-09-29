@@ -756,7 +756,37 @@ export function getMethod(isNew) {
     return isNew ? 'POST' : 'PATCH';
 }
 
-export function buildPatchPayload(editing, selected) {
+/**
+ * ETP-5537 — read-only filter for the PATCH (existing-record) payload.
+ *
+ * Same trigger as the create-side exclusion below: com.etendoerp.go PR 1220 (ETP-5347) made
+ * NeoServlet REJECT a write that carries a field the contract declares readOnly/system with a
+ * 422 `read_only_field`, where it used to drop it silently. On PATCH there is no create-time
+ * exemption at all — a read-only field must simply never be sent.
+ *
+ * It rides in because the payload is a raw `editing` vs `selected` diff, and the two sides are
+ * refreshed ASYMMETRICALLY after a line save: `refreshHeaderTotals` REPLACES `selected`
+ * wholesale with the header GET row, but MERGES that row onto `editing`. Any key living in
+ * `editing` that the GET does not echo therefore survives on one side only and shows up as a
+ * diff — with no user ever having touched it. A read-only key in the diff always got there
+ * because the backend or a callout recomputed it, never because the user edited it.
+ *
+ * Deliberately NARROWER than the create path: this applies rule 2 only (registered by a mounted
+ * form AND read-only there), never rule 1 ("not registered by any form → exclude"). Rule 1 is
+ * create-specific by its own rationale ("it belongs to a tab that is not part of the screen
+ * yet"), and on PATCH it is actively unsafe: `formFieldsRef` is populated only by mounted
+ * EntityForm instances, so a save fired with no header form mounted would have an EMPTY registry
+ * and rule 1 would exclude every key — turning a loud 422 into silent, total data loss. The same
+ * reasoning makes the registry args optional: with no registry we filter nothing and behave
+ * exactly as before, which is the safe direction to fail in.
+ *
+ * Keeps the create path's `userChangedKeysRef` escape hatch: if the app deliberately forced a
+ * value through (a custom panel calling onChange), we never swallow it silently.
+ */
+export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef) {
+    const isFieldExcluded = formFieldsRef && userChangedKeysRef
+        ? buildPatchFieldExclusion(formFieldsRef, editing)
+        : null;
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
@@ -764,9 +794,40 @@ export function buildPatchPayload(editing, selected) {
         // strips it as read-only anyway, and sending it makes the server read the field as
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
         if (isSequencePlaceholder(value)) continue;
+        if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;
+}
+
+/**
+ * Shared core behind both write paths' field exclusion (ETP-5537).
+ *
+ * Resolves a payload key against the fields every currently-mounted EntityForm registered for
+ * this record (`formFieldsRef`) and evaluates the contract's readOnly/readOnlyLogic for it.
+ * Returns `true` (registered and read-only), `false` (registered and writable), or `undefined`
+ * (not registered by any mounted form) — the three states the create and patch rules differ on.
+ */
+function buildRegisteredFieldReadOnly(formFieldsRef, editing) {
+    const registeredFields = [...formFieldsRef.current.values()].flat();
+    const fieldByKey = new Map(registeredFields.map(f => [f.key, f]));
+    const isReadOnly = getReadOnly(editing);
+    return (key) => {
+        const field = fieldByKey.get(key);
+        return field ? isReadOnly(field) : undefined;
+    };
+}
+
+/**
+ * PATCH-side exclusion: rule 2 only. See buildPatchPayload's comment for why rule 1 is
+ * deliberately left out here.
+ */
+export function buildPatchFieldExclusion(formFieldsRef, editing) {
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing);
+    return (key, userChangedKeysRef) => {
+        if (userChangedKeysRef.current.has(key)) return false;
+        return readOnlyState(key) === true;
+    };
 }
 
 /**
@@ -809,14 +870,14 @@ export function buildPatchPayload(editing, selected) {
  * accidentally swallow a value the user can legitimately still edit.
  */
 export function buildCreateFieldExclusion(formFieldsRef, editing) {
-    const registeredFields = [...formFieldsRef.current.values()].flat();
-    const fieldByKey = new Map(registeredFields.map(f => [f.key, f]));
-    const isReadOnly = getReadOnly(editing);
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing);
     return (key, userChangedKeysRef) => {
         if (userChangedKeysRef.current.has(key)) return false;
-        const field = fieldByKey.get(key);
-        if (!field) return true;
-        return isReadOnly(field);
+        const state = readOnlyState(key);
+        // Rule 1 — not registered by any mounted form (create-side only, see buildPatchPayload).
+        if (state === undefined) return true;
+        // Rule 2 — registered, but read-only there.
+        return state;
     };
 }
 
@@ -831,7 +892,7 @@ export function buildSavePayload({
     formFieldsRef,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected);
+        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef);
     }
 
     const payload = {};

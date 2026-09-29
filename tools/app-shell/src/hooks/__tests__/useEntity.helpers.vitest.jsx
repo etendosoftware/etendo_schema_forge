@@ -1611,6 +1611,137 @@ describe('useEntity helpers', () => {
     });
   });
 
+  // -------------------------------------------------------------------
+  // buildSavePayload — ETP-5537 read-only exclusion on the PATCH path
+  // -------------------------------------------------------------------
+  // ETP-5347 made NeoServlet reject a write carrying a contract-readOnly field with a 422
+  // `read_only_field` instead of dropping it silently. The PATCH payload is a raw
+  // editing-vs-selected diff, and refreshHeaderTotals refreshes the two sides asymmetrically
+  // (setSelected replaces wholesale, setEditing merges onto prev), so a read-only key the user
+  // never touched can end up in that diff — which is what stopped the Purchase Order confirm
+  // modal from ever opening (maybeSaveBeforeConfirm PATCHes first and aborts on failure).
+  //
+  // Deliberately NARROWER than the create path: rule 2 only. See buildPatchPayload's comment.
+  describe('buildSavePayload — read-only exclusion on PATCH (ETP-5537)', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    const patch = ({ editing, selected, formFieldsRef, userChangedKeysRef }) => buildSavePayload({
+      isNew: false,
+      selected,
+      editing,
+      entity: 'purchaseOrder',
+      apiBaseUrl: '/sws/neo/purchase-order',
+      backendDefaultKeysRef: emptyRef(),
+      userChangedKeysRef: userChangedKeysRef ?? emptyRef(),
+      formFieldsRef: formFieldsRef ?? formFieldsRefWith([]),
+    });
+
+    it('drops a registered read-only field that diverged (the Purchase Order totals case)', () => {
+      // summedLineAmount / grandTotalAmount are visibility:readOnly + form:true in
+      // artifacts/purchase-order/contract.json — registered by the mounted header form.
+      const payload = patch({
+        editing: { id: '1', description: 'edited', summedLineAmount: 120, grandTotalAmount: 145 },
+        selected: { id: '1', description: 'old', summedLineAmount: 100, grandTotalAmount: 121 },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'summedLineAmount', readOnly: true },
+          { key: 'grandTotalAmount', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('drops a field that evaluates read-only via readOnlyLogic', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', documentNo: 'PO-2' },
+        selected: { id: '1', description: 'old', documentNo: 'PO-1' },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'documentNo', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('keeps a registered writable field that diverged', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', orderReference: 'REF-9' },
+        selected: { id: '1', description: 'old', orderReference: 'REF-1' },
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }, { key: 'orderReference' }]),
+      });
+      expect(payload).toEqual({ description: 'edited', orderReference: 'REF-9' });
+    });
+
+    // The safety property that makes rule 1 create-only: an unregistered key must still be
+    // sent on PATCH. Applying rule 1 here would empty the payload whenever no header form is
+    // mounted, turning a loud 422 into silent, total data loss.
+    it('KEEPS a key no mounted form registered (rule 1 is create-only)', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', someUnregisteredField: 'v2' },
+        selected: { id: '1', description: 'old', someUnregisteredField: 'v1' },
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }]),
+      });
+      expect(payload).toEqual({ description: 'edited', someUnregisteredField: 'v2' });
+    });
+
+    it('sends the full diff when the form registry is empty (no form mounted)', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', orderReference: 'REF-9' },
+        selected: { id: '1', description: 'old', orderReference: 'REF-1' },
+        formFieldsRef: formFieldsRefWith([]),
+      });
+      expect(payload).toEqual({ description: 'edited', orderReference: 'REF-9' });
+    });
+
+    it('still sends a read-only field the app explicitly marked user-changed (escape hatch)', () => {
+      const payload = patch({
+        editing: { id: '1', grandTotalAmount: 145 },
+        selected: { id: '1', grandTotalAmount: 121 },
+        userChangedKeysRef: { current: new Set(['grandTotalAmount']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+      });
+      expect(payload).toEqual({ grandTotalAmount: 145 });
+    });
+
+    it('does not send a read-only field that did NOT diverge', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', grandTotalAmount: 121 },
+        selected: { id: '1', description: 'old', grandTotalAmount: 121 },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'grandTotalAmount', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+  });
+
+  // buildPatchPayload keeps working with its original 2-arg signature: the registry args are
+  // optional so a caller without a form registry filters nothing (old behavior), which is the
+  // safe direction to fail in.
+  describe('buildPatchPayload — read-only filtering (ETP-5537)', () => {
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    it('filters nothing when called with the legacy 2-arg signature', () => {
+      const payload = buildPatchPayload(
+        { id: '1', grandTotalAmount: 145 },
+        { id: '1', grandTotalAmount: 121 },
+      );
+      expect(payload).toEqual({ grandTotalAmount: 145 });
+    });
+
+    it('filters a read-only key when given the registry', () => {
+      const payload = buildPatchPayload(
+        { id: '1', grandTotalAmount: 145 },
+        { id: '1', grandTotalAmount: 121 },
+        formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+        { current: new Set() },
+      );
+      expect(payload).toEqual({});
+    });
+  });
+
   describe('getInvalidPhoneFields', () => {
     const FIELDS = [
       { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' },
