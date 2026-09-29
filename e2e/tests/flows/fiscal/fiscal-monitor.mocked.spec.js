@@ -94,19 +94,19 @@ async function loginWithOrg(page) {
   await login(page);
 }
 
-test.describe('Fiscal Monitor — period toggle', () => {
-  test('clicking Periodo anterior switches the SII section to the previous period', async ({ page }) => {
+test.describe('Fiscal Monitor — period toggle removed (ETP-5432)', () => {
+  test('the SII section renders with no Periodo actual/anterior toggle', async ({ page }) => {
     await loginWithOrg(page);
-    await installFiscalMonitorMocks(page, { siiCfg: SII_CFG });
+    await installFiscalMonitorMocks(page, { siiCfg: SII_CFG, siiCount: 10 });
     await navigateTo(page, 'fiscal-monitor');
 
-    // Wait for section to render
-    await expect(page.getByTestId('fm-period-toggle')).toBeVisible({ timeout: 8_000 });
+    // SII section renders normally...
+    await expect(page.getByTestId('fm-tabs').first()).toBeVisible({ timeout: 8_000 });
 
-    const prevBtn = page.getByTestId('fm-period-toggle').locator('button').filter({ hasText: t('fiscalMonitor.sii.period.previous') });
-    await prevBtn.click();
-
-    // The previous-period button should now have the active class
-    await expect(prevBtn).toHaveClass(/active/);
+    // ...but the previous-period selector (standard segmented control + compact
+    // dropdown) is gone for good — see docs/generated-custom-windows/fiscal-monitor.md
+    // "Period toggle" and commit ac71bc772 (root cause deferred, not fixed).
+    await expect(page.getByTestId('fm-period-toggle')).toHaveCount(0);
+    await expect(page.getByText(t('fiscalMonitor.sii.period.previous'))).toHaveCount(0);
   });
 });

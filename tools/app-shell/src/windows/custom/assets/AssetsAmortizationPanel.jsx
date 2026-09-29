@@ -6,7 +6,7 @@ import { StatusTag } from '@/components/ui/status-tag';
 import { useCurrency } from '@/hooks/useCurrency';
 import { extractErrorMessage } from '@/hooks/useEntity';
 import { runBatchDelete, toastBatchDeleteOutcome } from '@/lib/batchDelete.js';
-import { formatCurrency } from '@/lib/formatCurrency';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency';
 import { Checkbox } from '@/components/ui/checkbox';
 import SelectionToolbar from '@/components/contract-ui/SelectionToolbar.jsx';
 
@@ -161,7 +161,15 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
 
   // Compare against the expected amount to amortize with a small tolerance,
   // since both values are floats. No expected value → never force the alert color.
-  const expectedAmortizationAmount = data?.depreciationAmt;
+  // ETP-5414 QA — `depreciationAmt` is the FULL amount to amortize, but the plan
+  // lines only cover what's left to schedule: any `previouslyDepreciatedAmt`
+  // (amortized before this plan existed) is not represented as a line, so it must
+  // be subtracted from the expected total or a perfectly correct plan reads as a
+  // mismatch (e.g. 2.000 to amortize, 200 previously amortized → lines sum to a
+  // correct 1.800, but were compared against 2.000 and flagged red).
+  const expectedAmortizationAmount = data?.depreciationAmt != null
+    ? Number(data.depreciationAmt) - Number(data?.previouslyDepreciatedAmt ?? 0)
+    : null;
   const amortizationTotalMismatch = expectedAmortizationAmount != null
     && Math.abs(
       Math.round(totalAmortizationAmount * 100) / 100 - Math.round(Number(expectedAmortizationAmount) * 100) / 100,
@@ -240,7 +248,7 @@ export default function AssetsAmortizationPanel({ data, recordId: recordIdProp, 
                     </td>
                     <td className="py-3 pr-4 text-foreground">
                       {line.amortizationPercentage != null
-                        ? `${Number(line.amortizationPercentage).toFixed(2)}%`
+                        ? `${formatPlainDecimal(Number(line.amortizationPercentage).toFixed(2))}%`
                         : '—'}
                     </td>
                     <td className="py-3 pr-4 text-foreground">{formatCurrency(orgCurrency, line.amortizationAmount)}</td>

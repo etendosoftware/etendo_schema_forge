@@ -6,6 +6,7 @@ import SideMenu from '@/components/layout/SideMenu';
 import { filterMenuGroupsByAccess } from '@/windows/registry.js';
 import { useRoleMenu } from '@/hooks/useRoleMenu.js';
 import { useAccountIdentity } from '@/lib/flags/useAccountIdentity.js';
+import { useSessionStartTracking } from '@/lib/observability/useSessionStartTracking.js';
 import { useAuthOptional } from '@etendosoftware/app-shell-core/auth';
 import { useCapabilitiesSafe, useWindowAccessSafe } from '@/hooks/useCapabilitiesSafe.js';
 import { SidebarProvider, useSidebar } from '@/components/layout/SidebarContext';
@@ -440,6 +441,10 @@ function AppLayoutAccessGate({ menuGroups }) {
   // Same reason: this is the first component inside AuthProvider that has the
   // token, and flag targeting needs the account identity behind it.
   useAccountIdentity();
+  // ETP-4210 — fires `session_started` once per authenticated mount, for the
+  // Health Score's Login dimension. See useSessionStartTracking's own JSDoc for
+  // why this fires here (not on every authRevision bump / token rotation).
+  useSessionStartTracking();
   // ETP-4314 — fetch the instance-wide currency separator config once per session
   // (fire-and-forget, fails soft to the current `.`/`,` defaults on error) so
   // formatCurrency() picks up the real configured value instead of a hardcoded one.

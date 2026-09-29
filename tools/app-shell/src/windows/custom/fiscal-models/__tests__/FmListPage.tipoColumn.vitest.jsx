@@ -197,6 +197,49 @@ describe('FmListPage — "Tipo" column derivation (ETP-5338)', () => {
     expect(tipoCellOf(row).textContent).toBe('fm.type.ordinary');
   });
 
+  // ETP-5456 — "Tipo" also derives 349's "Sustitutiva" flag, the same way it already
+  // derives 303's "rectificativa": `manualData.identification.sustitutiva`, persisted by
+  // FmModel349Page.jsx's SubstitutiveSection. The two flags are mutually exclusive by
+  // construction (only 303 sets `rectificativa`, only 349 sets `sustitutiva`).
+  it('renders the substitutive label for a 349 row with manualData.identification.sustitutiva === true', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({
+      id: '349-sust-1', model: '349',
+      manualData: { identification: { sustitutiva: true } },
+    });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const row = container.querySelector('tbody tr');
+    expect(tipoCellOf(row).textContent).toBe('fm.type.substitutive');
+  });
+
+  it('also renders the substitutive label when sustitutiva is the legacy string "Y"', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({
+      id: '349-sust-2', model: '349',
+      manualData: { identification: { sustitutiva: 'Y' } },
+    });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const row = container.querySelector('tbody tr');
+    expect(tipoCellOf(row).textContent).toBe('fm.type.substitutive');
+  });
+
+  it('renders "ordinary" for a 349 row with sustitutiva explicitly false', async () => {
+    globalThis.fetch = mockCatalogFetch();
+    const decl = makeDecl({
+      id: '349-sust-3', model: '349',
+      manualData: { identification: { sustitutiva: false } },
+    });
+    const { container } = render(<FmListPage declarations={[decl]} {...withCatalogProps} />);
+    await waitForCatalogLoad();
+
+    const row = container.querySelector('tbody tr');
+    expect(tipoCellOf(row).textContent).toBe('fm.type.ordinary');
+  });
+
   it('never renders "fm.type.complementary" — that key stays unused by this column', async () => {
     globalThis.fetch = mockCatalogFetch();
     const decls = [
@@ -233,6 +276,25 @@ describe('FmListPage — "Tipo" column real-locale i18n (ETP-5338)', () => {
       // Not the raw key (i.e. the key actually resolved to a translation).
       expect(ui('fm.type.ordinary')).not.toBe('fm.type.ordinary');
       expect(ui('fm.type.rectificative')).not.toBe('fm.type.rectificative');
+    },
+  );
+
+  // ETP-5456 — fm.type.substitutive was added ONLY to en_US/es_ES. es_AR is a
+  // deprecated locale (see project memory: never add new i18n keys there) — it
+  // deliberately does NOT get this key, so a real (unmocked) es_AR viewer would
+  // see the raw key fall through here, not a translation. That's an accepted,
+  // pre-existing consequence of the deprecation, not a regression to fix.
+  const substitutiveLocales = {
+    en_US: 'Substitutive',
+    es_ES: 'Sustitutiva',
+  };
+
+  it.each(Object.entries(substitutiveLocales))(
+    'resolves fm.type.substitutive to a real, non-placeholder string in %s',
+    (locale, expected) => {
+      const ui = makeRealUI(loadLocaleDictionary(locale));
+      expect(ui('fm.type.substitutive')).toBe(expected);
+      expect(ui('fm.type.substitutive')).not.toBe('fm.type.substitutive');
     },
   );
 });
