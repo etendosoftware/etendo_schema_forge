@@ -15,7 +15,7 @@ import { getApiBase } from '@/hooks/useNeoResource.js';
  * ETP-5364 added `dismissed`: the user closed the checklist for good and the sidebar must stop
  * offering it. It is NOT `seen` (which only spends the one-time post-signup redirect) and NOT
  * "every step is ticked" (a tenant can finish the list and still want the entry there) — it is
- * an explicit, reversible act, so it needs its own flag. It lives on the same account-level JSON
+ * an explicit act, so it needs its own flag. It lives on the same account-level JSON
  * as the rest of the state, which is what makes it survive a logout and a new device.
  *
  * `dismissed` is deliberately TRI-STATE: `undefined` until the GET answers, then a real boolean.
@@ -219,7 +219,7 @@ export function useFirstSteps({ allowedIds } = {}) {
    * ETP-5364 — closes (or re-opens) the checklist, optimistically, and persists the whole state
    * like every other mutation here.
    *
-   * Takes the value rather than toggling so the two call sites say what they mean, and so a
+   * Takes the value rather than toggling so the call site says what it means, and so a
    * double click on "Finalizar configuración inicial" cannot re-open what it just closed.
    *
    * @param {boolean} next `true` to hide the checklist from the menu, `false` to bring it back.
