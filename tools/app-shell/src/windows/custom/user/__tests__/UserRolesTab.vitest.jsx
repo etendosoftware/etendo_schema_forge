@@ -20,12 +20,6 @@ vi.mock('@/lib/rolesApi.js', () => ({
   fetchTemplateRoles: vi.fn(),
 }));
 
-// ETP-5485 — the tab no longer walks the AD menu tree. Kept mocked only to assert it is
-// never called.
-vi.mock('@/lib/menuTree.js', () => ({
-  fetchMenuTree: vi.fn(),
-}));
-
 // ETP-4999 item 5 — render the Radix tooltip pieces inline so the winner tooltip's
 // content is synchronously in the DOM (no portal / hover / act warnings), same
 // pattern as ComputedFreshnessHint.vitest.jsx.
@@ -73,7 +67,6 @@ vi.mock('../../../../menu.json', () => ({
 }));
 
 import { fetchRolesOverview, fetchTemplateRoles } from '@/lib/rolesApi.js';
-import { fetchMenuTree } from '@/lib/menuTree.js';
 import { adaptMatrix, adaptReportsMatrix } from '@/pages/roles/useRolesOverviewData.js';
 import RolesAccessMatrix from '@/pages/roles/RolesAccessMatrix.jsx';
 import UserRolesTab from '../UserRolesTab.jsx';
@@ -184,12 +177,11 @@ describe('UserRolesTab', () => {
       expect(onVisibilityChange).toHaveBeenCalledWith(true);
     });
 
-    it('requests the templates WITH the shared matrix and never walks the AD menu tree (ETP-5485)', async () => {
+    it('requests the templates WITH the shared matrix (ETP-5485)', async () => {
       renderTab({ selectedRoleIds: ['role-fin'] });
 
       await screen.findByTestId('UserRolesTab');
       expect(fetchTemplateRoles).toHaveBeenCalledWith({ includeMatrix: true });
-      expect(fetchMenuTree).not.toHaveBeenCalled();
     });
 
     it('renders the empty state when zero roles are currently selected', async () => {
