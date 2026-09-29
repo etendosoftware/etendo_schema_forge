@@ -36,6 +36,9 @@ const DASHBOARD_KEYS = [
   'financialSummaryComparisonLast90d',
   'financialSummaryComparisonLastYear',
   'financialSummaryNoPrevious',
+  'financialTrendGrowthUp',
+  'financialTrendGrowthDown',
+  'financialTrendWeekOf',
   'bestProductsTitle',
   'bestProductsTrendPositive',
   'bestProductsToggleUnits',
@@ -156,6 +159,18 @@ describe('Dashboard genericLabels — ETP-5493 period placeholders', () => {
           assert.ok(labels[key].includes('{comparison}'), `${key} must include {comparison}`);
         });
       }
+
+      for (const key of ['financialTrendGrowthUp', 'financialTrendGrowthDown']) {
+        it(`${key} contains the {pct} and {comparison} placeholders`, () => {
+          assert.ok(labels[key].includes('{pct}'), `${key} must include {pct}`);
+          assert.ok(labels[key].includes('{comparison}'), `${key} must include {comparison}`);
+        });
+      }
+
+      it('financialTrendWeekOf contains the {date} placeholder and is a dashboard key', () => {
+        assert.ok(DASHBOARD_KEYS.includes('financialTrendWeekOf'));
+        assert.ok(labels.financialTrendWeekOf.includes('{date}'), 'financialTrendWeekOf must include {date}');
+      });
 
       it('has all 11 new period/comparison/no-previous keys as non-blank strings', () => {
         const newKeys = DASHBOARD_KEYS.filter(

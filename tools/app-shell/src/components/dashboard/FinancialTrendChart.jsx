@@ -9,6 +9,9 @@ import {
   localeFromUi,
   niceScale,
 } from '@/lib/dashboardNumberFormat.js';
+import { formatTrendPct, trendDirection } from '@/lib/dashboardTrendPct.js';
+import { parseCalendarDate } from '@/lib/dateOnly.js';
+import { resolveRangeCopySuffix, RANGE_COPY_SUFFIX } from '@/lib/dashboardRangeCopy.js';
 
 const CHART_W = 869;
 const CHART_H = 196;
@@ -35,30 +38,71 @@ function toBezierFillPath(pts, baseY) {
   return `${toBezierPath(pts)} L ${pts[pts.length - 1].x},${baseY} L ${pts[0].x},${baseY} Z`;
 }
 
+const GRANULARITY_DAY = 'day';
+const GRANULARITY_WEEK = 'week';
+const GRANULARITY_MONTH = 'month';
+
+// Minimum horizontal room (px) per X-axis label. Daily/weekly labels ("12 sep") are wider than
+// month labels ("Sep"), so a 30-point daily series thins its axis instead of overlapping. Day/week
+// use 64 because the last label is end-anchored (shifted left by ~half its width): 64 keeps a
+// clear gap to the previous visible label.
+const MIN_AXIS_LABEL_PX = { [GRANULARITY_DAY]: 64, [GRANULARITY_WEEK]: 64, [GRANULARITY_MONTH]: 40 };
+
+// ETP-5493: a missing/blank range on the trends endpoint means the rolling last 12 months
+// (unlike `kpis`, which defaults to year-to-date), so the copy must say "vs previous 12 months".
+const TRENDS_MISSING_RANGE_COPY_SUFFIX = RANGE_COPY_SUFFIX.lastYear;
+
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+
 /**
- * ETP-5011: computes the growth % shown in the widget's status line, using the
- * first month with real activity as the baseline instead of always values[0].
- * The trailing 12-month window can start with months that have no invoices yet
- * (e.g. a business that only started operating mid-window), and comparing
- * against a hard zero there always collapsed to a misleading "0%" even when
- * revenue clearly grew from that point on. If activity only started in the
- * very last month there is still no meaningful prior point to compare against,
- * so it falls back to 0% in that one case.
+ * ETP-5493: only every Nth X-axis label is drawn so a dense series does not overlap. The step is
+ * anchored to the LAST point (the most recent bucket is always labelled); the tooltip keeps the
+ * full precision of every point.
  */
-export function computeGrowthPct(values) {
-  if (!Array.isArray(values) || values.length < 2) return 0;
-  const firstActiveIdx = values.findIndex((v) => v > 0);
-  const hasBaseline = firstActiveIdx >= 0 && firstActiveIdx < values.length - 1;
-  if (!hasBaseline) return 0;
-  return Math.round(
-    ((values[values.length - 1] - values[firstActiveIdx]) / values[firstActiveIdx]) * 100
-  );
+export function axisLabelStep(count, plotW, granularity) {
+  const minPx = MIN_AXIS_LABEL_PX[granularity] ?? MIN_AXIS_LABEL_PX[GRANULARITY_MONTH];
+  return Math.max(1, Math.ceil((count * minPx) / Math.max(plotW, 1)));
+}
+
+/**
+ * ETP-5493: builds the axis + tooltip label of every point from the backend's ISO bucket
+ * `dates` and `granularity`, through the date-only helper so the calendar day never shifts with
+ * the host time zone. Returns `null` when `dates` does not describe the series (older backend),
+ * so the caller falls back to the legacy month-from-today labels.
+ */
+export function buildDateLabels({ dates, granularity, count, numberLocale, weekOfText }) {
+  if (!Array.isArray(dates) || dates.length !== count || count === 0) return null;
+  const parsed = dates.map((d) => parseCalendarDate(d));
+  if (parsed.some((d) => d === null)) return null;
+
+  const fmt = (options) => new Intl.DateTimeFormat(numberLocale, options);
+  const clean = (text) => text.replace(/\./g, '');
+  if (granularity === GRANULARITY_DAY || granularity === GRANULARITY_WEEK) {
+    const fmtAxis = fmt({ day: 'numeric', month: 'short' });
+    const fmtFull = fmt({ day: 'numeric', month: 'short', year: 'numeric' });
+    return {
+      axis: parsed.map((d) => clean(fmtAxis.format(d))),
+      tooltip: parsed.map((d) => {
+        const full = clean(fmtFull.format(d));
+        return granularity === GRANULARITY_WEEK ? weekOfText.replace('{date}', full) : full;
+      }),
+    };
+  }
+  if (granularity === GRANULARITY_MONTH) {
+    const fmtShort = fmt({ month: 'short' });
+    const fmtLong = fmt({ month: 'short', year: 'numeric' });
+    return {
+      axis: parsed.map((d) => capitalize(clean(fmtShort.format(d)))),
+      tooltip: parsed.map((d) => capitalize(fmtLong.format(d))),
+    };
+  }
+  return null;
 }
 
 /**
  * ETP-5011: badge background/text color for the growth status line, extracted
  * out of FinancialTrendChart so its sign check doesn't add to that function's
- * cognitive complexity (mirrors toBezierPath/computeGrowthPct above).
+ * cognitive complexity (mirrors toBezierPath above).
  */
 function growthBadgeColors(isNegative) {
   return isNegative
@@ -84,8 +128,18 @@ function GrowthStatusIcon({ isNegative }) {
  * only purpose here is to create that same record). Creation actions need the WRITE tier on the
  * target window, not mere visibility. Default `true` so existing callers and tests keep their
  * behaviour; `DashboardPage` passes the resolved values.
+ *
+ * ETP-5493 — the series follows the dashboard period selector. `dates` (ISO bucket starts) and
+ * `granularity` (`day|week|month`) drive the axis/tooltip labels; `growthPct`/`hasPrevious` come
+ * from the backend (revenue of the window vs the equivalent previous window) and `range` is the
+ * range the data was fetched with, which only selects the comparison copy. All are optional: an
+ * older backend sends none of them, and the chart falls back to month labels counted back from
+ * today and to the neutral "no previous data" status line.
  */
-export function FinancialTrendChart({ labels = [], values = [], expenseValues = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true }) {
+export function FinancialTrendChart({
+  labels = [], values = [], expenseValues = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true,
+  dates = null, granularity = null, growthPct = 0, hasPrevious = false, range,
+}) {
   const ui = useUI();
   const navigate = useNavigate();
   const { locale } = useLocaleSwitch();
@@ -108,19 +162,25 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
 
   const hasNoData = values.every(v => v === 0);
 
+  const dateLabels = buildDateLabels({
+    dates,
+    granularity,
+    count: values.length,
+    numberLocale,
+    weekOfText: ui('financialTrendWeekOf'),
+  });
+  // Legacy fallback (no `dates` from the backend): month labels counted back from today.
   const fmtShort = new Intl.DateTimeFormat(numberLocale, { month: 'short' });
   const fmtLong  = new Intl.DateTimeFormat(numberLocale, { month: 'short', year: 'numeric' });
-
   const getDate = (i) => new Date(new Date().getFullYear(), new Date().getMonth() - (labels.length - 1 - i), 1);
 
-  const axisLabels   = labels.map((_, i) => {
-    const s = fmtShort.format(getDate(i));
-    return s.charAt(0).toUpperCase() + s.slice(1).replace('.', '');
-  });
-  const tooltipLabel = (i) => {
-    const s = fmtLong.format(getDate(i));
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  };
+  const axisLabels = dateLabels
+    ? dateLabels.axis
+    : labels.map((_, i) => capitalize(fmtShort.format(getDate(i)).replace('.', '')));
+  const tooltipLabel = (i) => (dateLabels ? dateLabels.tooltip[i] : capitalize(fmtLong.format(getDate(i))));
+
+  const labelStep = axisLabelStep(values.length, chartW - PAD_X - PAD_RIGHT, dateLabels ? granularity : GRANULARITY_MONTH);
+  const axisLabelVisible = (i) => (values.length - 1 - i) % labelStep === 0;
 
   const switchChartType = (type) => {
     setChartType(type);
@@ -135,15 +195,21 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
 
   const fmtVal = (n) => formatDashboardAmount(n, currencyLabel, numberLocale);
 
-  const growthPct = computeGrowthPct(values);
   // ETP-5011: the status badge (icon + color) used to be hardcoded to green
   // regardless of growthPct's sign — only the text swapped between Up/Down.
   // Drive the icon/color off the same sign the text already uses.
-  const isGrowthNegative = growthPct < 0;
+  // Direction from the rounded pct (`trendDirection`): flat (rounded 0) keeps the "up" copy/icon.
+  const isGrowthNegative = trendDirection(growthPct) === 'down';
   const growthBadge = growthBadgeColors(isGrowthNegative);
-  const statusLine = growthPct >= 0
-    ? ui('financialTrendGrowthUp').replace('{pct}', Math.abs(growthPct))
-    : ui('financialTrendGrowthDown').replace('{pct}', Math.abs(growthPct));
+  const comparisonText = ui(
+    `financialSummaryComparison${resolveRangeCopySuffix(range, TRENDS_MISSING_RANGE_COPY_SUFFIX)}`
+  );
+  const growthTemplate = isGrowthNegative ? ui('financialTrendGrowthDown') : ui('financialTrendGrowthUp');
+  const growthPctText = formatTrendPct(growthPct);
+  // hasPrevious === false: the comparison window has no revenue, so a percentage is undefined.
+  const statusLine = hasPrevious
+    ? growthTemplate.replace('{pct}', growthPctText).replace('{comparison}', comparisonText)
+    : ui('financialSummaryNoPrevious');
 
   // Geometry (shared between line and bar)
   const plotW = chartW - PAD_X - PAD_RIGHT;
@@ -352,12 +418,17 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
         {/* Sub-header row */}
         <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexShrink: 0, paddingBottom: '8px' }}>
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '16px', minWidth: 0, flex: 1, overflow: 'hidden' }}>
-            {/* Status badge */}
+            {/* Status badge (neutral, without an up/down icon, when there is no previous period) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: growthBadge.background, borderRadius: '10px', flexShrink: 0 }}>
-                <GrowthStatusIcon isNegative={isGrowthNegative} data-testid="GrowthStatusIcon__14828e" />
-              </div>
-              <span style={{ fontSize: '12px', lineHeight: '16px', color: growthBadge.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {hasPrevious && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '20px', height: '20px', background: growthBadge.background, borderRadius: '10px', flexShrink: 0 }}>
+                  <GrowthStatusIcon isNegative={isGrowthNegative} data-testid="GrowthStatusIcon__14828e" />
+                </div>
+              )}
+              <span
+                data-testid="financial-trend-status"
+                style={{ fontSize: '12px', lineHeight: '16px', color: hasPrevious ? growthBadge.text : 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
                 {statusLine}
               </span>
             </div>
@@ -445,16 +516,16 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
               <path d={toBezierPath(revPts)} fill="none" stroke="var(--status-success-fg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
               {/* X-axis month labels */}
-              {axisLabels.map((m, i) => (
+              {axisLabels.map((m, i) => (axisLabelVisible(i) && (
                 <text
-                  key={m}
+                  key={i}
                   x={PAD_X + (i / Math.max(axisLabels.length - 1, 1)) * plotW}
                   y={CHART_H - 5}
                   textAnchor={i === axisLabels.length - 1 ? 'end' : 'middle'}
                   fill="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}
                 >{m}</text>
-              ))}
+              )))}
 
               {/* Invisible hover columns */}
               {values.map((_, i) => {
@@ -531,7 +602,7 @@ export function FinancialTrendChart({ labels = [], values = [], expenseValues = 
                     {hasExpenses && (
                       <rect x={gx + barW + innerGap} y={PAD_Y + plotH - expH} width={barW} height={expH} rx="3" fill="url(#bar-expense-gradient)" />
                     )}
-                    <text x={cx} y={CHART_H - 5} textAnchor="middle" fill="hsl(var(--muted-foreground))" style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}>{axisLabels[i]}</text>
+                    <text x={cx} y={CHART_H - 5} textAnchor="middle" fill="hsl(var(--muted-foreground))" style={{ fontSize: '12px', fontFamily: 'Inter', fontWeight: '400' }}>{axisLabelVisible(i) ? axisLabels[i] : ''}</text>
                   </g>
                 );
               })}

@@ -86,9 +86,11 @@ function mapKpis(handlerData) {
 
 /**
  * Map trends handler response.
- * Handler returns: [{labels, values}]
+ * Handler returns: [{labels, values, expenseValues, dates, granularity, growthPct, hasPrevious}]
+ * (the last four are ETP-5493 additions, absent from older backends). `range` is the range the
+ * data was fetched with, so the chart copy always matches the data on screen.
  */
-function mapTrends(handlerData) {
+function mapTrends(handlerData, range) {
   if (!handlerData || handlerData.length === 0) return null;
   const trend = handlerData[0];
 
@@ -109,6 +111,11 @@ function mapTrends(handlerData) {
     labels: Array.isArray(trend.labels) ? trend.labels : [],
     values,
     expenseValues: values.map((_, idx) => rawExpenseValues[idx] ?? 0),
+    dates: Array.isArray(trend.dates) ? trend.dates : null,
+    granularity: typeof trend.granularity === 'string' ? trend.granularity : null,
+    growthPct: Number.isFinite(Number(trend.growthPct)) ? Number(trend.growthPct) : 0,
+    hasPrevious: trend.hasPrevious === true,
+    range,
   };
 }
 
@@ -426,7 +433,7 @@ export function useDashboardData() {
 
       const empty = buildEmptyFallback();
       const mappedKpis = mapKpis(kpisData);
-      const mappedTrends = mapTrends(trendsData);
+      const mappedTrends = mapTrends(trendsData, range);
 
       setData({
         kpis: mappedKpis !== null ? mappedKpis : empty.kpis,

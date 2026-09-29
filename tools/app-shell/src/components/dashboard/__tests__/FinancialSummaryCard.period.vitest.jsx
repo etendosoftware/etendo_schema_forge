@@ -200,3 +200,41 @@ describe('FinancialSummaryCard — hasPrevious', () => {
     expect(container.querySelector(TREND_ICON)).toBeNull();
   });
 });
+
+describe('FinancialSummaryCard — expenses (lowerIsBetter) with the rounded direction', () => {
+  const expensesBlock = (expenses) => {
+    render(<FinancialSummaryCard kpis={kpis({ expenses })} currencyLabel="EUR" />);
+    return metricBlock('financialSummaryExpenses');
+  };
+
+  it('a decrease of 1.2 is good: down arrow, green', () => {
+    const block = expensesBlock(-1.2);
+    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+    expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
+    expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
+  });
+
+  it('a flat -0.4 shows the up arrow with the neutral-positive tone, not inverted', () => {
+    const block = expensesBlock(-0.4);
+    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
+    expect(styleAttr(badgeOf(block))).not.toContain(DESTRUCTIVE_BG);
+    expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
+    expect(block.textContent).toContain('"pct":"0"');
+  });
+
+  it('a decrease of 0.5 prints "1" and is good: down arrow, green', () => {
+    const block = expensesBlock(-0.5);
+    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-down/);
+    expect(styleAttr(badgeOf(block))).toContain(SUCCESS_BG);
+    expect(within(block).getByText(/^yoyDown/)).toBeInTheDocument();
+    expect(block.textContent).toContain('"pct":"1"');
+  });
+
+  it('an increase of 1.2 is bad: up arrow, red', () => {
+    const block = expensesBlock(1.2);
+    expect(block.querySelector('svg').getAttribute('class')).toMatch(/arrow-up/);
+    expect(styleAttr(badgeOf(block))).toContain(DESTRUCTIVE_BG);
+    expect(within(block).getByText(/^yoyUp/)).toBeInTheDocument();
+  });
+});

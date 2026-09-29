@@ -3,26 +3,13 @@ import { Check, ArrowUp, ArrowDown, X, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
+import { formatTrendPct, trendDirection } from '@/lib/dashboardTrendPct.js';
+import { resolveRangeCopySuffix } from '@/lib/dashboardRangeCopy.js';
 
-// ETP-5493: the card follows the dashboard period selector. Each range key maps to the suffix of
-// its two copy fragments (`financialSummaryPeriod<Suffix>` / `financialSummaryComparison<Suffix>`),
-// which are interpolated into the headline and the trend badges. Mirrors the backend
-// (`WidgetKpisHandler`): a missing/blank range means year-to-date, while an unknown non-blank
-// value is resolved like the other widgets, i.e. the rolling last 12 months.
-const RANGE_COPY_SUFFIX = {
-  ytd: 'Ytd',
-  mtd: 'Mtd',
-  last30d: 'Last30d',
-  last90d: 'Last90d',
-  lastYear: 'LastYear',
-};
-const MISSING_RANGE_COPY_SUFFIX = RANGE_COPY_SUFFIX.ytd;
-const UNKNOWN_RANGE_COPY_SUFFIX = RANGE_COPY_SUFFIX.lastYear;
-
-function resolveRangeCopySuffix(range) {
-  if (typeof range !== 'string' || range.trim() === '') return MISSING_RANGE_COPY_SUFFIX;
-  return RANGE_COPY_SUFFIX[range.trim()] ?? UNKNOWN_RANGE_COPY_SUFFIX;
-}
+// ETP-5493: the card follows the dashboard period selector. The range -> copy suffix mapping is
+// shared with the trend chart (`lib/dashboardRangeCopy.js`). Mirrors the backend
+// (`WidgetKpisHandler`): a missing/blank range means year-to-date (the default), while an unknown
+// non-blank value is resolved like the other widgets, i.e. the rolling last 12 months.
 
 /**
  * ETP-5493 — `range` is the period the `kpis` were fetched for; it only selects the copy
@@ -236,10 +223,12 @@ export function FinancialSummaryCard({
             const trend = kpi?.trend ?? 0;
             // Direction (arrow + yoyUp/yoyDown copy) follows the sign of the number; tone
             // (green/red) is inverted for lower-is-better KPIs such as expenses, where a
-            // decrease is the good outcome. A zero trend keeps the neutral (positive) tone.
-            const trendPositive = trend >= 0;
-            const toneGood = lowerIsBetter && trend !== 0 ? !trendPositive : trendPositive;
-            const pct = Math.abs(trend).toFixed(0);
+            // decrease is the good outcome. A flat trend (rounded 0, see `trendDirection`) keeps
+            // the neutral (positive) tone and the "up" arrow/copy.
+            const direction = trendDirection(trend);
+            const trendPositive = direction !== 'down';
+            const toneGood = lowerIsBetter && direction !== 'flat' ? !trendPositive : trendPositive;
+            const pct = formatTrendPct(trend);
             const showTrend = kpi?.hasPrevious !== false;
             const trendLabel = ui(trendPositive ? 'yoyUp' : 'yoyDown', { pct, comparison: comparisonText })
               .replace(/^[↑↓]\s*/, '');

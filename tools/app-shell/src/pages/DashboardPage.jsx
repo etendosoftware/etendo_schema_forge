@@ -147,6 +147,11 @@ function DashboardContent({ apiBaseUrl }) {
         labels={revenueTrend.labels}
         values={revenueTrend.values}
         expenseValues={expenseTrend}
+        dates={revenueTrend.dates}
+        granularity={revenueTrend.granularity}
+        growthPct={revenueTrend.growthPct}
+        hasPrevious={revenueTrend.hasPrevious}
+        range={revenueTrend.range}
         currencyLabel={dashboardCurrency}
         data-testid="FinancialTrendChart__3a4535" />
     ) },

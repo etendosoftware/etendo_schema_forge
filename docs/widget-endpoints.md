@@ -22,7 +22,7 @@ Each widget = **1 Spec** + **1 Entity** + **1 Handler**.
 | Spec Name | URL | Handler | Description |
 |-----------|-----|---------|-------------|
 | `widget-kpis` | `GET /sws/neo/widget-kpis/data` (dashboard: `GET /sws/neo/dashboard/kpis?range=`) | `widgetKpisHandler` | Financial summary KPI cards; follows `?range=` (ETP-5493), defaults to `ytd` |
-| `widget-revenue-trend` | `GET /sws/neo/widget-revenue-trend/data` | `widgetRevenueTrendHandler` | Monthly revenue chart data |
+| `widget-revenue-trend` | `GET /sws/neo/widget-revenue-trend/data` | `widgetRevenueTrendHandler` | Revenue/expense trend chart data (follows `range`) |
 | `widget-pending-tasks` | `GET /sws/neo/widget-pending-tasks/data` | `widgetPendingTasksHandler` | Pending tasks and alerts |
 | `widget-activity` | `GET /sws/neo/widget-activity/data` | `widgetActivityHandler` | Recent activity feed |
 
@@ -273,13 +273,33 @@ Fields: `key` (unique id; the `*ThisMonth` names are historical and unchanged), 
 
 ### widget-revenue-trend
 
+Follows the dashboard period selector (ETP-5493): `GET /sws/neo/dashboard/trends?range=<ytd|mtd|last30d|last90d|lastYear>`. The series is anchored to `NOW()` (not to the most recent invoice date) and bucketed with a granularity fixed per range:
+
+| range | granularity | buckets |
+|-------|-------------|---------|
+| `last30d` | `day` | 30 days, today included (30 points) |
+| `mtd` | `day` | 1st of the month to today |
+| `last90d` | `week` (ISO, Monday start) | 13-14 points, the first one partial |
+| `ytd` | `month` | January to the current month |
+| `lastYear` | `month` | rolling 12 months (13 points, the first one partial) |
+| missing / blank / unknown | `month` | same as `lastYear` (rolling 12 months) |
+
+The first and last buckets may be partial: only invoices with `dateinvoiced` in `[from, NOW()]` are summed (same window as `kpis`), using `totallines` (net) of completed/closed (`CO`/`CL`) invoices. Buckets without invoices are returned as `0`. The granularity is chosen from a hardcoded mapping, never from the parameter.
+
 ```json
 {
   "response": {
     "data": [
       {
-        "labels": ["Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar"],
-        "values": [32000,35000,28000,41000,38000,45000,42000,39000,44000,47000,43000,48250]
+        "labels": ["2026-08-31","2026-09-07","2026-09-14"],
+        "values": [32000,35000,28000],
+        "expenseValues": [12000,9000,15000],
+        "dates": ["2026-08-31","2026-09-07","2026-09-14"],
+        "granularity": "week",
+        "revenueTotal": 95000,
+        "previousRevenueTotal": 80000,
+        "growthPct": 18.8,
+        "hasPrevious": true
       }
     ],
     "count": 1
@@ -287,7 +307,7 @@ Fields: `key` (unique id; the `*ThisMonth` names are historical and unchanged), 
 }
 ```
 
-Single object with parallel `labels` (month abbreviations) and `values` (amounts) arrays.
+Fields: `labels`, `values` (revenue) and `expenseValues` are the original parallel arrays (`labels` is the month abbreviation for `month` buckets and the ISO date for `day`/`week` buckets). Additive fields: `dates` (ISO `yyyy-MM-dd` start of every bucket, the source clients should format labels from), `granularity` (`day`|`week`|`month`), `revenueTotal` (revenue of the current window), `previousRevenueTotal` (revenue of the comparison window `[prevFrom, prevTo)`, same bounds as `kpis`), `growthPct` (% change of `revenueTotal` vs `previousRevenueTotal`, one decimal, same formula as the `kpis` trend) and `hasPrevious` (`false` when the previous revenue is `0`: `growthPct` is then `0` and meaningless, so clients must show a neutral "no previous data" line instead of "0%").
 
 ### widget-pending-tasks
 
@@ -416,7 +436,7 @@ Fields: `id` (unique), `author` (display name), `text` (message), `timestamp` (I
 }
 ```
 
-Data is filtered to sales invoices (`issotrx = 'Y'`) in completed statuses (`CO`, `CL`) within the requested `?range=` period, sorted by newest first, limited to 10 rows. When no range is supplied the fallback covers the last 30 days anchored to the most recent invoice date.
+Data is filtered to sales invoices (`issotrx = 'Y'`) in completed statuses (`CO`, `CL`) within the requested `?range=` period (`dateinvoiced >= <range start>`), sorted by newest first, limited to 5 rows. When no range is supplied the fallback covers the last 30 days anchored to the most recent invoice date.
 
 Dashboard monetary widgets render values with an ISO currency prefix and fixed en-US numeric separators to avoid symbol and locale ambiguity in multi-currency orgs (for example, `EUR 7,284.20`).
 
