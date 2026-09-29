@@ -84,7 +84,7 @@ vi.mock('../FiscalMonitorDebugPanel.jsx', () => ({
 // (frozen page on "Edit") went unnoticed.
 vi.mock('../../shared/InvoicePreviewModal.jsx', () => ({
   default: (props) => (
-    <div data-testid="invoice-preview">
+    <div data-testid="invoice-preview" data-related-spec={props.relatedDocs?.spec ?? 'none'}>
       <button data-testid="invoice-preview-edit" onClick={() => props.onEdit?.('inv-1')}>
         Edit
       </button>
@@ -188,6 +188,8 @@ describe('FiscalMonitorPage invoice preview edit', () => {
     await waitFor(() => {
       expect(screen.getByTestId('invoice-preview')).toBeInTheDocument();
     });
+    // ETP-5527 — a sales invoice preview gets the shared sales-invoice definition.
+    expect(screen.getByTestId('invoice-preview')).toHaveAttribute('data-related-spec', 'sales-invoice');
 
     await act(async () => {
       screen.getByTestId('invoice-preview-edit').click();

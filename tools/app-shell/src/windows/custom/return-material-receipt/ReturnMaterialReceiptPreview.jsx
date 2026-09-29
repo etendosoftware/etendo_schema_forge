@@ -6,6 +6,7 @@ import { PreviewPdfPanel, usePreviewSendModal, ReceiptSendModal } from '../share
 import { useReturnReceiptPdf } from './useReturnReceiptPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 
 export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUrl, windowName, onClose, onEdit }) {
   const ui = useUI();
@@ -46,10 +47,9 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
     downloadBlobAsFile(pdfBlob, `dev-${receipt.documentNo || 'devolucion'}.pdf`);
   };
 
-  const specs = [
-    { key: 'sourceShipments', type: 'shipment', fetch: async () => receipt?.sourceShipments ?? [] },
-    { key: 'returnInvoices', type: 'sales-invoice', fetch: async () => receipt?.returnInvoices ?? [] },
-  ];
+  // ETP-5527 — same definition as the form. ReturnMaterialReceiptHeaderHandler injects
+  // sourceShipments/returnInvoices on the list GET too, so the row is used as the record.
+  const relatedDefinition = SALES_RELATED_DOCS['return-material-receipt'];
 
   // ETP-5124 — restored: the left panel shows the system-generated PDF, same as
   // sales-invoice/goods-shipment. NOTE: deliberately NOT wired to `attachmentConfig`
@@ -72,7 +72,7 @@ export default function ReturnMaterialReceiptPreview({ receipt, token, apiBaseUr
 
   const { actionButtons, tabs } = buildReturnPreviewContent({
     doc: receipt, pdfBlob, handleDownload, modalRef,
-    specs, partnerName, movementDate, token, apiBaseUrl, ui,
+    relatedDefinition, partnerName, movementDate, token, apiBaseUrl, ui,
     // ETP-5124 — the backend contract (`return-material-receipt-send`) now exists,
     // so this window gets the same "Enviar" button and email-history card as
     // Invoice/Order/Quotation/Goods Shipment.

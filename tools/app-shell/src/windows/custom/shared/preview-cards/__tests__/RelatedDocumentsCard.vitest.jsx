@@ -83,6 +83,9 @@ describe('RelatedDocumentsCard', () => {
     render(<RelatedDocumentsCard documentId="id-1" token="t" apiBaseUrl="/api" specs={SPECS} />);
     await waitFor(() => expect(screen.getByTestId('status-tag')).toBeInTheDocument());
     expect(screen.getByText('statusCompleted')).toBeInTheDocument();
+    // ETP-5527 — the row is single-line and the status tag is what truncates, so the full
+    // status label must stay reachable as the wrapper's hover title.
+    expect(screen.getByTestId('status-tag').parentElement).toHaveAttribute('title', 'statusCompleted');
   });
 
   it('gracefully handles fetch rejection and shows empty state', async () => {

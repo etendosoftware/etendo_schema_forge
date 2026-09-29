@@ -38,6 +38,38 @@ export function fetchById(specName, entityName, id, token, apiBaseUrl) {
     .catch(() => null);
 }
 
+/**
+ * Invoices of an order-like document (sales order or sales quotation) through the
+ * `listInvoices` header action (CreateDraftInvoiceHandler#handleList). Unlike a plain
+ * `salesOrder` criteria query it also finds invoices linked only through their lines
+ * (C_InvoiceLine.C_OrderLine_ID), e.g. partial invoicing or classic-UI invoices.
+ */
+export function fetchListInvoices(specName, entityName, id, token, apiBaseUrl) {
+  const base = neoBase(apiBaseUrl);
+  return apiFetch(`${base}/${specName}/${entityName}/${encodeURIComponent(id)}/action/listInvoices`, { baseUrl: '', token })
+    .then(r => (r.ok ? r.json() : null))
+    .then(j => j?.response?.data ?? [])
+    .catch(() => []);
+}
+
+/**
+ * Payments (payment-in) collected against a sales order, resolved through its
+ * payment plan: paymentPlan -> paymentDetails -> finPayment. Deduplicated by payment id.
+ */
+export async function fetchSalesOrderPayments(orderId, token, apiBaseUrl) {
+  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
+  if (plans.length === 0) return [];
+  const detailResults = await Promise.all(
+    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
+  );
+  const paymentIds = [...new Set(detailResults.flat().filter(d => d.payment).map(d => d.payment))];
+  if (paymentIds.length === 0) return [];
+  const results = await Promise.all(
+    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, token, apiBaseUrl))
+  );
+  return results.filter(Boolean);
+}
+
 // Cross-spec PATCH-by-id — sibling of `fetchById` above. Mirrors useEntity.js's own
 // save shape (getUrl/getMethod: PATCH `${apiBaseUrl}/${entity}/${id}`, response parsed
 // via `response.data[0]`), but targeting a DIFFERENT spec/entity than the one the

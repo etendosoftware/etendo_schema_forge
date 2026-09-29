@@ -106,6 +106,8 @@ describe('buildReturnPreviewContent', () => {
     assert.match(src, /apiBaseUrl=\{apiBaseUrl\}/);
     assert.match(src, /ui=\{ui\}/);
     assert.match(src, /specs=\{specs\}/);
+    // ETP-5527 — return-material-receipt passes the shared definition instead of specs.
+    assert.match(src, /relatedDefinition=\{relatedDefinition\}/);
   });
 
   it('forwards the emailsCard param to ReturnDocStatsPanel (ETP-5124)', () => {

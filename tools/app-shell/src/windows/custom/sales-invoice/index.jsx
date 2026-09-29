@@ -12,6 +12,7 @@ import { useRowDelete } from '@/hooks/useRowDelete';
 import HeaderPage from '@generated/sales-invoice/generated/web/sales-invoice/HeaderPage';
 import InvoiceHeaderTable from '@generated/sales-invoice/custom/InvoiceHeaderTable.jsx';
 import InvoicePreview from '../shared/InvoicePreview.jsx';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 import SalesInvoiceTopbar from './SalesInvoiceTopbar.jsx';
 import SalesInvoiceSecondaryActions from './SalesInvoiceSecondaryActions.jsx';
 import InvoiceBottomPanel from '@generated/sales-invoice/custom/InvoiceBottomPanel.jsx';
@@ -290,6 +291,7 @@ export default function SalesInvoiceWindow(props) {
           <InvoicePreview
             invoice={row}
             specName="sales-invoice"
+            relatedDocs={SALES_RELATED_DOCS['sales-invoice']}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
