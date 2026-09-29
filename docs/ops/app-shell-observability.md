@@ -50,6 +50,7 @@ is lazy-loaded only when the provider is enabled and used.
 | `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
 | `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |
 | `VITE_RUM_SESSION_SAMPLE_RATE` | Optional RUM session sample rate. Values are clamped to `0..1`; invalid values fall back to `0.1`. |
+| `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See Kill Switch. |
 | `VITE_MIXPANEL_ENABLED` | Set to `true` to enable Mixpanel. |
 | `VITE_MIXPANEL_TOKEN` | Mixpanel project token. Required when Mixpanel is enabled. |
 | `VITE_MIXPANEL_DEBUG` | Optional Mixpanel debug flag. |
@@ -65,6 +66,33 @@ VITE_MIXPANEL_ENABLED=true
 
 Staging reads `VITE_MIXPANEL_TOKEN` from the `${{ secrets.VITE_MIXPANEL_TOKEN }}`
 GitHub Actions secret.
+
+## Kill Switch
+
+Telemetry can be stopped without a deploy (ETP-4578). Two layers decide whether a
+provider may run, and a provider stopped by either is not "paused": before start it
+is never started (its SDK is not even imported, so nothing goes out), and after start
+it is shut down in place.
+
+| Layer | How | Scope |
+|-------|-----|-------|
+| Build default | `VITE_TELEMETRY_KILL=true`, or a comma list such as `mixpanel,aws-rum` | Holds from the first millisecond, needs no network, and cannot be lifted remotely. |
+| Runtime flag | `telemetry-kill-all`, `telemetry-kill-sentry`, `telemetry-kill-aws-rum`, `telemetry-kill-mixpanel` in the OpenFeature control plane (ConfigCat, or `VITE_FEATURE_FLAGS` locally) | Applies to a running tab when the control plane pushes the change (poll interval `VITE_CONFIGCAT_POLL_SECONDS`, 60 s by default). Setting it back to `false` restarts the provider. |
+
+The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpanel`.
+
+- A flag can only STOP telemetry the build allows; it never starts a provider the build
+  did not configure, and it never lifts a kill the build asked for.
+- The defaults are `false` for every switch, so an unreachable control plane keeps
+  today's behaviour instead of silently turning telemetry off.
+- If the flag client itself breaks, a running gateway keeps its current state: a broken
+  read never revives a stopped provider.
+- Startup waits at most 1.5 s for the flag provider before starting telemetry. A kill
+  flag that answers later still applies, in place. With a build default the wait is
+  irrelevant.
+- The switches are not reported as flag exposures (they would emit telemetry about the
+  telemetry they control) and are operational controls, not feature flags, so they are
+  not in `flags-registry.json` and do not enter the flag-debt scorecard.
 
 ## Events
 

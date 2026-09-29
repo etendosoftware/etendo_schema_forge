@@ -15,3 +15,5 @@ export const captureException = observability.captureException;
 export const flush = observability.flush;
 export const reset = observability.reset;
 export const setContext = observability.setContext;
+export const disable = observability.disable;
+export const enable = observability.enable;

@@ -33,12 +33,35 @@ export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
 /** Enables the admin-only public API key management entry point (ETP-5345). */
 export const PUBLIC_API_KEYS = 'public-api-keys';
 
+/**
+ * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
+ * safe default is `false` (today's shipped behaviour: providers run as configured). They are
+ * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
+ * exposure reporting so that reading a switch does not itself emit telemetry.
+ *
+ * The global switch stops every provider; a per-provider switch stops one. The keys after
+ * `telemetry-kill-` are the adapter names the gateway knows.
+ */
+export const TELEMETRY_KILL_ALL = 'telemetry-kill-all';
+export const TELEMETRY_KILL_PROVIDER_FLAGS = Object.freeze({
+  sentry: 'telemetry-kill-sentry',
+  'aws-rum': 'telemetry-kill-aws-rum',
+  mixpanel: 'telemetry-kill-mixpanel',
+});
+
+/** Flags that must never be reported through the observability layer they control. */
+export const NO_EXPOSURE_FLAGS = Object.freeze(
+  new Set([TELEMETRY_KILL_ALL, ...Object.values(TELEMETRY_KILL_PROVIDER_FLAGS)])
+);
+
 export const FLAG_DEFAULTS = Object.freeze({
   [PROOF_OF_CONCEPT_MENU]: false,
   [WEBMCP_AGENT_CHAT]: false,
   [PAGE_HELP_SUGGESTIONS]: false,
   [ACCT_PROCESS_MONITOR]: false,
   [PUBLIC_API_KEYS]: false,
+  [TELEMETRY_KILL_ALL]: false,
+  ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });
 
 /**
