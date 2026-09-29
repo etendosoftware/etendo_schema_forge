@@ -36,8 +36,15 @@ const LIST_COLUMNS = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
-  { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
-  { key: 'deliveryStatus', column: 'DeliveryStatus', type: 'percent', label: 'Shipment Status' },
+  // ETP-5317 (Part 2): point at the GO-owned stored computed columns
+  // (EM_ETGO_Invoice_Status / EM_ETGO_Delivery_Status), not the classic
+  // AD columns (InvoiceStatus / DeliveryStatus) — the classic ones never
+  // exclude the Total Discount line (ETGO_DTO) from their SQLLOGIC, so the
+  // advanced filter/sort on them disagreed with the (already-corrected)
+  // displayed value. See docs/bug-reports/2026-09-24-etp5317-... for the
+  // full root cause and the stored-computed-column implementation.
+  { key: 'eTGOInvoiceStatus', column: 'EM_ETGO_Invoice_Status', type: 'percent', label: 'Invoice Status' },
+  { key: 'eTGODeliveryStatus', column: 'EM_ETGO_Delivery_Status', type: 'percent', label: 'Shipment Status' },
 ];
 
 function CustomHeaderTable(props) {
@@ -49,11 +56,15 @@ const LABEL_OVERRIDES = {
     C_BPartner_ID: 'Contacto',
     DeliveryStatus: 'Estado de entrega',
     InvoiceStatus: 'Estado de facturación',
+    EM_ETGO_Delivery_Status: 'Estado de entrega',
+    EM_ETGO_Invoice_Status: 'Estado de facturación',
   },
   en_US: {
     C_BPartner_ID: 'Contact',
     DeliveryStatus: 'Delivery Status',
     InvoiceStatus: 'Invoicing Status',
+    EM_ETGO_Delivery_Status: 'Delivery Status',
+    EM_ETGO_Invoice_Status: 'Invoicing Status',
   },
 };
 

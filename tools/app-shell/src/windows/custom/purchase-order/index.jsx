@@ -30,8 +30,15 @@ const LIST_COLUMNS = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
-  { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
-  { key: 'deliveryStatusPurchase', column: 'DeliveryStatusPurchase', type: 'percent', label: 'Reception Status' },
+  // ETP-5317 (Part 2): point at the GO-owned stored computed columns
+  // (EM_ETGO_Invoice_Status / EM_ETGO_Deliv_Status_Purchase), not the classic
+  // AD columns (InvoiceStatus / DeliveryStatusPurchase) — the classic ones
+  // never exclude the Total Discount line (ETGO_DTO) from their SQLLOGIC, so
+  // the advanced filter/sort on them disagreed with the (already-corrected)
+  // displayed value. See docs/bug-reports/2026-09-24-etp5317-... for the
+  // full root cause and the stored-computed-column implementation.
+  { key: 'eTGOInvoiceStatus', column: 'EM_ETGO_Invoice_Status', type: 'percent', label: 'Invoice Status' },
+  { key: 'eTGODelivStatusPurchase', column: 'EM_ETGO_Deliv_Status_Purchase', type: 'percent', label: 'Reception Status' },
 ];
 
 const draftModeWithModal = {
@@ -53,12 +60,16 @@ const LABEL_OVERRIDES = {
     DatePromised: 'Fecha de entrega esperada',
     DeliveryStatusPurchase: 'Estado de recepción',
     InvoiceStatus: 'Estado de facturación',
+    EM_ETGO_Deliv_Status_Purchase: 'Estado de recepción',
+    EM_ETGO_Invoice_Status: 'Estado de facturación',
   },
   en_US: {
     C_BPartner_ID: 'Contact',
     DatePromised: 'Expected Delivery Date',
     DeliveryStatusPurchase: 'Reception Status',
     InvoiceStatus: 'Invoicing Status',
+    EM_ETGO_Deliv_Status_Purchase: 'Reception Status',
+    EM_ETGO_Invoice_Status: 'Invoicing Status',
   },
 };
 
