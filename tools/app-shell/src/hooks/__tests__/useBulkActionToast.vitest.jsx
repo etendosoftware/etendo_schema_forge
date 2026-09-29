@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 // a string that differs from the key itself is what lets translateBackendError's "did this
 // actually translate" guard (`translated !== key`) succeed, exercising the real mapped path.
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => {
+  useUI: () => (key, params = {}) => {
     const map = {
       processExecuted: '{ok} processed, {failed} failed',
       processExecutedWithOmitted: '{ok} processed, {omitted} omitted, {failed} failed',
@@ -24,8 +24,11 @@ vi.mock('@/i18n', () => ({
       // ETP-5316 — the AD_MESSAGE-key route's locale entries.
       'backendError.docLinesWithoutQuantity': 'Hay líneas sin cantidad.',
       'backendError.docLinesLockedProduct': 'Hay líneas con productos bloqueados que no pueden entregarse.',
+      // ETP-5175 — the Invalid-Account composer's entries.
+      'backendError.invalidAccount.base': 'No se pudo encontrar la cuenta.',
+      'backendError.invalidAccount.bpOnly': '(Contacto: {bp})',
     };
-    return map[key] || key;
+    return Object.keys(params).reduce((text, p) => text.replace(`{${p}}`, params[p]), map[key] || key);
   },
 }));
 
@@ -260,6 +263,22 @@ describe('useBulkActionToast', () => {
       });
       expect(toast.error).toHaveBeenCalledWith('Hay líneas sin cantidad.');
       expect(toast.error.mock.calls[0]).toHaveLength(1);
+    });
+
+    it('renders a single Invalid-Account failure from its messageParams (ETP-5175)', () => {
+      const { result } = renderHook(() => useBulkActionToast());
+      act(() => {
+        result.current.showResult({
+          ok: 0,
+          failed: [{
+            documentNo: 'FAC-01',
+            message: 'backend prose',
+            messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+            messageParams: { bpName: 'Acme' },
+          }],
+        });
+      });
+      expect(toast.error).toHaveBeenCalledWith('No se pudo encontrar la cuenta. (Contacto: Acme)');
     });
 
     it('falls back to the backend sentence when the keys are not recognised', () => {

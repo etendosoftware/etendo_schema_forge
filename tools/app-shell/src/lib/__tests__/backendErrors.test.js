@@ -1,7 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   extractBackendMessageKeys,
+  extractBackendMessageParams,
   translateBackendError,
   parseBackendErrorMessage,
 } from '../backendErrors.js';
@@ -271,7 +273,7 @@ describe('translateBackendError', () => {
 // ── ETP-4706: parameterized "Account could not be found" enrichment ──────────────
 //
 // Core Etendo's `@InvalidAccount@` message ("Account could not be found.") is
-// enriched server-side (DocumentPostingService#enrichWithFailingEntity) with the
+// enriched server-side (DocumentPostingService#failureOf) with the
 // transaction's Business Partner / BP Group name via the en_US-only
 // ETGO_InvalidAccountBpAndGroup / ETGO_InvalidAccountBpOnly AD_MESSAGE catalog
 // entries. These two skeletons carry a dynamic name, so they can't be an exact-match
@@ -420,6 +422,160 @@ describe('translateBackendError — parameterized "Account could not be found" (
       result,
       'Account could not be found. (Contact: Odd, BP Group: Fake, Corp, Business Partner Category: Vendors)',
     );
+  });
+});
+
+// ── ETP-5175: Invalid-Account posting failure rendered from its identity ────────
+//
+// DocumentPostingService (com.etendoerp.go) sends `messageKeys` + `messageParams` for this
+// failure, because the Spanish AD_MESSAGE_TRL text has no versioned home and production says
+// "Grupo de Terceros". The SPA composes the sentence itself with "Categoría de contacto". These
+// tests read the REAL locale files, so they pin the wording QA asked for, not a fixture.
+function localeTranslator(locale) {
+  const json = JSON.parse(readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), 'utf8'));
+  return fakeUiTranslator(json.genericLabels);
+}
+
+describe('translateBackendError — Invalid-Account identity (ETP-5175)', () => {
+  const es = localeTranslator('es_ES');
+  const ar = localeTranslator('es_AR');
+  const en = localeTranslator('en_US');
+  // What production sends today in a Spanish session: prose built from the stale TRL rows.
+  const prose = 'No se pudo encontrar la cuenta. (Contacto: Piensos del Ebro S.L., Grupo de Terceros: '
+    + 'Proveedores) Revise las siguientes cuentas contables del Producto: Desviación Pr. Factura.';
+  const bpGroupAndProduct = {
+    messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpAndGroup', 'ETGO_InvalidAccountMissingProductAccounts'],
+    messageParams: { bpName: 'Piensos del Ebro S.L.', bpGroup: 'Proveedores', missingProductAccounts: ['invoicePriceVariance'] },
+  };
+
+  it('renders the QA scenario in es_ES with "Categoría de contacto", never "terceros"', () => {
+    const result = translateBackendError(prose, es, bpGroupAndProduct);
+    assert.equal(result, 'No se pudo encontrar la cuenta. (Contacto: Piensos del Ebro S.L., Categoría de contacto: '
+      + 'Proveedores) Revise las siguientes cuentas contables del producto: Desviación Pr. Factura.');
+    assert.doesNotMatch(result, /tercero/i);
+  });
+
+  it('renders the same sentence in es_AR', () => {
+    assert.equal(translateBackendError(prose, ar, bpGroupAndProduct), translateBackendError(prose, es, bpGroupAndProduct));
+  });
+
+  it('renders it in en_US with Contact / Contact Category', () => {
+    assert.equal(translateBackendError(prose, en, bpGroupAndProduct),
+      'Account could not be found. (Contact: Piensos del Ebro S.L., Contact Category: Proveedores) '
+      + 'Please review the following accounts of the product: Invoice Price Variance.');
+  });
+
+  it('renders the Contact Category missing-accounts addendum, labelling every code', () => {
+    const result = translateBackendError('', es, {
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpAndGroup', 'ETGO_InvalidAccountMissingBpGroupAccounts'],
+      messageParams: { bpName: 'Acme', bpGroup: 'Clientes', missingBpGroupAccounts: ['nonInvoicedReceipts', 'vendorPrepayment'] },
+    });
+    assert.equal(result, 'No se pudo encontrar la cuenta. (Contacto: Acme, Categoría de contacto: Clientes) '
+      + 'Revise las siguientes cuentas contables de la categoría de contacto: Recibos no facturados, '
+      + 'Pagos por adelantado del proveedor.');
+  });
+
+  it('renders both addenda in composition order', () => {
+    const result = translateBackendError('', es, {
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpAndGroup', 'ETGO_InvalidAccountMissingBpGroupAccounts',
+        'ETGO_InvalidAccountMissingProductAccounts'],
+      messageParams: { bpName: 'Acme', bpGroup: 'Clientes', missingBpGroupAccounts: ['customerPrepayment'],
+        missingProductAccounts: ['productExpense', 'invoicePriceVariance'] },
+    });
+    assert.equal(result, 'No se pudo encontrar la cuenta. (Contacto: Acme, Categoría de contacto: Clientes) '
+      + 'Revise las siguientes cuentas contables de la categoría de contacto: Prepago del cliente. '
+      + 'Revise las siguientes cuentas contables del producto: Gastos del producto, Desviación Pr. Factura.');
+  });
+
+  it('renders the contact-only variant (no category)', () => {
+    const result = translateBackendError('', es, {
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly', 'ETGO_InvalidAccountMissingProductAccounts'],
+      messageParams: { bpName: 'Acme', missingProductAccounts: ['invoicePriceVariance'] },
+    });
+    assert.equal(result, 'No se pudo encontrar la cuenta. (Contacto: Acme) '
+      + 'Revise las siguientes cuentas contables del producto: Desviación Pr. Factura.');
+  });
+
+  it('every account code the backend can send has a label in all three locales', () => {
+    const codes = ['nonInvoicedReceipts', 'customerReceivablesNo', 'vendorLiability', 'customerPrepayment',
+      'vendorPrepayment', 'productExpense', 'invoicePriceVariance'];
+    for (const t of [es, ar, en]) {
+      for (const code of codes) {
+        assert.notEqual(t(`backendError.account.${code}`), `backendError.account.${code}`, code);
+      }
+    }
+  });
+
+  it('keeps the backend prose when no params were sent (older backend)', () => {
+    assert.equal(translateBackendError(prose, es, { messageKeys: bpGroupAndProduct.messageKeys }), prose);
+  });
+
+  it('keeps the backend prose when the keys do not include InvalidAccount', () => {
+    assert.equal(translateBackendError(prose, es, {
+      messageKeys: ['ETGO_InvalidAccountBpAndGroup'], messageParams: bpGroupAndProduct.messageParams,
+    }), prose);
+  });
+
+  it('keeps the backend prose when the BP could not be resolved (key only, no params)', () => {
+    assert.equal(translateBackendError('No se pudo encontrar la cuenta.', es, { messageKeys: ['InvalidAccount'] }),
+      'No se pudo encontrar la cuenta.');
+  });
+
+  it('keeps the backend prose when an account code has no label in this build', () => {
+    assert.equal(translateBackendError(prose, es, {
+      messageKeys: bpGroupAndProduct.messageKeys,
+      messageParams: { ...bpGroupAndProduct.messageParams, missingProductAccounts: ['someFutureAccount'] },
+    }), prose);
+  });
+
+  it('keeps the backend prose when bpGroup is missing for the BP+Group key', () => {
+    assert.equal(translateBackendError(prose, es, {
+      messageKeys: bpGroupAndProduct.messageKeys,
+      messageParams: { bpName: 'Acme', missingProductAccounts: ['invoicePriceVariance'] },
+    }), prose);
+  });
+
+  it('keeps the backend prose when the locale has no entries (t echoes keys)', () => {
+    assert.equal(translateBackendError(prose, (key) => key, bpGroupAndProduct), prose);
+  });
+});
+
+describe('translateBackendError — legacy "Account could not be found" text, new EN wording (ETP-5175)', () => {
+  const es = localeTranslator('es_ES');
+
+  it('matches the new "Contact / Contact Category" backend text', () => {
+    const result = translateBackendError('Account could not be found. (Contact: Acme Corp, Contact Category: Suppliers)', es);
+    assert.match(result, /\(Documento de Acme Corp, categoría Suppliers\)$/);
+  });
+
+  it('matches the new contact-only backend text', () => {
+    const result = translateBackendError('Account could not be found. (Contact: Acme Corp)', es);
+    assert.match(result, /\(Documento de Acme Corp\)$/);
+  });
+
+  it('legacy locale entries say "categoría de contacto", never "tercero"', () => {
+    const result = translateBackendError('Account could not be found. (Business Partner: Acme Corp)', es);
+    assert.match(result, /categoría de contacto/);
+    assert.doesNotMatch(result, /tercero/i);
+  });
+});
+
+describe('extractBackendMessageParams (ETP-5175)', () => {
+  it('reads messageParams from the flat body', () => {
+    assert.deepEqual(extractBackendMessageParams({ messageParams: { bpName: 'Acme' } }), { bpName: 'Acme' });
+  });
+
+  it('reads messageParams from the response and error envelopes', () => {
+    assert.deepEqual(extractBackendMessageParams({ response: { messageParams: { a: 1 } } }), { a: 1 });
+    assert.deepEqual(extractBackendMessageParams({ error: { messageParams: { b: 2 } } }), { b: 2 });
+  });
+
+  it('returns undefined when absent, empty, an array, or not an object', () => {
+    assert.equal(extractBackendMessageParams(null), undefined);
+    assert.equal(extractBackendMessageParams({}), undefined);
+    assert.equal(extractBackendMessageParams({ messageParams: {} }), undefined);
+    assert.equal(extractBackendMessageParams({ messageParams: ['x'] }), undefined);
+    assert.equal(extractBackendMessageParams({ messageParams: 'x' }), undefined);
   });
 });
 

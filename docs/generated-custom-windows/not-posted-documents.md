@@ -309,6 +309,20 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 3. **Post row** — `POST /header/{id}/action/post`; refreshes on success.
 4. **Post selected** — `POST /header/0/action/bulk-post`; refreshes on any result.
 
+### Invalid-account posting error (ETP-5175)
+
+A single **Post row** that fails with `STATUS_InvalidAccount` returns the same identity as the
+document windows: `NotPostedDocumentsHandler` forwards `messageKeys` + `messageParams`
+(through `DocumentPostingService.putMessageIdentity`), and `postRow` passes them to
+`translateBackendError`, so the toast reads, e.g.:
+
+> No se pudo encontrar la cuenta. (Contacto: Piensos del Ebro S.L., Categoría de contacto: Proveedores)
+> Revise las siguientes cuentas contables del producto: Desviación Pr. Factura.
+
+This is exactly the text Relación albarán-factura shows (see `matched-purchase-invoices.md`).
+**Post selected** only shows the ok/total counts, never a per-row message; `bulk-post` still
+forwards the identity on each row result so the data is there if a per-row view is added later.
+
 ---
 
 ## Manual verification
