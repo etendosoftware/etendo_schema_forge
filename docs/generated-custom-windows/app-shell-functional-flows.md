@@ -431,14 +431,12 @@ actual gallery cards, while missing these 5 real ones.
   `RolesAccessMatrix.jsx`) — the `--informes` suffix keeps a report row's key distinct from any
   window row in the same category, even though in practice a report id and a window id never
   collide (different id-spaces entirely).
-- **`UserRolesTab.jsx` (the User window's own permission-preview matrix) gets the same
-  treatment**, sharing the SAME `menu.json` `reportId` entries: `activeWindowIds` (its
-  union-of-every-role's-reachable-ids set) now also folds in each role's `reports[]` ids, and
-  `cellValue()` falls back to `role.reports` when `role.windows` has no match for a given row id.
-  Since a report id has NO `SFListMenu`/AD-tree fallback at all (unlike a window id, which still
-  degrades to an "uncategorized" bucket with its raw AD name), a report row can ONLY ever resolve
-  through `menuIndex` — this is exactly why every report id needs its own `menu.json` entry; one
-  missing would silently vanish from this tab's matrix with no error.
+- **`UserRolesTab.jsx` (the User window's own permission-preview matrix) renders the SAME
+  rows** — since ETP-5485 it adapts `SFSystemRoleTemplates?includeMatrix=true`'s `reportsMatrix`
+  (built by the same backend `RoleAccessMatrix`/`ReportAccessCatalog` code) through this page's
+  own `adaptReportsMatrix`, and nests the result under the same per-category "Informes"
+  sub-header. A report id absent from `menu.json` keeps the backend's hardcoded category and
+  raw name rather than vanishing, identically on both screens.
 - **Failure or edge behavior:** a category with real windows but no accessible report rows never
   shows the Informes sub-header (not an empty one). Passing no `reportsMatrix` prop at all to
   `RolesAccessMatrix` (backward compatibility) renders nothing extra — no crash, no empty

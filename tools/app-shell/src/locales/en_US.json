@@ -17653,7 +17653,6 @@
     "userRolesTabEmptyState": "Select a role to view permissions",
     "userRolesTabAdminFullAccessMessage": "This user has full access as an administrator",
     "userRolesTabWindowColumn": "Window",
-    "userRolesTabUncategorizedCategory": "Other",
     "userRolesTabWinnerTooltipTitle": "Effective permission",
     "userRolesTabWinnerTooltipDescription": "This is the highest access level the user has across all their roles.",
     "usersGridRolesColumn": "Roles",

@@ -17885,7 +17885,6 @@
     "userRolesTabEmptyState": "Selecciona un rol para visualizar los permisos",
     "userRolesTabAdminFullAccessMessage": "Este usuario tiene acceso completo como administrador",
     "userRolesTabWindowColumn": "Ventana",
-    "userRolesTabUncategorizedCategory": "Otros",
     "userRolesTabWinnerTooltipTitle": "Permiso efectivo",
     "userRolesTabWinnerTooltipDescription": "Es el nivel de acceso más alto que tiene el usuario entre todos sus roles.",
     "usersGridRolesColumn": "Roles",

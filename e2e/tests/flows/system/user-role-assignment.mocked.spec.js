@@ -23,26 +23,20 @@ import { login } from '../../helpers/auth.js';
  * EVERY route, not just the User form. `login()`'s baseline `/sws/**` catch-all
  * `route.abort()`s that specific URL, which `useRoleMenu()` treats as "webhook
  * unreachable" → fail OPEN (unfiltered sidebar, no gate). The detail-form describe
- * block below overrides `listmenu` with a real (non-empty) tree because
- * `UserRolesTab` needs real row data — a real-but-EMPTY tree would instead resolve
- * `allowedIds` to an empty `Set`, which `AppLayout` treats as "zero window access"
- * and renders a full-page "Sin acceso" block-screen instead of the app (verified
- * empirically while building this spec). The grid describe block does NOT need
- * `UserRolesTab`'s data, so it deliberately leaves `listmenu` unmocked and relies on
- * the same default fail-open behavior every other mocked spec in this repo assumes.
+ * block below overrides `listmenu` with a real (non-empty) tree so the sidebar gate lets
+ * the User window through (it must include the User window, `108`) — a real-but-EMPTY tree
+ * would instead resolve `allowedIds` to an empty `Set`, which `AppLayout` treats as "zero
+ * window access" and renders a full-page "Sin acceso" block-screen instead of the app
+ * (verified empirically while building this spec). Since ETP-5485 `UserRolesTab` no longer
+ * reads this tree — its rows come from the `matrix` in the `systemroletemplates` /
+ * `rolesoverview` mocks below. The grid describe block leaves `listmenu` unmocked and relies
+ * on the same default fail-open behavior every other mocked spec in this repo assumes.
  */
 
 const USER_ROW = { id: 'row-001', name: 'Test User', firstName: '', lastName: '', email: 'test.user@example.com', locked: false };
 
-// `role-admin.windows[]` must list every window `MENU_TREE` declares ('108' AND '143') —
-// DEV wave 6 fix #5 filters `UserRolesTab`'s matrix rows to the UNION of every role's
-// `windows[].id` (Admin included), matching production's `resolveActiveEtendoGoWindowIds()`
-// (every window Etendo GO actually exposes lands in Admin's own `windows[]`, per
-// `SFRolesOverview.java`). A window absent from ALL roles here — Admin included — is now
-// correctly treated as "classic-only" and dropped from the matrix entirely (fix #5); leaving
-// '108' out of every role's `windows[]`, as an earlier draft of this fixture did, silently
-// dropped its row and broke the "shows '—' for a role with no access" assertion below —
-// not a source bug, just an unrealistic fixture that predates fix #5.
+// Per-role `windows[]` only feeds the chip control / grid now; since ETP-5485 `UserRolesTab`'s
+// rows and cells come from the `matrix` fixture further down (`MATRIX_ROWS`).
 const ROLES = [
   { id: 'role-finance', name: 'Finance', isClientAdmin: false, windows: [{ id: '143', name: 'Pedido de venta', tier: 'full' }] },
   { id: 'role-sales', name: 'Sales', isClientAdmin: false, windows: [{ id: '143', name: 'Pedido de venta', tier: 'readOnly' }] },
@@ -64,11 +58,34 @@ const ROLES = [
 // client-admin row at all (there is none at system level, see its own class javadoc). This is
 // the ONLY source `AssignTemplateRolesControl.jsx`/`UserRolesTab.jsx` use for the selectable
 // template roles now (see `lib/rolesApi.js`'s `fetchTemplateRoles()` doc comment) — the
-// tenant-scoped `rolesoverview` mock above is kept ONLY for its client-admin row
-// (`activeWindowIds`/grid Admin-detection), never for the composable template list itself.
-// Same 4 roles/windows as `ROLES` above, minus the admin entry, so every existing assertion
-// on Finance/Sales window access continues to hold unchanged.
+// tenant-scoped `rolesoverview` mock above is kept for its client-admin row (admin-holder
+// detection, and the admin column's matrix), never for the composable template list itself.
 const SYSTEM_TEMPLATE_ROLES = ROLES.filter((role) => !role.isClientAdmin);
+
+// ETP-5485 — the backend `matrix` (built by `RoleAccessMatrix`, same shape for both
+// endpoints) that `UserRolesTab` now renders its rows from. Includes the 2 ETP-5071 proxy
+// rows the tab used to miss: "Modelos Fiscales" (window id `3E8F…`) and "Documentos no
+// contabilizados" (process id `D6AB…`); the real menu.json places both under Finance.
+const TAX_MODELS_PROXY_ID = '3E8FEA1EA7404D979306C9EE7FD2E7E8';
+const NOT_POSTED_DOCS_PROXY_ID = 'D6AB95CE52D34E1599590526115E26C6';
+const MATRIX_ROWS = [
+  { category: 'General Setup', id: '108', name: 'User', access: { 'role-finance': 'none', 'role-sales': 'none', 'role-admin': 'full' } },
+  { category: 'Sales Management', id: '143', name: 'Sales Order', access: { 'role-finance': 'full', 'role-sales': 'read-only', 'role-admin': 'full' } },
+  { category: 'Financial Management', id: TAX_MODELS_PROXY_ID, name: 'Fiscal Models', access: { 'role-finance': 'full', 'role-sales': 'none', 'role-admin': 'full' } },
+  { category: 'Other', id: NOT_POSTED_DOCS_PROXY_ID, name: 'Not Posted Documents', access: { 'role-finance': 'read-only', 'role-sales': 'none', 'role-admin': 'full' } },
+];
+
+/** Builds a backend `{categories: [{name, windows: [{id, name, access}]}]}` matrix, keeping only `roleIds`' access keys. */
+function backendMatrix(roleIds) {
+  const byCategory = new Map();
+  for (const { category, id, name, access } of MATRIX_ROWS) {
+    if (!byCategory.has(category)) byCategory.set(category, []);
+    const scoped = Object.fromEntries(roleIds.map((roleId) => [roleId, access[roleId] ?? 'none']));
+    byCategory.get(category).push({ id, name, access: scoped });
+  }
+  return { categories: [...byCategory.entries()].map(([name, windows]) => ({ name, windows })) };
+}
+const EMPTY_REPORTS_MATRIX = { categories: [] };
 
 const MENU_TREE = {
   tree: [
@@ -105,7 +122,11 @@ async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
   await page.route('**/sws/neo/rolesoverview**', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify({ roles: ROLES }),
+    body: JSON.stringify({
+      roles: ROLES,
+      matrix: backendMatrix(ROLES.map((role) => role.id)),
+      reportsMatrix: EMPTY_REPORTS_MATRIX,
+    }),
   }));
 
   // Missing this mock resolves to the generic `**/sws/**` catch-all's `{ data: [],
@@ -115,11 +136,20 @@ async function installUserDetailMocks(page, { savedRoleIds = [] } = {}) {
   // `RoleChipsCell`'s `useUserRoleGridData`) then renders its own empty/error state instead
   // of the real template roles, which is exactly what this spec was failing on before this
   // route was added.
-  await page.route('**/sws/neo/systemroletemplates**', (route) => route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ roles: SYSTEM_TEMPLATE_ROLES }),
-  }));
+  //
+  // ETP-5485 — only `UserRolesTab` asks for `?includeMatrix=true`; the other callers get the
+  // default roles-only shape, exactly like the real backend.
+  await page.route('**/sws/neo/systemroletemplates**', (route) => {
+    const includeMatrix = new URL(route.request().url()).searchParams.get('includeMatrix') === 'true';
+    const body = includeMatrix
+      ? {
+        roles: SYSTEM_TEMPLATE_ROLES,
+        matrix: backendMatrix(SYSTEM_TEMPLATE_ROLES.map((role) => role.id)),
+        reportsMatrix: EMPTY_REPORTS_MATRIX,
+      }
+      : { roles: SYSTEM_TEMPLATE_ROLES };
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  });
 
   await page.route('**/sws/neo/userroleassignments**', (route) => {
     const url = route.request().url();
@@ -222,8 +252,8 @@ test.describe('User role assignment — detail form (existing user)', () => {
     // `UserRolesTab__empty`. With zero roles selected, that's what's on screen.
     await expect(page.getByTestId('UserRolesTab__empty')).toBeVisible({ timeout: 10_000 });
 
-    // Let the two independent mount-time fetches (AssignTemplateRolesControl's own
-    // fetchRolesOverview + UserRolesTab's Promise.all([fetchMenuTree, fetchRolesOverview]))
+    // Let the independent mount-time fetches (AssignTemplateRolesControl's own + UserRolesTab's
+    // Promise.all([fetchRolesOverview, fetchTemplateRoles({ includeMatrix: true })]))
     // fully settle before taking the "before" snapshot.
     await page.waitForTimeout(300);
     const before = { ...counts };
@@ -246,10 +276,17 @@ test.describe('User role assignment — detail form (existing user)', () => {
     await expect(matrix).toBeVisible();
     await expect(page.getByTestId('UserRolesTab__empty')).toHaveCount(0);
     await expect(matrix.getByRole('columnheader', { name: 'Finanzas' })).toBeVisible();
-    // row-108 ("Usuario") is absent from role-finance's mocked `windows[]` → '—'.
-    // row-143 ("Pedido de venta") is present with tier 'full' → '✓'.
+    // row-108 ("Usuario") is 'none' for role-finance in the mocked matrix → '—'.
+    // row-143 ("Pedido de venta") is 'full' → '✓'.
     await expect(matrix.getByTestId('UserRolesTab__row-108')).toContainText('—');
     await expect(matrix.getByTestId('UserRolesTab__row-143')).toContainText('✓');
+    // ETP-5485 — the 2 ETP-5071 proxy rows are present, with Finance's real tier, under the
+    // Finance category (menu.json overrides the backend's raw categories).
+    const financeCategory = matrix.getByTestId('UserRolesTab__category-Finance');
+    await expect(financeCategory).toBeVisible();
+    await expect(matrix.getByTestId(`UserRolesTab__row-${TAX_MODELS_PROXY_ID}`)).toContainText('✓');
+    await expect(matrix.getByTestId(`UserRolesTab__row-${NOT_POSTED_DOCS_PROXY_ID}`)).toBeVisible();
+    await expect(matrix.getByTestId(`UserRolesTab__row-${NOT_POSTED_DOCS_PROXY_ID}`)).not.toContainText('✓');
 
     await page.getByTestId('AssignTemplateRolesControl__toggle-expand').click();
     await page.getByTestId('AssignTemplateRolesControl__toggle-role-sales').click();
