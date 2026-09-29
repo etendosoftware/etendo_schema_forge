@@ -61,13 +61,26 @@ import BankConnectionDeleteConfirmModal from '@/windows/custom/financial-account
 // cell body and has to move with it. It was `pl-[84px]` while NameCell opened with a
 // 44px drag-grip slot (44 + 32px avatar + 8px padding); the grip is gone, so it is
 // now just the avatar plus its padding.
+//
+// WIDTHS: every column carries one, and together they are the grid's floor — the
+// `min-w` on the scrolling wrapper below equals their sum plus the selection (40px) and
+// actions (124px) cells. Under DataTable's `table-layout: fixed; width: 100%`
+// (getTableContainerStyle) that gives two regimes:
+//  - container wider than the floor → the browser spreads the extra width across all
+//    columns IN PROPORTION to these values, so Cuenta and Tipo & IBAN keep their balance
+//    instead of one of them absorbing everything;
+//  - container narrower (narrow window, app sidebar expanded) → the grid scrolls
+//    horizontally instead of squeezing any column.
+// Changing a width means changing the wrapper's `min-w` too. Keep each column's
+// headClass and cellClass in step. Clipped text is revealed on hover (TruncatedText in
+// accountColumns.jsx).
 const COLUMN_CHROME = {
-  name: { headClass: 'w-[480px] pl-[40px] pr-2', cellClass: 'w-[480px] p-0' },
-  type: { headClass: 'w-[340px] px-2', cellClass: 'w-[340px] px-2 py-2' },
-  currency: { headClass: 'w-[120px] px-2', cellClass: 'w-[120px] px-2 py-2' },
-  country: { headClass: 'w-[160px] px-2', cellClass: 'w-[160px] px-2 py-2' },
-  currentBalance: { headClass: 'w-[200px] px-2', cellClass: 'w-[200px] px-2' },
-  eTGOPendingCount: { headClass: 'w-[280px] px-2', cellClass: 'w-[280px] px-2' },
+  name: { headClass: 'w-[240px] pl-[40px] pr-2', cellClass: 'w-[240px] p-0' },
+  type: { headClass: 'w-[230px] px-2', cellClass: 'w-[230px] px-2 py-2' },
+  currency: { headClass: 'w-[80px] px-2', cellClass: 'w-[80px] px-2 py-2' },
+  country: { headClass: 'w-[150px] px-2', cellClass: 'w-[150px] px-2 py-2' },
+  currentBalance: { headClass: 'w-[130px] px-2', cellClass: 'w-[130px] px-2' },
+  eTGOPendingCount: { headClass: 'w-[140px] px-2', cellClass: 'w-[140px] px-2' },
 };
 
 // DataTable right-aligns any column whose `type` is in its NUMERIC_FIELD_TYPES set
@@ -445,7 +458,14 @@ export default function AccountsHeaderTable({
             hand-assembled headerTable, no other `rowHoverStyle="elevated"` consumer
             has one — so it clips the shadow again at its own edge unless it also
             carries the same 24px of trailing room. */}
-        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
+        {/* `[&_table]:min-w-[1134px]` is the grid's floor: the sum of COLUMN_CHROME's
+            widths (970px) plus the selection (40px) and actions (124px) cells. Above it the
+            extra width is spread proportionally; below it the grid scrolls horizontally.
+            Applied to every table inside so the sticky header table and the body table keep
+            identical widths and stay aligned. */}
+        <div
+          className="[&_table]:min-w-[1134px]"
+          style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'auto', paddingBottom: 24 }}>
           <DataTable
             {...props}
             data={visibleAccounts}

@@ -8,6 +8,7 @@ function makeClient(overrides = {}) {
     people: { set: vi.fn() },
     set_group: vi.fn(),
     get_group: vi.fn(() => ({ set: vi.fn() })),
+    register: vi.fn(),
     flush: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -235,6 +236,24 @@ describe('createMixpanelProvider — group / groupSet', () => {
     const provider = createMixpanelProvider({ enabled: false, loader });
     await provider.group('account_id', 'client-1');
     expect(client.set_group).not.toHaveBeenCalled();
+  });
+
+  it('overwrites the set_group array fallback with the scalar value via register()', async () => {
+    const client = makeClient();
+    const loader = vi.fn().mockResolvedValue({ default: client });
+    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+
+    await provider.group('account_id', 'client-1');
+
+    expect(client.register).toHaveBeenCalledWith({ account_id: 'client-1' });
+  });
+
+  it('does nothing when client.register is missing (group() still succeeds)', async () => {
+    const client = makeClient({ register: undefined });
+    const loader = vi.fn().mockResolvedValue({ default: client });
+    const provider = createMixpanelProvider({ enabled: true, token: 'tok', loader });
+
+    await expect(provider.group('account_id', 'client-1')).resolves.toBeUndefined();
   });
 
   it('calls get_group(...).set(properties) when the group object supports it', async () => {

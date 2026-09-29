@@ -174,7 +174,11 @@ function makeProps(overrides = {}) {
 }
 
 function mockFiscalConfig(profile) {
-  useFiscalConfig.mockReturnValue({ profile });
+  // ETP-5432: a far-past default earliestSiiCutoverDate, so pre-existing tests
+  // (written before the SII eligibility-by-date gate existed) keep passing
+  // regardless of whether `data.accountingDate` is set. Tests exercising the
+  // gate itself (SiiStatusBadge dash) set `data.accountingDate` explicitly.
+  useFiscalConfig.mockReturnValue({ profile, earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z' });
 }
 
 // ETP-4463: SifTab no longer persists fields itself — it writes into the shared
@@ -327,13 +331,34 @@ describe('SifTab', () => {
     });
 
     it('shows SII status badge for the record estado', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'CO', aeatsiiEstado: 'CO' } })} />);
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', aeatsiiEstado: 'CO', accountingDate: '2026-06-15' },
+      })} />);
       expect(screen.getByText('sifDataTabs.status.sii.correct')).toBeInTheDocument();
     });
 
     it('shows default pending badge when estado is missing', () => {
-      render(<SifTab {...makeProps({ data: { documentStatus: 'CO' } })} />);
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', accountingDate: '2026-06-15' },
+      })} />);
       expect(screen.getByText('sifDataTabs.status.sii.pending')).toBeInTheDocument();
+    });
+
+    // ETP-5432: an invoice dated before the org's earliest-ever SII cutover must
+    // render a dash, never a fabricated "Pendiente" — mirrors the same rule
+    // already applied by PurchaseInvoiceHeaderTable.jsx's list column and
+    // useFiscalStatus.js's InvoicePreview "Estado SII" InfoRow.
+    it('shows a dash instead of a status badge for a pre-cutover invoice', () => {
+      render(<SifTab {...makeProps({
+        data: { documentStatus: 'CO', aeatsiiEstado: 'CO', accountingDate: '1999-01-01' },
+      })} />);
+      expect(screen.queryByText('sifDataTabs.status.sii.correct')).not.toBeInTheDocument();
+      expect(screen.queryByText('sifDataTabs.status.sii.pending')).not.toBeInTheDocument();
+      // The badge itself doesn't forward a data-testid on its dash branch, so
+      // scope structurally: it's the last child of the panel header (sibling
+      // of the title/subtitle block) — see PanelHeader in SifTab.jsx.
+      const panelHeader = screen.getByText('sifDataTabs.panel.sii.title').parentElement.parentElement;
+      expect(panelHeader.lastElementChild).toHaveTextContent('—');
     });
 
     // ETP-4888: the SII panel's Adjuntos section is wired to the invoice's

@@ -26,6 +26,10 @@ function renderButton(overrides = {}) {
       aeatsiiIssent: false,
       tbaiIssent: false,
       invoiceDate: '2026-06-15',
+      // ETP-5432 #3: SII books by accountingDate, not invoiceDate — see
+      // sifSending.js's getPendingSifTargets. Mirrors invoiceDate here so
+      // pre-existing tests (written before this gate existed) keep passing.
+      accountingDate: '2026-06-15',
     },
     recordId: 'INV_1',
     apiBaseUrl: '/sws/neo/sales-invoice',
@@ -38,10 +42,11 @@ describe('SendToSifButton', () => {
   beforeEach(() => {
     useFiscalConfigMock.mockReturnValue({
       profile: 'sii+tbai',
-      // Far-past adoption date + Bizkaia territory: neither gate interferes by
-      // default, so pre-existing tests (written before either gate existed)
-      // keep passing. Tests exercising a gate override this explicitly.
+      // Far-past adoption/cutover dates + Bizkaia territory: no gate interferes
+      // by default, so pre-existing tests (written before any of these gates
+      // existed) keep passing. Tests exercising a gate override this explicitly.
       tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+      earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
     });
     global.fetch = vi.fn(() => Promise.resolve({
       ok: true,
@@ -88,7 +93,10 @@ describe('SendToSifButton', () => {
 
   it('shows only the SII confirmation copy when the invoice predates TBAI adoption', () => {
     renderButton({
-      data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15' },
+      data: {
+        aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2019-06-15',
+        accountingDate: '2019-06-15',
+      },
     });
     fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
     expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -178,7 +186,11 @@ describe('SendToSifButton', () => {
       // ETP-5027: a purchase invoice's TBAI is always Batuz specifically, so the
       // combined-targets copy must be the purchase-specific key, never the
       // generic "SII + TicketBAI" wording sales invoices use.
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodyBothPurchase')).toBeInTheDocument();
@@ -186,7 +198,11 @@ describe('SendToSifButton', () => {
     });
 
     it('only offers SII (never TBAI) for a purchase invoice when the TBAI territory is Alava', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'ARABA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'ARABA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -195,7 +211,11 @@ describe('SendToSifButton', () => {
     });
 
     it('does not break when no TBAI config exists (tbaiRecord undefined) — territory falls back to null', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: undefined });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: undefined,
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({ apiBaseUrl: '/sws/neo/purchase-invoice' });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -207,10 +227,14 @@ describe('SendToSifButton', () => {
       useFiscalConfigMock.mockReturnValue({
         profile: 'sii+tbai',
         tbaiRecord: { tbaisystemdate: '2026-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
       });
       renderButton({
         apiBaseUrl: '/sws/neo/purchase-invoice',
-        data: { aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2025-12-31' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: false, invoiceDate: '2025-12-31',
+          accountingDate: '2025-12-31',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       expect(screen.getByText('sendToSifBodySii')).toBeInTheDocument();
@@ -233,10 +257,17 @@ describe('SendToSifButton', () => {
     });
 
     it('still resolves territory/targets correctly when the invoice org differs from the selected org', async () => {
-      useFiscalConfigMock.mockReturnValue({ profile: 'sii+tbai', tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' } });
+      useFiscalConfigMock.mockReturnValue({
+        profile: 'sii+tbai',
+        tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+        earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+      });
       renderButton({
         apiBaseUrl: '/sws/neo/purchase-invoice',
-        data: { aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE', invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: false, adOrgId: 'ORG_INVOICE', invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       expect(useFiscalConfigMock).toHaveBeenCalledWith('ORG_INVOICE', '/sws/neo/purchase-invoice');
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
@@ -264,7 +295,10 @@ describe('SendToSifButton', () => {
       renderButton({
         onSave,
         isDirty: true,
-        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
@@ -282,7 +316,10 @@ describe('SendToSifButton', () => {
       renderButton({
         onSave,
         isDirty: false,
-        data: { aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15' },
+        data: {
+          aeatsiiIssent: false, tbaiIssent: true, invoiceDate: '2026-06-15',
+          accountingDate: '2026-06-15',
+        },
       });
       fireEvent.click(screen.getByRole('button', { name: 'sendToSif' }));
       fireEvent.click(screen.getByRole('button', { name: 'sendToSifConfirm' }));
@@ -302,6 +339,46 @@ describe('SendToSifButton', () => {
 
       await screen.findByText('sendToSifSaveError');
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  // ETP-5432 QA sweep — item #1 (cutover-date consistency across call sites).
+  //
+  // getPendingSifTargets' SII branch was fixed in THIS ticket (#3) to take
+  // `earliestSiiCutoverDate` — the earliest cutover across ALL of the org's config rows,
+  // active or deactivated (useFiscalConfig.js's earliestCutoverDate()) — instead of a single
+  // row's own date, precisely because an org that changed its SII config ("Change SIF") could
+  // otherwise hide a genuinely-eligible older invoice behind the NEW active row's later
+  // cutover. The TBAI branch right next to it in the SAME function was never given the
+  // equivalent `earliestTbaiCutoverDate` — it still compares against `tbaiRecord?.tbaisystemdate`,
+  // i.e. the CURRENTLY ACTIVE tbai_config row's own date (see sifSending.js). useFiscalStatus.js
+  // (the invoice-preview badge) already receives and uses `earliestTbaiCutoverDate` correctly,
+  // so after a TBAI "Change SIF" the badge and this button can disagree on the same invoice.
+  //
+  // This test currently FAILS: SendToSifButton.jsx destructures `tbaiRecord` from
+  // useFiscalConfig() but never `earliestTbaiCutoverDate`, so getPendingSifTargets has no way
+  // to apply the earliest-cutover rule to TBAI. Fix by threading `earliestTbaiCutoverDate`
+  // through the same way `earliestSiiCutoverDate` already is.
+  it('BUG (ETP-5432 QA): TBAI gate must use the earliest-ever cutover, not the active config row\'s own date', async () => {
+    useFiscalConfigMock.mockReturnValue({
+      profile: 'sii+tbai',
+      // The org changed its TBAI config: the OLD (now inactive) row enrolled it in TBAI back
+      // in 2020 (earliestTbaiCutoverDate), but the CURRENTLY ACTIVE row's own tbaisystemdate is
+      // much later than this invoice.
+      tbaiRecord: { tbaisystemdate: '2026-08-01T00:00:00.000Z', etsgSifTerritory: 'BIZKAIA' },
+      earliestTbaiCutoverDate: '2020-01-01T00:00:00.000Z',
+      earliestSiiCutoverDate: '2000-01-01T00:00:00.000Z',
+    });
+    renderButton({
+      data: {
+        aeatsiiIssent: true, // SII already sent — isolates the assertion to TBAI alone
+        tbaiIssent: false,
+        invoiceDate: '2026-06-15', // after the org's real (earliest) TBAI enrollment...
+        accountingDate: '2026-06-15', // ...but before the currently active config's own date
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'sendToSif' })).toBeInTheDocument();
     });
   });
 });
