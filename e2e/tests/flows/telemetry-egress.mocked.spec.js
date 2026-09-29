@@ -17,6 +17,12 @@ import { login } from '../helpers/auth.js';
  *     A positive control: at least one request must be attempted, otherwise the "zero" of the
  *     other two scenarios would prove nothing (a broken interceptor also sees zero).
  *
+ * The interceptor is registered BEFORE `login()`, which navigates and boots the app: telemetry is
+ * initialized (and `app_started`, the session and group events go out) during that boot, so
+ * installing it afterwards would leave exactly that stretch unobserved. Requests seen up to the
+ * end of login are snapshotted as `bootAttempts`, and the positive control requires some, which is
+ * what proves the interceptor really covers the boot.
+ *
  * Scenarios 2 and 3 need their own bundle, see docs/ops/app-shell-observability.md (Kill Switch).
  */
 
@@ -53,14 +59,20 @@ async function visit(page, path) {
 }
 
 test.describe('telemetry egress', () => {
+  let attempts;
+  let bootAttempts;
+
   test.beforeEach(async ({ page }) => {
+    // Order matters: the interceptor first, then the login that boots the app.
+    attempts = await trackProviderRequests(page);
     await login(page);
+    // Let the first batch of startup telemetry go out before the snapshot.
+    await page.waitForTimeout(1500);
+    bootAttempts = [...attempts];
   });
 
   test('sends nothing to a provider host in the default bundle', async ({ page }) => {
     test.skip(SCENARIO !== 'default', 'this bundle has provider configuration; see E2E_TELEMETRY');
-    const attempts = await trackProviderRequests(page);
-
     await visit(page, '/dashboard');
     await visit(page, '/sales-order');
     await visit(page, '/first-steps');
@@ -70,8 +82,6 @@ test.describe('telemetry egress', () => {
 
   test('sends nothing when the providers are configured but the kill switch is on', async ({ page }) => {
     test.skip(SCENARIO !== 'killed', 'needs a bundle built with fake provider config and VITE_TELEMETRY_KILL=true');
-    const attempts = await trackProviderRequests(page);
-
     await visit(page, '/dashboard');
     await visit(page, '/sales-order');
 
@@ -80,10 +90,12 @@ test.describe('telemetry egress', () => {
 
   test('attempts requests when the providers are configured and not killed (positive control)', async ({ page }) => {
     test.skip(SCENARIO !== 'configured', 'needs a bundle built with fake provider config, without the kill');
-    const attempts = await trackProviderRequests(page);
-
     await visit(page, '/dashboard');
 
     expect(attempts.length, 'a configured bundle must reach at least one provider host, or the kill test proves nothing').toBeGreaterThan(0);
+    expect(
+      bootAttempts.length,
+      'the interceptor must see the requests made while the app boots (login), not only later navigations',
+    ).toBeGreaterThan(0);
   });
 });
