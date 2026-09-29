@@ -77,8 +77,15 @@ vi.mock('@/auth/useApiFetch.js', () => ({
 }));
 
 // The org profile that UNMASKS the bug — 'verifactu' would hide it entirely.
+// tbaiRecord/earliestSiiCutoverDate are far in the past so neither the TBAI
+// adoption-date gate (ETP-5122) nor the SII cutover-date gate (ETP-5432 #3)
+// hides the button given DATA's invoiceDate/accountingDate below.
 vi.mock('@/windows/custom/fiscal-config/useFiscalConfig.js', () => ({
-  useFiscalConfig: vi.fn(() => ({ profile: 'sii+tbai' })),
+  useFiscalConfig: vi.fn(() => ({
+    profile: 'sii+tbai',
+    tbaiRecord: { tbaisystemdate: '2020-01-01T00:00:00.000Z' },
+    earliestSiiCutoverDate: '2020-01-01T00:00:00.000Z',
+  })),
 }));
 
 vi.mock('@/lib/formatCurrency.js', () => ({
@@ -98,6 +105,8 @@ const DATA = {
   outstandingAmount: 1000,
   aeatsiiIssent: false,
   tbaiIssent: false,
+  invoiceDate: '2026-06-15',
+  accountingDate: '2026-06-15',
 };
 
 // One pending installment, so InvoiceTopbarExtra reaches its main return

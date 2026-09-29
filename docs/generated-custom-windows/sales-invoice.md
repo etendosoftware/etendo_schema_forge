@@ -860,8 +860,10 @@ invoice that predates the system's existence for the org entirely.
 **Where the earliest-cutover date lives:** `useFiscalConfig.js` now fetches ALL rows per
 system (`fetchAllRows`, not just the previously-preferred active-or-first row) and derives
 `earliestSiiCutoverDate` / `earliestTbaiCutoverDate` / `earliestVerifactuCutoverDate` from
-them (`earliestCutoverDate()`, `MIN` over `monitordate` / `tbaisystemdate` /
-`inVfactuSystem` across active AND inactive rows). This required **no new API call** — NEO
+them (`earliestCutoverDate()`, `MIN` over `fechaAcogidaSII` / `tbaisystemdate` /
+`inVfactuSystem` across active AND inactive rows — see "SII cutover field was reading the
+wrong column (ETP-5432, item #1)" below for a correction to the SII field name). This
+required **no new API call** — NEO
 already reads fiscal-config specs with `NO_ACTIVE_FILTER=true`, so the existing 3 requests
 already returned inactive rows; only the page size (`_limit`) was bumped from 10 to 50 and
 the "pick one row" step was split from the "compute the minimum" step. `siiRecord` /
@@ -961,6 +963,60 @@ Regression coverage (added on top of the sets above):
 Each covers, per system: eligible + never-sent → pending marker (not dash); not-eligible
 (pre-cutover) → still dash (regression guard); eligible + already-has-a-real-status →
 unchanged real status (regression guard).
+
+### SII cutover field was reading the wrong column (ETP-5432, item #1)
+
+**Bug:** `useFiscalConfig.js`'s `CUTOVER_FIELD.sii` read `aeatsii_config.monitordate` — the
+"SII monitor start date", a separate, cosmetic field (see `sii-config.md`) — instead of
+`fechaAcogidaSII` (`aeatsii_config.insiisystemdate`, NEO apiKey `fechaAcogidaSII`), the real
+SII enrollment/"fecha de acogida" date. Classic's own gate
+(`UpdateInvoicesPreSii.java`'s `siiConfig.getFechaAcogidaSII()`, and the
+`AEATSII_PreSII_Invoice` auxiliary input) never looks at `monitordate` for this purpose. An
+org whose SII monitor happened to start earlier than its real enrollment date could show a
+live SII status — and offer "Enviar a SIF" (see the next item) — for invoices dated before it
+was ever SII-enrolled. Live-tested on invoice 10000075 (accountingDate 22/09/2026,
+`fechaAcogidaSII` 24/09/2026).
+
+**Fix:** `CUTOVER_FIELD.sii` now reads `fechaAcogidaSII`. This is the single source
+`earliestSiiCutoverDate` is derived from (see "Second correction" above), so the fix
+propagates to every consumer of that value for free: the SII status badge (`useFiscalStatus`,
+this window and `purchase-invoice.md`), the invoice-preview "Estado SII" `InfoRow`, and the
+list columns' eligibility gate. `CUTOVER_FIELD.tbai`/`.verifactu` were already correct and are
+unchanged.
+
+### SII had no date gate at all on "Enviar a SIF" eligibility (ETP-5432, item #3)
+
+**Bug:** unlike TBAI (gated on `isSifEligibleByDate(invoice.invoiceDate,
+tbaiRecord?.tbaisystemdate)` since ETP-5122), `sifSending.js`'s `getPendingSifTargets()` had
+**no date gate at all** for SII — `sendSii: showSii && (!isSent(invoice?.aeatsiiIssent) ||
+pendingRegistralCorrection)`. Combined with the `monitordate` bug above, "Enviar a SIF" could
+offer to send an invoice dated before the org was ever SII-enrolled. Same live repro as above
+(invoice 10000075).
+
+**Fix:** `getPendingSifTargets(specName, profile, invoice, territory, tbaiRecord,
+siiCutoverDate)` gained a 6th parameter — `useFiscalConfig().earliestSiiCutoverDate` — and
+`sendSii` is now `siiEligibleByDate && (!isSent(...) || pendingRegistralCorrection)`, where
+`siiEligibleByDate = showSii && isSifEligibleByDate(invoice?.accountingDate,
+siiCutoverDate)`. SII books by accounting date, not invoice date — same rule
+`useFiscalStatus.js`'s own `siiEligible` check and `isSifEligibleByDate`'s doc already use.
+Fail-safe: with no cutover date on file, SII is never pending, mirroring
+`isSifEligibleByDate`'s own default. `SendToSifButton.jsx` and `useInvoicePreview.js` (both
+callers of `getPendingSifTargets`) were updated to pass `earliestSiiCutoverDate` through.
+
+### SIF tab's own SII status badge had no eligibility concept (ETP-5432)
+
+**Bug:** `SifTab.jsx`'s `SiiStatusBadge` (the "Estado SII" pill inside the SII panel of the
+SIF tab itself) had no eligibility concept at all — any falsy/unmapped `estado` fell through
+to `SII_DEFAULT` ("Pendiente"). `PurchaseInvoiceHeaderTable.jsx`'s list column and
+`useFiscalStatus.js`'s preview `InfoRow` both already applied the not-eligible-means-dash
+rule (ETP-5229 item #16); this third surface didn't, so an invoice dated before the org's SII
+cutover showed "Pendiente" here while correctly showing a dash everywhere else.
+
+**Fix:** `SiiStatusBadge` gained an `eligible` prop — renders a dash immediately when falsy,
+before touching `estado` at all. `useSifFieldPatcher.js` computes it as `siiEligible = showSii
+&& isSifEligibleByDate(data?.accountingDate, earliestSiiCutoverDate)` (same accounting-date
+rule as above) and returns it in its hook result; `SifTab.jsx` passes `data?.aeatsiiEstado`
+and the new `siiEligible` value into the badge.
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -1510,6 +1566,42 @@ raises never. In `Refresh_Mode = 'S'` a computation error rolls back the whole b
 transaction, so a raise would mean users cannot save invoices at all. See §5.8 of
 [`../plans/2026-09-08-tbai-status-computed-column-migration.md`](../plans/2026-09-08-tbai-status-computed-column-migration.md)
 for the five edge cases and the reasoning behind each.
+
+### Missing recompute dependency on `C_Invoice` itself (ETP-5432, item #5)
+
+**Bug:** `EM_ETGO_Tbai_Status`'s `AD_COLUMN_COMP_DEPENDENCY` rows only ever watched
+`tbai_config` and `tbai_syncinvoice` — there was **no dependency on `c_invoice` itself**. A
+stored computed column only recomputes when its recompute trigger actually fires, so a
+**newly created invoice** kept `eTGOTbaiStatus` as `NULL` (never computed at all) until the
+org's `tbai_config` changed again or a sync attempt was made — confirmed live (`SELECT
+tgname FROM pg_trigger WHERE tgrelid='c_invoice'::regclass` returned no `ad_scd_*` row for
+this column, while `tbai_config`/`tbai_syncinvoice` both had one). A `NULL` value is
+indistinguishable from "not sent yet", so it fell straight into `isSent()`/`'Pendiente'` in
+`useFiscalStatus.js`, showing "Pendiente" for an invoice that may predate the org's TBAI
+enrollment entirely — a status it never actually belonged to.
+
+**Fix — backend (`com.etendoerp.go`):** a new `AD_COLUMN_COMP_DEPENDENCY` row on
+`EM_ETGO_Tbai_Status`, watching `C_Invoice` (`SOURCE_TABLE_ID = 318`) for INSERT and UPDATE,
+with watched columns `DateInvoiced` (`AD_COLUMN_ID = 3783`) and `DocStatus`
+(`AD_COLUMN_ID = 3494`) — the two invoice-own columns the computation function's eligibility
+logic actually reads. `TARGET_ID_RESOLVER_SQL` follows the same
+`SELECT COALESCE(NEW.c_invoice_id, OLD.c_invoice_id) FROM dual` shape already used by the
+`tbai_syncinvoice` dependency. See `com.etendoerp.go`'s `docs/STORED-COMPUTED-COLUMNS.md` for
+the dependency-catalogue conventions this follows.
+
+**Fix — frontend defense-in-depth (`useFiscalStatus.js`):** because a stored column's
+recompute is only as reliable as its trigger wiring, `useFiscalStatus` also gained a
+client-side fallback that only kicks in when `eTGOTbaiStatus` is genuinely `null`/`undefined`
+(never computed) — any REAL value the DB already produced, including a literal `'NoAplica'`
+or `'Pendiente'` it wrote itself, is trusted as-is and never second-guessed:
+`tbaiUncomputed = invoice.eTGOTbaiStatus == null`; `tbaiDateEligible = !tbaiUncomputed ||
+isSifEligibleByDate(invoice.invoiceDate, tbaiCutover)`. The hook's `cutoverDates` parameter
+gained a `tbai` key (`{ sii, tbai, verifactu }`, was `{ sii, verifactu }`) — consulted ONLY as
+this fallback, never as TBAI's primary gate (that stays the DB's own `NoAplica` answer, per
+"TicketBAI status is a real column" above). This is a safety net for the window before the
+backend dependency fix (and any environment it hasn't been deployed to yet) — SII and
+Verifactu have no equivalent stored column and keep their own unconditional client-side
+`earliestCutoverDate` gating.
 
 ## MCP document actions (agents)
 

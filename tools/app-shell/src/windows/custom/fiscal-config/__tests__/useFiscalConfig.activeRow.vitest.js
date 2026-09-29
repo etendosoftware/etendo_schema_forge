@@ -110,9 +110,12 @@ describe('useFiscalConfig — active-row preference (N1)', () => {
 // the MIN cutover across ALL rows for a system (active or inactive), computed independently
 // of the active-row projection (siiRecord/tbaiRecord/verifactuRecord) covered above.
 describe('useFiscalConfig — earliest-ever cutover date (ETP-5229)', () => {
-  it('is the accounting-cutover (monitordate) of the SOLE sii row when there is only one', async () => {
+  // ETP-5432 #1 — sii's cutover field is `fechaAcogidaSII` (the real SII
+  // enrollment date), NOT `monitordate` (a display-only "from date" for the
+  // monitor UI, unreliable for gating).
+  it('is the accounting-cutover (fechaAcogidaSII) of the SOLE sii row when there is only one', async () => {
     mockApiFetch.mockImplementation(
-      apiFor({ ...EMPTY, 'sii-config': [{ id: 'sii-1', active: 'Y', monitordate: '2026-06-01T00:00:00.000Z' }] }),
+      apiFor({ ...EMPTY, 'sii-config': [{ id: 'sii-1', active: 'Y', fechaAcogidaSII: '2026-06-01T00:00:00.000Z' }] }),
     );
     const { result } = renderHook(() => useFiscalConfig('org-1', '/api'));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -122,13 +125,13 @@ describe('useFiscalConfig — earliest-ever cutover date (ETP-5229)', () => {
   // Scenario B: an OLD deactivated config has an EARLIER cutover than the
   // currently-active one — the earliest-ever value must come from the
   // deactivated (inactive) row, not the active row's own (later) date.
-  it('picks the EARLIEST monitordate across an inactive-old + active-new sii pair (scenario B)', async () => {
+  it('picks the EARLIEST fechaAcogidaSII across an inactive-old + active-new sii pair (scenario B)', async () => {
     mockApiFetch.mockImplementation(
       apiFor({
         ...EMPTY,
         'sii-config': [
-          { id: 'sii-old', active: 'N', monitordate: '2026-01-01T00:00:00.000Z' },
-          { id: 'sii-new', active: 'Y', monitordate: '2026-06-01T00:00:00.000Z' },
+          { id: 'sii-old', active: 'N', fechaAcogidaSII: '2026-01-01T00:00:00.000Z' },
+          { id: 'sii-new', active: 'Y', fechaAcogidaSII: '2026-06-01T00:00:00.000Z' },
         ],
       }),
     );
@@ -170,7 +173,7 @@ describe('useFiscalConfig — earliest-ever cutover date (ETP-5229)', () => {
   it('is null for verifactu when the org has zero verifactu rows, even though sii/tbai are configured', async () => {
     mockApiFetch.mockImplementation(
       apiFor({
-        'sii-config': [{ id: 'sii-1', active: 'Y', monitordate: '2026-01-01T00:00:00.000Z' }],
+        'sii-config': [{ id: 'sii-1', active: 'Y', fechaAcogidaSII: '2026-01-01T00:00:00.000Z' }],
         'tbai-config': [{ id: 'tbai-1', active: 'Y', tbaisystemdate: '2026-01-01T00:00:00.000Z' }],
         'verifactu-config': [],
       }),
@@ -196,8 +199,8 @@ describe('useFiscalConfig — earliest-ever cutover date (ETP-5229)', () => {
       apiFor({
         ...EMPTY,
         'sii-config': [
-          { id: 'sii-bad', active: 'N', monitordate: 'not-a-date' },
-          { id: 'sii-good', active: 'Y', monitordate: '2026-03-01T00:00:00.000Z' },
+          { id: 'sii-bad', active: 'N', fechaAcogidaSII: 'not-a-date' },
+          { id: 'sii-good', active: 'Y', fechaAcogidaSII: '2026-03-01T00:00:00.000Z' },
         ],
       }),
     );

@@ -122,12 +122,24 @@ describe('SiiMonitorSection — export button interaction', () => {
   });
 });
 
-describe('SiiMonitorSection — period toggle', () => {
-  it('renders current and previous period pills', () => {
+// ETP-5432: the "Periodo anterior" selector UI was intentionally hidden (see
+// SiiMonitorSection.jsx comments) — AEATSII_PRESII_INVOICE doesn't implement a
+// real rolling previous-period window, only a pre-SII-enrollment bootstrap
+// check, so showing it produced duplicate/wrong data.
+describe('SiiMonitorSection — period toggle (removed, ETP-5432)', () => {
+  it('does not render current/previous period pills in standard mode', () => {
     render(<SiiMonitorSection {...DEFAULT_PROPS} />);
     const pills = screen.getAllByRole('button');
     const labels = pills.map((b) => b.textContent);
-    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.current'))).toBe(true);
-    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.previous'))).toBe(true);
+    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.current'))).toBe(false);
+    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.previous'))).toBe(false);
+  });
+
+  it('does not render current/previous period pills in compact mode either', () => {
+    render(<SiiMonitorSection {...DEFAULT_PROPS} compact />);
+    const pills = screen.getAllByRole('button');
+    const labels = pills.map((b) => b.textContent);
+    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.current'))).toBe(false);
+    expect(labels.some((l) => l.includes('fiscalMonitor.sii.period.previous'))).toBe(false);
   });
 });

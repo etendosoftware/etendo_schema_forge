@@ -5,8 +5,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const treeSrc = readFileSync(join(__dirname, '..', 'AccountTreeView.jsx'), 'utf8');
-const modalSrc = readFileSync(join(__dirname, '..', 'NewAccountModal.jsx'), 'utf8');
+// The runtime components live under artifacts/ (see docs/generated-custom-windows/chart-of-accounts.md);
+// the same-named copies that used to sit next to this test were never loaded and were removed (ETP-5399).
+const ARTIFACT_CUSTOM = join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'chart-of-accounts', 'custom');
+const treeSrc = readFileSync(join(ARTIFACT_CUSTOM, 'AccountTreeView.jsx'), 'utf8');
+const modalSrc = readFileSync(join(ARTIFACT_CUSTOM, 'NewAccountModal.jsx'), 'utf8');
 const generatorSrc = readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'node_modules', '@etendosoftware', 'schema-forge-cli', 'src', 'generate-frontend.js'), 'utf8');
 const decisions = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', '..', '..', '..', 'artifacts', 'chart-of-accounts', 'decisions.json'), 'utf8'));
 
@@ -57,8 +60,10 @@ describe('ChartOfAccounts new sub-account modal source wiring', () => {
 
   it('passes the typed account code value and stable selected-parent prefix to AccountCodeField', () => {
     assert.match(modalSrc, /value=\{form\.searchKey\}/);
-    assert.match(modalSrc, /const\s+selectedParentCodePrefix\s*=\s*useMemo\s*\(/);
-    assert.match(modalSrc, /codePrefix:\s*selectedParentCodePrefix/);
+    // ETP-5399: the locked prefix is the NUMERIC posting prefix derived from the structural parent
+    // (4300A -> 4300), memoized once per selection.
+    assert.match(modalSrc, /const\s+selectedPostingPrefix\s*=\s*useMemo\s*\(/);
+    assert.match(modalSrc, /codePrefix:\s*selectedPostingPrefix/);
     assert.doesNotMatch(modalSrc, /codePrefix:\s*parent\s*\?\s*String\(parent\.searchKey\)\s*:\s*''/);
   });
 
