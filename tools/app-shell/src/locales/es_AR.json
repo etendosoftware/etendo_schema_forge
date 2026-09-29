@@ -18753,7 +18753,6 @@
     "financeAccountStatementsManualSaveDraft": "Guardar en borrador",
     "financeAccountStatementsManualSaveMore": "Más opciones de guardado",
     "financeAccountStatementsManualSaving": "Guardando…",
-    "financeAccountStatementsManualErrorName": "Introduce un nombre para el extracto",
     "financeAccountStatementsManualErrorLines": "Añade al menos una línea con importe",
     "financeAccountStatementsManualErrorIncompleteLine": "Completá los campos obligatorios de cada línea (fecha y un importe positivo de salida o entrada)",
     "financeAccountStatementsManualDiscardTitle": "¿Descartar cambios?",

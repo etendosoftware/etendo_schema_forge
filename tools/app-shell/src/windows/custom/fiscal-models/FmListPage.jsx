@@ -42,6 +42,17 @@ async function computeOperators349Real(decl, { token, apiBaseUrl } = {}) {
   return compute349Operators(decl, { token, apiBaseUrl });
 }
 
+// ETP-5432 pt.2 — sums a 349 key-totals object (`summary` or `rectificativeSummary`,
+// both `{ totalE, totalS, totalA, totalI }`) via Math.abs on each key, so a
+// negative corrective delta contributes to the list's "Resultado" total instead of
+// silently cancelling a positive one (or a same-sized regular total) into 0 — the
+// exact anti-netting rule `RectificativeSubtotalCard` (FmModel349Page.jsx) already
+// applies when rendering these same two objects on the detail page.
+function sumAbsKeyTotals(obj) {
+  return ['totalE', 'totalS', 'totalA', 'totalI']
+    .reduce((s, k) => s + Math.abs(parseFloat(obj?.[k]) || 0), 0);
+}
+
 // ETP-5438 — a declaration in one of these statuses must never be silently recomputed from
 // current invoice data again: once presented, an invoice added or removed afterward must not
 // change what "Resultado" shows. Kept as a local literal (not exported from
@@ -541,6 +552,17 @@ function fmListRowClassName({ selected, current }) {
   return current ? 'fm-table__row--current' : '';
 }
 
+// ETP-5456 — extracted to avoid a nested ternary (javascript:S3358). Mirrors the
+// mutually-exclusive rectificativa (303) / sustitutiva (349) precedence documented
+// at the `declTypeLabel` call site below.
+function resolveDeclTypeLabel(decl, t) {
+  if (decl.manualData?.identification?.rectificativa) return t('fm.type.rectificative');
+  const isSustitutiva = decl.manualData?.identification?.sustitutiva === true
+    || decl.manualData?.identification?.sustitutiva === 'Y';
+  if (isSustitutiva) return t('fm.type.substitutive');
+  return t('fm.type.ordinary');
+}
+
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl }) {
   const ui = useUI();
   const t  = ui;
@@ -996,8 +1018,19 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             let displayResult = decl.result;
             if (computed?.summary && !computed.error) {
               if (decl.model === '349') {
-                const total = ['totalE','totalS','totalA','totalI']
-                  .reduce((s, k) => s + (parseFloat(computed.summary[k]) || 0), 0);
+                // ETP-5432 pt.2 — a rectification-only period (no regular operators
+                // alongside it) has an all-zero regular `summary` (Fiscal349BoxesHandler
+                // always emits `summaryByKey` from the REGULAR aggregation only), so
+                // summing `summary` alone silently showed "Informativa"/0 here even
+                // though the declaration has real corrective operators — the detail
+                // page's own RectificativeSubtotalCard already renders the same
+                // `rectificativeSummary` correctly, so this was a list-only gap.
+                // Correctives are SIGNED deltas (can be negative), so they are summed
+                // via Math.abs — the same anti-cancellation rule RectificativeSubtotalCard
+                // documents for why E/S/A/I are never netted against each other; without
+                // it a -30 sales correction offset by a +30 purchase one would still sum
+                // to 0 and reproduce this exact bug.
+                const total = sumAbsKeyTotals(computed.summary) + sumAbsKeyTotals(computed.rectificativeSummary);
                 displayResult = { kind: 'info', amount: total };
               } else {
                 // ETP-5272 pt.6 (4th finding) — GET /fiscal303/boxes (computeBoxes303Real above)
@@ -1033,6 +1066,8 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             const hasDuplicatePeriod = decls.some(d => d.id !== decl.id
               && d.model === decl.model && d.year === decl.year && d.period === decl.period);
 
+            const declTypeLabel = resolveDeclTypeLabel(decl, t);
+
             return (
               <tr
                 key={decl.id}
@@ -1051,19 +1086,18 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                   <span className="fm-model-year" style={{ marginLeft: 6, fontWeight: 600 }}>{decl.year}</span>
                 </td>
                 <td><span className="fm-period">{decl.period}</span></td>
-                {/* ETP-5338 pt.3 — "Tipo" must reflect AEAT's rectificativa flag, which the
-                    user sets on the 303 detail page's "Autoliquidación Rectificativa" checkbox
-                    (`identChecks.rectificativa`, persisted as
-                    `manualData.identification.rectificativa`). `decl.type` (DECL_TYPE, ord/com)
-                    is a genuine but DIFFERENT AEAT concept (ordinaria/complementaria) that no UI
-                    flow currently sets to "com" — every declaration is created with DECL_TYPE=O,
-                    so deriving "Tipo" from it always showed "Ordinaria". 349 declarations have no
-                    rectificativa checkbox, so this correctly falls back to "Ordinaria" for them. */}
-                <td>
-                  {decl.manualData?.identification?.rectificativa
-                    ? t('fm.type.rectificative')
-                    : t('fm.type.ordinary')}
-                </td>
+                {/* ETP-5338 pt.3 / ETP-5456 — "Tipo" must reflect AEAT's rectificativa (303) and
+                    sustitutiva (349) flags, which the user sets on each model's own detail page
+                    ("Autoliquidación Rectificativa" / "Sustitutiva" checkboxes), both persisted
+                    under the same `manualData.identification` shape
+                    (`identChecks.rectificativa` / `identChecks.sustitutiva`). `decl.type`
+                    (DECL_TYPE, ord/com) is a genuine but DIFFERENT AEAT concept
+                    (ordinaria/complementaria) that no UI flow currently sets to "com" — every
+                    declaration is created with DECL_TYPE=O, so deriving "Tipo" from it always
+                    showed "Ordinaria". The two flags are mutually exclusive by construction (only
+                    303 exposes `rectificativa`, only 349 exposes `sustitutiva`), so checking both
+                    is safe without a `decl.model` guard. */}
+                <td>{declTypeLabel}</td>
                 <td>
                   <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>
