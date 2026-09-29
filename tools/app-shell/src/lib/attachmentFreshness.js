@@ -192,11 +192,14 @@ export function isOlderThanBranding(attachment, brandingUpdated) {
  *
  * **The `recordUpdated` guard is load-bearing, not a formality.** Not passing
  * `recordUpdated` is ETP-4787's deliberate opt-out, and the windows that opt out —
- * purchase-invoice, goods-receipt, return-material-receipt — do so because their marked
- * attachment holds the COUNTERPARTY's own document (the supplier's invoice / the OCR
- * source, the customer's signed receipt), never a cache of something we rendered. No
- * change of ours can make those stale, and flagging one would invite overwriting a real
- * user file. Keep this check after the guard; never hoist it above.
+ * purchase-invoice and goods-receipt — do so because their marked attachment holds the
+ * COUNTERPARTY's own document (the supplier's invoice / the OCR source, the supplier's
+ * delivery note), never a cache of something we rendered. No change of ours can make
+ * those stale — neither a record edit, a renderer rebuild nor a branding change — and
+ * flagging one would invite overwriting a real user file. (return-material-receipt does
+ * not reach this function at all: since ETP-5124 it passes no cache config — D18 in
+ * `docs/document-printables.md`.) Keep the renderer and branding checks after the guard;
+ * never hoist them above.
  *
  * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
  * @param {string|number|Date|null} recordUpdated  the record's `updated`
