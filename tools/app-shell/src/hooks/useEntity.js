@@ -291,19 +291,6 @@ const DEFAULTS_TIMEOUT_MS = 4000;
 // the same time the form does.
 export const PROCESS_FAILURE_TOAST_DURATION_MS = 8000;
 
-const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
-    'priceList',
-    'paymentMethod',
-    'paymentTerms',
-    'account',
-    'customerBlocking',
-    'purchasePricelist',
-    'pOPaymentMethod',
-    'pOPaymentTerms',
-    'pOFinancialAccount',
-    'vendorBlocking',
-]);
-
 // ETP-4156: the per-entity `name` / `username` / `searchKey` derivations that used to live
 // here (applyContactsRequiredFields, branching on the hardcoded entity names contact /
 // adUser / user / businessPartner / bpartner) now run server-side, where they are not tied
@@ -539,7 +526,7 @@ export function isSequencePlaceholder(value) {
     return typeof value === 'string' && /^<[^<>]+>$/.test(value);
 }
 
-export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
+export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
     if (key === 'id' || key.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(key)) {
@@ -569,10 +556,15 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
         return true;
     }
 
-    // Contacts (Business Partner): keep create aligned with Classic behavior.
-    // Billing preference fields are configured only after header creation.
-    // If sent here, org/window defaults can persist unwanted values on first save.
-    if (isContactsBusinessPartnerCreate && CONTACTS_PRECREATE_BILLING_FIELDS.has(key)) {
+    // ETP-5537 — generic replacement for the old Contacts-only
+    // `CONTACTS_PRECREATE_BILLING_FIELDS` allowlist (com.etendoerp.go PR #1220 / ETP-5347
+    // now rejects a create/update write that touches a field the entity does not expose as
+    // writable, instead of silently discarding it). `isFieldExcluded` — built once per save
+    // in `buildCreateFieldExclusion` — answers "is this key currently registered by one of
+    // this record's mounted forms, AND not evaluated read-only there?" for ANY window, not
+    // just Contacts. See that function's doc comment for the full rule and the
+    // `userChangedKeysRef` escape hatch.
+    if (isFieldExcluded && isFieldExcluded(key)) {
         return true;
     }
 
@@ -777,6 +769,57 @@ export function buildPatchPayload(editing, selected) {
     return payload;
 }
 
+/**
+ * ETP-5537 — builds the create-time field-exclusion predicate that replaces the old
+ * per-window allowlist (`CONTACTS_PRECREATE_BILLING_FIELDS`).
+ *
+ * com.etendoerp.go PR #1220 (ETP-5347) made NeoServlet reject, at the REST write boundary,
+ * any field the target entity does not expose as writable — a static, intentional
+ * enforcement of the contract's own `readOnly`/`system` metadata (see the ticket: "REST
+ * writes must reject fields marked read-only"), not a bug to route around per-field.
+ * ETP-5345 will keep expanding writable CRUD surface after this, so a hand-maintained
+ * per-window allowlist would need a new entry for every future entity — this rule instead
+ * reads the SAME signal the frontend already has for every window: the fields each
+ * currently-mounted `EntityForm` registered for this record (`formFieldsRef` — see
+ * EntityForm.jsx's `displayFields`, which includes contract-declared readOnly fields for
+ * the default/section layouts, only stripping them under `layout: 'horizontal'` without a
+ * `section`).
+ *
+ * A key is excluded from the CREATE payload when:
+ *   1. it is NOT registered by any currently-mounted form for this record (it belongs to
+ *      an entity/tab that simply is not part of the screen yet — e.g. Contacts' "customer"/
+ *      "vendorCreditor" extension fields before the Financial tab / vendor toggle is ever
+ *      touched, or a billing-preference field configured only after header creation); OR
+ *   2. it IS registered, but evaluates read-only there (static `field.readOnly` or a
+ *      `field.readOnlyLogic` function — see `getReadOnly` in lib/requiredFields.js).
+ *
+ * The one deliberate escape hatch: `userChangedKeysRef` — handleChange marks a key there on
+ * ANY `onChange` call, including a call a custom panel makes on purpose to force a value
+ * through outside normal typing (e.g. Assets' currency-echo-on-create in
+ * AssetsConfigPanel.jsx). This function must never silently drop a value the app itself
+ * decided the record "changed", even if the backend rejects it anyway for a reason this
+ * function cannot see (a genuine contract/backend mismatch belongs to a separate fix, not a
+ * dropped write here).
+ *
+ * NOTE: this does NOT see a field marked read-only only through the `displayLogic.readOnly`
+ * object some custom panels pass as a render-time override (not stored on the field itself,
+ * e.g. AssetsDetailPanel's `readOnlyAll`) — such a field is treated as writable here unless
+ * it is also excluded by rule 1 or 2 above. This is a narrower net than the full render-time
+ * check, on purpose: it only has to be accurate enough to stop known-bad values, never to
+ * accidentally swallow a value the user can legitimately still edit.
+ */
+export function buildCreateFieldExclusion(formFieldsRef, editing) {
+    const registeredFields = [...formFieldsRef.current.values()].flat();
+    const fieldByKey = new Map(registeredFields.map(f => [f.key, f]));
+    const isReadOnly = getReadOnly(editing);
+    return (key, userChangedKeysRef) => {
+        if (userChangedKeysRef.current.has(key)) return false;
+        const field = fieldByKey.get(key);
+        if (!field) return true;
+        return isReadOnly(field);
+    };
+}
+
 export function buildSavePayload({
     isNew,
     selected,
@@ -792,18 +835,18 @@ export function buildSavePayload({
     }
 
     const payload = {};
-    const isContactsBusinessPartnerCreate = entity === 'businessPartner'
-        && /\/contacts$/i.test(apiBaseUrl || '');
     const requiredFormKeys = new Set(
         [...formFieldsRef.current.values()].flat().filter(f => f.required).map(f => f.key),
     );
+    const isFieldExcludedByForm = buildCreateFieldExclusion(formFieldsRef, editing);
+    const isFieldExcluded = (key) => isFieldExcludedByForm(key, userChangedKeysRef);
 
     buildCreatePayload(
         editing,
         backendDefaultKeysRef,
         userChangedKeysRef,
         requiredFormKeys,
-        isContactsBusinessPartnerCreate,
+        isFieldExcluded,
         payload,
     );
     return payload;
@@ -884,9 +927,9 @@ export function getSaveSuccessMessage(isNew, ui) {
     return isNew ? ui('recordCreated') : ui('recordSaved');
 }
 
-export function buildCreatePayload(editing, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, payload) {
+export function buildCreatePayload(editing, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, payload) {
     for (const [key, value] of Object.entries(editing)) {
-        if (shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing)) continue;
+        if (shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, editing)) continue;
 
         payload[key] = value;
     }

@@ -411,13 +411,14 @@ describe('useEntity helpers', () => {
       expect(shouldSkipPayloadField('language', '181', bRef, { current: new Set() }, new Set(['language']), false, {})).toBe(false);
     });
 
-    it('skips contacts billing fields on create', () => {
-      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, true, {})).toBe(true);
-      expect(shouldSkipPayloadField('paymentMethod', 'someVal', defaultRefs, userRefs, reqKeys, true, {})).toBe(true);
+    it('skips fields the ETP-5537 generic isFieldExcluded predicate flags on create', () => {
+      const isFieldExcluded = (key) => key === 'priceList' || key === 'paymentMethod';
+      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, isFieldExcluded, {})).toBe(true);
+      expect(shouldSkipPayloadField('paymentMethod', 'someVal', defaultRefs, userRefs, reqKeys, isFieldExcluded, {})).toBe(true);
     });
 
-    it('does not skip billing fields when not contacts create', () => {
-      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, false, {})).toBe(false);
+    it('does not skip a field isFieldExcluded does not flag', () => {
+      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, () => false, {})).toBe(false);
     });
 
     it('skips SmartClient temporary import references', () => {
@@ -849,16 +850,16 @@ describe('useEntity helpers', () => {
       expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, false, {})).toBe(false);
     });
 
-    it('skips contacts account field on create', () => {
-      expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips account field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
-    it('skips contacts customerBlocking field on create', () => {
-      expect(shouldSkipPayloadField('customerBlocking', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips customerBlocking field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('customerBlocking', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
-    it('skips contacts purchasePricelist field on create', () => {
-      expect(shouldSkipPayloadField('purchasePricelist', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips purchasePricelist field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('purchasePricelist', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
     it('does not skip SmartClient ref when no identifier companion', () => {
@@ -1511,13 +1512,20 @@ describe('useEntity helpers', () => {
   });
 
   // -------------------------------------------------------------------
-  // buildSavePayload — contacts Business Partner create detection
+  // buildSavePayload — ETP-5537 generic create-field exclusion
   // -------------------------------------------------------------------
-  describe('buildSavePayload — contacts businessPartner create', () => {
+  // Replaces the old Contacts-only entity==='businessPartner' && apiBaseUrl-ends-in-'/contacts'
+  // detection: a field is now excluded from the CREATE payload whenever it is not registered by
+  // any currently-mounted form for this record (formFieldsRef) or is registered but evaluates
+  // read-only there — for ANY window, not just Contacts. See buildCreateFieldExclusion's doc
+  // comment in useEntity.js.
+  describe('buildSavePayload — generic create-field exclusion (ETP-5537)', () => {
     const emptyRef = () => ({ current: new Set() });
-    const formFieldsRef = () => ({ current: new Map([['__default__', [{ key: 'name', required: true }]]]) });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
 
-    it('drops the billing preference fields when creating from the contacts window', () => {
+    it('drops a field that is not registered by any currently-mounted form', () => {
+      // Mirrors Contacts: priceList/paymentTerms belong to a panel (BillingPreferencesForm)
+      // that is not mounted before the record exists, so they never get registered.
       const payload = buildSavePayload({
         isNew: true,
         selected: null,
@@ -1526,12 +1534,12 @@ describe('useEntity helpers', () => {
         apiBaseUrl: '/sws/neo/contacts',
         backendDefaultKeysRef: emptyRef(),
         userChangedKeysRef: emptyRef(),
-        formFieldsRef: formFieldsRef(),
+        formFieldsRef: formFieldsRefWith([{ key: 'name', required: true }]),
       });
       expect(payload).toEqual({ name: 'Acme' });
     });
 
-    it('keeps the billing fields when apiBaseUrl is missing (not the contacts window)', () => {
+    it('keeps a field that IS registered and not read-only, regardless of window', () => {
       const payload = buildSavePayload({
         isNew: true,
         selected: null,
@@ -1540,9 +1548,66 @@ describe('useEntity helpers', () => {
         apiBaseUrl: null,
         backendDefaultKeysRef: emptyRef(),
         userChangedKeysRef: emptyRef(),
-        formFieldsRef: formFieldsRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'priceList' },
+        ]),
       });
       expect(payload).toEqual({ name: 'Acme', priceList: 'pl-1' });
+    });
+
+    it('drops a field that IS registered but evaluates read-only (static readOnly)', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('drops a field that evaluates read-only via readOnlyLogic', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('still sends an excluded/read-only field when the app explicitly marks it user-changed', () => {
+      // The escape hatch: a custom panel can deliberately call onChange to force a value
+      // through (e.g. Assets' currency echo-on-create), which marks userChangedKeysRef.
+      const userChangedKeysRef = { current: new Set(['currency']) };
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef,
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme', currency: 'EUR' });
     });
   });
 
