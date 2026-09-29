@@ -2432,6 +2432,17 @@ before it affects a newly provisioned tenant. Expected end state: GOClient at 5 
 financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`ETGO_DTO` only) / 0
 accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
 
+**Update (ETP-5426) — the demo rows now have a third, opt-in consumer.** A signup that ticks
+"Include sample data" (Spain/EUR demo environments only) receives these very rows **and** the
+transactional chain that references them, through a second normalizer pass
+(`OnboardingDatasetProfile.SAMPLE_DATA`) run after the onboarding commit. That pass keeps exactly
+what `DemoMasterDataFilter` drops, so the split above still holds: the source stays complete, and
+each consumer decides at import time what it takes. The expected end state above is the default
+(unticked) signup; a ticked one adds the 4 products, 3 accounts, the secondary warehouse and
+`Beverages`, plus the documents — imported unposted, with no `FACT_ACCT`, and then posted by the
+system-wide `AcctServerProcess` on its next cycle with the tenant's own accounts. Full description:
+`com.etendoerp.go/docs/onboarding-flow.md` § "Optional sample data".
+
 ---
 
 ### N5 — No price list flagged as default (ETP-5245, 2026-09-09)
