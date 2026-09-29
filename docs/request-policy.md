@@ -73,6 +73,55 @@ Everything not listed here is forwarded to `fetch` untouched (`method`, `body`, 
 | `credentials` | overrides the default `'include'` |
 | `refreshVersion: false` | the call is a POST to an action endpoint (`/{spec}/{entity}/{id}/action/<name>`) that is a query in disguise — verified to NOT mutate the record it addresses. Skips the post-action re-read described below. Default `true`. See [Action endpoints re-read the record afterward](#action-endpoints-re-read-the-record-afterward-refreshversion-etp-5434) before setting this — the warning there is the important part |
 
+| `timeout` | ms to wait for a response before rejecting with a `NetworkError` (`reason: 'timeout'`). **Default: 60 s for a safe method (`GET`, `HEAD`, `OPTIONS`, or no method) and none for any other method.** An explicit value applies to any method; `0` disables it. Pass `timeout: 0` for a **long read** — see [Network failures and the timeout](#network-failures-and-the-timeout-etp-5424) |
+
+## Network failures and the timeout (ETP-5424)
+
+A request that never got an HTTP answer does not reach the call site as the browser's
+`TypeError('Failed to fetch')` anymore. `apiFetch` rejects with a `NetworkError`
+(`@etendosoftware/app-shell-core/auth`) whose `message` is **already translated**
+(`genericLabels.networkErrorRetry`), so any call site that shows `err.message` is correct
+without a special case.
+
+| Situation | What the call site receives |
+|---|---|
+| Offline, DNS, CORS, connection reset — `fetch` rejects with a `TypeError` | `NetworkError`, `reason: 'offline'`, original on `cause` |
+| A body reader (`json`, `text`, `blob`, …) rejects with a `TypeError` | `NetworkError`, `reason: 'offline'` |
+| No response within the timeout | `NetworkError`, `reason: 'timeout'` |
+| The caller's own `signal` aborts | the caller's `AbortError`, unchanged — a cancellation is not a failure |
+| A `SyntaxError` (bad JSON), a plain `Error` | unchanged |
+
+Detect it with `isNetworkError(err)`, never by matching `'Failed to fetch'` or
+`name === 'TypeError'`. A caller with more specific wording checks it first (the importer maps
+it to `importErrorConnection` / `importErrorTimeout`).
+
+**The translator** is registered once, by `installErrorTranslator` (`src/i18n/errorTranslator.js`)
+in an effect in `App.jsx`, with the rendered locale's dictionary — see `docs/i18n-guide.md`.
+
+**Why writes get no default timeout.** A read that is cut off can be retried safely. A write
+that is cut off may still commit on the server, and the user's "try again" is then a double
+submit — an order completed twice, a payment registered twice. So the 60 s default applies only
+to `GET`/`HEAD`/`OPTIONS`; a `POST`/`PUT`/`PATCH`/`DELETE` waits for its answer unless the
+caller passes a `timeout` explicitly. Some synchronous processes carry an explicit
+`timeout: 0` anyway (useEntity save-and-process and `handleProcess`, `useBatch`, year close,
+posting); it is redundant and documents intent.
+
+**Rule: pass `timeout: 0` for a long read.** The timer covers only until the response headers
+arrive, so what counts is how long the server takes to START answering. Opt out when the server
+builds the whole payload before replying:
+
+- a server-side export — `useCsvExport` (`export=csv|xlsx`, used by `ListExportButton` and the
+  financial-account exports);
+- a walk over thousands of rows — `ReportDrawer`'s `fetchAllRecords`;
+- an archive built on demand — the attachments `/zip` download.
+
+A plain list page, a single record, a selector or a file download (the bytes stream after the
+headers) keep the default.
+
+**A raw `fetch`** (the `/jsreport` container proxy) gets none of this: map a `TypeError` yourself
+with `new NetworkError({ reason: 'offline', cause: err })` — see `renderViaJsreport` in
+`ReportDrawer.jsx`.
+
 ## Updates carry a concurrency token (ETP-5073)
 
 `apiFetch` attaches an `updated` value to every `PATCH`/`PUT` whose target record this client has
