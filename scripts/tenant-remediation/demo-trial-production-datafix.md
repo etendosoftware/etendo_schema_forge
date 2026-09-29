@@ -21,6 +21,22 @@ The apply audit supports the standalone guarded rollback if reversal is explicit
 
 ## Canonical datafix framework
 
+### Paid environment consistency (R42)
+
+`20260929T190000Z__R42-paid-provisioning-commercial-metadata` repairs directly linked, paid, `PROVISIONED` checkout clients with an active owner. It normalizes all compatible `free`/`productive` plan rows to `productive`, and `DEMO`/`PRODUCTIVE` lifecycle rows to `PRODUCTIVE`, preserving existing IDs. Missing markers are inserted once. Existing trial dates, subscription status and billing records are preserved; historical payment alone never generates `CURRENT` subscription status.
+
+The plan's scope differs from lifecycle metadata: `TenantPlanService.resolvePlan` reads `visibleat_client_id`, and ordinary plan rows are System-owned. Lifecycle type/start reads the row's own `ad_client_id`. R42 mirrors those exact scopes. Ambiguous cross-client owners/visibility and targeted user/role/window rows are excluded. Closed/unknown subscription projections, reversed checkout states, reserved pool clients, and associations to a different productive client require separate diagnosis. Historical self-associations are preserved and do not block a directly paid client repair.
+
+Fiscal reversal mirrors existing R32: tenant VeriFactu/SII/TicketBAI test flags become productive, and the tenant's `ETSG_ForceTestMode` override is removed. The System fiscal default is preserved. Every statement rechecks the same direct payment/ownership/scope conditions; config updates target only active rows still in test mode. Compatible duplicate plan rows are normalized rather than deleted, so selecting either row yields the same plan. A second execution performs no physical preference/config mutation.
+
+```sh
+node cli/src/data-fixes/run.js --fix 20260929T190000Z__R42-paid-provisioning-commercial-metadata --dry-run
+```
+
+Use the existing runner with an explicitly selected `--client <ID>` to apply each reviewed candidate, retaining the normal transaction and ledger. A full before image must include both plan visibility scopes, tenant preferences, fiscal config rows, and payment rows. Guard any rollback on exact unchanged after images; preserve payment and ownership records. Do not reuse the R41 trial rollback file for R42 commercial changes.
+
+The production GOClient diagnosis was corrected by inspecting `VisibleAtClient`: it had two System-owned plan rows (`productive` and `free`) with the same client visibility, plus missing lifecycle type and a tenant fiscal test override. The initial own-client-only audit omitted those plan rows. R41 and the standalone inventory now inspect visible-client plans and fail closed on corrupt scope. An additional audit of all 45 previous trial repairs confirmed zero visible productive plans; their trial repairs remain valid.
+
 The supported repair is now the SQL catalog entry `cli/src/data-fixes/sql/20260929T180000Z__R41-demo-legacy-trial-start.sql`, executed by the existing runner. It uses the same metadata, `@check`, tenant-scoped guarded `@apply`, optional `@report`, per-client transaction, and atomic `ETGO_DATA_FIX_HISTORY` ledger as other datafixes. The standalone script below remains available as an inventory/rollback diagnostic; it is not the canonical repair entry point.
 
 Read-only preview, all clients (add `--client <ID>` to isolate one):
@@ -43,6 +59,18 @@ The existing runner binds only AD IDs. PostgreSQL's per-connection `PGOPTIONS` s
 Before applying, save an inventory from the standalone `--audit-only` command and the runner output. The canonical `@report` records inserted preference IDs/values in the success ledger detail; the standalone script's rollback command cannot roll back a canonical runner audit. To undo a canonical apply, use a separately reviewed, tenant-scoped deletion of only the recorded inserted preference ID after verifying its value/audit timestamps and absence in the before image, and record the manual reversal without deleting the ledger. No rollback has been executed.
 
 This is legacy-transition metadata, not a new onboarding gap: current onboarding already writes the original ready trial start. Do not bump the onboarding cutoff or rewrite that start date. The ETP-5548 preventive paid-provisioning change remains separate and in progress.
+
+## Paid commercial metadata production execution
+
+On 2026-09-29 at 23:03:18–23:03:29 UTC, the canonical R42 runner applied the reviewed repair to exactly four clients: Mi empresa galder, GOClient (the goadmin environment), Santiagou, and Fitz Roy Adventures. The direct-paid inventory contained 17 clients; the other 13 needed no R42 repair. A fresh read-only check matched the four reviewed IDs before the runner applied one tenant transaction at a time, including its ledger entry.
+
+The apply changed nine preference rows: four conflicting visible plan values became `productive`, GOClient received one missing `PRODUCTIVE` environment type, and four tenant fiscal test overrides were removed. Compatible productive plan rows retained their IDs. The final R42 check returned zero candidates. None of these four clients had fiscal config rows requiring mutation. The apply did not deploy code.
+
+Restricted operational evidence remains outside git: `/private/tmp/r42-production-before.json` contains complete paid-client before images, `/private/tmp/r42-production-apply.log` contains the runner results, and `/private/tmp/r42-production-after.json` is the expected read-only post-verification artifact. Canonical execution logs are under `logs/data-fixes/execution-20260929T230318Z.log` through `execution-20260929T230329Z.log`. Snapshot files use mode `0600`. Read-only preservation verification passed: all 17 checkout/payment snapshots were unchanged; all 13 untargeted paid clients retained their complete preference and fiscal rows; the four targets retained every unrelated trial, subscription and association row; the System fiscal preference was unchanged. A separate exact-ID database comparison confirmed that all 45 prior legacy trial preference rows remained byte-for-value identical to their recorded inserted rows. The final snapshot verifier exited successfully.
+
+Local real-database integration tests proved dry run without mutations, guarded repair, repeat execution with zero mutations independently of ledger skipping, compatible duplicate normalization, self-association preservation, and exclusion of foreign associations and ambiguous/payment-unconfirmed scopes. Registry and R42 checks passed 4/4; the R41 integration regression passed after its fixture was aligned with the actual visible-client plan resolver. Production verification confirmed that a second R42 check returned zero candidates.
+
+The generic runner labels R42's `@report` rows as requiring manual attention; here those rows are the successful productive metadata snapshot, not unresolved errors. Rollback must compare exact current rows with the saved after image, restore only the four changed plan rows and four removed fiscal preference rows using their original IDs, and delete only GOClient's recorded newly inserted type row. Preserve the success ledger and record any reviewed reversal explicitly. No rollback has been executed.
 
 ## Commands
 

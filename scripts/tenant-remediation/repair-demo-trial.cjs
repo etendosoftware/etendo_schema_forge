@@ -61,14 +61,14 @@ async function main(){
  exists(select 1 from etgo_checkout_request q where (q.created_client_id=c.ad_client_id or lower(q.client_name)=lower(c.name) or exists(select 1 from ad_user u where u.ad_client_id=c.ad_client_id and u.isactive='Y' and u.em_etgo_is_owner='Y' and lower(u.email)=lower(q.account_email))) and (q.paid_at is not null or upper(q.checkout_status) in ('PAID','PROVISIONING','PROVISIONED') or q.stripe_subscription_id is not null)) paid
  from ad_client c where c.ad_client_id<>'0' and c.isactive='Y' order by c.ad_client_id`)).rows;
  for(const c of clients){
- const prefs=(await db.query('select * from ad_preference where ad_client_id=$1 and isactive=$2 and attribute=ANY($3::text[]) order by ad_preference_id',[c.ad_client_id,'Y',attributes])).rows;
+ const prefs=(await db.query("select * from ad_preference where isactive=$2 and ((ad_client_id=$1 and attribute=ANY($3::text[])) or (attribute='ETGO_TenantPlan' and visibleat_client_id=$1)) order by ad_preference_id",[c.ad_client_id,'Y',attributes])).rows;
  const entry={clientId:c.ad_client_id,name:c.name,before:prefs};report.entries.push(entry);
  const values=key=>prefs.filter(p=>p.attribute===key).map(p=>String(p.value||'').trim());
  const plan=values('ETGO_TenantPlan');const type=values('ETGO_EnvironmentType');
  if(c.paid||plan.some(v=>v.toUpperCase()==='PRODUCTIVE')||type.some(v=>v.toUpperCase()==='PRODUCTIVE')||['ETGO_SubscriptionStatus','ETGO_SubscriptionDueAt','ETGO_SubscriptionEventAt','ETGO_AssociatedDemoClientId'].some(a=>values(a).length)){entry.status='excluded_paid_or_productive';continue;}
  if(!c.owned||c.pool_reserved||c.fixture){entry.status='excluded_pool_or_unowned';continue;}
  if(values('ETGO_AssociatedProductiveClientId').some(Boolean)){entry.status='excluded_associated_productive';continue;}
- if(attributes.some(a=>values(a).length>1)||prefs.some(p=>p.ad_user_id||p.ad_window_id||p.visibleat_role_id||p.ispropertylist!=='N')){entry.status='conflicting_preferences';continue;}
+ if(attributes.some(a=>values(a).length>1)||prefs.some(p=>p.ad_user_id||p.ad_window_id||p.visibleat_role_id||p.ispropertylist!=='N'||(p.attribute==='ETGO_TenantPlan'&&(!['0',c.ad_client_id].includes(p.ad_client_id)||p.visibleat_client_id!==c.ad_client_id))||(p.attribute!=='ETGO_TenantPlan'&&p.visibleat_client_id&&p.visibleat_client_id!==c.ad_client_id))){entry.status='conflicting_preferences';continue;}
  if(plan.some(v=>!['FREE'].includes(v.toUpperCase()))||type.some(v=>v.toUpperCase()!=='DEMO')){entry.status='unknown_classification';continue;}
  // Missing plan falls back to FREE in TenantPlanService; explicit demo also qualifies.
  const dates=[...values('ETGO_DemoTrialStartedAt'),...values('ETGO_LegacyTransitionStartedAt')];

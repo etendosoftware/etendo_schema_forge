@@ -159,6 +159,8 @@ const FIXES_WITH_REPORT = new Set([
   // R41 initializes the explicit legacy demo transition start timestamp. Its @report lists the
   // preference created for the tenant so operators can verify the transition marker after apply.
   '20260929T180000Z__R41-demo-legacy-trial-start',
+  // R42 reports the canonical productive preferences restored for paid provisioned tenants.
+  '20260929T190000Z__R42-paid-provisioning-commercial-metadata',
 ]);
 
 async function loadCatalogFiles() {

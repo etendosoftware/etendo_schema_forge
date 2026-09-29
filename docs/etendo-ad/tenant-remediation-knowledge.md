@@ -14,6 +14,10 @@
 
 ## Corrected misinterpretations
 
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
+
+- **2026-09-29 — Plan and lifecycle preferences have different tenant scopes.** `TenantPlanService.resolvePlan` reads `ETGO_TenantPlan` by `VisibleAtClient`, normally a System-owned row; `TenantEnvironmentLifecycleService` reads lifecycle type/date by the row's own client. An own-client-only audit omitted GOClient's two visible plan rows (`productive`/`free`). Audit both scopes, normalize compatible duplicates with direct paid provisioning evidence, and exclude foreign-owned/cross-visible metadata. The 45 prior demo trial repairs were independently rechecked and had zero visible productive plans.
+
 - **2026-09-29 — Missing demo banner does not prove an unpaid provisioning failure.** `TenantEnvironmentLifecycleService.resolve` returns no lifecycle snapshot when an otherwise free legacy tenant has neither trial/legacy transition start nor global activation. Preserve real trial starts; initialize legacy transition only with an explicit approved UTC instant. `AD_Client.created` is unsafe as a trial start for pool clients because pool creation predates user assignment. The canonical R41 fix uses a per-connection PostgreSQL setting supplied through `PGOPTIONS`, rather than broadening the application's global rollout property.
 
 - **2026-06-11 — `AccountingPackageCloner` is NOT the chart-of-accounts generator.** Wrong assumption (from the design spec): "R1/R2 reuse the cloner via webhook as single source of truth." Verified by reading `com.etendoerp.go/.../onboarding/AccountingPackageCloner.java`: it clones **tax categories, taxes, tax zones, tax accounts, and accounting combinations** — NOT the ~1790 `c_elementvalue` chart rows that gap A1 needs. **Apply:** for the corrective A1 data-fix, clone the chart from the GOOrg source client in SQL; do not route A1 to this cloner. The cloner belongs to the *preventive* front (onboarding accounting step) only.
@@ -2389,6 +2393,8 @@ as the immutability trigger for a data-fix `.sql` file.
 > entirely (see the two entries added at the end of this section).
 
 ### Corrected misinterpretations
+
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
 
 - **2026-09-01 — "Onboarding seeds sample contacts (Laura Morat / Juan Perez)" is FALSE.**
   `C_BPARTNER` is **not** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so the onboarding

@@ -13,13 +13,13 @@ test('real local datafix repairs a broken demo, preserves excluded tenants, and 
  const db=new Client({host:env.ETENDO_DB_HOST,port:55432,user:'tad',password:'tad',database:'etendo_local'});
  const ids=[];const dir=mkdtempSync(join(tmpdir(),'demo-datafix-test-'));const start=new Date().toISOString();
  const run=(script,args,extra={})=>{const r=spawnSync(process.execPath,[script,...args],{cwd:root,env:{...env,...extra},encoding:'utf8',timeout:90000});assert.equal(r.status,0,r.stderr+'\n'+r.stdout);return r.stdout;};
- const prefs=async id=>(await db.query('select * from ad_preference where ad_client_id=$1 order by ad_preference_id',[id])).rows;
+ const prefs=async id=>(await db.query('select * from ad_preference where (ad_client_id=$1 or visibleat_client_id=$1) order by ad_preference_id',[id])).rows;
  await db.connect();
  try{
   assert.equal((await db.query('select current_database() db')).rows[0].db,'etendo_local');
   const baseline=(await db.query('select * from ad_preference order by ad_preference_id')).rows;
   async function fixture(label,owner=true){const id=uuid();ids.push(id);const name=`DFTEST_${id}`;await db.query(`insert into ad_client(ad_client_id,ad_org_id,createdby,updatedby,value,name,description) values($1,'0','0','0',$2,$2,$3)`,[id,name,label]);if(owner)await db.query(`insert into ad_user(ad_user_id,ad_client_id,ad_org_id,createdby,updatedby,name,email,username,em_etgo_is_owner) values($1,$2,'0','0','0',$3,$4,$4,'Y')`,[uuid(),id,name,name+'@example.invalid']);return id;}
-  async function preference(id,key,value){await db.query(`insert into ad_preference(ad_preference_id,ad_client_id,ad_org_id,createdby,updatedby,attribute,value,ispropertylist,selected) values($1,$2,'0','0','0',$3,$4,'N','Y')`,[uuid(),id,key,value]);}
+  async function preference(id,key,value){await db.query(`insert into ad_preference(ad_preference_id,ad_client_id,ad_org_id,createdby,updatedby,attribute,value,ispropertylist,selected,visibleat_client_id) values($1,$2,'0','0','0',$3,$4,'N','Y',$5)`,[uuid(),id,key,value,key==='ETGO_TenantPlan'?id:null]);}
   const broken=await fixture('broken demo');await preference(broken,'ETGO_TenantPlan','FREE');await preference(broken,'ETGO_EnvironmentType','DEMO');
   const productive=await fixture('productive exclusion');await preference(productive,'ETGO_TenantPlan','PRODUCTIVE');
   const dated=await fixture('existing date exclusion');await preference(dated,'ETGO_TenantPlan','FREE');await preference(dated,'ETGO_DemoTrialStartedAt',start);
@@ -28,7 +28,8 @@ test('real local datafix repairs a broken demo, preserves excluded tenants, and 
   const subscribed=await fixture('subscription exclusion');await preference(subscribed,'ETGO_TenantPlan','FREE');await preference(subscribed,'ETGO_SubscriptionStatus','ACTIVE');
   const malformed=await fixture('malformed date exclusion');await preference(malformed,'ETGO_TenantPlan','FREE');await preference(malformed,'ETGO_DemoTrialStartedAt','not-a-date');
   const markers=[];for(const attribute of ['ETGO_SubscriptionDueAt','ETGO_SubscriptionEventAt','ETGO_AssociatedDemoClientId']){const id=await fixture(attribute+' exclusion');await preference(id,'ETGO_TenantPlan','FREE');await preference(id,attribute,attribute==='ETGO_AssociatedDemoClientId'?'':start);markers.push(id);}
-  const excluded=[productive,dated,pooled,unowned,subscribed,malformed,...markers];const excludedPrefs=async()=>{const rows=[];for(const id of excluded)rows.push(await prefs(id));return rows;};const before=await excludedPrefs();
+  const visibleProductive=await fixture('system visible productive exclusion');await db.query("insert into ad_preference(ad_preference_id,ad_client_id,ad_org_id,createdby,updatedby,attribute,value,ispropertylist,selected,visibleat_client_id) values($1,'0','0','0','0','ETGO_TenantPlan','productive','N','Y',$2)",[uuid(),visibleProductive]);
+  const excluded=[productive,dated,pooled,unowned,subscribed,malformed,...markers,visibleProductive];const excludedPrefs=async()=>{const rows=[];for(const id of excluded)rows.push(await prefs(id));return rows;};const before=await excludedPrefs();
   const script='scripts/tenant-remediation/repair-demo-trial.cjs';
   const impossible=spawnSync(process.execPath,[script,'--trial-start','2026-02-30T12:00:00Z','--apply','--audit',join(dir,'invalid.json')],{cwd:root,env,encoding:'utf8',timeout:90000});assert.notEqual(impossible.status,0);assert.match(impossible.stderr,/explicit UTC ISO instant/);assert.equal((await prefs(broken)).length,2);assert.deepEqual(await excludedPrefs(),before);
   console.log('Standalone impossible calendar date refused without preference changes');
@@ -54,9 +55,9 @@ test('real local datafix repairs a broken demo, preserves excluded tenants, and 
    assert.deepEqual(await excludedPrefs(),before);
    console.log('Canonical runner: dry run, apply, repeat and exclusions passed');
   }else console.log('Canonical SQL not available; standalone verified');
-  console.log('Standalone: dry run 0 writes; first apply 1 preference; second apply 0; rollback removed 1; 9 exclusions unchanged');
+  console.log('Standalone: dry run 0 writes; first apply 1 preference; second apply 0; rollback removed 1; 10 exclusions unchanged');
   await cleanup();assert.deepEqual((await db.query('select * from ad_preference order by ad_preference_id')).rows,baseline);
   console.log('Cleanup verified: original AD_Preference state restored');
  }finally{try{await cleanup();}finally{await db.end();rmSync(dir,{recursive:true,force:true});}}
- async function cleanup(){if(!ids.length)return;await db.query('delete from etgo_data_fix_history where remediated_client_id=ANY($1::text[])',[ids]);await db.query('delete from etgo_tenant_pool where pool_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_preference where ad_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_user where ad_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_sequence where ad_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_client where ad_client_id=ANY($1::text[])',[ids]);}
+ async function cleanup(){if(!ids.length)return;await db.query('delete from etgo_data_fix_history where remediated_client_id=ANY($1::text[])',[ids]);await db.query('delete from etgo_tenant_pool where pool_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_preference where ad_client_id=ANY($1::text[]) or visibleat_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_user where ad_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_sequence where ad_client_id=ANY($1::text[])',[ids]);await db.query('delete from ad_client where ad_client_id=ANY($1::text[])',[ids]);}
 });

@@ -18,20 +18,25 @@ WHERE c.ad_client_id = :client_id
   AND NOT EXISTS (SELECT 1 FROM etgo_tenant_pool t WHERE t.pool_client_id = c.ad_client_id
                   AND t.isactive = 'Y' AND (upper(t.status) <> 'CLAIMED'
                        OR coalesce(t.error_message, '') ILIKE '%fixture%'))
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y' AND p.attribute IN ('ETGO_TenantPlan', 'ETGO_EnvironmentType',
           'ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
           'ETGO_AssociatedProductiveClientId', 'ETGO_SubscriptionStatus',
           'ETGO_SubscriptionDueAt', 'ETGO_SubscriptionEventAt', 'ETGO_AssociatedDemoClientId')
       AND (p.ad_user_id IS NOT NULL OR p.ad_window_id IS NOT NULL
-           OR p.visibleat_role_id IS NOT NULL OR p.ispropertylist <> 'N'))
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+           OR p.visibleat_role_id IS NOT NULL OR p.ispropertylist <> 'N'
+           OR (p.attribute='ETGO_TenantPlan' AND (p.ad_client_id NOT IN ('0',c.ad_client_id) OR p.visibleat_client_id IS DISTINCT FROM c.ad_client_id))
+           OR (p.attribute<>'ETGO_TenantPlan' AND p.visibleat_client_id IS NOT NULL AND p.visibleat_client_id<>c.ad_client_id)))
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y' AND p.attribute IN ('ETGO_TenantPlan', 'ETGO_EnvironmentType',
           'ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
           'ETGO_AssociatedProductiveClientId', 'ETGO_SubscriptionStatus',
           'ETGO_SubscriptionDueAt', 'ETGO_SubscriptionEventAt', 'ETGO_AssociatedDemoClientId')
       GROUP BY p.attribute HAVING count(*) > 1)
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y'
       AND (p.attribute IN ('ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
                            'ETGO_SubscriptionStatus', 'ETGO_SubscriptionDueAt',
@@ -80,20 +85,25 @@ WHERE c.ad_client_id = :client_id
   AND NOT EXISTS (SELECT 1 FROM etgo_tenant_pool t WHERE t.pool_client_id = c.ad_client_id
                   AND t.isactive = 'Y' AND (upper(t.status) <> 'CLAIMED'
                        OR coalesce(t.error_message, '') ILIKE '%fixture%'))
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y' AND p.attribute IN ('ETGO_TenantPlan', 'ETGO_EnvironmentType',
           'ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
           'ETGO_AssociatedProductiveClientId', 'ETGO_SubscriptionStatus',
           'ETGO_SubscriptionDueAt', 'ETGO_SubscriptionEventAt', 'ETGO_AssociatedDemoClientId')
       AND (p.ad_user_id IS NOT NULL OR p.ad_window_id IS NOT NULL
-           OR p.visibleat_role_id IS NOT NULL OR p.ispropertylist <> 'N'))
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+           OR p.visibleat_role_id IS NOT NULL OR p.ispropertylist <> 'N'
+           OR (p.attribute='ETGO_TenantPlan' AND (p.ad_client_id NOT IN ('0',c.ad_client_id) OR p.visibleat_client_id IS DISTINCT FROM c.ad_client_id))
+           OR (p.attribute<>'ETGO_TenantPlan' AND p.visibleat_client_id IS NOT NULL AND p.visibleat_client_id<>c.ad_client_id)))
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y' AND p.attribute IN ('ETGO_TenantPlan', 'ETGO_EnvironmentType',
           'ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
           'ETGO_AssociatedProductiveClientId', 'ETGO_SubscriptionStatus',
           'ETGO_SubscriptionDueAt', 'ETGO_SubscriptionEventAt', 'ETGO_AssociatedDemoClientId')
       GROUP BY p.attribute HAVING count(*) > 1)
-  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE p.ad_client_id = c.ad_client_id
+  AND NOT EXISTS (SELECT 1 FROM ad_preference p WHERE (p.ad_client_id = c.ad_client_id
+          OR (p.attribute = 'ETGO_TenantPlan' AND p.visibleat_client_id = c.ad_client_id))
       AND p.isactive = 'Y'
       AND (p.attribute IN ('ETGO_DemoTrialStartedAt', 'ETGO_LegacyTransitionStartedAt',
                            'ETGO_SubscriptionStatus', 'ETGO_SubscriptionDueAt',
