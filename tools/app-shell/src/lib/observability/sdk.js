@@ -9,6 +9,9 @@
 import * as Sentry from '@sentry/react';
 import { AwsRum } from 'aws-rum-web';
 
+// `aws-rum-web` is pinned to an EXACT version in package.json: the core's RUM adapter sanitizes
+// batches through the SDK's private `defaultClientBuilder`, so a bump must be deliberate. The
+// adapter fails closed if it disappears, and the real-SDK test goes red.
 export { Sentry, AwsRum };
 
 // Lazy on purpose: Mixpanel is opt-in, and the SDK should only be downloaded when it is used.
