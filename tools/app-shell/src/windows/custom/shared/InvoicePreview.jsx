@@ -39,7 +39,7 @@ function isCreditNote(invoice) {
  *   - sales invoice, completed: managed by GenericPreviewModal (cached as a marked Attachment)
  *   - purchase invoice:         managed by GenericPreviewModal (drop zone → persisted)
  */
-function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf }) {
+function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, canAddPayment, addPaymentBlockedByDraft, onAddPayment, isSalesInvoice, onDownloadPdf, hasPdf, readOnly = false }) {
   const ui = useUI();
   return (
     <>
@@ -64,7 +64,8 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
           {ui('sendToSif')}
         </Button>
       )}
-      <Button
+      {/* ETP-5205 — hidden (not just disabled) under the Solo-Lectura tier. */}
+      {!readOnly && <Button
         size="sm"
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-border shadow-sm text-foreground disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
@@ -74,7 +75,7 @@ function InvoiceActionButtons({ triggerEdit, onEmail, canSendToSif, onOpenSif, c
         data-testid="Button__cf88e6">
         <Wallet className="text-muted-foreground" data-testid="Wallet__cf88e6" />
         {ui(isSalesInvoice ? 'invoicePreviewAddCollection' : 'invoicePreviewAddPayment')}
-      </Button>
+      </Button>}
       {isSalesInvoice && (
         <Button
           size="sm"
@@ -221,7 +222,7 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null }) {
+export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName, specName = 'purchase-invoice', onClose, onEdit, onInvoiceUpdated = null, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -280,7 +281,12 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
   // ETP-4717 — Send is only available once the invoice is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates. The
   // existing purchase-invoice exclusion stays: this window never sends email.
-  const isSendable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  const isDownloadable = specName !== 'purchase-invoice' && invoice?.documentStatus === 'CO';
+  // ETP-5205 — Solo-Lectura tier: Send, Add payment and Send-to-SIF are writes and are
+  // hidden; Download PDF stays (D1), and the stored document stays visible.
+  const isSendable = isDownloadable && !readOnly;
+  const canAddPayment = p.canAddPayment && !readOnly;
+  const canSendToSif = p.canSendToSif && !readOnly;
   // ETP-4315 — real, marked Attachment (C_Invoice, shared with purchase-invoice
   // below). Draft gate unchanged.
   const attachmentConfig = p.isSalesInvoice ? {
@@ -291,6 +297,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     // overwritten by this fresh pdfBlob. The purchase branch below deliberately omits it:
     // that slot holds the supplier's OWN document, which no edit of ours makes stale.
     recordUpdated: invoice?.updated ?? null,
+    readOnly,
     sourceBlob: !isDraft ? p.pdfBlob : null,
     autoFetch: true,
     token,
@@ -306,6 +313,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     documentId: invoice.id,
     tableName: 'C_Invoice',
     storeCondition: true,
+    readOnly,
     autoFetch: false,
     token,
     apiBaseUrl,
@@ -361,7 +369,7 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
           payments={p.payments}
           loadingPayments={p.loadingPayments}
           totalOutstanding={p.totalOutstanding}
-          canAddPayment={p.canAddPayment}
+          canAddPayment={canAddPayment}
           addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
           isDraft={p.isDraft}
           isFullyPaid={p.isFullyPaid}
@@ -394,14 +402,15 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     <InvoiceActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
       onEmail={isSendable ? p.openEmailModal : undefined}
-      canSendToSif={p.canSendToSif}
+      canSendToSif={canSendToSif}
       onOpenSif={() => p.setShowSifModal(true)}
-      canAddPayment={p.canAddPayment}
+      canAddPayment={canAddPayment}
       addPaymentBlockedByDraft={p.addPaymentBlockedByDraft}
       onAddPayment={() => p.setShowPaymentModal(true)}
       isSalesInvoice={p.isSalesInvoice}
-      onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
+      onDownloadPdf={isDownloadable ? handleDownloadPdf : undefined}
       hasPdf={hasPdf}
+      readOnly={readOnly}
       data-testid="InvoiceActionButtons__cf88e6" />
   );
 

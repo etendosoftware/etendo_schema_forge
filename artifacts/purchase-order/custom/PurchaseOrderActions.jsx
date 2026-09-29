@@ -40,7 +40,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess, onRefresh, onSave }) {
+export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl, onProcess, onRefresh, onSave, windowReadOnly = false }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -79,22 +79,23 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     // ETP-5255 — `isDraft` gates OPENING the modal, never keeping it mounted. Confirming the
     // order flips the record to CO, and the modal has to outlive that: it is where the result of
     // the receipt/invoice steps is reported.
-    const handler = () => { if (isDraft) setShowConfirm(true); };
+    const handler = () => { if (isDraft && !windowReadOnly) setShowConfirm(true); };
     window.addEventListener('purchase-order:open-confirm-modal', handler);
     return () => window.removeEventListener('purchase-order:open-confirm-modal', handler);
     // `isDraft` is read inside the handler, so an empty dep array would pin the value this effect
     // first saw and the modal would stop opening after any status change.
-  }, [isDraft]);
+  }, [isDraft, windowReadOnly]);
 
   // PurchaseOrderDraftChips (topbarExtra) dispatches this event when a grouped chip is clicked
   useEffect(() => {
     const handler = (e) => {
+      if (windowReadOnly) return;
       setActionsScroll(e.detail?.scrollTo ?? null);
       setShowActions(true);
     };
     window.addEventListener('purchase-order:open-actions-modal', handler);
     return () => window.removeEventListener('purchase-order:open-actions-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   // ETP-5315 — the confirm/create-docs flows below dispatch this same event on success
   // (ConfirmModal.handleConfirm, ConfirmModal.handleClose, CreateDocsModal.handleCreate), but
@@ -115,13 +116,15 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   // (PurchaseOrderSecondaryActions), while this modal (with its pdf/documentType
   // context) stays here in topbarRight; the button dispatches this event to open it.
   useEffect(() => {
-    const handler = () => setShowSend(true);
+    const handler = () => { if (!windowReadOnly) setShowSend(true); };
     window.addEventListener('purchase-order:open-send-modal', handler);
     return () => window.removeEventListener('purchase-order:open-send-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   useEffect(() => {
-    if (!isCompleted || !recordId) return;
+    // ETP-5205 — nothing to manage under read-only, so do not fetch (avoids 403 noise on
+    // goods-receipt for a role that cannot read it).
+    if (!isCompleted || !recordId || windowReadOnly) return;
     let cancelled = false;
 
     (async () => {
@@ -144,7 +147,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey]);
+  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey, windowReadOnly]);
 
   // ETP-5063 — a confirm that created neither a receipt nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -213,6 +216,12 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
   // is guarded on it.
   // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
   // loading state no longer needs to render it here.
+  // ETP-5205 — Solo-Lectura tier (DetailView's `windowReadOnly`): "Gestionar recepción y
+  // factura" and its modals create documents, so render nothing. Must stay before this loading
+  // return: the fetch is skipped under read-only, so `fetched` stays null and the "…"
+  // placeholder would otherwise show forever.
+  if (windowReadOnly) return null;
+
   if (isCompleted && !fetched && !showConfirm) {
     return <>{confirmedPanel}{confirmPortal}<span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', padding: '4px 8px' }}>…</span></>;
   }

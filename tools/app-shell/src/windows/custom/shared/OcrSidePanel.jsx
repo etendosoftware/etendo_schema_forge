@@ -54,7 +54,7 @@ function FileTab(props) {
  * Invoices captured by hand have nothing marked yet, so the panel stays empty
  * until the user attaches a file here or from the preview.
  */
-function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
+function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false }) {
   const ui = useUI();
   const tableName = getOcrDocType(docTypeId)?.tableName;
   const [pickError, setPickError] = useState(null);
@@ -71,7 +71,9 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     apiBaseUrl,
   });
 
-  const canAttach = !!(recordId && tableName && docTypeId);
+  // ETP-5205 — under the Solo-Lectura tier the stored document stays visible but
+  // nothing can be attached (no drop zone, no picker).
+  const canAttach = !!(recordId && tableName && docTypeId) && !readOnly;
 
   const handleFile = (picked) => {
     if (!picked || isBusy || !canAttach) return;
@@ -121,6 +123,15 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     );
   }
 
+  if (!storedFile && readOnly) {
+    return (
+      <div data-testid="ocr-side-panel-readonly-empty" className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
+        <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+        <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
+      </div>
+    );
+  }
+
   if (!storedFile) {
     return (
       <div className="flex h-full flex-col gap-2">
@@ -147,7 +158,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
 
   const isImage = storedFile.mimeType?.startsWith('image/');
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
+    <div className="flex h-full min-h-0 flex-col gap-2" {...(canAttach ? dropHandlers : {})}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
         <span className="truncate">{storedFile.fileName}</span>
@@ -208,4 +219,13 @@ export default function OcrSidePanel(props) {
       </div>
     </div>
   );
+}
+
+/**
+ * ETP-5205 — the same panel for the Solo-Lectura tier: shows the stored document,
+ * offers no way to attach one. A static component (not an inline wrapper) so the
+ * DetailView side panel keeps a stable identity across renders.
+ */
+export function ReadOnlyOcrSidePanel(props) {
+  return <OcrSidePanel {...props} readOnly data-testid="OcrSidePanel__c851a1" />;
 }

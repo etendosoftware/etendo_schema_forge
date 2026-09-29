@@ -17745,6 +17745,7 @@
     "dropZoneUploadPrompt": "Sube tu documento",
     "dropZoneBrowse": "Haz clic aquí para subir tu archivo",
     "dropZoneAcceptedTypes": "PDF, JPG, PNG, WebP, GIF",
+    "dropZoneReadOnlyEmpty": "No hay ningún documento adjunto",
     "goodsReceiptPreview.supplier": "Proveedor",
     "goodsReceiptPreview.warehouse": "Almacén",
     "goodsReceiptPreview.movementDate": "Fecha del movimiento",

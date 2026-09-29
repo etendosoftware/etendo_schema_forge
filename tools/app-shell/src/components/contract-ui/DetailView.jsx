@@ -2960,6 +2960,7 @@ export function DetailView({
                   onClick={() => setShowPrint(true)}
                   className={`${sqBtnSize} flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors`}
                   title={ui('print')}
+                  data-testid="action-document-print"
                 >
                   <Printer className="h-4 w-4" data-testid="Printer__fa3275" />
                 </button>
