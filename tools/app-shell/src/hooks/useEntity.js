@@ -780,12 +780,13 @@ export function getMethod(isNew) {
  * reasoning makes the registry args optional: with no registry we filter nothing and behave
  * exactly as before, which is the safe direction to fail in.
  *
- * Keeps the create path's `userChangedKeysRef` escape hatch: if the app deliberately forced a
- * value through (a custom panel calling onChange), we never swallow it silently.
+ * Keeps the create path's escape hatch, with the same correction: a value the app deliberately
+ * forced through (a custom panel calling onChange) is never swallowed silently, but a value a
+ * CALLOUT applied does not count as user-authored — see isUserAuthoredKey.
  */
-export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef) {
+export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null) {
     const isFieldExcluded = formFieldsRef && userChangedKeysRef
-        ? buildPatchFieldExclusion(formFieldsRef, editing)
+        ? buildPatchFieldExclusion(formFieldsRef, editing, contractFields)
         : null;
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
@@ -794,7 +795,7 @@ export function buildPatchPayload(editing, selected, formFieldsRef, userChangedK
         // strips it as read-only anyway, and sending it makes the server read the field as
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
         if (isSequencePlaceholder(value)) continue;
-        if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef)) continue;
+        if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef, calloutAppliedKeysRef)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;
@@ -808,9 +809,23 @@ export function buildPatchPayload(editing, selected, formFieldsRef, userChangedK
  * Returns `true` (registered and read-only), `false` (registered and writable), or `undefined`
  * (not registered by any mounted form) — the three states the create and patch rules differ on.
  */
-function buildRegisteredFieldReadOnly(formFieldsRef, editing) {
+function buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields = null) {
     const registeredFields = [...formFieldsRef.current.values()].flat();
-    const fieldByKey = new Map(registeredFields.map(f => [f.key, f]));
+    // ETP-5537: the window's DECLARED field list first, the mounted forms second.
+    //
+    // `formFieldsRef` alone is not enough to answer "is this field read-only": EntityForm only
+    // registers its `displayFields`, so a field living in a section/tab that is not currently
+    // rendered is absent from the registry entirely and reads as "unknown" rather than
+    // "read-only". That is exactly how `priceIncludesTax` (declared `readOnly: true`,
+    // `section: 'other'` in the generated OrderForm) escaped the check and reached the wire.
+    //
+    // `contractFields` is the window's full declared list (DetailView passes it as `gateFields`),
+    // so it answers for every field whether or not its section is on screen. mergeValidationFields
+    // gives the contract precedence and keeps registry-only fields (custom panels register fields
+    // the contract list does not carry).
+    const fieldByKey = new Map(
+        mergeValidationFields(contractFields, registeredFields).map(f => [f.key, f]),
+    );
     const isReadOnly = getReadOnly(editing);
     return (key) => {
         const field = fieldByKey.get(key);
@@ -822,12 +837,39 @@ function buildRegisteredFieldReadOnly(formFieldsRef, editing) {
  * PATCH-side exclusion: rule 2 only. See buildPatchPayload's comment for why rule 1 is
  * deliberately left out here.
  */
-export function buildPatchFieldExclusion(formFieldsRef, editing) {
-    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing);
-    return (key, userChangedKeysRef) => {
-        if (userChangedKeysRef.current.has(key)) return false;
+export function buildPatchFieldExclusion(formFieldsRef, editing, contractFields = null) {
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields);
+    return (key, userChangedKeysRef, calloutAppliedKeysRef) => {
+        if (isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef)) return false;
         return readOnlyState(key) === true;
     };
+}
+
+/**
+ * ETP-5537 — the escape hatch's real question: did the USER author this value?
+ *
+ * `userChangedKeysRef` alone cannot answer it. `handleChange` is the single entry point for
+ * both a user keystroke and a callout response applying a server-computed value
+ * (applyCalloutFieldUpdates calls it for every field in the response), so both land in the
+ * same set. A value a callout wrote is the server telling us what the field is worth — it is
+ * not the app deliberately forcing a value through, so it must not inherit the exemption.
+ *
+ * Confirmed empirically on purchase-order: selecting the vendor fires a callout whose response
+ * carries `priceIncludesTax` (a contract read-only, non-form field). It was marked user-changed,
+ * so it escaped the create exclusion, rode into the create POST, and — because the backend never
+ * echoes a read-only field back — left `editing` and `selected` permanently disagreeing about it.
+ * Every later PATCH then re-sent it and ETP-5347 answered 422 `read_only_field`, which is what
+ * stopped the confirm modal from opening.
+ *
+ * Deliberately kept SEPARATE from userChangedKeysRef rather than just not marking callout
+ * writes there: that set also PROTECTS values from being overwritten (mergeDefaultsPreservingUserEdits
+ * for a late /defaults response, and refreshHeaderTotals' merge). A callout-applied value needs that
+ * protection every bit as much as a typed one — dropping the mark would resurrect the
+ * defaults-clobbering class of bug (ETP-4741 / ETP-5190). Only the payload exemption changes.
+ */
+export function isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef) {
+    if (!userChangedKeysRef?.current?.has(key)) return false;
+    return !calloutAppliedKeysRef?.current?.has(key);
 }
 
 /**
@@ -869,10 +911,11 @@ export function buildPatchFieldExclusion(formFieldsRef, editing) {
  * check, on purpose: it only has to be accurate enough to stop known-bad values, never to
  * accidentally swallow a value the user can legitimately still edit.
  */
-export function buildCreateFieldExclusion(formFieldsRef, editing) {
-    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing);
-    return (key, userChangedKeysRef) => {
-        if (userChangedKeysRef.current.has(key)) return false;
+export function buildCreateFieldExclusion(formFieldsRef, editing, contractFields = null) {
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields);
+    return (key, userChangedKeysRef, calloutAppliedKeysRef) => {
+        // ETP-5537: a callout-applied value is not user-authored — see isUserAuthoredKey.
+        if (isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef)) return false;
         const state = readOnlyState(key);
         // Rule 1 — not registered by any mounted form (create-side only, see buildPatchPayload).
         if (state === undefined) return true;
@@ -890,17 +933,19 @@ export function buildSavePayload({
     backendDefaultKeysRef,
     userChangedKeysRef,
     formFieldsRef,
+    calloutAppliedKeysRef,
+    contractFields,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef);
+        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields);
     }
 
     const payload = {};
     const requiredFormKeys = new Set(
         [...formFieldsRef.current.values()].flat().filter(f => f.required).map(f => f.key),
     );
-    const isFieldExcludedByForm = buildCreateFieldExclusion(formFieldsRef, editing);
-    const isFieldExcluded = (key) => isFieldExcludedByForm(key, userChangedKeysRef);
+    const isFieldExcludedByForm = buildCreateFieldExclusion(formFieldsRef, editing, contractFields);
+    const isFieldExcluded = (key) => isFieldExcludedByForm(key, userChangedKeysRef, calloutAppliedKeysRef);
 
     buildCreatePayload(
         editing,
@@ -1224,6 +1269,10 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // ETP-5537: of the keys marked above, the subset whose value was written by a CALLOUT
+    // RESPONSE rather than by the user. `handleChange` is the single entry point for both, so
+    // without this the two are indistinguishable — see handleChange's `origin` option.
+    const calloutAppliedKeysRef = useRef(new Set());
     // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
     // the moment handleNew runs, and putting it in that callback's dependency array would
     // rebuild handleNew on every render for any caller passing an object literal — which
@@ -1719,6 +1768,7 @@ export function useEntity(entity, childEntity, {
     // tab's PATCH response is), never to paper over an unrelated staleness bug.
     const clearUserChangedKey = useCallback((key) => {
         userChangedKeysRef.current.delete(key);
+        calloutAppliedKeysRef.current.delete(key);
     }, []);
 
     const handleSelect = useCallback((row, { force = false } = {}) => {
@@ -1729,6 +1779,7 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        calloutAppliedKeysRef.current = new Set();
         // ETP-5034: a record is being handed to us directly (list row click) — any
         // not-found state from a previous route is stale, and an in-flight fetchById for the
         // PREVIOUS record must not land on top of the one we are selecting now.
@@ -1760,6 +1811,7 @@ export function useEntity(entity, childEntity, {
         // and no new race handling is needed. It also keeps `shouldSkipPayloadField` from
         // dropping a seeded legacy-looking FK id out of the POST payload.
         userChangedKeysRef.current = new Set(Object.keys(seed));
+        calloutAppliedKeysRef.current = new Set();
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -1839,7 +1891,17 @@ export function useEntity(entity, childEntity, {
         }
     }, [apiBaseUrl, entity, apiFetch]);
 
-    const handleChange = useCallback((field, value) => {
+    /**
+     * ETP-5537 — `origin: 'callout'` marks this write as "the server told us what this field is
+     * worth", not "the user edited this field". A callout-applied value still counts as changed
+     * for every PROTECTIVE use of userChangedKeysRef (it must not be clobbered by a late
+     * /defaults response or by refreshHeaderTotals), but it must NOT inherit the payload
+     * escape hatch — see buildCreateFieldExclusion. Any later write without the flag is a
+     * genuine user edit and reclaims the key.
+     */
+    const handleChange = useCallback((field, value, { origin } = {}) => {
+        if (origin === 'callout') calloutAppliedKeysRef.current.add(field);
+        else calloutAppliedKeysRef.current.delete(field);
         userChangedKeysRef.current.add(field);
         setEditing(prev => ({ ...prev, [field]: value }));
         // ETP-3894: clear the field-level error as soon as the user touches the field.
@@ -1906,6 +1968,7 @@ export function useEntity(entity, childEntity, {
             // The changed-key set is dropped too: those keys are no longer the user's edits, and
             // leaving them would keep scoping format validation to fields nobody touched.
             userChangedKeysRef.current.clear();
+            calloutAppliedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
             // Belt and braces: sonner already dismisses a toast when its action is clicked, but
@@ -2032,6 +2095,8 @@ export function useEntity(entity, childEntity, {
             backendDefaultKeysRef,
             userChangedKeysRef,
             formFieldsRef,
+            calloutAppliedKeysRef,
+            contractFields,
         });
         // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
         const body = JSON.stringify(payload);

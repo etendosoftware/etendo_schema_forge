@@ -1267,7 +1267,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: 'W1' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1', { origin: 'callout' });
       expect(ctx.appliedFields.get('warehouse')).toBe('W1');
     });
 
@@ -1313,7 +1313,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: '' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', '', { origin: 'callout' });
     });
 
     it('skips user-touched field that is NOT the trigger field', () => {
@@ -1343,7 +1343,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ bp: { value: 'BP-NEW' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('bp', 'BP-NEW');
+      expect(hook.handleChange).toHaveBeenCalledWith('bp', 'BP-NEW', { origin: 'callout' });
     });
 
     it('applies _identifier when entry has one', () => {
@@ -1358,7 +1358,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: 'W1', _identifier: 'Main Warehouse' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1', { origin: 'callout' });
       expect(hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
     });
   });

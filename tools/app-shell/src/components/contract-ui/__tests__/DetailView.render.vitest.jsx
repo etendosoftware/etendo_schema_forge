@@ -2173,7 +2173,7 @@ describe('applyCalloutFieldUpdates', () => {
     const hook = { handleChange: vi.fn() };
     const ctx = { data: {}, triggerField: 'product', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook, api: {}, catalogs: {} };
     applyCalloutFieldUpdates({ price: { value: 100 } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('price', 100);
+    expect(hook.handleChange).toHaveBeenCalledWith('price', 100, { origin: 'callout' });
     expect(ctx.appliedFields.get('price')).toBe(100);
   });
 
@@ -2204,7 +2204,7 @@ describe('applyCalloutFieldUpdates', () => {
     const touched = new Set(['product']);
     const ctx = { data: { product: 'P1' }, triggerField: 'product', userTouchedRef: { current: touched }, appliedFields: new Map(), hook, api: {}, catalogs: {} };
     applyCalloutFieldUpdates({ product: { value: 'P2' } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('product', 'P2');
+    expect(hook.handleChange).toHaveBeenCalledWith('product', 'P2', { origin: 'callout' });
   });
 
   it('applies empty callout value when field is also empty (userHasValue=false)', () => {
@@ -2212,14 +2212,14 @@ describe('applyCalloutFieldUpdates', () => {
     const ctx = { data: { note: '' }, triggerField: 'x', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook, api: {}, catalogs: {} };
     applyCalloutFieldUpdates({ note: { value: '' } }, ctx);
     // Empty current means userHasValue=false → skip condition not met → applies
-    expect(hook.handleChange).toHaveBeenCalledWith('note', '');
+    expect(hook.handleChange).toHaveBeenCalledWith('note', '', { origin: 'callout' });
   });
 
   it('applies value when current is null (no existing value)', () => {
     const hook = { handleChange: vi.fn() };
     const ctx = { data: { note: null }, triggerField: 'x', userTouchedRef: { current: new Set() }, appliedFields: new Map(), hook, api: {}, catalogs: {} };
     applyCalloutFieldUpdates({ note: { value: 'hello' } }, ctx);
-    expect(hook.handleChange).toHaveBeenCalledWith('note', 'hello');
+    expect(hook.handleChange).toHaveBeenCalledWith('note', 'hello', { origin: 'callout' });
   });
 });
 

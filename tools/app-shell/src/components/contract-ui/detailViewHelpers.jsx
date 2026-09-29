@@ -353,7 +353,11 @@ export function applyCalloutFieldUpdates(updates, ctx) {
       continue;
     }
     appliedFields.set(key, entry.value);
-    hook.handleChange(key, entry.value);
+    // ETP-5537 — `origin: 'callout'`: this value is the SERVER telling us what the field is
+    // worth, not the user editing it. It still counts as changed (so a late /defaults response
+    // cannot clobber it), but it must not inherit the payload escape hatch that exempts a
+    // user-authored value from the read-only exclusion — see isUserAuthoredKey in useEntity.js.
+    hook.handleChange(key, entry.value, { origin: 'callout' });
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
     // ETP-4772 follow-up: only a write that actually LEFT A VALUE may advance the
     // generation. A callout answering empty for a still-empty field is a no-op with

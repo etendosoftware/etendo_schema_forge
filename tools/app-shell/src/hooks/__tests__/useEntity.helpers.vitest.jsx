@@ -35,6 +35,7 @@ import {
   reportInvalidFormatField,
   getNumericFieldViolation,
   buildSavePayload,
+  isUserAuthoredKey,
 } from '../useEntity';
 import { numericFieldToastId, resetSaveBlockToastTracking } from '@/lib/numericValidation.js';
 
@@ -1739,6 +1740,156 @@ describe('useEntity helpers', () => {
         { current: new Set() },
       );
       expect(payload).toEqual({});
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ETP-5537 — a callout-applied value is not user-authored
+  // -------------------------------------------------------------------
+  // handleChange is the single entry point for BOTH a user keystroke and a callout response
+  // applying a server-computed value, so userChangedKeysRef alone cannot tell them apart. The
+  // payload escape hatch must only exempt values the USER authored.
+  //
+  // Confirmed on a live backend: on purchase-order, selecting the vendor fires a callout whose
+  // response carries `priceIncludesTax` (contract read-only, form: false). Marked user-changed,
+  // it escaped the create exclusion, rode into the create POST, and — the backend never echoing
+  // a read-only field back — left editing/selected permanently disagreeing, so every later PATCH
+  // re-sent it and ETP-5347 answered 422 read_only_field.
+  //
+  // These two tests are a matched pair and must stay that way: the first pins that a callout
+  // value is dropped, the second that a custom panel's deliberate onChange is still honoured.
+  describe('callout-applied values are not user-authored (ETP-5537)', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    it('drops a read-only, unregistered field a CALLOUT applied, even though it is "changed"', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { businessPartner: 'bp-1', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        // Exactly the observed state: the callout marked it changed...
+        userChangedKeysRef: { current: new Set(['businessPartner', 'priceIncludesTax']) },
+        // ...but it was the server's value, not the user's.
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'businessPartner' }]),
+      });
+      expect(payload).toEqual({ businessPartner: 'bp-1' });
+    });
+
+    it('still sends a value a custom panel forced through via onChange (Assets currency echo)', () => {
+      // AssetsConfigPanel calls onChange deliberately — a real app-authored edit, never flagged
+      // as callout-origin, so the escape hatch must still exempt it.
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['currency']) },
+        calloutAppliedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme', currency: 'EUR' });
+    });
+
+    it('drops a callout-applied read-only field from a PATCH too', () => {
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', grandTotalAmount: 121 },
+        editing: { id: '1', grandTotalAmount: 145 },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['grandTotalAmount']) },
+        calloutAppliedKeysRef: { current: new Set(['grandTotalAmount']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+      });
+      expect(payload).toEqual({});
+    });
+
+    it('a later genuine user edit reclaims a key the callout had written', () => {
+      // isUserAuthoredKey is the predicate handleChange maintains; this pins the reclaim rule
+      // that handleChange implements by deleting from calloutAppliedKeysRef on a non-callout write.
+      const userChangedKeysRef = { current: new Set(['description']) };
+      const calloutAppliedKeysRef = { current: new Set(['description']) };
+      expect(isUserAuthoredKey('description', userChangedKeysRef, calloutAppliedKeysRef)).toBe(false);
+      calloutAppliedKeysRef.current.delete('description');
+      expect(isUserAuthoredKey('description', userChangedKeysRef, calloutAppliedKeysRef)).toBe(true);
+    });
+
+    // The case that actually broke the Purchase Order confirm, and that formFieldsRef alone
+    // cannot catch: `priceIncludesTax` is declared readOnly in the generated OrderForm but sits
+    // in `section: 'other'`, so no mounted EntityForm registers it and the registry reads it as
+    // "unknown" instead of "read-only". contractFields is the window's full declared list and
+    // answers for it regardless of what is on screen. Without contractFields this test sends the
+    // field and reproduces the 422.
+    it('drops a contract-declared read-only field that no mounted form registered (PATCH)', () => {
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', description: 'old' },
+        editing: { id: '1', description: 'edited', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['description', 'priceIncludesTax']) },
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        // Only `description` is on screen — the 'other' section is not mounted.
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }]),
+        contractFields: [
+          { key: 'description' },
+          { key: 'priceIncludesTax', readOnly: true, section: 'other' },
+        ],
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('drops the same contract-declared read-only field on CREATE', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { businessPartner: 'bp-1', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['businessPartner', 'priceIncludesTax']) },
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'businessPartner' }]),
+        contractFields: [
+          { key: 'businessPartner' },
+          { key: 'priceIncludesTax', readOnly: true, section: 'other' },
+        ],
+      });
+      expect(payload).toEqual({ businessPartner: 'bp-1' });
+    });
+
+    it('keeps a contract-declared WRITABLE field that no mounted form registered (PATCH)', () => {
+      // The counter-case: contractFields must not become a second way to drop writable data.
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', orderReference: 'REF-1' },
+        editing: { id: '1', orderReference: 'REF-9' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        calloutAppliedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([]),
+        contractFields: [{ key: 'orderReference' }],
+      });
+      expect(payload).toEqual({ orderReference: 'REF-9' });
+    });
+
+    it('treats a key nobody changed as not user-authored, and tolerates missing refs', () => {
+      expect(isUserAuthoredKey('x', { current: new Set() }, { current: new Set() })).toBe(false);
+      expect(isUserAuthoredKey('x', undefined, undefined)).toBe(false);
+      expect(isUserAuthoredKey('x', { current: new Set(['x']) }, undefined)).toBe(true);
     });
   });
 
