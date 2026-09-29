@@ -92,21 +92,25 @@ describe('CurrencyRatePicker — unified field shell (ETP-5479)', () => {
   it('shows the focus ring on focus, like CreatableSearchSelect', () => {
     renderPicker();
     const cls = classesOf(screen.getByTestId('currency-rate-trigger'));
-    expect(cls).toEqual(expect.arrayContaining(['focus:outline-none', 'focus:ring-2', 'focus:ring-primary']));
+    // Ring geometry is always painted (transparent) so focusing only swaps the color.
+    expect(cls).toEqual(expect.arrayContaining(['focus:outline-none', 'ring-2', 'ring-transparent', 'focus:ring-primary']));
   });
 
   it('keeps the ring while the list is open (the search box takes focus) and drops it on close', () => {
     renderPicker();
     const trigger = screen.getByTestId('currency-rate-trigger');
-    expect(classesOf(trigger)).not.toContain('ring-2');
+    expect(classesOf(trigger)).toEqual(expect.arrayContaining(['ring-2', 'ring-transparent']));
+    expect(classesOf(trigger)).not.toContain('ring-primary');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(trigger);
     expect(classesOf(trigger)).toEqual(expect.arrayContaining(['ring-2', 'ring-primary']));
+    expect(classesOf(trigger)).not.toContain('ring-transparent');
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
 
     fireEvent.click(trigger);
-    expect(classesOf(trigger)).not.toContain('ring-2');
+    expect(classesOf(trigger)).toEqual(expect.arrayContaining(['ring-2', 'ring-transparent']));
+    expect(classesOf(trigger)).not.toContain('ring-primary');
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
   });
 
@@ -117,7 +121,7 @@ describe('CurrencyRatePicker — unified field shell (ETP-5479)', () => {
     const cls = classesOf(editor);
     expect(cls).toEqual(expect.arrayContaining([
       FIELD_HEIGHT, 'rounded-lg', 'border-[hsl(var(--border-control))]', 'bg-card',
-      'focus-within:ring-2', 'focus-within:ring-primary',
+      'ring-2', 'ring-transparent', 'focus-within:ring-primary',
     ]));
     expect(cls).not.toContain('rounded-md');
   });
