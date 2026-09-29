@@ -67,7 +67,7 @@ function DashboardContent({ apiBaseUrl }) {
   const { token, username } = useAuth();
   const { open: openCopilot } = useCopilot();
   const {
-    kpis, revenueTrend, expenseTrend, topClients, pendingTasks,
+    kpis, kpisRange, revenueTrend, expenseTrend, topClients, pendingTasks,
     recentInvoices, bestProducts, bestSellers, pendingAmounts, loading,
   } = useDashboardData();
   // Resolved independently of `useDashboardData()` even though that hook uses it too: both read
@@ -120,6 +120,7 @@ function DashboardContent({ apiBaseUrl }) {
     { key: 'kpis', weight: 672, height: 234, visible: showKpis, node: (
       <FinancialSummaryCard
         kpis={resolvedKpis}
+        range={kpisRange}
         currencyLabel={dashboardCurrency}
         canCreatePurchase={access.canCreateIn('purchase-invoice')}
         canCreateSale={access.canCreateIn('sales-invoice')}

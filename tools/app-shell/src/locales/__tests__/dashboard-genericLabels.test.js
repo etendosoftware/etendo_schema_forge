@@ -25,6 +25,17 @@ const DASHBOARD_KEYS = [
   'financialSummaryProfit',
   'yoyUp',
   'yoyDown',
+  'financialSummaryPeriodYtd',
+  'financialSummaryPeriodMtd',
+  'financialSummaryPeriodLast30d',
+  'financialSummaryPeriodLast90d',
+  'financialSummaryPeriodLastYear',
+  'financialSummaryComparisonYtd',
+  'financialSummaryComparisonMtd',
+  'financialSummaryComparisonLast30d',
+  'financialSummaryComparisonLast90d',
+  'financialSummaryComparisonLastYear',
+  'financialSummaryNoPrevious',
   'bestProductsTitle',
   'bestProductsTrendPositive',
   'bestProductsToggleUnits',
@@ -120,4 +131,48 @@ describe('Dashboard genericLabels — locale parity', () => {
       `Keys in en_US but missing from es_ES.genericLabels: ${missing.join(', ')}`,
     );
   });
+});
+
+// ETP-5493: the Financial Summary copy is interpolated with the selected period.
+describe('Dashboard genericLabels — ETP-5493 period placeholders', () => {
+  for (const locale of ['en_US', 'es_ES', 'es_AR']) {
+    describe(locale, () => {
+      let labels;
+
+      before(() => {
+        const url = new URL(`../${locale}.json`, import.meta.url);
+        labels = JSON.parse(readFileSync(url, 'utf8')).genericLabels;
+      });
+
+      for (const key of ['financialSummaryPositive', 'financialSummaryNegative']) {
+        it(`${key} contains the {period} placeholder`, () => {
+          assert.ok(labels[key].includes('{period}'), `${key} must include {period}`);
+        });
+      }
+
+      for (const key of ['yoyUp', 'yoyDown']) {
+        it(`${key} contains the {pct} and {comparison} placeholders`, () => {
+          assert.ok(labels[key].includes('{pct}'), `${key} must include {pct}`);
+          assert.ok(labels[key].includes('{comparison}'), `${key} must include {comparison}`);
+        });
+      }
+
+      it('has all 11 new period/comparison/no-previous keys as non-blank strings', () => {
+        const newKeys = DASHBOARD_KEYS.filter(
+          (k) => /^financialSummary(Period|Comparison)/.test(k) || k === 'financialSummaryNoPrevious',
+        );
+        assert.equal(newKeys.length, 11);
+        for (const key of newKeys) {
+          assert.equal(typeof labels[key], 'string', `${locale}.${key} must be a string`);
+          assert.ok(labels[key].trim().length > 0, `${locale}.${key} must not be blank`);
+        }
+      });
+
+      it('the period and comparison fragments carry no unresolved placeholders', () => {
+        for (const key of DASHBOARD_KEYS.filter((k) => /^financialSummary(Period|Comparison)/.test(k))) {
+          assert.doesNotMatch(labels[key], /\{\w+\}/, `${locale}.${key} must be a plain fragment`);
+        }
+      });
+    });
+  }
 });

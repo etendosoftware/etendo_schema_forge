@@ -4,7 +4,31 @@ import { useUI } from '@/i18n';
 import { useLocaleSwitch } from '@/i18n';
 import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberFormat.js';
 
+// ETP-5493: the card follows the dashboard period selector. Each range key maps to the suffix of
+// its two copy fragments (`financialSummaryPeriod<Suffix>` / `financialSummaryComparison<Suffix>`),
+// which are interpolated into the headline and the trend badges. Mirrors the backend
+// (`WidgetKpisHandler`): a missing/blank range means year-to-date, while an unknown non-blank
+// value is resolved like the other widgets, i.e. the rolling last 12 months.
+const RANGE_COPY_SUFFIX = {
+  ytd: 'Ytd',
+  mtd: 'Mtd',
+  last30d: 'Last30d',
+  last90d: 'Last90d',
+  lastYear: 'LastYear',
+};
+const MISSING_RANGE_COPY_SUFFIX = RANGE_COPY_SUFFIX.ytd;
+const UNKNOWN_RANGE_COPY_SUFFIX = RANGE_COPY_SUFFIX.lastYear;
+
+function resolveRangeCopySuffix(range) {
+  if (typeof range !== 'string' || range.trim() === '') return MISSING_RANGE_COPY_SUFFIX;
+  return RANGE_COPY_SUFFIX[range.trim()] ?? UNKNOWN_RANGE_COPY_SUFFIX;
+}
+
 /**
+ * ETP-5493 — `range` is the period the `kpis` were fetched for; it only selects the copy
+ * ("this month", "vs previous 30 days"). A KPI with `hasPrevious === false` has an empty
+ * comparison period, so its trend badge is hidden rather than showing a meaningless "0%".
+ *
  * ETP-5088 — `canCreatePurchase`/`canCreateSale` gate the two creation buttons in the empty state.
  * They are creation actions like the quick actions, so they need the WRITE tier on their target
  * window, not mere visibility: a role holding purchase-invoice read-only must not be offered
@@ -14,7 +38,7 @@ import { formatDashboardCompact, localeFromUi } from '@/lib/dashboardNumberForma
  * passes the resolved values.
  */
 export function FinancialSummaryCard({
-  kpis = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true,
+  kpis = [], currencyLabel = '', canCreatePurchase = true, canCreateSale = true, range,
 }) {
   const ui = useUI();
   const navigate = useNavigate();
@@ -35,6 +59,10 @@ export function FinancialSummaryCard({
     return { fontSize: '30px', lineHeight: '32px' };
   }
 
+  const rangeSuffix = resolveRangeCopySuffix(range);
+  const periodText = ui(`financialSummaryPeriod${rangeSuffix}`);
+  const comparisonText = ui(`financialSummaryComparison${rangeSuffix}`);
+
   const revenue  = kpis.find((k) => k.key === 'revenueThisMonth');
   const expenses = kpis.find((k) => k.key === 'expensesThisMonth');
   const profit   = kpis.find((k) => k.key === 'netProfit');
@@ -47,7 +75,7 @@ export function FinancialSummaryCard({
 
   const metrics = [
     { key: 'revenueThisMonth',  kpi: revenue,  labelKey: 'financialSummaryIncome' },
-    { key: 'expensesThisMonth', kpi: expenses, labelKey: 'financialSummaryExpenses' },
+    { key: 'expensesThisMonth', kpi: expenses, labelKey: 'financialSummaryExpenses', lowerIsBetter: true },
     { key: 'netProfit',         kpi: profit,   labelKey: 'financialSummaryProfit' },
   ];
 
@@ -191,7 +219,7 @@ export function FinancialSummaryCard({
               textOverflow: 'ellipsis',
             }}
           >
-            {ui(isProfitNegative ? 'financialSummaryNegative' : 'financialSummaryPositive')}
+            {ui(isProfitNegative ? 'financialSummaryNegative' : 'financialSummaryPositive', { period: periodText })}
           </span>
         </div>
 
@@ -204,17 +232,21 @@ export function FinancialSummaryCard({
             gap: '20px',
           }}
         >
-          {metrics.map(({ key, kpi, labelKey }) => {
+          {metrics.map(({ key, kpi, labelKey, lowerIsBetter = false }) => {
             const trend = kpi?.trend ?? 0;
+            // Direction (arrow + yoyUp/yoyDown copy) follows the sign of the number; tone
+            // (green/red) is inverted for lower-is-better KPIs such as expenses, where a
+            // decrease is the good outcome. A zero trend keeps the neutral (positive) tone.
             const trendPositive = trend >= 0;
+            const toneGood = lowerIsBetter && trend !== 0 ? !trendPositive : trendPositive;
             const pct = Math.abs(trend).toFixed(0);
-            const trendLabel = ui(trendPositive ? 'yoyUp' : 'yoyDown')
-              .replace('{pct}', pct)
+            const showTrend = kpi?.hasPrevious !== false;
+            const trendLabel = ui(trendPositive ? 'yoyUp' : 'yoyDown', { pct, comparison: comparisonText })
               .replace(/^[↑↓]\s*/, '');
             const TrendIcon = trendPositive ? ArrowUp : ArrowDown;
             const formattedValue = kpi ? formatDashboardCompact(kpi.value, { currencyLabel, locale: numberLocale }) : '—';
             const valueTypography = getMetricValueTypography(formattedValue);
-            const badgeStyle = trendPositive
+            const badgeStyle = toneGood
               ? { backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }
               : { backgroundColor: 'var(--status-destructive-bg)', color: 'hsl(var(--destructive))' };
 
@@ -265,35 +297,59 @@ export function FinancialSummaryCard({
                   >
                     {formattedValue}
                   </span>
-                  <span
-                    className="inline-flex items-center gap-1"
-                    style={{
-                      height: '24px',
-                      padding: '4px 8px',
-                      borderRadius: '360px',
-                      maxWidth: '100%',
-                      overflow: 'hidden',
-                      ...badgeStyle,
-                    }}
-                  >
-                    <TrendIcon
-                      style={{ width: '16px', height: '16px', flexShrink: 0 }}
-                      data-testid="TrendIcon__81e75f" />
+                  {showTrend ? (
                     <span
+                      className="inline-flex items-center gap-1"
                       style={{
-                        fontSize: '12px',
-                        lineHeight: '16px',
-                        color: badgeStyle.color,
-                        fontWeight: 400,
-                        whiteSpace: 'nowrap',
+                        height: '24px',
+                        padding: '4px 8px',
+                        borderRadius: '360px',
+                        maxWidth: '100%',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        minWidth: 0,
+                        ...badgeStyle,
                       }}
                     >
-                      {trendLabel}
+                      <TrendIcon
+                        style={{ width: '16px', height: '16px', flexShrink: 0 }}
+                        data-testid="TrendIcon__81e75f" />
+                      <span
+                        style={{
+                          fontSize: '12px',
+                          lineHeight: '16px',
+                          color: badgeStyle.color,
+                          fontWeight: 400,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          minWidth: 0,
+                        }}
+                      >
+                        {trendLabel}
+                      </span>
                     </span>
-                  </span>
+                  ) : (
+                    // Empty comparison period: neutral muted text, same box as the badge so the
+                    // card height stays constant. No pill background, no arrow.
+                    <span
+                      data-testid="financial-summary-no-trend"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        height: '24px',
+                        padding: '4px 8px',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        fontSize: '12px',
+                        lineHeight: '16px',
+                        fontWeight: 400,
+                        color: 'hsl(var(--muted-foreground))',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {ui('financialSummaryNoPrevious')}
+                    </span>
+                  )}
                 </div>
               </div>
             );
