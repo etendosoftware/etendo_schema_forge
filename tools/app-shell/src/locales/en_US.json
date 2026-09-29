@@ -19674,7 +19674,7 @@
     "openCopilot": "Open Copilot",
     "copilotMaximize": "Maximize",
     "copilotMinimize": "Minimize",
-    "copilotWelcome": "Hi! I'm your ERP assistant. What do you need today?",
+    "copilotWelcome": "Hi! I'm your ERP agent. What do you need today?",
     "copilotInvoiceResponse": "I'll help you create an invoice. Opening Sales Invoice...\n\nYou can also say 'show pending invoices' to see what's outstanding.",
     "copilotStockResponse": "Here's a quick stock summary:\n• Cerveza Ale 0.5L: 150 units\n• Vino Tinto Reserva: 80 units\n• Aceite de Oliva 1L: 230 units\n\nWould you like to check a specific product?",
     "copilotOrderResponse": "You have 5 pending orders:\n• SO-2026-0234 — Empresa ABC ($8,500)\n• SO-2026-0235 — Tech Solutions ($3,200)\n• SO-2026-0236 — Global Trade ($15,000)\n\nShould I open the orders list?",

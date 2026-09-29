@@ -19910,7 +19910,7 @@
     "openCopilot": "Abrir Copilot",
     "copilotMaximize": "Maximizar",
     "copilotMinimize": "Minimizar",
-    "copilotWelcome": "¡Hola! Soy tu asistente ERP. ¿En qué puedo ayudarte hoy?",
+    "copilotWelcome": "¡Hola! Soy tu agente ERP. ¿En qué puedo ayudarte hoy?",
     "copilotInvoiceResponse": "Te ayudaré a crear una factura. Abriendo Factura de venta...\n\nTambién puedes decir 'mostrar facturas pendientes' para ver lo que falta.",
     "copilotStockResponse": "Aquí tienes un resumen rápido del stock:\n• Cerveza Ale 0.5L: 150 unidades\n• Vino Tinto Reserva: 80 unidades\n• Aceite de Oliva 1L: 230 unidades\n\n¿Quieres comprobar un producto específico?",
     "copilotOrderResponse": "Tienes 5 pedidos pendientes:\n• SO-2026-0234 — Empresa ABC ($8,500)\n• SO-2026-0235 — Tech Solutions ($3,200)\n• SO-2026-0236 — Global Trade ($15,000)\n\n¿Abro la lista de pedidos?",
