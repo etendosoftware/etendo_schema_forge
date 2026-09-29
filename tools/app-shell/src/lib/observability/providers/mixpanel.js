@@ -1,3 +1,5 @@
+import { loadMixpanel } from '../sdk.js';
+
 function isEnabled(value) {
   return value === true || value === 'true';
 }
@@ -49,7 +51,7 @@ export function createMixpanelProvider({
   debug = false,
   apiHost,
   logger = console,
-  loader = () => import('mixpanel-browser'),
+  loader = loadMixpanel,
   storage = globalThis.localStorage,
 } = {}) {
   const explicitlyEnabled = isEnabled(enabled);

@@ -1,4 +1,4 @@
-import { AwsRum } from 'aws-rum-web';
+import { AwsRum } from './observability/sdk.js';
 
 export const DEFAULT_RUM_SESSION_SAMPLE_RATE = 0.1;
 

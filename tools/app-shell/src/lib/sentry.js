@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+import { Sentry } from './observability/sdk.js';
 
 export const DEFAULT_SENTRY_SEND_DEFAULT_PII = false;
 
