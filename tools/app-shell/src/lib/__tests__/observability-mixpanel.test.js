@@ -112,8 +112,21 @@ describe('Mixpanel observability adapter', () => {
     await provider.identify('user-1', { role: 'admin' });
     await provider.flush();
 
-    assert.deepEqual(calls, [
-      ['init', 'token-123', { debug: true, api_host: 'https://mixpanel.example', batch_requests: false }],
+    // ETP-4578: the SDK is now started with everything that collects on its own turned off.
+    // (Trait filtering is the gateway's job, so a direct provider call still passes 'role'.)
+    const [[, initToken, initOptions], ...rest] = calls;
+    assert.equal(initToken, 'token-123');
+    assert.equal(initOptions.debug, true);
+    assert.equal(initOptions.api_host, 'https://mixpanel.example');
+    assert.equal(initOptions.batch_requests, false);
+    assert.equal(initOptions.ip, false);
+    assert.equal(initOptions.autocapture, false);
+    assert.equal(initOptions.track_pageview, false);
+    assert.equal(initOptions.record_sessions_percent, 0);
+    assert.equal(initOptions.track_marketing, false);
+    assert.ok(initOptions.property_blacklist.includes('$current_url'));
+    assert.equal(typeof initOptions.hooks.before_send_events, 'function');
+    assert.deepEqual(rest, [
       ['track', 'app_started', { app: 'app-shell' }],
       ['track', 'page_view', { route: '/dashboard', routePattern: '/dashboard' }],
       ['identify', 'user-1'],
@@ -134,6 +147,9 @@ describe('Mixpanel observability adapter', () => {
           track(eventName, properties, _options, callback) {
             calls.push(['track', eventName, properties]);
             capturedCallback = callback;
+            // The real SDK returns the payload it queued (truthy); a falsy return means a hook
+            // dropped it and the callback will never fire.
+            return { queued: true };
           },
         },
       }),

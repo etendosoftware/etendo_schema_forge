@@ -70,11 +70,15 @@ describe('createMixpanelProvider — init', () => {
     await provider.init();
 
     expect(loader).toHaveBeenCalledTimes(1);
-    expect(client.init).toHaveBeenCalledWith('tok-1', {
+    // ETP-4578: the SDK also starts with everything that collects on its own turned off.
+    expect(client.init).toHaveBeenCalledWith('tok-1', expect.objectContaining({
       debug: true,
       batch_requests: false,
       api_host: 'https://api.mixpanel.test',
-    });
+      ip: false,
+      autocapture: false,
+      track_pageview: false,
+    }));
   });
 
   it('omits api_host from normalized options when not provided', async () => {
@@ -84,7 +88,8 @@ describe('createMixpanelProvider — init', () => {
 
     await provider.init();
 
-    expect(client.init).toHaveBeenCalledWith('tok-1', { debug: false, batch_requests: false });
+    expect(client.init).toHaveBeenCalledWith('tok-1', expect.objectContaining({ debug: false, batch_requests: false }));
+    expect(client.init.mock.calls[0][1]).not.toHaveProperty('api_host');
   });
 
   it('caches the client across repeated calls (loader called only once)', async () => {

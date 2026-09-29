@@ -271,15 +271,15 @@ const G1_DEBT = new Set([
  * Files that still gate on a client-held token (G2). Same rules as G1_DEBT — and
  * heavily overlapping with it, because the two smells travel together.
  *
- * ETP-4576 — the two `app-shell/src` entries are NOT debt and must stay: neither
- * `token` is a session credential. `mixpanel.js` gates on the Mixpanel project
- * token, and `InviteAcceptancePage` on the invitation token from the emailed link,
- * which IS that request's credential. Everything else on this surface was migrated —
+ * ETP-4576 — the `app-shell/src` entry is NOT debt and must stay: its `token` is not a
+ * session credential. `InviteAcceptancePage` gates on the invitation token from the emailed
+ * link, which IS that request's credential. (`providers/mixpanel.js` used to be listed for
+ * gating on the Mixpanel project token; ETP-4578 moved that gate into the core's Mixpanel
+ * adapter, so the entry went with it.) Everything else on this surface was migrated —
  * `lib/authMethodsApi.js` last, see the note in the list below.
  */
 const G2_DEBT = new Set([
-  // Not debt — see above: neither token is the session credential.
-  'lib/observability/providers/mixpanel.js',
+  // Not debt — see above: the token is not the session credential.
   'pages/InviteAcceptancePage.jsx',
   // `lib/authMethodsApi.js` was listed here (ETP-5115 arrived with develop reading its
   // credential out of `sf_platform_token`, a key `purgeLegacyAuthStorage` deletes, so under
