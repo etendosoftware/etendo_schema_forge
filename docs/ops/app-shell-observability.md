@@ -11,11 +11,11 @@ The browser initializer registers these providers:
 | Provider | Enabled when | Purpose |
 |----------|--------------|---------|
 | Sentry | `VITE_SENTRY_DSN` is set | Error capture, tracing, and app context |
-| AWS RUM | Hostname has matching RUM IDs | Browser performance, error, and HTTP telemetry |
+| AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set | Browser performance, error, and HTTP telemetry |
 | Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set | Product analytics events |
 
-Sentry defaults to `sendDefaultPii: false`. Only enable it with an explicit
-environment override after reviewing the privacy and legal impact. Release is
+Sentry sends with `sendDefaultPii: false` in every environment; there is no
+override (ETP-4578). Release is
 set from `VITE_SENTRY_RELEASE` when present, otherwise from available build
 metadata such as `SENTRY_RELEASE.id` injected at build time.
 
@@ -25,6 +25,13 @@ target, so a domain change is an Actions variable edit (`PUBLIC_ORIGIN_*`) plus 
 redeploy, with no code change. `VITE_RUM_SESSION_SAMPLE_RATE` is parsed as a
 bounded number from `0` to `1`; invalid or missing values fall back to the
 conservative default `0.1`. Missing RUM IDs are a no-op.
+
+AWS RUM is opt-in (ETP-4578). The injected IDs alone no longer switch it on: the
+build also needs `VITE_RUM_ENABLED=true`, so a deploy that does not set it runs
+without RUM. Its SDK has no before-send hook, so every batch is sanitized through
+the SDK's `clientBuilder` before it is serialized and signed (page titles, record
+ids and query strings never leave). Cookies are off unless
+`VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy.
 
 Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
 `VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
@@ -38,6 +45,8 @@ is lazy-loaded only when the provider is enabled and used.
 | `VITE_SENTRY_RELEASE` | Optional explicit Sentry release. If unset, the app falls back to available build metadata. |
 | `VITE_SENTRY_SEND_DEFAULT_PII` | **Ignored** (ETP-4578). `sendDefaultPii` is fixed to `false` in every environment; the variable can no longer turn it on. |
 | `VITE_APP_ENV` | Deploy target (`production`, `experimental`, `staging`). Sentry `environment`; unset means `development`. |
+| `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; the IDs below are also required. |
+| `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
 | `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
 | `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |
 | `VITE_RUM_SESSION_SAMPLE_RATE` | Optional RUM session sample rate. Values are clamped to `0..1`; invalid values fall back to `0.1`. |

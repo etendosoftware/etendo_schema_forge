@@ -130,7 +130,7 @@ describe('AWS RUM observability adapter', () => {
 
   it('stays disabled when the build did not inject RUM IDs', () => {
     const provider = createRumProvider({
-      env: {},
+      env: { VITE_RUM_ENABLED: 'true' },
       AwsRumCtor: class {
         constructor() {
           throw new Error('must not be constructed');
@@ -143,7 +143,18 @@ describe('AWS RUM observability adapter', () => {
     assert.equal(provider.enabled, false);
   });
 
-  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', () => {
+  it('is optional: the injected IDs alone no longer switch it on, it needs an explicit VITE_RUM_ENABLED (ETP-4578, D3)', () => {
+    const ids = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const off = createRumProvider({ env: ids, AwsRumCtor: class {}, logger: { warn() {} } });
+    assert.equal(off.enabled, false);
+
+    for (const flag of ['false', '1', 'yes', '']) {
+      assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: flag }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, false, flag);
+    }
+    assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: 'true' }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, true);
+  });
+
+  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', async () => {
     const calls = [];
     class FakeAwsRum {
       constructor(...args) {
@@ -153,6 +164,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
         VITE_RUM_SESSION_SAMPLE_RATE: '0.25',
@@ -160,26 +172,41 @@ describe('AWS RUM observability adapter', () => {
       AwsRumCtor: FakeAwsRum,
       logger: { warn() {} },
     });
-    provider.init();
+    await provider.init();
 
     assert.equal(provider.name, 'aws-rum');
     assert.equal(provider.enabled, true);
-    assert.deepEqual(calls[0], [
-      'monitor-id',
-      '1.0.0',
-      'eu-west-3',
-      {
-        sessionSampleRate: 0.25,
-        identityPoolId: 'pool-id',
-        endpoint: 'https://dataplane.rum.eu-west-3.amazonaws.com',
-        telemetries: ['performance', 'errors', 'http'],
-        allowCookies: true,
-        enableXRay: false,
-      },
-    ]);
+    const [appMonitorId, version, region, config] = calls[0];
+    assert.equal(appMonitorId, 'monitor-id');
+    assert.equal(version, '1.0.0');
+    assert.equal(region, 'eu-west-3');
+    assert.equal(config.sessionSampleRate, 0.25);
+    assert.equal(config.identityPoolId, 'pool-id');
+    assert.equal(config.endpoint, 'https://dataplane.rum.eu-west-3.amazonaws.com');
+    assert.deepEqual(config.telemetries, ['performance', 'errors', 'http']);
+    assert.equal(config.enableXRay, false);
+    // ETP-4578: batches are sanitized through the client builder, before they are signed.
+    assert.equal(typeof config.clientBuilder, 'function');
   });
 
-  it('logs and contains AWS RUM init failures', () => {
+  it('keeps cookies off unless VITE_RUM_ALLOW_COOKIES=true (open question for Privacy)', async () => {
+    const seen = [];
+    class FakeAwsRum {
+      constructor(...args) {
+        seen.push(args[3].allowCookies);
+      }
+    }
+    const base = {
+      VITE_RUM_ENABLED: 'true',
+      VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+      VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
+    };
+    await createRumProvider({ env: base, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    await createRumProvider({ env: { ...base, VITE_RUM_ALLOW_COOKIES: 'true' }, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    assert.deepEqual(seen, [false, true]);
+  });
+
+  it('logs and contains AWS RUM init failures', async () => {
     const warnings = [];
     class BrokenAwsRum {
       constructor() {
@@ -189,6 +216,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
@@ -200,8 +228,8 @@ describe('AWS RUM observability adapter', () => {
       },
     });
 
-    assert.doesNotThrow(() => provider.init());
-    assert.deepEqual(warnings, [['CloudWatch RUM init failed', 'rum unavailable']]);
+    await assert.doesNotReject(() => provider.init());
+    assert.deepEqual(warnings, [['[observability] aws-rum init failed', 'rum unavailable']]);
   });
 
   it('keeps legacy no-op behavior when no hostname config matches', () => {
@@ -219,8 +247,9 @@ describe('AWS RUM observability adapter', () => {
       logger: { warn() {} },
     });
 
+    // A disabled adapter is never started: the gateway (and the facade's isProviderEnabled)
+    // skip it, so the SDK constructor is not reached.
     assert.equal(provider.enabled, false);
-    assert.doesNotThrow(() => provider.init());
     assert.deepEqual(calls, []);
 
     const nullEnvProvider = createRumProvider({
@@ -231,7 +260,6 @@ describe('AWS RUM observability adapter', () => {
     });
 
     assert.equal(nullEnvProvider.enabled, false);
-    assert.doesNotThrow(() => nullEnvProvider.init());
     assert.deepEqual(calls, []);
   });
 
@@ -263,6 +291,7 @@ describe('browser observability config', () => {
     const config = buildBrowserObservabilityConfig({
       env: {
         VITE_SENTRY_DSN: 'dsn-123',
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
