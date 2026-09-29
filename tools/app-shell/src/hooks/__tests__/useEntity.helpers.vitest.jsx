@@ -1893,6 +1893,53 @@ describe('useEntity helpers', () => {
     });
   });
 
+  // -------------------------------------------------------------------
+  // ETP-5537 — $_identifier companions never travel in a PATCH
+  // -------------------------------------------------------------------
+  // An FK's `$_identifier` is the backend's display label, not a writable column. The create
+  // path has always dropped it (shouldSkipPayloadField, whose comment says "on create/update");
+  // the PATCH diff did not, so every PATCH touching an FK shipped the label too. Harmless while
+  // the backend discarded unknown fields — a hard 422 since ETP-5347 started rejecting them.
+  //
+  // Observed on a live backend, and it fires during vendor setup, before any order exists:
+  //   PATCH /sws/neo/contacts/businessPartner/<id>
+  //   -> 422 read_only_field, field = purchasePricelist$_identifier
+  describe('buildPatchPayload — $_identifier companions (ETP-5537)', () => {
+    it('sends the FK but never its $_identifier companion', () => {
+      const payload = buildPatchPayload(
+        {
+          id: '1',
+          purchasePricelist: 'pl-9',
+          purchasePricelist$_identifier: 'Tarifa de compra principal',
+        },
+        { id: '1', purchasePricelist: 'pl-1', purchasePricelist$_identifier: 'Otra tarifa' },
+      );
+      expect(payload).toEqual({ purchasePricelist: 'pl-9' });
+    });
+
+    it('drops a companion whose own FK did not change', () => {
+      // The real body carried four labels for three changed ids, plus a null one.
+      const payload = buildPatchPayload(
+        {
+          id: '1',
+          pOPaymentMethod: 'pm-2',
+          pOPaymentMethod$_identifier: 'Efectivo',
+          pOFinancialAccount$_identifier: null,
+        },
+        { id: '1', pOPaymentMethod: 'pm-1', pOPaymentMethod$_identifier: 'Transferencia' },
+      );
+      expect(payload).toEqual({ pOPaymentMethod: 'pm-2' });
+    });
+
+    it('never emits a companion even when it is the only difference', () => {
+      const payload = buildPatchPayload(
+        { id: '1', businessPartner: 'bp-1', businessPartner$_identifier: 'Relabelled' },
+        { id: '1', businessPartner: 'bp-1', businessPartner$_identifier: 'Old label' },
+      );
+      expect(payload).toEqual({});
+    });
+  });
+
   describe('getInvalidPhoneFields', () => {
     const FIELDS = [
       { key: 'etgoPhone', column: 'EM_Etgo_Phone', type: 'string' },

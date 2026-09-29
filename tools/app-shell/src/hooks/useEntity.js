@@ -791,6 +791,15 @@ export function buildPatchPayload(editing, selected, formFieldsRef, userChangedK
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
+        // ETP-5537 — an FK's `$_identifier` companion is the DISPLAY LABEL the backend sends
+        // alongside the id ("Tarifa de compra principal" next to the price-list id). It is not a
+        // writable column, and the create path has always known that: `shouldSkipPayloadField`
+        // drops it there, with a comment that says "on create/update". The PATCH diff never got
+        // the same skip, so every PATCH touching an FK shipped its label too — harmless while the
+        // backend discarded unknown fields, and a hard failure since ETP-5347 began rejecting
+        // them: `PATCH /contacts/businessPartner` answered 422 read_only_field for
+        // `purchasePricelist$_identifier`. Generic — any window with an FK field hits it.
+        if (key.includes('$_identifier')) continue;
         // A sequence placeholder is a display hint, never a user-authored value: the backend
         // strips it as read-only anyway, and sending it makes the server read the field as
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
