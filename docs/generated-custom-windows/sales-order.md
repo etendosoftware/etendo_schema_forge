@@ -570,3 +570,24 @@ entirely under `windowReadOnly`), the bulk-selection toolbar's Confirmar/Reactiv
 actions, and the "More" bulk kebab (Crear Factura / Crear Envío). This window has no standalone
 reject flow outside `useOrderWindow` (confirmed empty during the ticket's own review — nothing
 else to gate).
+
+### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
+
+Under the runtime Solo-Lectura tier (tier only — the static `decisions.json → window.readOnly`
+does not trigger any of this):
+
+- **Row "Enviar" (list hover)** is gone. `ListView` turns the Email gate itself off
+  (`documentPreview: false`, `sendDocument.enabled: false`, no `onEmail`), so `RowQuickActions`,
+  `DataTable`'s column-width estimate and its actions-column mount stay consistent. The default
+  `SendDocumentModal` mount is gated too.
+- **Preview**: no Send; **Download PDF stays** (decision D1: printing/downloading only exposes
+  data the role can already read). `ListView` passes `readOnly` (the tier) to `renderPreview`,
+  and the preview forwards it as `attachmentConfig.readOnly`: the marked attachment is still
+  READ (cached PDF shown, Download works) but never written — no auto-store of the rendered PDF,
+  no overwrite of a stale cache, no drop zone, no delete.
+- **Detail Print** (`action-document-print`) and the detail Mail/preview button **stay** (D1).
+- **Backend**: `POST /sws/neo/email-contracts/<window>-send/send` answers 403 (`UNAUTHORIZED`
+  → "No tenés autorización para enviar este documento") and every attachment write
+  (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
+  role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
+- **"Gestionar envío y factura"** (`OrderCreateInvoice`, topbarRight) renders nothing under `windowReadOnly` — also when the record is opened by direct URL. The cause was never the router: the component simply ignored `windowReadOnly`. It skips its shipments/invoices fetch and its `open-*-modal` event handlers no-op.

@@ -282,6 +282,7 @@ export default function PurchaseOrderActions({ data, recordId, token, apiBaseUrl
       {isCompleted && buttonLabel && (
         <button
           type="button"
+          data-testid="purchase-order-manage-docs"
           onClick={() => setShowActions(true)}
           style={btnPrimaryStyle}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).

@@ -158,6 +158,9 @@ export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
+  // ETP-5205 — mock mode only: per-window access tier overrides, e.g.
+  // `{ '143': 'read-only' }`. Every window not listed stays "full".
+  windowAccessOverrides = {},
 } = {}) {
   captureApiCredentials(page);
   if (IS_MOCK_MODE) {
@@ -165,7 +168,7 @@ export async function login(page, {
     // this mocked session from GET /sws/go/session below, exactly like production.
     // Seeding a token briefly starts a stale bearer refresh before that restore
     // wins, which looks like a post-login permissions change to the shell.
-    await page.addInitScript(() => {
+    await page.addInitScript((overrides) => {
       // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
       // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
       // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a
@@ -181,7 +184,9 @@ export async function login(page, {
       const realFetch = window.fetch.bind(window);
       // Stable identities are intentional: permissions do not change during a mocked
       // test, and a new Proxy per refresh looks like a real role update to AuthContext.
-      const windowAccess = new Proxy({}, { get: () => "full" });
+      const windowAccess = new Proxy({}, {
+        get: (_target, key) => (typeof key === 'string' && overrides[key]) || "full",
+      });
       const capabilities = new Proxy({}, { get: () => true });
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url;
@@ -228,7 +233,7 @@ export async function login(page, {
         }
         return realFetch(input, init);
       };
-    });
+    }, windowAccessOverrides);
 
     // Intercept /sws/* to prevent the real Etendo backend receiving our fake
     // token (which would return 401 and trigger logout()).

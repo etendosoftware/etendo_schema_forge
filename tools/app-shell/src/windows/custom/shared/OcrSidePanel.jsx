@@ -196,7 +196,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
           </Suspense>
         )}
       </div>
-      {hiddenInput}
+      {!readOnly && hiddenInput}
     </div>
   );
 }

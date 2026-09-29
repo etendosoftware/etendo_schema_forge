@@ -443,3 +443,11 @@ the user that Reactivar is now the way to edit the invoice.
 - `tools/app-shell/src/windows/custom/shared/__tests__/useConfirmWithCredit.test.js` gained two ETP-5381 blocks: the duplicate-invoice gate is asserted to trust `data.hasReturnInvoice` when the backend sends the boolean, to fall back to `returnInvoices` with the **non-voided** predicate (never the old `CO`-only one), and to keep that fallback guarded by `Array.isArray` so a missing field is not read as "already invoiced"; and `handleCreateReturnInvoice` is asserted to accept an `originInvoices` argument, to build the body as `{ originInvoices }` for a non-empty array, to send a bare `{}` rather than `{ originInvoices: [] }` when nothing was selected, and to serialize that body into the POST instead of a hardcoded `{}`.
 - `tools/app-shell/src/windows/custom/return-to-vendor-shipment/__tests__/ConfirmWithCreditButton.spec.jsx` locks the button-visibility side of guard P5 for this window: hidden when the backend reports `hasReturnInvoice: true` **even if the array lists only a voided invoice** (flag wins), and the array fallback uses the non-voided predicate so a `VO`-only list still shows the button.
 - **Remaining gap:** no mocked E2E spec exercises either entry point — `e2e/tests/flows/return-to-vendor-shipment.mocked.spec.js` does not reference `rectifiableInvoices`, `originInvoices` or the picker's test ids, despite already covering other rectificative-invoice behavior on this window.
+
+## Solo Lectura (read-only window-access tier) — preview writes (ETP-5205)
+
+Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically by `ListView`
+(the Email gate is switched off), and `ListView` passes `readOnly` to `renderPreview`. The preview hides **Enviar** and never writes the cached PDF (`attachmentConfig.readOnly`); Download stays.
+Backend: the email send contract and every attachment write answer 403 for this tier
+(`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
+Print and Download PDF are deliberately NOT restricted (they only expose readable data).

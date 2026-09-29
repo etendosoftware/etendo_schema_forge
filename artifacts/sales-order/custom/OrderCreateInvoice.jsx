@@ -290,6 +290,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       {isCompleted && buttonLabel && (
         <button
           type="button"
+          data-testid="sales-order-manage-docs"
           onClick={() => openModal(null)}
           style={btnPrimaryStyle}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
