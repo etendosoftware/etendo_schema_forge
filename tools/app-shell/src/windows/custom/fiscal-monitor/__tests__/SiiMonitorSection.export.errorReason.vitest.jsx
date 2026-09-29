@@ -67,10 +67,13 @@ vi.mock('../useFiscalMonitor.js', () => ({
   SII_RECIBIDAS_ENTITY: 'receivedInvoices',
   SII_EMITIDAS_ANT_ENTITY: 'issuedInvoices(previousPeriod)',
   SII_RECIBIDAS_ANT_ENTITY: 'receivedInvoices(previousPeriod)',
+  buildCutoverCriteria,
+  SII_DATE_FIELD,
 }));
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { buildCutoverCriteria, SII_DATE_FIELD } from './testHelpers/siiCutoverStub.js';
 import SiiMonitorSection from '../SiiMonitorSection.jsx';
 
 const baseProps = {

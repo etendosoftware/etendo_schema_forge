@@ -28,9 +28,10 @@ describe('FiscalKpiCards — SII variant', () => {
     assert.match(src, /fiscalMonitor\.kpi\.sii\.received/);
   });
 
-  it('includes both current and previous period cards', () => {
-    assert.match(src, /fiscalMonitor\.kpi\.sii\.sub\.current/);
-    assert.match(src, /fiscalMonitor\.kpi\.sii\.sub\.previous/);
+  it('includes the current-period sub label on both cards (previous-period card removed, ETP-5432)', () => {
+    const matches = src.match(/fiscalMonitor\.kpi\.sii\.sub\.current/g);
+    assert.ok(matches && matches.length >= 2, 'expected sub.current on both issued and received cards');
+    assert.doesNotMatch(src, /fiscalMonitor\.kpi\.sii\.sub\.previous/);
   });
 
   it('marks the issued card active when activeKey === issued', () => {
