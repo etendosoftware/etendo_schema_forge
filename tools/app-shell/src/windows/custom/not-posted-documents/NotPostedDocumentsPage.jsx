@@ -242,7 +242,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   // ── Post single row ───────────────────────────────────────────────────────────
   async function postRow(row) {
     if (!row.tableId) {
-      toast.error(`${ui('postingFailed')}: unknown tableId for ${row.documentType}`);
+      toast.error(ui('postingFailed'));
       return;
     }
     setPosting(p => new Set(p).add(row.documentId));
@@ -261,7 +261,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
-        const rawMessage = json?.message || res.statusText;
+        // Only a real backend message is translated; the HTTP status text ("Forbidden") and a
+        // 403 body never reach the user (ETP-5485 review M1).
+        const rawMessage = res.status === 403 ? null : json?.message;
         toast.error(rawMessage ? translateBackendError(rawMessage, ui) : ui('postingFailed'));
       }
     } catch (e) {

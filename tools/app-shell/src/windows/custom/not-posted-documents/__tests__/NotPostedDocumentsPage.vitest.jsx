@@ -219,7 +219,26 @@ describe('NotPostedDocumentsPage', () => {
       fireEvent.click(screen.getByTestId('npd-post-row-doc-3'));
     });
 
-    expect(toast.error).toHaveBeenCalled();
+    // ETP-5485 review M2 — translated message, no hardcoded English ("unknown tableId for …").
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
+  });
+
+  // ETP-5485 review M1 — a post rejected with 403 (grant revoked mid-session) must not toast the
+  // raw HTTP status text "Forbidden".
+  it('postRow toasts the translated failure, never the raw status text, when the post answers 403', async () => {
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    globalThis.fetch.mockImplementationOnce(() =>
+      Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ error: 'Access denied' }) }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
+    expect(toast.error).not.toHaveBeenCalledWith('Forbidden');
   });
 
   // ETP-5485 (BUG-2) — a load failure never renders raw backend text: an untranslatable message

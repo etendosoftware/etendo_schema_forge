@@ -314,7 +314,8 @@ Two layers now:
   mid-session), the page swaps itself for the same access-denied screen and hides the header
   record count. Any other load error shows a translated message: a known backend message via
   `translateBackendError`, otherwise `documentsLoadError`. Raw backend text and the HTTP status
-  text are never rendered.
+  text are never rendered. The same holds for the Post toasts: a rejected post (including a 403)
+  or a row without `tableId` shows the translated `postingFailed`, never "Forbidden".
 
 ### Menu entry, breadcrumb & i18n (ETP-4945)
 
