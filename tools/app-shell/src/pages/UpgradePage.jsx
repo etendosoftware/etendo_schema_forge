@@ -1196,7 +1196,7 @@ export default function UpgradePage() {
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
       {phase === 'waiting-provisioning' && (
         <Card data-testid="upgrade-provisioning-waiting">
-          <CardContent className="space-y-3 py-6">
+          <CardContent className="space-y-3 py-6" data-testid="upgrade-provisioning-waiting-content">
             <p className="font-semibold">{ui('upgradeProvisioningWaitingTitle')}</p>
             <p className="text-sm text-muted-foreground">{ui('upgradeProvisioningWaitingBody')}</p>
             <Button type="button" onClick={() => {
@@ -1212,20 +1212,20 @@ export default function UpgradePage() {
       )}
       {phase === 'recovery' && recoveryPurchase && (
         <Card data-testid="upgrade-provisioning-recovery">
-          <CardHeader>
-            <CardTitle className="text-base">{ui('upgradeProvisioningRecoveryTitle')}</CardTitle>
+          <CardHeader data-testid="upgrade-provisioning-recovery-header">
+            <CardTitle className="text-base" data-testid="upgrade-provisioning-recovery-title">{ui('upgradeProvisioningRecoveryTitle')}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4" data-testid="upgrade-provisioning-recovery-content">
             <p className="text-sm text-muted-foreground">{ui('upgradeProvisioningRecoveryBody')}</p>
             <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
               data-testid="upgrade-error">
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="upgrade-provisioning-recovery-error-icon" />
               <span>{ui(formError || 'upgradeProvisioningRecoveryError')}</span>
             </div>
             {recoveryPurchase.retryAllowed === true && (
               <Button type="button" onClick={retryPaidProvisioning} disabled={Boolean(resumingPurchaseId)}
                 data-testid="upgrade-provisioning-retry">
-                {resumingPurchaseId ? <Loader2 className="h-4 w-4 animate-spin" /> : ui('upgradeProvisioningRetry')}
+                {resumingPurchaseId ? <Loader2 className="h-4 w-4 animate-spin" data-testid="upgrade-provisioning-retry-spinner" /> : ui('upgradeProvisioningRetry')}
               </Button>
             )}
           </CardContent>
