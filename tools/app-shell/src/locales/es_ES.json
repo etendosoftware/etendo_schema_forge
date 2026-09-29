@@ -20683,6 +20683,7 @@
     "recordsCouldNotBeDeleted": "{count} registro(s) no pudieron ser eliminados",
     "noConversionRateError": "No hay tipo de cambio definido entre la moneda actual y la seleccionada para la fecha {date}. Cambio de moneda cancelado.",
     "networkError": "Error de red",
+    "networkErrorRetry": "No se pudo completar la acción. Intenta nuevamente.",
     "savedButCannotOpenRecord": "El registro se guardó pero no se pudo abrir. Actualiza el listado.",
     "savedButFollowUpActionFailed": "El registro se guardó, pero una acción posterior falló: {detail}",
     "backendError.ibanRequired": "Para generar la Cuenta Mostrada con IBAN es necesario introducir el IBAN",

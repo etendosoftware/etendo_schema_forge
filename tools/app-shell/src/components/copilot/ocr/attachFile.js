@@ -73,10 +73,13 @@ export async function attachFile({ token, tabId, recordId, file, fileName } = {}
 
   const url = `${detectEtendoBase()}/webhooks/?name=AttachFile`;
   try {
+    // ETP-5424 — an upload: a large base64 body can outlive the default timeout on a slow
+    // uplink, and a cut-off upload that still lands invites a duplicate attachment.
     const res = await apiFetch(url, {
       method: 'POST',
       baseUrl: '',
       token,
+      timeout: 0,
       body: JSON.stringify({
         ADTabId: tabId,
         RecordId: recordId,

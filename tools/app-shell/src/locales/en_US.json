@@ -20447,6 +20447,7 @@
     "recordsCouldNotBeDeleted": "{count} record(s) could not be deleted",
     "noConversionRateError": "No conversion rate defined between the current and the selected currency for date {date}. Currency change cancelled.",
     "networkError": "Network error",
+    "networkErrorRetry": "Could not complete the action. Try again.",
     "savedButCannotOpenRecord": "The record was saved but could not be opened. Please refresh the list.",
     "savedButFollowUpActionFailed": "The record was saved, but a follow-up action failed: {detail}",
     "backendError.ibanRequired": "Using IBAN for generating the Displayed Account requires to introduce the IBAN",

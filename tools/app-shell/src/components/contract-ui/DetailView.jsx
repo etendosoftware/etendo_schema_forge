@@ -380,7 +380,7 @@ export function buildSecondaryLineHandlers(deps) {
         toast.error(await extractErrorMessage(res));
       }
     } catch (err) {
-      toast.error(err.message || 'Network error');
+      toast.error(err.message || ui('networkErrorRetry'));
     } finally {
       setSavingSecondaryLine(false);
     }
@@ -1027,7 +1027,7 @@ async function executeDetailProcessImpl(process, paramValues, explicitRows, {
     const failed = results.length - ok;
     if (failed > 0) toast.error(`${failed} record(s) failed`);
   } catch (err) {
-    toast.error(err?.message || 'Network error');
+    toast.error(err?.message || ui('networkErrorRetry'));
   } finally {
     setExecutingDetailProcess(false);
   }
@@ -3821,7 +3821,7 @@ export function DetailView({
                                                 toast.error(await extractErrorMessage(res));
                                               }
                                             } catch (err) {
-                                              toast.error(err.message || 'Network error');
+                                              toast.error(err.message || ui('networkErrorRetry'));
                                             } finally { setSavingLine(false); }
                                           }}
                                           className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-md border border-destructive text-destructive hover:bg-destructive/10 disabled:opacity-50 ml-auto"
@@ -4255,7 +4255,7 @@ export function DetailView({
                     toast.error(await extractErrorMessage(res));
                   }
                 } catch (err) {
-                  toast.error(err.message || 'Network error');
+                  toast.error(err.message || ui('networkErrorRetry'));
                 } finally {
                   setSavingSecondaryLine(false);
                 }

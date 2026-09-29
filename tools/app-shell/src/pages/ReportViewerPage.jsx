@@ -1201,9 +1201,12 @@ function DrillDownViewer({ report, token, baseParams, bpId, bpName, targetReport
     setLoading(true);
     setError(null);
     try {
+      // ETP-5424 — a report render (here, the drill-down detail) is the longest request the
+      // app makes; opt out of the default timeout so a slow success never reads "try again".
       const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
         body: JSON.stringify({ format, params: renderParams, locale }),
+        timeout: 0,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
@@ -1567,10 +1570,12 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
     setLoading(true);
     setError(null);
     try {
+      // ETP-5424 — see the drill-down render above: renders opt out of the default timeout.
       const res = await apiFetch(`/api/reports/${report.id}/render`, {
         method: 'POST',
         baseUrl: '',
         body: JSON.stringify({ format, params: submitParams, locale }),
+        timeout: 0,
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));

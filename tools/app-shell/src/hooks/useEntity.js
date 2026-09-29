@@ -1959,7 +1959,7 @@ export function useEntity(entity, childEntity, {
                 return null;
             }
         } catch (err) {
-            const msg = err?.message || 'Network error';
+            const msg = err?.message || ui('networkErrorRetry');
             setSaveError(msg);
             toast.error(msg);
             return null;
@@ -2055,7 +2055,7 @@ export function useEntity(entity, childEntity, {
                 return false;
             }
         } catch (err) {
-            toast.error(err?.message || 'Network error');
+            toast.error(err?.message || ui('networkErrorRetry'));
             return false;
         }
     }, [selected, apiBaseUrl, entity, apiFetch, refresh, ui, invalidateEntityCache, cacheScope, specName, dataCache]);
@@ -2145,7 +2145,7 @@ export function useEntity(entity, childEntity, {
             toast.success(ui('lineAdded'));
             return savedLine ?? true;
         } catch (err) {
-            const msg = err?.message || 'Network error';
+            const msg = err?.message || ui('networkErrorRetry');
             setSaveError(msg);
             toast.error(msg);
             return null;
@@ -2230,9 +2230,12 @@ export function useEntity(entity, childEntity, {
         // `extraParams` are merged at the top level of the body (not inside fieldValues)
         // so processes whose AD parameters are validated against the request root —
         // e.g. M_Internal_Consumption_Post requiring `action` — receive them.
+        // ETP-5424 — a document process is synchronous and can outlive apiFetch's default
+        // timeout; cutting it off while the server still commits invites a double submit.
         const res = await apiFetch(`/${entity}/${saved.id}/action/${processField}`, {
             method: 'POST',
             body: JSON.stringify({ fieldValues: { [processField]: processValue }, ...(extraParams || {}) }),
+            timeout: 0,
         });
         if (!res.ok) {
             const msg = await extractErrorMessage(res, ui);
@@ -2359,9 +2362,11 @@ export function useEntity(entity, childEntity, {
         }
         Object.assign(fieldValues, paramValues);
         try {
+            // ETP-5424 — synchronous process, same opt-out as save-and-process above.
             const res = await apiFetch(`/${entity}/${selected.id}/action/${process.columnName ?? process.name}`, {
                 method: 'POST',
                 body: JSON.stringify({ fieldValues }),
+                timeout: 0,
             });
             if (res.ok) {
                 handleProcessSuccess(process);
@@ -2369,11 +2374,11 @@ export function useEntity(entity, childEntity, {
                 await handleProcessFailure(res);
             }
         } catch (err) {
-            toast.error(err?.message || 'Network error');
+            toast.error(err?.message || ui('networkErrorRetry'));
         } finally {
             setRunningProcess(null);
         }
-    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure]);
+    }, [selected, entity, apiFetch, handleProcessSuccess, handleProcessFailure, ui]);
 
     // Prime the hook state with a freshly-saved record so consumers (DetailView) can
     // navigate /new → /:id without triggering a redundant GET /<entity>/:id. The POST

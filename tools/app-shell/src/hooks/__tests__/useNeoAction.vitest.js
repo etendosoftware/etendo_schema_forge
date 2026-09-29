@@ -213,12 +213,14 @@ describe('useNeoAction', () => {
     expect(res).toEqual({ success: false, message: 'Connection refused' });
   });
 
-  it('returns failure with generic message when error has no message', async () => {
+  // ETP-5424 — the fallback is the translated networkErrorRetry label, not a hardcoded English
+  // 'Network error'. No LocaleProvider is mounted here, so useUI() echoes the key.
+  it('returns failure with the translated networkErrorRetry fallback when error has no message', async () => {
     globalThis.fetch.mockRejectedValue({});
     const { result } = renderHook(() => useNeoAction(baseOpts));
     let res;
     await act(async () => { res = await result.current.execute('rec-11', 'post'); });
-    expect(res).toEqual({ success: false, message: 'Network error' });
+    expect(res).toEqual({ success: false, message: 'networkErrorRetry' });
   });
 
   it('URL-encodes special characters in recordId', async () => {

@@ -240,6 +240,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         {
           method: 'POST',
           token,
+          // ETP-5424 — posting runs the accounting engine synchronously; opt out of the
+          // default timeout so a slow post is not reported as failed while it commits.
+          timeout: 0,
           body: JSON.stringify({ tableId: row.tableId, recordId: row.documentId }),
         }
       );
@@ -273,6 +276,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         {
           method: 'POST',
           token,
+          // ETP-5424 — bulk post: same opt-out as the single post above.
+          timeout: 0,
           body: JSON.stringify({
             rows: rowsToPost.map(r => ({ tableId: r.tableId, recordId: r.documentId, label: r.description })),
           }),
