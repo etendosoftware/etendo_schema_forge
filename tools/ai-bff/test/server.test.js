@@ -157,3 +157,30 @@ test('page interaction only allows the four supported actions', () => {
   assert.deepEqual(inputSchema.parse({ elementId: 'dom-1', action: 'click' }), { elementId: 'dom-1', action: 'click' });
   assert.throws(() => inputSchema.parse({ elementId: 'dom-1', action: 'evaluate' }));
 });
+
+test('handleChat resolves the usage credential from the session instead of a free variable', async () => {
+  const saved = { key: process.env.OPENCODE_API_KEY, url: process.env.OPENCODE_BASE_URL, trace: process.env.AI_BFF_TRACE };
+  process.env.OPENCODE_API_KEY = 'configured-test-value';
+  process.env.OPENCODE_BASE_URL = 'http://127.0.0.1:9/v1'; // refused at once: no real model call
+  process.env.AI_BFF_TRACE = 'off';
+  const req = request({ authorization: 'Bearer test-session-token' });
+  const res = response();
+  res.write = () => true;
+  res.on = () => res;
+  res.once = () => res;
+  res.emit = () => true;
+  res.removeListener = () => res;
+  try {
+    const pending = handleChat(req, res);
+    req.emit('data', JSON.stringify({ mode: 'page-help', messages: [] }));
+    req.emit('end');
+    await pending; // used to reject: ReferenceError: authorization is not defined
+  } catch (error) {
+    assert.doesNotMatch(String(error?.message), /authorization is not defined/);
+  } finally {
+    for (const [name, value] of [['OPENCODE_API_KEY', saved.key], ['OPENCODE_BASE_URL', saved.url], ['AI_BFF_TRACE', saved.trace]]) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+  assert.doesNotMatch(res.body, /authorization is not defined/);
+});

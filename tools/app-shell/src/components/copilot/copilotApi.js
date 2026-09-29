@@ -71,12 +71,20 @@ export async function copilotRequest(path, token, options = {}) {
     baseUrl: '',
     token,
     headers: extraHeaders,
+    // A 401 from /sws/copilot/* is a domain answer, not an expired session: that servlet
+    // authenticates with the stock bearer JWT and answers 401 to a cookie session (which
+    // holds no bearer), while every other endpoint of the same session is fine. Letting
+    // apiFetch route it to the logout handler logged the user out and reloaded the SPA
+    // whenever the chat opened its history. The caller gets the error and degrades.
+    on401: 'ignore',
   });
   const data = await parseJsonResponse(response);
 
   if (!response.ok) {
     const message = data?.error || data?.message || `Copilot request failed (${response.status})`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
 
   return data;
@@ -139,7 +147,7 @@ export function makeClientId() {
  * Normalize a conversation object from the backend.
  * The backend returns `id`; our UI uses `conversation_id` consistently.
  */
-function normalizeConversation(conv) {
+export function normalizeConversation(conv) {
   if (!conv) return conv;
   return {
     ...conv,
@@ -152,7 +160,7 @@ function normalizeConversation(conv) {
  * Normalize a message from the backend.
  * The backend uses `sender`; our UI uses `role`. Map "bot"/"assistant" → "copilot".
  */
-function normalizeMessage(msg) {
+export function normalizeMessage(msg) {
   if (!msg) return msg;
   const raw = msg.role || msg.sender || 'copilot';
   let role = raw;
@@ -194,9 +202,11 @@ export async function getLabels(token) {
 
 /**
  * Fetch active conversations for the given assistant app ID.
+ * Without `appId` the backend returns the user's conversations that have no app
+ * (the ones the agent chat writes); `copilotGet` drops the empty param.
  *
  * @param {string} token
- * @param {string} appId
+ * @param {string} [appId]
  * @returns {Promise<Array>}
  */
 export async function getConversations(token, appId) {
@@ -206,10 +216,11 @@ export async function getConversations(token, appId) {
 }
 
 /**
- * Fetch archived conversations for the given assistant app ID.
+ * Fetch archived conversations for the given assistant app ID (or, without one,
+ * the user's archived conversations that have no app).
  *
  * @param {string} token
- * @param {string} appId
+ * @param {string} [appId]
  * @returns {Promise<Array>}
  */
 export async function getArchivedConversations(token, appId) {
@@ -360,3 +371,32 @@ export async function permanentDeleteConversation(token, conversationId) {
   });
 }
 
+/**
+ * Create an empty conversation without running any agent (used by the agent chat, which
+ * runs its model in the AI BFF). Idempotent for the owner of `external_id`.
+ *
+ * @param {string} token
+ * @param {{title?: string, external_id?: string, app_id?: string}} body
+ * @returns {Promise<{success: boolean, conversation_id: string, created: boolean}>}
+ */
+export async function createConversation(token, { title, external_id, app_id } = {}) {
+  return copilotRequest('createConversation', token, {
+    method: 'POST',
+    body: JSON.stringify({ title, external_id, app_id }),
+  });
+}
+
+/**
+ * Append messages to a conversation in one call. A message carrying an `external_id`
+ * already stored in the conversation is skipped by the backend, so retries are safe.
+ *
+ * @param {string} token
+ * @param {{conversation_id: string, messages: Array<{role: 'user'|'assistant', text: string, external_id?: string, metadata?: object}>}} body
+ * @returns {Promise<{success: boolean, saved: number, skipped: number}>}
+ */
+export async function appendConversationMessages(token, { conversation_id, messages }) {
+  return copilotRequest('appendConversationMessages', token, {
+    method: 'POST',
+    body: JSON.stringify({ conversation_id, messages }),
+  });
+}
