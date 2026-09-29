@@ -308,4 +308,44 @@ describe('browser observability config', () => {
     assert.deepEqual(config.providers.map(provider => provider.name), ['sentry', 'aws-rum', 'mixpanel']);
     assert.deepEqual(config.providers.map(provider => provider.enabled), [true, true, false]);
   });
+
+  // ETP-4578 H6 (D3): Sentry is the only provider a build can rely on; RUM and Mixpanel are
+  // opt-in and each needs its own explicit switch.
+  describe('optional providers are off by default', () => {
+    const enabledOf = (env) => Object.fromEntries(
+      buildBrowserObservabilityConfig({ env, location: { hostname: 'h' }, logger: { warn() {} } })
+        .providers.map((provider) => [provider.name, provider.enabled]),
+    );
+    const RUM_IDS = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const MIXPANEL_TOKEN = { VITE_MIXPANEL_TOKEN: 'fake-project-token' };
+
+    it('starts nothing from an empty environment', () => {
+      assert.deepEqual(enabledOf({}), { sentry: false, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('does not start RUM or Mixpanel from their IDs and tokens alone', () => {
+      assert.deepEqual(enabledOf({ ...RUM_IDS, ...MIXPANEL_TOKEN }), { sentry: false, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('starts Sentry from the DSN alone, and nothing else', () => {
+      assert.deepEqual(enabledOf({ VITE_SENTRY_DSN: 'dsn', ...RUM_IDS, ...MIXPANEL_TOKEN }), { sentry: true, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('needs the explicit switch AND the configuration, for each optional provider', () => {
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true' }), { sentry: false, 'aws-rum': false, mixpanel: false }, 'RUM switch without IDs');
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true' }), { sentry: false, 'aws-rum': false, mixpanel: false }, 'Mixpanel switch without a token');
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true', ...RUM_IDS }), { sentry: false, 'aws-rum': true, mixpanel: false });
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true', ...MIXPANEL_TOKEN }), { sentry: false, 'aws-rum': false, mixpanel: true });
+    });
+
+    it('takes only the literal "true" as opt-in', () => {
+      for (const value of ['1', 'yes', 'TRUE', 'on', ' true']) {
+        assert.deepEqual(
+          enabledOf({ VITE_RUM_ENABLED: value, ...RUM_IDS, VITE_MIXPANEL_ENABLED: value, ...MIXPANEL_TOKEN }),
+          { sentry: false, 'aws-rum': false, mixpanel: false },
+          value,
+        );
+      }
+    });
+  });
 });
