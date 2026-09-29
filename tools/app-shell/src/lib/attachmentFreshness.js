@@ -27,8 +27,15 @@
  * the renderer changed. A PDF depends on the template, the CSS, the labels/locale and
  * the Handlebars helpers as much as on the record's data, and all three of those live
  * in the code, where a change moves no timestamp at all. `isCachedRenderingStale` is
- * therefore the predicate production code calls — it composes both reasons — while
+ * therefore the predicate production code calls — it composes every reason — while
  * `isAttachmentStale` remains exactly the record-vs-file comparison ETP-4787 shipped.
+ *
+ * ETP-5541 added the THIRD reason: the company branding changed. The issuer block of every
+ * printable — logo, organization name, tax ID, address — comes from the session, not from
+ * the record, so uploading a new logo on the Organization screen moved no record's
+ * `updated` and every cached PDF kept the old logo. The session now exposes
+ * `brandingUpdated` (the latest `updated` among those rows, same database clock as the
+ * attachment's), and a cached file written before it is stale.
  */
 
 /**
@@ -151,10 +158,31 @@ export function isRenderedByOlderBundle(attachment, buildEpochMs = RENDERER_BUIL
 }
 
 /**
+ * ETP-5541 — true when the cached file was written before the company branding (logo,
+ * organization name/tax ID/address) last changed, so it prints an outdated issuer block.
+ *
+ * `brandingUpdated` is the session's field of the same name. Fail-open like the rest of
+ * this module: an absent or unparseable value (a backend that predates it, a failed
+ * session fetch) or an unusable attachment timestamp yields `false`. Strict comparison,
+ * for the same whole-second reason as `isAttachmentStale`.
+ *
+ * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
+ * @param {string|number|Date|null} brandingUpdated  the session's `brandingUpdated`
+ * @returns {boolean}
+ */
+export function isOlderThanBranding(attachment, brandingUpdated) {
+  const brandingMs = toInstantMs(brandingUpdated);
+  if (brandingMs == null) return false;
+  const writtenMs = attachmentWrittenAtMs(attachment);
+  if (writtenMs == null) return false;
+  return writtenMs < brandingMs;
+}
+
+/**
  * Whether the cached rendering of a record must be discarded and re-rendered — the
- * predicate PRODUCTION CODE SHOULD CALL. It composes the two independent reasons a
- * cached PDF stops representing the record: the record changed (ETP-4787) or the
- * renderer changed (ETP-5125).
+ * predicate PRODUCTION CODE SHOULD CALL. It composes the three independent reasons a
+ * cached PDF stops representing the record: the record changed (ETP-4787), the
+ * renderer changed (ETP-5125) or the company branding changed (ETP-5541).
  *
  * `isAttachmentStale` stays exported for its own spec and as this function's first
  * half; new call sites belong here, so staleness keeps being decided in exactly one
@@ -171,10 +199,18 @@ export function isRenderedByOlderBundle(attachment, buildEpochMs = RENDERER_BUIL
  * @param {{ updatedAt?: string, uploadedAt?: string, createdAt?: string, creationDate?: string }|null} attachment
  * @param {string|number|Date|null} recordUpdated  the record's `updated`
  * @param {number} [buildEpochMs]  overridable so tests need no global stubbing
+ * @param {string|number|Date|null} [brandingUpdated]  the session's `brandingUpdated`
+ *   (ETP-5541); omitted means "branding unknown", which never invalidates
  * @returns {boolean}
  */
-export function isCachedRenderingStale(attachment, recordUpdated, buildEpochMs = RENDERER_BUILD_EPOCH_MS) {
+export function isCachedRenderingStale(
+  attachment,
+  recordUpdated,
+  buildEpochMs = RENDERER_BUILD_EPOCH_MS,
+  brandingUpdated = null,
+) {
   if (toInstantMs(recordUpdated) == null) return false;
   if (isAttachmentStale(attachment, recordUpdated)) return true;
-  return isRenderedByOlderBundle(attachment, buildEpochMs);
+  if (isRenderedByOlderBundle(attachment, buildEpochMs)) return true;
+  return isOlderThanBranding(attachment, brandingUpdated);
 }
