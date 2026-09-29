@@ -37116,7 +37116,7 @@
       ]
     },
     "314caee3650d614f6e16516792b6ae0979d23d630da4a9b794b05902fc5a07c8": {
-      "checksum": "5db0b65dd2f011368d41681bedc41bc92dbb3908f656a01c9d08c17adedc4c47",
+      "checksum": "b08fdf9fb7679b7cea80e210493796612cccefa4bcab5aa18e65aa4e8d811d29",
       "params": [
         "143"
       ],
@@ -37444,7 +37444,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Copied to C_Conversion_Rate_Document when createDraftInvoice is called.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=true AND e.transactionDocument.return= false AND e.transactionDocument.sOSubType NOT LIKE 'OB'",
@@ -160746,7 +160746,7 @@
       ]
     },
     "e914309500f47dd6b862879819658bc9e588f339dabc304f81cd3c58853ca4ac": {
-      "checksum": "ba6175be4700b69a7646255aaffa7584c5a6e1c0afd2167a4ceed0aaa18b17b7",
+      "checksum": "bd0e750a0aba6d6ccea78f1bee82b556f8eeb5ff2d006514a32b3c99f5e3893c",
       "params": [
         "181"
       ],
@@ -161296,7 +161296,7 @@
           "field_seq": 99999,
           "fieldlength": "22",
           "filterclause": null,
-          "help_text": "Nullable. When set, overrides the global C_Conversion_Rate lookup for activeCurrencyConversionRef. Copied to C_Conversion_Rate_Document when createDraftInvoice is called.",
+          "help_text": "",
           "hqlfilterclause": null,
           "hqlorderbyclause": null,
           "hqlwhereclause": "e.salesTransaction=false AND e.transactionDocument.return=false",
