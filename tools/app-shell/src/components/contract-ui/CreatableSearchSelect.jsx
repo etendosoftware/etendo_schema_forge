@@ -112,7 +112,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * CreatableSearchSelect's own cognitive complexity down — pure, no side effects). */
 function computeSelectDisplayState({
   parentKey, parentValue, value, emptyOptionLabel, required, editingIntent, open,
-  createLabel, loading, filteredOptions, query, resolvedLabel, ui, placeholderOverride,
+  createLabel, onCreateRequest, loading, filteredOptions, query, resolvedLabel, ui,
+  placeholderOverride,
 }) {
   const hasSelection = value != null && value !== '';
   const isDisabled = !!(parentKey && !parentValue && !value);
@@ -124,8 +125,12 @@ function computeSelectDisplayState({
   // Coerced to a real boolean (not left as the short-circuited `createLabel`/query string) —
   // it now also drives aria-expanded on the input, which must render "true"/"false", not
   // arbitrary text (ETP-4600 Gap A regression caught live: aria-expanded="+ Add address").
+  // Mirrors CreateAction's render condition: a function createLabel renders nothing while the
+  // query is empty, so it must not open an otherwise-empty panel (ETP-5479: 2px bordered sliver).
+  const showCreateAction = !!(createLabel && onCreateRequest
+    && (typeof createLabel !== 'function' || query.trim()));
   const showDropdown = !!(open && !isDisabled
-    && (showEmptyOption || createLabel || loading || filteredOptions.length > 0 || query.trim()));
+    && (showEmptyOption || showCreateAction || loading || filteredOptions.length > 0 || query.trim()));
   return { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown };
 }
 
@@ -616,7 +621,8 @@ export function CreatableSearchSelect({
   const { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown } =
     computeSelectDisplayState({
       parentKey, parentValue, value, emptyOptionLabel, placeholderOverride, required: field.required,
-      editingIntent, open, createLabel, loading, filteredOptions, query, resolvedLabel, ui,
+      editingIntent, open, createLabel, onCreateRequest, loading, filteredOptions, query,
+      resolvedLabel, ui,
     });
 
   const handleSelect = (opt) => {
