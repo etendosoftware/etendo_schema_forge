@@ -43,6 +43,26 @@ function FileTab(props) {
 }
 
 /**
+ * Drag-and-drop handlers for DocumentView. `enabled: false` (ETP-5205, Solo-Lectura tier)
+ * returns no handlers at all, so a drag neither highlights the panel nor reaches `onFile`.
+ * Kept outside the component so its branches do not count against DocumentView's complexity.
+ */
+function buildDropHandlers({ enabled, onFile, setIsDragOver }) {
+  if (!enabled) return {};
+  return {
+    onDrop: (event) => {
+      event.preventDefault();
+      setIsDragOver(false);
+      onFile(event.dataTransfer.files?.[0]);
+    },
+    onDragOver: (event) => { event.preventDefault(); setIsDragOver(true); },
+    onDragLeave: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
+    },
+  };
+}
+
+/**
  * Edit-mode view: renders the record's marked "main" Attachment and lets the
  * user fill it (ETP-4855).
  *
@@ -85,17 +105,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
     storeFile(picked);
   };
 
-  const dropHandlers = {
-    onDrop: (event) => {
-      event.preventDefault();
-      setIsDragOver(false);
-      handleFile(event.dataTransfer.files?.[0]);
-    },
-    onDragOver: (event) => { event.preventDefault(); setIsDragOver(true); },
-    onDragLeave: (event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
-    },
-  };
+  const dropHandlers = buildDropHandlers({ enabled: !readOnly, onFile: handleFile, setIsDragOver });
 
   const hiddenInput = (
     <input
@@ -158,7 +168,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
 
   const isImage = storedFile.mimeType?.startsWith('image/');
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2" {...(canAttach ? dropHandlers : {})}>
+    <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
         <span className="truncate">{storedFile.fileName}</span>
