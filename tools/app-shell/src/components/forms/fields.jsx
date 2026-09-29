@@ -687,7 +687,7 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscarâ€
           // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
           // let alone than the equivalent field in every generated window. Height, radius and focus
           // belong to the density tokens, not to this component.
-          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] focus-within:ring-2 focus-within:ring-primary ${disabled ? 'border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed' : 'border-[hsl(var(--border-control))] bg-card hover:bg-[hsl(var(--field-hover))]'}`}
+          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] ring-2 ring-transparent focus-within:ring-primary ${disabled ? 'border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed' : 'border-[hsl(var(--border-control))] bg-card hover:bg-[hsl(var(--field-hover))]'}`}
           onClick={!disabled && showChip ? startEditing : undefined}
         >
           {showChip ? (

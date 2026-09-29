@@ -236,7 +236,7 @@ export function CurrencyRatePicker({
       </Label>
       {/* Trigger */}
       {editingRate ? (
-        <div className={`w-full flex items-center gap-1 ${ENABLED_SHELL} focus-within:ring-2 focus-within:ring-primary`}>
+        <div className={`w-full flex items-center gap-1 ${ENABLED_SHELL} ring-2 ring-transparent focus-within:ring-primary`}>
           <span className="font-medium shrink-0">{displayIso} —</span>
           {/* The canonical masked input, not a hand-rolled one: it owns the keystroke filtering
               (letters and a second separator never reach the value), renders the configured decimal
@@ -286,7 +286,7 @@ export function CurrencyRatePicker({
             aria-expanded={open}
             // The ring stays on while the list is open: the search box takes focus then,
             // but CreatableSearchSelect keeps its ring for as long as its list is open too.
-            className={`flex-1 min-w-0 flex items-center justify-between ${ENABLED_SHELL} hover:bg-[hsl(var(--field-hover))] focus:outline-none focus:ring-2 focus:ring-primary${open ? ' ring-2 ring-primary' : ''}`}
+            className={`flex-1 min-w-0 flex items-center justify-between ${ENABLED_SHELL} hover:bg-[hsl(var(--field-hover))] focus:outline-none ring-2 focus:ring-primary${open ? ' ring-primary' : ' ring-transparent'}`}
             onClick={() => setOpen((v) => !v)}
           >
             {value ? (

@@ -109,7 +109,7 @@ function PopupSearchInput({ field, value, displayValue, onChange, label, selecto
         // placeholder as its only text, so it must say so explicitly rather
         // than let a reader mistake the placeholder for a value.
         {...(displayText ? {} : { 'data-placeholder': '' })}
-        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--field-hover))] focus:ring-2 focus:ring-primary focus:outline-none`}
+        className={`w-full ${FIELD_HEIGHT} text-sm rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-left flex items-center gap-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
@@ -295,7 +295,7 @@ function LookupFormField({ field, value, displayValue, selectorUrl, selectorCont
         type="button"
         data-testid={`field-${field.key}`}
         onClick={() => setOpen(true)}
-        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] hover:bg-[hsl(var(--field-hover))] focus:ring-2 focus:ring-primary focus:outline-none`}
+        className={`w-full flex items-center gap-2 ${FIELD_HEIGHT} rounded-lg border border-[hsl(var(--border-control))] bg-card p-2 text-sm text-left shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] ring-2 ring-transparent focus:ring-primary focus:outline-none`}
       >
         <Search
           className="h-4 w-4 text-muted-foreground shrink-0"
