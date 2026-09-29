@@ -87,9 +87,13 @@ The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpan
   today's behaviour instead of silently turning telemetry off.
 - If the flag client itself breaks, a running gateway keeps its current state: a broken
   read never revives a stopped provider.
-- Startup waits at most 1.5 s for the flag provider before starting telemetry. A kill
-  flag that answers later still applies, in place. With a build default the wait is
-  irrelevant.
+- Startup waits at most 1.5 s for the flag provider (`FLAGS_READY_WAIT_MS`) before starting
+  telemetry. A kill flag that answers later still applies, in place, **but traffic has
+  already gone out by then**: RUM has made its 2 `cognito-identity` calls and Sentry has
+  started and may have sent. Measured with the real SDKs: a late flag gave 2 Cognito calls
+  before it and 0 after. **For a kill that holds from the very first request, use
+  `VITE_TELEMETRY_KILL` (a build default), not the flag.** The wait is deliberately not
+  longer: it would delay the first errors of every session for the sake of a rare case.
 - The switches are not reported as flag exposures (they would emit telemetry about the
   telemetry they control) and are operational controls, not feature flags, so they are
   not in `flags-registry.json` and do not enter the flag-debt scorecard.
@@ -115,6 +119,18 @@ env $FAKE VITE_TELEMETRY_KILL=true E2E_TELEMETRY=killed E2E_SUITE=mocked E2E_FIL
 ```
 
 Run 2 before trusting 3: if the control sees no request, the interceptor is what is broken.
+
+## Known limits
+
+- **`/oauth2-clients` is reported as `/:id`.** A route whose FIRST segment is 12+ characters
+  mixing letters and digits (`oauth2-clients`: 14 characters and a `2`) reads as an id to the
+  core's scrub, which runs on the route after it is normalized and cannot tell it is a route.
+  The host has always kept a first segment as the screen name, so this loses the page's name in
+  Sentry, Mixpanel and RUM. It over-collapses and leaks nothing. Follow-up (a core change, so a
+  new preview and repin): a route's first segment must never collapse, which means routing
+  `gateway.page` and the three adapters through a route-aware sanitize. Anchor:
+  `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
+  turns red when it is fixed.
 
 ## Events
 
