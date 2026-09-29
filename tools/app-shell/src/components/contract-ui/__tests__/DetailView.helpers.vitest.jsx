@@ -851,6 +851,7 @@ describe('DetailView helper functions', () => {
       expect(actionsFn).toHaveBeenCalledWith({
         data,
         children: hook.children,
+        isSaving: false,
         onRefresh: expect.any(Function),
       });
     });
@@ -873,6 +874,14 @@ describe('DetailView helper functions', () => {
       renderExtraActionButtons(actionsFn, data, hook, '');
       capturedOnRefresh();
       expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
+    });
+
+    it('passes the record save state to the actions factory as isSaving (ETP-5278 QA follow-up)', () => {
+      const received = [];
+      const actionsFn = (args) => { received.push(args.isSaving); return []; };
+      renderExtraActionButtons(actionsFn, { id: 'rec-1' }, { children: [], isSaving: true }, '');
+      renderExtraActionButtons(actionsFn, { id: 'rec-1' }, { children: [] }, '');
+      expect(received).toEqual([true, false]);
     });
 
     it('onRefresh also invalidates the entity cache (ETP-5278 — list-row staleness)', () => {

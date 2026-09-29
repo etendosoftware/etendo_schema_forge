@@ -1190,7 +1190,7 @@ export function DetailView({
   showDetailFooterTotals = undefined,
   onAfterSave,
   onAfterCreate, onAfterExistingSave,
-  additionalDirtyState = false,
+  additionalDirtyState = false, saveBusy = false,
   labelOverrides,
   enableSecondaryRowDelete = false,
   sidebarClassName = 'w-96 shrink-0 overflow-y-auto pt-2 pl-0 pr-4 pb-5',
@@ -2875,7 +2875,7 @@ export function DetailView({
 
   const saveActionParams = {
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
-    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls,
+    ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
     setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };

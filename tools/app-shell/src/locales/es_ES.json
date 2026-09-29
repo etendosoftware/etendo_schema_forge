@@ -17822,6 +17822,7 @@
     "saveUserFirstForRoles": "Guarda el usuario primero para asignar roles",
     "adminRoleNoCompositionMessage": "Este usuario ya tiene el rol Administrador, que otorga acceso completo. No se pueden componer roles adicionales para él.",
     "roleAssignmentSaveFailed": "No se pudieron guardar los roles asignados",
+    "roleAssignmentConcurrentModification": "se estaba guardando otro cambio de roles de este usuario al mismo tiempo. Recarga e inténtalo de nuevo",
     "roleAssignmentSaveFailedAfterUserSaved": "El usuario se guardó, pero los roles no pudieron actualizarse: {detail}",
     "removeRoleAria": "Quitar rol",
     "newUser": "Nuevo usuario",
