@@ -95,8 +95,9 @@ export function useRelatedDocuments({ definition, id, record, token, apiBaseUrl,
   const hasFetch = fetchSources.length > 0;
   const depsKey = recordReady && definition?.depsKey ? definition.depsKey(effectiveRecord) : '';
   // Load mode refetches when a (re)loaded record lands; record mode on explicit refreshes.
+  const loadedVersion = loaded.id === id ? loaded.version : 0;
   const trigger = needsLoad
-    ? (loaded.id === id ? loaded.version : 0)
+    ? loadedVersion
     : `${refreshKey}:${String(refreshSignal ?? '')}`;
   const recordRef = useRef(effectiveRecord);
   recordRef.current = effectiveRecord;
