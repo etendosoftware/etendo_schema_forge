@@ -1013,6 +1013,28 @@ export function buildInitialTabs(p) {
   return entries.map(e => e.tab);
 }
 
+/**
+ * Reloads a record after something outside the default CRUD path mutated it (a side-effecting
+ * extra action, a custom process-confirm modal that calls its own backend action, ...).
+ *
+ * ETP-5290 — `{ force: true }` is REQUIRED: without it `fetchById` serves the pre-mutation
+ * record from the in-memory cache for up to `staleTime` (or indefinitely if nothing else reads
+ * the id), so the toast fires but the status chip / buttons never update until a full reload.
+ * `invalidateEntityCache()` drops the entity's cached lists and records (ETP-5278) and
+ * `refresh()` force-reloads the mounted LIST so the grid row matches — the same
+ * `invalidateEntityCache(); fetchById(...); refresh();` sequence as useEntity's
+ * `handleProcessSuccess`.
+ *
+ * ETP-5547 — the process-confirm modal's `onRefresh` (DetailView → renderProcessConfirmModal)
+ * called `fetchById` without `force`, so payment-in/out "Confirmar" after "Reactivar"
+ * (registerPayment → 201) never issued a GET and the window stayed on "Borrador".
+ */
+export function refreshRecordAfterMutation(hook, id) {
+  hook.invalidateEntityCache?.();
+  hook.fetchById?.(id, { force: true });
+  hook.refresh?.();
+}
+
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
@@ -1041,11 +1063,7 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
     // useEntity.js) so the grid row reflects the change too, not just the open
     // detail form.
-    onRefresh: () => {
-      hook.invalidateEntityCache?.();
-      hook.fetchById?.(data?.id, { force: true });
-      hook.refresh?.();
-    },
+    onRefresh: () => refreshRecordAfterMutation(hook, data?.id),
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button

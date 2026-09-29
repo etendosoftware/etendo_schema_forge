@@ -13,31 +13,77 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 // was reachable over a dirty form.
 import { hasUnsavedChanges } from '@/lib/unsavedChanges.js';
 
-// Re-reads each freshly cloned header so State 2 can list them with their own documentNo /
-// business partner / status instead of bare ids. A failed or unparseable read degrades to
-// `{ id }` — the row still renders and stays clickable, which beats failing the whole clone
-// after the records were already created server-side.
-async function fetchClonedRecords(apiFetch, headerEntity, newIds) {
-  return Promise.all(newIds.map(id =>
-    apiFetch(`/${headerEntity}/${id}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(json => {
-        const raw = json?.response?.data;
-        const record = Array.isArray(raw) ? raw[0] : raw;
-        return { id, ...(record ?? {}) };
-      })
-      .catch(() => ({ id }))
-  ));
+// ETP-5547: every cloned row carries a `cloneStatus` so State 2 never shows a link to a record
+// that does not exist.
+//   ok        — the follow-up GET answered 2xx: the record exists (an unparseable body only
+//               costs the documentNo / business partner, not the link).
+//   notFound  — the GET answered 404: the clone POST said 201 but the record is gone (the
+//               transaction was rolled back after the response). Rendered as a failed row.
+//   unverified — the GET failed for any other reason (network, 5xx, 403): the record most
+//               likely exists, so the row stays clickable, but it is flagged instead of being
+//               presented as a confirmed success.
+//   missingId — the POST answered 2xx without a usable id: a copy was created but cannot be
+//               linked, so the row points the user to the list instead.
+const CLONE_STATUS = Object.freeze({
+  OK: 'ok', NOT_FOUND: 'notFound', UNVERIFIED: 'unverified', MISSING_ID: 'missingId',
+});
+
+function extractRecord(json) {
+  const raw = json?.response?.data;
+  return (Array.isArray(raw) ? raw[0] : raw) ?? {};
 }
+
+// ASSUMPTION: the server commits the clone transaction BEFORE the POST response reaches the
+// client (NeoServlet does no early response flush), so a 404 here means the clone truly does not
+// exist. If an early flush is ever introduced, this GET could race the commit and produce false
+// `notFound` rows.
+async function verifyClonedRecord(apiFetch, headerEntity, id) {
+  if (!id) return { id: null, cloneStatus: CLONE_STATUS.MISSING_ID };
+  try {
+    const r = await apiFetch(`/${headerEntity}/${id}`);
+    if (r.status === 404) return { id, cloneStatus: CLONE_STATUS.NOT_FOUND };
+    if (!r.ok) return { id, cloneStatus: CLONE_STATUS.UNVERIFIED };
+    const json = await r.json().catch(() => null);
+    return { id, ...extractRecord(json), cloneStatus: CLONE_STATUS.OK };
+  } catch {
+    return { id, cloneStatus: CLONE_STATUS.UNVERIFIED };
+  }
+}
+
+// Re-reads each freshly cloned header so State 2 can list them with their own documentNo /
+// business partner / status instead of bare ids — and, since ETP-5547, so a clone that the
+// server reported but that does not actually exist is caught before we link to it.
+function fetchClonedRecords(apiFetch, headerEntity, newIds) {
+  return Promise.all(newIds.map(id => verifyClonedRecord(apiFetch, headerEntity, id)));
+}
+
+// A clone can be navigated to only when it has an id and the GET did not prove it missing.
+function isNavigableClone(rec) {
+  return !!rec.id && rec.cloneStatus !== CLONE_STATUS.NOT_FOUND && rec.cloneStatus !== CLONE_STATUS.MISSING_ID;
+}
+
+const CLONE_STATUS_MESSAGE_KEY = {
+  [CLONE_STATUS.NOT_FOUND]: 'cloneResultNotFound',
+  [CLONE_STATUS.UNVERIFIED]: 'cloneResultUnverified',
+  [CLONE_STATUS.MISSING_ID]: 'cloneResultMissingId',
+};
 
 // Singular/plural copy for the two states. Kept together (and out of the component) because all
 // three strings switch on the same count and the many-variants share the {count} placeholder.
-function buildCloneTitles(n, ui) {
+// `created` is the number of clones NOT proven missing by the follow-up GET (ETP-5547): the
+// done title only ever counts those, and switches to the failure copy when there are none.
+function buildCloneTitles(n, ui, created = n) {
   const one = n === 1;
+  let doneTitle;
+  if (created === 0) {
+    doneTitle = one ? ui('cloneFailedTitleOne') : ui('cloneFailedTitleMany').replace('{count}', n);
+  } else {
+    doneTitle = created === 1 ? ui('cloneDoneTitleOne') : ui('cloneDoneTitleMany').replace('{count}', created);
+  }
   return {
     confirmTitle: one ? ui('cloneConfirmTitleOne') : ui('cloneConfirmTitleMany').replace('{count}', n),
     confirmSub: one ? ui('cloneConfirmSubtitleOne') : ui('cloneConfirmSubtitleMany').replace('{count}', n),
-    doneTitle: one ? ui('cloneDoneTitleOne') : ui('cloneDoneTitleMany').replace('{count}', n),
+    doneTitle,
   };
 }
 
@@ -112,7 +158,10 @@ function DocStatusTag({ status, dictionary }) {
  * Modal for cloning one or more records.
  *
  * State 1 — Confirmation: lists selected documents + full-width clone button.
- * State 2 — Done: lists cloned documents as clickable links; replaces State 1 in place.
+ * State 2 — Done: lists cloned documents as clickable links; replaces State 1 in place. Each
+ *           row is verified with a GET first (ETP-5547): a 404 renders as a failed, non-clickable
+ *           row; any other GET failure stays clickable but flagged as unverified; when every
+ *           clone is missing the title switches to the failure copy.
  *
  * Props:
  *   records        — rowObject[] for grid multi-clone (each row has id, documentNo?, businessPartner$_identifier?, documentStatus?)
@@ -159,7 +208,9 @@ export default function CloneOrderModal({
   const [clonedRecords, setCloned]  = useState([]);
   const [hoveredId, setHoveredId]   = useState(null);
 
-  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui);
+  const createdCount = clonedRecords.filter(rec => rec.cloneStatus !== CLONE_STATUS.NOT_FOUND).length;
+  const allFailed = phase === 'done' && createdCount === 0;
+  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui, phase === 'done' ? createdCount : n);
 
   const handleClone = async () => {
     setPhase('cloning');
@@ -168,25 +219,35 @@ export default function CloneOrderModal({
       const newIds = [];
       for (const item of items) {
         const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
-        const json = await res.json();
+        // ETP-5547: an empty / non-JSON body must not turn a created clone into the generic
+        // error — a 2xx without a usable id is reported per row as `missingId` instead.
+        const json = await res.json().catch(() => null);
         if (!res.ok) {
           setError(extractCloneErrorMessage(json, ui(errorKey)));
           setPhase('confirm');
           return;
         }
-        newIds.push(json?.response?.data?.id);
+        newIds.push(json?.response?.data?.id ?? null);
         trackDocumentCreated();
       }
 
-      const result = n > 1 ? newIds : newIds[0];
+      const fetched = await fetchClonedRecords(apiFetch, headerEntity, newIds);
+      // Only clones that can be opened are handed to the caller: a caller-side navigation to a
+      // missing id is the very false success ETP-5547 removes.
+      const usableIds = fetched.filter(isNavigableClone).map(rec => rec.id);
+      const result = n > 1 ? usableIds : usableIds[0];
       if (routePrefix) {
-        const fetched = await fetchClonedRecords(apiFetch, headerEntity, newIds);
         setCloned(fetched);
         setPhase('done');
-        onCloned?.(result);
-      } else {
+        if (usableIds.length > 0) onCloned?.(result);
+      } else if (usableIds.length === fetched.length) {
         onClose();
         onCloned?.(result);
+      } else {
+        // Legacy caller (no routePrefix) and at least one clone cannot be opened: show State 2
+        // with the per-row outcome instead of closing and navigating to a missing record.
+        setCloned(fetched);
+        setPhase('done');
       }
     } catch {
       setError(ui(errorKey));
@@ -206,45 +267,74 @@ export default function CloneOrderModal({
         {phase === 'done' ? (
           /* ── STATE 2: Done ── */
           (<>
-            <div style={{ ...modalHeader, background: 'var(--status-success-bg)' }}>
+            <div style={{ ...modalHeader, background: allFailed ? 'var(--status-destructive-bg)' : 'var(--status-success-bg)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ ...iconBox, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}>
-                  <CheckIcon size={18} data-testid="CheckIcon__66b049" />
-                </div>
+                {allFailed ? (
+                  <div style={{ ...iconBox, background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)' }}>
+                    <InfoIcon data-testid="InfoIcon__66b049" />
+                  </div>
+                ) : (
+                  <div style={{ ...iconBox, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}>
+                    <CheckIcon size={18} data-testid="CheckIcon__66b049" />
+                  </div>
+                )}
                 <div>
-                  <div style={titleStyle}>{doneTitle}</div>
-                  <div style={subtitleStyle}>{ui('cloneDoneSubtitle')}</div>
+                  <div style={titleStyle} data-testid="clone-done-title">{doneTitle}</div>
+                  <div style={subtitleStyle}>{ui(allFailed ? 'cloneFailedSubtitle' : 'cloneDoneSubtitle')}</div>
                 </div>
               </div>
               <button type="button" onClick={onClose} style={closeBtn}>×</button>
             </div>
             <div style={{ overflowY: 'auto', maxHeight: 360 }}>
-              {clonedRecords.map((rec) => (
-                <div
-                  key={rec.id}
-                  data-testid={`clone-result-${rec.id}`}
-                  onClick={() => handleRowClick(rec.id)}
-                  onMouseEnter={() => setHoveredId(rec.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
-                    borderBottom: '1px solid hsl(var(--muted))', cursor: 'pointer',
-                    background: hoveredId === rec.id ? 'hsl(var(--muted))' : 'hsl(var(--card))',
-                    transition: 'background 0.12s',
-                  }}
-                >
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--status-info-fg)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {rec.documentNo || rec.id}
-                  </span>
-                  <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {rec['businessPartner$_identifier'] || ''}
-                  </span>
-                  <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
-                  <span style={{ color: 'hsl(var(--text-disabled))', opacity: hoveredId === rec.id ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
-                    <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
-                  </span>
-                </div>
-              ))}
+              {clonedRecords.map((rec, index) => {
+                const navigable = !!routePrefix && isNavigableClone(rec);
+                const failed = rec.cloneStatus === CLONE_STATUS.NOT_FOUND;
+                const messageKey = CLONE_STATUS_MESSAGE_KEY[rec.cloneStatus];
+                const rowKey = rec.id ?? `missing-${index}`;
+                const hovered = navigable && hoveredId === rec.id;
+                let messageColor = 'var(--status-warning-fg)';
+                if (failed) messageColor = 'var(--status-destructive-fg)';
+                return (
+                  <div
+                    key={rowKey}
+                    data-testid={`clone-result-${rowKey}`}
+                    data-clone-status={rec.cloneStatus}
+                    onClick={navigable ? () => handleRowClick(rec.id) : undefined}
+                    onMouseEnter={navigable ? () => setHoveredId(rec.id) : undefined}
+                    onMouseLeave={navigable ? () => setHoveredId(null) : undefined}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
+                      borderBottom: '1px solid hsl(var(--muted))', cursor: navigable ? 'pointer' : 'default',
+                      background: (failed && 'var(--status-destructive-bg)') || (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))'),
+                      transition: 'background 0.12s',
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 600, color: navigable ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {rec.documentNo || rec.id || ''}
+                    </span>
+                    {messageKey ? (
+                      <span
+                        data-testid={`clone-result-message-${rowKey}`}
+                        style={{ fontSize: 12, color: messageColor, flex: 1, lineHeight: 1.4 }}
+                      >
+                        {ui(messageKey)}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {rec['businessPartner$_identifier'] || ''}
+                      </span>
+                    )}
+                    {rec.cloneStatus === CLONE_STATUS.OK && (
+                      <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
+                    )}
+                    {navigable && (
+                      <span style={{ color: 'hsl(var(--text-disabled))', opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
+                        <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </>)
         ) : (

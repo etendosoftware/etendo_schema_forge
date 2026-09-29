@@ -189,6 +189,16 @@ component's own JSDoc for the full shape), `showSend` + `onSendClick`, `showCopy
 `true`), and `children` for a window-specific secondary action that isn't Copy link/Clone/Send
 (e.g. a fiscal "send to SII/TBAI" button) but still belongs in the DF's "Enviar" position.
 
+**Clone result verification (ETP-5547) — shared `CloneOrderModal` behaviour.** Every clone, from the
+grid or from `DocumentSecondaryActions`, is re-read with `GET /{headerEntity}/{id}` after the clone
+POST. Each result row is `ok` (link), `notFound` (404 — red, not clickable, `cloneResultNotFound`),
+`unverified` (any other GET failure — still clickable, flagged with `cloneResultUnverified`) or
+`missingId` (2xx POST with no usable id — not clickable, `cloneResultMissingId`). The done title
+counts only clones not proven missing and switches to `cloneFailedTitle*` when none exist; only
+openable ids reach `onCloned`. Legacy callers without `routePrefix` now also wait for these GETs and
+stay on the result view (instead of closing and navigating) when a clone cannot be opened. Relies
+on the server committing before the POST response (no early flush in `NeoServlet`).
+
 **A `SendDocumentModal` needs client-rendered PDF context `DocumentSecondaryActions` does not
 have.** Nine migrated windows (see the table below) keep their existing `SendDocumentModal`
 inside their `topbarRight` component instead of duplicating it, and bridge the Send *button* in
