@@ -2946,7 +2946,7 @@ each one against the code, when auditing freshness.
 
 **Component:** `com.etendoerp.go` `UserRoleCompositionService#demoteFromAdmin` and
 `PersonalRoleAccessProvisioningService#buildPersonalRoleName`; data-fix
-`cli/src/data-fixes/sql/20260928T120000Z__R41-personal-role-owner-backfill.sql`.
+`cli/src/data-fixes/sql/20260928T140000Z__R41-personal-role-owner-backfill.sql`.
 
 **Symptom:** a user created after a same-named user was deleted, promoted to Admin and then demoted, came back
 with the deleted user's permissions. A user whose personal role was `"Personal – X (2)"`, or who had been renamed,

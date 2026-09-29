@@ -7,7 +7,7 @@ import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/par
 
 /**
  * Static + parse validation for the R41 corrective data-fix
- * (20260928T120000Z__R41-personal-role-owner-backfill.sql, ETP-5502).
+ * (20260928T140000Z__R41-personal-role-owner-backfill.sql, ETP-5502).
  *
  * The behavior — rules 1-3 attribute an owner, an ambiguous dormant role and a deleted user's
  * orphan stay NULL, a re-run's @check matches nothing — was verified live against the local dev
@@ -19,7 +19,7 @@ import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/par
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
-const FIX_FILE = '20260928T120000Z__R41-personal-role-owner-backfill.sql';
+const FIX_FILE = '20260928T140000Z__R41-personal-role-owner-backfill.sql';
 const FIX_ID = basename(FIX_FILE, '.sql');
 
 const rawText = readFileSync(join(SQL_DIR, FIX_FILE), 'utf8');
@@ -53,7 +53,7 @@ describe('R41 data-fix — header metadata', () => {
 
   it('sorts after every other fix in the catalog', () => {
     const ts = parseFixTimestamp(FIX_ID);
-    assert.equal(ts.toISOString(), '2026-09-28T12:00:00.000Z');
+    assert.equal(ts.toISOString(), '2026-09-28T14:00:00.000Z');
     const others = readdirSync(SQL_DIR)
       .filter((f) => f.endsWith('.sql') && f !== FIX_FILE)
       .map((f) => basename(f, '.sql'));
