@@ -1262,7 +1262,7 @@ Two field-level props control how the grid column renders raw values as labeled 
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
+| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). `"percent"` renders a progress circle (see "Percent column rendering" below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
 | `enumValues` | array | `null` | Maps raw cell values to display labels. Each entry: `{ "value": "<raw>", "name": "<i18nKeyOrLabel>" }`. The generator emits these as `enumLabels: { '<raw>': '<name>' }` on the table column descriptor. |
 
 **How `enumValues` is resolved at runtime:**
@@ -1341,6 +1341,51 @@ introducing a different number format for one column.
   "grow": true,
   "columnWidth": 192,
   "readOnlyLogic": null
+}
+```
+
+#### Percent column rendering (`columnType: "percent"`)
+
+Renders a 0-100 status value (delivery / invoicing progress) in DataTable list grids as a
+compact **progress circle** (ETP-5545) instead of a linear bar: a 24px SVG ring with the
+percentage label beside it (not inside). Implementation: `ProgressCircle`
+(`tools/app-shell/src/components/contract-ui/ProgressCircle.jsx`), used by
+`renderPercentCell` in `DataTable.cellRenderers.jsx`.
+
+| Value | Arc |
+|-------|-----|
+| `0` | grey track only (no arc) |
+| `1`-`99` | foreground (black) arc |
+| `>= 100` | green arc |
+
+The percentage **label** is always the theme foreground colour (black), in every state
+(0%, 1-99% and 100% or more); only the arc changes colour.
+
+- The value is assumed to be a 0-100 status. Above 100 the arc is clamped to a full ring,
+  but the label still shows the real value.
+- The cell is left-aligned.
+- The header is left-aligned and wraps onto 2 lines (max label width about 80px); the sort
+  arrow sits to the right of the label, as for any left-aligned column.
+- **`headerWrap`** is a generic DataTable column-descriptor option (boolean). It defaults to
+  `true` for `percent` columns and `false` for every other type. Set `headerWrap: false` on a
+  column descriptor to keep the truncated single-line header, or `true` to wrap the header of
+  any other column type.
+- **Width:** in list mode the percent column basis is 104px (`PERCENT_LIST_BASIS_PX` in
+  `tools/app-shell/src/lib/linesColumnWidth.js`, used by `columnMinWidthPx`). The lines panel
+  and add-row (`columnFlex`) intentionally keep 152px, so the two constants diverge on
+  purpose. An explicit `col.minWidth` still wins.
+- **Not covered:** the `InlineLinesPanel` percent read cell, `listModalCells`, `KPIHeader`
+  and the fm303 percent inputs are different renderers and still show plain text.
+
+Example — `return-material-receipt` `invoiceStatus` field:
+
+```json
+"invoiceStatus": {
+  "visibility": "readOnly",
+  "grid": true,
+  "gridOrder": 7,
+  "form": false,
+  "columnType": "percent"
 }
 ```
 
