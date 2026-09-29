@@ -10,10 +10,9 @@ import {
 } from '../rum.js';
 import {
   createSentryProvider,
-  DEFAULT_SENTRY_SEND_DEFAULT_PII,
+  SENTRY_SEND_DEFAULT_PII,
   resolveSentryEnvironment,
   resolveSentryRelease,
-  resolveSentrySendDefaultPii,
 } from '../sentry.js';
 
 describe('sentry observability adapter', () => {
@@ -64,12 +63,35 @@ describe('sentry observability adapter', () => {
     assert.equal(provider.enabled, false);
   });
 
-  it('enables Sentry PII only when explicitly requested via env', () => {
-    assert.equal(resolveSentrySendDefaultPii(undefined), DEFAULT_SENTRY_SEND_DEFAULT_PII);
-    assert.equal(resolveSentrySendDefaultPii('true'), true);
-    assert.equal(resolveSentrySendDefaultPii('1'), true);
-    assert.equal(resolveSentrySendDefaultPii('false'), false);
-    assert.equal(resolveSentrySendDefaultPii('unexpected'), DEFAULT_SENTRY_SEND_DEFAULT_PII);
+  it('never enables Sentry PII, whatever VITE_SENTRY_SEND_DEFAULT_PII says, in any environment (ETP-4578, D4)', () => {
+    assert.equal(SENTRY_SEND_DEFAULT_PII, false);
+    for (const appEnv of ['production', 'staging', 'experimental', 'development', undefined]) {
+      for (const value of ['true', '1', 'yes', 'on', true]) {
+        const calls = [];
+        const provider = createSentryProvider({
+          dsn: 'dsn-123',
+          sentry: { browserTracingIntegration: () => 'bt', init: (options) => calls.push(options) },
+          env: { VITE_APP_ENV: appEnv, VITE_SENTRY_SEND_DEFAULT_PII: value },
+        });
+        provider.init();
+        assert.equal(calls[0].sendDefaultPii, false, `env=${appEnv} value=${value}`);
+      }
+    }
+  });
+
+  it('installs the SDK egress hooks, which is where the traffic the gateway never sees is sanitized', () => {
+    const calls = [];
+    const provider = createSentryProvider({
+      dsn: 'dsn-123',
+      sentry: { init: (options) => calls.push(options) },
+      env: {},
+    });
+    provider.init();
+
+    for (const hook of ['beforeSend', 'beforeSendTransaction', 'beforeSendSpan', 'beforeBreadcrumb']) {
+      assert.equal(typeof calls[0][hook], 'function', `${hook} must be installed`);
+    }
+    assert.equal(calls[0].sampleRate, 1);
   });
 
   it('resolves Sentry release from env first and then build metadata', () => {

@@ -1,6 +1,22 @@
+import { createSentryAdapter } from '@etendosoftware/app-shell-core/observability/adapters/sentry';
 import { Sentry } from './observability/sdk.js';
+import { SAFE_EVENT_PROPERTY_KEYS } from './observability/payload.js';
 
-export const DEFAULT_SENTRY_SEND_DEFAULT_PII = false;
+/**
+ * The host's Sentry/GlitchTip provider (ETP-4578): the core's adapter with this app's
+ * environment wiring. The adapter installs the SDK's own egress hooks (beforeSend,
+ * beforeSendTransaction, beforeSendSpan, beforeBreadcrumb), which is where the traffic the
+ * gateway never sees — global error handlers, automatic breadcrumbs, tracing spans — is
+ * sanitized.
+ *
+ * `sendDefaultPii` is fixed to false in every environment (D4). It used to be readable from
+ * VITE_SENTRY_SEND_DEFAULT_PII, which let a build flip it on in production; that variable is
+ * now ignored.
+ */
+export const SENTRY_SEND_DEFAULT_PII = false;
+
+// Requests to the NEO API carry the trace headers; nothing else does.
+export const SENTRY_TRACE_PROPAGATION_TARGETS = [/core\..+\.etendo\.cloud/, 'core.etendo.cloud'];
 
 /**
  * The deploy workflow injects VITE_APP_ENV from its target, so the environment
@@ -9,31 +25,6 @@ export const DEFAULT_SENTRY_SEND_DEFAULT_PII = false;
 export function resolveSentryEnvironment(env = import.meta.env) {
   const value = env?.VITE_APP_ENV;
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'development';
-}
-
-export function resolveSentrySendDefaultPii(
-  value,
-  fallback = DEFAULT_SENTRY_SEND_DEFAULT_PII
-) {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-
-  if (typeof value !== 'string') {
-    return fallback;
-  }
-
-  const normalized = value.trim().toLowerCase();
-
-  if (['true', '1', 'yes', 'on'].includes(normalized)) {
-    return true;
-  }
-
-  if (['false', '0', 'no', 'off'].includes(normalized)) {
-    return false;
-  }
-
-  return fallback;
 }
 
 export function resolveSentryRelease(
@@ -55,50 +46,20 @@ export function resolveSentryRelease(
 
 export function createSentryProvider({
   dsn,
-  enabled = Boolean(dsn),
   sentry = Sentry,
   env = import.meta.env,
   buildMetadata = globalThis,
+  logger = console,
 } = {}) {
   const resolvedEnv = env ?? {};
-  const release = resolveSentryRelease(resolvedEnv, buildMetadata);
-  const sendDefaultPii = resolveSentrySendDefaultPii(
-    resolvedEnv.VITE_SENTRY_SEND_DEFAULT_PII
-  );
 
-  return {
-    name: 'sentry',
-    enabled,
-
-    init() {
-      if (!dsn) return;
-
-      sentry.init({
-        dsn,
-        environment: resolveSentryEnvironment(resolvedEnv),
-        release,
-        integrations: [sentry.browserTracingIntegration()],
-        tracesSampleRate: 0.1,
-        tracePropagationTargets: [/core\..+\.etendo\.cloud/, 'core.etendo.cloud'],
-        sendDefaultPii,
-      });
-    },
-
-    captureException(error, details = {}) {
-      if (typeof sentry.captureException === 'function') {
-        sentry.captureException(error, { extra: details });
-      }
-    },
-
-    setContext(context = {}) {
-      if (typeof sentry.setContext === 'function') {
-        sentry.setContext('app', context);
-      }
-    },
-  };
-}
-
-export function initSentry(options = {}) {
-  const dsn = options.dsn ?? import.meta.env.VITE_SENTRY_DSN;
-  return createSentryProvider({ ...options, dsn }).init();
+  return createSentryAdapter({
+    sdk: sentry,
+    dsn,
+    environment: resolveSentryEnvironment(resolvedEnv),
+    release: resolveSentryRelease(resolvedEnv, buildMetadata),
+    tracePropagationTargets: SENTRY_TRACE_PROPAGATION_TARGETS,
+    allowedKeys: SAFE_EVENT_PROPERTY_KEYS,
+    logger,
+  });
 }

@@ -36,7 +36,7 @@ is lazy-loaded only when the provider is enabled and used.
 |----------|-------------|
 | `VITE_SENTRY_DSN` | Enables Sentry. |
 | `VITE_SENTRY_RELEASE` | Optional explicit Sentry release. If unset, the app falls back to available build metadata. |
-| `VITE_SENTRY_SEND_DEFAULT_PII` | Optional explicit Sentry PII gate. Defaults to `false`; set to `true` only with approved privacy review. |
+| `VITE_SENTRY_SEND_DEFAULT_PII` | **Ignored** (ETP-4578). `sendDefaultPii` is fixed to `false` in every environment; the variable can no longer turn it on. |
 | `VITE_APP_ENV` | Deploy target (`production`, `experimental`, `staging`). Sentry `environment`; unset means `development`. |
 | `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
 | `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |

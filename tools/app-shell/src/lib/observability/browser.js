@@ -30,6 +30,7 @@ export function buildBrowserObservabilityConfig({
       createSentryProvider({
         dsn: env.VITE_SENTRY_DSN,
         env,
+        logger,
       }),
       createRumProvider({
         env,
