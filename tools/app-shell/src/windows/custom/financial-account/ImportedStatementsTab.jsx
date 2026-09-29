@@ -23,6 +23,7 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { useFinancialAccountCacheInvalidation } from './financialAccountCacheInvalidation';
 
 /**
  * The date an imported statement is filtered by, as a comparable {@link Date}, or `null` when the
@@ -99,6 +100,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
   const { sync } = useBankConnectionActions();
   const [syncing, setSyncing] = useState(false);
+  const { invalidateAccountList } = useFinancialAccountCacheInvalidation();
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
   const [search, setSearch] = useState('');
@@ -165,11 +167,15 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // refresh button looked broken (it reloaded exactly the half that was already correct). This
   // token is bumped alongside every reload; `refreshStatements` is what all mutation paths and
   // the refresh button call, so the two halves can no longer drift apart.
+  // ETP-5522 — it is also the choke point that marks the Cuentas list stale: creating, importing,
+  // syncing, processing, reactivating or deleting a statement changes the account's pending count
+  // (EM_ETGO_Pending_Count), and the list would otherwise serve its cached rows on the way back.
   const [linesRefreshToken, setLinesRefreshToken] = useState(0);
   const refreshStatements = useCallback(() => {
+    invalidateAccountList();
     reload();
     setLinesRefreshToken((t) => t + 1);
-  }, [reload]);
+  }, [reload, invalidateAccountList]);
 
   // ETP-5111 — the bulk trash is no longer pre-disabled here. ETP-4921 blocked it up front for a
   // processed statement or a bank-connected (PSD2) account ("don't let them touch the trash
