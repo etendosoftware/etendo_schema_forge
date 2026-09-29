@@ -16864,6 +16864,8 @@
     "ocrReviewVendorCreate": "Create new contact",
     "ocrReviewVendorNoMatches": "No matches",
     "ocrReviewVendorChecking": "Checking...",
+    "ocrReviewVendorNoAddress": "This contact has no address, and the invoice needs one. Add it in Contacts, in the contact's Address tab.",
+    "ocrReviewVendorRecheck": "Check again",
     "ocrReviewSubmit": "Auto-fill",
     "ocrReviewContinue": "Continue",
     "ocrReviewCancel": "Cancel",
