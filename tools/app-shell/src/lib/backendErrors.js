@@ -95,6 +95,10 @@ const BACKEND_ERROR_MAP = {
   'The IBAN is too short.': 'backendError.ibanTooShort',
   'The IBAN is not valid: the check digits do not match.': 'backendError.ibanChecksumInvalid',
   'Invalid country': 'backendError.invalidCountry',
+  // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
+  // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
   'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank': 'backendError.ibanInvalid',

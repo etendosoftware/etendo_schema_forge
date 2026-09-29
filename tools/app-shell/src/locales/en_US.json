@@ -20458,6 +20458,7 @@
     "backendError.ibanTooShort": "The IBAN is too short",
     "backendError.ibanChecksumInvalid": "The IBAN is not valid: the check digits do not match",
     "backendError.invalidCountry": "Invalid country",
+    "backendError.countryRequired": "Country is required",
     "backendError.ibanInvalid": "IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank",
     "backendError.swiftRequired": "Using the SWIFT Code for generating the Displayed Account requires to introduce a SWIFT Code and the Generic Account No.",
     "backendError.invalidAccountBpAndGroup": "An accounting account required to post this document could not be found. Check the accounting configuration of the accounting schema, the product and the business partner category. (Document of {bp}, category {group})",
