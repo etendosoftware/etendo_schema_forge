@@ -9,7 +9,6 @@ export {
   fetchChild,
   fetchById,
   fetchListInvoices,
-  fetchSalesOrderPayments,
 } from './helpers.js';
 export { DOCUMENT_CHIP_TYPES, docChipProps } from './docChipTypes.jsx';
 export { SALES_RELATED_DOCS, getSalesRelatedDocs } from './salesRelatedDocs.js';

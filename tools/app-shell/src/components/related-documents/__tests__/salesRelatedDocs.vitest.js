@@ -5,13 +5,12 @@
 // assert the resulting chips, in order, after collectRelatedItems' dedup.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const backend = vi.hoisted(() => ({ byCriteria: {}, byId: {}, listInvoices: {}, payments: {} }));
+const backend = vi.hoisted(() => ({ byCriteria: {}, byId: {}, listInvoices: {} }));
 
 vi.mock('../helpers.js', () => ({
   fetchByCriteria: vi.fn(async (spec, entity, field, value) => backend.byCriteria[`${spec}/${entity}?${field}=${value}`] ?? []),
   fetchById: vi.fn(async (spec, entity, id) => backend.byId[`${spec}/${entity}/${id}`] ?? null),
   fetchListInvoices: vi.fn(async (spec, entity, id) => backend.listInvoices[`${spec}/${entity}/${id}`] ?? []),
-  fetchSalesOrderPayments: vi.fn(async (orderId) => backend.payments[orderId] ?? []),
 }));
 
 import * as helpers from '../helpers.js';
@@ -36,7 +35,6 @@ beforeEach(() => {
   backend.byCriteria = {};
   backend.byId = {};
   backend.listInvoices = {};
-  backend.payments = {};
 });
 
 describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
@@ -52,16 +50,15 @@ describe('SALES_RELATED_DOCS — resolved chips per spec', () => {
       expected: ['sales-order:o1', 'sales-invoice:i1'],
     },
     {
-      name: 'sales-order: source quotation read by FK, shipments, listInvoices, payments',
+      name: 'sales-order: source quotation read by FK, shipments, listInvoices',
       spec: 'sales-order',
       record: { id: 'o1', quotation: 'q1' },
       backend: {
         byId: { 'sales-quotation/quotation/q1': { id: 'q1', documentStatus: 'CA' } },
         byCriteria: { 'goods-shipment/goodsShipment?salesOrder=o1': [{ id: 's1' }] },
         listInvoices: { 'sales-order/header/o1': [{ id: 'i1' }] },
-        payments: { o1: [{ id: 'p1' }] },
       },
-      expected: ['sales-quotation:q1', 'shipment:s1', 'sales-invoice:i1', 'payment-in:p1'],
+      expected: ['sales-quotation:q1', 'shipment:s1', 'sales-invoice:i1'],
     },
     {
       name: 'sales-invoice generated from a quotation: origin chip is a sales-quotation',

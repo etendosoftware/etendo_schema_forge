@@ -13,7 +13,7 @@ vi.mock('@etendosoftware/app-shell-core/auth/api', () => ({
 }));
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-import { fetchListInvoices, fetchSalesOrderPayments } from '../helpers.js';
+import { fetchListInvoices } from '../helpers.js';
 
 const BASE = '/sws/neo/sales-order';
 
@@ -35,27 +35,5 @@ describe('fetchListInvoices', () => {
   ])('resolves [] on %s', async (_label, entry) => {
     responses.map['/sws/neo/sales-order/header/o1/action/listInvoices'] = entry;
     await expect(fetchListInvoices('sales-order', 'header', 'o1', 'tok', BASE)).resolves.toEqual([]);
-  });
-});
-
-describe('fetchSalesOrderPayments', () => {
-  it('walks paymentPlan → paymentDetails → finPayment, one request per distinct payment', async () => {
-    responses.map['/sws/neo/sales-order/paymentPlan?parentId=o1&_limit=50'] = [{ id: 'pp1' }, { id: 'pp2' }];
-    responses.map['/sws/neo/sales-order/paymentDetails?parentId=pp1&_limit=50'] = [{ payment: 'p1' }, { payment: null }];
-    responses.map['/sws/neo/sales-order/paymentDetails?parentId=pp2&_limit=50'] = [{ payment: 'p1' }, { payment: 'p2' }];
-    responses.map['/sws/neo/payment-in/finPayment/p1'] = [{ id: 'p1' }];
-    // p2 unreadable → dropped
-
-    await expect(fetchSalesOrderPayments('o1', 'tok', BASE)).resolves.toEqual([{ id: 'p1' }]);
-    const paymentCalls = apiFetch.mock.calls.filter(([url]) => url.includes('/finPayment/'));
-    expect(paymentCalls.map(([url]) => url)).toEqual([
-      '/sws/neo/payment-in/finPayment/p1',
-      '/sws/neo/payment-in/finPayment/p2',
-    ]);
-  });
-
-  it('stops after the payment plan when the order has none', async () => {
-    await expect(fetchSalesOrderPayments('o1', 'tok', BASE)).resolves.toEqual([]);
-    expect(apiFetch).toHaveBeenCalledTimes(1);
   });
 });

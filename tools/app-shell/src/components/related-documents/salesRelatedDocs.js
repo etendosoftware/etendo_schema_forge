@@ -27,13 +27,14 @@
  * spec-scoped base (`.../sws/neo/<spec>`); cross-spec calls go through neoBase().
  *
  * Purchase documents are deliberately NOT here (separate ticket ETP-5539).
+ * Payments (cobros) are deliberately NOT related documents either: a sales order or
+ * invoice never lists its payments as chips (functional decision, ETP-5527).
  */
 import { getArSubtype } from '@generated/sales-invoice/custom/invoiceSubtype.js';
 import {
   fetchByCriteria,
   fetchById,
   fetchListInvoices,
-  fetchSalesOrderPayments,
 } from './helpers.js';
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -141,11 +142,6 @@ export const SALES_RELATED_DOCS = {
         type: 'sales-invoice',
         fetch: ({ id, token, apiBaseUrl }) =>
           fetchListInvoices('sales-order', 'header', id, token, apiBaseUrl),
-      },
-      {
-        key: 'payments',
-        type: 'payment-in',
-        fetch: ({ id, token, apiBaseUrl }) => fetchSalesOrderPayments(id, token, apiBaseUrl),
       },
     ],
   },

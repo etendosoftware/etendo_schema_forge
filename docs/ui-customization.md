@@ -397,7 +397,9 @@ For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`,
 | `SALES_RELATED_DOCS`, `getSalesRelatedDocs(spec)` | `salesRelatedDocs.js` | One entry per sales spec: `spec`, `entity` (header entity), optional `refreshEvent`, optional `depsKey(record)`, and `sources[]`. Each source has a `key`, a `type` (a `DOCUMENT_CHIP_TYPES` key, or `(doc) => key`) and either `select(record)` (synchronous, read from the record) or `fetch({ id, record, token, apiBaseUrl })` (async). `getSalesRelatedDocs` returns `null` for any non-sales spec. |
 | `useRelatedDocuments({ definition, id, record, token, apiBaseUrl, refreshSignal })` | `useRelatedDocuments.js` | Resolves a definition into `{ items: [{ type, doc }], loading, refresh }`, deduplicating by chip type + id. `record === undefined` → the hook loads the **detail** record itself (preview mode); `record === null` → waits for it (form still loading). Listens to `refreshEvent`; refetches async sources when `depsKey` or `refreshSignal` changes. |
 | `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `artifacts/<spec>/custom/RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
-| `fetchListInvoices`, `fetchSalesOrderPayments` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines); payments through `paymentPlan → paymentDetails → payment-in`. |
+| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines). |
+
+Payments (cobros) are deliberately **not** related documents: no sales order or invoice lists its payments as chips (functional decision, ETP-5527). Do not add a payments source to a definition.
 
 The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
 

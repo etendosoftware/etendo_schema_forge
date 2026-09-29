@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const navigate = vi.hoisted(() => vi.fn());
-const backend = vi.hoisted(() => ({ byCriteria: {}, byId: {}, listInvoices: {}, payments: {} }));
+const backend = vi.hoisted(() => ({ byCriteria: {}, byId: {}, listInvoices: {} }));
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 vi.mock('@/i18n', () => ({
@@ -20,7 +20,6 @@ vi.mock('@/components/related-documents/helpers.js', async (importOriginal) => (
   fetchByCriteria: vi.fn(async (spec, entity, field, value) => backend.byCriteria[`${spec}/${entity}?${field}=${value}`] ?? []),
   fetchById: vi.fn(async (spec, entity, id) => backend.byId[`${spec}/${entity}/${id}`] ?? null),
   fetchListInvoices: vi.fn(async (spec, entity, id) => backend.listInvoices[`${spec}/${entity}/${id}`] ?? []),
-  fetchSalesOrderPayments: vi.fn(async (orderId) => backend.payments[orderId] ?? []),
 }));
 
 import { render, waitFor, fireEvent, cleanup } from '@testing-library/react';
@@ -72,13 +71,11 @@ describe('Related documents — form section and list preview show the same docu
         byId: { 'sales-quotation/quotation/q1': doc('q1', 'QU-1', { documentStatus: 'CA' }) },
         byCriteria: { 'goods-shipment/goodsShipment?salesOrder=o1': [doc('s1', 'SH-1')] },
         listInvoices: { 'sales-order/header/o1': [doc('i1', 'INV-1')] },
-        payments: { o1: [{ id: 'p1', documentNo: 'PAY-1', status: 'RPR' }] },
       },
       expected: [
         '/sales-quotation/q1 | quotationDoc QU-1',
         '/goods-shipment/s1 | shipmentDoc SH-1',
         '/sales-invoice/i1 | invoiceDoc INV-1',
-        '/payment-in/p1 | paymentDoc PAY-1',
       ],
       refreshable: true,
     },
@@ -127,7 +124,7 @@ describe('Related documents — form section and list preview show the same docu
     },
   ])('$spec', async ({ spec, Form, record, data, expected, refreshable }) => {
     const definition = SALES_RELATED_DOCS[spec];
-    Object.assign(backend, { byCriteria: {}, listInvoices: {}, payments: {}, ...data });
+    Object.assign(backend, { byCriteria: {}, listInvoices: {}, ...data });
     // The preview only holds the list row: the card loads the detail record by id.
     backend.byId = { ...data.byId, [`${definition.spec}/${definition.entity}/${record.id}`]: record };
     const apiBaseUrl = `/sws/neo/${spec}`;
