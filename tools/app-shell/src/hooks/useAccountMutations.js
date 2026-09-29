@@ -46,6 +46,21 @@ const BASE_PATH = '/sws/neo/financial-account';
 const ENTITY_PATH = `${BASE_PATH}/account`;
 
 /**
+ * Copies the optional Salt Edge provider chosen at offline creation into the DAL body — the
+ * backend upserts it and links it to the account so a later bank connect can preselect that bank.
+ * Each key is emitted only when it carries a value.
+ */
+function copyProviderFields(payload, body) {
+  if (payload.providerCode) body.providerCode = payload.providerCode;
+  if (payload.providerName) body.providerName = payload.providerName;
+  // Its logo (ETP-5521), only when non-blank. The backend keeps it only when it is an https URL on
+  // the Salt Edge logo CDN host, and only to fill a provider that has no logo yet (never replaces).
+  if (typeof payload.providerLogoUrl === 'string' && payload.providerLogoUrl.trim()) {
+    body.providerLogoUrl = payload.providerLogoUrl;
+  }
+}
+
+/**
  * Map the SPA form payload to the DAL property names of FIN_Financial_Account.
  * Only keys present in the input are emitted, so a PUT that omits `swiftCode`
  * (the edit modal hides BIC) leaves the stored value untouched.
@@ -61,15 +76,7 @@ function toDalBody(payload) {
   // bank link exist. Emitted only when present so a PUT that omits it leaves the stored value
   // untouched, same rule as every other field here.
   if ('countryId' in payload) body.country = payload.countryId;
-  // Optional Salt Edge provider chosen at offline creation — the backend upserts it and links it
-  // to the account so a later bank connect can preselect that bank.
-  if (payload.providerCode) body.providerCode = payload.providerCode;
-  if (payload.providerName) body.providerName = payload.providerName;
-  // Its logo (ETP-5521), only when non-blank. The backend keeps it only when it is an https URL on
-  // the Salt Edge logo CDN host, and only to fill a provider that has no logo yet (never replaces).
-  if (typeof payload.providerLogoUrl === 'string' && payload.providerLogoUrl.trim()) {
-    body.providerLogoUrl = payload.providerLogoUrl;
-  }
+  copyProviderFields(payload, body);
   // Reconciliation tolerance fields (only sent when explicitly changed in the edit modal).
   // DAL property names per contract.json: the custom columns are `EM_ETGO_Date_Tolerance` /
   // `EM_ETGO_Amount_Tolerance`, but Etendo derives the bean property by dropping the "EM_"

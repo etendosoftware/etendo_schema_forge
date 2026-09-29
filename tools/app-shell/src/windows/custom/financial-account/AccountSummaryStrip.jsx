@@ -12,6 +12,78 @@ function formatIban(iban) {
   return iban.replace(/\s+/g, '').match(/.{1,4}/g)?.join(' ') ?? iban;
 }
 
+/** What the avatar + identifier block shows (ETP-5521 added the logo-only card case). */
+const IDENTIFIER_MODE = {
+  FULL: 'full',
+  LOGO_ONLY: 'logoOnly',
+  HIDDEN: 'hidden',
+};
+
+/**
+ * Cash has no IBAN, so its block is hidden. Banks (and a missing account) show the IBAN; a card
+ * shows its masked card number instead. An offline card without a PAN can still carry the bank
+ * logo picked at creation — then only the logo is shown; with neither, the block is hidden.
+ */
+function resolveIdentifierMode(account) {
+  const type = account?.type;
+  if (type === ACCOUNT_TYPE.CASH) return IDENTIFIER_MODE.HIDDEN;
+  if (type !== ACCOUNT_TYPE.CARD || account?.maskedPan) return IDENTIFIER_MODE.FULL;
+  return account?.providerLogoUrl?.trim() ? IDENTIFIER_MODE.LOGO_ONLY : IDENTIFIER_MODE.HIDDEN;
+}
+
+/**
+ * Avatar + identifier — fixed width, never grows or shrinks, so the KPIs line up the same way in
+ * every mode. Banks show the IBAN (with "—" when none stored) and a copy button; cards show their
+ * card number, or only the bank logo in `LOGO_ONLY` mode.
+ */
+function AccountIdentifierBlock({ account, mode }) {
+  const ui = useUI();
+  const isCard = account?.type === ACCOUNT_TYPE.CARD;
+
+  const handleCopyIban = () => {
+    if (account?.iban) {
+      navigator.clipboard.writeText(account.iban).then(() => {
+        toast.success(ui('financeAccountDetailIbanCopied'));
+      });
+    }
+  };
+
+  return (
+    <div className="flex w-[364px] shrink-0 items-center gap-2">
+      <AccountLogoAvatar
+        account={account}
+        className="shrink-0"
+        data-testid="AccountLogoAvatar__748dd1" />
+      {mode === IDENTIFIER_MODE.FULL ? (
+        <div className="flex min-w-0 flex-col">
+          <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
+            {isCard ? ui('financeAccountDetailCardNumber') : 'IBAN'}
+          </span>
+          <div className="flex items-center gap-0.5">
+            <span
+              data-testid="iban-text"
+              className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
+            >
+              {isCard ? account?.maskedPan : formatIban(account?.iban)}
+            </span>
+            {!isCard && account?.iban ? (
+              <button
+                type="button"
+                onClick={handleCopyIban}
+                data-testid="iban-copy-button"
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
+                aria-label={ui('financeAccountDetailIbanCopyAria')}
+              >
+                <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * Horizontal strip shown under the movements toolbar.
  * Displays IBAN with copy button + three KPI figures (balance, inflows, outflows).
@@ -38,22 +110,7 @@ export function AccountSummaryStrip({ account, totals, loading }) {
     : null;
   const suffix = suffixText ? ` (${suffixText})` : '';
 
-  const isCash = account?.type === ACCOUNT_TYPE.CASH;
-  const isCard = account?.type === ACCOUNT_TYPE.CARD;
-  // Cash has no IBAN; a card shows its masked card number instead of an IBAN.
-  // The identifier text is hidden for cash, and for a card without a PAN.
-  const showIdentifier = !isCash && (!isCard || !!account?.maskedPan);
-  // ETP-5521: an offline card (no PAN) can still carry the bank logo picked at creation — show
-  // just the logo then. A card with neither PAN nor logo keeps the whole block hidden.
-  const showLogoOnly = isCard && !showIdentifier && Boolean(account?.providerLogoUrl?.trim());
-
-  const handleCopyIban = () => {
-    if (account?.iban) {
-      navigator.clipboard.writeText(account.iban).then(() => {
-        toast.success(ui('financeAccountDetailIbanCopied'));
-      });
-    }
-  };
+  const identifierMode = resolveIdentifierMode(account);
 
   if (loading) {
     return (
@@ -75,44 +132,13 @@ export function AccountSummaryStrip({ account, totals, loading }) {
     <div className="px-2 py-1">
       <div className="flex items-center gap-5 rounded-lg border border-[hsl(var(--border-subtle))] px-3 py-2">
 
-        {/* Avatar + identifier — fixed width, never grows or shrinks. Hidden for
-            cash accounts (no IBAN) and for cards with neither a masked PAN nor a bank
-            logo. Banks show the IBAN (with "—" when none stored); cards show their card
-            number, or only the bank logo when there is no PAN (ETP-5521). */}
-        {showIdentifier || showLogoOnly ? (
-          <div className="flex w-[364px] shrink-0 items-center gap-2">
-            <AccountLogoAvatar
-              account={account}
-              className="shrink-0"
-              data-testid="AccountLogoAvatar__748dd1" />
-            {showIdentifier ? (
-              <div className="flex min-w-0 flex-col">
-                <span className="text-xs leading-4 text-[hsl(var(--muted-foreground))]">
-                  {isCard ? ui('financeAccountDetailCardNumber') : 'IBAN'}
-                </span>
-                <div className="flex items-center gap-0.5">
-                  <span
-                    data-testid="iban-text"
-                    className="truncate text-xs leading-4 text-[hsl(var(--muted-foreground))]"
-                  >
-                    {isCard ? account?.maskedPan : formatIban(account?.iban)}
-                  </span>
-                  {!isCard && account?.iban ? (
-                    <button
-                      type="button"
-                      onClick={handleCopyIban}
-                      data-testid="iban-copy-button"
-                      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
-                      aria-label={ui('financeAccountDetailIbanCopyAria')}
-                    >
-                      <Copy className="h-4 w-4" data-testid="Copy__748dd1" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Avatar + identifier — hidden for cash, and for a card with neither PAN nor logo. */}
+        {identifierMode === IDENTIFIER_MODE.HIDDEN ? null : (
+          <AccountIdentifierBlock
+            account={account}
+            mode={identifierMode}
+            data-testid="AccountIdentifierBlock__748dd1" />
+        )}
 
         {/* Saldo total */}
         <div data-testid="kpi-balance" className="flex flex-1 flex-col gap-0.5">
