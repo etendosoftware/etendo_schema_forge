@@ -25,12 +25,6 @@ import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
 
 /**
- * The list's default order: newest statement first.
- *
- * Shared by the pre-sort and by `useClientSort`'s indicator seed, which must agree or the header
- * arrow would describe an order the rows are not in.
- */
-/**
  * The date an imported statement is filtered by, as a comparable {@link Date}, or `null` when the
  * value is missing or unparseable.
  *
@@ -55,7 +49,24 @@ function statementFilterDate(raw) {
   return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
 }
 
-const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'documentNo', direction: 'desc' });
+/**
+ * The list's default order: most recent transaction date first (ETP-5447).
+ *
+ * Only the PRIMARY key is named here, because this seeds `useClientSort`'s header indicator —
+ * shared with the pre-sort below, which must agree or the arrow would describe an order the rows
+ * are not in. The pre-sort adds the `created` tiebreak underneath; see `defaultSortedStatements`.
+ */
+const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'transactionDate', direction: 'desc' });
+
+/**
+ * Accessors for the two default-order keys. Explicit rather than taken from
+ * `buildStatementSortAccessors`, so the default order does not depend on `transactionDate`
+ * remaining a contract grid column, and because `created` is never a column at all.
+ */
+const DEFAULT_ORDER_ACCESSORS = Object.freeze({
+  created: (s) => s.created,
+  transactionDate: (s) => s.transactionDate,
+});
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
@@ -280,24 +291,35 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
   const sortAccessors = useMemo(() => buildStatementSortAccessors(bcpLocale), [bcpLocale]);
   const sortColumns = useMemo(() => buildStatementSortColumns(ui), [ui]);
-  // Newest first by default. The handler returns the statements in no particular order, so a
-  // freshly created one — manual or imported — landed wherever it happened to fall and the user
-  // had to hunt for the row they had just made. DocumentNo is the only strictly increasing key
-  // the list has (the transaction date is the bank's, not the creation order), so the newest
-  // statement is always the highest one.
+  // Default order (ETP-5447): transaction date DESC, then creation DESC, then id DESC — the same
+  // total order `BankStatementsHandler.STATEMENTS_SQL` returns. It keeps Classic's shape for this
+  // tab: its AD tab sorts by `-transactionDate`, and `DefaultJsonDataService` always appends `id`
+  // (flipped to `-id` when every column is descending), i.e. `transactionDate DESC, id DESC`. That
+  // is deterministic but arbitrary — a UUID says nothing about arrival order — so `created`
+  // replaces it as the tiebreak, and the id stays only as the last resort. The previous default,
+  // `documentNo DESC`, ignored the transaction date the user actually reads the list by.
+  //
+  // Two passes of a STABLE sort make a composite order: sorting by `created` first and then by
+  // `transactionDate` leaves rows that tie on the transaction date in creation order. Rows that
+  // tie on both keep the backend's order, which already carries the final `id DESC`.
   //
   // Pre-sorted HERE rather than through `initialSort`, which only seeds the header indicator and
   // deliberately does not reorder — see `useClientSort`'s doc. Both are needed: this call puts
   // the rows in order, `initialSort` makes the arrow agree with what is on screen.
-  const defaultSortedStatements = useMemo(
-    () => sortRows(filteredStatements, {
-      key: 'documentNo',
+  const defaultSortedStatements = useMemo(() => {
+    const byCreated = sortRows(filteredStatements, {
+      key: 'created',
       direction: 'desc',
-      accessors: sortAccessors,
+      accessors: DEFAULT_ORDER_ACCESSORS,
       locale: bcpLocale,
-    }),
-    [filteredStatements, sortAccessors, bcpLocale],
-  );
+    });
+    return sortRows(byCreated, {
+      key: STATEMENTS_DEFAULT_SORT.key,
+      direction: STATEMENTS_DEFAULT_SORT.direction,
+      accessors: DEFAULT_ORDER_ACCESSORS,
+      locale: bcpLocale,
+    });
+  }, [filteredStatements, bcpLocale]);
   const {
     sorted: sortedStatements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
     isDefaultSort,

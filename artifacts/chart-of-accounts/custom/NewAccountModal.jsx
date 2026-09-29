@@ -212,6 +212,9 @@ export default function NewAccountModal({
   const [form, setForm] = useState(EMPTY_FORM);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  // ETP-5399 (QA) — once the user picks an Account Type, a later parent change must not
+  // silently overwrite it with the derived default. Reset on every fresh open.
+  const accountTypeTouchedRef = useRef(false);
 
   const selectedStructuralParentCode = useMemo(() => {
     const parent = parentOptions.find((p) => p.id === form.parentAccountId);
@@ -270,6 +273,7 @@ export default function NewAccountModal({
       accountType: defaultAccountType,
     });
     setErrors({});
+    accountTypeTouchedRef.current = false;
     initDoneRef.current = true;
   }, [isOpen, currentRecord, parentOptions, allAccounts.length, accountsFetched, apiBaseUrl, accountRows]);
 
@@ -279,12 +283,13 @@ export default function NewAccountModal({
       const newId = e.target.value;
       const parent = parentOptions.find((p) => p.id === newId);
       const parentCode = parent ? String(parent.searchKey) : '';
-      const accountType = deriveDefaultAccountType(null, parentCode, accountRows);
       setForm((prev) => ({
         ...prev,
         parentAccountId: newId,
         searchKey: derivePostingPrefix(parentCode),
-        accountType,
+        accountType: accountTypeTouchedRef.current
+          ? prev.accountType
+          : deriveDefaultAccountType(null, parentCode, accountRows),
       }));
       setErrors((prev) => ({ ...prev, parentAccountId: undefined }));
     },
@@ -302,6 +307,7 @@ export default function NewAccountModal({
   }, []);
 
   const handleAccountTypeChange = useCallback((e) => {
+    accountTypeTouchedRef.current = true;
     setForm((prev) => ({ ...prev, accountType: e.target.value }));
     setErrors((prev) => ({ ...prev, accountType: undefined }));
   }, []);
@@ -367,7 +373,7 @@ export default function NewAccountModal({
       onOpenChange={handleOpenChange}
       data-testid="Dialog__2c756f">
       <DialogContent
-        className="max-w-md"
+        className="max-w-xl"
         data-testid="new-account-modal"
       >
         <DialogHeader data-testid="DialogHeader__2c756f">
@@ -387,6 +393,7 @@ export default function NewAccountModal({
             options={parentOptions.map((p) => ({ id: p.id, code: p.searchKey, name: p.name }))}
             onChange={(id) => handleParentChange({ target: { value: id ?? '' } })}
             error={errors.parentAccountId}
+            modal
             data-testid="new-account-modal-parent"
           />
 
