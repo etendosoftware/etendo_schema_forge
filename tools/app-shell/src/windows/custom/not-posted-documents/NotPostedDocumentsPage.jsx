@@ -7,6 +7,7 @@ import './not-posted-documents.css';
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
+import { AccessDeniedMessage } from '@/components/access/ProcessAccessGuard.jsx';
 
 function formatDate(raw) {
   if (!raw) return '';
@@ -165,6 +166,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  // ETP-5485 (BUG-2) — the backend answered 403: this role cannot use the page at all. The
+  // route guard (`index.jsx`) normally stops such a role before mounting; this covers the
+  // cases it can't see (access map unreachable, a grant revoked mid-session).
+  const [accessDenied, setAccessDenied] = useState(false);
   const fetchAbortRef = useRef(null);
 
   const fetchRows = useCallback(async (filters) => {
@@ -185,13 +190,20 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       const res = await apiFetch(`/header?${params}`, { token, signal: ctrl.signal });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
-        if (fetchAbortRef.current === ctrl) setLoadError(json?.message || res.statusText);
+        if (fetchAbortRef.current !== ctrl) return;
+        if (res.status === 403) {
+          setAccessDenied(true);
+          return;
+        }
+        // Keep only the raw backend message here; `loadErrorText()` translates it at render
+        // time (never the raw text nor the HTTP status text — i18n policy).
+        setLoadError({ rawMessage: json?.message ?? null });
         return;
       }
       const rowsData = json?.rows ?? [];
       if (fetchAbortRef.current === ctrl) setRows(rowsData);
     } catch (e) {
-      if (e.name !== 'AbortError' && fetchAbortRef.current === ctrl) setLoadError(e.message);
+      if (e.name !== 'AbortError' && fetchAbortRef.current === ctrl) setLoadError({ rawMessage: null });
     } finally {
       if (fetchAbortRef.current === ctrl) setLoading(false);
     }
@@ -300,15 +312,24 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   useSetPageMeta({
     title: ui('notPostedDocuments'),
     breadcrumb: `${ui('finance')} / ${ui('notPostedDocuments')}`,
-    recordCount: rows.length,
+    // No count on the access-denied screen — a "0 registros" there reads as "no data".
+    recordCount: accessDenied ? undefined : rows.length,
   });
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
+  // ETP-5485 (BUG-2) — a known backend message translates; anything else shows the generic
+  // translated load error, so no raw backend/HTTP text ever reaches the user.
+  function loadErrorText() {
+    const rawMessage = loadError?.rawMessage;
+    const translated = rawMessage ? translateBackendError(rawMessage, ui) : null;
+    return translated && translated !== rawMessage ? translated : ui('documentsLoadError');
+  }
+
   function renderTableContent() {
     if (loading && !rows.length) return <div className="npd-center"><span>…</span></div>;
-    if (loadError) return <div className="npd-center npd-error">{loadError}</div>;
+    if (loadError) return <div className="npd-center npd-error">{loadErrorText()}</div>;
     if (rows.length === 0) {
       return (
         <div data-testid="npd-empty-state" className="npd-center">
@@ -381,6 +402,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       </div>
     );
   }
+
+  if (accessDenied) return <AccessDeniedMessage />;
 
   return (
     <div className="npd-page">

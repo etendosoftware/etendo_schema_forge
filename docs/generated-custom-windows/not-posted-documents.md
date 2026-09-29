@@ -290,6 +290,32 @@ File: `tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocument
 
 Props: `{ token, apiBaseUrl }` — `apiBaseUrl` is already spec-scoped.
 
+### Access gate (ETP-5485)
+
+The page has no `AD_Window`; its only access anchor is the "Not Posted Documents" OBUIAPP
+process `D6AB95CE52D34E1599590526115E26C6` (the same id `menu.json`'s `obuiappProcessId`, the
+backend's `NotPostedDocumentsHandler.NOT_POSTED_DOCUMENTS_PROCESS_ID` and the role matrices'
+proxy row use). So the generic `WindowAccessGuard` — which only reads `windowAccess[windowId]`
+— never applied, and the page had no gate of its own: a role without the grant (e.g.
+Purchasing-only) did not see the sidebar entry, but opening `/not-posted-documents` directly
+rendered the filters, "0 registros" and the backend's raw English "Forbidden".
+
+Two layers now:
+
+- **Route guard.** The registry entry (`windows/custom/not-posted-documents/index.jsx`) wraps the
+  page in `ProcessAccessGuard` (`tools/app-shell/src/components/access/ProcessAccessGuard.jsx`),
+  which checks the process id against `useRoleMenu()` — the same role-filtered id set the
+  sidebar filters by, so page and sidebar always agree. A role without the process gets the
+  shared access-denied screen (`data-testid="window-access-denied"`, i18n `windowAccessDenied`,
+  identical to `WindowAccessGuard`) and the page never mounts or fires a request. While access
+  is still loading it shows a neutral placeholder; when the menu map is unreachable it fails
+  OPEN, like the sidebar.
+- **Backend 403.** If the header load still answers 403 (guard failed open, or a grant revoked
+  mid-session), the page swaps itself for the same access-denied screen and hides the header
+  record count. Any other load error shows a translated message: a known backend message via
+  `translateBackendError`, otherwise `documentsLoadError`. Raw backend text and the HTTP status
+  text are never rendered.
+
 ### Menu entry, breadcrumb & i18n (ETP-4945)
 
 - Breadcrumb: `Finanzas / Documentos no contabilizados` (`` `${ui('finance')} / ${ui('notPostedDocuments')}` ``, passed to `useSetPageMeta`). Previously this window passed no `breadcrumb` key at all — `TopBar` renders nothing when `breadcrumb` is falsy, so the window had no breadcrumb whatsoever before this fix, even though its `title` (`ui('notPostedDocuments')`) was already correctly translated.
@@ -321,6 +347,9 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 5. Post a single row → success toast + row disappears.
 6. Post selected → partial/complete toast + table refreshes.
 7. Menu title shows "Documentos no contabilizados" in Spanish.
+8. (ETP-5485) As a Purchasing-only user (no "Not Posted Documents" process grant), open
+   `/not-posted-documents` directly → the "No tienes acceso a esta ventana" screen, no filters,
+   no "0 registros", no "Forbidden". A Finance user still gets the full page.
 
 ---
 
@@ -329,6 +358,7 @@ The `MultiSelect` component (inline in the same file) closes on outside-click vi
 - `artifacts/not-posted-documents/decisions.json` — `layoutType: "custom"`, `javaQualifier: "not-posted-documents"`, Finance category.
 - `tools/app-shell/src/windows/registry.js` — `not-posted-documents` in `customLoaders`.
 - `tools/app-shell/src/windows/custom/not-posted-documents/NotPostedDocumentsPage.jsx` — main component.
+- `tools/app-shell/src/windows/custom/not-posted-documents/index.jsx` — route entry wrapped in `ProcessAccessGuard` (ETP-5485); covered by `__tests__/index.access.vitest.jsx`, `components/access/__tests__/ProcessAccessGuard.vitest.jsx`, the 403/error cases in `__tests__/NotPostedDocumentsPage.vitest.jsx`, and the "direct route without process access" block of `e2e/tests/flows/accounting/not-posted-documents.mocked.spec.js`.
 - `tools/app-shell/src/windows/custom/not-posted-documents/not-posted-documents.css` — scoped `npd-*` CSS.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DOCUMENT_TYPE_TO_TABLE_ID` grid-row enrichment map (includes `"Internal Consumption"` → `800168` since ETP-5445, covered by `NotPostedDocumentsHandlerTest`); `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
 - `modules/com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` — `isget=Y, ispost=Y`.

@@ -222,19 +222,61 @@ describe('NotPostedDocumentsPage', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
-  it('shows error message from API on load failure', async () => {
+  // ETP-5485 (BUG-2) — a load failure never renders raw backend text: an untranslatable message
+  // falls back to the translated `documentsLoadError`, and the HTTP status text never shows.
+  it('shows the translated load-error message (never the raw backend text) on load failure', async () => {
     globalThis.fetch = vi.fn((url) => {
       if (url.includes('_mode=filter-options')) {
         return Promise.resolve({ ok: true, json: async () => ({}) });
       }
       return Promise.resolve({
         ok: false,
+        status: 500,
         statusText: 'Internal Server Error',
         json: async () => ({ message: 'Something went wrong' }),
       });
     });
     render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByText('Something went wrong'));
+    await waitFor(() => screen.getByText('documentsLoadError'));
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+    expect(screen.queryByText('Internal Server Error')).not.toBeInTheDocument();
+  });
+
+  it('shows the translated load-error message when the load request throws', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
+      return Promise.reject(new Error('Failed to fetch'));
+    });
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByText('documentsLoadError'));
+    expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
+  });
+
+  // ETP-5485 (BUG-2) — the backend answers 403 for a role without the "Not Posted Documents"
+  // process grant. The page must show the same access-denied screen as any other window: no
+  // filters, no "0 registros", no raw "Forbidden".
+  it('renders the access-denied screen (no filters, no raw status text) when the load answers 403', async () => {
+    globalThis.fetch = vi.fn((url) => {
+      if (url.includes('_mode=filter-options')) {
+        return Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({}) });
+      }
+      return Promise.resolve({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: async () => ({ message: 'Access denied' }),
+      });
+    });
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    const denied = await screen.findByTestId('window-access-denied');
+    expect(denied).toHaveTextContent('windowAccessDenied');
+    expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
+    expect(screen.queryByText('Access denied')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('npd-empty-state')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/./)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('applies filters as query params when filter button clicked', async () => {
