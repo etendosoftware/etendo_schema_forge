@@ -94,6 +94,28 @@ The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpan
   telemetry they control) and are operational controls, not feature flags, so they are
   not in `flags-registry.json` and do not enter the flag-debt scorecard.
 
+### Verifying egress in a browser
+
+`e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
+providers' hosts (Sentry/GlitchTip, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
+are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
+one and passes `VITE_*` through to it. The fake values below never reach a real account.
+
+```bash
+FAKE='VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1 VITE_MIXPANEL_ENABLED=true VITE_MIXPANEL_TOKEN=fake-project-token VITE_RUM_ENABLED=true VITE_RUM_APP_MONITOR_ID=fake-monitor VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool'
+
+# 1. Default bundle, no provider configuration: zero requests.
+E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
+
+# 2. Positive control, providers configured and NOT killed: requests are attempted.
+env $FAKE E2E_TELEMETRY=configured E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
+
+# 3. Providers configured and killed by the build default: zero requests.
+env $FAKE VITE_TELEMETRY_KILL=true E2E_TELEMETRY=killed E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
+```
+
+Run 2 before trusting 3: if the control sees no request, the interceptor is what is broken.
+
 ## Events
 
 Event definitions live in
