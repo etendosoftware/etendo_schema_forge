@@ -9,6 +9,18 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 import { AccessDeniedMessage } from '@/components/access/ProcessAccessGuard.jsx';
 
+/** Query string for the rows request: only the filters that are actually set. */
+function buildRowsQuery(filters) {
+  const params = new URLSearchParams();
+  if (filters.document) params.set('document', filters.document);
+  if (filters.accountingStatuses?.size > 0) {
+    params.set('accountingStatus', [...filters.accountingStatuses].join(','));
+  }
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  return params;
+}
+
 function formatDate(raw) {
   if (!raw) return '';
   const s = typeof raw === 'string' ? raw : String(raw);
@@ -180,14 +192,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const params = new URLSearchParams();
-      if (filters.document) params.set('document', filters.document);
-      if (filters.accountingStatuses?.size > 0)
-        params.set('accountingStatus', [...filters.accountingStatuses].join(','));
-      if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-      if (filters.dateTo) params.set('dateTo', filters.dateTo);
-
-      const res = await apiFetch(`/header?${params}`, { token, signal: ctrl.signal });
+      const res = await apiFetch(`/header?${buildRowsQuery(filters)}`, { token, signal: ctrl.signal });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         if (fetchAbortRef.current !== ctrl) return;
