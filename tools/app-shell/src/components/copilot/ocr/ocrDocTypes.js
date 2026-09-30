@@ -29,8 +29,10 @@ export const OCR_DOC_TYPES = [
         kind: 'entity',
         label: 'ocrReviewVendorLabel',
         extractFrom: ['vendor_name', 'tax_id'],
-        entitySpec: 'contacts/businessPartner',
-        filter: 'active = true',
+        // The invoice header's own vendor selector — a plain `q` search that passes the
+        // production WAF, unlike an HQL `_neoWhere` (see ocrQuery.js).
+        selector: 'purchase-invoice/header/C_BPartner_ID',
+        selectorParams: { isSOTrx: 'N', isVendor: 'Y' },
         preResolve: 'findBp',
         createComponent: 'CreateContactModal',
         createDocumentType: 'purchase',
@@ -95,7 +97,10 @@ export const OCR_DOC_TYPES = [
         kind: 'entity',
         label: 'ocrLinesColTax',
         extractFrom: 'tax_label',
-        entitySpec: 'tax/tax',
+        // A plain `q` selector search (see ocrQuery.js). Not the line's C_Tax_ID selector: its
+        // validation rule needs @DateInvoiced@, which NEO turns into NULL here, so it lists
+        // nothing. The invoice tax tab's C_Tax_ID has no rule — every tax of the client.
+        selector: 'purchase-invoice/tax/C_Tax_ID',
         preResolve: 'findTax',
         emptyOptionLabel: 'ocrLinesTaxDefault',
         searchPlaceholder: 'ocrLinesTaxSearch',
