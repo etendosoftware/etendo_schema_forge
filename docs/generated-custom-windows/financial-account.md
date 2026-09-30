@@ -2249,7 +2249,10 @@ Four things are non-obvious:
   payload as top-level `writeoffDifference`.
 - **The limit diverges from Classic on purpose.** `FIN_Financial_Account.Writeofflimit` (now
   editable, surfaced in Edit account → reconciliation settings) caps the write-off, enforced both in
-  the UI and server-side in `ReconciliationHandler.assertWithinWriteoffLimit`. Classic only applies
+  the UI and server-side — for reconciliation in `ReconciliationWriteoffSupport.assertWithinWriteoffLimit`,
+  and since ETP-5558 also for the invoice payment registration (`registerPayment`, reached from the
+  invoice payment modal, MCP and direct REST) in `PaymentWriteoffLimitGuard`, same null/0 rule and
+  the same cent rounding as the SPA (see `sales-invoice.md`). Classic only applies
   it when the `WriteOffLimitPreference` preference is `'Y'`, and its comparison treats an unset or
   zero limit as "block everything". The column has no default, is not mandatory, and the preference
   does not exist in this instance — copying that literally would disable the feature on every

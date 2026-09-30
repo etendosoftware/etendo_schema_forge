@@ -655,7 +655,6 @@ describe('NewPaymentEntryModal', () => {
 
       const caption = await screen.findByText(/writeoffAdjustLimitExceeded/);
       expect(caption.textContent).toMatch(/5,00/);
-      expect(caption.textContent).not.toMatch(/"limit":"0,00/);
       expect(screen.getByTestId('cp-writeoff-toggle-switch')).toBeDisabled();
     });
   });

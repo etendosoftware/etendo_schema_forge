@@ -1813,11 +1813,15 @@ Three constraints worth knowing:
 - **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
   `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
   any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
-  the consumed credit or a PIS transfer exists) now refuses it with a 400 and the translatable
-  `ETGO_WriteoffLimitExceeded` message. Same rule as `writeoffMath.js → writeoffState`: difference =
-  pending installment − (cash + selected credit sources), compared as-is with the limit (no currency
-  conversion), equal-to-limit allowed, null/0 = unlimited, not applied when editing a draft (that
-  path never writes off). The SPA never sends an over-limit write-off, so its behaviour is unchanged.
+  the consumed credit or a PIS transfer exists) now refuses it with a 400 and the
+  `ETGO_WriteoffLimitExceeded` AD_Message (English only — the module ships no message
+  translations). Same rule as `writeoffMath.js → writeoffState`: difference = round2(pending
+  installment) − round2(cash + selected credit sources), exactly as `usePaymentBalance` rounds,
+  compared with the limit with no currency conversion; equal-to-limit allowed, null/0 = unlimited,
+  not applied when editing a draft (that path never writes off). The SPA never sends an over-limit
+  write-off, so its behaviour is unchanged. Known gap: a PIS transfer is checked before the bank is
+  instructed, but its deferred replay re-runs the guard afterwards, so a limit lowered in between
+  refuses the replay with the money already moved.
   The same ETP-5558 change fixed the blocked caption, which always read "0,00 €":
   `writeoffState` now returns the effective `limit` (`null` when there is none).
 
