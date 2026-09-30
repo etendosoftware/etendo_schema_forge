@@ -10,6 +10,19 @@ import PdfViewer, { usePdfZoom } from './PdfViewer.jsx';
 const TOOLBAR_BUTTON = 'flex h-9 items-center justify-center text-[hsl(var(--floating-toolbar-fg))] transition-colors hover:bg-[hsl(var(--floating-toolbar-fg)/0.12)] disabled:cursor-not-allowed disabled:opacity-40';
 const TOOLBAR_BORDER = 'border border-[hsl(var(--floating-toolbar-fg)/0.3)]';
 
+/**
+ * The lightbox is a viewer, never a drop target. React synthetic drag events bubble through
+ * the portal to the lightbox's React ancestors — in the form sidebar that is the container
+ * whose drop handler replaces the document — so they are stopped here, for every consumer.
+ * Cancelling the default (with `dropEffect: 'none'`) also keeps the browser from navigating
+ * to a file dropped on the lightbox.
+ */
+function ignoreFileDrag(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+}
+
 /** Width that fits the whole image in the box, never upscaled past its natural size. */
 function fitImageWidth(box, natural) {
   if (!natural || natural.width <= 0 || box.width <= 32) return 0;
@@ -177,7 +190,7 @@ function LightboxBody({ file, onReplace, onDelete, actionsDisabled }) {
  * A Radix dialog, so it gets the focus trap, focus return to the trigger and the layer
  * stack for free — Escape closes only the topmost layer, which matters because this opens
  * on top of the invoice form or the list preview and a delete confirmation opens on top
- * of it in turn.
+ * of it in turn. Files dragged onto it are ignored (see `ignoreFileDrag`).
  *
  * @param {boolean}  open
  * @param {Function} onClose
@@ -209,6 +222,10 @@ export default function FileLightbox({
             event.preventDefault();
             if (returnFocusRef.current?.isConnected) returnFocusRef.current.focus();
           }}
+          onDragEnter={ignoreFileDrag}
+          onDragOver={ignoreFileDrag}
+          onDragLeave={ignoreFileDrag}
+          onDrop={ignoreFileDrag}
           className="fixed inset-0 z-50 flex flex-col bg-[hsl(var(--scrim))] focus:outline-none"
           data-testid="file-lightbox"
         >

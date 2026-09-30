@@ -2051,6 +2051,9 @@ All three render the shared `UploadedFileViewer` (`tools/app-shell/src/windows/c
   Zoom out, Reemplazar archivo, Eliminar archivo, Cerrar. Encajar fits the whole page into the
   lightbox. X or ESC closes it; ESC closes only the topmost layer (a delete confirmation opened
   from the lightbox closes first) and is not propagated to the form or list preview underneath.
+  The lightbox is a viewer, not a drop target: a file dragged onto it is ignored — it does not
+  replace the document (the file sidebar's own drop area sits underneath it in the React tree)
+  and the browser does not navigate to the file.
 - **Button order** follows Figma and the existing mini toolbar (Zoom in, Encajar, Zoom out), not
   the ticket's textual order.
 
@@ -2059,7 +2062,13 @@ All three render the shared `UploadedFileViewer` (`tools/app-shell/src/windows/c
 Solo-Lectura tier); the list preview only when `attachmentConfig.readOnly` is false. Under the
 Solo-Lectura tier (ETP-5205) the "Más" button and the lightbox's Replace/Delete are not rendered;
 viewing, the lightbox and zoom stay. No document-status gate was added — uploading was never
-limited to drafts on either surface. While a write is in flight Replace and Delete are disabled.
+limited to drafts on either surface. While a write is in flight — an upload or a delete —
+Replace and Delete are disabled, in the menu and in the lightbox, on both surfaces:
+`useMainAttachment` reports `isBusy` for every write it runs (a pending counter, so one
+operation finishing cannot clear it under another). In the file sidebar the attach button also
+shows its spinner during a delete, and a drop is ignored until the delete returns. If a newer
+file was stored while a DELETE was in flight, the DELETE only removes the attachment it
+targeted; the newer file stays on screen.
 
 **Scope.** `fileActions` is opt-in on `GenericPreviewModal` and only purchase-invoice sets it;
 goods-receipt and return-material-receipt (the other drop-zone windows) keep the plain viewer
