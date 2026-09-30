@@ -156,41 +156,42 @@ export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-
 }
 
 /**
- * ETP-5551 — resolves once the app shell's own `GET /sws/go/onboarding/first-steps` has been
- * answered (or has failed), i.e. once the mocked `login()` below has really finished starting
- * the dashboard.
+ * ETP-5551 — opt-in race guard for specs that override `GET /sws/go/onboarding/first-steps`
+ * AFTER `login()` (enable with `login(page, { awaitFirstStepsRead: true })`).
  *
- * `waitForURL('**\/dashboard')` alone is not that signal: it resolves on the navigation's load
- * event, while `FirstStepsProvider` (mounted in `AppLayout`) only issues this GET after the
- * session restore has made the shell authenticated. On a slow machine that is well AFTER
- * `login()` used to return, so a spec that then overrides the endpoint with an UNSEEN state
- * (first-steps-onboarding.mocked.spec.js) answered the dashboard's first read itself — and the
- * dashboard gate called `markSeen()`, POSTing an extra `seen: true` write into that spec's store.
- * Reproduced under 20x CPU throttling: zero first-steps reads had happened when `login()`
- * returned. Waiting for the read here means it is always served by `login()`'s own "already
- * seen" stub, so every spec that overrides the route after `login()` is protected, not just one.
+ * `waitForURL('**\/dashboard')` resolves on the load event, but `FirstStepsProvider` only reads
+ * this endpoint once the session restore has authenticated the shell. On a slow machine that
+ * read lands after `login()` returns, so a spec's own override (e.g. an UNSEEN state) answers
+ * it and the dashboard gate POSTs a stray `seen: true`. Waiting for the read guarantees it was
+ * served by `login()`'s "already seen" stub.
  *
- * A response is enough — once it exists, the route that served it has already been chosen, so a
- * later override cannot reach this read (`requestfinished` would also wait for the body, which
- * under throttling lands measurably later for nothing). `requestfailed` too, so a spec that
- * aborts the endpoint does not hang here. Bounded and swallowed on timeout: this is a settle
- * point, not an assertion — a shell that never reads the endpoint must not turn every login into
- * a failure. The bound is generous because under 20x throttling the read took 11-15s to be
- * issued; normally it lands within milliseconds of the load event and costs nothing.
+ * A response is enough (the serving route is already chosen); `requestfailed` also counts so a
+ * spec that aborts the endpoint does not hang. Fails loudly on timeout: if the read is never
+ * issued the guard cannot hold, and the spec must say so rather than silently pass or stall.
+ * Must be armed BEFORE the navigation so a fast read cannot slip past it.
  *
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<void>}
+ * @returns {Promise<void>} rejects if no first-steps read settles within `timeout`
  */
-function waitForFirstStepsRead(page, { timeout = 30_000 } = {}) {
+function armFirstStepsReadGuard(page, { timeout = 10_000 } = {}) {
   const isFirstStepsRead = (request) => request.method() === 'GET'
     && request.url().includes('/sws/go/onboarding/first-steps');
-  // Each waiter swallows its own rejection: the one that loses the race still times out (or
-  // rejects on page close) later, and an unhandled rejection there would fail an unrelated test.
-  const settle = (promise) => promise.then(() => {}, () => {});
-  return Promise.race([
-    settle(page.waitForResponse((response) => isFirstStepsRead(response.request()), { timeout })),
-    settle(page.waitForEvent('requestfailed', { predicate: isFirstStepsRead, timeout })),
-  ]);
+  const answered = page.waitForResponse((response) => isFirstStepsRead(response.request()), { timeout });
+  const failed = page.waitForEvent('requestfailed', { predicate: isFirstStepsRead, timeout });
+  // The losing waiter still rejects later (timeout or page close); never let that go unhandled.
+  answered.catch(() => {});
+  failed.catch(() => {});
+  const guard = Promise.any([answered, failed]).then(() => {}, (error) => {
+    throw new Error(
+      `login({ awaitFirstStepsRead: true }): the dashboard never issued GET /sws/go/onboarding/first-steps `
+      + `within ${timeout}ms, so the first-steps race guard cannot hold `
+      + '(FirstStepsProvider unmounted, gated, or the route renamed?).',
+      { cause: error },
+    );
+  });
+  // Handled here in case login() throws before awaiting it; awaiting `guard` still rejects.
+  guard.catch(() => {});
+  return guard;
 }
 
 export async function login(page, {
@@ -199,6 +200,9 @@ export async function login(page, {
   // ETP-5205 — mock mode only: per-window access tier overrides, e.g.
   // `{ '143': 'read-only' }`. Every window not listed stays "full".
   windowAccessOverrides = {},
+  // ETP-5551 — mock mode only: wait for the dashboard's first-steps read before returning,
+  // failing if it never happens. Only for specs that override that route after login().
+  awaitFirstStepsRead = false,
 } = {}) {
   captureApiCredentials(page);
   if (IS_MOCK_MODE) {
@@ -384,11 +388,10 @@ export async function login(page, {
       }
     });
 
-    // Armed BEFORE the navigation so a fast read cannot slip past it.
-    const firstStepsRead = waitForFirstStepsRead(page);
+    const firstStepsRead = awaitFirstStepsRead ? armFirstStepsReadGuard(page) : null;
     await page.goto('/dashboard');
     await page.waitForURL('**/dashboard', { timeout: 10_000 });
-    await firstStepsRead;
+    if (firstStepsRead) await firstStepsRead;
     return;
   }
 
