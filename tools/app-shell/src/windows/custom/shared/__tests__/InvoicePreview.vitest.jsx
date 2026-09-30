@@ -1100,3 +1100,63 @@ describe('InvoicePreview — email history wiring (ETP-5069)', () => {
     expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });
+
+// ── ETP-5205 (QA pasada 1): Solo-Lectura tier ─────────────────────────────────
+// Send, Add payment/collection and Send to SIF are writes → hidden. Download PDF stays (D1).
+// The attachment stays readable (sales: cached PDF; purchase: the supplier's own document)
+// but is flagged read-only so the preview never uploads, replaces or deletes it.
+describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDocumentCurrency.mockReturnValue({ orgCurrencyCode: 'EUR', isSameCurrency: true, exchangeRate: null });
+  });
+
+  function lastAttachmentConfig() {
+    return vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig;
+  }
+
+  const salesProps = {
+    readOnly: true,
+    specName: 'sales-invoice',
+    windowName: 'sales-invoice',
+    apiBaseUrl: '/api/sales-invoice',
+  };
+
+  it('sales invoice: hides Send, Send to SIF and Add collection; keeps Download', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+      isSalesInvoice: true, canAddPayment: true, canSendToSif: true, pdfUrl: 'blob:inv',
+    }));
+
+    renderInvoicePreview(salesProps);
+
+    expect(screen.queryByText('invoicePreviewSend')).not.toBeInTheDocument();
+    expect(screen.queryByText('sendToSif')).not.toBeInTheDocument();
+    expect(screen.queryByText('invoicePreviewAddCollection')).not.toBeInTheDocument();
+    expect(screen.getByText('invoicePreviewDownloadPdf').closest('button')).toBeEnabled();
+    expect(lastAttachmentConfig().readOnly).toBe(true);
+  });
+
+  it('purchase invoice: the stored document stays readable but read-only; no Add payment', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ canAddPayment: true }));
+
+    renderInvoicePreview({ readOnly: true });
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.readOnly).toBe(true);
+    expect(cfg.storeCondition).toBe(true);
+    expect(cfg.autoFetch).toBe(false);
+    expect(screen.queryByText('invoicePreviewAddPayment')).not.toBeInTheDocument();
+  });
+
+  it('sales invoice under full access keeps Send and Add collection (control)', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+      isSalesInvoice: true, canAddPayment: true, pdfUrl: 'blob:inv',
+    }));
+
+    renderInvoicePreview({ ...salesProps, readOnly: false });
+
+    expect(screen.getByText('invoicePreviewSend')).toBeInTheDocument();
+    expect(screen.getByText('invoicePreviewAddCollection')).toBeInTheDocument();
+    expect(lastAttachmentConfig().readOnly).toBe(false);
+  });
+});

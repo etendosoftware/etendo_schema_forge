@@ -280,7 +280,7 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
     onSuccess: () => setRefreshKey(k => k + 1),
   });
 
-  const renderPreview = useCallback(({ row, onClose, onEdit }) => (
+  const renderPreview = useCallback(({ row, onClose, onEdit, readOnly }) => (
     <QuotationPreview
       quotation={row}
       token={token}
@@ -288,8 +288,9 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
       windowName={windowName}
       onClose={onClose}
       onEdit={onEdit}
+      readOnly={readOnly || windowAccessTier === 'read-only'}
       data-testid="QuotationPreview__bc8637" />
-  ), [token, apiBaseUrl, windowName]);
+  ), [token, apiBaseUrl, windowName, windowAccessTier]);
 
   const rowQuickActions = useMemo(() => ({
     enabled: true,
@@ -305,12 +306,13 @@ export default function SalesQuotationWindow({ windowName, recordId, token, apiB
     documentPreview: true,
     onEdit:   (row) => navigate(`/${windowName}/${row.id}`),
     onClone:  (row) => setCloneTargets([row]),
-    onEmail:  onRowEmail,
+    // ETP-5205 — Send is a write under Solo Lectura (ListView also disables it).
+    onEmail:  windowAccessTier === 'read-only' ? undefined : onRowEmail,
     onDelete: requestDelete,
     // ETP-5378 — rowMenuActions composes Confirmar with the form-shared "reject"
     // entry (customMenuActions); see its own doc comment above.
     menuActions: rowMenuActions,
-  }), [navigate, windowName, requestDelete, onRowEmail, rowMenuActions]);
+  }), [navigate, windowName, requestDelete, onRowEmail, rowMenuActions, windowAccessTier]);
 
   if (recordId) {
     return (

@@ -368,6 +368,7 @@ function AppLayoutInner({ menuGroups, embedded }) {
             isFavorite={meta?.isFavorite}
             onPageHelp={meta?.onPageHelp}
             onAIClick={meta?.onAIClick}
+            quickActions={meta?.quickActions}
             rightExtras={meta?.rightExtras}
             data-testid="TopBar__488148" />
         )}

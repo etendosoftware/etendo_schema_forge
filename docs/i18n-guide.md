@@ -172,6 +172,25 @@ because they were template literals rather than a `DEFAULT_LABELS` entry — a t
 is invisible to every "find the hardcoded label" review. Grep for `` toast.success(` `` and
 `` toast.info(` `` before calling a flow translated.
 
+### Errors core builds for you: `NetworkError` (ETP-5424)
+
+`apiFetch` turns a dropped connection or a timeout into a `NetworkError` whose `message` is
+**already translated** — core resolves `genericLabels.networkErrorRetry` through a translator
+the app registers once. That is why the ~150 call sites that show `err.message` need no change.
+
+- **Key:** `networkErrorRetry` — `en_US` "Could not complete the action. Try again.", `es_ES` /
+  `es_AR` "No se pudo completar la acción. Intenta nuevamente." A missing entry is silent: the
+  user gets core's English fallback, not the key.
+- **Registration:** `installErrorTranslator(dictionary)` in `src/i18n/errorTranslator.js`, called
+  from an effect in `App.jsx` with `dictionaries[renderedLocale]` and re-run on every locale
+  change. It resolves with `resolveUI`, so it reads the same dictionary as `useUI()`. Do not
+  register a second translator anywhere else.
+- **A fallback that was a hardcoded `'Network error'`** is `ui('networkErrorRetry')` now
+  (`useEntity` save/delete/add-line/process).
+- **A raw `fetch`** (the `/jsreport` proxy) gets none of this. Map a `TypeError` yourself with
+  `new NetworkError({ reason: 'offline', cause: err })` from `@etendosoftware/app-shell-core/auth`
+  — see `renderViaJsreport` in `ReportDrawer.jsx`.
+
 ## Rules for Adding New Translations
 
 ### 1. NEVER hardcode user-visible strings

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 // ETP-5295 — the REAL reader, not a stub: the computation blocks extracted below now call
 // `readOrderPendingDocs(data)`, so the harness feeds them the same function the component uses.
 import { readOrderPendingDocs } from '../../../../tools/app-shell/src/windows/custom/shared/orderPendingDocs.js';
+import { ETGO_DTO_PRODUCT_ID } from '../../../../tools/app-shell/src/lib/documentTotals.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'OrderCreateInvoice.jsx'), 'utf8');
@@ -792,7 +793,10 @@ describe('OrderCreateInvoice', () => {
     function extractComputationBlocks(source) {
       // ETP-4567: post-fix source drops the Math.max(0, ...) clamp entirely —
       // qtyPending/totalPending are now plain (possibly negative) differences.
-      const re = /const qtyOrdered[\s\S]*?const totalPending\s*=\s*totalOrder - totalInvoiced;/g;
+      // ETP-5525 — the block now starts at `const goodsLines = orderLines.filter(...)` (the Total
+      // Discount line is dropped before summing), so `qtyOrdered` reads `goodsLines`; starting
+      // the match at `const qtyOrdered` would leave `goodsLines` a free variable in the harness.
+      const re = /const goodsLines[\s\S]*?const totalPending\s*=\s*totalOrder - totalInvoiced;/g;
       return [...source.matchAll(re)].map(m => m[0]);
     }
     function extractNeedsBlocks(source, needsVarName) {
@@ -857,11 +861,13 @@ describe('OrderCreateInvoice', () => {
       // eslint-disable-next-line no-new-func -- deliberately eval'ing the literal source under test
       const fn = new Function(
         'data', 'orderLines', 'invoicesComplete', 'shipmentsDraft', 'invoiceDraft', 'fetched', 'readOrderPendingDocs',
+        'ETGO_DTO_PRODUCT_ID',
         body,
       );
       return fn(
         { grandTotalAmount, ...annotations },
         [], invoicesComplete, shipmentsDraft, invoiceDraft, true, readOrderPendingDocs,
+        ETGO_DTO_PRODUCT_ID,
       );
     }
 
