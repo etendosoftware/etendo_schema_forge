@@ -120,6 +120,8 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
     try {
       const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
+        // ETP-5424 — a document render is a long call; opt out of the default timeout.
+        timeout: 0,
         baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: docId } }),
       });
@@ -162,6 +164,8 @@ export default function DocumentPrintDrawer({ open, onClose, windowName, documen
       // Get HTML
       const res = await apiFetch(`/api/reports/${reportId}/render`, {
         method: 'POST',
+        // ETP-5424 — a document render is a long call; opt out of the default timeout.
+        timeout: 0,
         baseUrl: '',
         body: JSON.stringify({ format: 'html', params: { documentId: currentDocId } }),
       });

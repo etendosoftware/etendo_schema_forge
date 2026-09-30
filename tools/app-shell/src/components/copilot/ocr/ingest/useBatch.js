@@ -37,10 +37,14 @@ export function useBatch({ token }) {
     setError(null);
     setLoading(true);
     try {
+      // ETP-5424 — one /batch POST is a single transaction over many operations and can
+      // outlive apiFetch's default timeout. Cutting it off client-side would report rows as
+      // failed while the transaction may still commit, so the send opts out.
       const res = await apiFetch(batchUrl, {
         baseUrl: '',
         method: 'POST',
         body: JSON.stringify({ operations }),
+        timeout: 0,
       });
       const text = await res.text().catch(() => '');
       let json = null;

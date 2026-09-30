@@ -11,6 +11,7 @@ import { emitSurveyTrigger } from '@/lib/surveys/survey-engine.js';
 import { useOrderPdf } from '@/windows/custom/shared/useOrderPdf.js';
 import { readOrderPendingDocs } from '@/windows/custom/shared/orderPendingDocs.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
 import { translateBackendError } from '@/lib/backendErrors.js';
 // ETP-5024 x ETP-4576: this modal used to hand-build its headers, and they were missing
 // `Accept-Language` — the backend (NeoAuthenticator.applyRequestLanguage) silently falls
@@ -31,6 +32,16 @@ const fmtNum = (v, decimals = 2) =>
     ? Number(v).toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
     : '0';
 
+// ETP-5525 — ONE owner for the "Gestionar …" wording: the detail button's label and the
+// CreateDocsModal title it opens are the same string, so a shipment-only order no longer opens a
+// dialog titled "Generar factura". Returns null when nothing is pending (no button).
+const manageDocsLabel = (ui, needsShip, needsInvoice) => {
+  if (needsShip && needsInvoice) return ui('soManageShipmentAndInvoice');
+  if (needsShip) return ui('soManageShipment');
+  if (needsInvoice) return ui('soManageInvoice');
+  return null;
+};
+
 function Spinner() {
   return (
     <>
@@ -45,7 +56,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave }) {
+export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave, windowReadOnly = false }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -84,22 +95,23 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     // ETP-5255 — `isDraft` gates OPENING the modal, never keeping it mounted. Confirming flips
     // the record to CO, and the modal has to outlive that: it is where the result of the
     // shipment/invoice steps is reported.
-    const handler = () => { if (isDraft) setShowConfirm(true); };
+    const handler = () => { if (isDraft && !windowReadOnly) setShowConfirm(true); };
     window.addEventListener('sales-order:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-order:open-confirm-modal', handler);
     // `isDraft` is read inside the handler, so an empty dep array would pin the value this effect
     // first saw and the modal would stop opening after any status change.
-  }, [isDraft]);
+  }, [isDraft, windowReadOnly]);
 
   // OrderDraftChips (topbarExtra) dispatches this event when a grouped chip is clicked
   useEffect(() => {
     const handler = (e) => {
+      if (windowReadOnly) return;
       setActionsScroll(e.detail?.scrollTo ?? null);
       setShowActions(true);
     };
     window.addEventListener('sales-order:open-actions-modal', handler);
     return () => window.removeEventListener('sales-order:open-actions-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   // ETP-5315 — the confirm/create-docs flows below dispatch this same event on success
   // (ConfirmModal.handleConfirm, ConfirmModal.handleClose, CreateDocsModal.handleCreate), but
@@ -120,13 +132,15 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   // (OrderCreateInvoiceSecondaryActions), while this modal (with its pdf/documentType
   // context) stays here in topbarRight; the button dispatches this event to open it.
   useEffect(() => {
-    const handler = () => setShowSend(true);
+    const handler = () => { if (!windowReadOnly) setShowSend(true); };
     window.addEventListener('sales-order:open-send-modal', handler);
     return () => window.removeEventListener('sales-order:open-send-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   useEffect(() => {
-    if (!isCompleted || !recordId) return;
+    // ETP-5205 — nothing to manage under read-only, so do not fetch (avoids 403 noise on
+    // goods-shipment for a role that cannot read it).
+    if (!isCompleted || !recordId || windowReadOnly) return;
     let cancelled = false;
 
     (async () => {
@@ -153,7 +167,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey]);
+  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey, windowReadOnly]);
 
   // ETP-5063 — a confirm that created neither a shipment nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -211,6 +225,12 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     document.body,
   ) : null;
 
+  // ETP-5205 — Solo-Lectura tier (DetailView's `windowReadOnly`): "Gestionar envío y factura"
+  // and its modals create documents, so render nothing. After every hook, and BEFORE the loading
+  // return below: the fetch is skipped under read-only, so `fetched` stays null and that return
+  // would otherwise show the "…" placeholder forever.
+  if (windowReadOnly) return null;
+
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
   // loading state no longer needs to render it here.
@@ -238,8 +258,13 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
 
     // deliveredQuantity is a system field on each order line — Etendo updates it
     // when shipments are confirmed. More reliable than summing shipment lines.
-    const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
-    const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
+    // ETP-5525 — the Total Discount line (product ETGO_DTO, ordered 1, never delivered) is not
+    // goods: counting it kept qtyPending at 1 on a fully delivered order. `/lines` already strips
+    // it server-side (DiscountLineFilter); excluding it here too, by the same product-id
+    // criterion, keeps this fallback correct on its own.
+    const goodsLines   = orderLines.filter(l => l?.product !== ETGO_DTO_PRODUCT_ID);
+    const qtyOrdered   = goodsLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
+    const qtyDelivered = goodsLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
     const qtyPending   = qtyOrdered - qtyDelivered;
 
     const totalOrder    = Number(data?.grandTotalAmount) || 0;
@@ -263,9 +288,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     const needsShip    = needsPrimaryDoc ?? (qtyPending !== 0 && shipmentsDraft.length === 0);
     const needsInvoice = needsInvoiceDoc ?? (totalPending !== 0 && !invoiceDraft);
 
-    if      (needsShip && needsInvoice) buttonLabel = ui('soManageShipmentAndInvoice');
-    else if (needsShip)                 buttonLabel = ui('soManageShipment');
-    else if (needsInvoice)              buttonLabel = ui('soManageInvoice');
+    buttonLabel = manageDocsLabel(ui, needsShip, needsInvoice);
 
     derived = {
       shipmentsComplete, invoicesComplete,
@@ -281,6 +304,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       {isCompleted && buttonLabel && (
         <button
           type="button"
+          data-testid="sales-order-manage-docs"
           onClick={() => openModal(null)}
           style={btnPrimaryStyle}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).
@@ -815,7 +839,7 @@ export function CreateDocsModal({ orderId, data, base, currency, derived, onClos
         {/* Title row */}
         <div style={{ padding: '16px 20px 14px', borderBottom: '0.5px solid hsl(var(--card))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {ui('soManageDocsTitle')}
+            {manageDocsLabel(ui, needsShip, needsInvoice) ?? ui('soManageDocsTitle')}
           </div>
           <button type="button" onClick={onClose} style={closeBtn}>&times;</button>
         </div>
@@ -984,8 +1008,13 @@ export function ManageDocsLauncher({ orderId, data, apiBaseUrl, token, onClose, 
   const invoiceDraft     = invoices.find(i => i.documentStatus === 'DR') ?? null;
   const invoicesComplete = invoices.filter(i => i.documentStatus === 'CO');
 
-  const qtyOrdered   = orderLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
-  const qtyDelivered = orderLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
+  // ETP-5525 — the Total Discount line (product ETGO_DTO, ordered 1, never delivered) is not
+  // goods: counting it kept qtyPending at 1 on a fully delivered order. `/lines` already strips
+  // it server-side (DiscountLineFilter); excluding it here too, by the same product-id
+  // criterion, keeps this fallback correct on its own.
+  const goodsLines   = orderLines.filter(l => l?.product !== ETGO_DTO_PRODUCT_ID);
+  const qtyOrdered   = goodsLines.reduce((s, l) => s + (Number(l.orderedQuantity)   || 0), 0);
+  const qtyDelivered = goodsLines.reduce((s, l) => s + (Number(l.deliveredQuantity) || 0), 0);
   const qtyPending   = qtyOrdered - qtyDelivered;
 
   const totalOrder    = Number(data?.grandTotalAmount) || 0;

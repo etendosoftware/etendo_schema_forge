@@ -242,12 +242,13 @@ export default function GoodsReceiptWindow(props) {
         hideLink
         bulkActions={GoodsReceiptBulkAction}
         hideEyeCount
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <GoodsReceiptPreview
             receipt={row}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             data-testid="GoodsReceiptPreview__bf4f23" />

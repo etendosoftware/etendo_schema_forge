@@ -170,8 +170,11 @@ describe('renderStatusCell', () => {
   });
 });
 
+// Test id set on <ProgressCircle> inside renderPercentCell (arc id is `<id>-arc`).
+const PERCENT_CELL_TEST_ID = 'ProgressCircle__a91437';
+
 describe('renderPercentCell', () => {
-  it('renders the percentage with the expected palette', () => {
+  it('renders the percentage as a progress circle with the foreground tone', () => {
     const { container } = renderCell(renderPercentCell({
       ...baseContext,
       row: { id: '1', progress: 45 },
@@ -179,7 +182,22 @@ describe('renderPercentCell', () => {
     }));
 
     expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
+    expect(screen.getByText('45%')).toHaveClass('text-foreground');
+    expect(container.querySelector(`[data-testid="${PERCENT_CELL_TEST_ID}-arc"]`)).toHaveClass('stroke-foreground');
+    expect(container.querySelector('.bg-status-warning')).toBeNull();
+  });
+
+  it('left-aligns the wrapper (justify-start, never justify-end)', () => {
+    const { container } = renderCell(renderPercentCell({
+      ...baseContext,
+      row: { id: '1', progress: 45 },
+      col: { key: 'progress', type: 'percent' },
+    }));
+
+    const wrapper = container.querySelector('.flex.items-center');
+    expect(wrapper).toHaveClass('justify-start');
+    expect(wrapper).not.toHaveClass('justify-end');
+    expect(container.querySelector('.justify-end')).toBeNull();
   });
 });
 

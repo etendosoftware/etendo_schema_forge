@@ -214,8 +214,10 @@ export default function ImportLinesModal({
       for (const line of lines) {
         const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
         const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+        // ETP-5424 — a line create in an import loop: a cut-off write that still commits
+        // would be re-imported on retry, so it opts out of the default timeout.
         const res = await apiFetch(`/${linesEndpoint}`, {
-          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
+          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
         });
         if (!res.ok) errors++;
         else importedDocIds.add(doc.id);

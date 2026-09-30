@@ -1,6 +1,7 @@
 // Mock listAttachments BEFORE imports (Vitest hoisting)
 vi.mock('@/components/copilot/ocr/listAttachments', () => ({
   fetchMainAttachment: vi.fn(),
+  fetchBrandingUpdated: vi.fn(),
   fetchAttachmentBlobUrl: vi.fn(),
   uploadAndMarkMainAttachment: vi.fn(),
   markAttachmentAsMain: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/components/attachments/attachmentsBus', async (importOriginal) => {
 import { renderHook, act, waitFor } from '@testing-library/react';
 import {
   fetchMainAttachment,
+  fetchBrandingUpdated,
   fetchAttachmentBlobUrl,
   uploadAndMarkMainAttachment,
   markAttachmentAsMain,
@@ -51,6 +53,8 @@ describe('useMainAttachment', () => {
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test-url');
     globalThis.URL.revokeObjectURL = vi.fn();
     globalThis.fetch = vi.fn();
+    // ETP-5541 — branding unknown by default (fail-open): never invalidates.
+    fetchBrandingUpdated.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -131,7 +135,25 @@ describe('useMainAttachment', () => {
 
       await waitFor(() => expect(result.current.isBusy).toBe(false));
 
+      // ETP-5541 — the session is asked for brandingUpdated; null (unknown) is fail-open.
+      expect(fetchBrandingUpdated).toHaveBeenCalledWith({
+        token: 'test-token', apiBaseUrl: '/sws/neo/purchase-invoice',
+      });
       expect(result.current.storedFileIsStale).toBe(false);
+    });
+
+    it('flags an attachment written before the company branding last changed (ETP-5541)', async () => {
+      fetchMainAttachment.mockResolvedValue({ ...MAIN_ATTACHMENT, uploadedAt: '2026-08-24T11:00:00Z' });
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+      fetchBrandingUpdated.mockResolvedValue('2026-08-24T11:00:01Z');
+
+      const { result } = renderHook(() =>
+        useMainAttachment({ ...BASE_PARAMS, recordUpdated: '2026-08-24T12:15:30+02:00' }),
+      );
+
+      await waitFor(() => expect(result.current.isBusy).toBe(false));
+
+      expect(result.current.storedFileIsStale).toBe(true);
     });
 
     it('never flags anything when the caller passes no recordUpdated', async () => {
@@ -142,6 +164,8 @@ describe('useMainAttachment', () => {
 
       await waitFor(() => expect(result.current.isBusy).toBe(false));
 
+      // ETP-5541 — an opted-out window can never be invalidated, so no /session round trip.
+      expect(fetchBrandingUpdated).not.toHaveBeenCalled();
       expect(result.current.storedFileIsStale).toBe(false);
     });
 
@@ -299,7 +323,7 @@ describe('useMainAttachment', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://example.com/f.pdf',
         {
-          credentials: 'include',
+          credentials: 'include', signal: expect.any(AbortSignal),
           headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
         },
       );

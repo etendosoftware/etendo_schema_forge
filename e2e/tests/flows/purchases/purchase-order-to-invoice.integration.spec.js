@@ -192,11 +192,20 @@ test.describe('Purchase Order → Invoice — Happy path (integration)', () => {
         '[Plan 9.4] "Guardar" should be disabled on a Completed PO — fields are readonly',
       ).toBeFalsy();
 
-      // Capture document number from breadcrumb for the import modal search
-      const breadcrumb = await page.locator('text=/Pedido de Compra/').first().textContent().catch(() => '');
-      poDocNo = breadcrumb.split('/').pop()?.trim()
+      // Capture document number from the breadcrumb's current page for the import modal search.
+      // ETP-5504: the TopBar breadcrumb is structured — "Pedido de Compra" is its own button and
+      // the record title is the `topbar-breadcrumb-current` level — so parsing the text of the
+      // node that matches the window name would return the window name, not the document number.
+      const currentCrumb = await page.getByTestId('topbar-breadcrumb-current')
+        .textContent({ timeout: 5_000 }).catch(() => '');
+      const fullCrumb = currentCrumb ? '' : await page.getByTestId('topbar-breadcrumb')
+        .textContent({ timeout: 2_000 }).catch(() => '');
+      poDocNo = currentCrumb?.trim()
+        || fullCrumb?.split(' / ').pop()?.trim()
         || await page.locator('input[disabled]').first().inputValue().catch(() => null);
       expect(poDocNo, 'Should have captured the PO document number').toBeTruthy();
+      expect(poDocNo, 'Captured the window name instead of the PO document number')
+        .not.toMatch(/^(Pedido de Compra|Purchase Order)$/i);
       await slow(page);
     });
 
