@@ -1575,9 +1575,19 @@ Three constraints worth knowing:
   `PaymentDraftEditService.reapplyLinkedInstallmentPSD`, a Core call with no write-off input, so
   offering the toggle there would promise something the backend cannot honour.
 - **Capped by the account's write-off limit.** `FIN_Financial_Account.Writeofflimit` disables the
-  toggle with an explanatory caption when the difference exceeds it; the backend re-checks. An unset
-  or zero limit means *no limit* — a deliberate divergence from Classic, documented in
+  toggle with an explanatory caption naming the limit when the difference exceeds it. An unset or
+  zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
+- **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
+  `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
+  any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
+  the consumed credit or a PIS transfer exists) now refuses it with a 400 and the translatable
+  `ETGO_WriteoffLimitExceeded` message. Same rule as `writeoffMath.js → writeoffState`: difference =
+  pending installment − (cash + selected credit sources), compared as-is with the limit (no currency
+  conversion), equal-to-limit allowed, null/0 = unlimited, not applied when editing a draft (that
+  path never writes off). The SPA never sends an over-limit write-off, so its behaviour is unchanged.
+  The same ETP-5558 change fixed the blocked caption, which always read "0,00 €":
+  `writeoffState` now returns the effective `limit` (`null` when there is none).
 
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a

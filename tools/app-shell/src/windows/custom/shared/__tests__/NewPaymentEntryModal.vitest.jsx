@@ -641,6 +641,25 @@ describe('NewPaymentEntryModal', () => {
     });
   });
 
+  describe('write-off limit hint (ETP-5558)', () => {
+    it('names the account\'s real limit when the shortfall exceeds it, not 0,00', async () => {
+      // Before ETP-5558 writeoffState did not return `limit`, so the blocked caption was fed
+      // `undefined` and always read "0,00 €" whatever the account had configured.
+      mockApiFetch = buildApiFetch({
+        accounts: [{ id: 'acc-1', label: 'Banco', currency: 'EUR', defaultPaymentMethod: 'Transfer',
+          writeoffLimit: 5 }],
+      });
+      renderModal({ dir: 'in', outstanding: 1000 });
+      await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('cp-amount-input'), { target: { value: '800' } });
+
+      const caption = await screen.findByText(/writeoffAdjustLimitExceeded/);
+      expect(caption.textContent).toMatch(/5,00/);
+      expect(caption.textContent).not.toMatch(/"limit":"0,00/);
+      expect(screen.getByTestId('cp-writeoff-toggle-switch')).toBeDisabled();
+    });
+  });
+
   describe('catalog loading resilience', () => {
     it('degrades gracefully (no crash, both actions disabled) when invoiceAccounts rejects', async () => {
       mockApiFetch = vi.fn(async (path) => {
