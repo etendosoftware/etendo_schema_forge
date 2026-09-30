@@ -2044,3 +2044,5 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).
+
+- Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Delivered: [PercentBar] N%" row under Status, fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). Like the order preview it renders whenever the value is non-null, regardless of document status.

@@ -274,3 +274,41 @@ describe('SummaryCard', () => {
     });
   });
 });
+
+// ── SummaryCard delivery row label (ETP-5549) ─────────────────────────────────
+
+describe('SummaryCard — delivery row label (ETP-5549)', () => {
+  const base = {
+    currencyCode: 'EUR',
+    grandTotal: 100,
+    contact: 'Acme Corp',
+    date: '2024-05-01',
+    statusCode: 'CO',
+    statusLabel: 'Completed',
+  };
+
+  it('uses the default previewCardDeliveryPercent label when deliveryLabel is omitted', () => {
+    render(<SummaryCard {...base} deliveryPercent={60} />);
+    expect(screen.getByText('previewCardDeliveryPercent')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
+  });
+
+  it('uses the custom deliveryLabel instead of the default when provided', () => {
+    render(<SummaryCard {...base} deliveryPercent={40} deliveryLabel="previewCardReceivedPercent" />);
+    expect(screen.getByText('previewCardReceivedPercent')).toBeInTheDocument();
+    expect(screen.queryByText('previewCardDeliveryPercent')).not.toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
+  });
+
+  it('shows the row for deliveryPercent 0', () => {
+    render(<SummaryCard {...base} deliveryPercent={0} />);
+    expect(screen.getByText('previewCardDeliveryPercent')).toBeInTheDocument();
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it.each([undefined, null])('hides the row when deliveryPercent is %s', (value) => {
+    render(<SummaryCard {...base} deliveryPercent={value} deliveryLabel="previewCardReceivedPercent" />);
+    expect(screen.queryByText('previewCardDeliveryPercent')).not.toBeInTheDocument();
+    expect(screen.queryByText('previewCardReceivedPercent')).not.toBeInTheDocument();
+  });
+});

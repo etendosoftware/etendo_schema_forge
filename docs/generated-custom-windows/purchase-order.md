@@ -563,3 +563,5 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - **"Gestionar recepción y factura"** (`PurchaseOrderActions`, topbarRight) renders nothing under `windowReadOnly`, same fix as the sales-order twin (fetch skipped, `open-*-modal` handlers no-op).
+
+- Preview panel delivery label (ETP-5549): the `OrderPreview` delivery percent row for purchase orders is labelled "Received:" / "Recibido:" (`previewCardReceivedPercent`, passed to `SummaryCard` via `deliveryLabel`); sales orders keep "Delivered:" / "Entregado:".

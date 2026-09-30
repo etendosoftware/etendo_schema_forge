@@ -2025,3 +2025,5 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview (drop-zone mode) and the OCR side panel (`ReadOnlyOcrSidePanel`) keep showing the supplier's document but offer no upload, drop or delete. Preview also hides **Añadir pago**.
+
+- Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Received: [PercentBar] N%" row under Status (label key `previewCardReceivedPercent`), fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). It renders whenever the value is non-null, regardless of document status.

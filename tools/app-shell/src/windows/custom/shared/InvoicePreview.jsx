@@ -136,6 +136,13 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
   const latestDueDate = getLatestInstallmentDueDate(installments);
   const currencyCode = installments[0]?.['currency$_identifier'] || invoice?.['currency$_identifier'] || '';
 
+  // Same gating as OrderPreview: show the row whenever the backend sent a value.
+  // Sales invoices read "Delivered", purchase invoices "Received".
+  const isPurchaseInvoice = specName === 'purchase-invoice';
+  const deliveryPercent = invoice?.eTGODeliveryStatus != null && invoice.eTGODeliveryStatus !== ''
+    ? Number(invoice.eTGODeliveryStatus)
+    : undefined;
+
   return (
     <div className="pb-4">
       <SummaryCard
@@ -146,6 +153,8 @@ function InvoiceGeneralTab({ invoice, partnerName, badgeProps, statusLabel, inst
         dueDate={latestDueDate ?? null}
         statusCode={invoice?.documentStatus}
         statusLabel={statusLabel}
+        deliveryPercent={Number.isFinite(deliveryPercent) ? deliveryPercent : undefined}
+        deliveryLabel={isPurchaseInvoice ? ui('previewCardReceivedPercent') : undefined}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
