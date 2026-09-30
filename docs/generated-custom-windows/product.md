@@ -1445,3 +1445,19 @@ memory:
 The keyed coded/FK values are the point where parts 2 and 3 meet: an English template writes
 `Unit`, `Item` and `Spain`, and part 2 is what makes those resolve for a Spanish user who receives
 that file.
+
+## List toolbar: view toggle on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows, followed by a gray
+separator line between toolbar and body. This window declares no subset tabs; its tab group is the
+**list / gallery view toggle**, which used to sit on the first row right after "Filtros" and now
+sits alone on the second row. The first row keeps "Filtros" on the left and sort, refresh, import,
+export and "New …" on the right. The toggle is on the second row at every width and behaves as
+before.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/product` and confirm "Filtros"
+sits on the first row with the main actions on the right, untruncated; the list/gallery toggle
+sits on the second row; switching view still swaps grid and gallery.

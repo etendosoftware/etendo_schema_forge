@@ -280,3 +280,18 @@ prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
 `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` at the top of `handleApplyAndProcess`,
 before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
 documentAction path is the already-guarded generic process button — so it needed no change.
+
+## List toolbar / body separator — ETP-5509
+
+The list showed no line between the toolbar and the body: the toolbar ended and the summary
+sidebar and the grid started directly below it, the sidebar's right border hanging from nothing.
+`PaymentHeaderTableBase.jsx` (shared with Payment Out) never drew one, and neither did the shared list bar.
+
+The line is now part of the shared list bar itself (`ListView.jsx`, a `border-b` in
+`--border-subtle` on the toolbar container, full card width), so this window gets it without any
+change to `PaymentHeaderTableBase.jsx` — and so does every other window that keeps the native
+bar. Payment Out gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
+toolbar stays single-row.
+
+Manual verification: open `/payment-in` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
+runs under the toolbar, above both the sidebar and the grid, across the full width of the card.

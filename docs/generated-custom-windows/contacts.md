@@ -1283,3 +1283,19 @@ rendered unconditionally in the shared `ListView.jsx`, regardless of `windowRead
 shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
 future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
 ETP-5205 commit history for the fix and its test).
+
+## List toolbar: tab group on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
+and the main actions (sort, refresh, import, export, "New …") on the first, and the **Todos / Personas / Empresas** subset tabs on a second row
+below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
+group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
+with the filters and the actions. The tabs are on the second row at every width, and they behave
+as before: choosing another entry filters the grid and highlights the selection.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/contacts` and confirm "Filtros" sits on the
+first row with sort, refresh, import, export and "New contact" on the right, untruncated; the
+three tabs sit on the second row; switching tab still filters the grid.

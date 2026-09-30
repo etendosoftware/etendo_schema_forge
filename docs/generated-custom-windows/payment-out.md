@@ -404,3 +404,18 @@ the editor already models it as a source.
 When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
 a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
 the editor never opens on a record it could not save correctly.
+
+## List toolbar / body separator — ETP-5509
+
+The list showed no line between the toolbar and the body: the toolbar ended and the summary
+sidebar and the grid started directly below it, the sidebar's right border hanging from nothing.
+`PaymentHeaderTableBase.jsx` (shared with Payment In) never drew one, and neither did the shared list bar.
+
+The line is now part of the shared list bar itself (`ListView.jsx`, a `border-b` in
+`--border-subtle` on the toolbar container, full card width), so this window gets it without any
+change to `PaymentHeaderTableBase.jsx` — and so does every other window that keeps the native
+bar. Payment In gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
+toolbar stays single-row.
+
+Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
+runs under the toolbar, above both the sidebar and the grid, across the full width of the card.

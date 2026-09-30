@@ -2002,3 +2002,19 @@ navigates to the created invoice.
   checks the chosen vendor (`checkBpHasLocation` in `purchaseInvoiceDescriptor.js`). When it has
   no address, the modal says so under Proveedor, offers "Volver a verificar", and keeps
   **Continuar** disabled. A failed lookup (`unknown`) does not block the modal.
+
+## List toolbar: tab group on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
+and the main actions (sort, refresh, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
+below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
+group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
+with the filters and the actions. The tabs are on the second row at every width, and they behave
+as before: choosing another entry filters the grid and highlights the selection.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/purchase-invoice` and confirm the status and date
+filters and "Filtros" sit on the first row with sort, refresh and "New invoice" on the right,
+untruncated; the three tabs sit on the second row; switching tab still filters the grid.
