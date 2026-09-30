@@ -129,8 +129,15 @@ vi.mock('@generated/purchase-order/generated/web/purchase-order/index.jsx', () =
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import PurchaseOrderWindow from '../index.jsx';
+
+// ETP-5487 — index.jsx now reads useSearchParams() (react-router-dom), which
+// throws outside a Router context. Wrap every render in MemoryRouter.
+function renderWithRouter(ui) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wiring)', () => {
   beforeEach(() => {
@@ -142,14 +149,14 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
   });
 
   it('renders the list view (ListView) when no recordId is present and access is full', () => {
-    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('list-view')).toBeInTheDocument();
     expect(lastListViewProps.window).toBeUndefined();
   });
 
   it('renders GeneratedApp (detail view) when a recordId is present', () => {
-    render(<PurchaseOrderWindow windowName="purchase-order" recordId="po-1" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" recordId="po-1" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('generated-app')).toHaveAttribute('data-record-id', 'po-1');
     expect(lastGeneratedAppProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
@@ -160,14 +167,14 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
   // effectiveWindow; verifies the useMemo wiring added alongside the guard.
   it('passes a read-only effectiveWindow to ListView when the access tier is read-only', () => {
     currentWindowAccessTier = 'read-only';
-    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" window={{ foo: 'bar' }} />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" window={{ foo: 'bar' }} />);
 
     expect(lastListViewProps.window).toMatchObject({ foo: 'bar', readOnly: true });
   });
 
   it('renders the WindowAccessGuard (windowId 181) instead of ListView when the access tier is none', () => {
     currentWindowAccessTier = 'none';
-    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('window-access-guard')).toHaveAttribute('data-window-id', '181');
     expect(screen.queryByTestId('list-view')).not.toBeInTheDocument();
@@ -175,14 +182,14 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
 
   it('renders the WindowAccessGuard instead of GeneratedApp when the access tier is none, even with a recordId', () => {
     currentWindowAccessTier = 'none';
-    render(<PurchaseOrderWindow windowName="purchase-order" recordId="po-1" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" recordId="po-1" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
     expect(screen.queryByTestId('generated-app')).not.toBeInTheDocument();
   });
 
   it('passes documentType (translated via useMenuLabel) through to useOrderWindow', () => {
-    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ specName: 'purchase-order', documentType: 'Purchase Order' });
   });
@@ -194,7 +201,7 @@ describe('PurchaseOrderWindow — render smoke tests (ETP-4520 window-access wir
   // to rowQuickActions.menuActions (see useOrderWindow.vitest.jsx for that
   // shared, window-agnostic behavior).
   it('passes showReactivate: true to useOrderWindow, enabling the row-hover kebab Reactivate item', () => {
-    render(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<PurchaseOrderWindow windowName="purchase-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ showReactivate: true });
   });

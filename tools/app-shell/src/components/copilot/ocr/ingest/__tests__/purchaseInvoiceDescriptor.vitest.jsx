@@ -1,4 +1,4 @@
-import { nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax } from '../purchaseInvoiceDescriptor';
+import { nonBlank, toIsoDate, buildTaxSearchTerm, buildLineOps, findBp, resolveTaxesForLines, findTax, checkBpHasLocation } from '../purchaseInvoiceDescriptor';
 
 // Mock simSearch and contactApi to test findBp/resolveTaxesForLines without network
 vi.mock('@etendosoftware/app-shell-core/lib/simSearch.js', () => ({
@@ -758,6 +758,44 @@ describe('purchaseInvoiceDescriptor', () => {
       ];
       const result = await resolveTaxesForLines({ token: 'tk', lines });
       expect(result).toEqual([null, null]);
+    });
+  });
+
+  // ETP-5289 — the review modal blocks only on a known-missing address, never on a failed lookup.
+  describe('checkBpHasLocation', () => {
+    const ctx = { token: 'tok', apiBaseUrl: 'http://test/neo/purchase-invoice', bpId: 'bp-1' };
+
+    beforeEach(() => {
+      globalThis.fetch = vi.fn();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('returns present when the vendor has an active address', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [{ id: 'loc-1' }] } }) });
+      expect(await checkBpHasLocation(ctx)).toBe('present');
+      expect(globalThis.fetch.mock.calls[0][0]).toContain('/contacts/locationAddress');
+    });
+
+    it('returns missing when the lookup answers with no address', async () => {
+      globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ response: { data: [] } }) });
+      expect(await checkBpHasLocation(ctx)).toBe('missing');
+    });
+
+    it('returns unknown when the lookup fails, answers non-OK or unreadable', async () => {
+      globalThis.fetch.mockRejectedValueOnce(new Error('network'));
+      expect(await checkBpHasLocation(ctx)).toBe('unknown');
+      globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      expect(await checkBpHasLocation(ctx)).toBe('unknown');
+      globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => { throw new Error('bad'); } });
+      expect(await checkBpHasLocation(ctx)).toBe('unknown');
+    });
+
+    it('returns unknown without a vendor id', async () => {
+      expect(await checkBpHasLocation({ ...ctx, bpId: null })).toBe('unknown');
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     });
   });
 });

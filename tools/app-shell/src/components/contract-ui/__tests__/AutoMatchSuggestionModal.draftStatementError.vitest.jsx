@@ -153,6 +153,18 @@ describe('AutoMatchSuggestionModal — draft-statement refusal is translated', (
     // translateBackendError returns the original for anything it does not know, so wiring it in
     // must not have swallowed the messages that were already surfacing correctly.
     applyMock.mockResolvedValue({
+      results: [{ statementLineId: 'line-1', error: { message: 'Unmapped backend failure for line-1' } }],
+    });
+    renderModal();
+
+    fireEvent.click(screen.getByTestId('automatch-modal-apply'));
+
+    await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    expect(toast.error).toHaveBeenCalledWith('Unmapped backend failure for line-1');
+  });
+
+  it('translates the already-reconciled refusal and drops the internal line id (ETP-5472)', async () => {
+    applyMock.mockResolvedValue({
       results: [{ statementLineId: 'line-1', error: { message: 'Statement line is already reconciled: line-1' } }],
     });
     renderModal();
@@ -160,7 +172,10 @@ describe('AutoMatchSuggestionModal — draft-statement refusal is translated', (
     fireEvent.click(screen.getByTestId('automatch-modal-apply'));
 
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect(toast.error).toHaveBeenCalledWith('Statement line is already reconciled: line-1');
+    // The prefix matcher passes an empty params object; this mock renders it as `t:<key> `.
+    const [message] = toast.error.mock.calls[0];
+    expect(message.trim()).toBe('t:backendError.statementLineAlreadyReconciled');
+    expect(message).not.toContain('line-1');
   });
 
   it('falls back to the generic error key when the failure carries no message', async () => {

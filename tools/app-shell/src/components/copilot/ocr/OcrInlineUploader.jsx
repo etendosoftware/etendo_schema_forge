@@ -6,8 +6,7 @@ const LazyPdfViewer = lazy(() => import('@/windows/custom/shared/PdfViewer.jsx')
 import { useUI } from '@/i18n';
 import { useCopilot } from '@/components/CopilotContext';
 import { getOcrDocType } from './ocrDocTypes';
-import { attachFile } from './attachFile';
-import { listAttachments, markAttachmentAsMain } from './listAttachments';
+import { uploadAndMarkMainAttachment } from './listAttachments';
 import { buildOcrSchema } from './buildOcrSchema';
 import { useOcrExtraction } from './useOcrExtraction';
 import { useOcrFlow } from './useOcrFlow';
@@ -62,40 +61,27 @@ export default function OcrInlineUploader({
   });
 
   // After a successful batch commit:
-  //   1. attach the source PDF to the new record (if a tabId is registered)
-  //   2. mark that attachment as the record's "main" document (ETP-4315) —
-  //      safe without a heuristic here specifically because the record just
-  //      came into existence, so it cannot yet have more than one attachment
-  //   3. hop from /<window>/new to /<window>/<newId> so the form binds to it
-  // Both attachment steps are non-fatal — the document was created either
-  // way; we still navigate so the user sees the result.
+  //   1. upload the source PDF to the new record and mark it as its "main"
+  //      document (ETP-4315) in one NEO request — safe without a heuristic
+  //      because the record just came into existence, so it has no other
+  //      attachment to compete with
+  //   2. hop from /<window>/new to /<window>/<newId> so the form binds to it
+  // The upload goes through /sws/neo/attachments, not the AttachFile webhook:
+  // the webhook accepts only a Bearer token, so under the cookie session
+  // (ETP-4576) it answered 401 and apiFetch logged the user out (ETP-5289).
+  // The upload is non-fatal — the document was created either way; we still
+  // navigate so the user sees the result.
   useEffect(() => {
     if (!result?.committed || !result?.recordId || !docType?.routePrefix) return;
     const newId = result.recordId;
     const sourceFile = fileAtExtractRef.current;
     (async () => {
-      if (sourceFile && docType.tabId) {
-        const res = await attachFile({
-          token,
-          tabId: docType.tabId,
-          recordId: newId,
-          file: sourceFile,
+      if (sourceFile && docType.tableName) {
+        const created = await uploadAndMarkMainAttachment({
+          token, tableName: docType.tableName, recordId: newId, file: sourceFile, apiBaseUrl,
         });
-        if (res?.error) {
-          console.warn('[OCR] AttachFile failed (non-fatal):', res.error);
-        } else if (docType.tableName) {
-          const created = await listAttachments({
-            token, tableName: docType.tableName, recordId: newId, apiBaseUrl,
-          });
-          const soleAttachment = created[0];
-          if (soleAttachment?.id) {
-            const marked = await markAttachmentAsMain({
-              token, attachmentId: soleAttachment.id, isMain: true, apiBaseUrl,
-            });
-            if (!marked) {
-              console.warn('[OCR] Marking the scanned document as main failed (non-fatal)');
-            }
-          }
+        if (!created) {
+          console.warn('[OCR] Attaching the scanned document failed (non-fatal)');
         }
       }
       navigate(`${docType.routePrefix}${newId}`, { replace: true });
@@ -230,14 +216,18 @@ export default function OcrInlineUploader({
           </div>
         </button>
       )}
+      {/* ETP-5289 — `overflow-hidden` clips the spinning icon. These rows end flush with the
+          side panel's bottom edge, and a rotating 12px square is ~17px across its diagonal, so it
+          overflowed the panel by half a pixel every quarter turn: the panel's scrollbar blinked,
+          and before the gutter fix that also resized and redrew the PDF preview. */}
       {status === 'uploading' && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrUploading')}
         </div>
       )}
       {(status === 'extracting' || applying) && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 overflow-hidden text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__5fab8d" />
           {ui('ocrExtracting')}
         </div>
@@ -254,7 +244,9 @@ export default function OcrInlineUploader({
           <span>{pickError}</span>
         </div>
       )}
-      {result && status === 'done' && !applying && (
+      {/* ETP-5289 — only a created invoice is "done"; a cancelled or failed flow also leaves a
+          `result` behind and used to show the success check. */}
+      {result?.committed && status === 'done' && !applying && (
         <div className="flex items-center gap-2 text-xs text-status-success-foreground">
           <CheckCircle2 className="h-3 w-3" data-testid="CheckCircle2__5fab8d" />
           {ui('ocrDone')}

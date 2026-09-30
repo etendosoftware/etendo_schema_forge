@@ -322,7 +322,12 @@ describe('AutoMatchSuggestionModal — apply outcome reporting', () => {
 
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
     // Naming the accounting account here would mislead: it is not what stopped the other group.
-    expect(toast.error).toHaveBeenCalledWith('Statement line is already reconciled: line-1');
+    // ETP-5472: the backend message itself is now translated, with the internal line id dropped.
+    // The prefix matcher hands `ui` an empty params object, which this file's mock renders as
+    // `key ` (trailing space) — hence the trim.
+    const [message] = toast.error.mock.calls[0];
+    expect(message.trim()).toBe('backendError.statementLineAlreadyReconciled');
+    expect(message).not.toContain('line-1');
     expect(toast.warning).not.toHaveBeenCalled();
   });
 
