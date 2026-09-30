@@ -358,8 +358,8 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
       `${API_BASE_URL}/header/${RECORD_ID}`,
       // `credentials: 'include'` comes from the shared helper now, instead of being
-      // remembered per call site (ETP-5022).
-      { credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
+      // remembered per call site (ETP-5022). ETP-5424: a GET also carries apiFetch's timeout signal.
+      { credentials: 'include', signal: expect.any(AbortSignal), headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } },
     ));
 
     await waitFor(() => {
@@ -374,7 +374,7 @@ describe('useTaxSifLineRowActions — header fetch + selector context wiring', (
       expect(url).toContain('priceList=PL-1');
       expect(url).toContain('C_BPartner_Location_ID=ADDR-1');
       expect(url).toContain('currency=EUR');
-      expect(init).toEqual({ credentials: 'include', headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } });
+      expect(init).toEqual({ credentials: 'include', signal: expect.any(AbortSignal), headers: { Authorization: `Bearer ${TOKEN}`, 'Accept-Language': 'es_ES' } });
     });
   });
 

@@ -215,10 +215,13 @@ export async function uploadAndMarkMainAttachment({
   const form = new FormData();
   form.append('file', file, fileName || file.name || 'document');
   try {
+    // ETP-5424 — an upload: a large file body can outlive the default timeout on a slow
+    // uplink, and a cut-off upload that still lands invites a duplicate attachment.
     const res = await apiFetch(url, {
       method: 'POST',
       baseUrl: '',
       token,
+      timeout: 0,
       body: form,
     });
     if (!res.ok) return null;

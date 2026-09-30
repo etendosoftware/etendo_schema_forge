@@ -323,7 +323,7 @@ describe('useMainAttachment', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'https://example.com/f.pdf',
         {
-          credentials: 'include',
+          credentials: 'include', signal: expect.any(AbortSignal),
           headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
         },
       );

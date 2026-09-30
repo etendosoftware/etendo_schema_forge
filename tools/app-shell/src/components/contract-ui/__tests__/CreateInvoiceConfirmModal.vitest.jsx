@@ -295,7 +295,7 @@ describe('CreateInvoiceConfirmModal', () => {
     });
 
     expect(fetch).toHaveBeenCalledWith('/api/pending', {
-      credentials: 'include',
+      credentials: 'include', signal: expect.any(AbortSignal),
       headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
     });
   });
@@ -398,7 +398,7 @@ describe('CreateInvoiceConfirmModal', () => {
         expect(fetch).toHaveBeenCalledWith(
           '/sws/neo/goods-shipment/price-list/priceList?_startRow=0&_endRow=200',
           {
-            credentials: 'include',
+            credentials: 'include', signal: expect.any(AbortSignal),
             headers: { Authorization: 'Bearer test-token', 'Accept-Language': 'es_ES' },
           },
         );
