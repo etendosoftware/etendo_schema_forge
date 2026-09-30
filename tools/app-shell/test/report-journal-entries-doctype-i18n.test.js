@@ -70,7 +70,7 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
     // back to a CASE on ad_table.tablename for exactly those three tables.
     assert.match(
       SQL,
-      /MAX\(COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)\)\s+AS\s+docbasetype/i,
+      /MAX\(COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'M_MOVEMENT'\s+THEN\s+'MMM'\s+WHEN\s+'M_INTERNAL_CONSUMPTION'\s+THEN\s+'MIC'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)\)\s+AS\s+docbasetype/i,
     );
   });
 
@@ -97,6 +97,10 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
     // here makes the existing rl/rlt joins resolve the real label (and
     // its translation) for free — same mechanism as FAT/MXI/MMI.
     assert.match(caseBlock, /WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'/i);
+    // ETP-5273: Goods Movements and Internal Consumption also post fact_acct
+    // rows with no c_doctype, so they need the same table-based fallback.
+    assert.match(caseBlock, /WHEN\s+'M_MOVEMENT'\s+THEN\s+'MMM'/i);
+    assert.match(caseBlock, /WHEN\s+'M_INTERNAL_CONSUMPTION'\s+THEN\s+'MIC'/i);
   });
 
   it('reuses the existing adt (ad_table) join already used by doc_window — no new join to ad_table added', () => {
@@ -132,7 +136,7 @@ describe('report-journal-entries — docbasetype/isreturn SQL projection (ETP-50
   it('joins ad_ref_list on the fixed DocBaseType reference (183), matching the same fallback-resolved docbasetype expression used for the docbasetype column', () => {
     assert.match(
       SQL,
-      /LEFT JOIN ad_ref_list rl\s+ON\s+rl\.ad_reference_id = '183'\s+AND\s+rl\.value = COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)/i,
+      /LEFT JOIN ad_ref_list rl\s+ON\s+rl\.ad_reference_id = '183'\s+AND\s+rl\.value = COALESCE\(dt\.docbasetype,\s*CASE\s+UPPER\(adt\.tablename\)\s+WHEN\s+'FIN_FINACC_TRANSACTION'\s+THEN\s+'FAT'\s+WHEN\s+'M_MATCHINV'\s+THEN\s+'MXI'\s+WHEN\s+'M_INVENTORY'\s+THEN\s+'MMI'\s+WHEN\s+'M_MOVEMENT'\s+THEN\s+'MMM'\s+WHEN\s+'M_INTERNAL_CONSUMPTION'\s+THEN\s+'MIC'\s+WHEN\s+'A_AMORTIZATION'\s+THEN\s+'AMZ'\s+ELSE\s+NULL\s+END\)/i,
     );
   });
 
@@ -199,6 +203,16 @@ const CASES = [
   ['GLJ', null, 'GL Journal', DOC_TYPE_LABEL_OVERRIDES.en_US.GLJ, DOC_TYPE_LABEL_OVERRIDES.es_ES.GLJ],
   ['ARR', null, 'AR Receipt', DOC_TYPE_LABEL_OVERRIDES.en_US.ARR, DOC_TYPE_LABEL_OVERRIDES.es_ES.ARR],
   ['AMZ', null, 'Amortization', 'Amortization', 'Amortization'],
+  // ETP-5273: Goods Movements (M_Movement, MMM) and Internal Consumption
+  // (M_Internal_Consumption, MIC) used to render the generic "Journal" label.
+  // Expected values are LITERAL on purpose: DOC_TYPE_LABEL_OVERRIDES is
+  // imported from the INSTALLED @etendosoftware/schema-forge-cli package, which
+  // does not carry MMM/MIC until the core is published and bumped here. Reading
+  // `DOC_TYPE_LABEL_OVERRIDES.en_US.MMM` would be `undefined` and mask the
+  // check. These cases are EXPECTED to fail until that core bump lands; they
+  // must then turn green with no further edits.
+  ['MMM', 'N', 'Material Movement', 'Goods Movement', 'Movimiento entre almacenes'],
+  ['MIC', 'N', 'Internal Material Consumption', 'Internal Consumption', 'Consumo interno'],
   [null, null, 'Journal', 'Journal', 'Journal'],
 ];
 
