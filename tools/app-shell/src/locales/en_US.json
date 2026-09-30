@@ -21155,7 +21155,6 @@
     "fmDebug.profile.verifactu": "VERI*FACTU",
     "purchaseOrder.topbar.deliveryStatus": "Delivery Status",
     "purchaseOrder.topbar.invoiceStatus": "Invoice Status",
-    "goodsReceipt.topbar.invoiceStatus": "Invoice Status",
     "goodsReceipt.confirmModal.title": "Register invoice?",
     "goodsReceipt.confirmModal.subtitle": "The receipt will be confirmed. Choose whether to also create a Purchase Invoice (Type: Invoice).",
     "goodsReceipt.confirmModal.createInvoiceTitle": "Create Purchase Invoice",

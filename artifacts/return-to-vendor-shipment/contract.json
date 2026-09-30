@@ -1,8 +1,8 @@
 {
   "version": "0.4.0",
   "generatedAt": "2026-08-13T11:56:58.791Z",
-  "updatedAt": "2026-09-24T10:36:53.127Z",
-  "checksum": "a4f8b294fa1885dc",
+  "updatedAt": "2026-09-30T15:58:09.579Z",
+  "checksum": "a96e25d167c80258",
   "frontendContract": {
     "window": {
       "id": "273673D2ED914C399A6C51DB758BE0F9",
@@ -18,6 +18,7 @@
         }
       },
       "customComponents": {
+        "topbarExtra": "ReturnToVendorShipmentInvoicedBadge",
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },
@@ -708,6 +709,7 @@
         }
       },
       "customComponents": {
+        "topbarExtra": "ReturnToVendorShipmentInvoicedBadge",
         "bottomSection": "ReturnToVendorShipmentBottomPanel",
         "topbarRight": "ConfirmWithCreditButton"
       },

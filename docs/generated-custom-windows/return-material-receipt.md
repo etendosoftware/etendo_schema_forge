@@ -26,6 +26,8 @@ Receive material back into stock after a sales-side return flow. The window is o
 - Line interaction: the child table and form expose line number, product, movement quantity, UOM, order quantity, and sales-order-line context.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record — including a customer-issued return document, if the customer provides one (ETP-5124; this is the only place that document is attached — see the ETP-5124 note below, which reverted the ETP-4408 preview-panel upload slot).
 
+- **Header progress badge (ETP-5549):** `ReturnMaterialReceiptInvoicedBadge` shows the read-only `invoiceStatus` percentage as "Facturado N%" (`invoiced`). Shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/`) rendered in the detail topbar via `decisions.json → window.customComponents.topbarExtra`, shown only when the document is completed (CO), including 0% (neutral tone); hidden in any other status or when the field is missing.
+
 ## Reactive behavior and dependencies
 
 - The child lines depend on the header record through the standard detail relationship; generated data flow uses `parentId={id}` for child queries, so lines are scoped to the selected receipt.

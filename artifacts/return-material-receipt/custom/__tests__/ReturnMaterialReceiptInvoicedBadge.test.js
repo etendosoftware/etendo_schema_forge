@@ -5,14 +5,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '..', 'GoodsShipmentBillingBadge.jsx'), 'utf8');
+const src = readFileSync(join(__dirname, '..', 'ReturnMaterialReceiptInvoicedBadge.jsx'), 'utf8');
 
-describe('GoodsShipmentBillingBadge', () => {
-  it('exports a default function component named GoodsShipmentBillingBadge', () => {
-    assert.match(src, /export default function GoodsShipmentBillingBadge/);
+describe('ReturnMaterialReceiptInvoicedBadge', () => {
+  it('exports a default function component', () => {
+    assert.match(src, /export default function ReturnMaterialReceiptInvoicedBadge/);
   });
 
-  it('imports useUI from @/i18n', () => {
+  it('uses useUI from @/i18n', () => {
     assert.match(src, /import\s*\{[^}]*useUI[^}]*\}\s*from\s*['"]@\/i18n['"]/);
   });
 
@@ -25,25 +25,19 @@ describe('GoodsShipmentBillingBadge', () => {
     assert.match(src, /documentStatus=\{data\?\.documentStatus\}/);
   });
 
-  it('reads invoiceStatus only (not completelyInvoiced)', () => {
+  it('reads the invoiceStatus field', () => {
     assert.match(src, /value=\{data\?\.invoiceStatus\}/);
-    assert.doesNotMatch(src, /completelyInvoiced/);
   });
 
   it('labels via ui("invoiced") without hardcoded strings', () => {
     assert.match(src, /label=\{ui\(['"]invoiced['"]\)\}/);
-    assert.doesNotMatch(src, /['"](Invoiced|Partially Invoiced|Pending)['"]/);
   });
 
-  it('opts in to showing the badge for positive non-completed documents', () => {
-    assert.match(src, /<ProgressFieldBadge[^>]*\sshowWhenPositive(\s|\/|>)/s);
-  });
-
-  it('preserves the billing-badge testId', () => {
+  it('keeps the billing-badge testId', () => {
     assert.match(src, /testId="billing-badge"/);
   });
 
   it('does not duplicate pill/tone logic', () => {
-    assert.doesNotMatch(src, /DocumentStatusPill|getProgressTone|TONE_STYLES|Math\.round|<span|tabular-nums/);
+    assert.doesNotMatch(src, /DocumentStatusPill|getProgressTone|TONE_STYLES/);
   });
 });

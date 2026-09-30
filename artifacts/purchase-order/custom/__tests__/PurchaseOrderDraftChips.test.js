@@ -21,9 +21,15 @@ describe('PurchaseOrderDraftChips', () => {
     assert.match(src, /getProgressTone/);
   });
 
-  it('reuses TONE_STYLES from the status-tag tokens (success/warning/neutral)', () => {
-    assert.match(src, /from '@\/components\/ui\/status-tag-tokens\.js'/);
-    assert.match(src, /TONE_STYLES\[tone\]/);
+  it('renders the progress chip through DocumentStatusPill (single text layer)', () => {
+    assert.match(src, /import DocumentStatusPill from '@\/components\/contract-ui\/DocumentStatusPill'/);
+    assert.match(src, /<DocumentStatusPill/);
+    assert.match(src, /showIcon=\{false}/);
+    assert.match(src, /tone=\{getProgressTone\(pct\)}/);
+    assert.match(src, /label=\{`\$\{label} \$\{percent}%`}/);
+    assert.match(src, /testId="order-progress-badge"/);
+    assert.doesNotMatch(src, /TONE_STYLES/);
+    assert.doesNotMatch(src, /tabular-nums/);
   });
 
   it('computes receivedPct from order-line quantities', () => {

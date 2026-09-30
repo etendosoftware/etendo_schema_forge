@@ -21391,7 +21391,6 @@
     "fmDebug.profile.verifactu": "VERI*FACTU",
     "purchaseOrder.topbar.deliveryStatus": "Estado de entrega",
     "purchaseOrder.topbar.invoiceStatus": "Estado de facturación",
-    "goodsReceipt.topbar.invoiceStatus": "Estado de facturación",
     "goodsReceipt.confirmModal.title": "¿Registrar factura?",
     "goodsReceipt.confirmModal.subtitle": "El albarán se confirmará. Elige si deseas crear también una Factura de Compra (Tipo: Factura).",
     "goodsReceipt.confirmModal.createInvoiceTitle": "Crear Factura de Compra",

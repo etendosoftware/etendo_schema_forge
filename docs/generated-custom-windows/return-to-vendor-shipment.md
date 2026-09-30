@@ -27,6 +27,8 @@ Because the line model points back to a return source, this window should primar
 
 At list level, the window exposes return-to-vendor shipments as purchase records. At detail level, it renders the shipment header plus child lines and a related-documents tab. The contract uses the default layout, marks `description` as the notes field, and enables related-documents support.
 
+- **Header progress badge (ETP-5549):** `ReturnToVendorShipmentInvoicedBadge` shows the read-only `invoiceStatus` percentage as "Facturado N%" (`invoiced`). Shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/`) rendered in the detail topbar via `decisions.json → window.customComponents.topbarExtra`, shown only when the document is completed (CO), including 0% (neutral tone); hidden in any other status or when the field is missing.
+
 ## Reactive behavior and dependencies
 The main visible parent-child dependency is the standard shipment header to shipment lines relationship: child rows belong to the selected header record, and app-shell behavior refreshes child rows and the header together after line changes.
 
