@@ -66,11 +66,13 @@ describe('saveActions.jsx — Save button disabled conditions (ETP-3662)', () =>
   });
 
   it('gates the existing-record Save button with !isDirty', () => {
-    // The non-draftMode existing-record Save button checks isDocumentReadOnly, isSaving, !isDirty,
+    // The non-draftMode existing-record Save button checks isDocumentReadOnly, busy, !isDirty,
     // blockSaveForBalance (ETP-4244 balance footer gate), AND saveGate.blocked (ETP-4933).
+    // ETP-5278 — `busy` is `hook.isSaving || saveBusy` (a window-reported in-flight write).
+    assert.match(srcSave, /const busy = hook\.isSaving \|\| saveBusy;/);
     assert.match(
       srcSave,
-      /disabled=\{isDocumentReadOnly \|\| hook\.isSaving \|\| !isDirty \|\| blockSaveForBalance \|\| saveGate\.blocked\}/,
+      /disabled=\{isDocumentReadOnly \|\| busy \|\| !isDirty \|\| blockSaveForBalance \|\| saveGate\.blocked\}/,
     );
   });
 

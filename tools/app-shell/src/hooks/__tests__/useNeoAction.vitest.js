@@ -282,6 +282,25 @@ describe('useNeoAction', () => {
       expect(res.message).toBe('boom');
     });
 
+    it('returns messageParams alongside messageKeys when the backend sends them (ETP-5175)', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Unprocessable Entity',
+        json: async () => ({
+          success: false,
+          message: 'Account could not be found. (Contact: Acme)',
+          messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+          messageParams: { bpName: 'Acme' },
+        }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-p1', 'post'); });
+
+      expect(res.messageKeys).toEqual(['InvalidAccount', 'ETGO_InvalidAccountBpOnly']);
+      expect(res.messageParams).toEqual({ bpName: 'Acme' });
+    });
+
     it('leaves messageKeys undefined against a backend that does not send them', async () => {
       globalThis.fetch.mockResolvedValue({
         ok: false,

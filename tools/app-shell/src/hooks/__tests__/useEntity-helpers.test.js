@@ -377,9 +377,9 @@ describe('shouldSkipPayloadField', () => {
     );
   });
 
-  it('returns true for a contacts billing field during business partner create', () => {
+  it('returns true when isFieldExcluded (ETP-5537 generic create-field exclusion) says so', () => {
     assert.equal(
-      shouldSkipPayloadField('priceList', 'SomeList', emptyRef(), emptyRef(), new Set(), true, {}),
+      shouldSkipPayloadField('priceList', 'SomeList', emptyRef(), emptyRef(), new Set(), () => true, {}),
       true
     );
   });
@@ -618,10 +618,10 @@ describe('buildCreatePayload', () => {
     assert.deepEqual(payload, { name: 'Acme' });
   });
 
-  it('skips contacts billing fields during a business partner create', () => {
+  it('skips fields isFieldExcluded (ETP-5537 generic create-field exclusion) excludes', () => {
     const editing = { name: 'Acme', priceList: 'SomeList' };
     const payload = {};
-    buildCreatePayload(editing, emptyRef(), emptyRef(), new Set(), true, payload);
+    buildCreatePayload(editing, emptyRef(), emptyRef(), new Set(), (key) => key === 'priceList', payload);
     assert.deepEqual(payload, { name: 'Acme' });
   });
 
