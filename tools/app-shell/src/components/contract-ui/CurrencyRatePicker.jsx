@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ChevronDown, Loader2, Pencil, Check, X } from 'lucide-react';
 import { Label } from '@/components/ui/label';
+import { FIELD_HEIGHT, LABEL_GAP } from '@/components/ui/formDensity';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
@@ -8,6 +9,17 @@ import { MaskedAmountInput } from '@/components/forms/fields.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useUI } from '@/i18n';
+
+// ETP-5479: the Moneda field must look and behave exactly like the field it replaces.
+// In every window NOT matched by EntityForm's isCurrencyRateSelectorField (e.g. Albaranes)
+// Moneda is a CreatableSearchSelect when editable and a disabled Input when read-only.
+// This picker used to draw its own shell — rounded-md, px-3 py-2, `hover:bg-muted/40` (a
+// much lighter hover) and NO focus style at all — so Pedido de compra showed no focus
+// ring while Albaranes did. Same box, hover fill, focus ring and disabled look now.
+const FIELD_SHELL = `${FIELD_HEIGHT} rounded-lg border px-2 text-sm`;
+const ENABLED_SHELL = `${FIELD_SHELL} border-[hsl(var(--border-control))] bg-card text-text-primary shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)]`;
+const DISABLED_SHELL = `${FIELD_SHELL} border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed`;
+
 /**
  * CurrencyRatePicker — searchable currency selector for order header fields.
  *
@@ -196,11 +208,14 @@ export function CurrencyRatePicker({
 
   if (isReadOnly) {
     return (
-      <div className="space-y-1.5" data-testid={`field-${field.key}`}>
+      <div className={LABEL_GAP} data-testid={`field-${field.key}`}>
         <Label
           className="text-sm text-foreground font-medium"
           data-testid={"Label__" + field.id}>{resolvedLabel}</Label>
-        <div className="rounded-md border border-input bg-muted/50 px-3 py-2 text-sm cursor-default">
+        <div
+          className={`flex w-full items-center ${DISABLED_SHELL}`}
+          aria-disabled="true"
+          data-testid="currency-rate-readonly">
           {displayIso}
           {displayRate != null && (
             <span className="text-muted-foreground ml-1">— {formatRate(displayRate)}</span>
@@ -211,7 +226,7 @@ export function CurrencyRatePicker({
   }
 
   return (
-    <div className="space-y-1.5 relative" data-testid={`field-${field.key}`} ref={containerRef}>
+    <div className={`${LABEL_GAP} relative`} data-testid={`field-${field.key}`} ref={containerRef}>
       <Label
         htmlFor={field.key}
         className="text-sm text-foreground font-medium"
@@ -221,7 +236,7 @@ export function CurrencyRatePicker({
       </Label>
       {/* Trigger */}
       {editingRate ? (
-        <div className="w-full flex items-center gap-1 rounded-md border border-input bg-card dark:bg-background px-2 py-1.5 text-sm">
+        <div className={`w-full flex items-center gap-1 ${ENABLED_SHELL} ring-2 ring-transparent focus-within:ring-primary`}>
           <span className="font-medium shrink-0">{displayIso} —</span>
           {/* The canonical masked input, not a hand-rolled one: it owns the keystroke filtering
               (letters and a second separator never reach the value), renders the configured decimal
@@ -268,7 +283,10 @@ export function CurrencyRatePicker({
             data-testid="currency-rate-trigger"
             id={field.key}
             type="button"
-            className="flex-1 flex items-center justify-between rounded-md border border-input bg-card dark:bg-background px-3 py-2 text-sm hover:bg-muted/40 transition-colors"
+            aria-expanded={open}
+            // The ring stays on while the list is open: the search box takes focus then,
+            // but CreatableSearchSelect keeps its ring for as long as its list is open too.
+            className={`flex-1 min-w-0 flex items-center justify-between ${ENABLED_SHELL} hover:bg-[hsl(var(--field-hover))] focus:outline-none ring-2 focus:ring-primary${open ? ' ring-primary' : ' ring-transparent'}`}
             onClick={() => setOpen((v) => !v)}
           >
             {value ? (

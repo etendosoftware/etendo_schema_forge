@@ -238,6 +238,16 @@ replaces the standard `SelectorInput` and:
 - The field `eTGOCurrencyRate` is declared in `decisions.json` as
   `form: false, grid: false` — it is invisible to the user; only
   `CurrencyRatePicker` manages it.
+- Looks like every other field (ETP-5479): the trigger, the inline rate editor
+  and the read-only box share the `CreatableSearchSelect` shell — `FIELD_HEIGHT`,
+  `rounded-lg`, `--border-control` border, the `--field-hover` hover fill and a
+  `ring-2 ring-primary` focus ring (kept while the list is open, since the
+  search box takes focus). Read-only renders the disabled-field look
+  (`--field-hover` fill, `--field-disabled-border` border, `text-text-disabled`),
+  same as the disabled `Input` used for read-only FKs. Label spacing is
+  `LABEL_GAP`. Before, it had its own lighter `hover:bg-muted/40` and no focus
+  style, so Moneda looked different in Pedido de compra than in Albaranes (which
+  renders the plain selector).
 
 The `currencyOptions` endpoint is the same one used by sales-order —
 implemented in `CurrencyOptionsHandler.java` (`com.etendoerp.go`). It filters
