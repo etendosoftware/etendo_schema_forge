@@ -107,10 +107,16 @@ older file ⇒ stale ⇒ re-render. Three things about that are worth knowing be
   old never-invalidated behaviour. So a new cached window that forgets it fails **silently**,
   exactly like the email-wiring gaps in step 1.
 
+Two more invalidation causes sit behind the same `recordUpdated` guard: a new frontend bundle
+(ETP-5125) and a company-branding change — logo, org name/tax ID/address — reported by the
+session's `brandingUpdated` (ETP-5541). The printed logo is resolved server-side by
+`CompanyLogoResolver` (`AD_OrgInfo` first, `AD_ClientInfo` last); never pick the logo in JS.
+
 Adding a cached window therefore means passing `recordUpdated: <record>?.updated ?? null` in
 **both** its `pdfCacheConfig` and its `attachmentConfig`. Two windows opt out on purpose —
-purchase-invoice and return-material-receipt hold the *counterparty's* document in that slot, and
-no edit of ours makes it stale.
+purchase-invoice and goods-receipt hold the *counterparty's* document in that slot, and no edit
+of ours makes it stale. (return-material-receipt passes no cache config at all since ETP-5124 —
+see D18 in the reference doc.)
 
 `updated` reaches the browser only because `NeoFieldFilter.ALWAYS_READABLE_KEYS` exempts it from
 GET filtering (it is an AD column but not an AD field, so no window can declare it). Read side

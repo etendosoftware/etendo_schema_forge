@@ -171,6 +171,33 @@ export async function fetchMainAttachment({ token, tableName, recordId, apiBaseU
 }
 
 /**
+ * ETP-5541 — the instant the company branding (logo, organization name/tax ID/address)
+ * last changed, as `GET /sws/neo/session` reports it in `brandingUpdated`. Read beside
+ * `fetchMainAttachment` because it is the other half of deciding whether a cached
+ * rendering is still current (`lib/attachmentFreshness.js` → `isCachedRenderingStale`).
+ * Never throws — returns `null` on any error, which the freshness check treats as
+ * "branding unknown" (fail-open).
+ *
+ * @param {{ token: string, apiBaseUrl?: string }} params
+ * @returns {Promise<string|null>}
+ */
+export async function fetchBrandingUpdated({ token, apiBaseUrl } = {}) {
+  const base = detectAttachmentsBase(apiBaseUrl);
+  try {
+    const res = await apiFetch(`${base}/sws/neo/session`, {
+      method: 'GET',
+      baseUrl: '',
+      token,
+    });
+    if (!res.ok) return null;
+    const json = await res.json().catch(() => null);
+    return json?.brandingUpdated ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Uploads a file and marks it as (tableName, recordId)'s "main" document in
  * the same request — the previously-marked attachment, if any, is deleted
  * server-side as part of the same transaction. Returns the created
@@ -188,10 +215,13 @@ export async function uploadAndMarkMainAttachment({
   const form = new FormData();
   form.append('file', file, fileName || file.name || 'document');
   try {
+    // ETP-5424 — an upload: a large file body can outlive the default timeout on a slow
+    // uplink, and a cut-off upload that still lands invites a duplicate attachment.
     const res = await apiFetch(url, {
       method: 'POST',
       baseUrl: '',
       token,
+      timeout: 0,
       body: form,
     });
     if (!res.ok) return null;

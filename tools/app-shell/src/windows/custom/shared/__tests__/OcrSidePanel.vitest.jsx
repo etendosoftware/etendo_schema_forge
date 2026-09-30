@@ -45,7 +45,7 @@ vi.mock('../PdfViewer.jsx', () => ({
 // --- Import under test ---
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import OcrSidePanel from '../OcrSidePanel.jsx';
+import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../OcrSidePanel.jsx';
 
 // --- Helpers ---
 
@@ -276,5 +276,37 @@ describe('OcrSidePanel — re-attach button', () => {
     fireEvent.change(fileInput(container), { target: { files: [pdfFile('new.pdf')] } });
 
     expect(storeFile).toHaveBeenCalledWith(expect.objectContaining({ name: 'new.pdf' }));
+  });
+});
+
+// --- ETP-5205 (QA pasada 1): Solo-Lectura tier ---
+
+
+describe('ReadOnlyOcrSidePanel (ETP-5205)', () => {
+  it('shows the stored document with no attach button and no file input', () => {
+    hookState = withFile({ objectUrl: 'blob:doc', mimeType: 'application/pdf', fileName: 'scan.pdf' });
+
+    const { container } = render(<ReadOnlyOcrSidePanel {...defaultProps} />);
+
+    expect(screen.getByText('scan.pdf')).toBeInTheDocument();
+    expect(screen.queryByText('ocrSidePanelAttach')).not.toBeInTheDocument();
+    expect(fileInput(container)).toBeNull();
+  });
+
+  it('without a stored document shows an empty state instead of the drop zone', () => {
+    const { container } = render(<ReadOnlyOcrSidePanel {...defaultProps} />);
+
+    expect(screen.getByTestId('ocr-side-panel-readonly-empty')).toBeInTheDocument();
+    expect(dropZone(container)).toBeNull();
+    expect(fileInput(container)).toBeNull();
+  });
+
+  it('a dropped file is never stored', () => {
+    hookState = withFile({ objectUrl: 'blob:doc', mimeType: 'application/pdf', fileName: 'scan.pdf' });
+    const { container } = render(<ReadOnlyOcrSidePanel {...defaultProps} />);
+
+    fireEvent.drop(container.firstChild, { dataTransfer: { files: [pdfFile()] } });
+
+    expect(storeFile).not.toHaveBeenCalled();
   });
 });

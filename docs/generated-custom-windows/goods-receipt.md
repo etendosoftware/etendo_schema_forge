@@ -636,3 +636,11 @@ invoice is built from the receipt(s), not the order".
 - `artifacts/goods-receipt/custom/BulkInvoiceFromReceipt.jsx` (new) + `artifacts/goods-receipt/custom/__tests__/BulkInvoiceFromReceipt.test.js` (new, source-shape coverage mirroring `BulkInvoiceFromShipment.test.js`, including the same `quote — real price per line, not an estimate` block: receipt-line + `pendingInvoiceLines` fetches, the purchase-order-line price fetch independent of `selectedPriceListId`, the Tarifa-price fetch scoped to unlinked lines via `purchase-invoice/lines/selectors/M_Product_ID`, and the order-price-over-tariff-price precedence).
 - `tools/app-shell/src/windows/custom/goods-receipt/index.jsx` registers it as the first child of `GoodsReceiptBulkAction`; `GoodsReceiptWindow.vitest.jsx` mocks it (the generated-app test double renders every `bulkActions` child with no props, so the real hook-using component must not run for real in that suite) and asserts it renders inside the `bulk-actions-slot`.
 - `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/MultiDocumentInvoiceSupport.java` (new) and `CreatePurchaseInvoiceHandler.java`'s `receiptIds`/`createFromReceipts`/`createInvoiceHeaderFromReceipts`/`pendingInvoiceLines` additions, covered by new cases in `CreatePurchaseInvoiceHandlerTest.java`: `receiptIds` parsing (incl. malformed array), same-BP validation (incl. a null-BusinessPartner hardening the sales original lacked), the size-1-falls-back-to-`createFromReceipt` compatibility guard, `ShipmentInOutLine.class` passed to the native process, empty-selection-throws-before-saving, and the common-order-vs-BP-default header financial ladder.
+
+## Solo Lectura (read-only window-access tier) — preview writes (ETP-5205)
+
+Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically by `ListView`
+(the Email gate is switched off), and `ListView` passes `readOnly` to `renderPreview`. The preview (drop-zone mode) keeps showing the stored document and its download, but offers no drop zone, file picker or delete (`attachmentConfig.readOnly`).
+Backend: the email send contract and every attachment write answer 403 for this tier
+(`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
+Print and Download PDF are deliberately NOT restricted (they only expose readable data).

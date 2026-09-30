@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { useUI } from '@/i18n';
 import { extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
@@ -35,6 +36,7 @@ import { extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/ba
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
   const apiFetch = useApiFetch(apiBaseUrl);
+  const ui = useUI();
 
   const execute = useCallback(async (recordId, actionName, requestBody) => {
     if (!apiBaseUrl || !recordId || !actionName) {
@@ -68,11 +70,11 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
       const success = nested?.success ?? body?.success ?? true;
       return { success, message };
     } catch (err) {
-      return { success: false, message: err?.message || 'Network error' };
+      return { success: false, message: err?.message || ui('networkErrorRetry') };
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, entityName, apiFetch]);
+  }, [apiBaseUrl, entityName, apiFetch, ui]);
 
   return { execute, loading };
 }

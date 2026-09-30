@@ -147,6 +147,23 @@ Hand-written React components must live in one of these locations, NEVER in `art
 - Files in `artifacts/{window}/custom/` must be imported from generated files using relative paths to `../../../custom/`.
 - The pipeline should scaffold a stub if the file doesn't exist on first run (check `pipeline.js`).
 
+### Entity Behavior in Shared Code — com.etendoerp.go (BLOCKER)
+
+Applies to Java in `{etendo_root}/modules/com.etendoerp.go`, not to this repo's tooling.
+
+**Shared code may branch on structure. It must never branch on identity.**
+- *Structure* — allowed: generic AD metadata that names no entity, e.g. `column.isMandatory()`, `!column.isUpdatable()`.
+- *Identity* — BLOCKER: `"sales-order"`, `"C_OrderLine"`, a spec name or table name compared inside a shared class, however it is guarded.
+- *Business property name* — BLOCKER when new: `dalEntity.hasProperty("unitPrice")`, "does this entity declare a `uOM`?". It is identity in disguise (it names the group of entities that have the property); the behaviour goes in each such entity's customization, calling a shared util explicitly if several share it (T12). Existing guards of this kind in the write-path compensations are tolerated until migration M4.
+
+Behavior that belongs to one entity goes in that entity's own customization: `@NeoExtension(spec, entity)` (preferred), or a `@Named("<qualifier>")` bean bound through `ETGO_SF_ENTITY.Java_Qualifier`. **`@Named` only — `@ApplicationScoped` (or any normal scope) makes the lookup silently skip the handler**, because `@Named` is not `@Inherited` and the bean resolves to a Weld client proxy.
+
+Treat as shared code: `NeoSelectorService`, `NeoDefaultsService`, `NeoCrudHandler`, `NeoServlet`, `NeoSubEndpointDispatcher`, `McpToolRouter(Support)`, **`BatchService`**, and the write-path compensations `McpLinePriceInjector`, `McpBillToInjector`, `McpWriteRequestSupport`, `NeoCommercialLinePolicy`, `DocTypeResolver`. The last group already holds behavior selected by property-name guards, pending M4; a PR adding a new compensation there, or adding an entity name to an existing one, is a BLOCKER.
+
+**A divergence between paths must be declared, not discovered.** If a PR makes one channel behave differently from another (`neo_create` vs `neo_batch`, MCP vs REST), the difference must be recorded in `com.etendoerp.go/docs/neo-headless.md` §4.12.9 in the same change. Precedent: `neo_batch` persisted order lines at price 0 while `neo_create` priced them correctly, for months, with nothing in any response or log saying so — the injection was present and simply ran too early to see the parent.
+
+**Check before approving:** `grep -n '"[a-z-]*-[a-z-]*"' <changed shared file>` for spec-name literals, and confirm any new compensation is reachable from the entity rather than applied to everything that structurally matches.
+
 ### Pipeline-Level Fixes (BLOCKER)
 Never fix a generated output file directly. If a generated file has a bug or wrong content, the fix must be in the generator (`generate-frontend.js`, `generate-contract.js`, `resolve-curated.js`, etc.) so it applies to all windows.
 
