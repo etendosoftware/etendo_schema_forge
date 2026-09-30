@@ -851,6 +851,7 @@ describe('DetailView helper functions', () => {
       expect(actionsFn).toHaveBeenCalledWith({
         data,
         children: hook.children,
+        isSaving: false,
         onRefresh: expect.any(Function),
       });
     });
@@ -873,6 +874,14 @@ describe('DetailView helper functions', () => {
       renderExtraActionButtons(actionsFn, data, hook, '');
       capturedOnRefresh();
       expect(hook.fetchById).toHaveBeenCalledWith('rec-1', { force: true });
+    });
+
+    it('passes the record save state to the actions factory as isSaving (ETP-5278 QA follow-up)', () => {
+      const received = [];
+      const actionsFn = (args) => { received.push(args.isSaving); return []; };
+      renderExtraActionButtons(actionsFn, { id: 'rec-1' }, { children: [], isSaving: true }, '');
+      renderExtraActionButtons(actionsFn, { id: 'rec-1' }, { children: [] }, '');
+      expect(received).toEqual([true, false]);
     });
 
     it('onRefresh also invalidates the entity cache (ETP-5278 — list-row staleness)', () => {
@@ -1258,7 +1267,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: 'W1' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1', { origin: 'callout' });
       expect(ctx.appliedFields.get('warehouse')).toBe('W1');
     });
 
@@ -1304,7 +1313,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: '' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', '', { origin: 'callout' });
     });
 
     it('skips user-touched field that is NOT the trigger field', () => {
@@ -1334,7 +1343,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ bp: { value: 'BP-NEW' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('bp', 'BP-NEW');
+      expect(hook.handleChange).toHaveBeenCalledWith('bp', 'BP-NEW', { origin: 'callout' });
     });
 
     it('applies _identifier when entry has one', () => {
@@ -1349,7 +1358,7 @@ describe('DetailView helper functions', () => {
         catalogs: {},
       };
       applyCalloutFieldUpdates({ warehouse: { value: 'W1', _identifier: 'Main Warehouse' } }, ctx);
-      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1');
+      expect(hook.handleChange).toHaveBeenCalledWith('warehouse', 'W1', { origin: 'callout' });
       expect(hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
     });
   });

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { Check, Circle, Clock, Eye, Receipt } from 'lucide-react';
+import { Check, Circle, Clock, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { cn } from '@/lib/utils.js';
@@ -30,10 +30,10 @@ import CompanyDataSummary from '@/pages/first-steps/CompanyDataSummary.jsx';
  * catalogue's `findExpandedStepId` only picks which row is open when the page first renders.
  *
  * ETP-5364 — once every visible step is done the page offers "Finalizar configuración inicial",
- * which sets `dismissed` and drops the entry from the sidebar. The page itself stays routable at
- * `/first-steps` and then renders the banner that undoes it, so the action is reversible without
- * a settings screen: hiding a menu entry with no way back is a trap, not a feature. Completing
- * the list does NOT dismiss it on its own — a user may well want the checklist to stay.
+ * which sets `dismissed`, drops the entry from the sidebar and sends the user to the dashboard.
+ * It is a one-way act by product decision: there is no way to bring the entry back, and a
+ * dismissed account that opens `/first-steps` by URL is redirected to the dashboard as well.
+ * Completing the list does NOT dismiss it on its own — a user may well want the checklist to stay.
  *
  * Where the first invoice is created: the same route the dashboard's "Sales invoices" quick
  * action uses (`/{window}/new`, resolved by the `:windowName/:recordId` route).
@@ -335,17 +335,26 @@ export default function FirstStepsPage() {
   }, [handleToggle]);
 
   /**
-   * ETP-5364 — closes the checklist for good, or brings it back.
+   * ETP-5364 — closes the checklist for good and lands the user on the dashboard: the menu
+   * entry has just vanished, so the page they are on is no longer somewhere they can navigate
+   * to. Only on a saved write — `setDismissed` rolls its own state back on a failed POST, which
+   * is invisible on its own, so a failure keeps the user here with a toast instead.
    *
-   * Stays on this page after closing rather than navigating to the dashboard: the entry has
-   * just vanished from the menu, and leaving the user in front of the banner that explains it
-   * (and offers the way back) is what makes that reversible instead of alarming. `setDismissed`
-   * rolls its own state back on a failed POST, which is invisible on its own — hence the toast.
+   * `finishing` holds back the dismissed-account redirect below while the POST is in flight:
+   * `setDismissed` flips `dismissed` optimistically, and without it that flip would bounce the
+   * user to the dashboard before the write had a chance to fail.
    */
-  const handleSetDismissed = useCallback(async (next) => {
-    const saved = await setDismissed(next);
-    if (!saved) toast.error(ui('genericError'));
-  }, [setDismissed, ui]);
+  const [finishing, setFinishing] = useState(false);
+  const handleFinishSetup = useCallback(async () => {
+    setFinishing(true);
+    const saved = await setDismissed(true);
+    if (!saved) {
+      setFinishing(false);
+      toast.error(ui('genericError'));
+      return;
+    }
+    navigate('/dashboard');
+  }, [setDismissed, navigate, ui]);
 
   useSetPageMeta({
     title: ui('firstStepsPageTitle'),
@@ -372,6 +381,12 @@ export default function FirstStepsPage() {
   // Gate acted on here, after every hook above has already been called unconditionally on
   // every render (see the ETP-5395 comment at the top of this component).
   if (capabilities.isOwner !== true) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  // ETP-5364 — a dismissed checklist is gone for good, so reaching it by URL lands on the
+  // dashboard too. Exact `true` only: `dismissed` is `undefined` until the GET answers, and
+  // redirecting on that would throw every user off the page on every load.
+  if (dismissed === true && !finishing) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -404,29 +419,6 @@ export default function FirstStepsPage() {
             </div>
           </div>
 
-          {dismissed && (
-            <div
-              className="rounded-xl border bg-card p-4 shadow-sm space-y-2"
-              data-testid="first-steps-dismissed-notice"
-            >
-              <p className="text-sm font-medium text-text-primary">
-                {ui('firstStepsDismissedTitle')}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {ui('firstStepsDismissedSubtitle')}
-              </p>
-              <button
-                type="button"
-                onClick={() => handleSetDismissed(false)}
-                className="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50"
-                data-testid="first-steps-reopen"
-              >
-                <Eye className="h-4 w-4" data-testid="first-steps-reopen-icon" />
-                {ui('firstStepsReopen')}
-              </button>
-            </div>
-          )}
-
           {allSet && (
             <div className="space-y-2">
               <div className="flex flex-wrap gap-2">
@@ -442,7 +434,7 @@ export default function FirstStepsPage() {
                 {!dismissed && (
                   <button
                     type="button"
-                    onClick={() => handleSetDismissed(true)}
+                    onClick={handleFinishSetup}
                     className="flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted/50"
                     data-testid="first-steps-finish-setup"
                   >

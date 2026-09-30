@@ -55,8 +55,8 @@ export function FirstStepsProvider({ children }) {
     completed,
     seen,
     // ETP-5364 — the user closed the checklist for good. Read by `AppLayout`, which feeds it to
-    // `filterMenuGroupsByAccess` as the fourth menu axis, and by `FirstStepsPage` to offer
-    // bringing it back. Never derived from `completedCount === total`: finishing the list is not
+    // `filterMenuGroupsByAccess` as the fourth menu axis, and by `FirstStepsPage` to stop
+    // offering the finish button. Never derived from `completedCount === total`: finishing the list is not
     // the same act as choosing to put it away. TRI-STATE — `undefined` until the GET answers,
     // and the menu filter reveals the entry only on an exact `false`. See useFirstSteps.js.
     dismissed,

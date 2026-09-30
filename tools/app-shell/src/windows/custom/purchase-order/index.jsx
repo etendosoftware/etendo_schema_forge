@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'react-router-dom';
 import GeneratedApp from '@generated/purchase-order/generated/web/purchase-order/index.jsx';
 import HeaderTable from '@generated/purchase-order/generated/web/purchase-order/HeaderTable';
 import CopyLinkButton from '@/components/contract-ui/CopyLinkButton';
@@ -30,8 +31,15 @@ const LIST_COLUMNS = [
   { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector', label: 'Business Partner', required: true },
   { key: 'documentStatus', column: 'DocStatus', type: 'status', label: 'Document Status', required: true },
   { key: 'grandTotalAmount', column: 'GrandTotal', type: 'amount', label: 'Total Gross Amount', required: true },
-  { key: 'invoiceStatus', column: 'InvoiceStatus', type: 'percent', label: 'Invoice Status' },
-  { key: 'deliveryStatusPurchase', column: 'DeliveryStatusPurchase', type: 'percent', label: 'Reception Status' },
+  // ETP-5317 (Part 2): point at the GO-owned stored computed columns
+  // (EM_ETGO_Invoice_Status / EM_ETGO_Deliv_Status_Purchase), not the classic
+  // AD columns (InvoiceStatus / DeliveryStatusPurchase) — the classic ones
+  // never exclude the Total Discount line (ETGO_DTO) from their SQLLOGIC, so
+  // the advanced filter/sort on them disagreed with the (already-corrected)
+  // displayed value. See docs/bug-reports/2026-09-24-etp5317-... for the
+  // full root cause and the stored-computed-column implementation.
+  { key: 'eTGOInvoiceStatus', column: 'EM_ETGO_Invoice_Status', type: 'percent', label: 'Invoice Status' },
+  { key: 'eTGODelivStatusPurchase', column: 'EM_ETGO_Deliv_Status_Purchase', type: 'percent', label: 'Reception Status' },
 ];
 
 const draftModeWithModal = {
@@ -53,12 +61,16 @@ const LABEL_OVERRIDES = {
     DatePromised: 'Fecha de entrega esperada',
     DeliveryStatusPurchase: 'Estado de recepción',
     InvoiceStatus: 'Estado de facturación',
+    EM_ETGO_Deliv_Status_Purchase: 'Estado de recepción',
+    EM_ETGO_Invoice_Status: 'Estado de facturación',
   },
   en_US: {
     C_BPartner_ID: 'Contact',
     DatePromised: 'Expected Delivery Date',
     DeliveryStatusPurchase: 'Reception Status',
     InvoiceStatus: 'Invoicing Status',
+    EM_ETGO_Deliv_Status_Purchase: 'Reception Status',
+    EM_ETGO_Invoice_Status: 'Invoicing Status',
   },
 };
 
@@ -97,6 +109,7 @@ export default function PurchaseOrderWindow(props) {
   const { recordId, windowName, token, apiBaseUrl } = props;
   const [cloneTargets, setCloneTargets] = useState(null);
   const tMenu = useMenuLabel();
+  const [searchParams] = useSearchParams();
 
   const { headers, createContactCtxValue, contactPortal } =
     useCreateContactModal({ apiBaseUrl, token, documentType: 'purchase' });
@@ -169,6 +182,21 @@ export default function PurchaseOrderWindow(props) {
     );
   }
 
+  // ETP-5487 — the dashboard "Recepciones" card drills down into this exact
+  // criterion: completed purchase orders (Estado doc. = Completado) whose
+  // reception is not yet finished (Estado de recepcion < 100). Mirrors the
+  // `?filter=overdue`/`paymentsDue` pattern in purchase-invoice/index.jsx.
+  const isPendingReception = searchParams.get('filter') === 'pendingReception';
+  const initialAdvancedFilter = isPendingReception
+    ? {
+        rowOperator: 'and',
+        conditions: [
+          { field: 'documentStatus', operator: 'equals', value: 'CO' },
+          { field: 'deliveryStatusPurchase', operator: 'lessThan', value: 100 },
+        ],
+      }
+    : null;
+
   return (
     <>
       <ListView
@@ -187,6 +215,8 @@ export default function PurchaseOrderWindow(props) {
         renderPreview={renderPreview}
         externalPreviewRow={effectiveRecord}
         onExternalPreviewClose={clearSavedRecord}
+        initialAdvancedFilter={initialAdvancedFilter}
+        initialFiltersFromUrl={isPendingReception}
         {...props}
         window={effectiveWindow}
         data-testid="ListView__b7ace5" />

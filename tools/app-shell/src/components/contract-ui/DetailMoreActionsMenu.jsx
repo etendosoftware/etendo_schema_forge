@@ -133,7 +133,11 @@ export function DetailMoreActionsMenu({
       hook.fetchById?.(currentId, { force: true });
       setDocsRefreshSignal(v => v + 1);
     } else {
-      toast.error(translateBackendError(result.message, ui) || ui('actionFailed'));
+      // ETP-5175 — same identity the row-kebab Post forwards (buildMenuActionExecutedHandler).
+      toast.error(translateBackendError(result.message, ui, {
+        messageKeys: result.messageKeys,
+        messageParams: result.messageParams,
+      }) || ui('actionFailed'));
     }
   };
   return (

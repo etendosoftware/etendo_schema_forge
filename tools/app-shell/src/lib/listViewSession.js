@@ -26,6 +26,16 @@
  * NOTHING. `persistListState` removes the key instead of writing a default snapshot, so a
  * window that was never touched behaves exactly as it did before this module existed, and a
  * user who clears their filters gets the key cleaned up rather than pinned to a stale default.
+ *
+ * LIFETIME: a snapshot lives only while the user stays inside its window — the list route
+ * `/<window>` and every record route under it (`/<window>/<id>`, `/<window>/new`). Any
+ * navigation whose first path segment changes (another window, the dashboard, the root)
+ * clears the left window's key via `pruneListStateOnNavigation`, called on every pathname
+ * change by `ListStateRouteGuard.jsx` (mounted once in `App.jsx`). So re-entering a window
+ * from the menu or with browser back lands on its default view, while a refresh (F5) inside
+ * the window keeps the state — a fresh page load has no previous pathname to compare.
+ * The scope is the route's first segment, which is what ListView uses as `listStateScope`
+ * (`windowName`, as `WindowLoader` reads it from `/:windowName`).
  */
 
 const STORAGE_PREFIX = 'listState:';
@@ -145,4 +155,27 @@ export function resolveDefaultQuickFilterIndices(quickFilters, initialQuickFilte
 export function sanitizeFilterIndices(indices, list) {
   if (!Array.isArray(indices)) return null;
   return indices.filter((i) => Number.isInteger(i) && list?.[i]);
+}
+
+/**
+ * The window a pathname belongs to: its first path segment, or null for the root.
+ * `/sales-invoice`, `/sales-invoice/ABC` and `/sales-invoice/new` all map to `sales-invoice`.
+ */
+export function windowScopeFromPath(pathname) {
+  if (typeof pathname !== 'string') return null;
+  const segment = pathname.split('/').find(Boolean);
+  return segment || null;
+}
+
+/**
+ * Clears the saved state of the window being left when a navigation changes window scope.
+ * No-op on first load (no previous pathname) and while staying inside the same window.
+ * @returns {string|null} the scope that was cleared, or null when nothing was pruned.
+ */
+export function pruneListStateOnNavigation(prevPathname, nextPathname) {
+  if (prevPathname == null) return null;
+  const prevScope = windowScopeFromPath(prevPathname);
+  if (!prevScope || prevScope === windowScopeFromPath(nextPathname)) return null;
+  clearListState(prevScope);
+  return prevScope;
 }

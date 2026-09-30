@@ -739,13 +739,17 @@ export const api = {
       "DatePromised": "Fecha de entrega esperada",
       "DeliveryStatusPurchase": "Estado de recepción",
       "InvoiceStatus": "Estado de facturación",
+      "EM_ETGO_Deliv_Status_Purchase": "Estado de recepción",
+      "EM_ETGO_Invoice_Status": "Estado de facturación",
       "PriceList": "Precio"
     },
     "en_US": {
       "C_BPartner_ID": "Contact",
       "DatePromised": "Expected Delivery Date",
       "DeliveryStatusPurchase": "Reception Status",
-      "InvoiceStatus": "Invoicing Status"
+      "InvoiceStatus": "Invoicing Status",
+      "EM_ETGO_Deliv_Status_Purchase": "Reception Status",
+      "EM_ETGO_Invoice_Status": "Invoicing Status"
     }
   }
 };
