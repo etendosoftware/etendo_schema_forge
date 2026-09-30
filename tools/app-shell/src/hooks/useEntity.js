@@ -1022,8 +1022,12 @@ export async function saveWithReadOnlyFieldRetry(apiFetch, url, method, payload,
         if (!rejectedField || !Object.prototype.hasOwnProperty.call(currentPayload, rejectedField)) {
             return res;
         }
-        const { [rejectedField]: _dropped, ...rest } = currentPayload;
-        currentPayload = rest;
+        // Drop via a copy + delete rather than rest-destructuring: an unused binding for the
+        // discarded key (e.g. `_dropped`) trips Sonar's S1481 — Sonar doesn't honor ESLint's
+        // underscore-ignore convention, so the two engines disagree on this idiom.
+        const nextPayload = { ...currentPayload };
+        delete nextPayload[rejectedField];
+        currentPayload = nextPayload;
     }
     return lastRes;
 }
