@@ -128,7 +128,7 @@ All commits MUST follow Etendo Git Police conventions as defined by the `/etendo
 
 ## Resolving GitHub Issues
 Create a Jira task inside the current epic, then delegate branch + PR creation to Clerk. PR must reference the GitHub issue (e.g., `Fixes #141`).
-An accepted GitHub feature/bug may need one or more Jira tasks, cross-linked both ways; the reverse is not required — internal work stays Jira-only, and only public ideas/bugs/features get a GitHub issue (Clerk `<github_issues_roadmap>`).
+An accepted GitHub feature/bug has one or more Jira tasks, cross-linked both ways; the reverse is not required — internal work stays Jira-only, and only public ideas/bugs/features get a GitHub issue (Clerk `<github_issues_roadmap>`).
 
 </pipeline_rules>
 
