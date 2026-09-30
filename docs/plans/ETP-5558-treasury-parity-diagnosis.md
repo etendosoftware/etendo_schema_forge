@@ -277,9 +277,14 @@ wrong even though the block itself is right.
 
 ## Open observations (to verify)
 
-- `neo_list(payment-in, finPayment)` answered `totalRows: 5` (with `limit: 4`) while the *Cobro*
-  list in the UI shows 13 payments. Either the MCP list applies an implicit filter or the count
-  is wrong — an agent counting collections would be misled.
+- ~~`neo_list(payment-in, finPayment)` answered `totalRows: 5` while the *Cobro* list in the UI
+  shows 13.~~ **Resolved — not a bug.** Timing: the MCP call ran ~19:32 (5 payments existed), the
+  UI was read ~20:00 (13 existed); payments kept being created during the session. Re-run now:
+  `totalRows: 19`, same as the DB. Both channels apply the tab filter (`whereclause
+  FIN_Payment.isReceipt='Y'`, `hqlwhereclause e.receipt='Y'`); `payment-out/header` mirrors it
+  (`isReceipt='N'`, 2 = DB).
+- Duplicate `documentNo` among collections: 1000002 and 1000003 appear twice each (e.g. 1000002
+  as RDNC at 19:27 and as RPAP at 20:11). Sequence fault or draft number reuse — to verify.
 - Sales invoice lines grid shows *Precio 0,00* for lines created with `unitPrice: 100`
   (`listPrice: 0`, `grossUnitPrice: 0`). Not treasury; check which column the grid reads.
 
@@ -364,10 +369,8 @@ except the accepted BUG-4 exception.
 - BUG-2 / BUG-3: with Step 2 the hand-built headers are no longer reachable from MCP; verify
   whether REST is affected (`receipt:true` on payment-out create, empty `documentType` selector)
   and fix in the payment customizations if it is, otherwise record it as REST-only follow-up.
-- List count mismatch: `neo_list payment-in/finPayment` returns 5 payments while the UI list shows
-  13. Find whether the MCP list applies an implicit filter or miscounts, and align it with what the
-  UI shows (an agent counting collections must see the same set). Same check on
-  `payment-out/header`.
+- Duplicate payment `documentNo` (open observation): find whether it is a sequence fault or a
+  draft number reuse; fix it if it is a defect, in the payment customizations.
 
 ### Step 6 — Docs and validation
 
@@ -375,7 +378,7 @@ except the accepted BUG-4 exception.
 - `docs/generated-custom-windows/sales-invoice.md` / `purchase-invoice.md`: action catalog now
   published to MCP; fix the stale "refund retired" note.
 - One MCP test per matrix row (1–3, 4b, 5–9, 11, 12) plus the refusals (BUG-1, hidden verbs,
-  write-off over limit, missing rate) and the payment list count parity with the UI.
+  write-off over limit, missing rate).
 - Re-run the Agroquímicos finance agent (agentic-game) and measure with `make mcp-metrics`: zero
   `neo_create payment-in/finPayment`, `neo_action registerPayment` present with `ok`.
 
