@@ -153,10 +153,12 @@ function mapPendingTasks(handlerData) {
         collectionsDueToday_plural: '/sales-invoice?filter=overdue',
         paymentsDueToday: '/purchase-invoice?filter=overdue',
         paymentsDueToday_plural: '/purchase-invoice?filter=overdue',
-        pendingReceptions: '/goods-receipt?DocStatus=DR',
-        pendingReceptions_plural: '/goods-receipt?DocStatus=DR',
-        pendingSalesDeliveries: '/goods-shipment?DocStatus=DR',
-        pendingSalesDeliveries_plural: '/goods-shipment?DocStatus=DR',
+        // ETP-5487 — source moved from M_InOut drafts (goods-receipt/goods-shipment) to
+        // completed C_Order rows filtered by delivery status (purchase-order/sales-order).
+        pendingReceptions: '/purchase-order?filter=pendingReception',
+        pendingReceptions_plural: '/purchase-order?filter=pendingReception',
+        pendingSalesDeliveries: '/sales-order?filter=pendingDelivery',
+        pendingSalesDeliveries_plural: '/sales-order?filter=pendingDelivery',
       };
       if (FILTER_LINKS[mapped.taskKey]) {
         mapped.link = FILTER_LINKS[mapped.taskKey];
@@ -169,8 +171,12 @@ function mapPendingTasks(handlerData) {
 
 const PENDING_TASK_RULES = [
   { match: (l, t) => l === '/sales-invoice' || t.includes('overdue invoices'),            singular: 'overdueInvoices',        plural: 'overdueInvoices_plural'        },
-  { match: (l, t) => l.startsWith('/goods-receipt') || t.includes('pending reception'),   singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
-  { match: (l, t) => l.startsWith('/goods-shipment') || t.includes('pending delivery'),   singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
+  // Backward-compatible link fallback while handlers migrate to navigation: a
+  // com.etendoerp.go backend without the ETP-5487 fix may still emit the legacy
+  // /goods-receipt /goods-shipment links during a rolling deploy, so both the
+  // new and old prefixes must match here.
+  { match: (l, t) => l.startsWith('/purchase-order') || l.startsWith('/goods-receipt') || t.includes('pending reception'),  singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
+  { match: (l, t) => l.startsWith('/sales-order') || l.startsWith('/goods-shipment') || t.includes('pending delivery'),      singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
   { match: (l, t) => t.includes('collection') && t.includes('due today'),                 singular: 'collectionsDueToday',    plural: 'collectionsDueToday_plural'    },
   { match: (l, t) => t.includes('payment') && t.includes('overdue'),                      singular: 'paymentsOverdue',        plural: 'paymentsOverdue_plural'        },
   { match: (l, t) => t.includes('payment') && t.includes('due today'),                    singular: 'paymentsDueToday',       plural: 'paymentsDueToday_plural'       },

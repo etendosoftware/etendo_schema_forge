@@ -464,7 +464,7 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 });
 
 test.describe('Finalizar configuración inicial — ETP-5364', () => {
-  test('is offered only at 7/7, and removes the sidebar entry when pressed', async ({ page }) => {
+  test('is offered only at 7/7, and removes the sidebar entry and lands on Inicio', async ({ page }) => {
     const mock = await setupFirstSteps(page, null);
     await page.goto('/first-steps');
     await waitForCopyTranslated(page);
@@ -482,6 +482,8 @@ test.describe('Finalizar configuración inicial — ETP-5364', () => {
 
     await page.getByTestId('first-steps-finish-setup').click();
 
+    // The user is taken to Inicio: the page they were on just left the menu.
+    await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
     // And it is a real write, not a local flag.
     await expect.poll(() => mock.state.value?.dismissed).toBe(true);
@@ -526,20 +528,12 @@ test.describe('Finalizar configuración inicial — ETP-5364', () => {
     expect(mock.writes.length).toBe(0);
   });
 
-  test('brings the entry back from the page, which stays routable', async ({ page }) => {
-    // Hiding a menu entry with no way back is a trap. The page is still reachable by URL and
-    // carries the undo.
-    const mock = await setupFirstSteps(page,
-      { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
+  test('sends a dismissed account that opens the page by URL to Inicio', async ({ page }) => {
+    // Product decision: finishing the setup is one-way, so the page is not reachable either.
+    await setupFirstSteps(page, { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
 
     await page.goto('/first-steps');
-    await expect(page.getByTestId('first-steps-dismissed-notice')).toBeVisible();
-    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
-
-    await page.getByTestId('first-steps-reopen').click();
-
-    await expect.poll(() => mock.state.value?.dismissed).toBe(false);
-    await expandSidebar(page);
-    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId('first-steps-page')).toHaveCount(0);
   });
 });
