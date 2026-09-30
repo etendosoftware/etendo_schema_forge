@@ -467,3 +467,148 @@ describe('ListView toolbar layout — edge cases', () => {
     expect(within(tabsRow()).getByTestId('filter-all')).toBeInTheDocument();
   });
 });
+
+// ─── ETP-5509 acceptance: main actions stay in the first row ────────────────
+// Sort, refresh, import/export, print, link and the primary "New …" button
+// must NOT follow the tab group into row 2. Every test renders WITH
+// `subsetFilters` so both rows exist — otherwise "not in the tabs row" would be
+// vacuously true. `ListSortPopover` and `ListExportButton` are the real
+// components here (neither is mocked in this file).
+
+describe('ListView toolbar layout — main row holds every main action', () => {
+  const IMPORT_CONFIG = { enabled: true, spec: 'contacts', fields: [] };
+
+  // Asserts the control sits in row 1, not in row 2, and exists exactly once in
+  // the toolbar (moved, never duplicated across rows).
+  const expectOnlyInMainRow = (element) => {
+    expect(mainRow()).toContainElement(element);
+    expect(tabsRow()).not.toContainElement(element);
+  };
+
+  it('holds the sort trigger', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    expectOnlyInMainRow(screen.getByTestId('list-sort-toggle'));
+    expect(within(tabsRow()).queryByTestId('list-sort-toggle')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('list-sort-toggle')).toHaveLength(1);
+  });
+
+  it('holds the refresh button', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    // No dedicated test id: the button is identified by its `title`, which is
+    // the `refresh` i18n key under the key-returning mock.
+    expectOnlyInMainRow(screen.getByTitle('refresh'));
+    expect(within(tabsRow()).queryByTitle('refresh')).not.toBeInTheDocument();
+    expect(screen.getAllByTitle('refresh')).toHaveLength(1);
+  });
+
+  it('holds the import and export buttons when import is enabled', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS, import: IMPORT_CONFIG });
+
+    for (const testId of ['ListView__importButton', 'ListView__exportButton']) {
+      expectOnlyInMainRow(screen.getByTestId(testId));
+      expect(within(tabsRow()).queryByTestId(testId)).not.toBeInTheDocument();
+      expect(screen.getAllByTestId(testId)).toHaveLength(1);
+    }
+  });
+
+  it('renders neither import nor export without an enabled import config', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    const toolbar = screen.getByTestId('list-toolbar');
+    expect(within(toolbar).queryByTestId('ListView__importButton')).not.toBeInTheDocument();
+    expect(within(toolbar).queryByTestId('ListView__exportButton')).not.toBeInTheDocument();
+  });
+
+  it('holds the print button when print is not hidden', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    // No dedicated test id (generic `Button__620cbc`): located by role + name.
+    expectOnlyInMainRow(within(mainRow()).getByRole('button', { name: 'print' }));
+    expect(within(tabsRow()).queryByRole('button', { name: 'print' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'print' })).toHaveLength(1);
+  });
+
+  it('drops the print button from the toolbar when hidePrint is set', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS, hidePrint: true });
+
+    expect(within(screen.getByTestId('list-toolbar')).queryByRole('button', { name: 'print' }))
+      .not.toBeInTheDocument();
+  });
+
+  it('holds the link button when the link is not hidden', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    // The link button has no test id and no accessible name — the only hook is
+    // its icon, so the button is reached through the icon's parent.
+    const linkButton = screen.getByTestId('Link2__620cbc').closest('button');
+    expect(linkButton).not.toBeNull();
+    expectOnlyInMainRow(linkButton);
+    expect(within(tabsRow()).queryByTestId('Link2__620cbc')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('Link2__620cbc')).toHaveLength(1);
+  });
+
+  it('drops the link button from the toolbar when hideLink is set', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS, hideLink: true });
+
+    expect(within(screen.getByTestId('list-toolbar')).queryByTestId('Link2__620cbc'))
+      .not.toBeInTheDocument();
+  });
+
+  it('holds the split-button dropdown next to the create action when newActions are passed', () => {
+    renderListView({
+      subsetFilters: SUBSET_FILTERS,
+      newActions: [{ key: 'fromTemplate', label: 'naFromTemplate', onClick: vi.fn() }],
+    });
+
+    const more = screen.getByTestId('action-new-more');
+    expectOnlyInMainRow(more);
+    expect(within(tabsRow()).queryByTestId('action-new-more')).not.toBeInTheDocument();
+    // Same split button as the primary action, not a control of its own.
+    expect(more.parentElement).toBe(screen.getByTestId('action-new').parentElement);
+  });
+
+  it('renders no split-button dropdown without newActions', () => {
+    renderListView({ subsetFilters: SUBSET_FILTERS });
+
+    expect(screen.queryByTestId('action-new-more')).not.toBeInTheDocument();
+    expect(within(mainRow()).getByTestId('action-new')).toBeInTheDocument();
+  });
+
+  it('splits the main row into exactly two clusters: filters first, actions second', () => {
+    renderListView({
+      subsetFilters: SUBSET_FILTERS,
+      quickFilters: QUICK_FILTERS,
+      import: IMPORT_CONFIG,
+    });
+
+    const clusters = Array.from(mainRow().children);
+    expect(clusters).toHaveLength(2);
+    const [filtersCluster, actionsCluster] = clusters;
+
+    expect(within(filtersCluster).getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(within(filtersCluster).getByTestId('quick-filter-overdue')).toBeInTheDocument();
+    expect(within(filtersCluster).queryByTestId('action-new')).not.toBeInTheDocument();
+
+    expect(within(actionsCluster).getByTestId('action-new')).toBeInTheDocument();
+    expect(within(actionsCluster).queryByTestId('list-filter-bar')).not.toBeInTheDocument();
+    // Every main action shares the right-hand cluster with the create button.
+    expect(within(actionsCluster).getByTestId('list-sort-toggle')).toBeInTheDocument();
+    expect(within(actionsCluster).getByTitle('refresh')).toBeInTheDocument();
+    expect(within(actionsCluster).getByTestId('ListView__importButton')).toBeInTheDocument();
+    expect(within(actionsCluster).getByTestId('ListView__exportButton')).toBeInTheDocument();
+    expect(within(actionsCluster).getByRole('button', { name: 'print' })).toBeInTheDocument();
+    expect(within(actionsCluster).getByTestId('Link2__620cbc')).toBeInTheDocument();
+  });
+
+  it('keeps the two-cluster main row on a single-row toolbar', () => {
+    renderListView();
+
+    expect(queryTabsRow()).not.toBeInTheDocument();
+    const clusters = Array.from(mainRow().children);
+    expect(clusters).toHaveLength(2);
+    expect(within(clusters[0]).getByTestId('list-filter-bar')).toBeInTheDocument();
+    expect(within(clusters[1]).getByTestId('action-new')).toBeInTheDocument();
+  });
+});
