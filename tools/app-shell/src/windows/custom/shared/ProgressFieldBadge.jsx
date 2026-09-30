@@ -23,6 +23,6 @@ export default function ProgressFieldBadge({ value, label, testId, documentStatu
       showIcon={false}
       label={`${label} ${percent}%`}
       testId={testId}
-    />
+      data-testid="DocumentStatusPill__2c9a76" />
   );
 }
