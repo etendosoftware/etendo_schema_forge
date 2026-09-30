@@ -201,6 +201,20 @@ function cloneRowBackground(failed, hovered) {
   return (failed && 'var(--status-destructive-bg)') || (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))');
 }
 
+function cloneRowLabelColor(navigable) {
+  return navigable ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))';
+}
+
+// Click / hover handlers of a State 2 row. A row that cannot be opened gets none, so it stays inert.
+function cloneRowHandlers(navigable, id, onRowClick, setHoveredId) {
+  if (!navigable) return {};
+  return {
+    onClick: () => onRowClick(id),
+    onMouseEnter: () => setHoveredId(id),
+    onMouseLeave: () => setHoveredId(null),
+  };
+}
+
 // Middle cell of a State 2 row: the clone-status message when the row is not a confirmed
 // success, the business partner otherwise.
 function CloneResultDetail({ rec, messageKey, failed, rowKey, ui }) {
@@ -229,9 +243,7 @@ function CloneResultRow({ rec, index, routePrefix, hoveredId, setHoveredId, onRo
     <div
       data-testid={`clone-result-${rowKey}`}
       data-clone-status={rec.cloneStatus}
-      onClick={navigable ? () => onRowClick(rec.id) : undefined}
-      onMouseEnter={navigable ? () => setHoveredId(rec.id) : undefined}
-      onMouseLeave={navigable ? () => setHoveredId(null) : undefined}
+      {...cloneRowHandlers(navigable, rec.id, onRowClick, setHoveredId)}
       style={{
         display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
         borderBottom: '1px solid hsl(var(--muted))', cursor: navigable ? 'pointer' : 'default',
@@ -239,10 +251,16 @@ function CloneResultRow({ rec, index, routePrefix, hoveredId, setHoveredId, onRo
         transition: 'background 0.12s',
       }}
     >
-      <span style={{ fontSize: 12, fontWeight: 600, color: navigable ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: cloneRowLabelColor(navigable), whiteSpace: 'nowrap', flexShrink: 0 }}>
         {rec.documentNo || rec.id || ''}
       </span>
-      <CloneResultDetail rec={rec} messageKey={messageKey} failed={failed} rowKey={rowKey} ui={ui} />
+      <CloneResultDetail
+        rec={rec}
+        messageKey={messageKey}
+        failed={failed}
+        rowKey={rowKey}
+        ui={ui}
+        data-testid="CloneResultDetail__66b049" />
       {rec.cloneStatus === CLONE_STATUS.OK && (
         <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
       )}
@@ -288,7 +306,8 @@ function CloneDoneView({ allFailed, doneTitle, clonedRecords, routePrefix, hover
             setHoveredId={setHoveredId}
             onRowClick={onRowClick}
             ui={ui}
-            dictionary={dictionary} />
+            dictionary={dictionary}
+            data-testid="CloneResultRow__66b049" />
         ))}
       </div>
     </>
@@ -332,7 +351,11 @@ function CloneConfirmView({ items, phase, blockedByUnsaved, error, confirmTitle,
       {/* Document list */}
       <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid hsl(var(--muted))' }}>
         {items.map((item) => (
-          <CloneConfirmItemRow key={item.id} item={item} dictionary={dictionary} />
+          <CloneConfirmItemRow
+            key={item.id}
+            item={item}
+            dictionary={dictionary}
+            data-testid="CloneConfirmItemRow__66b049" />
         ))}
       </div>
       <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -473,7 +496,8 @@ export default function CloneOrderModal({
             onRowClick={handleRowClick}
             onClose={onClose}
             ui={ui}
-            dictionary={dictionary} />
+            dictionary={dictionary}
+            data-testid="CloneDoneView__66b049" />
         ) : (
           <CloneConfirmView
             items={items}
@@ -486,7 +510,8 @@ export default function CloneOrderModal({
             onClone={handleClone}
             onClose={onClose}
             ui={ui}
-            dictionary={dictionary} />
+            dictionary={dictionary}
+            data-testid="CloneConfirmView__66b049" />
         )}
       </div>
     </div>
