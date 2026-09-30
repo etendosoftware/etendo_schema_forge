@@ -1,8 +1,8 @@
 {
   "version": "0.2.0",
   "generatedAt": "2026-09-17T15:12:05.434Z",
-  "updatedAt": "2026-09-24T03:05:45.593Z",
-  "checksum": "fb43db8a08f509c7",
+  "updatedAt": "2026-09-30T15:58:09.087Z",
+  "checksum": "18951c99e5c9a7ba",
   "frontendContract": {
     "window": {
       "id": "183",
@@ -14,6 +14,7 @@
       "hideDeleteWhenComplete": true,
       "hidePrintWhen": true,
       "customComponents": {
+        "topbarExtra": "PurchaseInvoiceReceiptBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
       },
@@ -5298,6 +5299,7 @@
       "hideDeleteWhenComplete": true,
       "hidePrintWhen": true,
       "customComponents": {
+        "topbarExtra": "PurchaseInvoiceReceiptBadge",
         "headerTable": "InvoiceHeaderTable",
         "bottomSection": "PurchaseInvoiceBottomPanel"
       },
