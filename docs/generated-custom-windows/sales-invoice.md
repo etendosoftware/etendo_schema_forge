@@ -2023,7 +2023,7 @@ either way; relies on unit-test coverage.
 ## List toolbar: tab group on its own row — ETP-5509
 
 The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
-and the main actions (sort, refresh, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
+and the main actions (sort, refresh, print, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
 below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
 group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
 with the filters and the actions. The tabs are on the second row at every width, and they behave

@@ -34,11 +34,14 @@ The idle list bar is a column of up to two rows, closed by a separator line.
 - **Row 2 — the tab group** — the subset-filter segmented control and the list/gallery view
   toggle. It is rendered **only** when the window has one of them (`subsetFilters` with at least
   one entry, or a `galleryRenderer`); a window with neither (e.g. Warehouse) keeps a single-row
-  toolbar and no empty band.
+  toolbar and no empty band. *Provisional:* treating the view toggle as part of the tab group
+  (Product, whose second row holds only the toggle) is an interpretation of the ticket's "tab
+  group", pending product confirmation.
 - **Separator** — a `border-b` in `--border-subtle` on the toolbar container, spanning the full
   width of the card. Every window that keeps the native bar gets it by construction. A window
   that drops the bar with `hideListBar` draws its own toolbar and therefore its own line
-  (financial-account).
+  (financial-account). *Provisional:* in a standard window this line is drawn in addition to the
+  existing line under the column headers; keeping both is pending product confirmation.
 
 Why two rows: the tab group used to open row 1. At the minimum supported viewport (1280×720 with
 the navigation rail expanded) it competed for width with the filters and the actions. The tabs
@@ -50,7 +53,11 @@ precisely so that either placement can host it.
 
 Stable test ids: `list-toolbar` (container, carries the separator), `list-toolbar-main-row`
 (row 1), `list-toolbar-tabs-row` (row 2, absent when there is no tab group). The controls keep
-theirs: `filter-<key>` (subset entries), `quick-filter-<key>`, `view-toggle`.
+theirs: `filter-<key>` (subset entries — the entry's `key`, else its `label` lowercased),
+`quick-filter-<key>`, `view-toggle`. Row 1 also holds `filter-status`, `filter-type`,
+`filter-date` and `filter-advanced`, which share the `filter-` prefix with the subset entries, so
+scope prefix queries to a row. The Playwright guard for the layout is described in
+`docs/e2e-testing-guide.md` → "Layout reference: list toolbar at 1280×720 (ETP-5509)".
 
 Out of scope of the shared layout: only what `ListView` itself renders is moved. A window that
 replaces the bar through `hideListBar` (financial-account's `AccountsToolbar`, which has no tab

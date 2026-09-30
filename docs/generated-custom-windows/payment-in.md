@@ -293,5 +293,8 @@ change to `PaymentHeaderTableBase.jsx` — and so does every other window that k
 bar. Payment Out gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
 toolbar stays single-row.
 
+The list toolbar has no "New …" button here (`window.hideCreate: true`), so the ticket's
+acceptance line about the "New" button staying visible does not apply to this window.
+
 Manual verification: open `/payment-in` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
