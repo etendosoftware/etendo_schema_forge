@@ -3,6 +3,8 @@ import { X, Loader2, Search, ChevronDown, Check, Plus } from 'lucide-react';
 import { useUI } from '@/i18n';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 /* eslint-disable react/prop-types */
 
 const SELECTOR_PAGE_SIZE = 50;
@@ -109,18 +111,12 @@ export default function ProductResolverPopup({
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
-          <button
-            onClick={cancel}
-            className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted rounded-lg"
-          >
+          <Button variant="outline" onClick={cancel} data-testid="Button__b3ae11_cancel">
             {ui('cancel')}
-          </button>
-          <button
-            onClick={submit}
-            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-status-info hover:bg-status-info rounded-lg"
-          >
+          </Button>
+          <Button onClick={submit} data-testid="Button__b3ae11_continue">
             {ui('continue')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -181,7 +177,6 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
-  const wrapRef = useRef(null);
   const inputRef = useRef(null);
 
   // Seed query with the extracted description the first time the picker opens.
@@ -190,18 +185,8 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
     if (open && !seeded) {
       setQuery(initialQuery || '');
       setSeeded(true);
-      setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open, seeded, initialQuery]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handle = (event) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [open]);
 
   useEffect(() => {
     if (!open || !selectorUrl) return undefined;
@@ -251,68 +236,72 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
     setOpen(false);
   };
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
-      >
-        <span className={`truncate ${value ? 'text-foreground' : 'text-muted-foreground'}`}>
-          {value?.label || ui('ocrProductSkip')}
-        </span>
-        <ChevronDown
-          size={16}
-          className="text-muted-foreground shrink-0"
-          data-testid="ChevronDown__b3ae11" />
-      </button>
-    );
-  }
-
+  // ETP-5289 — the list renders in a portal (Popover). As an `absolute` child it was clipped by
+  // the popup's scrolling body instead of overlapping it.
   return (
-    <div className="relative" ref={wrapRef}>
-      <div className="flex items-center gap-2 rounded-lg border border-foreground bg-card px-3 py-2">
-        <Search size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={ui('ocrProductSearchPlaceholder')}
-          className="flex-1 text-sm text-foreground placeholder-gray-500 outline-none"
-        />
-        {loading && <Loader2
-          size={14}
-          className="animate-spin text-muted-foreground"
-          data-testid="Loader2__b3ae11" />}
-      </div>
-      <div className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border-subtle bg-card shadow-lg">
-        {onCreateNew && (
-          <button
-            type="button"
-            onClick={onCreateNew}
-            className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-status-info-foreground hover:bg-status-info"
-          >
-            <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
-            <span className="truncate">{ui('ocrProductCreateNew')}</span>
-          </button>
-        )}
-        {!loading && failed && (
-          <div className="px-3 py-2 text-xs text-muted-foreground">{ui('ocrProductLoadError')}</div>
-        )}
-        {!loading && !failed && options.length === 0 && (
-          <div className="px-3 py-2 text-xs text-muted-foreground">{ui('noResults')}</div>
-        )}
-        {options.map(o => (
-          <SelectorOption
-            key={o.id}
-            option={o}
-            selected={value?.id === o.id}
-            onPick={handlePick}
-            data-testid="SelectorOption__b3ae11" />
-        ))}
-      </div>
-    </div>
+    <Popover open={open} onOpenChange={setOpen} data-testid="Popover__b3ae11">
+      <PopoverTrigger asChild data-testid="PopoverTrigger__b3ae11">
+        <button
+          type="button"
+          className="w-full border border-border-control rounded-lg px-3 py-2 text-sm bg-card hover:border-border-control focus:outline-none focus:ring-2 focus:ring-focus-ring flex items-center justify-between gap-2"
+        >
+          <span className={`truncate ${value ? 'text-foreground' : 'text-muted-foreground'}`}>
+            {value?.label || ui('ocrProductSkip')}
+          </span>
+          <ChevronDown
+            size={16}
+            className="text-muted-foreground shrink-0"
+            data-testid="ChevronDown__b3ae11" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="z-[60] w-[var(--radix-popover-trigger-width)] min-w-72 p-0"
+        onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}
+        data-testid="PopoverContent__b3ae11">
+        <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+          <Search size={14} className="text-muted-foreground shrink-0" data-testid="Search__b3ae11" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={ui('ocrProductSearchPlaceholder')}
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+          />
+          {loading && <Loader2
+            size={14}
+            className="animate-spin text-muted-foreground"
+            data-testid="Loader2__b3ae11" />}
+        </div>
+        <div className="max-h-56 overflow-auto">
+          {onCreateNew && (
+            <button
+              type="button"
+              onClick={() => { setOpen(false); onCreateNew(); }}
+              className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm text-status-info-foreground hover:bg-muted/50"
+            >
+              <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
+              <span className="truncate">{ui('createProduct')}</span>
+            </button>
+          )}
+          {!loading && failed && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">{ui('ocrProductLoadError')}</div>
+          )}
+          {!loading && !failed && options.length === 0 && (
+            <div className="px-3 py-2 text-xs text-muted-foreground">{ui('noResults')}</div>
+          )}
+          {options.map(o => (
+            <SelectorOption
+              key={o.id}
+              option={o}
+              selected={value?.id === o.id}
+              onPick={handlePick}
+              data-testid="SelectorOption__b3ae11" />
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -438,7 +427,7 @@ function SelectorDialog({
             <button
               type="button"
               onClick={onCreateNew}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-status-info-foreground hover:bg-status-info border-b border-border-subtle"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-left text-status-info-foreground hover:bg-muted/50 border-b border-border-subtle"
             >
               <Plus size={14} className="shrink-0" data-testid="Plus__b3ae11" />
               <span className="truncate">{createLabel}</span>
@@ -656,21 +645,17 @@ function ProductCreateForm({ initialName, productSpecUrl, apiFetch, token, onCre
           )}
         </div>
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-subtle">
-          <button
+          <Button
+            variant="outline"
             onClick={onCancel}
             disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-foreground bg-muted hover:bg-muted rounded-lg disabled:opacity-50"
-          >
+            data-testid="Button__b3ae11_createCancel">
             {ui('cancel')}
-          </button>
-          <button
-            onClick={submit}
-            disabled={submitting}
-            className="px-4 py-2 text-sm font-medium text-primary-foreground bg-status-info hover:bg-status-info rounded-lg disabled:opacity-50 flex items-center gap-2"
-          >
+          </Button>
+          <Button onClick={submit} disabled={submitting} data-testid="Button__b3ae11_create">
             {submitting && <Loader2 size={13} className="animate-spin" data-testid="Loader2__b3ae11" />}
             {ui('ocrProductCreate')}
-          </button>
+          </Button>
         </div>
       </div>
       {picker === 'uom' && uomSelectorUrl && (

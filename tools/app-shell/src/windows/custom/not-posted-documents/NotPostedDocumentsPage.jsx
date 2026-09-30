@@ -6,7 +6,11 @@ import './not-posted-documents.css';
 
 // ETP-5022: this page carried its own buildHeaders copy; header policy now has one home.
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { translateBackendError } from '@/lib/backendErrors.js';
+import {
+  translateBackendError,
+  extractBackendMessageKeys,
+  extractBackendMessageParams,
+} from '@/lib/backendErrors.js';
 
 function formatDate(raw) {
   if (!raw) return '';
@@ -250,7 +254,14 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
         const rawMessage = json?.message || res.statusText;
-        toast.error(rawMessage ? translateBackendError(rawMessage, ui) : ui('postingFailed'));
+        // ETP-5175 — the identity lets the Invalid-Account failure render in the UI locale, the
+        // same sentence the document windows show.
+        toast.error(rawMessage
+          ? translateBackendError(rawMessage, ui, {
+            messageKeys: extractBackendMessageKeys(json),
+            messageParams: extractBackendMessageParams(json),
+          })
+          : ui('postingFailed'));
       }
     } catch (e) {
       toast.error(ui('postingFailed'));

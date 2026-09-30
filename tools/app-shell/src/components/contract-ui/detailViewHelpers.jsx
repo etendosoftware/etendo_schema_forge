@@ -353,7 +353,11 @@ export function applyCalloutFieldUpdates(updates, ctx) {
       continue;
     }
     appliedFields.set(key, entry.value);
-    hook.handleChange(key, entry.value);
+    // ETP-5537 — `origin: 'callout'`: this value is the SERVER telling us what the field is
+    // worth, not the user editing it. It still counts as changed (so a late /defaults response
+    // cannot clobber it), but it must not inherit the payload escape hatch that exempts a
+    // user-authored value from the read-only exclusion — see isUserAuthoredKey in useEntity.js.
+    hook.handleChange(key, entry.value, { origin: 'callout' });
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
     // ETP-4772 follow-up: only a write that actually LEFT A VALUE may advance the
     // generation. A callout answering empty for a still-empty field is a no-op with
@@ -756,10 +760,16 @@ export function getWindowTitle(breadcrumb, tMenu, windowName) {
       : tMenu(windowName) || windowName || '';
 }
 
-export function getRecordTitle(isNew, ui, data, titleField) {
-  return isNew
-      ? ui('newRecord')
-      : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+// ETP-5285: a title field declared with `enumValues` carries i18n keys in its
+// form `options`, so the title reads the same translated label as the grid and
+// the form instead of the stored value.
+export function getRecordTitle(isNew, ui, data, titleField, formFields) {
+  if (isNew) return ui('newRecord');
+  const raw = `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+  const option = formFields
+      ?.find(f => f.key === titleField)
+      ?.options?.find(o => String(o.value) === raw);
+  return option?.label ? ui(option.label) : raw;
 }
 
 export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
@@ -1039,6 +1049,10 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
     children: hook.children,
+    // ETP-5278 — lets an action that writes the same record stay disabled while the record's
+    // own save (PATCH) is in flight, e.g. the Users window's promote/demote, which would
+    // otherwise be clickable in the gap before that window's follow-up role write starts.
+    isSaving: !!hook.isSaving,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
     // action (e.g. resend-invitation, admin promote/demote) the same way a

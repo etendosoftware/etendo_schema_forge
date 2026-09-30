@@ -23,11 +23,15 @@ export function CopilotProvider({ children, menuGroups }) {
     if (!agentEnabled) return legacy.state;
     return {
       ...legacy.state,
-      conversations: [],
-      archivedConversations: [],
+      conversations: ai.conversations,
+      archivedConversations: ai.archivedConversations,
+      conversationId: ai.conversationId,
+      isLoadingConversations: ai.isLoadingConversations,
+      isLoadingArchivedConversations: ai.isLoadingArchivedConversations,
+      isLoadingMessages: ai.isLoadingMessages,
       selectedAssistant: {
         app_id: 'etendo-go-ai',
-        name: 'Etendo Go AI',
+        name: 'Etendo AI',
       },
       messages: ai.messages,
       input: ai.input,
@@ -38,14 +42,22 @@ export function CopilotProvider({ children, menuGroups }) {
       pageHelpActive: ai.pageHelpActive,
       pageHelpLoading: ai.pageHelpLoading,
     };
-  }, [agentEnabled, ai.error, ai.input, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
+  }, [agentEnabled, ai.archivedConversations, ai.conversationId, ai.conversations, ai.error, ai.input, ai.isLoadingArchivedConversations, ai.isLoadingConversations, ai.isLoadingMessages, ai.isSending, ai.messages, ai.pageHelpActive, ai.pageHelpError, ai.pageHelpLoading, ai.pageHelpSuggestion, legacy.state]);
   const actions = useMemo(() => {
     if (!agentEnabled) return legacy.actions;
     return {
       ...legacy.actions,
       loadBootstrap: () => {},
-      loadConversations: () => {},
-      loadArchivedConversations: () => {},
+      // History: same backend and list shape as the legacy copilot, driven by the agent chat.
+      loadConversations: ai.actions.loadConversations,
+      loadArchivedConversations: ai.actions.loadArchivedConversations,
+      selectConversation: ai.actions.selectConversation,
+      deleteConversation: ai.actions.deleteConversation,
+      restoreConversation: ai.actions.restoreConversation,
+      permanentDelete: ai.actions.permanentDelete,
+      renameConversation: ai.actions.renameConversation,
+      retry: ai.actions.retry,
+      dismissError: ai.actions.dismissError,
       sendMessage: ai.actions.sendMessage,
       setInput: ai.actions.setInput,
       resetConversation: ai.actions.resetConversation,

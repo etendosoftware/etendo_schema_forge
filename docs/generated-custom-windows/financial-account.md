@@ -114,6 +114,35 @@ fixes rather than UX:
 - **A statement belonging to a PSD2 bank-connected account is now rejected with 409**
   (`BankStatementsHandler.handleDelete`). Previously enforced in the frontend only.
 
+## Statements on a bank-connected account: no manual create, import or delete (ETP-5471)
+
+On an account whose `EM_PSD2_Connection_Status` is connected, statements come from the bank sync.
+The UI already hides Import / Create there (`StatementsToolbar` shows only Sincronizar), but until
+ETP-5471 the backend refused only `?action=delete`. An MCP agent created a statement on a connected
+account in test pass CB-46. The rule is now enforced server-side, on every path, with one predicate:
+`BankStatementsSupport.isBankConnected` (`BankIntegrationConstants.FA_CONNECTION_STATUS_CONNECTED`).
+
+| Path | Refused with 409 when the account is connected |
+|---|---|
+| `bank-statements?action=create` (manual statement) and MCP `createStatement` | `BankStatementsHandler.handleCreate`, before anything is saved |
+| `bank-statements?action=import` / `?action=preview` (C43 / CSV) and MCP `importStatement` / `previewStatement` | `BankStatementsHandler.parseUploadInput`, before the file is decoded |
+| `bank-statements?action=delete` and MCP `deleteStatement` | `BankStatementsHandler.handleDelete` (pre-existing guard) |
+
+- **One write path.** The MCP named actions of the `bank-statements` spec
+  (`BankStatementAgentActions`, ETP-5447/ETP-5469) dispatch to the same handler methods as the REST
+  actions, and the generic `financial-account` entities `importedBankStatements` /
+  `bankStatementLines` refuse every write with 405 (`bankStatementEntityHandler`). So the check in
+  `BankStatementsHandler` covers REST, MCP and batch alike; there is no generic path around it.
+  The action descriptions tell the agent up front that create / import / preview answer 409 on a
+  bank-connected account.
+- **The bank sync is unaffected.** It creates statements through OBDal
+  (`BankStatementHelper.createBankStatement`, PSD2 module) and never reaches a NEO handler. That is
+  also why this is not an `EntityPersistenceEventObserver`: one would block the sync itself.
+- **Message.** "This account is synchronized with the bank; statements cannot be created or imported
+  manually." translated through `backendError.statementBankConnectedNotCreatable`
+  (`lib/backendErrors.js`, exact-text match; keep the Java constant
+  `BankStatementsHandler.MSG_STATEMENT_BANK_CONNECTED_NOT_CREATABLE` byte-for-byte in sync).
+
 ## Accepted consequence
 
 Bulk-deleting **processed** movements used to work — `useBatchDeleteDialog` ran one Payment Removal
@@ -305,7 +334,9 @@ Field editability in the top section:
   same catalog and codes as the New Account form) on **every** Bank-type account regardless of
   bank-link state; clearing Country while a real IBAN remains is its own distinct error
   (`financeAccountsNewCountryRequiredForIban`), gated so it never fires for a legacy account whose
-  country was already empty and simply never touched during this edit.
+  country was already empty and simply never touched during this edit — unless the IBAN itself is
+  edited (ETP-5473: the backend no longer derives the missing country from the IBAN, so an edited
+  IBAN on a country-less account needs a Country before Save).
 - **Currency** is editable only while the account is **both** not bank-connected **and** has no
   registered transactions yet (ETP-4530). `hasTransactions` is a server-computed flag (not a real
   AD column) injected into every account row by `FinancialAccountsPageHandler` (the handler behind
@@ -1049,25 +1080,31 @@ options available.
 | Operation | HTTP | URL | Notes |
 |-----------|------|-----|-------|
 | List | `GET` | `/sws/neo/financial-account/account` | generic list (included fields only); every row now carries `deletable`/`deleteBlockedReason` (ETP-4871) alongside the pre-existing `hasTransactions` |
-| Create | `POST` | `/sws/neo/financial-account/account` | body (DAL names): `{ name, currency, type?, iBAN?, swiftCode?, country? }` — `country` is required by the SPA but optional for API/MCP callers (falls back to IBAN-derived, ETP-4896) |
-| Update | `PUT` | `/sws/neo/financial-account/account/{id}` | omitting `iBAN`/`swiftCode`/`country` keys preserves stored values |
+| Create | `POST` | `/sws/neo/financial-account/account` | body (DAL names): `{ name, currency, country, type?, iBAN?, swiftCode? }` — `country` is required for every account type and every caller, SPA or API/MCP (ETP-5473); it is never derived from the IBAN |
+| Update | `PUT` | `/sws/neo/financial-account/account/{id}` | omitting `iBAN`/`swiftCode`/`country` keys preserves stored values; sending `country: null`/blank clears it (persisted as `NULL`) except on a Bank account that keeps an IBAN, where it is rejected (ETP-5473) |
 | Archive | `PATCH` | `/sws/neo/financial-account/account/{id}` `{active: false}` | soft-archive (`IsActive='N'`); 409 if open reconciliations. ETP-4871: this used to be the `DELETE` verb (short-circuited into an archive) — DELETE now does a real delete instead, see below |
 | Delete | `DELETE` | `/sws/neo/financial-account/account/{id}` | **ETP-4871 — a real delete**, gated by `deletable`: every FK into `FIN_Financial_Account` is RESTRICT, so the row is only deletable with zero dependent records anywhere (movements, statements, reconciliations, payments, payment proposals, journal lines, bank-file exceptions, defaulting business partners, an active bank connection). 409 (with a human-readable message) if a dependency appeared since the row was loaded — defense-in-depth against the list-load/click race |
 | Currencies | `GET` | `/sws/neo/financial-account/account/selectors/C_Currency_ID` | generic FK selector (replaces `?action=defaults` currency list); restricted to EUR/USD/GBP by `CurrencyIsoAllowlistSelectorPolicy` (a `SelectorContextPolicy` keyed on the `Currency` target entity, registered in `NeoSelectorPolicy`) — applies to every Currency TableDir selector, not just this one |
 | Defaults | `GET` | `/sws/neo/financial-account/account/defaults` | generic defaults; `defaults.currency` = org currency, `defaults.country` = org country (ETP-4896, omitted entirely when it can't be resolved to a usable value — never the AD-seeded United States); the response also carries a `countryIbanRules` sibling (see below) |
 
 **Hook behavior (`handle()` pre-phase):**
-- POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then validates the `(IBAN, country)` pair (see below) and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
-- PUT/PATCH: name uniqueness (excluding self) + the same `(IBAN, country)` pair validation; a bare `{active}` PATCH (archive/unarchive) passes straight through since it only validates keys the body actually carries.
+- POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then requires `country` (all types, see below) and validates the `(IBAN, country)` pair and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
+- PUT/PATCH: name uniqueness (excluding self) + a sent `country` must resolve (clearing it is only refused on a Bank account with an IBAN) + the same `(IBAN, country)` pair validation; a bare `{active}` PATCH (archive/unarchive) passes straight through since it only validates keys the body actually carries.
 - DELETE (ETP-4871): re-validates `deletable` server-side and 409s if any dependency exists, otherwise performs the real, permanent delete.
 - **Sub-endpoints are not account writes (ETP-5468).** Button actions (`POST /account/{id}/action/<button>`, MCP `neo_action`), callouts and display-logic evaluation reach the hook with `httpMethod=POST` too. `handle()` and `afterHandle()` now act only when `NeoContext.getEndpointType()` is `CRUD` (or `null`, which internal callers such as batch/clone leave unset) — see `FinancialAccountHandler.isCrudRequest`. Before, every button call on `account` first ran the create validation, so an agent had to invent a unique `name` and a `currency` to get its button through, and the post-hook could provision a "new" account off an action response.
 - `matchingAlgorithm` is declared `visibility: "system"` in `decisions.json` so its `ETGO_SF_FIELD` row stays **included** — required for the injected value to survive `NeoFieldFilter`. `country` is `visibility: "editable"` (ETP-4896, see below) — it was `"system"` before. `deletable`/`deleteBlockedReason` are virtual, handler-injected fields, the same shape as `hasTransactions`/`pendingCount`.
 
 ### Country field + IBAN↔country validation (ETP-4896)
 
-`C_Country_ID` used to be backend-only: `FinancialAccountHandler` derived it from the IBAN's ISO prefix and silently overwrote whatever was there, so a Cash/Card/IBAN-less-Bank account was always left with no country and no way to set one, and Salt Edge-connected accounts could never disagree with their own IBAN. Country is now a normal, always-editable, always-required field in both `NewAccountWizard`/`AccountFormStep` (all three account types) and `EditAccountModal` — pre-filled with the active organization's country (`defaults.country` above) but never locked, unlike Type/Currency which lock once the account has transactions or a bank link.
+`C_Country_ID` used to be backend-only: `FinancialAccountHandler` derived it from the IBAN's ISO prefix and silently overwrote whatever was there, so a Cash/Card/IBAN-less-Bank account was always left with no country and no way to set one, and Salt Edge-connected accounts could never disagree with their own IBAN. Country is now a normal, always-editable field — required on create by `NewAccountWizard`/`AccountFormStep` (all three account types) and, since ETP-5473, by the backend for every caller. `EditAccountModal` does **not** require it: it can be cleared on edit except on a Bank account that keeps an IBAN (the backend applies the same rule) — pre-filled with the active organization's country (`defaults.country` above) but never locked, unlike Type/Currency which lock once the account has transactions or a bank link.
 
-- **Precedence**: a country present in the request body always wins. IBAN→country derivation (the old behavior) is kept only as a fallback for callers (API/MCP) that send an IBAN but no country at all.
+- **Server-side country rule (ETP-5473)** — the backend now mirrors the UI exactly (the New Account form on create, `EditAccountModal` on update), so an API/MCP caller can no longer create an account the UI would refuse:
+  - **Create** (Bank, Cash and Card alike): a missing, `null` or blank `country` → 400 `Country is required`; an id that does not resolve → 400 `Invalid country`.
+  - **Update**: a `country` id that does not resolve → 400 `Invalid country`. Sending `country: null` or blank **clears** it, and the handler normalizes the value to JSON `null` so it persists as `NULL`, never `''`. That is allowed for Cash and Card accounts and for a Bank account whose effective IBAN (the body's, else the stored one) is blank. On a Bank account that keeps a non-blank IBAN it is rejected with 400 `A bank account with an IBAN must have a country.`, the same rule `EditAccountModal` enforces client-side (`missingCountry` → `financeAccountsNewCountryRequiredForIban`). A PUT/PATCH that carries neither `iBAN` nor `country` skips all of this, so legacy rows stored without a country (seed data, pre-ETP-4896 accounts) keep accepting unrelated edits (rename, tolerances, archive, …).
+  - **No IBAN→country derivation**. Until ETP-5473 a body carrying an IBAN but no country got its country filled in from the IBAN prefix (a fallback kept by ETP-4896 for API/MCP callers). The UI never derived it, so the backend no longer does either. A create with an IBAN and no country is rejected with `Country is required`. A PATCH that adds an IBAN to a legacy Bank account with no stored country, without sending a country in the same body, is rejected with `A bank account with an IBAN must have a country.`.
+  - Both messages are translated in the SPA through `lib/backendErrors.js`: `Country is required` → `backendError.countryRequired` (new), and `A bank account with an IBAN must have a country.` → `backendError.countryIban` (existing). See the "Backend error messages are translated in the SPA" note under "Not implemented yet". The New Account form requires Country, so it never reaches `Country is required`. `EditAccountModal` pre-checks the IBAN-without-country case (`financeAccountsNewCountryRequiredForIban`, blocks Save). That check fires when Country is actively cleared during the edit, **or** when the IBAN is edited while Country is empty (a legacy country-less Bank account). A rename-only edit of such an account leaves the IBAN untouched and still saves. The backend messages remain the safety net for what slips past (a stale/empty `countryIbanRules`, a race with another tab).
+  - **API/MCP callers:** when updating the IBAN of a Bank account whose stored record has no country, send `country` in the same body. A full-record PUT that re-sends the IBAN without a country is rejected with `A bank account with an IBAN must have a country.`
+  - No data-fix: existing accounts stored without a country are left as they are.
 - **Validation** (`FinancialAccountCountrySupport.validateIbanCountryPair`, Java) runs whenever the body touches `iBAN` or `country` on a Bank account with a non-blank effective IBAN, mirroring trigger `FIN_FINANCIAL_ACCOUNT_TRG2`'s own `IF (:NEW.TYPE='B') ... IF (:NEW.IBAN IS NOT NULL)` guards so Cash/Card accounts and IBAN-less Bank accounts are never rejected. A mismatched pair now returns a **readable 400** instead of the trigger's raw `@20259@`/`@20257@`/`@COUNTRY_IBAN@` message, which `NeoErrorSanitizer` would otherwise flatten into a generic 500. The frontend runs the same checks client-side first (`@/lib/countryIban.js`'s `validateIbanForCountry`, mirrored against the `countryIbanRules` catalog) so the 400 is a safety net, not the primary UX.
 - **`countryIbanRules` catalog**: only ~45 of the 243 seeded countries carry IBAN metadata (`IBANCOUNTRY`/`IBANNODIGITS` on `C_Country`); the other ~198 (e.g. Argentina, United States) have none. For those, `validateIbanForCountry`'s prefix/length checks are **skipped, not failed** — only mod-97 applies — because the function receives an already-resolved catalog *row* and cannot tell "no country picked yet" from "picked one with no metadata". But the DB **does** reject an IBAN on such a country (`C_GET_IBAN_DISPLAYED_ACCOUNT` folds the null-metadata case into the same `@20259@` as a mismatch), so the QA follow-up added `countryLacksIbanConfig(countryId, countryIbanRules)`: callers synthesize a `noIbanConfig` error code from it, the same out-of-band pattern already used for `missingCountry`. Its **empty-catalog guard is load-bearing, not defensive noise** — `countryIbanRules` is legitimately `[]` on a non-ok `/defaults`, a network throw, a payload without the key, and on every render before the fetch resolves (both consumers start from `[]`), so an empty catalog means "unknown, defer to the backend" rather than "no country can hold an IBAN". The catalog (`{id, iso, name, ibanPrefix, ibanLength}`) is server-cached 24h and served as a sibling of `accounts`/`summary`/`defaults` from all three read surfaces the SPA uses: the `account/defaults` response, `financial-accounts-page`, and the spec W list GET. It is **not** the country picker's option list — the picker itself is the generic, searchable `C_Country_ID` selector (`CreatableSearchSelect`, `serverSearch`), since 239 active countries don't fit a `staticOptions` dropdown the way the ~20-currency picker does.
 - **Changing the country on an account with a stored IBAN is not free**: the (IBAN, country) pair must stay consistent, so changing one may require changing the other — this is the real, pre-existing DB constraint, not a new restriction.
@@ -1083,9 +1120,11 @@ options available.
 
   Unchanged by this: `SaltEdgeAccountLinkHelper.populateBankIBANField` still reconciles a linked account's country against the IBAN Salt Edge returns and surfaces a mismatch as a **warning toast** (via `data.warning`) rather than blocking — that path now only matters for already-linked accounts, and no change was made to that helper.
 
-Server-side validation and country-derivation logic lives in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
+Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
 
 **MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` by `Java_Qualifier` and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `neo_create` / `neo_update` / `neo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
+
+**MCP delete response + unknown-id status (ETP-5474, runtime change):** `FinancialAccountHandler.deleteAccount` answers a successful account `DELETE` with `204 No Content`, which `neo_delete` used to render as `{}` — so an agent read a successful delete as a failure. `McpToolRouter.handleDelete` now returns `{"deleted": true, "id": "<id>"}` for any handler 2xx (other than 202) with an empty body, the same shape as the generic delete path; REST and the SPA are unchanged (still 204). An **unknown** account id on `DELETE` now answers `404 not_found` ("Account not found") instead of 400; a blank id stays 400 and dependency blockers stay 409 with the reason sentence (e.g. "Cannot delete this account. This account has registered transactions. …"). No UI impact: `useBulkRowDelete`/`batchDelete` treat any 4xx as a refusal alike, and `useAccountMutations().deleteAccount` only special-cases 409. Out of scope: `guardArchive` (the `PATCH {active: false}` path) still answers 400 for a missing account. Verified live via MCP on 2026-09-28 (delete → confirmation and row gone; second delete → 404; "Caja", with transactions → 409 with reason, row kept). Platform reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.17.
 
 The spec + entity + field source-data records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml`, `ETGO_SF_ENTITY.xml` and `ETGO_SF_FIELD.xml` of `com.etendoerp.go` (regenerated by `push-to-neo financial-account` + `export.database`).
 
@@ -1227,7 +1266,7 @@ All keys added to both `en_US.json` and `es_ES.json`.
 | `financeAccountsEditTab*` / `financeAccountsAccounting*` | Edit modal tabs (ETP-4530): tab labels, section titles (`...SectionPaymentIn`/`...SectionPaymentOut`, plus the reused `financeAccountsEditTabGeneral` for Banco's General sub-section), the 9 field labels (`...BankRevaluationGain`/`...Loss`, `...BankFee`, `...InTransitIn`, `...Deposit`, `...ClearedIn`, `...InTransitOut`, `...Withdrawal`, `...ClearedOut`, ETP-4872), empty-ledger message. The retired `fINAssetAcct`/`fINTransitoryAcct` keys (`...BankAsset`, `...Transitory`, `...BankAssetRequired[Summary]`) are left in both locale files, unused, since nothing renders them anymore — pending confirmation the "no field required" behavior (ETP-4872) is final before deleting them |
 | `financeAccountsNewFieldCountry` / `financeAccountsBankConnectionFieldCountry` (ETP-4896) | Country field label — New Account form and Edit modal respectively (kept separate from `financeAccountsNewBankCountry`, the unrelated BankPicker flag-dropdown `aria-label`) |
 | `financeAccountsNewIbanCountryMismatch` / `financeAccountsNewIbanLengthMismatch` (ETP-4896) | IBAN validation error messages for the two country-aware checks (prefix mismatch, wrong length), shared by both forms alongside the pre-existing `financeAccountsNewIbanInvalid` (mod-97 failure) |
-| `financeAccountsNewCountryRequiredForIban` (ETP-4896 follow-up) | EditAccountModal-only: shown when Country is explicitly cleared during the edit while a real IBAN remains — mirrors the backend's "A bank account with an IBAN must have a country." 400 verbatim in translated form, and doubles as the backend-message fallback in `handleSave`'s catch block |
+| `financeAccountsNewCountryRequiredForIban` (ETP-4896 follow-up) | EditAccountModal-only: shown when Country is explicitly cleared during the edit while a real IBAN remains, or (ETP-5473) when the IBAN of a Bank account with no country is edited while Country stays empty — mirrors the backend's "A bank account with an IBAN must have a country." 400 verbatim in translated form, and doubles as the backend-message fallback in `handleSave`'s catch block |
 | `financeAccountsBankConnectionSpainOnly` (ETP-4896) | The reason the edit modal's connect button is disabled on a non-Spanish account. The only place the Spain-only rule is spelled out — the list row and row kebab hide their connect affordance instead |
 
 Key reference (English):
@@ -1888,6 +1927,48 @@ not pre-empt this failure. Making it do so would mean duplicating
 against `C_PeriodControl` — in a codebase whose rule is never to reimplement Core's logic. The copy
 would drift on the first Core change. Failing inside Core and reporting its message costs one
 harmless round trip (nothing is written) and stays correct by construction.
+
+#### "Already reconciled" refusals and partial feedback (ETP-5472)
+
+With a Spanish UI, `reconcileGroup` refusals used to toast raw English, some with an internal id
+glued on. `lib/backendErrors.js` now translates every wire form below, and never shows an internal id:
+
+| Backend text (com.etendoerp.go) | Key |
+|---|---|
+| `Statement line is already reconciled` (exact — `ReconciliationHandler.MSG_LINE_ALREADY_RECONCILED`) | `backendError.statementLineAlreadyReconciled` |
+| `Statement line is already reconciled: <statementLineId>` (`ReconciliationFlowSupport`) | `backendError.statementLineAlreadyReconciled` |
+| `Operation is already reconciled: <operationId>` (`ReconciliationFlowSupport`) | `backendError.operationAlreadyReconciled` |
+| `Reconciliation <documentNo> is an unconfirmed draft that already holds this line. Review it before reconciling the line again.` (409, `ReconciliationLineTargetSupport`) | `backendError.draftHoldsLine` |
+
+The two `: <id>` forms are prefix matchers (`matchStatementLineAlreadyReconciled`,
+`matchOperationAlreadyReconciled`) that return no params, so the UUID is dropped. The draft form is
+a prefix/suffix matcher (`matchDraftHoldsLine`) that interpolates `{documentNo}`; it shares the
+`Reconciliation ` prefix with `backendError.foreignDraftReconciliation` (ETP-5468) but not the
+suffix, so the two never cross-match. The Java text is a de facto wire contract: rewording it
+server-side silently brings the English back.
+
+**Partial reconciliation toast.** When the selected movements cover only part of the line, the 201
+response of `reconcileGroup` carries `partial: true`, `pendingAmount` (signed like the line) and
+`remainderLineId`. `ReconciliationSplitPanel.submitReconcile` then shows an info toast,
+`financeReconcileToastPartial` ("Conciliada parcialmente: quedan {amount} pendientes."), with the
+absolute pending amount formatted through `formatCurrency` in the account currency, instead of
+"Conciliación realizada". A response without those fields keeps the plain success toast.
+
+**Backend hardening, same ticket (com.etendoerp.go).** `reconcileGroup` now:
+
+- **auto-heals** only a statement line linked to a movement that has NO reconciliation at all: the
+  stale link is cleared and that movement becomes a match candidate again, instead of the line
+  being refused as "already reconciled";
+- **refuses** a line held by an unconfirmed draft reconciliation (e.g. one left by the Classic
+  "Match Statement" button) with a 409 and the translated `backendError.draftHoldsLine` message
+  naming the draft's document number. The draft is never discarded — the user reviews it first;
+- redirects a request aimed at a partial group's head to its pending remainder line;
+- reports `partial: true` only when a pending remainder line really exists, so the partial toast
+  above never fires for a fully covered line.
+
+When a reconcile is refused, the request's own pending writes are rolled back. That does not
+cover work Core commits mid-flow (e.g. inside a Core process it delegates to): such writes survive
+the refusal, so a failed reconcile is not guaranteed to leave zero trace.
 
 #### Posting the unreconciled remainder to an accounting account (ETP-4796)
 

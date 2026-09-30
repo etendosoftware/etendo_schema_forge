@@ -249,6 +249,36 @@ was given. If drag-to-reorder is ever added, its order belongs in this same snap
 
 To clear the saved state programmatically, call `clearListState(scope)`.
 
+### Lifetime: the saved state lives only inside its window
+
+A snapshot survives only while the user stays inside the window it belongs to — the list route
+`/<window>` and every record route under it (`/<window>/<id>`, `/<window>/new`). As soon as a
+navigation changes the first path segment (another window, the dashboard, the root), the state of
+the window being left is cleared. The destination window's own state is never touched.
+
+| Navigation | Saved state |
+|---|---|
+| List -> record -> list (breadcrumb, Cancel, browser Back) | kept |
+| Record -> another record / `new` of the same window | kept |
+| Refresh (F5) on the list or on a record | kept |
+| Leave to another window, the dashboard or `/` | cleared for the window left |
+| Re-enter afterwards (menu or browser Back) | default view |
+
+Implementation: `ListStateRouteGuard` (`tools/app-shell/src/lib/ListStateRouteGuard.jsx`) is a
+render-nothing component mounted once inside the router in `App.jsx`, next to
+`ObservabilityRouteTracker`. On every `location.pathname` change it calls
+`pruneListStateOnNavigation(prev, next)` from `listViewSession.js`, which compares
+`windowScopeFromPath(prev)` against `windowScopeFromPath(next)` and calls `clearListState` for the
+previous scope when they differ. A fresh page load has no previous pathname, which is why F5 keeps
+the state. This also means a dashboard-shortcut filter (ETP-5009) does not stick: once the user
+leaves the window, re-entering from the menu lands on the default view.
+
+The scope is the route's first segment, which matches ListView's `listStateScope` because
+`WindowLoader` passes the `/:windowName` route param as `windowName`. A `ListView` rendered inside
+an `EmbeddedWindowRoute` runs under its own `MemoryRouter`, so its navigations never reach the
+guard; its key (the embedded window's name) is cleared only when the user later leaves that
+window's own route.
+
 ### Precedence: a URL deep-link beats the saved state (ETP-5009)
 
 ```
@@ -311,3 +341,4 @@ All four toolbar surfaces use the same size tokens (`h-9`, `px-3`, `text-xs`) so
   - `tools/app-shell/src/components/contract-ui/ListView.jsx` — filter state + toolbar layout.
   - `tools/app-shell/src/components/contract-ui/ListFilterBar.jsx` — document-type filters + advanced filter popover.
   - `tools/app-shell/src/lib/listViewSession.js` — session snapshot of the grid state (ETP-4994).
+  - `tools/app-shell/src/lib/ListStateRouteGuard.jsx` — clears a window's snapshot when the user leaves it.
