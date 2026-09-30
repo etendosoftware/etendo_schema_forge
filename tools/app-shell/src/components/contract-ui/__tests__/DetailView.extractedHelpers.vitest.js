@@ -468,6 +468,7 @@ describe('renderExtraActionButtons', () => {
     expect(extraActions).toHaveBeenCalledWith({
       data,
       children: hook.children,
+      isSaving: false,
       onRefresh: expect.any(Function),
     });
   });

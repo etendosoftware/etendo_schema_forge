@@ -1009,6 +1009,117 @@ describe('useEntity', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // applyPersistedFields (ETP-5255, QA F-1)
+  // ---------------------------------------------------------------------------
+  //
+  // Adopts a value that ANOTHER write path has already stored (the contacts credit-limit
+  // stepper autosaves its own field) WITHOUT marking it dirty. The panel used to report it via
+  // `handleChange`, which writes `editing` only: `editing[key] !== selected[key]` flagged the
+  // field dirty, "Save" stayed enabled after the autosave, and its PATCH re-sent the field —
+  // a superseded copy when clicked while the next autosave was in flight, which reverted it.
+
+  describe('applyPersistedFields (ETP-5255, QA F-1)', () => {
+    const RECORD = {
+      id: 'bp-1',
+      name: 'Acme',
+      creditLimit: 0,
+      etgoWeb: 'https://old.example',
+      updated: '2026-09-28T10:00:00+00:00',
+    };
+    let patches;
+
+    beforeEach(() => {
+      patches = [];
+      globalThis.fetch = vi.fn(async (url, opts) => {
+        if (opts?.method === 'PATCH' || opts?.method === 'PUT') {
+          const body = JSON.parse(opts.body);
+          patches.push(body);
+          return {
+            ok: true,
+            json: async () => ({ response: { data: [{ ...RECORD, ...body, updated: 'v2' }] } }),
+          };
+        }
+        return { ok: true, json: async () => ({ response: { data: [] } }) };
+      });
+    });
+
+    function renderContact() {
+      return renderEntity('businessPartner', null, {
+        apiBaseUrl: 'http://localhost/sws/neo/contacts',
+        skipListFetch: true,
+      });
+    }
+
+    it('writes the persisted value into both editing and selected, leaving the header clean', () => {
+      const { result } = renderContact();
+      act(() => { result.current.handleSelect(RECORD); });
+
+      act(() => { result.current.applyPersistedFields({ creditLimit: 5 }); });
+
+      expect(result.current.editing.creditLimit).toBe(5);
+      expect(result.current.selected.creditLimit).toBe(5);
+      expect(result.current.isDirtyHeader).toBe(false);
+      expect(result.current.dirtyHeaderFieldKeys).not.toContain('creditLimit');
+    });
+
+    it('keeps a pending user edit dirty and alone in the save payload', async () => {
+      const { result } = renderContact();
+      act(() => { result.current.handleSelect(RECORD); });
+
+      act(() => { result.current.handleChange('etgoWeb', 'https://new.example'); });
+      act(() => { result.current.applyPersistedFields({ creditLimit: 5 }); });
+
+      // The user's own edit is still pending — adopting a saved value must not swallow it.
+      expect(result.current.isDirtyHeader).toBe(true);
+      expect(result.current.dirtyHeaderFieldKeys).toEqual(['etgoWeb']);
+
+      await act(async () => { await result.current.handleSave({ silent: true }); });
+
+      expect(patches).toHaveLength(1);
+      expect(patches[0].etgoWeb).toBe('https://new.example');
+      // THE regression: re-sending the autosaved field is what reverted the user's last click.
+      expect(patches[0]).not.toHaveProperty('creditLimit');
+    });
+
+    it('stays clean across successive persisted values (one per autosave)', () => {
+      const { result } = renderContact();
+      act(() => { result.current.handleSelect(RECORD); });
+
+      act(() => { result.current.applyPersistedFields({ creditLimit: 5 }); });
+      act(() => { result.current.applyPersistedFields({ creditLimit: 6 }); });
+
+      expect(result.current.isDirtyHeader).toBe(false);
+      expect(result.current.editing.creditLimit).toBe(6);
+      expect(result.current.selected.creditLimit).toBe(6);
+    });
+
+    it('ignores a missing or non-object patch', () => {
+      const { result } = renderContact();
+      act(() => { result.current.handleSelect(RECORD); });
+
+      act(() => {
+        result.current.applyPersistedFields(null);
+        result.current.applyPersistedFields(undefined);
+        result.current.applyPersistedFields('creditLimit');
+      });
+
+      expect(result.current.selected).toEqual(RECORD);
+      expect(result.current.isDirtyHeader).toBe(false);
+    });
+
+    it('does not conjure a record when none is loaded', () => {
+      const { result } = renderContact();
+      const selectedBefore = result.current.selected;
+      const editingBefore = result.current.editing;
+
+      act(() => { result.current.applyPersistedFields({ creditLimit: 5 }); });
+
+      expect(result.current.selected).toBe(selectedBefore);
+      expect(result.current.editing).toBe(editingBefore);
+    });
+  });
+
   describe('buildHeaders — Accept-Language locale propagation', () => {
     beforeEach(() => {
       globalThis.fetch = vi.fn().mockResolvedValue({

@@ -85,7 +85,7 @@ describe('inventory-stock-report — grouped layout renders one card per group (
 
   it('produces well-formed HTML: every opened <table> and <div class="stock-card"> is closed the same number of times', () => {
     const html = render({ dimensionField: 'product' }, rows);
-    const openTables = (html.match(/<table class="report-table">/g) || []).length;
+    const openTables = (html.match(/<table class="report-table"[^>]*>/g) || []).length;
     const closeTables = (html.match(/<\/table>/g) || []).length;
     assert.equal(openTables, 3);
     assert.equal(closeTables, 3);
@@ -110,7 +110,7 @@ describe('inventory-stock-report — flat (ungrouped) layout is untouched (ETP-5
     // (CSS declarations aren't conditional) — check the MARKUP usage, not
     // the stylesheet, is absent from the flat/ungrouped body.
     assert.doesNotMatch(html, /class="stock-cards?"/);
-    const tableOccurrences = [...html.matchAll(/<table class="report-table">/g)];
+    const tableOccurrences = [...html.matchAll(/<table class="report-table"[^>]*>/g)];
     assert.equal(tableOccurrences.length, 1);
   });
 

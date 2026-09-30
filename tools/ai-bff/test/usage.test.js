@@ -341,3 +341,10 @@ test('onFinish records without awaiting and still closes the MCP client', () => 
   assert.match(body, /await mcpClient\?\.close\(\);/);
   assert.ok(body.indexOf('usage.finish') < body.indexOf('mcpClient?.close'));
 });
+
+test('postUsageEvent skips the post when the session has no Bearer token', async () => {
+  const { postUsageEvent } = await import('../src/usage.js');
+  let called = false;
+  await postUsageEvent({}, { url: 'http://x/usage', authorization: undefined, fetchImpl: () => { called = true; } });
+  assert.equal(called, false);
+});

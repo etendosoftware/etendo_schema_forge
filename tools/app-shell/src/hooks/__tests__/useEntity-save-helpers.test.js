@@ -450,7 +450,7 @@ describe('shouldSkipPayloadField', () => {
       backendDefaultKeysRef,
       userChangedKeysRef,
       new Set(opts.required ?? []),
-      opts.contactsBp ?? false,
+      opts.isFieldExcluded ?? false,
       opts.editing ?? {},
     );
   };
@@ -519,9 +519,9 @@ describe('shouldSkipPayloadField', () => {
     assert.equal(call('language', '181', { defaults: ['language'], required: ['language'] }), false);
   });
 
-  it('skips contacts billing fields on business-partner create only', () => {
-    assert.equal(call('priceList', 'PL', { contactsBp: true }), true);
-    assert.equal(call('priceList', 'PL', { contactsBp: false }), false);
+  it('skips a field when isFieldExcluded (ETP-5537 generic create-field exclusion) says so', () => {
+    assert.equal(call('priceList', 'PL', { isFieldExcluded: () => true }), true);
+    assert.equal(call('priceList', 'PL', { isFieldExcluded: () => false }), false);
   });
 
   it('skips SmartClient temporary import references on FK-like fields', () => {
@@ -853,7 +853,10 @@ describe('buildSavePayload', () => {
     assert.deepEqual(payload, { name: 'ACME' });
   });
 
-  it('drops the contacts billing fields on a business-partner create', () => {
+  // ETP-5537: replaces the old Contacts-only entity/apiBaseUrl detection with the generic
+  // rule — a field not registered by any currently-mounted form (or registered but read-only)
+  // is excluded from the CREATE payload, for any window. See buildCreateFieldExclusion.
+  it('drops a field that is not registered by any currently-mounted form', () => {
     const payload = buildSavePayload({
       isNew: true,
       selected: null,
@@ -865,14 +868,16 @@ describe('buildSavePayload', () => {
     assert.deepEqual(payload, { name: 'ACME' });
   });
 
-  it('keeps the billing fields for a non-contacts business-partner window', () => {
+  it('keeps a field that IS registered and not read-only, regardless of window', () => {
     const payload = buildSavePayload({
       isNew: true,
       selected: null,
       editing: { name: 'ACME', priceList: 'PL-1' },
       entity: 'businessPartner',
       apiBaseUrl: '/sws/neo/vendors',
-      ...refs(),
+      backendDefaultKeysRef: { current: new Set() },
+      userChangedKeysRef: { current: new Set() },
+      formFieldsRef: { current: new Map([['header', [{ key: 'name', required: true }, { key: 'priceList' }]]]) },
     });
     assert.deepEqual(payload, { name: 'ACME', priceList: 'PL-1' });
   });

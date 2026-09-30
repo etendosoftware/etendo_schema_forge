@@ -51,7 +51,10 @@ export function showBulkActionToast(ui, result) {
     // literal and point at nothing the user can find in the document. Absent against a backend
     // that does not send them, in which case this is the pre-existing text-only translation.
     toast.error(
-      translateBackendError(failed[0].message, ui, { messageKeys: failed[0].messageKeys })
+      translateBackendError(failed[0].message, ui, {
+        messageKeys: failed[0].messageKeys,
+        messageParams: failed[0].messageParams,
+      })
       || ui('actionFailed'),
     );
     return;
