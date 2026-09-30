@@ -4,6 +4,15 @@ How to extend, customize, and hook into NEO Headless endpoints without modifying
 
 **Target audience:** Developers building on top of `com.etendoerp.go` who need per-entity, per-endpoint, or per-field custom logic.
 
+> **Binding: read this before you register a handler.** This guide predates the
+> `@NeoExtension` annotation and most of its examples still show the original
+> `@Named` + `JAVA_QUALIFIER` binding. **That binding is legacy and must not be used for
+> new code.** Everything else here — the hook lifecycle, `NeoContext`, the examples, the
+> pitfalls — is current and applies to both bindings; only *how the class is bound to an
+> entity* changed. For new handlers use
+> `@NeoExtension(spec = "<spec>", entity = "<entity>")` and see
+> `com.etendoerp.go/docs/neo-headless.md` §5.3.a, which is canonical on the choice.
+
 ---
 
 ## Overview
@@ -186,6 +195,26 @@ public interface NeoHandler {
 ```
 
 ### 2.2 Registration
+
+#### 2.2.a New code — `@NeoExtension`
+
+Annotate the class with the spec and entity it customizes. Nothing else: no DB record, no
+`JAVA_QUALIFIER`, no CDI scope.
+
+```java
+// spec = ETGO_SF_SPEC.Name (kebab-case), entity = ETGO_SF_ENTITY.Name
+@NeoExtension(spec = "purchase-order", entity = "header")
+public class PurchaseOrderHandler implements NeoHandler { ... }
+```
+
+`NeoExtensionIndex` resolves it, and `NeoExtensionDispatcher` routes REST single, REST batch and
+MCP through it alike. Because the binding lives in the file, splitting one handler into two needs
+no data change, and it cannot be silently lost by a CDI proxy. Conflicting declarations are logged
+at `ERROR` and never fail the build; `make extension-parity` reports them offline.
+
+#### 2.2.b Legacy — `@Named` + `JAVA_QUALIFIER`
+
+Still resolved as the fallback, so existing handlers keep working. **Do not add a new one.**
 
 1. Annotate your class with `@Named("qualifierName")` **only** — do **not** add `@ApplicationScoped` or any other normal scope (see the warning below).
 2. Set `JAVA_QUALIFIER = 'qualifierName'` on the ETGO_SF_Entity record.

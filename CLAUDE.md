@@ -572,13 +572,16 @@ public class InternalConsumptionLineHandler implements NeoHandler {
     @Override public NeoResponse afterHandle(NeoContext context) { return null; } // post-hook
 }
 ```
-**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). See `docs/neo-headless-extensibility.md` §2.2.
+**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). This trap is one of the reasons `@NeoExtension` exists: it binds by annotation index, not by reading `@Named` off the instance class. See `docs/neo-headless-extensibility.md` §2.2.
 
 - `handle()` → `null` continues to default CRUD; `NeoResponse` short-circuits.
 - `afterHandle()` → `null` keeps default result; `NeoResponse` replaces it.
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
-Full reference: `docs/neo-headless-extensibility.md`
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a — **start there**, it is
+the one that covers `@NeoExtension`. `docs/neo-headless-extensibility.md` documents the hook
+lifecycle (`handle`/`afterHandle`, contexts, examples) but predates the annotation, so its
+registration steps still describe the legacy binding only.
 
 ## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
 
