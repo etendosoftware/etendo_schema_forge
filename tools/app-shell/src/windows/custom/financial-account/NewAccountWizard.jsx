@@ -86,7 +86,7 @@ function resolveFormMode(accountType) {
  * Multi-step modal to create a financial account "offline" (ETP-4096):
  *   type picker → (Bank/Card) connection toggle → bank picker → institution → form
  *   Bank and Card share the full flow (Card form is Name + Currency only); Caja
- *   goes straight to a simple form. "Con conexión" is shown but inert (T3).
+ *   goes straight to a simple form. "Con conexión" hands off to `onConnectWithCreation`.
  *
  * Props:
  *   - open: controls visibility
@@ -176,8 +176,15 @@ export function NewAccountWizard({ open, onClose, onCreated, onConnectWithCreati
     try {
       // When the chosen bank is a real Salt Edge provider, remember it on the account so a later
       // bank connect preselects that bank. Static-catalog banks have no Salt Edge code → skipped.
+      // The logo travels too (ETP-5521) so the provider catalog stores it and the account row
+      // shows the bank logo instead of the generic placeholder.
       const payload = selectedBank?.isProvider
-        ? { ...values, providerCode: selectedBank.id, providerName: selectedBank.name }
+        ? {
+          ...values,
+          providerCode: selectedBank.id,
+          providerName: selectedBank.name,
+          providerLogoUrl: selectedBank.logoUrl,
+        }
         : values;
       await createAccount(payload);
       toast.success(ui('financeAccountsNewCreateSuccess'));

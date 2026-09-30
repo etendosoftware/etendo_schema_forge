@@ -17,10 +17,17 @@ vi.mock('sonner', () => ({
   toast: { success: (...args) => toastSuccess(...args) },
 }));
 
-// Stub AccountLogoAvatar so its dependency tree (icons) doesn't matter
+// Stub AccountLogoAvatar so its dependency tree (icons) doesn't matter. It mirrors the real
+// component's contract just enough to assert the logo: an <img> only when a logo URL is present.
 vi.mock('@/components/financial-accounts/AccountLogoAvatar', () => ({
-  AccountLogoAvatar: () => <div data-testid="avatar" />,
+  AccountLogoAvatar: ({ account }) => (
+    <div data-testid="avatar">
+      {account?.providerLogoUrl ? <img data-testid="avatar-logo" src={account.providerLogoUrl} alt="" /> : null}
+    </div>
+  ),
 }));
+
+const CDN_LOGO = 'https://d1uuj3mi6rzwpm.cloudfront.net/logos/providers/es/santander_es.svg';
 
 import { AccountSummaryStrip } from '../AccountSummaryStrip.jsx';
 
@@ -156,7 +163,7 @@ describe('AccountSummaryStrip', () => {
     expect(screen.queryByTestId('iban-copy-button')).not.toBeInTheDocument();
   });
 
-  it('hides the identifier block for a card account without a masked PAN', () => {
+  it('hides the identifier block for a card account without a masked PAN nor a logo', () => {
     render(
       <AccountSummaryStrip
         account={{ type: 'CA', iban: null, maskedPan: '', name: 'Tarjeta' }}
@@ -165,7 +172,52 @@ describe('AccountSummaryStrip', () => {
       />,
     );
     expect(screen.queryByTestId('iban-text')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('avatar')).not.toBeInTheDocument();
     expect(screen.getByTestId('kpi-balance')).toBeInTheDocument();
+  });
+
+  it('shows only the bank logo for a card account without a masked PAN but with a logo (ETP-5521)', () => {
+    render(
+      <AccountSummaryStrip
+        account={{ type: 'CA', iban: null, maskedPan: '', providerLogoUrl: CDN_LOGO, name: 'Tarjeta' }}
+        totals={TOTALS}
+        loading={false}
+      />,
+    );
+    expect(screen.getByTestId('avatar')).toBeInTheDocument();
+    expect(screen.getByTestId('avatar-logo')).toHaveAttribute('src', CDN_LOGO);
+    expect(screen.queryByTestId('iban-text')).not.toBeInTheDocument();
+    expect(screen.queryByText('financeAccountDetailCardNumber')).not.toBeInTheDocument();
+    expect(screen.getByTestId('kpi-balance')).toBeInTheDocument();
+  });
+
+  it('hides the identifier block for a card without a masked PAN and a whitespace-only logo (ETP-5521)', () => {
+    render(
+      <AccountSummaryStrip
+        account={{ type: 'CA', iban: null, maskedPan: '', providerLogoUrl: '   ', name: 'Tarjeta' }}
+        totals={TOTALS}
+        loading={false}
+      />,
+    );
+    expect(screen.queryByTestId('avatar')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('iban-text')).not.toBeInTheDocument();
+    expect(screen.getByTestId('kpi-balance')).toBeInTheDocument();
+  });
+
+  it('shows both the bank logo and the masked card number for a card with a PAN and a logo (ETP-5521)', () => {
+    render(
+      <AccountSummaryStrip
+        account={{
+          type: 'CA', iban: null, maskedPan: '**** **** **** 1234', providerLogoUrl: CDN_LOGO, name: 'Tarjeta',
+        }}
+        totals={TOTALS}
+        loading={false}
+      />,
+    );
+    expect(screen.getByTestId('avatar-logo')).toHaveAttribute('src', CDN_LOGO);
+    expect(screen.getByTestId('iban-text')).toHaveTextContent('**** **** **** 1234');
+    expect(screen.getByText('financeAccountDetailCardNumber')).toBeInTheDocument();
+    expect(screen.queryByTestId('iban-copy-button')).not.toBeInTheDocument();
   });
 
   it('copies the IBAN to the clipboard and toasts on success', async () => {
