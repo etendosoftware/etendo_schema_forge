@@ -87,7 +87,9 @@ export function useCsvExport() {
       if (!spec) throw new Error(`unsupported export format: ${format}`);
       const query = buildExportQuery(params, format);
       const url = `${path}${path.includes('?') ? '&' : '?'}${query}`;
-      const res = await apiFetch(url, baseUrl === undefined ? undefined : { baseUrl });
+      // ETP-5424 — a server-side export streams the whole filtered list and can outlive
+      // apiFetch's default timeout, so it opts out.
+      const res = await apiFetch(url, baseUrl === undefined ? { timeout: 0 } : { baseUrl, timeout: 0 });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       // The backend DECLINES to export (`NeoCsvExportService.tryExport` returns false) by
       // writing its normal JSON response with a 200 — a legitimate answer for a GET that is not

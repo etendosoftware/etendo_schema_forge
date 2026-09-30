@@ -23,6 +23,7 @@ import { EditAccountModal } from './EditAccountModal.jsx';
 import { ArchiveAccountDialog } from './ArchiveAccountDialog.jsx';
 import { DeleteAccountDialog } from './DeleteAccountDialog.jsx';
 import { BankConnectionFlowUI } from './BankConnectionFlowUI.jsx';
+import { useFinancialAccountCacheInvalidation } from './financialAccountCacheInvalidation';
 import { useBankConnectionFlow } from '@/hooks/useBankConnectionFlow';
 import { AutoMatchSuggestionModal } from '@/components/contract-ui/AutoMatchSuggestionModal';
 import { useAutoMatch } from '@/hooks/useReconciliation';
@@ -262,6 +263,16 @@ export function FinancialAccountDetail({ recordId }) {
     setAutoMatchArmed, setAutoOpenNewMovement, setEditOpen,
   });
   const { account, loading: accountLoading, error: accountError, reload: reloadAccount } = useFinancialAccount(recordId);
+  // ETP-5522 — every mutation below bypasses the shared query cache the Cuentas list is served
+  // from, so the list would come back with its pre-mutation rows (a stale "Conciliado" badge).
+  // Mutation success paths use these wrappers, which mark the list stale (no request) before
+  // reloading. Any new mutation in this detail must go through one of them. Plain navigation and
+  // mount deliberately do not invalidate.
+  const { invalidateAccountList } = useFinancialAccountCacheInvalidation();
+  const reloadAccountAndList = useCallback(() => {
+    invalidateAccountList();
+    reloadAccount();
+  }, [invalidateAccountList, reloadAccount]);
   // ETP-4795: cash accounts close their drawer instead of matching bank-statement lines, so both
   // the Reconciliation tab body and the automatch engine branch on this.
   const isCashAccount = account?.type === ACCOUNT_TYPE.CASH;
@@ -287,7 +298,7 @@ export function FinancialAccountDetail({ recordId }) {
   }, [account, visibleTabs, activeTab]);
   // ETP-4530: powers the Edit modal's "Connect bank" button from this entry point too — same
   // flow/UI as the accounts list (FinancialAccountsPage.jsx), just reloading the account instead.
-  const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccount });
+  const bankConnectionFlow = useBankConnectionFlow({ onDone: reloadAccountAndList });
   // Automatch matches bank-statement lines against movements — a cash account has no statements,
   // so the engine is never queried and its modal never opens for one (ETP-4795). Queried whenever
   // the Reconciliation tab is active (not just while the modal is open) so the ETP-4922 "armed"
@@ -314,15 +325,21 @@ export function FinancialAccountDetail({ recordId }) {
     if (autoMatchGroups.length > 0) setAutoMatchOpen(true);
   }, [autoMatchArmed, autoMatchLoading, autoMatchGroups]);
   const { movements, totals, enabledDimensions, headerDimensions, trxTypes, accountOrgId, paymentMethods, loading: movementsLoading, reload: reloadMovements } = useAccountMovements(recordId);
+  // Movement create/edit/delete/lifecycle and funds transfers change the balances and pending
+  // counts the list shows (a transfer touches TWO accounts; the entity-wide invalidation covers both).
+  const reloadMovementsAndList = useCallback(() => {
+    invalidateAccountList();
+    reloadMovements();
+  }, [invalidateAccountList, reloadMovements]);
   // Bumped after an automatch apply so the reconciliation panel remounts and re-runs the matching
   // algorithms (fresh pending lines + suggestions), keeping the view in sync after each reconcile.
   const [reconciliationRefreshKey, setReconciliationRefreshKey] = useState(0);
   const handleAutoMatchSuccess = useCallback(() => {
-    reloadAccount();
+    reloadAccountAndList();
     reloadAutoMatch();
     reloadMovements();
     setReconciliationRefreshKey((k) => k + 1);
-  }, [reloadAccount, reloadAutoMatch, reloadMovements]);
+  }, [reloadAccountAndList, reloadAutoMatch, reloadMovements]);
   const { statements } = useBankStatements(recordId);
   // Lifted out of ReconciliationListTab so the tab badge can show the count without the tab being
   // mounted — and without a second fetch of the same endpoint. Idle (`null`) on non-cash accounts,
@@ -336,13 +353,15 @@ export function FinancialAccountDetail({ recordId }) {
   // remount key, and the surrounding account + movements + tab badges come back fresh with it.
   // `reloadAutoMatch` is idle on a cash account and `reloadReconciliations` on a bank one (both
   // hooks are passed `null` there), so calling all of them is safe on either type.
+  // Also the Edit modal's `onSaved`, so it goes through `reloadAccountAndList` (an edit changes
+  // the name/type/bank columns of the list row).
   const handleReconciliationRefresh = useCallback(() => {
-    reloadAccount();
+    reloadAccountAndList();
     reloadAutoMatch();
     reloadMovements();
     reloadReconciliations();
     setReconciliationRefreshKey((k) => k + 1);
-  }, [reloadAccount, reloadAutoMatch, reloadMovements, reloadReconciliations]);
+  }, [reloadAccountAndList, reloadAutoMatch, reloadMovements, reloadReconciliations]);
   const movementsTabRef = useRef(null);
   const statementsTabRef = useRef(null);
   const runCsvExport = useCsvExport();
@@ -509,7 +528,7 @@ export function FinancialAccountDetail({ recordId }) {
               accountOrgId={accountOrgId}
               paymentMethods={paymentMethods}
               loading={movementsLoading}
-              onReload={reloadMovements}
+              onReload={reloadMovementsAndList}
               highlightTxnId={highlightTxnId}
               txnUnbounded={txnUnbounded}
               autoOpenNewMovement={autoOpenNewMovement}
@@ -525,14 +544,14 @@ export function FinancialAccountDetail({ recordId }) {
               // The confirmed close becomes a new row of the Reconciliations tab and bumps its
               // badge count, and that list is fetched here (not inside the tab), so it has to be
               // reloaded too — otherwise the close only shows up after a manual page refresh.
-              onCloseSuccess={() => { reloadAccount(); reloadMovements(); reloadReconciliations(); }}
+              onCloseSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadReconciliations(); }}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
             <ReconciliationTab
               key={reconciliationRefreshKey}
               account={account}
               paymentMethods={paymentMethods}
-              onReconcileSuccess={() => { reloadAccount(); reloadMovements(); reloadAutoMatch(); }}
+              onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
               data-testid="ReconciliationTab__f7dbb3" />
           ))}
           {activeTab === 'statements' && (
@@ -586,11 +605,16 @@ export function FinancialAccountDetail({ recordId }) {
         onClose={() => setArchiveTarget(null)}
         // Archiving takes the account out of the list, so there is nothing left to look at here —
         // go back. Restoring leaves you on a perfectly valid account, so stay and just refresh.
+        // Either way the list's cached rows are now wrong (ETP-5522), hence the invalidation.
         onArchived={() => {
           const wasUnarchive = archiveTarget?.active === false;
           setArchiveTarget(null);
-          if (wasUnarchive) reloadAccount();
-          else navigate('/financial-account');
+          if (wasUnarchive) {
+            reloadAccountAndList();
+          } else {
+            invalidateAccountList();
+            navigate('/financial-account');
+          }
         }}
         data-testid="ArchiveAccountDialog__f7dbb3" />
       <DeleteAccountDialog
@@ -599,7 +623,7 @@ export function FinancialAccountDetail({ recordId }) {
         onClose={() => setDeleteTarget(null)}
         // A real delete removes the account outright — same "nothing left to look at" reasoning
         // as the archive-branch above, unconditionally (there is no restore-and-stay case here).
-        onDeleted={() => { setDeleteTarget(null); navigate('/financial-account'); }}
+        onDeleted={() => { setDeleteTarget(null); invalidateAccountList(); navigate('/financial-account'); }}
         data-testid="DeleteAccountDialog__f7dbb3" />
       <BankConnectionFlowUI flow={bankConnectionFlow} data-testid="BankConnectionFlowUI__f7dbb3" />
     </TooltipProvider>

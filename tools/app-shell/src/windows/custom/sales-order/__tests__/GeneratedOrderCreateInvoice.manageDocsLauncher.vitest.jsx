@@ -26,6 +26,14 @@
  * that used to crash: loading → resolved-with-nothing-pending (closes silently) and
  * loading → resolved-with-something-pending (opens `CreateDocsModal`). A third test pins the
  * regression class itself by asserting no "Rendered more hooks" console error is ever logged.
+ *
+ * ## ETP-5525
+ *
+ * Two further blocks at the bottom: the `CreateDocsModal` title follows what is actually pending
+ * (it used to be the fixed `soManageDocsTitle` — "Generar factura" — even for a shipment-only
+ * order), and the no-annotation fallback excludes the Total Discount line (product
+ * `ETGO_DTO_PRODUCT_ID`, ordered 1, never delivered) so it cannot keep a fully delivered order
+ * "pending shipment", on both surfaces that carry their own copy of that derivation.
  */
 
 import { render, screen, act, waitFor } from '@testing-library/react';
@@ -80,7 +88,8 @@ vi.mock('@/lib/formatCurrency.js', () => ({
   formatCurrency: (_currency, value) => `${Number(value || 0).toFixed(2)} €`,
 }));
 
-import { ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
+import OrderCreateInvoice, { ManageDocsLauncher } from '@generated/sales-order/custom/OrderCreateInvoice';
+import { ETGO_DTO_PRODUCT_ID } from '@/lib/documentTotals.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────────────
 
@@ -194,7 +203,6 @@ describe('ManageDocsLauncher — Rules-of-Hooks regression (ETP-5295)', () => {
       expect(screen.getByTestId('sales-order-manage-docs-modal')).toBeInTheDocument(),
     );
     expect(screen.getByTestId('sales-order-manage-shipment-card')).toBeInTheDocument();
-    expect(screen.getByText('soManageDocsTitle')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     assertNoHooksOrderViolation();
   });
@@ -225,5 +233,89 @@ describe('ManageDocsLauncher — Rules-of-Hooks regression (ETP-5295)', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('sales-order-manage-docs-modal')).not.toBeInTheDocument();
     assertNoHooksOrderViolation();
+  });
+});
+
+async function renderLauncher({ orderLines, grandTotalAmount }) {
+  globalThis.fetch = mockFetch({ shipments: [], orderLines, invoices: [] });
+  await act(async () => {
+    render(
+      <ManageDocsLauncher
+        {...baseProps}
+        data={ORDER({ grandTotalAmount })}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+  });
+  await waitFor(() =>
+    expect(screen.getByTestId('sales-order-manage-docs-modal')).toBeInTheDocument(),
+  );
+}
+
+// ETP-5525 — the modal title is the same wording as the button that opens it. Before, it was
+// always `soManageDocsTitle` ("Generar factura"), so a shipment-only order opened a dialog about
+// invoicing. No backend annotation on ORDER(), so pending comes from the local fallback.
+describe('CreateDocsModal — title follows what is pending (ETP-5525)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ['shipment only', { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 0 }], grandTotalAmount: 0 },
+      'soManageShipment', true, false],
+    ['invoice only', { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 10 }], grandTotalAmount: 500 },
+      'soManageInvoice', false, true],
+    ['shipment and invoice', { orderLines: [{ orderedQuantity: 10, deliveredQuantity: 0 }], grandTotalAmount: 500 },
+      'soManageShipmentAndInvoice', true, true],
+  ])('%s pending → title %s', async (_label, scenario, title, shipCard, invoiceCard) => {
+    await renderLauncher(scenario);
+
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(screen.queryByText('soManageDocsTitle')).not.toBeInTheDocument();
+    expect(!!screen.queryByTestId('sales-order-manage-shipment-card')).toBe(shipCard);
+    expect(!!screen.queryByTestId('sales-order-manage-invoice-card')).toBe(invoiceCard);
+  });
+});
+
+// ETP-5525 — goods fully delivered plus the Total Discount line (ordered 1, delivered 0), still
+// to invoice, no backend annotation. Counting the discount line reads 1 unit pending and offers a
+// shipment that can never be created. The detail button and the launcher each carry their own
+// copy of the fallback, so each is pinned.
+describe('Local pending fallback ignores the Total Discount line (ETP-5525)', () => {
+  const LINES_WITH_DISCOUNT = [
+    { product: 'goods-1', orderedQuantity: 10, deliveredQuantity: 10 },
+    { product: ETGO_DTO_PRODUCT_ID, orderedQuantity: 1, deliveredQuantity: 0 },
+  ];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('ManageDocsLauncher offers only the invoice', async () => {
+    await renderLauncher({ orderLines: LINES_WITH_DISCOUNT, grandTotalAmount: 500 });
+
+    expect(screen.queryByTestId('sales-order-manage-shipment-card')).not.toBeInTheDocument();
+    expect(screen.getByTestId('sales-order-manage-invoice-card')).toBeInTheDocument();
+  });
+
+  it('the detail-page button reads "manage invoice", not shipment', async () => {
+    globalThis.fetch = mockFetch({ shipments: [], orderLines: LINES_WITH_DISCOUNT, invoices: [] });
+    await act(async () => {
+      render(
+        <OrderCreateInvoice
+          recordId="so-launcher-1"
+          token="tok"
+          apiBaseUrl="/sws/neo/sales-order"
+          onRefresh={vi.fn()}
+          onSave={vi.fn()}
+          data={ORDER({ grandTotalAmount: 500 })}
+        />,
+      );
+    });
+
+    expect(await screen.findByText('soManageInvoice')).toBeInTheDocument();
+    expect(screen.queryByText('soManageShipmentAndInvoice')).not.toBeInTheDocument();
+    expect(screen.queryByText('soManageShipment')).not.toBeInTheDocument();
   });
 });

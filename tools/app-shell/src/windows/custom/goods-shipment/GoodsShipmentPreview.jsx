@@ -60,7 +60,7 @@ function ShipmentStatsPanel({ shipment, partnerName, movementDate, ui }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit }) {
+export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
@@ -121,7 +121,9 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
 
   // ETP-4717 — Send is only available once the shipment is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates.
-  const isSendable = shipment.documentStatus === 'CO';
+  const isDownloadable = shipment.documentStatus === 'CO';
+  // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
+  const isSendable = isDownloadable && !readOnly;
   const isDraft = shipment.documentStatus === 'DR';
 
   // ── Left panel ──────────────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
   // generated-PDF windows (sales-invoice/order/quotation).
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: shipment?.updated ?? null,
+        storeCondition: true, readOnly, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: shipment?.updated ?? null,
         documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl,
       }
     : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
@@ -187,8 +189,8 @@ export default function GoodsShipmentPreview({ shipment, token, apiBaseUrl, wind
         size="sm"
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
-        disabled={!pdfBlob || !isSendable}
-        onClick={pdfBlob && isSendable ? handleDownload : undefined}
+        disabled={!pdfBlob || !isDownloadable}
+        onClick={pdfBlob && isDownloadable ? handleDownload : undefined}
         data-testid="Button__5d626b">
         <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__5d626b" />
         {ui('invoicePreviewDownloadPdf')}

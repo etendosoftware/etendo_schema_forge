@@ -256,7 +256,7 @@ export default function ContactsTable({ data = [], apiBaseUrl, token, onDataMuta
         invalidateBusinessPartner();
       }
     } catch (err) {
-      toast.error(err.message || 'Network error');
+      toast.error(err.message || ui('networkErrorRetry'));
     } finally {
       resolve();
     }

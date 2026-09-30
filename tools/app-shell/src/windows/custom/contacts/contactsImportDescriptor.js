@@ -226,11 +226,14 @@ async function resolveCategoryId(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
+    // ETP-5424 — part of an import run: a category create cut off by the default timeout
+    // could still commit, and the retry would then create a duplicate.
     const res = await apiFetch(url, {
       method: 'POST',
       baseUrl: '',
       token: config.token,
       body: JSON.stringify({ searchKey, name }),
+      timeout: 0,
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);

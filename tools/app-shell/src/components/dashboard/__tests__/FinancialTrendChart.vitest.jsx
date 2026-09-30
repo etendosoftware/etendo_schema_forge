@@ -31,7 +31,7 @@ class MockResizeObserver {
 }
 globalThis.ResizeObserver = MockResizeObserver;
 
-import { FinancialTrendChart, computeGrowthPct } from '../FinancialTrendChart.jsx';
+import { FinancialTrendChart } from '../FinancialTrendChart.jsx';
 
 const SAMPLE_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
 const SAMPLE_VALUES = [1000, 1500, 1200, 1800, 2200, 2500];
@@ -95,6 +95,7 @@ describe('FinancialTrendChart', () => {
         labels={SAMPLE_LABELS}
         values={SAMPLE_VALUES}
         currencyLabel="EUR"
+        growthPct={150} hasPrevious
       />
     );
     // Growth is (2500-1000)/1000 = 150% — ui mock returns key as-is
@@ -193,6 +194,7 @@ describe('FinancialTrendChart', () => {
         labels={['Jan', 'Feb']}
         values={[2000, 1000]}
         currencyLabel="EUR"
+        growthPct={-50} hasPrevious
       />
     );
     expect(screen.getByText('financialTrendGrowthDown')).toBeInTheDocument();
@@ -209,6 +211,7 @@ describe('FinancialTrendChart', () => {
         labels={['Jan', 'Feb']}
         values={[2000, 1000]}
         currencyLabel="EUR"
+        growthPct={-50} hasPrevious
       />
     );
     expect(container.querySelector('[data-testid="X__14828e"]')).toBeInTheDocument();
@@ -221,6 +224,7 @@ describe('FinancialTrendChart', () => {
         labels={SAMPLE_LABELS}
         values={SAMPLE_VALUES}
         currencyLabel="EUR"
+        growthPct={50} hasPrevious
       />
     );
     expect(container.querySelector('[data-testid="Check__14828e"]')).toBeInTheDocument();
@@ -283,22 +287,23 @@ describe('FinancialTrendChart', () => {
         labels={['Jan', 'Feb']}
         values={[0, 500]}
         currencyLabel="EUR"
+        hasPrevious={false}
       />
     );
-    // No prior point to compare against (activity starts in the very last
-    // month) → growthPct = 0 → shows "Up" as a neutral fallback.
-    expect(screen.getByText('financialTrendGrowthUp')).toBeInTheDocument();
+    // ETP-5493: no previous period (backend hasPrevious=false) → neutral status line.
+    expect(screen.getByText('financialSummaryNoPrevious')).toBeInTheDocument();
   });
 
-  it('regression ETP-5011: computes real growth from the first active month, not a leading zero month', () => {
+  it('ETP-5493: shows the neutral no-previous status when the backend sends no comparison', () => {
     render(
       <FinancialTrendChart
         labels={['Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug']}
         values={[0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 3000]}
         currencyLabel="EUR"
+        hasPrevious={false}
       />
     );
-    expect(screen.getByText('financialTrendGrowthUp')).toBeInTheDocument();
+    expect(screen.getByText('financialSummaryNoPrevious')).toBeInTheDocument();
   });
 
   it('triggers tooltip on mouse enter on hover columns (line chart)', () => {
@@ -337,43 +342,6 @@ describe('FinancialTrendChart', () => {
       fireEvent.mouseLeave(barGroups[0]);
     }
     expect(container).toBeTruthy();
-  });
-});
-
-// ── computeGrowthPct (pure function, exact percentages) ────────────────────
-
-describe('computeGrowthPct', () => {
-  it('computes growth relative to values[0] when it is already active', () => {
-    expect(computeGrowthPct([1000, 1500, 1200, 1800, 2200, 2500])).toBe(150);
-  });
-
-  it('computes negative growth when values decrease', () => {
-    expect(computeGrowthPct([2000, 1000])).toBe(-50);
-  });
-
-  it('falls back to 0 when activity only starts in the very last point', () => {
-    expect(computeGrowthPct([0, 500])).toBe(0);
-  });
-
-  it('falls back to 0 when there is no activity at all', () => {
-    expect(computeGrowthPct([0, 0, 0, 0])).toBe(0);
-  });
-
-  it('falls back to 0 with fewer than two data points', () => {
-    expect(computeGrowthPct([500])).toBe(0);
-    expect(computeGrowthPct([])).toBe(0);
-  });
-
-  /**
-   * Regression test for ETP-5011: a trailing 12-month window that starts with
-   * zero-activity months (e.g. a client that only started operating in Jan)
-   * must compare against the first ACTIVE month, not the leading zero month —
-   * otherwise real growth from 1000 to 3000 was reported as a flat "0%".
-   */
-  it('uses the first active month as baseline, not a leading zero month', () => {
-    // Sep..Dec are zero (no invoices yet), Jan=1000 (first activity), Aug=3000.
-    const values = [0, 0, 0, 0, 1000, 0, 0, 0, 0, 0, 0, 3000];
-    expect(computeGrowthPct(values)).toBe(200);
   });
 });
 

@@ -3,6 +3,8 @@ import {
   createApiFetch, getAmbientToken, useAuthOptional,
 } from '@etendosoftware/app-shell-core/auth';
 import { useLogout } from '@/auth/useLogout.js';
+import { useOptionalDataCache } from '@etendosoftware/app-shell-core/data';
+import { invalidateAfterWrite } from '@/lib/crossSpecCacheInvalidation.js';
 
 /**
  * The app's authenticated `fetch`: the core helper bound to this session, with the same
@@ -44,6 +46,9 @@ export function useApiFetch(baseUrl) {
   // fresh request function each render, and any effect that lists it as a dependency would
   // re-fire forever.
   const hasSession = auth != null;
+  // ETP-5525 — the shared record cache (null without a DataProvider). Its identity is stable for
+  // the provider's lifetime, so listing it below does not churn the returned function.
+  const cache = useOptionalDataCache()?.cache ?? null;
 
   // [ETP-5195 follow-up] When a scope (the session controller) is available, read the token
   // LIVE off it at request time instead of closing over the `token` const captured by THIS
@@ -64,10 +69,24 @@ export function useApiFetch(baseUrl) {
     getToken = getAmbientToken;
   }
 
-  return useMemo(() => createApiFetch(
-    baseUrl,
-    getToken,
-    logout,
-    apiSessionScope,
-  ), [baseUrl, hasSession, logout, apiSessionScope]);
+  return useMemo(() => {
+    const request = createApiFetch(baseUrl, getToken, logout, apiSessionScope);
+    if (!cache) return request;
+    // ETP-5525 — a successful write to a child document (e.g. a shipment or invoice) marks the
+    // cached records of the specs derived from it (the parent order) stale, so the next
+    // client-side arrival refetches instead of serving pre-write annotations. The dependency
+    // map and the matching live in crossSpecCacheInvalidation.js; the response is returned
+    // untouched.
+    return async (path, options = {}) => {
+      const res = await request(path, options);
+      if (res?.ok) {
+        // `?? ''` deliberately differs from core's `defaultBaseUrl()` fallback: only the path
+        // segments matter for spec matching, and the spec is always in the path, so the real
+        // base is never needed here. Do not "fix" this to mirror core.
+        const prefix = options.baseUrl !== undefined ? options.baseUrl : baseUrl;
+        invalidateAfterWrite(cache, { url: `${prefix ?? ''}${path}`, method: options.method });
+      }
+      return res;
+    };
+  }, [baseUrl, hasSession, logout, apiSessionScope, cache]);
 }
