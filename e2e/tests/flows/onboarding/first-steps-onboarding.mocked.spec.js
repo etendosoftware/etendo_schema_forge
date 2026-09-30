@@ -126,6 +126,11 @@ async function waitForCopyTranslated(page) {
  * endpoint with a fixed "already seen" answer (so every OTHER mocked spec reaches the
  * dashboard), and Playwright matches routes in reverse registration order. This is the
  * documented override hook — a spec that needs an unseen account provides its own route.
+ *
+ * Only safe because login() does not return until the dashboard's own first-steps read has been
+ * answered by that stub (ETP-5551, `waitForFirstStepsRead` in auth.js). Before that, a slow
+ * machine let the read arrive AFTER this override: it saw `null`, the dashboard gate called
+ * markSeen(), and a stray `seen: true` POST landed in `mock.writes` (7 writes instead of 6).
  */
 async function setupFirstSteps(page, initial = null, transferStatus = null) {
   await login(page);

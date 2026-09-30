@@ -155,6 +155,44 @@ export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
+/**
+ * ETP-5551 — resolves once the app shell's own `GET /sws/go/onboarding/first-steps` has been
+ * answered (or has failed), i.e. once the mocked `login()` below has really finished starting
+ * the dashboard.
+ *
+ * `waitForURL('**\/dashboard')` alone is not that signal: it resolves on the navigation's load
+ * event, while `FirstStepsProvider` (mounted in `AppLayout`) only issues this GET after the
+ * session restore has made the shell authenticated. On a slow machine that is well AFTER
+ * `login()` used to return, so a spec that then overrides the endpoint with an UNSEEN state
+ * (first-steps-onboarding.mocked.spec.js) answered the dashboard's first read itself — and the
+ * dashboard gate called `markSeen()`, POSTing an extra `seen: true` write into that spec's store.
+ * Reproduced under 20x CPU throttling: zero first-steps reads had happened when `login()`
+ * returned. Waiting for the read here means it is always served by `login()`'s own "already
+ * seen" stub, so every spec that overrides the route after `login()` is protected, not just one.
+ *
+ * A response is enough — once it exists, the route that served it has already been chosen, so a
+ * later override cannot reach this read (`requestfinished` would also wait for the body, which
+ * under throttling lands measurably later for nothing). `requestfailed` too, so a spec that
+ * aborts the endpoint does not hang here. Bounded and swallowed on timeout: this is a settle
+ * point, not an assertion — a shell that never reads the endpoint must not turn every login into
+ * a failure. The bound is generous because under 20x throttling the read took 11-15s to be
+ * issued; normally it lands within milliseconds of the load event and costs nothing.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<void>}
+ */
+function waitForFirstStepsRead(page, { timeout = 30_000 } = {}) {
+  const isFirstStepsRead = (request) => request.method() === 'GET'
+    && request.url().includes('/sws/go/onboarding/first-steps');
+  // Each waiter swallows its own rejection: the one that loses the race still times out (or
+  // rejects on page close) later, and an unhandled rejection there would fail an unrelated test.
+  const settle = (promise) => promise.then(() => {}, () => {});
+  return Promise.race([
+    settle(page.waitForResponse((response) => isFirstStepsRead(response.request()), { timeout })),
+    settle(page.waitForEvent('requestfailed', { predicate: isFirstStepsRead, timeout })),
+  ]);
+}
+
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
@@ -346,8 +384,11 @@ export async function login(page, {
       }
     });
 
+    // Armed BEFORE the navigation so a fast read cannot slip past it.
+    const firstStepsRead = waitForFirstStepsRead(page);
     await page.goto('/dashboard');
     await page.waitForURL('**/dashboard', { timeout: 10_000 });
+    await firstStepsRead;
     return;
   }
 
