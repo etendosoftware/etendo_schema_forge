@@ -45,10 +45,16 @@ const LABEL_STYLE = { padding: '0 4px' };
  * - testId (default "document-status-pill"): overrides data-testid for callers that must keep a legacy id.
  * - showIcon (default true): set to false to keep the tone colors but render no icon
  *   (e.g. progress badges such as Delivered/Received/Invoiced %).
+ * - icon: optional React node rendered in place of the tone icon, left of the label with the
+ *   same spacing. When provided it wins over the tone icon and `showIcon`. Omitted -> output
+ *   is exactly the tone-icon behaviour above.
  *
- * The root span exposes data-status, data-tone and data-show-icon for tests.
+ * The root span exposes data-status, data-tone, data-show-icon and, only with a custom `icon`,
+ * data-has-icon="true". data-show-icon keeps reporting the `showIcon` prop alone (the TONE icon
+ * switch), so existing consumers/tests that assert it are unaffected; data-has-icon flags the
+ * custom icon separately.
  */
-export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix, hint, showIcon = true, testId = 'document-status-pill' }) {
+export default function DocumentStatusPill({ status, label, enumLabels, tone: toneProp, prefix, hint, showIcon = true, icon, testId = 'document-status-pill' }) {
   const dictionary = useLocale();
   if (status == null) return null;
 
@@ -56,6 +62,7 @@ export default function DocumentStatusPill({ status, label, enumLabels, tone: to
   const Icon = TONE_ICON[tone];
   const text = label ?? statusLabel(status, dictionary, null, enumLabels);
   const palette = TONE_STYLES[tone] ?? TONE_STYLES.neutral;
+  const hasIcon = icon != null;
 
   return (
     <span
@@ -63,10 +70,12 @@ export default function DocumentStatusPill({ status, label, enumLabels, tone: to
       data-status={status}
       data-tone={tone}
       data-show-icon={showIcon ? 'true' : 'false'}
+      data-has-icon={hasIcon ? 'true' : undefined}
       title={hint || undefined}
       style={{ ...PILL_STYLE, background: palette.background, color: palette.color }}
     >
-      {showIcon && Icon ? <Icon
+      {hasIcon ? icon : null}
+      {!hasIcon && showIcon && Icon ? <Icon
         size={16}
         color={TONE_ICON_COLOR[tone]}
         aria-hidden="true"

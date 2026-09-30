@@ -176,6 +176,43 @@ describe('DocumentStatusPill', () => {
     });
   });
 
+  describe('icon prop', () => {
+    const customIcon = <svg data-testid="custom-icon" />;
+
+    it('renders the custom icon in place of the tone icon', () => {
+      render(<DocumentStatusPill status="X" tone="success" label="L" icon={customIcon} />);
+      expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
+      expect(screen.queryByTestId('Icon__1e4f01')).toBeNull();
+    });
+
+    it('sets data-has-icon="true" when an icon is given', () => {
+      render(<DocumentStatusPill status="X" tone="neutral" label="L" icon={customIcon} />);
+      expect(screen.getByTestId('document-status-pill')).toHaveAttribute('data-has-icon', 'true');
+    });
+
+    it('wins over showIcon={false} while data-show-icon still reflects the prop', () => {
+      render(<DocumentStatusPill status="X" tone="success" label="L" showIcon={false} icon={customIcon} />);
+      const pill = screen.getByTestId('document-status-pill');
+      expect(screen.getByTestId('custom-icon')).toBeInTheDocument();
+      expect(pill).toHaveAttribute('data-show-icon', 'false');
+      expect(pill).toHaveAttribute('data-has-icon', 'true');
+    });
+
+    it('without icon: no data-has-icon attribute and the tone icon still renders', () => {
+      render(<DocumentStatusPill status="X" tone="success" label="L" />);
+      const pill = screen.getByTestId('document-status-pill');
+      expect(pill).not.toHaveAttribute('data-has-icon');
+      expect(screen.getByTestId('Icon__1e4f01')).toBeInTheDocument();
+    });
+
+    it('renders the icon before the label', () => {
+      render(<DocumentStatusPill status="X" tone="neutral" label="L" icon={customIcon} />);
+      const pill = screen.getByTestId('document-status-pill');
+      expect(pill.firstElementChild).toBe(screen.getByTestId('custom-icon'));
+      expect(pill.lastElementChild).toHaveTextContent('L');
+    });
+  });
+
   describe('testId prop and typography', () => {
     it('keeps data-testid="document-status-pill" by default', () => {
       render(<DocumentStatusPill status="X" tone="neutral" label="L" />);

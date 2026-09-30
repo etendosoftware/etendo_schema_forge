@@ -1,5 +1,6 @@
 import { getProgressTone } from '@/lib/progressTone';
 import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill';
+import ProgressRing from '@/components/contract-ui/ProgressRing';
 
 /**
  * Header progress badge backed by a 0..100 percentage field (delivered, received,
@@ -21,6 +22,12 @@ export default function ProgressFieldBadge({ value, label, testId, documentStatu
       status={percent}
       tone={getProgressTone(percent / 100)}
       showIcon={false}
+      icon={<ProgressRing
+        value={percent}
+        size={16}
+        variant="current"
+        ringTestId={`${testId}-ring`}
+        data-testid="ProgressRing__2c9a76" />}
       label={`${label} ${percent}%`}
       testId={testId}
       data-testid="DocumentStatusPill__2c9a76" />
