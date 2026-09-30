@@ -665,4 +665,180 @@ describe('useMainAttachment', () => {
     });
   });
 
+  // ── deleteFile while in flight (ETP-5518 W1) ────────────────────────────────
+  //
+  // A DELETE keeps the hook busy for its whole duration (so Replace / Delete stay disabled
+  // everywhere), `isBusy` is driven by a counter of pending operations, and a DELETE that
+  // lands after a newer file was stored clears nothing.
+
+  describe('deleteFile in flight (ETP-5518)', () => {
+    function deferred() {
+      let resolve;
+      let reject;
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    }
+
+    async function mountWithStoredFile() {
+      fetchMainAttachment.mockResolvedValue(MAIN_ATTACHMENT);
+      fetchAttachmentBlobUrl.mockResolvedValue('blob:main-url');
+      const hook = renderHook(() => useMainAttachment(BASE_PARAMS));
+      await waitFor(() => expect(hook.result.current.storedFile?.attachmentId).toBe('att-1'));
+      await waitFor(() => expect(hook.result.current.isBusy).toBe(false));
+      return hook;
+    }
+
+    function startDelete(result) {
+      let pending;
+      act(() => { pending = result.current.deleteFile(); });
+      return pending;
+    }
+
+    it('is busy from the moment the DELETE starts until it settles', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+
+      expect(result.current.isBusy).toBe(true);
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      expect(result.current.isBusy).toBe(true);
+      expect(result.current.storedFile.attachmentId).toBe('att-1');
+
+      await act(async () => { del.resolve({ ok: true }); await pending; });
+
+      expect(result.current.isBusy).toBe(false);
+      expect(result.current.storedFile).toBeNull();
+    });
+
+    it('a rejected DELETE ends the busy state and propagates the error to the caller', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+      const outcome = pending.then(() => 'resolved', (err) => err);
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => { del.reject(new Error('delete exploded')); await outcome; });
+
+      const err = await outcome;
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toBe('delete exploded');
+      expect(result.current.isBusy).toBe(false);
+      expect(result.current.storedFile.attachmentId).toBe('att-1');
+      expect(notifyAttachmentsChanged).not.toHaveBeenCalled();
+    });
+
+    it('a non-ok DELETE ends the busy state silently and keeps the file', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => { del.resolve({ ok: false, error: 'server_error' }); await pending; });
+
+      expect(result.current.isBusy).toBe(false);
+      expect(result.current.storedFile.attachmentId).toBe('att-1');
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    });
+
+    it('with nothing interleaved, an ok DELETE clears the file and revokes its object URL', async () => {
+      deleteAttachment.mockResolvedValue({ ok: true });
+      const { result } = await mountWithStoredFile();
+
+      await act(async () => { await result.current.deleteFile(); });
+
+      expect(result.current.storedFile).toBeNull();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:main-url');
+      expect(notifyAttachmentsChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('a DELETE that lands after a newer file was stored keeps the newer file and its URL', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      uploadAndMarkMainAttachment.mockResolvedValue({ id: 'att-B' });
+      URL.createObjectURL.mockReturnValue('blob:B-url');
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+      const newFile = new File(['%PDF-B'], 'b.pdf', { type: 'application/pdf' });
+      await act(async () => { await result.current.storeFile(newFile); });
+      expect(result.current.storedFile.attachmentId).toBe('att-B');
+      notifyAttachmentsChanged.mockClear();
+      URL.revokeObjectURL.mockClear();
+
+      await act(async () => { del.resolve({ ok: true }); await pending; });
+
+      expect(deleteAttachment).toHaveBeenCalledWith(expect.objectContaining({ attachmentId: 'att-1' }));
+      expect(result.current.storedFile).toEqual({
+        attachmentId: 'att-B', fileName: 'b.pdf', mimeType: 'application/pdf', objectUrl: 'blob:B-url',
+      });
+      expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:B-url');
+      expect(notifyAttachmentsChanged).toHaveBeenCalledTimes(1);
+      expect(notifyAttachmentsChanged).toHaveBeenCalledWith({
+        tableName: 'C_Invoice', recordId: 'inv-1', source: expect.any(String),
+      });
+      expect(result.current.isBusy).toBe(false);
+    });
+
+    it('stays busy while a DELETE is pending even after an overlapping store finishes first', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      uploadAndMarkMainAttachment.mockResolvedValue({ id: 'att-B' });
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+      await act(async () => {
+        await result.current.storeFile(new File(['%PDF-B'], 'b.pdf', { type: 'application/pdf' }));
+      });
+
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => { del.resolve({ ok: true }); await pending; });
+      expect(result.current.isBusy).toBe(false);
+    });
+
+    it('stays busy while a store is pending even after an overlapping DELETE finishes first', async () => {
+      const del = deferred();
+      const upload = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      uploadAndMarkMainAttachment.mockReturnValue(upload.promise);
+      const { result } = await mountWithStoredFile();
+
+      const pendingDelete = startDelete(result);
+      let pendingStore;
+      act(() => {
+        pendingStore = result.current.storeFile(new File(['%PDF-B'], 'b.pdf', { type: 'application/pdf' }));
+      });
+
+      await act(async () => { del.resolve({ ok: true }); await pendingDelete; });
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => { upload.resolve({ id: 'att-B' }); await pendingStore; });
+      expect(result.current.isBusy).toBe(false);
+      expect(result.current.storedFile.attachmentId).toBe('att-B');
+    });
+
+    it('stays busy while a DELETE is pending even after a cross-view refresh finishes first', async () => {
+      const del = deferred();
+      deleteAttachment.mockReturnValue(del.promise);
+      const { result } = await mountWithStoredFile();
+
+      const pending = startDelete(result);
+      dispatchAttachmentsChanged({ tableName: 'C_Invoice', recordId: 'inv-1', source: 'some-other-view' });
+      await waitFor(() => expect(fetchMainAttachment).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(fetchAttachmentBlobUrl).toHaveBeenCalledTimes(2));
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      expect(result.current.isBusy).toBe(true);
+
+      await act(async () => { del.resolve({ ok: true }); await pending; });
+      expect(result.current.isBusy).toBe(false);
+    });
+  });
+
 });

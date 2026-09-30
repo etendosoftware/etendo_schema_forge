@@ -28,7 +28,7 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key, params) => (params ? `${key}:${params.count}` : key),
 }));
 
-import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent, createEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import UploadedFileViewer from '../UploadedFileViewer.jsx';
 import FileLightbox from '../FileLightbox.jsx';
@@ -373,5 +373,88 @@ describe('FileLightbox — edge cases', () => {
     await user.click(screen.getByTestId('file-lightbox-close'));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ETP-5518 W4 — the lightbox is a viewer, never a drop target. React drag events bubble
+// through the portal to the lightbox's React ancestors (in the form sidebar, the container
+// whose drop handler replaces the document), so the dialog content must stop them.
+describe('FileLightbox — ignores dragged files', () => {
+  const droppedPdf = () => new File(['%PDF-1.4'], 'dropped.pdf', { type: 'application/pdf' });
+
+  function renderInsideDropTarget() {
+    const parent = {
+      onDragEnter: vi.fn(),
+      onDragOver: vi.fn(),
+      onDragLeave: vi.fn(),
+      onDrop: vi.fn(),
+    };
+    render(
+      <div data-testid="drop-parent" {...parent}>
+        <FileLightbox open onClose={vi.fn()} file={PDF} onReplace={vi.fn()} onDelete={vi.fn()} />
+      </div>,
+    );
+    return parent;
+  }
+
+  function fireDrag(type, target) {
+    const dataTransfer = { files: [droppedPdf()], types: ['Files'], dropEffect: 'copy' };
+    const event = createEvent[type](target, { dataTransfer });
+    fireEvent(target, event);
+    return { event, dataTransfer };
+  }
+
+  it('drag events on the lightbox never reach its React ancestors', async () => {
+    const parent = renderInsideDropTarget();
+    const lightbox = await screen.findByTestId('file-lightbox');
+
+    fireDrag('dragEnter', lightbox);
+    fireDrag('dragOver', lightbox);
+    fireDrag('dragLeave', lightbox);
+    fireDrag('drop', lightbox);
+
+    expect(parent.onDragEnter).not.toHaveBeenCalled();
+    expect(parent.onDragOver).not.toHaveBeenCalled();
+    expect(parent.onDragLeave).not.toHaveBeenCalled();
+    expect(parent.onDrop).not.toHaveBeenCalled();
+  });
+
+  it('a drop on the document inside the lightbox is stopped too', async () => {
+    const parent = renderInsideDropTarget();
+    const lightbox = await screen.findByTestId('file-lightbox');
+    const page = (await within(lightbox).findAllByTestId('pdf-page'))[0];
+
+    fireDrag('dragOver', page);
+    fireDrag('drop', page);
+
+    expect(parent.onDragOver).not.toHaveBeenCalled();
+    expect(parent.onDrop).not.toHaveBeenCalled();
+  });
+
+  it('cancels dragover and drop and reports dropEffect none, so the browser neither opens the file nor shows a drop cursor', async () => {
+    renderInsideDropTarget();
+    const lightbox = await screen.findByTestId('file-lightbox');
+
+    const enter = fireDrag('dragEnter', lightbox);
+    const over = fireDrag('dragOver', lightbox);
+    const drop = fireDrag('drop', lightbox);
+
+    expect(enter.event.defaultPrevented).toBe(true);
+    expect(over.event.defaultPrevented).toBe(true);
+    expect(drop.event.defaultPrevented).toBe(true);
+    expect(enter.dataTransfer.dropEffect).toBe('none');
+    expect(over.dataTransfer.dropEffect).toBe('none');
+    expect(drop.dataTransfer.dropEffect).toBe('none');
+  });
+
+  it('tolerates a drag event without dataTransfer', async () => {
+    const parent = renderInsideDropTarget();
+    const lightbox = await screen.findByTestId('file-lightbox');
+
+    const event = createEvent.dragOver(lightbox);
+    fireEvent(lightbox, event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(parent.onDragOver).not.toHaveBeenCalled();
   });
 });
