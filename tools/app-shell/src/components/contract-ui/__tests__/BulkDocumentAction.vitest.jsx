@@ -1467,6 +1467,39 @@ describe('BulkDocumentAction — messageKeys reach the persisted failure (ETP-53
     await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
   });
 
+  it('neoAction mode: the adapter carries messageParams too (ETP-5175)', async () => {
+    mockNeoExecute.mockResolvedValueOnce({
+      success: false,
+      message: 'Account could not be found. (Contact: Acme)',
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+      messageParams: { bpName: 'Acme' },
+    });
+    render(
+      <BulkDocumentAction
+        selectedRows={[{ id: 'row-np1', documentNo: 'FAC-01' }]}
+        clearSelection={vi.fn()}
+        token="tok"
+        apiBaseUrl="/api"
+        windowName="sales-invoice"
+        actionMode="neoAction"
+        buildActions={buildPost}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('bulkCompletion'));
+    fireEvent.click(screen.getByText(CONFIRM_BUTTON));
+
+    await waitFor(() => expect(sessionStorage.getItem(STORAGE_KEY)).not.toBeNull());
+    expect(readStored().failed).toEqual([{
+      documentNo: 'FAC-01',
+      message: 'Account could not be found. (Contact: Acme)',
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+      messageParams: { bpName: 'Acme' },
+    }]);
+
+    await waitFor(() => expect(window.location.reload).toHaveBeenCalled(), { timeout: 3000 });
+  });
+
   it('keeps per-row keys distinct across a multi-row failure', async () => {
     mockDocExecute
       .mockRejectedValueOnce(docActionError('no qty', ['ProductNotNullAndMovementQtyZero']))

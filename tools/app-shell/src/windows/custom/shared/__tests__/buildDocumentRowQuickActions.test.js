@@ -156,6 +156,24 @@ describe('buildDocumentRowQuickActions', () => {
       assert.equal(errorSpy.mock.calls[0].arguments[0], 'PERIOD CLOSED');
     });
 
+    it('renders the Invalid-Account failure from result.messageParams (ETP-5175)', () => {
+      const errorSpy = mock.method(toast, 'error', () => {});
+      const dictionary = {
+        'backendError.invalidAccount.base': 'BASE.',
+        'backendError.invalidAccount.bpOnly': '(C: {bp})',
+      };
+      const ui = (k, params = {}) => Object.keys(params)
+        .reduce((text, p) => text.replace(`{${p}}`, params[p]), dictionary[k] ?? k);
+      const handler = buildMenuActionExecutedHandler(ui, () => {});
+      handler({ neoAction: 'post' }, {
+        success: false,
+        message: 'backend prose',
+        messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+        messageParams: { bpName: 'Acme' },
+      });
+      assert.equal(errorSpy.mock.calls[0].arguments[0], 'BASE. (C: Acme)');
+    });
+
     it('falls back to the raw message when messageKeys are unknown', () => {
       const errorSpy = mock.method(toast, 'error', () => {});
       const handler = buildMenuActionExecutedHandler((k) => k, () => {});

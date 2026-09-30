@@ -40,8 +40,8 @@
     {
       "field": "uom",
       "label": {
-        "en_US": "UoM",
-        "es_ES": "UdM"
+        "en_US": "Unit of Measure",
+        "es_ES": "Unidad de medida"
       },
       "type": "string",
       "width": "8%",

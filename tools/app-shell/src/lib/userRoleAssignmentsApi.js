@@ -5,6 +5,12 @@ import { NEO_BASE, fetchNeoWebhookJson } from './neoWebhookClient.js';
 // Shared fetch/parse/unwrap mechanics (base URL, token, `{result: "<json-string>"}`
 // envelope) live in `neoWebhookClient.js`'s `fetchNeoWebhookJson` — see that module
 // for the full rationale (no `Content-Type` header, fresh token per call, etc.).
+/**
+ * ETP-5278 — `code` of an SFAssignUserRoles/SFPromoteUserRole failure when the write lost a race
+ * against another write for the same user (com.etendoerp.go `RoleWriteConflicts.CODE`).
+ */
+export const ROLE_WRITE_CONFLICT_CODE = 'CONCURRENT_MODIFICATION';
+
 const assignmentsFallback = (data) =>
   ('assignments' in data || 'templateRoleIds' in data || 'success' in data) ? data : null;
 
@@ -83,7 +89,11 @@ export async function saveUserRoleAssignments(userId, templateRoleIds) {
   const url = `${NEO_BASE}/assignuserroles?${params.toString()}`;
   const result = await fetchNeoWebhookJson(url, 'SFAssignUserRoles', assignmentsFallback);
   if (result.success === false) {
-    throw new Error(result.message || 'SFAssignUserRoles rejected the request');
+    const error = new Error(result.message || 'SFAssignUserRoles rejected the request');
+    // ETP-5278 — machine-readable failure reason (e.g. ROLE_WRITE_CONFLICT_CODE) so callers can
+    // pick a translated message instead of the raw backend text.
+    error.code = result.code;
+    throw error;
   }
   return result;
 }
