@@ -11,6 +11,19 @@ import {
   extractBackendMessageKeys,
   extractBackendMessageParams,
 } from '@/lib/backendErrors.js';
+import { AccessDeniedMessage } from '@/components/access/ProcessAccessGuard.jsx';
+
+/** Query string for the rows request: only the filters that are actually set. */
+function buildRowsQuery(filters) {
+  const params = new URLSearchParams();
+  if (filters.document) params.set('document', filters.document);
+  if (filters.accountingStatuses?.size > 0) {
+    params.set('accountingStatus', [...filters.accountingStatuses].join(','));
+  }
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
+  if (filters.dateTo) params.set('dateTo', filters.dateTo);
+  return params;
+}
 
 function formatDate(raw) {
   if (!raw) return '';
@@ -169,6 +182,10 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  // ETP-5485 (BUG-2) — the backend answered 403: this role cannot use the page at all. The
+  // route guard (`index.jsx`) normally stops such a role before mounting; this covers the
+  // cases it can't see (access map unreachable, a grant revoked mid-session).
+  const [accessDenied, setAccessDenied] = useState(false);
   const fetchAbortRef = useRef(null);
 
   const fetchRows = useCallback(async (filters) => {
@@ -179,23 +196,23 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const params = new URLSearchParams();
-      if (filters.document) params.set('document', filters.document);
-      if (filters.accountingStatuses?.size > 0)
-        params.set('accountingStatus', [...filters.accountingStatuses].join(','));
-      if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-      if (filters.dateTo) params.set('dateTo', filters.dateTo);
-
-      const res = await apiFetch(`/header?${params}`, { token, signal: ctrl.signal });
+      const res = await apiFetch(`/header?${buildRowsQuery(filters)}`, { token, signal: ctrl.signal });
       const json = await res.json().catch(() => null);
       if (!res.ok) {
-        if (fetchAbortRef.current === ctrl) setLoadError(json?.message || res.statusText);
+        if (fetchAbortRef.current !== ctrl) return;
+        if (res.status === 403) {
+          setAccessDenied(true);
+          return;
+        }
+        // Keep only the raw backend message here; `loadErrorText()` translates it at render
+        // time (never the raw text nor the HTTP status text — i18n policy).
+        setLoadError({ rawMessage: json?.message ?? null });
         return;
       }
       const rowsData = json?.rows ?? [];
       if (fetchAbortRef.current === ctrl) setRows(rowsData);
     } catch (e) {
-      if (e.name !== 'AbortError' && fetchAbortRef.current === ctrl) setLoadError(e.message);
+      if (e.name !== 'AbortError' && fetchAbortRef.current === ctrl) setLoadError({ rawMessage: null });
     } finally {
       if (fetchAbortRef.current === ctrl) setLoading(false);
     }
@@ -234,7 +251,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   // ── Post single row ───────────────────────────────────────────────────────────
   async function postRow(row) {
     if (!row.tableId) {
-      toast.error(`${ui('postingFailed')}: unknown tableId for ${row.documentType}`);
+      toast.error(ui('postingFailed'));
       return;
     }
     setPosting(p => new Set(p).add(row.documentId));
@@ -253,7 +270,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         fetchRows({ document, accountingStatuses, dateFrom, dateTo });
         setSelected(p => { const n = new Set(p); n.delete(row.documentId); return n; });
       } else {
-        const rawMessage = json?.message || res.statusText;
+        // Only a real backend message is translated; the HTTP status text ("Forbidden") and a
+        // 403 body never reach the user (ETP-5485 review M1).
+        const rawMessage = res.status === 403 ? null : json?.message;
         // ETP-5175 — the identity lets the Invalid-Account failure render in the UI locale, the
         // same sentence the document windows show.
         toast.error(rawMessage
@@ -311,15 +330,24 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   useSetPageMeta({
     title: ui('notPostedDocuments'),
     breadcrumb: `${ui('finance')} / ${ui('notPostedDocuments')}`,
-    recordCount: rows.length,
+    // No count on the access-denied screen — a "0 registros" there reads as "no data".
+    recordCount: accessDenied ? undefined : rows.length,
   });
 
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
+  // ETP-5485 (BUG-2) — a known backend message translates; anything else shows the generic
+  // translated load error, so no raw backend/HTTP text ever reaches the user.
+  function loadErrorText() {
+    const rawMessage = loadError?.rawMessage;
+    const translated = rawMessage ? translateBackendError(rawMessage, ui) : null;
+    return translated && translated !== rawMessage ? translated : ui('documentsLoadError');
+  }
+
   function renderTableContent() {
     if (loading && !rows.length) return <div className="npd-center"><span>…</span></div>;
-    if (loadError) return <div className="npd-center npd-error">{loadError}</div>;
+    if (loadError) return <div className="npd-center npd-error">{loadErrorText()}</div>;
     if (rows.length === 0) {
       return (
         <div data-testid="npd-empty-state" className="npd-center">
@@ -392,6 +420,8 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
       </div>
     );
   }
+
+  if (accessDenied) return <AccessDeniedMessage data-testid="AccessDeniedMessage__b28bb1" />;
 
   return (
     <div className="npd-page">
