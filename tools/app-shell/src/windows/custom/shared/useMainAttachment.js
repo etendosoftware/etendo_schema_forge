@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   fetchMainAttachment,
+  fetchBrandingUpdated,
   fetchAttachmentBlobUrl,
   uploadAndMarkMainAttachment,
   markAttachmentAsMain,
@@ -11,7 +12,11 @@ import {
   notifyAttachmentsChanged,
   useAttachmentsChanged,
 } from '@/components/attachments/attachmentsBus';
-import { isCachedRenderingStale } from '@/lib/attachmentFreshness.js';
+import {
+  isCachedRenderingStale,
+  RENDERER_BUILD_EPOCH_MS,
+  toInstantMs,
+} from '@/lib/attachmentFreshness.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 /**
  * useMainAttachment — sidebar/tab and preview always agree, because both read
@@ -95,14 +100,22 @@ export function useMainAttachment({
     let objectUrl = null;
     setIsBusy(true);
     try {
-      const main = await fetchMainAttachment({ token, tableName, recordId: documentId, apiBaseUrl });
+      // ETP-5541 — the session's `brandingUpdated` is the third staleness input (a new
+      // logo moves no record's `updated`). Only asked for when `recordUpdated` opts the
+      // window into invalidation at all; see `pdfUtils.js → fetchCachedBlob`.
+      const [main, brandingUpdated] = await Promise.all([
+        fetchMainAttachment({ token, tableName, recordId: documentId, apiBaseUrl }),
+        toInstantMs(recordUpdated) == null ? null : fetchBrandingUpdated({ token, apiBaseUrl }),
+      ]);
       if (!main) {
         revokeUrl();
         setStoredFile(null);
         setStoredFileIsStale(false);
         return;
       }
-      setStoredFileIsStale(isCachedRenderingStale(main, recordUpdated));
+      setStoredFileIsStale(
+        isCachedRenderingStale(main, recordUpdated, RENDERER_BUILD_EPOCH_MS, brandingUpdated),
+      );
       // ETP-5358 Part 2 — metadata-only mode: existence + staleness is everything the
       // auto-store gate and onFileChange need. Skip the blob GET entirely; fetchBlobUrl()
       // below fetches it lazily, on demand, if/when a caller actually needs the bytes.

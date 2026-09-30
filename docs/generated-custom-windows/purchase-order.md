@@ -191,6 +191,14 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - **ETP-4468 — Confirm no longer discards an unsaved header edit**: previously, editing a header field (e.g. Currency, Business Partner) and clicking **Confirmar** without hitting **Save** first silently confirmed the order with the OLD header values — the confirm modal fetched its own stale server copy (`freshData`) and prioritized it over the in-memory `data` prop, and the confirm POST never triggered a save. Fixed by (1) `DetailView.jsx` now passes `onSave={() => hook.handleSave({ silent: true })}` into the `topbarRight` slot alongside `onProcess`/`onRefresh`; (2) `PurchaseOrderActions.jsx` threads `onSave` into its internal `ConfirmModal`, which force-saves (`await onSave()`, aborting with an error if it fails) before the `documentAction` POST; (3) the modal's data-source priority was flipped to `const d = data || freshData || {}` so the in-memory (possibly unsaved-but-present) `data` wins over the stale fetch. `artifacts/purchase-order/custom/__tests__/PurchaseOrderActions.test.js` locks the prop threading, the `data`-over-`freshData` priority, and the save-before-confirm ordering via source-reading regex assertions. This fix is implemented independently of the near-identical `OrderCreateInvoice.jsx` fix on Sales Order — the two files are deliberately kept duplicated rather than consolidated.
 - **ETP-4940 — save-before-confirm guard centralized into DetailView**: the ETP-4468 fix above was a per-window patch inside `PurchaseOrderActions.jsx`'s own `ConfirmModal`. ETP-4940 moved the same guarantee one level up: `DetailView.jsx`'s `renderDraftModeSaveActions` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) — gated on the fuller `isDirty` (header OR any pending line-edit/add-row state) — *before* firing `draftMode.onConfirm()`, i.e. before this window's confirm modal even opens. In the normal flow this makes the ETP-4468 `onSave()` call inside `PurchaseOrderActions.jsx` a no-op (the header is already clean by the time the modal mounts); it was intentionally **kept**, not removed, as defense-in-depth for the modal's own submit path, and because `PurchaseOrderActions.test.js` pins that exact save-before-confirm behavior. See `detailViewHelpers.jsx` for the full centralized contract (also covers the kebab-menu documentAction path via `DetailMoreActionsMenu.jsx`, with a narrower header-only-dirty gap documented there).
 
+## Currency field styling — ETP-5479
+
+The header **Moneda** field is rendered by `CurrencyRatePicker` (see
+`sales-quotation.md` → "CurrencyRatePicker on quotations"). It uses the same
+field shell, `--field-hover` hover fill, focus ring and disabled look as every
+other selector, so it matches the plain selector Moneda renders in windows
+outside `isCurrencyRateSelectorField` (Albaranes: goods-receipt / goods-shipment).
+
 ## Dual-currency display — ETP-4027
 
 Purchase orders use the same `OrderPreview` component as sales orders (with `specName='purchase-order'`), so the dual-currency display and currency field lock described below apply identically to both windows.
@@ -533,3 +541,24 @@ compra / Crear Recepción), and the secondary-actions bar's Clone/Send (shared
 `PurchaseOrderReactivateBulkAction.jsx`, in the same bulk-selection toolbar, does not consume
 `windowReadOnly` yet — flagged during the ticket's own review, deliberately deferred as a
 follow-up.
+
+### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
+
+Under the runtime Solo-Lectura tier (tier only — the static `decisions.json → window.readOnly`
+does not trigger any of this):
+
+- **Row "Enviar" (list hover)** is gone. `ListView` turns the Email gate itself off
+  (`documentPreview: false`, `sendDocument.enabled: false`, no `onEmail`), so `RowQuickActions`,
+  `DataTable`'s column-width estimate and its actions-column mount stay consistent. The default
+  `SendDocumentModal` mount is gated too.
+- **Preview**: no Send; **Download PDF stays** (decision D1: printing/downloading only exposes
+  data the role can already read). `ListView` passes `readOnly` (the tier) to `renderPreview`,
+  and the preview forwards it as `attachmentConfig.readOnly`: the marked attachment is still
+  READ (cached PDF shown, Download works) but never written — no auto-store of the rendered PDF,
+  no overwrite of a stale cache, no drop zone, no delete.
+- **Detail Print** (`action-document-print`) and the detail Mail/preview button **stay** (D1).
+- **Backend**: `POST /sws/neo/email-contracts/<window>-send/send` answers 403 (`UNAUTHORIZED`
+  → "No tenés autorización para enviar este documento") and every attachment write
+  (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
+  role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
+- **"Gestionar recepción y factura"** (`PurchaseOrderActions`, topbarRight) renders nothing under `windowReadOnly`, same fix as the sales-order twin (fetch skipped, `open-*-modal` handlers no-op).

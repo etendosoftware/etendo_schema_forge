@@ -304,7 +304,7 @@ describe('DetailView line sidebar save/delete flow (classic layout)', () => {
     // like the original, sends no Content-Type for this bodyless GET), so this exact-match
     // assertion is updated to the new (still correct) request shape.
     expect(fetchMock.mock.calls[1][1]).toEqual({
-      credentials: 'include',
+      credentials: 'include', signal: expect.any(AbortSignal),
       headers: {
         Authorization: 'Bearer test-token',
         'Accept-Language': 'es_ES',

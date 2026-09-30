@@ -227,12 +227,13 @@ export default function GoodsShipmentWindow({ windowName, recordId, apiBaseUrl, 
         labelOverrides={LABEL_OVERRIDES}
         hideLink
         bulkActions={GoodsShipmentBulkActions}
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <GoodsShipmentPreview
             shipment={row}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             data-testid="GoodsShipmentPreview__9851c7" />

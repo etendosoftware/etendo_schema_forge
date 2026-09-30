@@ -81,7 +81,7 @@ function CurrencyBadge({ iso }) {
  * permanently invisible — the X was in the DOM here but never shown, so a chosen destination
  * account or accounting concept could not be cleared at all.
  */
-const FIELD_WRAPPER_CLS = `group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--muted))] focus-within:ring-2 focus-within:ring-primary`;
+const FIELD_WRAPPER_CLS = `group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] bg-card px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] hover:bg-[hsl(var(--field-hover))] focus-within:ring-2 focus-within:ring-primary`;
 /** Borderless input used inside FIELD_WRAPPER_CLS. */
 const FIELD_INPUT_CLS = 'h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-sm outline-none placeholder:text-[hsl(var(--text-disabled))]';
 

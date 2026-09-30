@@ -65,7 +65,7 @@ function ReceiptStatsPanel({ receipt, partnerName, movementDate, token, apiBaseU
   );
 }
 
-export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, windowName, onClose, onEdit }) {
+export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
@@ -122,6 +122,8 @@ export default function GoodsReceiptPreview({ receipt, token, apiBaseUrl, window
     tableName: 'M_InOut',
     useMainAttachment: true,
     storeCondition: true,
+    // ETP-5205 — Solo-Lectura tier: show the stored document, offer no upload/delete.
+    readOnly,
     autoFetch: false,
     token,
     apiBaseUrl,

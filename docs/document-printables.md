@@ -124,9 +124,10 @@ not as alternatives: DAL stamps `updated` on insert too, so it is always the rig
 present.)
 
 ```
-lib/attachmentFreshness.js   isCachedRenderingStale(attachment, recordUpdated)
-   │    ├── isAttachmentStale     : the record changed      (ETP-4787)
-   │    └── isRenderedByOlderBundle : the renderer changed  (ETP-5125)
+lib/attachmentFreshness.js   isCachedRenderingStale(attachment, recordUpdated, buildEpochMs, brandingUpdated)
+   │    ├── isAttachmentStale       : the record changed    (ETP-4787)
+   │    ├── isRenderedByOlderBundle : the renderer changed  (ETP-5125)
+   │    └── isOlderThanBranding     : the company branding changed (ETP-5541)
    ├── pdfUtils.js  → fetchCachedBlob   : stale ⇒ return null ⇒ render fresh
    └── useMainAttachment.js             : stale ⇒ storedFileIsStale: true
           └── GenericPreviewModal       : re-uploads the fresh blob (replaces the stale row)
@@ -227,6 +228,34 @@ Three properties worth knowing before touching it:
   invalidates nothing. Restart `make dev`, or unmark the attachment (see §3 of the
   `/document-printables` skill). This is the case that will still waste an afternoon.
 
+### The third cause: the company branding changed (ETP-5541)
+
+The issuer block of every printable — logo, organization name, tax ID, address — comes from
+`GET /sws/neo/session`, not from the record. Uploading a new logo on the Organization screen
+touches only `AD_OrgInfo` / `AD_Image`, so no record's `updated` moves and, before ETP-5541,
+every cached PDF kept the old logo.
+
+The session now carries **`brandingUpdated`**: the latest `updated` among `AD_Org`, its
+`AD_OrgInfo`, that info's `C_Location` and the resolved logo `AD_Image` (all on the same database
+clock as the attachment's `updatedAt`). Both halves of the cache (`fetchCachedBlob` and
+`useMainAttachment`) fetch it in parallel with the marked attachment's metadata, and
+`isCachedRenderingStale` treats a file written before it as stale. The `[pdf]` console line reads
+`company branding updated …` for this case.
+
+- **Only for opted-in windows.** The session is asked for only when the window passes
+  `recordUpdated`; purchase-invoice / goods-receipt never pay the round trip and can never be
+  invalidated by it (the same load-bearing guard as ETP-5125).
+- **Fail-open.** A failed session fetch or a backend without the field reads as "branding
+  unknown" and invalidates nothing.
+- **Over-approximates.** Any edit to the organization's info (e.g. a bank field on `AD_OrgInfo`)
+  also invalidates — one cold render per document, the same trade as `updated`.
+
+Which logo the session returns is decided in one backend place, `CompanyLogoResolver`
+(com.etendoerp.go): the current organization's `AD_OrgInfo` logo, then the client's first
+organization logo (by `AD_Org_ID`, the jsreport `resolveCompanyLogoDataUrl` criterion), then
+`AD_ClientInfo` as the last resort. The customer portal's logo uses the same resolver. GO supports
+one organization per tenant, so there is no per-document organization logo.
+
 ### Known waste, separate from the cache
 
 `InvoiceTopbarExtra` used to call `useInvoicePdf` in the component body, so **opening a completed
@@ -286,6 +315,8 @@ click Send; it does not fix the remount itself.
 | D20 | The detail-view **Send button** moved to `topbarSecondary` (left of Save), but its `SendDocumentModal` did **not** move out of the window's `topbarRight` component; the two are bridged by a `window` `CustomEvent` (`'<window>:open-send-modal'`) | ETP-5260 | The button is a plain visibility/order concern (DF wants it left of Save), but the modal needs client-rendered PDF/`documentType` context (`pdfBlobUrl`, status-derived copy) that the generic, window-agnostic `DocumentSecondaryActions` does not carry and should not be taught per-window. Two windows (`purchase-order`, `goods-shipment`) already used the identical event-bridge pattern for their Confirm/action modals, so this reuses an established shape rather than inventing a second one. Affects `purchase-order`, `sales-order`, `sales-quotation`, `goods-shipment`, `sales-invoice` (5 of the 9 ETP-5260 windows — `purchase-invoice`/`goods-receipt` have no Send button, and the two return windows have neither Clone nor Send in `topbarSecondary`) |
 | D21 | `sales-order`, `purchase-order`, `sales-quotation`, `goods-shipment` gate their `use*Pdf` id on `showSend`, mirroring `sales-invoice`'s ETP-4912 fix; `SendDocumentModal`'s own fallback-build effect now also guards on `pdfBlobLoading` (with `pdfError` excluded, so a hook error still falls through to it); each of the five callers passes `hookLoading \|\| (showSend && !pdfUrl && !pdfError)` instead of the raw hook `loading` | ETP-5308 | Fixed the "0 → 2 `/jsreport/api/report` POSTs on opening a Draft edit form" bug (root cause: eager unconditional PDF build on mount). Gating alone traded that bug for a **new** race — `pdfBlobLoading` itself lags one render behind the state change that starts the fetch, so `SendDocumentModal`'s own fallback build fired a second, redundant render on the very first Send click. Caught live via chrome-devtools network inspection, not by the unit/vitest suite (none of it exercises real render timing) |
 | D22 | `usePdfGenerator`'s effect cleanup (fires when `recordId` goes truthy → null, i.e. the modal closes) now also resets `pdfUrl`, `error` and `loading`, not just `pdfBlob` | ETP-5308 | Closing left `pdfUrl` pointing at an already-revoked object URL — the cleanup revoked it and cleared `pdfBlob` but never reset `pdfUrl` itself. Reopening then risked handing that stale/revoked URL to `SendDocumentModal` for one render before the next fetch resolved. Clearing state at close time (root cause) replaced an earlier per-component workaround (a ref tracking "did this session just open") that duplicated the same fix four times and mutated a ref during render — reviewed as a fragile pattern under React's StrictMode/concurrent-rendering discard rules |
+| D23 | Under the runtime Solo-Lectura tier every preview keeps **reading** the marked attachment (cached PDF / supplier document, Download) but never **writes** it: `attachmentConfig.readOnly` blocks the auto-store, the stale-cache overwrite, the drop zone and delete. Send (both email paths) is hidden; Print and Download stay | ETP-5205 | Print/Download only expose data the role can read (decision D1 of the ticket); Send mails the customer and uploads the PDF, and the auto-store is a write. `storeCondition: false` was rejected as the switch because it also disables the READ side (`useMainAttachment` becomes a no-op), which would drop the cached-PDF view and the Download gate. The backend refuses the same writes independently (`NeoAttachmentAuthorizer`, email-contract `authorize()`), so a Solo-Lectura cache is simply never refreshed until a full-access user opens the document |
+| D24 | The printable logo comes from `AD_OrgInfo` (the GO Organization screen), with the client's first org logo and then `AD_ClientInfo` as fallbacks, resolved once in `CompanyLogoResolver` for both the session and the portal; a branding change (`session.brandingUpdated`) invalidates cached PDFs | ETP-5541 | The Organization screen saves to `AD_OrgInfo` but the session and portal read `AD_ClientInfo`, so uploaded logos never printed. `AD_ClientInfo` kept as last resort for tenants that never uploaded an org logo (user decision). Branding lives outside the record, so without the third staleness reason a completed document's cached PDF would keep the old logo forever |
 
 **Normative order for any conflict: the AEAT spec > the ticket's example images > classic's
 implementation.** Applied three times in ETP-4912 (quiet zone, font size, placement).
