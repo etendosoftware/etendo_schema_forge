@@ -17516,6 +17516,7 @@
     "dropZoneUploadPrompt": "Upload your document",
     "dropZoneBrowse": "Click here to upload your file",
     "dropZoneAcceptedTypes": "PDF, JPG, PNG, WebP, GIF",
+    "dropZoneReadOnlyEmpty": "No document attached",
     "goodsReceiptPreview.supplier": "Supplier",
     "goodsReceiptPreview.warehouse": "Warehouse",
     "goodsReceiptPreview.movementDate": "Movement Date",

@@ -56,7 +56,7 @@ function Spinner() {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave }) {
+export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, onRefresh, onSave, windowReadOnly = false }) {
   const navigate = useNavigate();
   const ui = useUI();
   const tMenu = useMenuLabel();
@@ -95,22 +95,23 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     // ETP-5255 — `isDraft` gates OPENING the modal, never keeping it mounted. Confirming flips
     // the record to CO, and the modal has to outlive that: it is where the result of the
     // shipment/invoice steps is reported.
-    const handler = () => { if (isDraft) setShowConfirm(true); };
+    const handler = () => { if (isDraft && !windowReadOnly) setShowConfirm(true); };
     window.addEventListener('sales-order:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-order:open-confirm-modal', handler);
     // `isDraft` is read inside the handler, so an empty dep array would pin the value this effect
     // first saw and the modal would stop opening after any status change.
-  }, [isDraft]);
+  }, [isDraft, windowReadOnly]);
 
   // OrderDraftChips (topbarExtra) dispatches this event when a grouped chip is clicked
   useEffect(() => {
     const handler = (e) => {
+      if (windowReadOnly) return;
       setActionsScroll(e.detail?.scrollTo ?? null);
       setShowActions(true);
     };
     window.addEventListener('sales-order:open-actions-modal', handler);
     return () => window.removeEventListener('sales-order:open-actions-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   // ETP-5315 — the confirm/create-docs flows below dispatch this same event on success
   // (ConfirmModal.handleConfirm, ConfirmModal.handleClose, CreateDocsModal.handleCreate), but
@@ -131,13 +132,15 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
   // (OrderCreateInvoiceSecondaryActions), while this modal (with its pdf/documentType
   // context) stays here in topbarRight; the button dispatches this event to open it.
   useEffect(() => {
-    const handler = () => setShowSend(true);
+    const handler = () => { if (!windowReadOnly) setShowSend(true); };
     window.addEventListener('sales-order:open-send-modal', handler);
     return () => window.removeEventListener('sales-order:open-send-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   useEffect(() => {
-    if (!isCompleted || !recordId) return;
+    // ETP-5205 — nothing to manage under read-only, so do not fetch (avoids 403 noise on
+    // goods-shipment for a role that cannot read it).
+    if (!isCompleted || !recordId || windowReadOnly) return;
     let cancelled = false;
 
     (async () => {
@@ -164,7 +167,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
     })();
 
     return () => { cancelled = true; };
-  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey]);
+  }, [isCompleted, recordId, base, apiFetch, apiBaseUrl, refreshKey, windowReadOnly]);
 
   // ETP-5063 — a confirm that created neither a shipment nor an invoice has
   // nothing worth a blocking modal for; only render it when at least one
@@ -221,6 +224,12 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       data-testid="ConfirmModal__18d1f0" />,
     document.body,
   ) : null;
+
+  // ETP-5205 — Solo-Lectura tier (DetailView's `windowReadOnly`): "Gestionar envío y factura"
+  // and its modals create documents, so render nothing. After every hook, and BEFORE the loading
+  // return below: the fetch is skipped under read-only, so `fetched` stays null and that return
+  // would otherwise show the "…" placeholder forever.
+  if (windowReadOnly) return null;
 
   // ── COMPLETED (loading) ────────────────────────────────────────────────────
   // ETP-5260 — Copy link now renders unconditionally via the sibling topbarSecondary slot, so this
@@ -295,6 +304,7 @@ export default function OrderCreateInvoice({ data, recordId, token, apiBaseUrl, 
       {isCompleted && buttonLabel && (
         <button
           type="button"
+          data-testid="sales-order-manage-docs"
           onClick={() => openModal(null)}
           style={btnPrimaryStyle}
           // Hover to match the shared Confirm button's `hover:bg-primary/90` (90% opacity).

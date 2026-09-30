@@ -2002,3 +2002,24 @@ navigates to the created invoice.
   checks the chosen vendor (`checkBpHasLocation` in `purchaseInvoiceDescriptor.js`). When it has
   no address, the modal says so under Proveedor, offers "Volver a verificar", and keeps
   **Continuar** disabled. A failed lookup (`unknown`) does not block the modal.
+
+### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
+
+Under the runtime Solo-Lectura tier (tier only — the static `decisions.json → window.readOnly`
+does not trigger any of this):
+
+- **Row "Enviar" (list hover)** is gone. `ListView` turns the Email gate itself off
+  (`documentPreview: false`, `sendDocument.enabled: false`, no `onEmail`), so `RowQuickActions`,
+  `DataTable`'s column-width estimate and its actions-column mount stay consistent. The default
+  `SendDocumentModal` mount is gated too.
+- **Preview**: no Send; **Download PDF stays** (decision D1: printing/downloading only exposes
+  data the role can already read). `ListView` passes `readOnly` (the tier) to `renderPreview`,
+  and the preview forwards it as `attachmentConfig.readOnly`: the marked attachment is still
+  READ (cached PDF shown, Download works) but never written — no auto-store of the rendered PDF,
+  no overwrite of a stale cache, no drop zone, no delete.
+- **Detail Print** (`action-document-print`) and the detail Mail/preview button **stay** (D1).
+- **Backend**: `POST /sws/neo/email-contracts/<window>-send/send` answers 403 (`UNAUTHORIZED`
+  → "No tenés autorización para enviar este documento") and every attachment write
+  (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
+  role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
+- Preview (drop-zone mode) and the OCR side panel (`ReadOnlyOcrSidePanel`) keep showing the supplier's document but offer no upload, drop or delete. Preview also hides **Añadir pago**.
