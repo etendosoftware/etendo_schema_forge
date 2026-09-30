@@ -111,9 +111,12 @@ describe('both cache consumers use the composed predicate (ETP-5125)', () => {
     ['write side', join(__dirname, '..', '..', 'windows', 'custom', 'shared', 'useMainAttachment.js')],
   ];
 
+  // ETP-5541: both consumers also forward the session's brandingUpdated (4th argument).
   it.each(CONSUMERS)('%s decides staleness with isCachedRenderingStale', (_label, path) => {
     const src = readFileSync(path, 'utf8');
-    expect(src).toMatch(/isCachedRenderingStale\(\s*main,\s*recordUpdated\s*\)/);
+    expect(src).toMatch(
+      /isCachedRenderingStale\(\s*main,\s*recordUpdated,\s*RENDERER_BUILD_EPOCH_MS,\s*brandingUpdated\s*,?\s*\)/,
+    );
   });
 
   it('write side no longer references the record-only predicate at all', () => {
