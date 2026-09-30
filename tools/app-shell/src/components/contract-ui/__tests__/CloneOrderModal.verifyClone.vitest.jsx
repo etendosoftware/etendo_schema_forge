@@ -69,10 +69,26 @@ function jsonResponse(status, body) {
   };
 }
 
+// A 2xx response whose body is not JSON (empty / HTML): `json()` rejects like the real one does.
+function nonJsonResponse(status) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => { throw new SyntaxError('Unexpected end of JSON input'); },
+  };
+}
+
+// Sentinel values for the routeFetch maps below.
+const NO_ID = Symbol('no-id');             // POST 201 with a body that carries no id
+const NON_JSON = Symbol('non-json');       // POST 201 with a body that is not JSON
+const NETWORK_ERROR = Symbol('network');   // GET rejects (fetch throws)
+
 /**
  * Routes fetch by method + URL.
- *   clones   — { [sourceId]: newId } answered by POST …/header/{sourceId}/action/cloneRecord (201)
- *   verified — { [newId]: 200 | 404 } answered by GET …/header/{newId}
+ *   clones   — { [sourceId]: newId | NO_ID | NON_JSON } answered by
+ *              POST …/header/{sourceId}/action/cloneRecord (201)
+ *   verified — { [newId]: 200 | 404 | <other status> | NETWORK_ERROR } answered by
+ *              GET …/header/{newId}
  * Any other GET (e.g. the helper's re-read of the source record) answers 200 with that record.
  */
 function routeFetch({ clones, verified }) {
@@ -83,14 +99,23 @@ function routeFetch({ clones, verified }) {
 
     const cloneMatch = path.match(/\/header\/([^/]+)\/action\/cloneRecord$/);
     if (method === 'POST' && cloneMatch) {
-      return jsonResponse(201, { response: { data: { id: clones[cloneMatch[1]] } } });
+      const newId = clones[cloneMatch[1]];
+      if (newId === NON_JSON) return nonJsonResponse(201);
+      if (newId === NO_ID) return jsonResponse(201, { response: { data: {} } });
+      return jsonResponse(201, { response: { data: { id: newId } } });
     }
 
     const getMatch = path.match(/\/header\/([^/]+)$/);
     if (method === 'GET' && getMatch) {
       const id = getMatch[1];
+      if (verified[id] === NETWORK_ERROR) {
+        throw new TypeError('Failed to fetch');
+      }
       if (verified[id] === 404) {
         return jsonResponse(404, { error: { message: 'Record not found' } });
+      }
+      if (typeof verified[id] === 'number' && verified[id] !== 200) {
+        return jsonResponse(verified[id], { error: { message: 'Server error' } });
       }
       return jsonResponse(200, {
         response: { data: [{ id, documentNo: `DOC-${id}`, 'businessPartner$_identifier': 'Acme Corp' }] },
@@ -251,6 +276,126 @@ describe('CloneOrderModal — ETP-5547 clone verification', () => {
 
     fireEvent.click(row);
     expect(mockNavigate).toHaveBeenCalledWith(`${ROUTE_PREFIX}new-ok`);
+  });
+
+  describe('unverified — the verification GET fails for a reason other than 404', () => {
+    function expectUnverifiedButNavigable(newId, { onCloned }) {
+      const row = screen.getByTestId(`clone-result-${newId}`);
+      expect(row).toHaveAttribute('data-clone-status', 'unverified');
+      expect(row).toHaveStyle({ cursor: 'pointer' });
+      // Flagged, not presented as a confirmed Borrador.
+      expect(within(row).getByTestId(`clone-result-message-${newId}`))
+        .toHaveTextContent('cloneResultUnverified');
+      expect(within(row).queryByTestId('status-tag')).not.toBeInTheDocument();
+      // The record most likely exists: the title still reports success.
+      expect(screen.getByTestId('clone-done-title')).toHaveTextContent(SUCCESS_TITLE_KEY);
+      expect(onCloned).toHaveBeenCalledWith(newId);
+
+      fireEvent.click(row);
+      expect(mockNavigate).toHaveBeenCalledWith(`${ROUTE_PREFIX}${newId}`);
+    }
+
+    it('keeps the row navigable but flagged when the GET rejects with a network error', async () => {
+      routeFetch({ clones: { 'src-1': 'new-net' }, verified: { 'new-net': NETWORK_ERROR } });
+      const callbacks = renderModal();
+
+      await cloneAndWaitForDone();
+
+      expectUnverifiedButNavigable('new-net', callbacks);
+      expect(callbacks.onClose).toHaveBeenCalled();
+    });
+
+    for (const status of [500, 403]) {
+      it(`keeps the row navigable but flagged when the GET answers ${status}`, async () => {
+        routeFetch({ clones: { 'src-1': 'new-err' }, verified: { 'new-err': status } });
+        const callbacks = renderModal();
+
+        await cloneAndWaitForDone();
+
+        expectUnverifiedButNavigable('new-err', callbacks);
+      });
+    }
+
+    it('does not render the unverified row as failed (no destructive background)', async () => {
+      routeFetch({ clones: { 'src-1': 'new-err' }, verified: { 'new-err': 500 } });
+      renderModal();
+
+      await cloneAndWaitForDone();
+
+      const row = screen.getByTestId('clone-result-new-err');
+      expect(row.style.background).not.toContain('--status-destructive-bg');
+    });
+  });
+
+  describe('missingId — the clone POST answers 2xx without a usable id', () => {
+    const variants = [
+      { name: 'a JSON body without an id', clone: NO_ID },
+      { name: 'a non-JSON / empty body', clone: NON_JSON },
+    ];
+
+    for (const { name, clone } of variants) {
+      it(`renders an inert missingId row for ${name}`, async () => {
+        routeFetch({ clones: { 'src-1': clone }, verified: {} });
+        const callbacks = renderModal();
+
+        await cloneAndWaitForDone();
+
+        const row = screen.getByTestId('clone-result-missing-0');
+        expect(row).toHaveAttribute('data-clone-status', 'missingId');
+        expect(row).toHaveStyle({ cursor: 'default' });
+        expect(within(row).getByTestId('clone-result-message-missing-0'))
+          .toHaveTextContent('cloneResultMissingId');
+        expect(within(row).queryByTestId('status-tag')).not.toBeInTheDocument();
+
+        // The generic clone error would send the user back to State 1 — it must not appear.
+        expect(screen.queryByText('cloneOrderError')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('action-clone-record')).not.toBeInTheDocument();
+
+        clickEverywhereIn(row);
+        expect(mockNavigate).not.toHaveBeenCalled();
+        expect(callbacks.onClose).not.toHaveBeenCalled();
+        // No usable id → nothing is handed to the caller (never a null id).
+        expect(callbacks.onCloned).not.toHaveBeenCalled();
+        expect(callbacks.onCloned).not.toHaveBeenCalledWith(null);
+      });
+    }
+
+    it('does not issue a verification GET for a clone without an id', async () => {
+      routeFetch({ clones: { 'src-1': NO_ID }, verified: {} });
+      renderModal();
+
+      await cloneAndWaitForDone();
+
+      const nullGets = globalThis.fetch.mock.calls.filter(([input, init = {}]) => {
+        const url = typeof input === 'string' ? input : input.url;
+        const method = (init.method || 'GET').toUpperCase();
+        return method === 'GET' && /\/header\/(null|undefined)(\?|$)/.test(url);
+      });
+      expect(nullGets).toHaveLength(0);
+    });
+
+    it('hands only the linkable clone to the caller in a mixed multi-clone', async () => {
+      routeFetch({ clones: { 'src-1': 'new-ok', 'src-2': NON_JSON }, verified: { 'new-ok': 200 } });
+      const callbacks = renderModal({ records: SOURCE_TWO });
+
+      await cloneAndWaitForDone();
+
+      expect(screen.getByTestId('clone-result-new-ok')).toHaveAttribute('data-clone-status', 'ok');
+      expect(screen.getByTestId('clone-result-missing-1')).toHaveAttribute('data-clone-status', 'missingId');
+      expect(callbacks.onCloned).toHaveBeenCalledWith(['new-ok']);
+      expect(screen.queryByText('cloneOrderError')).not.toBeInTheDocument();
+    });
+
+    it('without routePrefix, stays open on State 2 instead of calling onCloned', async () => {
+      routeFetch({ clones: { 'src-1': NO_ID }, verified: {} });
+      const callbacks = renderModal({ routePrefix: undefined });
+
+      fireEvent.click(screen.getByTestId('action-clone-record'));
+
+      await waitFor(() => expect(screen.getByTestId('clone-result-missing-0')).toBeInTheDocument());
+      expect(callbacks.onClose).not.toHaveBeenCalled();
+      expect(callbacks.onCloned).not.toHaveBeenCalled();
+    });
   });
 
   it('verifies each clone with a GET of the new record id', async () => {
