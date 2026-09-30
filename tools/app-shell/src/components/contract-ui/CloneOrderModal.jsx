@@ -154,6 +154,222 @@ function DocStatusTag({ status, dictionary }) {
   );
 }
 
+// POSTs the clone action for every item, in order. Stops at the first non-2xx answer and hands
+// its body back so the caller can surface the server message.
+async function postClones(apiFetch, items, headerEntity, cloneActionName) {
+  const newIds = [];
+  for (const item of items) {
+    const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
+    // ETP-5547: an empty / non-JSON body must not turn a created clone into the generic
+    // error — a 2xx without a usable id is reported per row as `missingId` instead.
+    const json = await res.json().catch(() => null);
+    if (!res.ok) return { ok: false, json };
+    newIds.push(json?.response?.data?.id ?? null);
+    trackDocumentCreated();
+  }
+  return { ok: true, newIds };
+}
+
+// Decides what happens once every clone has been re-read. Only clones that can be opened are
+// handed to the caller: a caller-side navigation to a missing id is the very false success
+// ETP-5547 removes.
+//   routePrefix set       — show State 2; notify the caller only when something is navigable.
+//   legacy, all navigable — close and notify the caller.
+//   legacy, any missing   — show State 2 with the per-row outcome instead of closing and
+//                           navigating to a missing record.
+function resolveCloneOutcome(fetched, n, routePrefix) {
+  const usableIds = fetched.filter(isNavigableClone).map(rec => rec.id);
+  const result = n > 1 ? usableIds : usableIds[0];
+  if (routePrefix) return { showDone: true, closeModal: false, notify: usableIds.length > 0, result };
+  if (usableIds.length === fetched.length) return { showDone: false, closeModal: true, notify: true, result };
+  return { showDone: true, closeModal: false, notify: false, result };
+}
+
+// Per-row derivations for State 2.
+function describeCloneRow(rec, index, routePrefix, hoveredId) {
+  const navigable = !!routePrefix && isNavigableClone(rec);
+  return {
+    navigable,
+    failed: rec.cloneStatus === CLONE_STATUS.NOT_FOUND,
+    messageKey: CLONE_STATUS_MESSAGE_KEY[rec.cloneStatus],
+    rowKey: rec.id ?? `missing-${index}`,
+    hovered: navigable && hoveredId === rec.id,
+  };
+}
+
+function cloneRowBackground(failed, hovered) {
+  return (failed && 'var(--status-destructive-bg)') || (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))');
+}
+
+// Middle cell of a State 2 row: the clone-status message when the row is not a confirmed
+// success, the business partner otherwise.
+function CloneResultDetail({ rec, messageKey, failed, rowKey, ui }) {
+  if (!messageKey) {
+    return (
+      <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {rec['businessPartner$_identifier'] || ''}
+      </span>
+    );
+  }
+  let messageColor = 'var(--status-warning-fg)';
+  if (failed) messageColor = 'var(--status-destructive-fg)';
+  return (
+    <span
+      data-testid={`clone-result-message-${rowKey}`}
+      style={{ fontSize: 12, color: messageColor, flex: 1, lineHeight: 1.4 }}
+    >
+      {ui(messageKey)}
+    </span>
+  );
+}
+
+function CloneResultRow({ rec, index, routePrefix, hoveredId, setHoveredId, onRowClick, ui, dictionary }) {
+  const { navigable, failed, messageKey, rowKey, hovered } = describeCloneRow(rec, index, routePrefix, hoveredId);
+  return (
+    <div
+      data-testid={`clone-result-${rowKey}`}
+      data-clone-status={rec.cloneStatus}
+      onClick={navigable ? () => onRowClick(rec.id) : undefined}
+      onMouseEnter={navigable ? () => setHoveredId(rec.id) : undefined}
+      onMouseLeave={navigable ? () => setHoveredId(null) : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
+        borderBottom: '1px solid hsl(var(--muted))', cursor: navigable ? 'pointer' : 'default',
+        background: cloneRowBackground(failed, hovered),
+        transition: 'background 0.12s',
+      }}
+    >
+      <span style={{ fontSize: 12, fontWeight: 600, color: navigable ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {rec.documentNo || rec.id || ''}
+      </span>
+      <CloneResultDetail rec={rec} messageKey={messageKey} failed={failed} rowKey={rowKey} ui={ui} />
+      {rec.cloneStatus === CLONE_STATUS.OK && (
+        <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
+      )}
+      {navigable && (
+        <span style={{ color: 'hsl(var(--text-disabled))', opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
+          <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ── STATE 2: Done ── */
+function CloneDoneView({ allFailed, doneTitle, clonedRecords, routePrefix, hoveredId, setHoveredId, onRowClick, onClose, ui, dictionary }) {
+  return (
+    <>
+      <div style={{ ...modalHeader, background: allFailed ? 'var(--status-destructive-bg)' : 'var(--status-success-bg)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {allFailed ? (
+            <div style={{ ...iconBox, background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)' }}>
+              <InfoIcon data-testid="InfoIcon__66b049" />
+            </div>
+          ) : (
+            <div style={{ ...iconBox, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}>
+              <CheckIcon size={18} data-testid="CheckIcon__66b049" />
+            </div>
+          )}
+          <div>
+            <div style={titleStyle} data-testid="clone-done-title">{doneTitle}</div>
+            <div style={subtitleStyle}>{ui(allFailed ? 'cloneFailedSubtitle' : 'cloneDoneSubtitle')}</div>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} style={closeBtn}>×</button>
+      </div>
+      <div style={{ overflowY: 'auto', maxHeight: 360 }}>
+        {clonedRecords.map((rec, index) => (
+          <CloneResultRow
+            key={rec.id ?? `missing-${index}`}
+            rec={rec}
+            index={index}
+            routePrefix={routePrefix}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onRowClick={onRowClick}
+            ui={ui}
+            dictionary={dictionary} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function CloneConfirmItemRow({ item, dictionary }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px', borderBottom: '1px solid hsl(var(--muted))', background: 'hsl(var(--card))' }}>
+      <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        {item.documentNo || item.id}
+      </span>
+      <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {item['businessPartner$_identifier'] || ''}
+      </span>
+      {item.documentStatus && <DocStatusTag
+        status={item.documentStatus}
+        dictionary={dictionary}
+        data-testid="DocStatusTag__66b049" />}
+    </div>
+  );
+}
+
+/* ── STATE 1: Confirm ── */
+function CloneConfirmView({ items, phase, blockedByUnsaved, error, confirmTitle, confirmSub, processingKey, onClone, onClose, ui, dictionary }) {
+  const cloning = phase === 'cloning';
+  return (
+    <>
+      <div style={{ ...modalHeader, background: 'var(--status-info-bg)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ ...iconBox, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
+            <CloneIcon size={18} data-testid="CloneIcon__66b049" />
+          </div>
+          <div>
+            <div style={titleStyle}>{confirmTitle}</div>
+            <div style={subtitleStyle}>{confirmSub}</div>
+          </div>
+        </div>
+        <button type="button" onClick={onClose} style={closeBtn} disabled={phase === 'cloning'}>×</button>
+      </div>
+      {/* Document list */}
+      <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid hsl(var(--muted))' }}>
+        {items.map((item) => (
+          <CloneConfirmItemRow key={item.id} item={item} dictionary={dictionary} />
+        ))}
+      </div>
+      <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Info banner — or the unsaved-changes refusal, which replaces it: showing both
+            would bury the one thing the user has to act on. */}
+        {blockedByUnsaved ? (
+          <div data-testid="clone-blocked-unsaved" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-warning-bg)', borderRadius: 8, border: '1px solid var(--status-warning-border)' }}>
+            <span style={{ color: 'var(--status-warning-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+            <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.5 }}>{ui('cloneBlockedUnsavedChanges')}</span>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
+            <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
+            <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
+          </div>
+        )}
+
+        {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
+
+        {/* Clone button */}
+        <button
+          type="button"
+          data-testid="action-clone-record"
+          onClick={onClone}
+          disabled={cloning || blockedByUnsaved}
+          title={blockedByUnsaved ? ui('cloneBlockedUnsavedChanges') : undefined}
+          style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: (cloning || blockedByUnsaved) ? 0.6 : 1, cursor: (cloning || blockedByUnsaved) ? 'not-allowed' : 'pointer' }}
+        >
+          {cloning ? <Spinner data-testid="Spinner__66b049" /> : <CloneIcon size={15} data-testid="CloneIcon__66b049" />}
+          {cloning ? ui(processingKey) : confirmTitle}
+        </button>
+
+      </div>
+    </>
+  );
+}
+
 /**
  * Modal for cloning one or more records.
  *
@@ -208,47 +424,30 @@ export default function CloneOrderModal({
   const [clonedRecords, setCloned]  = useState([]);
   const [hoveredId, setHoveredId]   = useState(null);
 
+  const isDone = phase === 'done';
   const createdCount = clonedRecords.filter(rec => rec.cloneStatus !== CLONE_STATUS.NOT_FOUND).length;
-  const allFailed = phase === 'done' && createdCount === 0;
-  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui, phase === 'done' ? createdCount : n);
+  const allFailed = isDone && createdCount === 0;
+  const { confirmTitle, confirmSub, doneTitle } = buildCloneTitles(n, ui, isDone ? createdCount : n);
 
   const handleClone = async () => {
     setPhase('cloning');
     setError(null);
     try {
-      const newIds = [];
-      for (const item of items) {
-        const res  = await apiFetch(`/${headerEntity}/${item.id}/action/${cloneActionName}`, { method: 'POST' });
-        // ETP-5547: an empty / non-JSON body must not turn a created clone into the generic
-        // error — a 2xx without a usable id is reported per row as `missingId` instead.
-        const json = await res.json().catch(() => null);
-        if (!res.ok) {
-          setError(extractCloneErrorMessage(json, ui(errorKey)));
-          setPhase('confirm');
-          return;
-        }
-        newIds.push(json?.response?.data?.id ?? null);
-        trackDocumentCreated();
+      const posted = await postClones(apiFetch, items, headerEntity, cloneActionName);
+      if (!posted.ok) {
+        setError(extractCloneErrorMessage(posted.json, ui(errorKey)));
+        setPhase('confirm');
+        return;
       }
 
-      const fetched = await fetchClonedRecords(apiFetch, headerEntity, newIds);
-      // Only clones that can be opened are handed to the caller: a caller-side navigation to a
-      // missing id is the very false success ETP-5547 removes.
-      const usableIds = fetched.filter(isNavigableClone).map(rec => rec.id);
-      const result = n > 1 ? usableIds : usableIds[0];
-      if (routePrefix) {
-        setCloned(fetched);
-        setPhase('done');
-        if (usableIds.length > 0) onCloned?.(result);
-      } else if (usableIds.length === fetched.length) {
-        onClose();
-        onCloned?.(result);
-      } else {
-        // Legacy caller (no routePrefix) and at least one clone cannot be opened: show State 2
-        // with the per-row outcome instead of closing and navigating to a missing record.
+      const fetched = await fetchClonedRecords(apiFetch, headerEntity, posted.newIds);
+      const outcome = resolveCloneOutcome(fetched, n, routePrefix);
+      if (outcome.showDone) {
         setCloned(fetched);
         setPhase('done');
       }
+      if (outcome.closeModal) onClose();
+      if (outcome.notify) onCloned?.(outcome.result);
     } catch {
       setError(ui(errorKey));
       setPhase('confirm');
@@ -263,144 +462,31 @@ export default function CloneOrderModal({
   return (
     <div style={overlay} onClick={phase === 'cloning' ? undefined : onClose}>
       <div style={card} onClick={e => e.stopPropagation()}>
-
-        {phase === 'done' ? (
-          /* ── STATE 2: Done ── */
-          (<>
-            <div style={{ ...modalHeader, background: allFailed ? 'var(--status-destructive-bg)' : 'var(--status-success-bg)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                {allFailed ? (
-                  <div style={{ ...iconBox, background: 'var(--status-destructive-bg)', color: 'var(--status-destructive-fg)' }}>
-                    <InfoIcon data-testid="InfoIcon__66b049" />
-                  </div>
-                ) : (
-                  <div style={{ ...iconBox, background: 'var(--status-success-bg)', color: 'var(--status-success-fg)' }}>
-                    <CheckIcon size={18} data-testid="CheckIcon__66b049" />
-                  </div>
-                )}
-                <div>
-                  <div style={titleStyle} data-testid="clone-done-title">{doneTitle}</div>
-                  <div style={subtitleStyle}>{ui(allFailed ? 'cloneFailedSubtitle' : 'cloneDoneSubtitle')}</div>
-                </div>
-              </div>
-              <button type="button" onClick={onClose} style={closeBtn}>×</button>
-            </div>
-            <div style={{ overflowY: 'auto', maxHeight: 360 }}>
-              {clonedRecords.map((rec, index) => {
-                const navigable = !!routePrefix && isNavigableClone(rec);
-                const failed = rec.cloneStatus === CLONE_STATUS.NOT_FOUND;
-                const messageKey = CLONE_STATUS_MESSAGE_KEY[rec.cloneStatus];
-                const rowKey = rec.id ?? `missing-${index}`;
-                const hovered = navigable && hoveredId === rec.id;
-                let messageColor = 'var(--status-warning-fg)';
-                if (failed) messageColor = 'var(--status-destructive-fg)';
-                return (
-                  <div
-                    key={rowKey}
-                    data-testid={`clone-result-${rowKey}`}
-                    data-clone-status={rec.cloneStatus}
-                    onClick={navigable ? () => handleRowClick(rec.id) : undefined}
-                    onMouseEnter={navigable ? () => setHoveredId(rec.id) : undefined}
-                    onMouseLeave={navigable ? () => setHoveredId(null) : undefined}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px',
-                      borderBottom: '1px solid hsl(var(--muted))', cursor: navigable ? 'pointer' : 'default',
-                      background: (failed && 'var(--status-destructive-bg)') || (hovered ? 'hsl(var(--muted))' : 'hsl(var(--card))'),
-                      transition: 'background 0.12s',
-                    }}
-                  >
-                    <span style={{ fontSize: 12, fontWeight: 600, color: navigable ? 'var(--status-info-fg)' : 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {rec.documentNo || rec.id || ''}
-                    </span>
-                    {messageKey ? (
-                      <span
-                        data-testid={`clone-result-message-${rowKey}`}
-                        style={{ fontSize: 12, color: messageColor, flex: 1, lineHeight: 1.4 }}
-                      >
-                        {ui(messageKey)}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {rec['businessPartner$_identifier'] || ''}
-                      </span>
-                    )}
-                    {rec.cloneStatus === CLONE_STATUS.OK && (
-                      <DocStatusTag status="DR" dictionary={dictionary} data-testid="DocStatusTag__66b049" />
-                    )}
-                    {navigable && (
-                      <span style={{ color: 'hsl(var(--text-disabled))', opacity: hovered ? 1 : 0, transition: 'opacity 0.12s', flexShrink: 0 }}>
-                        <ArrowRightIcon data-testid="ArrowRightIcon__66b049" />
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </>)
+        {isDone ? (
+          <CloneDoneView
+            allFailed={allFailed}
+            doneTitle={doneTitle}
+            clonedRecords={clonedRecords}
+            routePrefix={routePrefix}
+            hoveredId={hoveredId}
+            setHoveredId={setHoveredId}
+            onRowClick={handleRowClick}
+            onClose={onClose}
+            ui={ui}
+            dictionary={dictionary} />
         ) : (
-          /* ── STATE 1: Confirm ── */
-          (<>
-            <div style={{ ...modalHeader, background: 'var(--status-info-bg)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ ...iconBox, background: 'var(--status-info-bg)', color: 'var(--status-info-fg)' }}>
-                  <CloneIcon size={18} data-testid="CloneIcon__66b049" />
-                </div>
-                <div>
-                  <div style={titleStyle}>{confirmTitle}</div>
-                  <div style={subtitleStyle}>{confirmSub}</div>
-                </div>
-              </div>
-              <button type="button" onClick={onClose} style={closeBtn} disabled={phase === 'cloning'}>×</button>
-            </div>
-            {/* Document list */}
-            <div style={{ overflowY: 'auto', maxHeight: 240, borderBottom: '1px solid hsl(var(--muted))' }}>
-              {items.map((item) => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 20px', borderBottom: '1px solid hsl(var(--muted))', background: 'hsl(var(--card))' }}>
-                  <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {item.documentNo || item.id}
-                  </span>
-                  <span style={{ fontSize: 13, color: 'hsl(var(--foreground))', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item['businessPartner$_identifier'] || ''}
-                  </span>
-                  {item.documentStatus && <DocStatusTag
-                    status={item.documentStatus}
-                    dictionary={dictionary}
-                    data-testid="DocStatusTag__66b049" />}
-                </div>
-              ))}
-            </div>
-            <div style={{ padding: '12px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Info banner — or the unsaved-changes refusal, which replaces it: showing both
-                  would bury the one thing the user has to act on. */}
-              {blockedByUnsaved ? (
-                <div data-testid="clone-blocked-unsaved" style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-warning-bg)', borderRadius: 8, border: '1px solid var(--status-warning-border)' }}>
-                  <span style={{ color: 'var(--status-warning-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
-                  <span style={{ fontSize: 12, color: 'var(--status-warning-fg)', lineHeight: 1.5 }}>{ui('cloneBlockedUnsavedChanges')}</span>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', background: 'var(--status-info-bg)', borderRadius: 8, border: '1px solid var(--status-info-border)' }}>
-                  <span style={{ color: 'var(--status-info-fg)', flexShrink: 0, marginTop: 1 }}><InfoIcon data-testid="InfoIcon__66b049" /></span>
-                  <span style={{ fontSize: 12, color: 'var(--status-info-fg)', lineHeight: 1.5 }}>{ui('cloneInfoBanner')}</span>
-                </div>
-              )}
-
-              {error && <div style={{ color: 'hsl(var(--destructive))', fontSize: 12 }}>{error}</div>}
-
-              {/* Clone button */}
-              <button
-                type="button"
-                data-testid="action-clone-record"
-                onClick={handleClone}
-                disabled={phase === 'cloning' || blockedByUnsaved}
-                title={blockedByUnsaved ? ui('cloneBlockedUnsavedChanges') : undefined}
-                style={{ ...btnPrimary, width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: 8, opacity: (phase === 'cloning' || blockedByUnsaved) ? 0.6 : 1, cursor: (phase === 'cloning' || blockedByUnsaved) ? 'not-allowed' : 'pointer' }}
-              >
-                {phase === 'cloning' ? <Spinner data-testid="Spinner__66b049" /> : <CloneIcon size={15} data-testid="CloneIcon__66b049" />}
-                {phase === 'cloning' ? ui(processingKey) : confirmTitle}
-              </button>
-
-            </div>
-          </>)
+          <CloneConfirmView
+            items={items}
+            phase={phase}
+            blockedByUnsaved={blockedByUnsaved}
+            error={error}
+            confirmTitle={confirmTitle}
+            confirmSub={confirmSub}
+            processingKey={processingKey}
+            onClone={handleClone}
+            onClose={onClose}
+            ui={ui}
+            dictionary={dictionary} />
         )}
       </div>
     </div>
