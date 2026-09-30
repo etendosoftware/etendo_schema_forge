@@ -291,19 +291,6 @@ const DEFAULTS_TIMEOUT_MS = 4000;
 // the same time the form does.
 export const PROCESS_FAILURE_TOAST_DURATION_MS = 8000;
 
-const CONTACTS_PRECREATE_BILLING_FIELDS = new Set([
-    'priceList',
-    'paymentMethod',
-    'paymentTerms',
-    'account',
-    'customerBlocking',
-    'purchasePricelist',
-    'pOPaymentMethod',
-    'pOPaymentTerms',
-    'pOFinancialAccount',
-    'vendorBlocking',
-]);
-
 // ETP-4156: the per-entity `name` / `username` / `searchKey` derivations that used to live
 // here (applyContactsRequiredFields, branching on the hardcoded entity names contact /
 // adUser / user / businessPartner / bpartner) now run server-side, where they are not tied
@@ -539,7 +526,7 @@ export function isSequencePlaceholder(value) {
     return typeof value === 'string' && /^<[^<>]+>$/.test(value);
 }
 
-export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing) {
+export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, editing) {
     // Always skip ID fields, identifier companions, and legacy FK keys (e.g. ad_org_id)
     // managed by the backend — these should never be sent by the client on create/update.
     if (key === 'id' || key.includes('$_identifier') || /^[a-zA-Z]+_[A-Z]{2,4}$/.test(key)) {
@@ -569,10 +556,15 @@ export function shouldSkipPayloadField(key, value, backendDefaultKeysRef, userCh
         return true;
     }
 
-    // Contacts (Business Partner): keep create aligned with Classic behavior.
-    // Billing preference fields are configured only after header creation.
-    // If sent here, org/window defaults can persist unwanted values on first save.
-    if (isContactsBusinessPartnerCreate && CONTACTS_PRECREATE_BILLING_FIELDS.has(key)) {
+    // ETP-5537 — generic replacement for the old Contacts-only
+    // `CONTACTS_PRECREATE_BILLING_FIELDS` allowlist (com.etendoerp.go PR 1220 / ETP-5347
+    // now rejects a create/update write that touches a field the entity does not expose as
+    // writable, instead of silently discarding it). `isFieldExcluded` — built once per save
+    // in `buildCreateFieldExclusion` — answers "is this key currently registered by one of
+    // this record's mounted forms, AND not evaluated read-only there?" for ANY window, not
+    // just Contacts. See that function's doc comment for the full rule and the
+    // `userChangedKeysRef` escape hatch.
+    if (isFieldExcluded && isFieldExcluded(key)) {
         return true;
     }
 
@@ -764,17 +756,181 @@ export function getMethod(isNew) {
     return isNew ? 'POST' : 'PATCH';
 }
 
-export function buildPatchPayload(editing, selected) {
+/**
+ * ETP-5537 — read-only filter for the PATCH (existing-record) payload.
+ *
+ * Same trigger as the create-side exclusion below: com.etendoerp.go PR 1220 (ETP-5347) made
+ * NeoServlet REJECT a write that carries a field the contract declares readOnly/system with a
+ * 422 `read_only_field`, where it used to drop it silently. On PATCH there is no create-time
+ * exemption at all — a read-only field must simply never be sent.
+ *
+ * It rides in because the payload is a raw `editing` vs `selected` diff, and the two sides are
+ * refreshed ASYMMETRICALLY after a line save: `refreshHeaderTotals` REPLACES `selected`
+ * wholesale with the header GET row, but MERGES that row onto `editing`. Any key living in
+ * `editing` that the GET does not echo therefore survives on one side only and shows up as a
+ * diff — with no user ever having touched it. A read-only key in the diff always got there
+ * because the backend or a callout recomputed it, never because the user edited it.
+ *
+ * Deliberately NARROWER than the create path: this applies rule 2 only (registered by a mounted
+ * form AND read-only there), never rule 1 ("not registered by any form → exclude"). Rule 1 is
+ * create-specific by its own rationale ("it belongs to a tab that is not part of the screen
+ * yet"), and on PATCH it is actively unsafe: `formFieldsRef` is populated only by mounted
+ * EntityForm instances, so a save fired with no header form mounted would have an EMPTY registry
+ * and rule 1 would exclude every key — turning a loud 422 into silent, total data loss. The same
+ * reasoning makes the registry args optional: with no registry we filter nothing and behave
+ * exactly as before, which is the safe direction to fail in.
+ *
+ * Keeps the create path's escape hatch, with the same correction: a value the app deliberately
+ * forced through (a custom panel calling onChange) is never swallowed silently, but a value a
+ * CALLOUT applied does not count as user-authored — see isUserAuthoredKey.
+ */
+export function buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields = null) {
+    const isFieldExcluded = formFieldsRef && userChangedKeysRef
+        ? buildPatchFieldExclusion(formFieldsRef, editing, contractFields)
+        : null;
     const payload = {};
     for (const [key, value] of Object.entries(editing)) {
         if (key === 'id') continue;
+        // ETP-5537 — an FK's `$_identifier` companion is the DISPLAY LABEL the backend sends
+        // alongside the id ("Tarifa de compra principal" next to the price-list id). It is not a
+        // writable column, and the create path has always known that: `shouldSkipPayloadField`
+        // drops it there, with a comment that says "on create/update". The PATCH diff never got
+        // the same skip, so every PATCH touching an FK shipped its label too — harmless while the
+        // backend discarded unknown fields, and a hard failure since ETP-5347 began rejecting
+        // them: `PATCH /contacts/businessPartner` answered 422 read_only_field for
+        // `purchasePricelist$_identifier`. Generic — any window with an FK field hits it.
+        if (key.includes('$_identifier')) continue;
         // A sequence placeholder is a display hint, never a user-authored value: the backend
         // strips it as read-only anyway, and sending it makes the server read the field as
         // "the caller chose this number", which suppresses its own re-numbering (ETP-5274).
         if (isSequencePlaceholder(value)) continue;
+        if (isFieldExcluded && isFieldExcluded(key, userChangedKeysRef, calloutAppliedKeysRef)) continue;
         if (value !== selected[key]) payload[key] = value;
     }
     return payload;
+}
+
+/**
+ * Shared core behind both write paths' field exclusion (ETP-5537).
+ *
+ * Resolves a payload key against the fields every currently-mounted EntityForm registered for
+ * this record (`formFieldsRef`) and evaluates the contract's readOnly/readOnlyLogic for it.
+ * Returns `true` (registered and read-only), `false` (registered and writable), or `undefined`
+ * (not registered by any mounted form) — the three states the create and patch rules differ on.
+ */
+function buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields = null) {
+    const registeredFields = [...formFieldsRef.current.values()].flat();
+    // ETP-5537: the window's DECLARED field list first, the mounted forms second.
+    //
+    // `formFieldsRef` alone is not enough to answer "is this field read-only": EntityForm only
+    // registers its `displayFields`, so a field living in a section/tab that is not currently
+    // rendered is absent from the registry entirely and reads as "unknown" rather than
+    // "read-only". That is exactly how `priceIncludesTax` (declared `readOnly: true`,
+    // `section: 'other'` in the generated OrderForm) escaped the check and reached the wire.
+    //
+    // `contractFields` is the window's full declared list (DetailView passes it as `gateFields`),
+    // so it answers for every field whether or not its section is on screen. mergeValidationFields
+    // gives the contract precedence and keeps registry-only fields (custom panels register fields
+    // the contract list does not carry).
+    const fieldByKey = new Map(
+        mergeValidationFields(contractFields, registeredFields).map(f => [f.key, f]),
+    );
+    const isReadOnly = getReadOnly(editing);
+    return (key) => {
+        const field = fieldByKey.get(key);
+        return field ? isReadOnly(field) : undefined;
+    };
+}
+
+/**
+ * PATCH-side exclusion: rule 2 only. See buildPatchPayload's comment for why rule 1 is
+ * deliberately left out here.
+ */
+export function buildPatchFieldExclusion(formFieldsRef, editing, contractFields = null) {
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields);
+    return (key, userChangedKeysRef, calloutAppliedKeysRef) => {
+        if (isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef)) return false;
+        return readOnlyState(key) === true;
+    };
+}
+
+/**
+ * ETP-5537 — the escape hatch's real question: did the USER author this value?
+ *
+ * `userChangedKeysRef` alone cannot answer it. `handleChange` is the single entry point for
+ * both a user keystroke and a callout response applying a server-computed value
+ * (applyCalloutFieldUpdates calls it for every field in the response), so both land in the
+ * same set. A value a callout wrote is the server telling us what the field is worth — it is
+ * not the app deliberately forcing a value through, so it must not inherit the exemption.
+ *
+ * Confirmed empirically on purchase-order: selecting the vendor fires a callout whose response
+ * carries `priceIncludesTax` (a contract read-only, non-form field). It was marked user-changed,
+ * so it escaped the create exclusion, rode into the create POST, and — because the backend never
+ * echoes a read-only field back — left `editing` and `selected` permanently disagreeing about it.
+ * Every later PATCH then re-sent it and ETP-5347 answered 422 `read_only_field`, which is what
+ * stopped the confirm modal from opening.
+ *
+ * Deliberately kept SEPARATE from userChangedKeysRef rather than just not marking callout
+ * writes there: that set also PROTECTS values from being overwritten (mergeDefaultsPreservingUserEdits
+ * for a late /defaults response, and refreshHeaderTotals' merge). A callout-applied value needs that
+ * protection every bit as much as a typed one — dropping the mark would resurrect the
+ * defaults-clobbering class of bug (ETP-4741 / ETP-5190). Only the payload exemption changes.
+ */
+export function isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef) {
+    if (!userChangedKeysRef?.current?.has(key)) return false;
+    return !calloutAppliedKeysRef?.current?.has(key);
+}
+
+/**
+ * ETP-5537 — builds the create-time field-exclusion predicate that replaces the old
+ * per-window allowlist (`CONTACTS_PRECREATE_BILLING_FIELDS`).
+ *
+ * com.etendoerp.go PR 1220 (ETP-5347) made NeoServlet reject, at the REST write boundary,
+ * any field the target entity does not expose as writable — a static, intentional
+ * enforcement of the contract's own `readOnly`/`system` metadata (see the ticket: "REST
+ * writes must reject fields marked read-only"), not a bug to route around per-field.
+ * ETP-5345 will keep expanding writable CRUD surface after this, so a hand-maintained
+ * per-window allowlist would need a new entry for every future entity — this rule instead
+ * reads the SAME signal the frontend already has for every window: the fields each
+ * currently-mounted `EntityForm` registered for this record (`formFieldsRef` — see
+ * EntityForm.jsx's `displayFields`, which includes contract-declared readOnly fields for
+ * the default/section layouts, only stripping them under `layout: 'horizontal'` without a
+ * `section`).
+ *
+ * A key is excluded from the CREATE payload when:
+ *   1. it is NOT registered by any currently-mounted form for this record (it belongs to
+ *      an entity/tab that simply is not part of the screen yet — e.g. Contacts' "customer"/
+ *      "vendorCreditor" extension fields before the Financial tab / vendor toggle is ever
+ *      touched, or a billing-preference field configured only after header creation); OR
+ *   2. it IS registered, but evaluates read-only there (static `field.readOnly` or a
+ *      `field.readOnlyLogic` function — see `getReadOnly` in lib/requiredFields.js).
+ *
+ * The one deliberate escape hatch: `userChangedKeysRef` — handleChange marks a key there on
+ * ANY `onChange` call, including a call a custom panel makes on purpose to force a value
+ * through outside normal typing (e.g. Assets' currency-echo-on-create in
+ * AssetsConfigPanel.jsx). This function must never silently drop a value the app itself
+ * decided the record "changed", even if the backend rejects it anyway for a reason this
+ * function cannot see (a genuine contract/backend mismatch belongs to a separate fix, not a
+ * dropped write here).
+ *
+ * NOTE: this does NOT see a field marked read-only only through the `displayLogic.readOnly`
+ * object some custom panels pass as a render-time override (not stored on the field itself,
+ * e.g. AssetsDetailPanel's `readOnlyAll`) — such a field is treated as writable here unless
+ * it is also excluded by rule 1 or 2 above. This is a narrower net than the full render-time
+ * check, on purpose: it only has to be accurate enough to stop known-bad values, never to
+ * accidentally swallow a value the user can legitimately still edit.
+ */
+export function buildCreateFieldExclusion(formFieldsRef, editing, contractFields = null) {
+    const readOnlyState = buildRegisteredFieldReadOnly(formFieldsRef, editing, contractFields);
+    return (key, userChangedKeysRef, calloutAppliedKeysRef) => {
+        // ETP-5537: a callout-applied value is not user-authored — see isUserAuthoredKey.
+        if (isUserAuthoredKey(key, userChangedKeysRef, calloutAppliedKeysRef)) return false;
+        const state = readOnlyState(key);
+        // Rule 1 — not registered by any mounted form (create-side only, see buildPatchPayload).
+        if (state === undefined) return true;
+        // Rule 2 — registered, but read-only there.
+        return state;
+    };
 }
 
 export function buildSavePayload({
@@ -786,27 +942,94 @@ export function buildSavePayload({
     backendDefaultKeysRef,
     userChangedKeysRef,
     formFieldsRef,
+    calloutAppliedKeysRef,
+    contractFields,
 }) {
     if (!isNew && selected) {
-        return buildPatchPayload(editing, selected);
+        return buildPatchPayload(editing, selected, formFieldsRef, userChangedKeysRef, calloutAppliedKeysRef, contractFields);
     }
 
     const payload = {};
-    const isContactsBusinessPartnerCreate = entity === 'businessPartner'
-        && /\/contacts$/i.test(apiBaseUrl || '');
     const requiredFormKeys = new Set(
         [...formFieldsRef.current.values()].flat().filter(f => f.required).map(f => f.key),
     );
+    const isFieldExcludedByForm = buildCreateFieldExclusion(formFieldsRef, editing, contractFields);
+    const isFieldExcluded = (key) => isFieldExcludedByForm(key, userChangedKeysRef, calloutAppliedKeysRef);
 
     buildCreatePayload(
         editing,
         backendDefaultKeysRef,
         userChangedKeysRef,
         requiredFormKeys,
-        isContactsBusinessPartnerCreate,
+        isFieldExcluded,
         payload,
     );
     return payload;
+}
+
+/**
+ * ETP-5537 — network-level safety net for a read-only field the frontend's own filters missed.
+ *
+ * buildSavePayload's exclusions (buildCreateFieldExclusion / buildPatchFieldExclusion) are
+ * frontend-metadata-driven, and that metadata is only as complete as what the generator emitted
+ * into a mounted form's field list (`formFieldsRef`) or the window's declared field list
+ * (`contractFields`, DetailView's `gateFields` = `Form.fields`) — never the full contract. A
+ * field can be readOnly in `contract.json` yet absent from every generated form the frontend
+ * actually renders (a stale/orphaned generated form, a field the generator never emitted into
+ * any header form), in which case both filters see it as "unknown" rather than "read-only" and
+ * it still reaches the wire. That happened for real: `priceIncludesTax` is readOnly in
+ * `artifacts/purchase-order/contract.json` but the currently-imported `HeaderForm.jsx` never
+ * declares it at all — the only generated form that does (`OrderForm.jsx`) is an orphaned older
+ * artifact nothing imports.
+ *
+ * ETP-5347's 422 `read_only_field` response names the exact offending key with total certainty
+ * — it is the backend's own metadata, strictly more authoritative than anything the frontend can
+ * infer. And a field the backend refuses as read-only was never something the user needed
+ * persisted: pre-ETP-5347 that same value was silently discarded by the backend and the save
+ * still succeeded. So dropping exactly the field a 422 names and retrying reproduces that exact
+ * pre-ETP-5347 behavior, just reactively instead of preemptively — it can never guess a field to
+ * drop, only remove one the backend has just, unambiguously named.
+ *
+ * Deliberately NOT another rule inside buildSavePayload/buildPatchPayload/
+ * buildCreateFieldExclusion: those stay the first line of defense (they avoid the round-trip
+ * entirely for every case they already cover); this is the network-level fallback for whatever
+ * escapes them, and it needs no per-field or per-window logic to stay safe.
+ *
+ * `maxAttempts` caps retries (default 5) so a backend that never stops naming new read-only
+ * fields cannot loop forever — on exhaustion the last (still-failing) response is returned for
+ * the normal error path to handle, same as any other unretriable failure.
+ */
+export async function saveWithReadOnlyFieldRetry(apiFetch, url, method, payload, { maxAttempts = 5 } = {}) {
+    let currentPayload = payload;
+    let lastRes = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const body = JSON.stringify(currentPayload);
+        const res = await apiFetch(url, { method, body, baseUrl: '' });
+        lastRes = res;
+        if (res.ok) return res;
+        let rejectedField = null;
+        try {
+            const parsed = await res.clone().json();
+            if (res.status === 422 && parsed?.error === 'read_only_field' && typeof parsed?.field === 'string') {
+                rejectedField = parsed.field;
+            }
+        } catch {
+            // Not JSON, or the body was already consumed — nothing retriable to learn here.
+        }
+        // Only retry when the named field is actually present in what we just sent — otherwise
+        // this isn't the case we exist to fix (a different 422 shape, a stale-record conflict,
+        // a validation error), and the response is handed back as-is for the normal error path.
+        if (!rejectedField || !Object.prototype.hasOwnProperty.call(currentPayload, rejectedField)) {
+            return res;
+        }
+        // Drop via a copy + delete rather than rest-destructuring: an unused binding for the
+        // discarded key (e.g. `_dropped`) trips Sonar's S1481 — Sonar doesn't honor ESLint's
+        // underscore-ignore convention, so the two engines disagree on this idiom.
+        const nextPayload = { ...currentPayload };
+        delete nextPayload[rejectedField];
+        currentPayload = nextPayload;
+    }
+    return lastRes;
 }
 
 /**
@@ -884,9 +1107,9 @@ export function getSaveSuccessMessage(isNew, ui) {
     return isNew ? ui('recordCreated') : ui('recordSaved');
 }
 
-export function buildCreatePayload(editing, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, payload) {
+export function buildCreatePayload(editing, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, payload) {
     for (const [key, value] of Object.entries(editing)) {
-        if (shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isContactsBusinessPartnerCreate, editing)) continue;
+        if (shouldSkipPayloadField(key, value, backendDefaultKeysRef, userChangedKeysRef, requiredFormKeys, isFieldExcluded, editing)) continue;
 
         payload[key] = value;
     }
@@ -1120,6 +1343,10 @@ export function useEntity(entity, childEntity, {
     const backendDefaultKeysRef = useRef(new Set());
     // Fields explicitly changed by the user (via handleChange) in the current new-record session.
     const userChangedKeysRef = useRef(new Set());
+    // ETP-5537: of the keys marked above, the subset whose value was written by a CALLOUT
+    // RESPONSE rather than by the user. `handleChange` is the single entry point for both, so
+    // without this the two are indistinguishable — see handleChange's `origin` option.
+    const calloutAppliedKeysRef = useRef(new Set());
     // `initialData` behind a ref so `handleNew` keeps a stable identity. It is read only at
     // the moment handleNew runs, and putting it in that callback's dependency array would
     // rebuild handleNew on every render for any caller passing an object literal — which
@@ -1571,6 +1798,23 @@ export function useEntity(entity, childEntity, {
         setEditing(prev => (prev ? { ...prev, ...patch } : prev));
     }, []);
 
+    // ETP-5255 — adopt header values that ANOTHER write path has already persisted (a panel
+    // that autosaves its own field, e.g. the contacts credit-limit stepper). Written into BOTH
+    // `selected` and `editing`, so the field is not dirty: it is saved, not pending.
+    //
+    // Routing such a value through `handleChange` instead marked it dirty, which kept "Save"
+    // enabled after the panel had already stored it — and made "Save" re-send it. Clicked while
+    // the panel's NEXT autosave was still in flight, that re-send carried the superseded value;
+    // the per-record write chain queued it behind the autosave and sent it with the refreshed
+    // `updated`, so the server accepted it and silently reverted the user's last edit (QA F-1).
+    // Unlike `handleChange`, this deliberately fires no callout and does not touch
+    // `userChangedKeysRef`: nothing here is a user edit awaiting a save.
+    const applyPersistedFields = useCallback((patch) => {
+        if (!patch || typeof patch !== 'object') return;
+        setSelected(prev => (prev ? { ...prev, ...patch } : prev));
+        setEditing(prev => (prev ? { ...prev, ...patch } : prev));
+    }, []);
+
     // ETP-4029 — narrow escape hatch for refreshHeaderTotals's userChangedKeysRef
     // protection above, scoped to ONE known cross-surface-sync case (see call site
     // in DetailView.jsx: the Exchange Rates secondary tab on sales-invoice /
@@ -1598,6 +1842,7 @@ export function useEntity(entity, childEntity, {
     // tab's PATCH response is), never to paper over an unrelated staleness bug.
     const clearUserChangedKey = useCallback((key) => {
         userChangedKeysRef.current.delete(key);
+        calloutAppliedKeysRef.current.delete(key);
     }, []);
 
     const handleSelect = useCallback((row, { force = false } = {}) => {
@@ -1608,6 +1853,7 @@ export function useEntity(entity, childEntity, {
         // buildCreatePayload (new records), not the existing-record PATCH diff.
         neutralizePendingDefaults();
         userChangedKeysRef.current = new Set();
+        calloutAppliedKeysRef.current = new Set();
         // ETP-5034: a record is being handed to us directly (list row click) — any
         // not-found state from a previous route is stale, and an in-flight fetchById for the
         // PREVIOUS record must not land on top of the one we are selecting now.
@@ -1639,6 +1885,7 @@ export function useEntity(entity, childEntity, {
         // and no new race handling is needed. It also keeps `shouldSkipPayloadField` from
         // dropping a seeded legacy-looking FK id out of the POST payload.
         userChangedKeysRef.current = new Set(Object.keys(seed));
+        calloutAppliedKeysRef.current = new Set();
         setFieldErrors({});
         // ETP-5034: the creation route must never inherit a previous route's not-found state,
         // nor let an in-flight fetchById resolve into the empty creation form.
@@ -1718,7 +1965,17 @@ export function useEntity(entity, childEntity, {
         }
     }, [apiBaseUrl, entity, apiFetch]);
 
-    const handleChange = useCallback((field, value) => {
+    /**
+     * ETP-5537 — `origin: 'callout'` marks this write as "the server told us what this field is
+     * worth", not "the user edited this field". A callout-applied value still counts as changed
+     * for every PROTECTIVE use of userChangedKeysRef (it must not be clobbered by a late
+     * /defaults response or by refreshHeaderTotals), but it must NOT inherit the payload
+     * escape hatch — see buildCreateFieldExclusion. Any later write without the flag is a
+     * genuine user edit and reclaims the key.
+     */
+    const handleChange = useCallback((field, value, { origin } = {}) => {
+        if (origin === 'callout') calloutAppliedKeysRef.current.add(field);
+        else calloutAppliedKeysRef.current.delete(field);
         userChangedKeysRef.current.add(field);
         setEditing(prev => ({ ...prev, [field]: value }));
         // ETP-3894: clear the field-level error as soon as the user touches the field.
@@ -1785,6 +2042,7 @@ export function useEntity(entity, childEntity, {
             // The changed-key set is dropped too: those keys are no longer the user's edits, and
             // leaving them would keep scoping format validation to fields nobody touched.
             userChangedKeysRef.current.clear();
+            calloutAppliedKeysRef.current.clear();
             setSaveError(null);
             setFieldErrors({});
             // Belt and braces: sonner already dismisses a toast when its action is clicked, but
@@ -1911,13 +2169,16 @@ export function useEntity(entity, childEntity, {
             backendDefaultKeysRef,
             userChangedKeysRef,
             formFieldsRef,
+            calloutAppliedKeysRef,
+            contractFields,
         });
-        // NEO Headless expects flat field values — NeoServlet handles wrapping for JsonDataService
-        const body = JSON.stringify(payload);
         try {
             // getUrl already returns the full ${apiBaseUrl}/... path, so baseUrl: ''
-            // keeps it from being prefixed a second time.
-            const res = await apiFetch(url, { method, body, baseUrl: '' });
+            // keeps it from being prefixed a second time. NEO Headless expects flat field
+            // values — NeoServlet handles wrapping for JsonDataService. saveWithReadOnlyFieldRetry
+            // builds the JSON body itself per attempt (ETP-5537): a read-only field the frontend
+            // filters missed gets dropped and the save retried once the backend names it.
+            const res = await saveWithReadOnlyFieldRetry(apiFetch, url, method, payload);
             if (res.ok) {
                 const data = await res.json();
                 const saved = normalizeRecord(data?.response?.data?.[0] ?? data, entity);
@@ -2436,7 +2697,7 @@ export function useEntity(entity, childEntity, {
         isValid, missingRequired, missingRequiredFields,
         fieldErrors, registerFields,
         handleSelect, handleNew, handleChange, handleSave, handleSaveAndProcess, handleDelete, handleProcess,
-        handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved,
+        handleAddChild, handleUpdateChild, handleDeleteChild, primeSaved, applyPersistedFields,
         refresh, fetchById, fetchChildren, fetchChildDefaults, loadMore, refreshHeaderTotals, clearUserChangedKey,
         invalidateEntityCache,
         // ETP-5366: exposed for the callers that write a child collection OUTSIDE this hook

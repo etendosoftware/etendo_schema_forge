@@ -195,10 +195,12 @@ describe('useOcrFlow — full flow', () => {
         linesFailed: 0,
         unresolved: ['Widget X'],
       });
-      // ok = 1 header + 2 lines; unmatched products surface as soft failures.
+      // ETP-5289 — ok counts the 2 lines only, not the header; a line the user skipped in
+      // "Match products" is omitted, not failed.
       expect(H.showResult).toHaveBeenCalledWith({
-        ok: 3,
-        failed: [{ reason: 'product_not_found: Widget X' }],
+        ok: 2,
+        omitted: [{ reason: 'product_not_found: Widget X' }],
+        failed: [],
       });
       expect(onRefresh).toHaveBeenCalledWith('INV-1');
       expect(screen.getByTestId('loading')).toHaveTextContent('false');
@@ -298,7 +300,8 @@ describe('useOcrFlow — full flow', () => {
       await user.click(await screen.findByTestId('review-cancel'));
 
       await waitFor(() => expect(readResult()).toEqual({ committed: false, cancelled: true }));
-      expect(H.showResult).toHaveBeenCalledWith({ ok: 0, failed: [{ reason: 'cancelled_by_user' }] });
+      // ETP-5289 — cancelling is the user's choice, not a failure: no toast.
+      expect(H.showResult).not.toHaveBeenCalled();
       expect(H.buildBatch).not.toHaveBeenCalled();
       expect(onRefresh).not.toHaveBeenCalled();
       expect(screen.getByTestId('loading')).toHaveTextContent('false');

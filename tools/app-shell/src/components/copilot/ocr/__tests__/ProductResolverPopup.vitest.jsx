@@ -251,7 +251,7 @@ describe('ProductResolverPopup', () => {
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
     await user.click(screen.getByText('ocrProductSkip'));
     await waitFor(() => {
-      expect(screen.getByText('ocrProductCreateNew')).toBeInTheDocument();
+      expect(screen.getByText('createProduct')).toBeInTheDocument();
     });
   });
 
@@ -323,8 +323,8 @@ describe('ProductResolverPopup', () => {
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} />);
     await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('ocrProductCreateNew')).toBeInTheDocument());
-    await user.click(screen.getByText('ocrProductCreateNew'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
 
     expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('ocrProductCreateDefaultsFailed')).toBeInTheDocument());
@@ -369,8 +369,8 @@ describe('ProductResolverPopup', () => {
 
     render(<ProductResolverPopup {...defaultProps} unmatched={unmatched} onSubmit={onSubmit} />);
     await user.click(screen.getByText('ocrProductSkip'));
-    await waitFor(() => expect(screen.getByText('ocrProductCreateNew')).toBeInTheDocument());
-    await user.click(screen.getByText('ocrProductCreateNew'));
+    await waitFor(() => expect(screen.getByText('createProduct')).toBeInTheDocument());
+    await user.click(screen.getByText('createProduct'));
 
     expect(await screen.findByText('ocrProductCreateTitle')).toBeInTheDocument();
     expect(screen.getAllByDisplayValue('Widget A').length).toBeGreaterThan(0);
@@ -399,5 +399,27 @@ describe('ProductResolverPopup', () => {
       taxCategory: 'tax-1',
     });
     expect(JSON.parse(postCall[1].body)).not.toHaveProperty('id');
+  });
+
+  // ETP-5289 Bug 6 — as an `absolute` child the list was clipped by the popup's scrolling body.
+  it('renders the product dropdown outside the popup body so it can overlap it', async () => {
+    const user = userEvent.setup();
+    render(<ProductResolverPopup {...defaultProps} unmatched={[{ idx: 0, description: 'Widget A' }]} />);
+
+    const trigger = screen.getByText('ocrProductSkip');
+    await user.click(trigger);
+
+    const input = await screen.findByPlaceholderText('ocrProductSearchPlaceholder');
+    const popupBody = trigger.closest('.overflow-y-auto');
+    expect(popupBody).not.toBeNull();
+    expect(popupBody.contains(input)).toBe(false);
+  });
+
+  // ETP-5289 Bug 5 — the save buttons used the info-banner tint and read as disabled.
+  it('renders the continue button with the primary button style', () => {
+    render(<ProductResolverPopup {...defaultProps} />);
+    const continueBtn = screen.getByText('continue').closest('button');
+    expect(continueBtn.className).toContain('bg-primary');
+    expect(continueBtn.className).not.toContain('bg-status-info');
   });
 });

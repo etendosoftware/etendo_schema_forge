@@ -6,6 +6,7 @@
 // Mock import.meta.env before the module loads
 vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid-1234' });
 
+import { registerApiSession, resetApiSessionForTests } from '@etendosoftware/app-shell-core/auth/api';
 import {
   detectBaseUrl,
   buildCopilotUrl,
@@ -28,6 +29,8 @@ import {
   deleteConversation,
   restoreConversation,
   permanentDeleteConversation,
+  createConversation,
+  appendConversationMessages,
 } from '../copilotApi.js';
 
 // ---------------------------------------------------------------------------
@@ -490,6 +493,47 @@ describe('Endpoint helpers', () => {
     const [url] = globalThis.fetch.mock.calls[0];
     expect(url).toContain('permanentDeleteConversation');
   });
+
+  it('getConversations / getArchivedConversations send no app_id when none is given', async () => {
+    mockOk([]);
+    await getConversations('tk');
+    await getArchivedConversations('tk', null);
+    const [listUrl] = globalThis.fetch.mock.calls[0];
+    const [archivedUrl] = globalThis.fetch.mock.calls[1];
+    expect(listUrl).toMatch(/\/sws\/copilot\/conversations$/);
+    expect(archivedUrl).toMatch(/\/sws\/copilot\/archivedConversations$/);
+  });
+
+  it('createConversation POSTs title and external_id', async () => {
+    mockOk({ success: true, conversation_id: 'X1', created: true });
+    const result = await createConversation('tk', { title: 'Hi', external_id: 'X1' });
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toMatch(/\/sws\/copilot\/createConversation$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body)).toEqual({ title: 'Hi', external_id: 'X1' });
+    expect(result.created).toBe(true);
+  });
+
+  it('appendConversationMessages POSTs the whole batch in one request', async () => {
+    mockOk({ success: true, saved: 2, skipped: 0 });
+    const messages = [
+      { role: 'user', text: 'a', external_id: 'm1' },
+      { role: 'assistant', text: 'b', external_id: 'm2' },
+    ];
+    await appendConversationMessages('tk', { conversation_id: 'X1', messages });
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toMatch(/\/sws\/copilot\/appendConversationMessages$/);
+    expect(JSON.parse(init.body)).toEqual({ conversation_id: 'X1', messages });
+  });
+
+  it('createConversation surfaces a backend error', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ error: 'external_id is not available' }),
+    });
+    await expect(createConversation('tk', { external_id: 'X1' })).rejects.toThrow('external_id is not available');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -681,5 +725,39 @@ describe('detectBaseUrl — path variations', () => {
     const result = detectBaseUrl();
     // Falls back to import.meta.env.VITE_API_BASE || ''
     expect(typeof result).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 401 is a domain answer for /sws/copilot/*, never an expired session
+// ---------------------------------------------------------------------------
+
+describe('copilotRequest — 401 does not log the user out', () => {
+  const onUnauthorized = vi.fn();
+
+  beforeEach(() => {
+    onUnauthorized.mockClear();
+    registerApiSession({ getToken: () => 'live-token', onUnauthorized, baseUrl: '' });
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: { get: () => 'text/html' },
+      text: async () => '',
+    });
+  });
+
+  afterEach(() => {
+    resetApiSessionForTests();
+  });
+
+  it.each([
+    ['getConversations', () => getConversations(undefined)],
+    ['getArchivedConversations', () => getArchivedConversations(undefined)],
+    ['createConversation', () => createConversation(undefined, { external_id: 'X' })],
+    ['appendConversationMessages', () => appendConversationMessages(undefined, { conversation_id: 'X', messages: [] })],
+    ['getAssistants (legacy)', () => getAssistants(undefined)],
+  ])('%s rejects with the status and never calls onUnauthorized', async (_name, call) => {
+    await expect(call()).rejects.toMatchObject({ status: 401, message: expect.stringContaining('401') });
+    expect(onUnauthorized).not.toHaveBeenCalled();
   });
 });
