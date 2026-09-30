@@ -649,16 +649,16 @@ run_e2e_suite() {
   local log="$REPO_DIR/tmp/pre-push/e2e-${suite}.log"
   mkdir -p "$REPO_DIR/tmp/pre-push"
 
-  # Integration specs share one live Etendo/Postgres tenant sequentially (workers:1,
-  # see playwright.config.js) — shared-state flakiness there is expected, and CI already
-  # gets 1 free retry (retries: process.env.CI ? 1 : 0). Local pre-push had 0, so a
-  # single flaky spec failed the whole push with no cushion. Mocked specs are fully
-  # isolated per-page fakes — a flake there is a real bug, so they keep the default (0
-  # locally). E2E_RETRIES, if already exported by the caller, always wins.
-  local retries="${E2E_RETRIES:-}"
-  if [ -z "$retries" ] && [ "$suite" = "integration" ]; then
-    retries=1
-  fi
+  # Mirror CI exactly. run-e2e-full.sh exports CI=true and playwright.config.js
+  # resolves `retries: process.env.CI ? 1 : 0`, so the pipeline grants BOTH suites
+  # one retry. This gate used to give mocked 0 on the theory that a mocked flake is
+  # always a real bug. In practice that made the gate stricter than the pipeline: a
+  # flake CI absorbs blocked the push instead, and the only way through was exporting
+  # E2E_RETRIES=1 by hand on every attempt. A gate that rejects what CI would accept
+  # is a false negative, so both suites now get the same single retry CI gives them.
+  # Flakes still surface: the summary reports them per suite by name.
+  # E2E_RETRIES, if already exported by the caller, always wins.
+  local retries="${E2E_RETRIES:-1}"
 
   echo "==> Playwright E2E — ${label}..."
   start=$SECONDS
