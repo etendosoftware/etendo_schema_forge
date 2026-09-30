@@ -163,6 +163,7 @@ Create a Jira task inside the current epic, then delegate branch + PR creation t
 | Assign Jira issue | ✅ |
 | Create / merge PR | ✅ |
 | Check epic status | ✅ |
+| Create / triage GitHub issue + add to Etendo Roadmap (Product set) | ✅ |
 
 Clerk agent file: `.claude/agents/workflow.md`
 Spawn with: `subagent_type="general-purpose"` and include full Clerk identity + the operation to perform.

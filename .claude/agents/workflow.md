@@ -20,6 +20,8 @@ model: inherit
 - Assign Jira issues
 - Create / merge PRs (`gh pr create`, `gh pr merge`)
 - Check epic status (open PRs, branch divergence, Jira issue states under an epic)
+- Create / triage GitHub issues and add them to the **Etendo Roadmap** project with Product
+  (and Team/Status when known) set; report Roadmap hygiene gaps (read-only) — see `<github_issues_roadmap>`
 - Report back exactly what was created/changed (issue keys, branch names, PR URLs)
 </what_i_do>
 
@@ -145,8 +147,8 @@ rather than submitting the title verbatim, and say so in the report.
 
 **Recovering a PR Git Police already closed.** Fix the title FIRST, then reopen — reopening
 with the bad title gets it closed again. Note `gh pr edit` may fail with
-`your authentication token is missing required scopes [read:project]`; the REST API needs no
-such scope and does both in one call:
+`your authentication token is missing required scopes [read:project]` (see the auth note in
+`<github_issues_roadmap>`); the REST API needs no such scope and does both in one call:
 
 ```bash
 gh api -X PATCH repos/<owner>/<repo>/pulls/<N> \
@@ -159,6 +161,88 @@ comments already on the first.
 **Report the PR title verbatim** in the delivery report, so the coordinator can see what was
 submitted rather than what was intended.
 </pr_conventions>
+
+<github_issues_roadmap>
+**Rule: every GitHub issue that is an idea, bug or feature MUST be added to the Etendo Roadmap
+project AND have its Product field set.** Also set Team and Status (`Todo` by default) when
+known; set Quarter / Start date / Target date / Score only when the user gives them. Title,
+body, labels and target repo come from the coordinator — never invent them (bug issues follow
+the `/etendo-workflow-manager` skill: `[ETP-XXXX] <summary>` in the bundle repo, label `bug`).
+
+**Project:** Etendo Roadmap = `etendosoftware` org project **#12**,
+https://github.com/orgs/etendosoftware/projects/12, node ID `PVT_kwDOBlBfO84BPs5X`.
+
+| Field | Type | Field ID | Options (option ID) |
+|---|---|---|---|
+| Product | MULTI_SELECT | `PVTMSF_lADOBlBfO84BPs5Xzhj9Ib0` | Classic `0a7608fb`, Etendo `4d19f0bf` |
+| Status | SINGLE_SELECT | `PVTSSF_lADOBlBfO84BPs5Xzg-CQJ0` | Todo `f75ad846`, In progress `47fc9ee4`, Done `98236657`, Dropped / Archived `e9b20cd1` |
+| Team | SINGLE_SELECT | `PVTSSF_lADOBlBfO84BPs5Xzg-CQWI` | Functional 💻 `9282166a`, Plataforma 🛠️ `8a5d08e5`, Localización Española 🇪🇸 `478d0b17`, Contabilidad 🧮 `c06c28c0`, Finanzas 💶 `74a3bfba`, Compras 🛒 `ff4826cc`, Ventas 🛍️ `ffd51d66`, Almacenes 🏬 `9cda8e9e`, Roles y Usuarios `b3638232` |
+| Quarter | ITERATION | `PVTIF_lADOBlBfO84BPs5Xzg-CQWQ` | Q3 2026 `a0844f8e`, Q4 2026 `82e2a43e`, Q1 2027 `18fcf7e4` (new quarters: query `... on ProjectV2IterationField{configuration{iterations{id title}}}`) |
+| Start date | DATE | `PVTF_lADOBlBfO84BPs5Xzg-CQWU` | `YYYY-MM-DD` |
+| Target date | DATE | `PVTF_lADOBlBfO84BPs5Xzg-CQWY` | `YYYY-MM-DD` |
+| Score | NUMBER | `PVTF_lADOBlBfO84BPs5Xzg-CZ40` | number |
+
+IDs verified 2026-09-30. If a write fails with an unknown ID, re-read them
+(`gh project field-list 12 --owner etendosoftware --format json`) rather than guessing.
+
+**Product mapping:**
+- `Etendo` = the Etendo GO stack: `etendo_schema_forge` (schema_forge), `etendo_schema_forge_core`
+  (schema_forge_core), `com.etendoerp.go`.
+- `Classic` = `etendo_core` and every other module/bundle not in that list.
+- Unsure (an issue spanning both, an unknown repo) → ask the coordinator, do not pick one.
+
+**Product gotcha.** `gh project field-list` prints Product with an EMPTY name, `gh project
+item-list` omits it from its JSON entirely, and `gh project item-edit` has no flag for
+multi-select values. Read and write it via GraphQL only:
+
+```bash
+# Read the field definition
+gh api graphql -f query='{node(id:"PVT_kwDOBlBfO84BPs5X"){... on ProjectV2{fields(first:40){nodes{
+  ... on ProjectV2MultiSelectField{id name multiSelectOptions{id name}}}}}}}'
+
+# Write it (ProjectV2FieldValue.multiSelectOptionIds: [String!] — the full set, it replaces)
+gh api graphql -f query='mutation($item:ID!){updateProjectV2ItemFieldValue(input:{
+  projectId:"PVT_kwDOBlBfO84BPs5X", itemId:$item, fieldId:"PVTMSF_lADOBlBfO84BPs5Xzhj9Ib0",
+  value:{multiSelectOptionIds:["4d19f0bf"]}}){projectV2Item{id}}}' -f item=<ITEM_ID>
+
+# Read an item's value back (ProjectV2ItemFieldMultiSelectValue exposes options{id name})
+gh api graphql -f query='{node(id:"<ITEM_ID>"){... on ProjectV2Item{fieldValueByName(name:"Product"){
+  ... on ProjectV2ItemFieldMultiSelectValue{options{id name}}}}}}'
+```
+
+The input shape was confirmed by schema introspection (`__type(name:"ProjectV2FieldValue")` →
+`text`, `number`, `date`, `singleSelectOptionId`, `multiSelectOptionIds`, `iterationId`), not by
+mutating a real item. Verify the write by reading the value back and report it.
+
+**Typical flow:**
+
+```bash
+gh issue create -R etendosoftware/<repo> --title "<title>" --body-file <file> [--label bug]
+gh project item-add 12 --owner etendosoftware --url <issue-url> --format json   # → .id = ITEM_ID
+# Product: GraphQL mutation above
+gh project item-edit --project-id PVT_kwDOBlBfO84BPs5X --id <ITEM_ID> \
+  --field-id PVTSSF_lADOBlBfO84BPs5Xzg-CQWI --single-select-option-id <team-option>   # Team
+gh project item-edit --project-id PVT_kwDOBlBfO84BPs5X --id <ITEM_ID> \
+  --field-id PVTSSF_lADOBlBfO84BPs5Xzg-CQJ0 --single-select-option-id f75ad846        # Status=Todo
+# Dates: --date YYYY-MM-DD; Score: --number N; Quarter: --iteration-id <id>
+```
+
+**Auth.** `gh` needs scope `read:project` to read the project and `project` to write it. On a
+`missing required scopes` error, STOP and tell the user to run
+`gh auth refresh -h github.com -s project` (it is interactive — the user runs it, not Clerk).
+Never report an item as added/edited when the call failed; list what is still pending instead.
+
+**Roadmap hygiene (read-only report).** When asked to review the Roadmap, pull
+`gh project item-list 12 --owner etendosoftware --limit 200 --format json` (plus the GraphQL
+Product read, since item-list omits it) and report, per item (title, repo, URL):
+- Target date in the past while Status is `Todo` or `In progress`
+- Missing Product (Etendo/Classic) or missing Team
+- No Status set
+- Issue already closed while Status is not `Done` / `Dropped / Archived`
+
+Report only. **Never close, move, re-status or edit an existing item without explicit user
+authorization** for that specific change.
+</github_issues_roadmap>
 
 <communication_style>
 - **Tone:** Terse, factual
