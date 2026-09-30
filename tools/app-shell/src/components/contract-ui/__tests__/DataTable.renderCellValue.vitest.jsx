@@ -213,25 +213,32 @@ describe('renderCellValue — status-cell', () => {
 // ────────────────────────────────────────────────────────────────────────────
 // percent-cell
 // ────────────────────────────────────────────────────────────────────────────
+// Test id set on <ProgressCircle> inside renderPercentCell (arc id is `<id>-arc`).
+const PERCENT_CELL_TEST_ID = 'ProgressCircle__a91437';
+
 describe('renderCellValue — percent-cell', () => {
   const columns = [{ key: 'progress', label: 'Progress', type: 'percent' }];
 
-  it('renders 0% for value 0 with semantic muted styling', () => {
+  it('renders 0% for value 0 with foreground label and no arc', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 0 }]);
-    expect(screen.getByText('0%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-muted')).toBeTruthy();
+    expect(screen.getByText('0%')).toHaveClass('text-foreground');
+    // Guard against a vacuous null: the wrapper renders, only the arc is absent.
+    expect(container.querySelector(`[data-testid="${PERCENT_CELL_TEST_ID}"]`)).not.toBeNull();
+    expect(container.querySelector(`[data-testid="${PERCENT_CELL_TEST_ID}-arc"]`)).toBeNull();
   });
 
-  it('renders partial values with semantic warning styling', () => {
+  it('renders partial values with foreground (black) arc and label', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 45 }]);
-    expect(screen.getByText('45%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-status-warning')).toBeTruthy();
+    expect(screen.getByText('45%')).toHaveClass('text-foreground');
+    expect(container.querySelector(`[data-testid="${PERCENT_CELL_TEST_ID}-arc"]`)).toHaveClass('stroke-foreground');
+    expect(container.querySelector('.bg-status-warning')).toBeNull();
   });
 
-  it('renders >= 100 with semantic success styling', () => {
+  it('renders >= 100 with green arc, foreground label and the real value', () => {
     const { container } = renderTable(columns, [{ id: '1', progress: 120 }]);
-    expect(screen.getByText('120%')).toBeInTheDocument();
-    expect(container.querySelector('.bg-status-success')).toBeTruthy();
+    expect(screen.getByText('120%')).toHaveClass('text-foreground');
+    expect(container.querySelector(`[data-testid="${PERCENT_CELL_TEST_ID}-arc"]`))
+      .toHaveClass('stroke-[hsl(var(--status-done-badge))]');
   });
 
   it('treats NaN as 0', () => {

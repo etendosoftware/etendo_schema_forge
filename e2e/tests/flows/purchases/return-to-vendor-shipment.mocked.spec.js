@@ -896,7 +896,11 @@ test.describe('return-to-vendor-shipment — import from receipt modal', () => {
     //  b) "action-import-receipt-empty-state" testid in LinesEmptyState
     // Both open ImportFromReceiptModal with targetId + bpId.
     // The empty-state renders because lines are empty (mock returns []).
-    const emptyStateBtn = page.getByRole('button', { name: /albarán|añadir desde|importar/i }).first();
+    // ETP-5504: scoped to the detail view — the TopBar breadcrumb now renders the window
+    // level ("Albarán de Devolución") as a button, and an unscoped `.first()` clicked it
+    // and navigated back to the list instead of opening the import modal.
+    const emptyStateBtn = page.getByTestId('detail-view')
+      .getByRole('button', { name: /albarán|añadir desde|importar/i }).first();
     await emptyStateBtn.waitFor({ state: 'visible', timeout: 8_000 });
     await emptyStateBtn.click();
 

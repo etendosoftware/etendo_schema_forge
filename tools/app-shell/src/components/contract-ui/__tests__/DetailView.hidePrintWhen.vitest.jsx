@@ -253,3 +253,14 @@ describe('DetailView — hidePrintWhen (ETP-4714)', () => {
     expect(screen.queryByTestId('Printer__fa3275')).not.toBeInTheDocument();
   });
 });
+
+// ETP-5205 (QA pasada 1, decision D1) — printing only exposes data the role can already read,
+// so the detail Print button stays under the runtime Solo-Lectura tier. Guard against a later
+// "fix" that hides it together with the write actions.
+describe('DetailView — Print under the Solo-Lectura tier (ETP-5205 D1)', () => {
+  it('keeps the Print button when window.readOnly (runtime tier) is true', () => {
+    mockHook.editing = { id: '123', documentNo: 'SO-001', documentStatus: 'CO', processed: true };
+    renderDetailView({ window: { readOnly: true } });
+    expect(screen.getByTestId('action-document-print')).toBeInTheDocument();
+  });
+});

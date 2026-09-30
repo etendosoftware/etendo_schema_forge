@@ -20,6 +20,7 @@ import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialo
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
+import { installErrorTranslator } from './i18n/errorTranslator.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
@@ -426,6 +427,11 @@ export default function App() {
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
   const { dictionaries, renderedLocale } = useLocaleDictionaries(locale, coreLoaders);
+  // ETP-5424 — core builds a NetworkError's message through this translator, so a dropped
+  // connection reads in the rendered locale at every call site that shows `err.message`.
+  // The message is resolved when the error is built, which is always after a request settles,
+  // so this effect is in place before any request of the same commit can fail.
+  useEffect(() => installErrorTranslator(dictionaries[renderedLocale]), [dictionaries, renderedLocale]);
 
   // ETP-5022 — changing the language must reload the page. Translated reference data
   // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
