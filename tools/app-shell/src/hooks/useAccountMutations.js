@@ -8,9 +8,9 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  *
  * ETP-4239: the spec is a generic W (CRUD) spec — standard REST verbs against
  * the `account` header entity, validated/enriched server-side by the
- * `financialAccountHeaderHandler` pre-hook (country derived from the IBAN when the caller sends
- * none — ETP-4896 lets a caller-supplied country win instead — default matching algorithm, name
- * uniqueness, archive guard):
+ * `financialAccountHeaderHandler` pre-hook (country required on create for every account type
+ * and never derived from the IBAN — ETP-5473 —, IBAN/country pair check, default matching
+ * algorithm, name uniqueness, archive guard):
  *   - createAccount(payload)     → POST   /sws/neo/financial-account/account
  *   - updateAccount(id, payload) → PUT    /sws/neo/financial-account/account/{id}
  *   - archiveAccount(id)         → PATCH  /sws/neo/financial-account/account/{id} {active:false}

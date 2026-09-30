@@ -201,9 +201,12 @@ export default function OcrSidePanel(props) {
   const location = useLocation();
   const ocrDocType = matchOcrDocType(location.pathname);
 
+  // ETP-5289 — reserve the scrollbar's gutter. The PDF preview fits its page to this box's
+  // width, so a scrollbar that came and went resized the page, the resized page toggled the
+  // scrollbar again, and react-pdf redrew the canvas every ~250 ms: the "flicker" on Extract.
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         <FileTab {...props} docTypeId={ocrDocType?.id} data-testid="FileTab__c851a1" />
       </div>
     </div>

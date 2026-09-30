@@ -189,7 +189,7 @@ describe('applyCalloutFieldUpdates', () => {
       a,
     );
     expect(a.appliedFields.get('warehouse')).toBe('WH1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 
   it('skips an empty callout value when the field already has a user value', () => {
@@ -235,7 +235,7 @@ describe('applyCalloutFieldUpdates', () => {
       a,
     );
     expect(a.appliedFields.get('warehouse')).toBe('WH1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 
   it('emits key$_identifier when entry._identifier is present', () => {
@@ -244,7 +244,7 @@ describe('applyCalloutFieldUpdates', () => {
       { warehouse: { value: 'WH1', _identifier: 'Main Warehouse' } },
       a,
     );
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
     expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse$_identifier', 'Main Warehouse');
   });
 
@@ -255,7 +255,7 @@ describe('applyCalloutFieldUpdates', () => {
       a,
     );
     expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 
   // handleEntryIdentifierChange's `entry.value && api?.selectors` branch (ETP-4706):
@@ -294,7 +294,7 @@ describe('applyCalloutFieldUpdates', () => {
         a,
       );
       expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
     });
 
     it('does not emit an identifier when the selector matches but no catalog option has that id', () => {
@@ -305,7 +305,7 @@ describe('applyCalloutFieldUpdates', () => {
         a,
       );
       expect(a.hook.handleChange).toHaveBeenCalledTimes(1);
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
     });
   });
 });
@@ -373,7 +373,7 @@ describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
     );
 
     expect(a.appliedFields.get('warehouse')).toBe('DEFAULT_WH');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'DEFAULT_WH', { origin: 'callout' });
     expect(fieldGenerationRef.current.warehouse).toBe(2);
   });
 
@@ -404,7 +404,7 @@ describe('applyCalloutFieldUpdates — ETP-4772 stale response guard', () => {
       a,
     );
     expect(a.appliedFields.get('warehouse')).toBe('WH1');
-    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1');
+    expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', 'WH1', { origin: 'callout' });
   });
 });
 
@@ -666,7 +666,7 @@ describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write
         // lets an intentional clear through when there is nothing to protect.
         expect(a.appliedFields.has('warehouse')).toBe(true);
         expect(a.appliedFields.get('warehouse')).toBe(emptyValue);
-        expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', emptyValue);
+        expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', emptyValue, { origin: 'callout' });
         // ...but the generation must stand still, or every older in-flight
         // response for this field is silently dropped as stale (ETP-5190).
         expect(fieldGenerationRef.current.warehouse).toBe(0);
@@ -683,7 +683,7 @@ describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write
 
       applyCalloutFieldUpdates({ partnerAddress: { value: '' } }, a);
 
-      expect(a.hook.handleChange).toHaveBeenCalledWith('partnerAddress', '');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('partnerAddress', '', { origin: 'callout' });
       expect(fieldGenerationRef.current.partnerAddress).toBeUndefined();
     });
   });
@@ -833,7 +833,7 @@ describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write
 
       applyCalloutFieldUpdates({ warehouse: { value: '' } }, a);
 
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '', { origin: 'callout' });
     });
 
     it('does not bump the generation for an empty answer even without generation tracking wired', () => {
@@ -841,7 +841,7 @@ describe('applyCalloutFieldUpdates / applyOneComboEntry — ETP-5190 empty write
       // must not throw and must still apply the empty write.
       const a = makeArgs({ data: { warehouse: '' } });
       applyCalloutFieldUpdates({ warehouse: { value: '' } }, a);
-      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '');
+      expect(a.hook.handleChange).toHaveBeenCalledWith('warehouse', '', { origin: 'callout' });
     });
   });
 });

@@ -27,6 +27,7 @@ import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStore
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
 import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
+import { ListStateRouteGuard } from './lib/ListStateRouteGuard.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
@@ -494,6 +495,7 @@ export default function App() {
         notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
         data-testid="AppShellRuntime__ecaf3f">
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
+        <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />

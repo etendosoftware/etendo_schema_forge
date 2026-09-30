@@ -126,8 +126,15 @@ vi.mock('@generated/sales-order/generated/web/sales-order/index.jsx', () => ({
 
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesOrderWindow from '../index.jsx';
+
+// ETP-5487 — index.jsx now reads useSearchParams() (react-router-dom), which
+// throws outside a Router context. Wrap every render in MemoryRouter.
+function renderWithRouter(ui) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 describe('SalesOrderWindow — render smoke tests (ETP-4520 window-access wiring)', () => {
   beforeEach(() => {
@@ -139,14 +146,14 @@ describe('SalesOrderWindow — render smoke tests (ETP-4520 window-access wiring
   });
 
   it('renders the list view (ListView) when no recordId is present and access is full', () => {
-    render(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('list-view')).toBeInTheDocument();
     expect(lastListViewProps.window).toBeUndefined();
   });
 
   it('renders GeneratedApp (detail view) when a recordId is present', () => {
-    render(<SalesOrderWindow windowName="sales-order" recordId="so-1" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" recordId="so-1" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('generated-app')).toHaveAttribute('data-record-id', 'so-1');
     expect(lastGeneratedAppProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
@@ -157,14 +164,14 @@ describe('SalesOrderWindow — render smoke tests (ETP-4520 window-access wiring
   // effectiveWindow; verifies the useMemo wiring added alongside the guard.
   it('passes a read-only effectiveWindow to ListView when the access tier is read-only', () => {
     currentWindowAccessTier = 'read-only';
-    render(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" window={{ foo: 'bar' }} />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" window={{ foo: 'bar' }} />);
 
     expect(lastListViewProps.window).toMatchObject({ foo: 'bar', readOnly: true });
   });
 
   it('renders the WindowAccessGuard (windowId 143) instead of ListView when the access tier is none', () => {
     currentWindowAccessTier = 'none';
-    render(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('window-access-guard')).toHaveAttribute('data-window-id', '143');
     expect(screen.queryByTestId('list-view')).not.toBeInTheDocument();
@@ -172,14 +179,14 @@ describe('SalesOrderWindow — render smoke tests (ETP-4520 window-access wiring
 
   it('renders the WindowAccessGuard instead of GeneratedApp when the access tier is none, even with a recordId', () => {
     currentWindowAccessTier = 'none';
-    render(<SalesOrderWindow windowName="sales-order" recordId="so-1" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" recordId="so-1" apiBaseUrl="/api" token="tkn" />);
 
     expect(screen.getByTestId('window-access-guard')).toBeInTheDocument();
     expect(screen.queryByTestId('generated-app')).not.toBeInTheDocument();
   });
 
   it('passes documentType (translated via useMenuLabel) through to useOrderWindow', () => {
-    render(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
+    renderWithRouter(<SalesOrderWindow windowName="sales-order" apiBaseUrl="/api" token="tkn" />);
 
     expect(lastUseOrderWindowArgs).toMatchObject({ specName: 'sales-order', documentType: 'Sales Order' });
   });
