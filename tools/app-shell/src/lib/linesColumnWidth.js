@@ -28,6 +28,13 @@ const FIXED_BASIS_PX = {
 // least as much room as a plain text input of the same length — settling for
 // the narrower selector tier (192px) clipped the trailing word inside the
 // trigger. `1 1` keeps the column elastic on top.
+// Percent columns render a compact ProgressCircle (~64px of content). The
+// lines/add-row flex layout (`columnFlex`) keeps the 152px FIXED_BASIS_PX tier so
+// InlineLinesPanel rows and DataTable's add-row colgroup stay aligned; only the
+// plain-list HTML table (`columnMinWidthPx`, used exclusively by DataTable list
+// mode) narrows to this basis. An explicit `col.minWidth` still wins.
+const PERCENT_LIST_BASIS_PX = 104;
+
 const ELASTIC_BASIS_PX = {
   string: 224,
   text: 224,
@@ -142,5 +149,6 @@ export function columnMinWidthPx(col) {
   if (col.minWidth) return col.minWidth;
   if (col.type === 'boolean' && col.badge) return booleanBadgeBasisPx(col);
   if (SELECTOR_TYPES.has(col.type)) return 192;
+  if (col.type === 'percent') return PERCENT_LIST_BASIS_PX;
   return ELASTIC_BASIS_PX[col.type] ?? FIXED_BASIS_PX[col.type] ?? 120;
 }

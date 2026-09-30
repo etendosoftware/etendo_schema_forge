@@ -53,11 +53,11 @@ describe('PurchaseInvoiceHeaderTable — columns', () => {
     assert.match(src, /key: 'eTGODeliveryStatus', column: 'em_etgo_delivery_status'/);
   });
 
-  it('renders delivery status as a percent progress bar', () => {
+  it('renders delivery status as a percent progress circle', () => {
     assert.match(
       src,
       /key: 'eTGODeliveryStatus'.*type: 'percent'/,
-      'eTGODeliveryStatus must use type: "percent" so DataTable renders the progress bar',
+      'eTGODeliveryStatus must use type: "percent" so DataTable renders the progress circle',
     );
   });
 
