@@ -8,9 +8,13 @@ import { ReconciliationSplitPanel } from '@/components/contract-ui/Reconciliatio
  * pending statement lines and candidate operations for the account and composes
  * Etendo's reconciliation flow on the backend.
  *
- * @param {{ account: object|null, paymentMethods?: Array<object>, onReconcileSuccess?: () => void }} props
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier, handed straight to the split
+ * panel, which closes every write path under it (reconcile, un-reconcile, post a difference, store
+ * the difference account) while leaving browsing and selection available.
+ *
+ * @param {{ account: object|null, paymentMethods?: Array<object>, onReconcileSuccess?: () => void, windowReadOnly?: boolean }} props
  */
-export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess }) {
+export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess, windowReadOnly = false }) {
   const navigate = useNavigate();
 
   return (
@@ -36,6 +40,7 @@ export function ReconciliationTab({ account, paymentMethods, onReconcileSuccess 
         accountUpdated={account?.updated ?? null}
         onBack={() => navigate(-1)}
         onReconcileSuccess={onReconcileSuccess}
+        windowReadOnly={windowReadOnly}
         data-testid="ReconciliationSplitPanel__46a213" />
     </div>
   );

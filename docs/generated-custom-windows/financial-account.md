@@ -1374,7 +1374,7 @@ Detail view for a single `FIN_Financial_Account` reached from the Cuentas list p
 
 ## Intent
 
-Display the full detail of a financial account: a summary strip with KPIs, and three tabs for Movements, Reconciliation and Imported Statements. The Movements tab is the primary working surface; the Reconciliation tab hosts the manual bank reconciliation split panel (T6); the Imported Statements tab is a placeholder pending a later iteration.
+Display the full detail of a financial account: a summary strip with KPIs, and three tabs for Movements, Reconciliation and Imported Statements. The Movements tab is the primary working surface; the Reconciliation tab hosts the manual bank reconciliation split panel (T6) — or, on a cash account, the Cash close tab; the Imported Statements tab lists the account's bank statements (import, manual create, process, and their lines).
 
 ## What this view does
 
@@ -2573,7 +2573,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
-    ReconciliacionTab.jsx          — placeholder (T6)
+    ReconciliationTab.jsx          — thin host for ReconciliationSplitPanel (T6); forwards windowReadOnly (ETP-5457)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
@@ -4572,21 +4572,57 @@ One thing specific to this window, unreported and fixed in passing: `ImportState
 downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
 translated. It now passes both the column caption and the skipped-by-user reason.
 
-## Solo Lectura (read-only window-access tier) gating — ETP-5205
+## Read-only access tier (ETP-5205 / ETP-5457)
+
+**Scope: UI only.** A role whose window-access tier for Financial Account is `read-only` sees the
+window browse-only: every entry point that writes is hidden (or, where hiding would break the
+layout, disabled), every dialog that leads to a write is kept shut, and every mutating handler
+returns early as defense in depth. The backend is not changed by this — it remains the boundary.
 
 Financial Account is not one of ETP-5205's originally-named windows — brought into scope
 separately after v5's audit flagged it as completely unwired. Unlike the generated-page windows,
 this window never delegates to `DetailView.jsx`/`GeneratedApp`, so `windowReadOnly` (computed from
-`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded from scratch
-through 5 files: `index.jsx` → `DetailToolbarActions`/`MovementsTab` → `MovementsTable`/
-`MovementsToolbar` → `MovementRowKebab`. Gated: the Editar/AutoMatch buttons AND their modals' own
-`open` conditions (defense-in-depth — a deep link or an auto-open effect can otherwise still mount
-a modal independently of its trigger button), the movement row kebab's 6 mutating actions, the
-"Nuevo movimiento"/"Transferir fondos" split button and its two modals, and the bulk-delete
-selection bar (its own trigger is unreachable once unmounted, no separate open-gate needed).
-**Known gap, not fixed by this ticket:** the Reconciliation tab, Imported Statements tab, and Cash
-Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documented in-code near the
-`useWindowAccess` call in `index.jsx`, deliberately out of scope. Live verification against a real
-read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
-read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
-coverage.
+`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded by hand into each
+tab. ETP-5205 covered the header and Movements; ETP-5457 closed the remaining three tabs
+(Reconciliation, Imported statements, Cash close), which until then carried no `windowReadOnly`
+reference at all.
+
+The prop is **`windowReadOnly` everywhere, never `readOnly`**: in `ReconciliationSplitPanel.jsx`,
+`readOnly` already means "the selected line is already reconciled", and the two are unrelated.
+
+The pattern, applied uniformly: **hide** entry points (toolbar buttons, row icons, row kebabs,
+bulk bar, the selection checkboxes whose only use is bulk delete); **disable** only the primary
+buttons whose removal would break the layout (the reconcile action bar, the cash-close side
+panel); force each write dialog closed with `open={... && !windowReadOnly}` so a deep link or an
+auto-open effect cannot mount it without its trigger; and never rely on passing an `undefined`
+handler, since these components still render the control.
+
+| Tab / surface | Hidden under `read-only` | Disabled under `read-only` | Still available |
+|---|---|---|---|
+| Header (`DetailToolbarActions`, ETP-5205) | Editar, AutoMatch; `EditAccountModal` and `AutoMatchSuggestionModal` kept shut (Archive / Delete / Connect are only reachable from the edit modal) | — | Refresh, Export |
+| Movements (ETP-5205) | "Nuevo movimiento" / "Transferir fondos" split button and both modals, the row kebab (`MovementRowKebab` returns `null` — all 6 items mutate), the bulk-delete bar | — | Filters, search, sort, row expansion, export |
+| Reconciliation — bank / card (`ReconciliationSplitPanel`, ETP-5457) | Per-document un-link "−" (`recon-unlink-{id}`, both in the candidate list of a reconciled line and in the partial line's "conciliado" block); the "post the difference" button of the difference banner (`recon-difference-open`); every dialog: payment method, difference, GL-item setup, un-reconcile confirmation | "Conciliar (N)" / "Desconciliar (N)" (`recon-action-reconcile`) | Selecting lines and candidates, filters, search, sort, "Dejar pendiente" (banner dismiss, changes no data), Cancel, Back |
+| Imported statements (`ImportedStatementsTab`, ETP-5457) | Import split-button (`statements-import-button`, `statements-import-split`) or bank sync (`statements-bank-sync-button`); per-row edit / delete / kebab (`StatementRowKebab` returns `null`); header and row selection checkboxes; the bulk-delete bar and its dialog; `ImportStatementModal`, `ManualStatementModal` and `StatementConfirmDialog` kept shut | — | Back, status / date / advanced filters, search, sort, refresh, row expansion (lines), CSV export |
+| Cash close (`CashCloseTab`, ETP-5457) | `CashCloseConfirmDialog` kept shut | "Confirmar cierre" (`cash-close-confirm`), "Guardar borrador" (`cash-close-save-draft`), statement date (`cash-close-statement-date`), declared balance (`cash-close-declared-balance`) | Ticking movements, hide-cleared / hide-after toggles, search, the live summary |
+| Reconciliations list | Nothing to gate — navigation only | — | Everything |
+
+**CSV export and navigation keep working.** On Imported statements the export reads the tab's
+selection through its ref; with the checkboxes hidden the selection is always empty, so it exports
+the filtered statement headers — the same thing a full-access user gets with nothing selected.
+
+**Defense in depth in the split panel.** `ReconciliationSplitPanel` wraps each mutating handler
+(`handleReconcile`, `submitReconcile`, `confirmGlItemSetup`, `confirmDifference`,
+`requestRemoveOne`, `requestRemoveSelected`, `confirmRemove`) in the module-level
+`guardWrite(windowReadOnly, fn)`, which returns a no-op under the tier. It is the same early return
+spelled once, instead of an `if (windowReadOnly) return;` in every handler — the component already
+sits at Sonar's cognitive-complexity ceiling (javascript:S3776). `ImportedStatementsTab` (sync,
+confirm) and `CashCloseTab` (save draft, confirm click, run confirm) use plain early returns; the
+bulk delete needs none, since neither its bar nor its dialog is rendered under the tier.
+
+`DifferenceBanner` (`ReconciliationDifference.jsx`) gained an optional `windowReadOnly` prop
+(default `false`) that drops its post button while keeping the banner and its dismiss. Its only
+consumer is the split panel.
+
+Live verification against a real read-only-tier role was not done for either ticket (DB-confirmed:
+no role in the system currently holds a read-only grant on this window) — a deliberate scope call;
+coverage relies on unit tests.
