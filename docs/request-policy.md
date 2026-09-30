@@ -208,6 +208,38 @@ loses its token, which covers the ambient (non-React) path too.
 That is why the local `@/auth/useApiFetch.js` **wraps** the core hook instead of re-exporting
 it: taking the core's own `useAuth().logout` would silently skip the clear.
 
+## Writes to child documents invalidate the parent order's cache (ETP-5525)
+
+The shared record cache (`@etendosoftware/app-shell-core/data`, 30 s `recordStaleTime`) is
+invalidated by `useEntity` for **its own spec only**. Some specs show values the backend derives
+from other specs' documents — the order header's `needsPrimaryDoc` / `needsInvoiceDoc` are computed
+from its shipments/receipts and invoices — so a write to a shipment left the order record "fresh"
+in the cache, and a client-side return to the order (a Related Documents chip, the back button)
+rendered the pre-write annotation until a full reload.
+
+The local `useApiFetch` therefore also runs `invalidateAfterWrite` from
+`tools/app-shell/src/lib/crossSpecCacheInvalidation.js` after every **successful non-GET**
+response: if the request URL has a path segment listed in `WRITE_INVALIDATES_SPECS`, every cached
+query of the dependent specs is marked stale (`cache.invalidate({ spec })`) and the next read
+refetches. The response itself is returned untouched, and without a `DataProvider` the hook
+returns the plain core client.
+
+| A write to | Marks stale |
+|---|---|
+| `goods-shipment`, `sales-invoice` | `sales-order` |
+
+The Purchase equivalent (`goods-receipt` / `purchase-invoice` → `purchase-order`) is intentionally
+not included yet: it is owned by the Purchase cell, and adding it is just those two map entries.
+
+Add a row there when a new spec starts displaying values derived from another spec's documents.
+Not covered: writes made through the plain-module `apiFetch` (`@etendosoftware/app-shell-core/auth/api`,
+e.g. `lib/batchDelete.js`), which has no access to the cache, and
+writes made in another tab or by another user — those still wait out `recordStaleTime`.
+Also not covered: hook-based writes made inside app-shell-core itself, which go through core's own
+`useApiFetch` rather than this wrapper, and the in-flight read race: an order GET already in flight
+when the child write completes can store pre-write data as fresh (the core cache only discards such
+a response on `clear()`). That race is rare in this flow, which is a navigation after the write.
+
 ## Working without an AuthProvider
 
 `useApiFetch` and `useLogout` read the session with `useAuthOptional`, so they do NOT throw in
