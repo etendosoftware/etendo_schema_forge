@@ -331,7 +331,7 @@ describe('useAttachments — remaining branches', () => {
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
         'http://api.test/sws/neo/attachments/file/att-1',
-        { credentials: 'include', headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
+        { credentials: 'include', signal: expect.any(AbortSignal), headers: { Authorization: 'Bearer tok-123', 'Accept-Language': 'es_ES' } },
       );
       expect(anchorClick).toHaveBeenCalledTimes(1);
       expect(globalThis.URL.createObjectURL).toHaveBeenCalled();

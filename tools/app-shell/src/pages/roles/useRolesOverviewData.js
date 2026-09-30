@@ -220,11 +220,11 @@ function adaptCards(roles) {
  * that id is hidden (no visible alternative exists) — `adaptMatrix` uses exactly that
  * signal to drop sidebar-hidden windows from the matrix (see ETP-5071 below).
  *
- * **Second consumer (ETP-5196):** `windows/custom/user/UserRolesTab.jsx` now imports this
- * function directly (not re-implemented) to resolve its own per-window category/label/order,
- * so the User window's "Roles del usuario" tab groups windows identically to this page's
- * `RolesAccessMatrix` — see that file's `resolveCategoryRow` JSDoc for its own fallback
- * chain (AD-menu-tree walk, then an "Other" bucket) for a window this index doesn't cover.
+ * **Second consumer (ETP-5196, reworked ETP-5485):** `windows/custom/user/UserRolesTab.jsx`
+ * no longer resolves rows itself — it feeds `SFSystemRoleTemplates`' `includeMatrix=true`
+ * payload (built by the same backend class as this page's `matrix`) through the exported
+ * `adaptMatrix`/`adaptReportsMatrix` below, so both screens get identical rows, categories and
+ * order by construction.
  *
  * **ETP-5402 — `item.reportId` (4th identity key).** A report row's backend id (`tax-report`,
  * `balance-sheet`, ...) lives in an entirely different id-space than `windowId`/
@@ -421,18 +421,22 @@ function adaptCategoryMatrix(payload, menuIndex, itemsKey) {
   });
 }
 
-/** Adapts the backend's `matrix` (real windows) — see `adaptCategoryMatrix`. */
-function adaptMatrix(matrix, menuIndex) {
+/**
+ * Adapts the backend's `matrix` (real windows) — see `adaptCategoryMatrix`. Exported
+ * (ETP-5485) for `UserRolesTab.jsx`, which adapts `SFSystemRoleTemplates`' matrix through
+ * this same function; `menuIndex` defaults to the module's `menu.json` index.
+ */
+export function adaptMatrix(matrix, menuIndex = MENU_WINDOW_INDEX) {
   return adaptCategoryMatrix(matrix, menuIndex, 'windows');
 }
 
 /**
  * ETP-5402 — adapts the backend's `reportsMatrix` (the Informes subsection) — see
- * `adaptCategoryMatrix`. Not exported, same as `adaptMatrix` — consumed only through
- * `useRolesOverviewData()`'s `reportsMatrix` field, which `RolesAccessMatrix.jsx` then
- * merges into its per-category "Informes" sub-block alongside `adaptMatrix`'s rows.
+ * `adaptCategoryMatrix`. `RolesAccessMatrix.jsx` merges it into its per-category "Informes"
+ * sub-block alongside `adaptMatrix`'s rows; exported (ETP-5485) for `UserRolesTab.jsx`,
+ * which does the same.
  */
-function adaptReportsMatrix(reportsMatrix, menuIndex) {
+export function adaptReportsMatrix(reportsMatrix, menuIndex = MENU_WINDOW_INDEX) {
   return adaptCategoryMatrix(reportsMatrix, menuIndex, 'reports');
 }
 

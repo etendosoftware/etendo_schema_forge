@@ -180,18 +180,19 @@ describe('CreatableSearchSelect chip mode (ETP-4000)', () => {
     const emptyInput = screen.getByTestId('field-address');
     // Wrapper is the input's grandparent (input -> flex row -> outer wrapper div).
     const emptyWrapper = emptyInput.closest('.group.relative');
-    expect(emptyWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+    expect(emptyWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--field-hover\)\)\]/);
 
     const { container: chipContainer } = render(
       <Harness initialValue="ADDR-1" initialDisplay="123 Main St" />
     );
     const chip = within(chipContainer).getByTestId('field-address-chip');
     const chipWrapper = chip.closest('.group.relative');
-    expect(chipWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--muted\)\)\]/);
+    expect(chipWrapper.className).toMatch(/hover:bg-\[hsl\(var\(--field-hover\)\)\]/);
 
-    // both non-disabled states resolve to the exact same hover class
-    expect(emptyWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
-    expect(chipWrapper.className).toContain('bg-card hover:bg-[hsl(var(--muted))]');
+    // both non-disabled states resolve to the exact same hover class — the shared
+    // --field-hover fill every field uses (ETP-5479), not --muted
+    expect(emptyWrapper.className).toContain('bg-card hover:bg-[hsl(var(--field-hover))]');
+    expect(chipWrapper.className).toContain('bg-card hover:bg-[hsl(var(--field-hover))]');
 
     // sanity check container is unused directly but rendered without error
     expect(emptyContainer).toBeTruthy();

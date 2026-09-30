@@ -1,3 +1,4 @@
+import { ProgressCircle } from './ProgressCircle.jsx';
 import { Switch } from '@/components/ui/switch';
 import { StatusTag } from '@/components/ui/status-tag';
 import { Tag } from '@/components/ui/tag';
@@ -101,28 +102,6 @@ function isFirstVisibleStringColumn(col, visibleColumns) {
   return col === visibleColumns[0] && col.type === 'string';
 }
 
-function getPercentCellPalette(row, col) {
-  const val = Number(row[col.key]);
-  const pct = Number.isNaN(val) ? 0 : val;
-  let color;
-  if (pct >= 100) {
-    color = 'bg-status-success';
-  } else if (pct > 0) {
-    color = 'bg-status-warning';
-  } else {
-    color = 'bg-muted';
-  }
-  let textColor;
-  if (pct >= 100) {
-    textColor = 'text-status-success-foreground';
-  } else if (pct > 0) {
-    textColor = 'text-status-warning-foreground';
-  } else {
-    textColor = 'text-muted-foreground';
-  }
-  return { color, pct, textColor };
-}
-
 export function renderEnumCell({ rawValue, tMenu, col }) {
   const raw = rawValue;
   const label = tMenu(col.enumLabels?.[raw] ?? raw);
@@ -158,29 +137,14 @@ export function renderStatusCell({ row, col, dictionary, ui }) {
 }
 
 export function renderPercentCell({ row, col }) {
-  const { color, pct, textColor } = getPercentCellPalette(row, col);
   return (
-    // `percent` is in NUMERIC_FIELD_TYPES, so DataTable right-aligns this
-    // column's header and <td> — but `text-align` has no effect on a `flex`
-    // child (flex items are positioned by `justify-content`, not text-align),
-    // so without `justify-end` this bar-plus-label combo silently ignored
-    // that alignment and hugged the cell's LEFT edge while its header stayed
-    // right-aligned. `renderAmountCell` (plain <span>) and
-    // `renderSignedDeltaCell` (`text-right` on a block <span>) don't need
-    // this because neither uses `display: flex`.
-    <div className="flex items-center justify-end gap-2">
-      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-      </div>
-      {/* Fixed width, independent of digit count — "0%" is narrower than "100%", and
-          without a shared width here the bar (first in the row) shifts left/right
-          per row as the flex group's total width changes, even though `justify-end`
-          keeps the group itself flush right. `shrink-0` stops the bar from eating
-          into this space when the row is tight. `text-left` (not `text-right`) so the
-          digit right after the bar sits at the same x every row — right-aligning
-          inside this fixed box did the opposite: "100%" (wider) started right next
-          to the bar while "0%" (narrower) floated with a gap first. */}
-      <span className={`text-xs tabular-nums text-left w-9 shrink-0 ${textColor}`}>{pct}%</span>
+    // `percent` is in NUMERIC_FIELD_TYPES but DataTable deliberately LEFT-aligns
+    // its header and <td> (Figma: circle at the cell's left edge, under a
+    // left-aligned header). A `flex` child is positioned by `justify-content`,
+    // not text-align, so `justify-start` states that alignment explicitly
+    // instead of relying on the default.
+    <div className="flex items-center justify-start">
+      <ProgressCircle value={row[col.key]} data-testid="ProgressCircle__a91437" />
     </div>
   );
 }

@@ -74,7 +74,7 @@ export function useOrderWindow({
     documentType,
   });
 
-  const renderPreview = useCallback(({ row, onClose, onEdit }) => (
+  const renderPreview = useCallback(({ row, onClose, onEdit, readOnly }) => (
     <OrderPreview
       order={row}
       token={token}
@@ -83,8 +83,9 @@ export function useOrderWindow({
       specName={specName}
       onClose={onClose}
       onEdit={onEdit}
+      readOnly={readOnly || windowReadOnly}
       data-testid="OrderPreview__4b313b" />
-  ), [token, apiBaseUrl, windowName, specName]);
+  ), [token, apiBaseUrl, windowName, specName, windowReadOnly]);
 
   const rowQuickActions = useMemo(() => ({
     enabled: true,
@@ -100,7 +101,8 @@ export function useOrderWindow({
     documentPreview: true,
     onEdit: (row) => navigate(`/${windowName}/${row.id}`),
     onClone: (row) => setCloneTargets([row]),
-    onEmail: onRowEmail,
+    // ETP-5205 — Send is a write under Solo Lectura (ListView also disables it).
+    onEmail: windowReadOnly ? undefined : onRowEmail,
     onDelete: requestDelete,
     menuActions: ({ row, status }) => {
       if (windowReadOnly) return [];

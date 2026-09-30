@@ -127,6 +127,8 @@ async function renderPdfIntoIframe(node, reportId, documentId, apiFetch, setPdfL
   try {
     const res = await apiFetch(`/api/reports/${reportId}/render`, {
       method: 'POST',
+      // ETP-5424 — a document render is a long call; opt out of the default timeout.
+      timeout: 0,
       baseUrl: '',
       body: JSON.stringify({ format: 'html', params: { documentId } }),
     });
@@ -251,6 +253,8 @@ function EmailFormPanel({ recipientFieldsProps, subject, message, onSubjectChang
 async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo, apiFetch) {
   const res = await apiFetch(`/api/reports/${reportId}/render`, {
     method: 'POST',
+    // ETP-5424 — a document render is a long call; opt out of the default timeout.
+    timeout: 0,
     baseUrl: '',
     body: JSON.stringify({ format: 'html', params: { documentId } }),
   });
@@ -258,6 +262,8 @@ async function fetchAndDownloadPdf(reportId, documentId, windowName, documentNo,
   const html = await res.text();
   const pdfRes = await apiFetch('/jsreport/api/report', {
     method: 'POST',
+    // ETP-5424 — a document render is a long call; opt out of the default timeout.
+    timeout: 0,
     baseUrl: '',
     body: JSON.stringify({ template: { content: html, engine: 'none', recipe: 'chrome-pdf', chrome: { format: 'A4', marginTop: '10mm', marginBottom: '10mm', marginLeft: '10mm', marginRight: '10mm' } }, data: {} }),
   });

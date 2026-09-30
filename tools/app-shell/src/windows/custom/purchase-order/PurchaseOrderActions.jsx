@@ -362,9 +362,11 @@ function ConfirmOrderModal({
 
     try {
       // Step 1: Complete the order via documentAction=CO
+      // ETP-5424 — synchronous document process: opt out of the default timeout, a cut-off
+      // completion that still commits server-side invites a double submit.
       const processRes = await apiFetch(
         `/header/${orderId}/action/documentAction`,
-        { method: 'POST', body: JSON.stringify({ docAction: 'CO' }) },
+        { method: 'POST', body: JSON.stringify({ docAction: 'CO' }), timeout: 0 },
       );
       if (!processRes.ok) {
         const err = await processRes.json().catch(() => null);
@@ -377,7 +379,7 @@ function ConfirmOrderModal({
       if (selected === 'invoice') {
         const res = await apiFetch(
           `/header/${orderId}/action/rMCreateInvoice`,
-          { method: 'POST', body: JSON.stringify({}) },
+          { method: 'POST', body: JSON.stringify({}), timeout: 0 },
         );
         if (!res.ok) {
           const err = await res.json().catch(() => null);

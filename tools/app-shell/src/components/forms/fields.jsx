@@ -681,13 +681,13 @@ export function ChipSelect({ value, onChange, useLookup, placeholder = 'Buscar�
           // which renders the same chip for the FK pickers in sales-invoice, has always had it.
           //
           // The box itself is deliberately the SAME shell CreatableSearchSelect draws for those FK
-          // pickers — shared FIELD_HEIGHT, rounded-lg, token-based shadow, hover fill and a
-          // ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own
+          // pickers — shared FIELD_HEIGHT, rounded-lg, token-based shadow, --field-hover fill, the
+          // shared disabled fill/border (no opacity, ETP-5479) and a ring-2/ring-primary focus state. It used to hardcode `h-10 rounded-md` with its own
           // focus treatment, which made an accounting-concept picker 4px taller and differently
           // rounded than the plain `Input` sitting right next to it in the same modal row (Importe),
           // let alone than the equivalent field in every generated window. Height, radius and focus
           // belong to the density tokens, not to this component.
-          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border border-[hsl(var(--border-control))] px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] focus-within:ring-2 focus-within:ring-primary ${disabled ? 'bg-[hsl(var(--muted))] opacity-70' : 'bg-card hover:bg-[hsl(var(--muted))]'}`}
+          className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center gap-1 rounded-lg border px-2 shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] ring-2 ring-transparent focus-within:ring-primary ${disabled ? 'border-[hsl(var(--field-disabled-border))] bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed' : 'border-[hsl(var(--border-control))] bg-card hover:bg-[hsl(var(--field-hover))]'}`}
           onClick={!disabled && showChip ? startEditing : undefined}
         >
           {showChip ? (
