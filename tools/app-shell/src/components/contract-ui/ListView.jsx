@@ -296,7 +296,7 @@ function ListToolbarTabs({
         <div role="group" aria-label="Filters" className="inline-flex items-center gap-1 rounded-xl bg-[hsl(var(--muted))] p-1 h-10">
           {subsetFilters.map((sf, i) => (
             <button
-              key={i}
+              key={sf.key || sf.label}
               onClick={() => onSelectSubset(i)}
               data-testid={`filter-${sf.key || sf.label?.toLowerCase()}`}
               className={[
