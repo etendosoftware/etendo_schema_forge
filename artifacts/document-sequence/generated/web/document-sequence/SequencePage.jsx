@@ -122,6 +122,7 @@ export default function SequencePage({ windowName, recordId, ...props }) {
         hideDeleteButton
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "AD_Sequence", config: {} } }]}
         requiredHeaderFields={requiredHeaderFields}
+        titleField="name"
         labelOverrides={labelOverrides}
         {...props} window={effectiveWindow}
       />

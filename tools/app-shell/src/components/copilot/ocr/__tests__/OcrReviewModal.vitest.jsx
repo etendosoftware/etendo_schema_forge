@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/i18n', () => ({
@@ -22,7 +22,19 @@ vi.mock('../strategies.js', () => ({
   },
 }));
 
+const checkBpHasLocation = vi.fn();
+vi.mock('../ingest/purchaseInvoiceDescriptor.js', () => ({
+  checkBpHasLocation: (...args) => checkBpHasLocation(...args),
+}));
+
 import OcrReviewModal from '../OcrReviewModal.jsx';
+
+beforeEach(() => {
+  checkBpHasLocation.mockReset();
+  checkBpHasLocation.mockResolvedValue('present');
+});
+
+const continueButton = () => screen.getByText('ocrReviewContinue');
 
 const fields = [
   {
@@ -84,7 +96,8 @@ describe('OcrReviewModal', () => {
     expect(screen.getByText('INV-1')).toBeInTheDocument();
     expect(screen.getByText('2026-07-01')).toBeInTheDocument();
 
-    await user.click(screen.getByText('ocrReviewContinue'));
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
 
     expect(onSubmit).toHaveBeenCalledWith({
       vendor: { id: 'bp-1', label: 'Resolved Vendor' },
@@ -118,7 +131,8 @@ describe('OcrReviewModal', () => {
 
     await user.click(within(screen.getByTestId('kind-documentNo')).getByText('edit documentNo'));
     expect(switches[1]).toHaveAttribute('aria-checked', 'true');
-    await user.click(screen.getByText('ocrReviewContinue'));
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
     expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({
       documentNo: 'edited-documentNo',
     }));
@@ -139,10 +153,55 @@ describe('OcrReviewModal', () => {
     expect(screen.getByText('ocrReviewContinue')).toBeDisabled();
 
     await user.click(within(screen.getByTestId('kind-vendor')).getByText('edit vendor'));
-    await user.click(screen.getByText('ocrReviewContinue'));
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    await user.click(continueButton());
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
       vendor: { id: 'bp-2', label: 'New Vendor' },
     }));
+  });
+
+  // ETP-5289 — a vendor with no address cannot carry the invoice (partnerAddress is NOT NULL).
+  it('blocks Continue and explains when the vendor has no address', async () => {
+    checkBpHasLocation.mockResolvedValue('missing');
+    const user = userEvent.setup();
+    const { onSubmit } = renderModal();
+
+    expect(await screen.findByText('ocrReviewVendorNoAddress')).toBeInTheDocument();
+    expect(checkBpHasLocation).toHaveBeenCalledWith({ token: 'tok', apiBaseUrl: '/api', bpId: 'bp-1' });
+    expect(continueButton()).toBeDisabled();
+    await user.click(continueButton());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('re-checks on demand and unblocks once the address exists', async () => {
+    checkBpHasLocation.mockResolvedValueOnce('missing').mockResolvedValueOnce('present');
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(await screen.findByTestId('ocr-review-vendor-recheck'));
+
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    expect(screen.queryByText('ocrReviewVendorNoAddress')).not.toBeInTheDocument();
+    expect(checkBpHasLocation).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not block when the address lookup itself fails', async () => {
+    checkBpHasLocation.mockResolvedValue('unknown');
+    renderModal();
+
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    expect(screen.queryByText('ocrReviewVendorNoAddress')).not.toBeInTheDocument();
+  });
+
+  it('checks the newly chosen vendor, not the pre-resolved one', async () => {
+    checkBpHasLocation.mockImplementation(async ({ bpId }) => (bpId === 'bp-2' ? 'missing' : 'present'));
+    const user = userEvent.setup();
+    renderModal({ preResolved: {} });
+
+    await user.click(within(screen.getByTestId('kind-vendor')).getByText('edit vendor'));
+
+    expect(await screen.findByText('ocrReviewVendorNoAddress')).toBeInTheDocument();
+    expect(continueButton()).toBeDisabled();
   });
 });
