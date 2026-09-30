@@ -7,18 +7,37 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
 
-describe('PurchaseOrderWindow — legacy pendingDelivery filter removed (ETP-4004)', () => {
+describe('PurchaseOrderWindow — pending reception filter (ETP-5487, supersedes ETP-4004)', () => {
   it('does not import buildPendingDeliveryFilter', () => {
     assert.doesNotMatch(src, /buildPendingDeliveryFilter/,
-      'buildPendingDeliveryFilter must be removed — ' +
-      'the dashboard now navigates to goods-receipt for pending receptions, not purchase-order');
+      'buildPendingDeliveryFilter must not be reintroduced without updating this guard — ' +
+      'purchase-order currently composes the ?filter=pendingReception advanced filter inline (ETP-5487)');
   });
 
-  it('does not reference the pendingDelivery filter string for receptions', () => {
-    // The pendingDelivery filter is still used by sales-order (addPendingSalesDeliveries).
-    // Purchase-order must not apply it as an initialColumnFilter for receptions.
+  it('does not reference the pendingDelivery filter string (purchase-order uses pendingReception)', () => {
+    // purchase-order's own URL filter is `pendingReception` (see isPendingReception below).
+    // `pendingDelivery` is sales-order's filter name (addPendingSalesDeliveries) and must
+    // never leak into purchase-order.
     assert.doesNotMatch(src, /initialColumnFilters.*pendingDelivery/s,
       'purchase-order must not pass pendingDelivery as initialColumnFilters');
+  });
+
+  it('reads the pendingReception filter param from the URL', () => {
+    assert.match(src, /isPendingReception\s*=\s*searchParams\.get\('filter'\)\s*===\s*'pendingReception'/,
+      'purchase-order must read ?filter=pendingReception — the Dashboard "Recepciones" card ' +
+      'navigates here with that param (ETP-5487, replacing the old goods-receipt ' +
+      '?DocStatus=DR link that ETP-4004 originally removed)');
+  });
+
+  it('builds the pendingReception advanced filter for completed orders with reception < 100', () => {
+    assert.match(src, /field:\s*'documentStatus',\s*operator:\s*'equals',\s*value:\s*'CO'/,
+      'the pendingReception filter must scope to completed (CO) orders');
+    assert.match(src, /field:\s*'deliveryStatusPurchase',\s*operator:\s*'lessThan',\s*value:\s*100/,
+      'the pendingReception filter must scope to deliveryStatusPurchase < 100');
+  });
+
+  it('passes initialFiltersFromUrl so the URL filter outranks saved grid state', () => {
+    assert.match(src, /initialFiltersFromUrl=\{isPendingReception\}/);
   });
 
   it('exports a default function component named PurchaseOrderWindow', () => {
