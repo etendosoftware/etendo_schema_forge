@@ -7,7 +7,7 @@ import { useLocation } from 'react-router-dom';
 import { ACCEPTED_TYPES, ACCEPT_ATTR } from './attachmentFileTypes.js';
 
 const LazyOcrInlineUploader = lazy(() => import('@/components/copilot/ocr/OcrInlineUploader.jsx'));
-const LazyPdfViewer = lazy(() => import('./PdfViewer.jsx'));
+const LazyUploadedFileViewer = lazy(() => import('./UploadedFileViewer.jsx'));
 
 /* eslint-disable react/prop-types */
 
@@ -82,7 +82,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
   const inputRef = useRef(null);
 
   const {
-    storedFile, isBusy, storeFailed, storeFile,
+    storedFile, isBusy, storeFailed, storeFile, deleteFile,
   } = useMainAttachment({
     documentId: recordId,
     tableName,
@@ -166,7 +166,11 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
     );
   }
 
-  const isImage = storedFile.mimeType?.startsWith('image/');
+  // ETP-5518 — Replace and Delete are writes: offered under the same gate as attaching
+  // (`canAttach`), so the Solo-Lectura tier keeps the viewer and the lightbox but no menu.
+  const openPicker = canAttach ? () => inputRef.current?.click() : undefined;
+  // A failed delete keeps the file on screen; the rejection must not go unhandled.
+  const removeFile = canAttach ? () => deleteFile().catch(() => {}) : undefined;
   return (
     <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -176,7 +180,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
           <button
             type="button"
             disabled={isBusy}
-            onClick={() => inputRef.current?.click()}
+            onClick={openPicker}
             className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle bg-card px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isBusy
@@ -190,21 +194,20 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
       <div className={`min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed bg-card ${
         isDragOver ? 'border-primary' : 'border-border-control'
       }`}>
-        {isImage ? (
-          <div className="flex h-full w-full items-center justify-center overflow-auto">
-            <img src={storedFile.objectUrl} alt={storedFile.fileName} className="max-h-full max-w-full object-contain" />
-          </div>
-        ) : (
-          <Suspense
-            fallback={(
-              <div className="flex h-full items-center justify-center text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
-              </div>
-            )}
-            data-testid="Suspense__c851a1">
-            <LazyPdfViewer url={storedFile.objectUrl} data-testid="LazyPdfViewer__c851a1" />
-          </Suspense>
-        )}
+        <Suspense
+          fallback={(
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
+            </div>
+          )}
+          data-testid="Suspense__c851a1">
+          <LazyUploadedFileViewer
+            file={storedFile}
+            onReplace={openPicker}
+            onDelete={removeFile}
+            actionsDisabled={isBusy}
+            data-testid="LazyUploadedFileViewer__c851a1" />
+        </Suspense>
       </div>
       {!readOnly && hiddenInput}
     </div>

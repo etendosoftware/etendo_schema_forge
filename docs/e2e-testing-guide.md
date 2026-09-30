@@ -1008,6 +1008,19 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
+| `preview-file-replace-input` | — | Hidden `<input type="file">` behind "Reemplazar archivo" in the list preview (`fileActions` mode) — use `setInputFiles()` |
+| `file-viewer-more` | — | "Más" (⋯) button on the uploaded-file mini toolbar (`UploadedFileViewer`) |
+| `file-viewer-menu` | — | Its dropdown menu |
+| `file-viewer-replace` | — | "Reemplazar archivo" menu item |
+| `file-viewer-delete` | — | "Eliminar archivo" menu item (opens `confirm-delete-dialog`) |
+| `file-viewer-expand` | — | Click target over the file preview that opens the lightbox |
+| `file-lightbox` | — | `FileLightbox` dialog container (`role="dialog"`) |
+| `file-lightbox-title` | — | File name in the lightbox header |
+| `file-lightbox-page-count` | — | Page count line (PDF only) |
+| `file-lightbox-zoom-in` / `-fit` / `-zoom-out` | — | Lightbox zoom controls |
+| `file-lightbox-replace` | — | Lightbox "Reemplazar archivo" button |
+| `file-lightbox-delete` | — | Lightbox "Eliminar archivo" button (opens `confirm-delete-dialog`) |
+| `file-lightbox-close` | — | Lightbox close (X) button |
 | `filter-{name}` | `filter-todos`, `filter-personas` | ListView subset filter buttons |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
