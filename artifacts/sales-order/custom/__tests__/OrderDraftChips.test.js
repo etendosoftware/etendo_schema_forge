@@ -16,20 +16,20 @@ describe('OrderDraftChips', () => {
     assert.match(src, /documentStatus === 'CO'/);
   });
 
-  it('uses the shared progress-tone helper for badge color', () => {
-    assert.match(src, /from '@\/lib\/progressTone'/);
-    assert.match(src, /getProgressTone/);
+  it('delegates the progress badge to the shared ProgressFieldBadge', () => {
+    assert.match(src, /import ProgressFieldBadge from '@\/windows\/custom\/shared\/ProgressFieldBadge'/);
+    assert.equal((src.match(/<ProgressFieldBadge/g) || []).length, 2);
+    assert.match(src, /documentStatus=\{data\?\.documentStatus}/);
+    assert.equal((src.match(/testId="order-progress-badge"/g) || []).length, 2);
   });
 
-  it('renders the progress chip through DocumentStatusPill (single text layer)', () => {
-    assert.match(src, /import DocumentStatusPill from '@\/components\/contract-ui\/DocumentStatusPill'/);
-    assert.match(src, /<DocumentStatusPill/);
-    assert.match(src, /showIcon=\{false}/);
-    assert.match(src, /tone=\{getProgressTone\(pct\)}/);
-    assert.match(src, /label=\{`\$\{label} \$\{percent}%`}/);
-    assert.match(src, /testId="order-progress-badge"/);
+  it('no longer owns tone, rounding or clamping logic (lives in ProgressFieldBadge)', () => {
+    assert.doesNotMatch(src, /function ProgressBadge|<ProgressBadge/);
+    assert.doesNotMatch(src, /DocumentStatusPill/);
+    assert.doesNotMatch(src, /getProgressTone|progressTone/);
+    assert.doesNotMatch(src, /Math\.round/);
+    assert.doesNotMatch(src, /Math\.max\(0,\s*Math\.min/);
     assert.doesNotMatch(src, /TONE_STYLES/);
-    assert.doesNotMatch(src, /tabular-nums/);
   });
 
   it('computes deliveredPct from order-line quantities', () => {
@@ -40,9 +40,9 @@ describe('OrderDraftChips', () => {
     assert.match(src, /totalOrder > 0 \? totalInvoiced \/ totalOrder : 0/);
   });
 
-  it('renders Delivered and Invoiced progress badges unconditionally when state is loaded', () => {
-    assert.match(src, /<ProgressBadge[^>]*soAllDelivered[^>]*pct=\{deliveredPct\}/s);
-    assert.match(src, /<ProgressBadge[^>]*soAllInvoiced[^>]*pct=\{invoicedPct\}/s);
+  it('renders Delivered and Invoiced progress badges when state is loaded', () => {
+    assert.match(src, /<ProgressFieldBadge[^>]*value=\{Number\.isFinite\(deliveredPct\) \? deliveredPct \* 100 : 0}[^>]*label=\{ui\('soAllDelivered'\)}/s);
+    assert.match(src, /<ProgressFieldBadge[^>]*value=\{Number\.isFinite\(invoicedPct\) \? invoicedPct \* 100 : 0}[^>]*label=\{ui\('soAllInvoiced'\)}/s);
   });
 
   it('does not render draft navigation pills (related docs panel covers it)', () => {
@@ -53,14 +53,5 @@ describe('OrderDraftChips', () => {
   it('drops the legacy CompletionBadge gray-only treatment', () => {
     assert.doesNotMatch(src, /CompletionBadge/);
     assert.doesNotMatch(src, /background:\s*'#F3F4F6'/);
-  });
-
-  it('renders the rounded integer percent in the badge', () => {
-    assert.match(src, /Math\.round\(safePct \* 100\)/);
-    assert.match(src, /\{percent\}%/);
-  });
-
-  it('clamps the percentage to the 0..1 range before rendering', () => {
-    assert.match(src, /Math\.max\(0,\s*Math\.min\(1,\s*pct\)\)/);
   });
 });

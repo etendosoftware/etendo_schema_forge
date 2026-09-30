@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { getProgressTone } from '@/lib/progressTone';
-import DocumentStatusPill from '@/components/contract-ui/DocumentStatusPill';
+import ProgressFieldBadge from '@/windows/custom/shared/ProgressFieldBadge';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 const CRITERIA = (field, value) =>
@@ -66,22 +65,18 @@ export default function PurchaseOrderDraftChips({ data, recordId, token, apiBase
 
   return (
     <>
-      <ProgressBadge label={ui('poAllReceived')} pct={receivedPct} />
-      <ProgressBadge label={ui('poAllInvoiced')} pct={invoicedPct} />
+      <ProgressFieldBadge
+        documentStatus={data?.documentStatus}
+        value={Number.isFinite(receivedPct) ? receivedPct * 100 : 0}
+        label={ui('poAllReceived')}
+        testId="order-progress-badge"
+      />
+      <ProgressFieldBadge
+        documentStatus={data?.documentStatus}
+        value={Number.isFinite(invoicedPct) ? invoicedPct * 100 : 0}
+        label={ui('poAllInvoiced')}
+        testId="order-progress-badge"
+      />
     </>
-  );
-}
-
-function ProgressBadge({ label, pct }) {
-  const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(1, pct)) : 0;
-  const percent = Math.round(safePct * 100);
-  return (
-    <DocumentStatusPill
-      status={percent}
-      tone={getProgressTone(pct)}
-      showIcon={false}
-      label={`${label} ${percent}%`}
-      testId="order-progress-badge"
-    />
   );
 }

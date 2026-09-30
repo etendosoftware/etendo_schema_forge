@@ -32,6 +32,20 @@ describe('ProgressFieldBadge', () => {
     expect(el).toHaveAttribute('data-tone', 'success');
   });
 
+  it('rounds 99.8 up to 100% and renders success when completed', () => {
+    renderBadge({ value: 99.8 });
+    const el = screen.getByTestId('p-badge');
+    expect(el).toHaveTextContent('Delivered 100%');
+    expect(el).toHaveAttribute('data-tone', 'success');
+  });
+
+  it('rounds 0.4 down to 0% and renders neutral when completed', () => {
+    renderBadge({ value: 0.4 });
+    const el = screen.getByTestId('p-badge');
+    expect(el).toHaveTextContent('Delivered 0%');
+    expect(el).toHaveAttribute('data-tone', 'neutral');
+  });
+
   it('accepts numeric strings', () => {
     renderBadge({ value: '50' });
     expect(screen.getByTestId('p-badge')).toHaveTextContent('Delivered 50%');
