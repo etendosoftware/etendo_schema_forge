@@ -84,7 +84,7 @@
  * ever resolves to a 0% tax.
  *
  * `productCategory` IS resolved explicitly: its `@SQL=` default selects the row
- * flagged `ISDEFAULT='Y'`, and neither GOClient category ("Generic", "Discounts")
+ * flagged `ISDEFAULT='Y'`, and neither GOClient category ("Genérico", "Discounts")
  * carries that flag, so the default silently yields nothing and the required
  * field would be rejected. The category selector already excludes
  * system-flagged categories, so its first row is the tenant's real, user-facing
@@ -276,11 +276,10 @@ async function findProductFixture(page, { searchKey, headers }) {
  * to exclude `EM_Etgo_IsSystemCategory='Y'` rows, so its first item is a real
  * user-facing category and never the hidden "Discounts" one that only exists to
  * carry `ETGO_DTO`. On a fresh tenant that first item is the starter category
- * seeded by `GOClient/M_PRODUCT_CATEGORY.xml`: base name and `VALUE` "Generic"
- * since ETP-5079 (it was "Otros"), displayed as "Genérico" through its es_ES
- * `M_PRODUCT_CATEGORY_TRL` row. Resolution stays positional-by-selector and
- * never matches on that label — the base name, the search key and the rendered
- * identifier are now three different strings, and only the id is stable.
+ * seeded by `GOClient/M_PRODUCT_CATEGORY.xml`: base name and `VALUE` "Genérico"
+ * since ETP-5498 (it was "Generic" since ETP-5079, and "Otros" before that).
+ * Resolution stays positional-by-selector and never matches on a label —
+ * only the id is stable across these renames.
  */
 async function resolveProductCategoryId(page, { headers }) {
   const items = await fetchSelectorItems(page, {
@@ -427,11 +426,19 @@ async function fetchExistingPrices(page, { productId, headers }) {
  * of surfacing as an unexplained `0,00 €` in a document total several steps and
  * several files later.
  *
- * `priceLimit` is sent explicitly as 0 rather than left out. `ProductPriceHandler
- * #handlePost` defaults an omitted `priceLimit` to `listPrice`, which would make
- * the fixture's list price its own floor — harmless on the GOClient tariffs
- * (both `ENFORCEPRICELIMIT='N'`) but a latent "price under limit" rejection on
- * any tenant whose tariff does enforce it.
+ * ETP-5537: `priceLimit` is deliberately NOT sent, even though omitting it makes
+ * `ProductPriceHandler#handlePost` default it to `listPrice` (the fixture's list
+ * price becomes its own floor) — harmless on the GOClient tariffs this fixture
+ * targets (both `ENFORCEPRICELIMIT='N'`), but a latent "price under limit"
+ * rejection on any tenant whose tariff does enforce it. It has to be omitted
+ * because the `product` spec's `price` entity contract does not declare
+ * `priceLimit` as a field at all (checked `artifacts/product/contract.json`),
+ * so NEO now rejects the write outright (com.etendoerp.go PR #1220 / ETP-5347
+ * started rejecting any field not declared on the target entity). The real fix
+ * is adding `priceLimit` as a declared, editable field on the `price` entity
+ * (decisions.json → pipeline regen) so it can be sent again safely — that is
+ * schema/contract work, out of scope for this test-helper fix. Tracked as a
+ * follow-up; do not silently re-add `priceLimit: '0'` here without that change.
  *
  * @returns {Promise<{total: number, repaired: number, alreadyCorrect: number}>}
  *   `total` versions were written; `repaired` of them were missing the row or
@@ -470,7 +477,6 @@ async function ensurePrices(page, { productId, fixture, headers }) {
         priceListVersion: version.id,
         standardPrice: String(fixture.standardPrice),
         listPrice: String(fixture.listPrice),
-        priceLimit: '0',
       },
     });
     if (!res.ok()) {

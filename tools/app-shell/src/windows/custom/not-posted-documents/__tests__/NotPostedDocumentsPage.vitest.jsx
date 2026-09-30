@@ -496,6 +496,42 @@ describe('NotPostedDocumentsPage', () => {
     useUI.mockImplementation(() => (key) => key);
   });
 
+  // ETP-5175 — the single post forwards the Invalid-Account identity, so this page shows the
+  // same localized sentence as the document windows instead of the backend's prose.
+  it('renders an Invalid-Account failure from messageKeys + messageParams', async () => {
+    const dictionary = {
+      'backendError.invalidAccount.base': 'BASE.',
+      'backendError.invalidAccount.bpOnly': '(C: {bp})',
+    };
+    useUI.mockImplementation(() => (key, params = {}) => Object.keys(params)
+      .reduce((text, p) => text.replace(`{${p}}`, params[p]), dictionary[key] ?? key));
+
+    globalThis.fetch = mkFetch(ROWS);
+    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
+
+    globalThis.fetch.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: false,
+        statusText: 'Unprocessable Entity',
+        json: async () => ({
+          success: false,
+          message: 'backend prose',
+          messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+          messageParams: { bpName: 'Acme' },
+        }),
+      }),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('BASE. (C: Acme)');
+
+    useUI.mockImplementation(() => (key) => key);
+  });
+
   // ── postRow: ambiguous/unparseable body must not be treated as success ─────
   it('shows error toast when postRow gets a 200 with an unparseable body (e.g. proxy error page)', async () => {
     globalThis.fetch = mkFetch(ROWS);

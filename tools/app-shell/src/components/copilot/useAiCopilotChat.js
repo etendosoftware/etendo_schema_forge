@@ -4,6 +4,9 @@ import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } fro
 import { useLocation, useNavigate } from 'react-router-dom';
 import { buildWriteHeaders } from '@/auth/api.js';
 import { useMenuLabel } from '@/i18n';
+import { createAgentConversation, appendAgentMessages, getAgentConversationMessages } from './agentChatApi.js';
+import { conversationTitle, hasPendingTool, toUiMessages, unsavedMessages } from './agentHistory.js';
+import { useAgentConversations } from './useAgentConversations.js';
 import { AmbiguousWindowError, UnknownWindowError, assertInternalPath, buildWindowRouteIndex, knownWindowSlugs, normalizeWindowKey } from './windowRoutes.js';
 
 // Re-exported so existing importers of the guard keep their current path.
@@ -198,6 +201,12 @@ function traceToolCall(stage, payload) {
   console.log(`%c[copilot:tool] ${stage}`, 'color:var(--primary);font-weight:bold', payload);
 }
 
+/** History saving must never disturb the chat: failures are only traced (DEV) and warned. */
+function traceHistory(stage, payload) {
+  // eslint-disable-next-line no-console -- a failed save is not user-facing but must not be silent
+  console.warn(`[copilot:history] ${stage}`, payload);
+}
+
 function messageText(message) {
   if (typeof message.content === 'string') return message.content;
   return (message.parts || [])
@@ -236,10 +245,25 @@ export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
   const messagesRef = useRef([]);
   const domRegistryRef = useRef(new Map());
   const pageHelpPendingRef = useRef(false);
-  const opencodeSessionRef = useRef(null);
-  if (!opencodeSessionRef.current) {
-    opencodeSessionRef.current = createOpencodeSessionId();
+  // One id per chat: it is the conversation's external_id in the Copilot history AND the
+  // x-opencode-session sent to the BFF, so token-usage records and history correlate. A new
+  // chat gets a fresh id; a resumed conversation reuses its own.
+  const conversationIdRef = useRef(null);
+  if (!conversationIdRef.current) {
+    conversationIdRef.current = createOpencodeSessionId();
   }
+  const [conversationId, setConversationId] = useState(conversationIdRef.current);
+  const conversationCreatedRef = useRef(false);
+  const savedIdsRef = useRef(new Set());
+  const saveChainRef = useRef(Promise.resolve());
+  const turnAbortedRef = useRef(false);
+  // Set when the backend refuses this session for the history endpoints (401/403/404): stop
+  // retrying every turn. The chat itself is unaffected.
+  const historyRefusedRef = useRef(false);
+  const selectSeqRef = useRef(0);
+  const statusRef = useRef('ready');
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [pageHelpSuggestion, setPageHelpSuggestion] = useState('');
   const [pageHelpActive, setPageHelpActive] = useState(false);
   const [pageHelpError, setPageHelpError] = useState('');
@@ -365,7 +389,7 @@ export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
     // the lifetime of the transport.
     headers: () => ({
       ...buildWriteHeaders(),
-      'x-opencode-session': opencodeSessionRef.current,
+      'x-opencode-session': conversationIdRef.current,
     }),
   }), []);
   const [input, setInput] = useState('');
@@ -405,6 +429,130 @@ export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
   });
   addToolOutputRef.current = chat.addToolOutput;
   messagesRef.current = chat.messages;
+
+  statusRef.current = chat.status;
+
+  const isBusy = () => statusRef.current === 'submitted' || statusRef.current === 'streaming';
+
+  const startNewConversation = useCallback(() => {
+    selectSeqRef.current += 1;
+    if (isBusy()) chat.stop();
+    chat.setMessages([]);
+    chat.clearError();
+    const id = createOpencodeSessionId();
+    conversationIdRef.current = id;
+    setConversationId(id);
+    conversationCreatedRef.current = false;
+    savedIdsRef.current = new Set();
+    turnAbortedRef.current = false;
+    setLoadError('');
+    setIsLoadingMessages(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isBusy only reads a ref
+  }, [chat.setMessages, chat.stop, chat.clearError]);
+
+  const history = useAgentConversations({ activeId: conversationId, onActiveRemoved: startNewConversation });
+  const { upsertConversation } = history;
+
+  // Save the finished turn: the conversation is created lazily with the first saved batch
+  // (title = first user message), then every batch is appended in one call. Saving is
+  // serialized, idempotent (per-message external_id) and never throws into the chat.
+  const persistTurn = useCallback(messages => {
+    const id = conversationIdRef.current;
+    saveChainRef.current = saveChainRef.current.then(async () => {
+      try {
+        if (historyRefusedRef.current || conversationIdRef.current !== id) return;
+        const batch = unsavedMessages(messages, savedIdsRef.current);
+        if (batch.length === 0) return;
+        if (!conversationCreatedRef.current) {
+          const title = conversationTitle(batch.find(m => m.role === 'user')?.text ?? batch[0].text);
+          await createAgentConversation({ title, external_id: id });
+          if (conversationIdRef.current !== id) return;
+          conversationCreatedRef.current = true;
+          upsertConversation({ conversation_id: id, title });
+        }
+        await appendAgentMessages({
+          conversation_id: id,
+          messages: batch.map(({ role, text, external_id }) => ({ role, text, external_id })),
+        });
+        if (conversationIdRef.current === id) batch.forEach(m => savedIdsRef.current.add(m.id));
+      } catch (error) {
+        // 401/403: not allowed; 404: the history endpoints are not installed on this server.
+        if ([401, 403, 404].includes(error?.status)) historyRefusedRef.current = true;
+        traceHistory('save failed', { conversationId: id, message: error instanceof Error ? error.message : String(error) });
+      }
+    });
+  }, [upsertConversation]);
+
+  // A turn ends when the chat goes from busy back to ready. Errors and user aborts are not
+  // saved (the assistant part of a failed turn is discarded, like the legacy question flow).
+  const previousStatusRef = useRef(chat.status);
+  useEffect(() => {
+    const previous = previousStatusRef.current;
+    previousStatusRef.current = chat.status;
+    if (previous !== 'submitted' && previous !== 'streaming') return;
+    const discardAssistantMessages = () => {
+      for (const message of chat.messages) {
+        if (message.role === 'assistant') savedIdsRef.current.add(message.id);
+      }
+    };
+    if (chat.status === 'error') {
+      discardAssistantMessages();
+      return;
+    }
+    if (chat.status !== 'ready') return;
+    if (turnAbortedRef.current) {
+      turnAbortedRef.current = false;
+      discardAssistantMessages();
+      return;
+    }
+    const last = chat.messages[chat.messages.length - 1];
+    // A tool round-trip is still in flight: the SDK is about to send the tool outputs back.
+    if (last?.role === 'assistant'
+      && (hasPendingTool(last) || lastAssistantMessageIsCompleteWithToolCalls({ messages: chat.messages }))) return;
+    persistTurn(chat.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on status transitions only
+  }, [chat.status]);
+
+  const selectConversation = useCallback(async conv => {
+    const id = conv?.conversation_id;
+    if (!id) return;
+    selectSeqRef.current += 1;
+    const sequence = selectSeqRef.current;
+    if (isBusy()) chat.stop();
+    chat.setMessages([]);
+    chat.clearError();
+    conversationIdRef.current = id;
+    setConversationId(id);
+    conversationCreatedRef.current = true;
+    savedIdsRef.current = new Set();
+    turnAbortedRef.current = false;
+    setLoadError('');
+    setIsLoadingMessages(true);
+    try {
+      const stored = await getAgentConversationMessages(id);
+      if (sequence !== selectSeqRef.current) return;
+      savedIdsRef.current = new Set(stored.map(m => m.id));
+      chat.setMessages(toUiMessages(stored));
+    } catch (error) {
+      if (sequence === selectSeqRef.current) setLoadError(error instanceof Error ? error.message : '');
+    } finally {
+      if (sequence === selectSeqRef.current) setIsLoadingMessages(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isBusy only reads a ref
+  }, [chat.setMessages, chat.stop, chat.clearError]);
+
+  const stop = useCallback(() => {
+    if (isBusy()) turnAbortedRef.current = true;
+    chat.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isBusy only reads a ref
+  }, [chat.stop]);
+
+  const { clearHistoryError } = history;
+  const dismissError = useCallback(() => {
+    chat.clearError();
+    setLoadError('');
+    clearHistoryError();
+  }, [chat.clearError, clearHistoryError]);
 
   const pageHelpChat = useChat({
     id: 'etendo-go-page-help',
@@ -451,7 +599,7 @@ export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
     try {
       await pageHelpChat.sendMessage({
         text: [
-          'Observe the current Etendo Go screen from the DOM text below.',
+          'Observe the current Etendo screen from the DOM text below.',
           'Respond with one concise, user-facing observation about what is visible.',
           'Point out urgent or useful context, such as an overdue sales invoice, and ask whether the user wants help.',
           'Do not call tools, do not navigate, do not modify data, and do not describe this instruction.',
@@ -476,21 +624,34 @@ export function useAiCopilotChat({ onOpenCopilot, menuGroups }) {
   const actions = useMemo(() => ({
     sendMessage,
     setInput,
-    resetConversation: () => chat.setMessages([]),
-    startNewConversation: () => chat.setMessages([]),
+    resetConversation: startNewConversation,
+    startNewConversation,
+    selectConversation,
+    loadConversations: history.loadConversations,
+    loadArchivedConversations: history.loadArchivedConversations,
+    renameConversation: history.renameConversation,
+    deleteConversation: history.deleteConversation,
+    restoreConversation: history.restoreConversation,
+    permanentDelete: history.permanentDelete,
     retry: chat.regenerate,
-    dismissError: chat.clearError,
-    stop: chat.stop,
+    dismissError,
+    stop,
     addToolResult: chat.addToolOutput,
     requestPageHelp,
     showPageHelp,
-  }), [chat.addToolOutput, chat.setMessages, chat.stop, requestPageHelp, sendMessage, showPageHelp]);
+  }), [chat.addToolOutput, chat.regenerate, dismissError, history.deleteConversation, history.loadArchivedConversations, history.loadConversations, history.permanentDelete, history.renameConversation, history.restoreConversation, requestPageHelp, selectConversation, sendMessage, showPageHelp, startNewConversation, stop]);
 
   return {
     messages,
     input,
     isSending: chat.status === 'submitted' || chat.status === 'streaming',
-    error: chat.error?.message || '',
+    error: chat.error?.message || loadError || history.historyError,
+    conversationId,
+    isLoadingMessages,
+    conversations: history.conversations,
+    archivedConversations: history.archivedConversations,
+    isLoadingConversations: history.isLoadingConversations,
+    isLoadingArchivedConversations: history.isLoadingArchivedConversations,
     pageHelpSuggestion,
     pageHelpError: pageHelpError || pageHelpChat.error?.message || '',
     pageHelpActive,

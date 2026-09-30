@@ -1950,3 +1950,55 @@ was initially missed** — its sibling on sales-invoice (`InvoiceTopbarExtra`) f
 `{ data, recordId, apiBaseUrl, onSave, isDirty }` from its props and silently dropped the prop, so
 the button stayed visible/clickable for a completed invoice with pending SII/TBAI targets even
 under read-only. Found and fixed during the ticket's full v1-v6 review pass (commit `d134ecb82`).
+
+## OCR flow under the cookie session — ETP-5289
+
+Under the cookie session (ETP-4576) the SPA holds no Bearer token. Two calls in the OCR flow still
+required one, and each answered 401. `apiFetch` reads a 401 as an expired session and logs the
+user out. The session is then restored from the cookie, so it looks like the page "reloaded and
+went back to the dashboard".
+
+| Step | Before | Now |
+|---|---|---|
+| Upload + extract (`/sws/copilot/file`, `/sws/copilot/executeTool`) | 401: `CopilotJwtServlet` accepts only a Bearer SWS JWT | `CopilotSessionBridgeFilter` (com.etendoerp.go) resolves the cookie session, builds `OBContext` from it and dispatches to Copilot's `RestService`. No JWT is minted: `generateToken` NPEs when the environment's only warehouse belongs to org `0`. See ADR-0001, D1 addendum |
+| Post-commit attachment | `POST /webhooks/?name=AttachFile` + list + `PATCH …/main`, where the webhook answered 401 | one `POST /sws/neo/attachments/C_Invoice/{id}?markAsMain=true` (`uploadAndMarkMainAttachment`) |
+
+This replaces the "OCR post-commit — `attachFile`" row of the ETP-4855 table above. `attachFile.js`
+was removed. The upload stays non-fatal: if it fails, the uploader logs a warning and still
+navigates to the created invoice.
+
+### OCR UI fixes — ETP-5289
+
+- **Preview and scrollbar flicker on Extract.** The "Uploading…/Extracting…" rows end flush
+  with the side panel's bottom edge. Their spinner is a 12 px square, and rotated it spans ~17 px,
+  so it pushed up to 0.48 px past the panel on every quarter turn (measured). That toggled the
+  panel's scrollbar. Each toggle changed the width by 11 px, and `PdfViewer`, which fits the page
+  to the width, redrew the canvas ~4 times per second. The fix has two parts:
+  - The spinner rows clip their content (`overflow-hidden`), which removes the cause.
+  - The panel reserves the scrollbar's space (`[scrollbar-gutter:stable]`). A future overflow
+    can then no longer resize and redraw the preview.
+- **Match products / New product buttons looked disabled.** They used the info-banner tint
+  (`bg-status-info`). Both now use the shared `Button`: `default` for the action, `outline` for
+  Cancel.
+- **Product dropdown clipped inside the popup.** The list was an `absolute` child of the popup's
+  scrolling body. It is now a `Popover` (portal), so it overlaps the popup. The create option reads
+  **"Crear producto"** (`createProduct` key, shared with the lookup create targets), in the app's
+  standard blue (`text-status-info-foreground`).
+- Contact category selector and the default country Spain are covered by ETP-5332 (OCR opens the
+  real Contacts window) and ETP-5103 (`LocationEditorModal` preselects Spain).
+- **Result toast.** The count now covers the invoice lines only. The header is the document
+  itself, not one of the processed records, so it used to report `1 + lines`.
+- **Cancelling a popup.** It is the user's choice, so no toast is shown. Before, it was reported
+  as `{ ok: 0, failed: [cancelled_by_user] }`, which the bulk toast renders as "La acción falló".
+  The panel's "Done" row is also limited to a committed invoice; before, it appeared after a
+  cancelled or failed flow too.
+- **Skipped lines are omitted, not failed.** A line left without a product in "Match products" is
+  reported under `omitted`, so the toast reads "N registros omitidos". A per-line failure cannot
+  happen on a created invoice: the batch is atomic, so any failure aborts the whole document.
+- **Vendor without an address.** The invoice header cannot be saved without one
+  (`C_Invoice.C_BPartner_Location_ID` is NOT NULL). A contact created from the review popup
+  without filling its Dirección tab has none, and so may an existing vendor. The batch used to
+  post anyway and failed with "La acción falló" after the lines review. Now the review modal
+  checks the chosen vendor (`checkBpHasLocation` in `purchaseInvoiceDescriptor.js`). When it has
+  no address, the modal says so under Proveedor, offers "Volver a verificar", and keeps
+  **Continuar** disabled. A failed lookup (`unknown`) does not block the modal.

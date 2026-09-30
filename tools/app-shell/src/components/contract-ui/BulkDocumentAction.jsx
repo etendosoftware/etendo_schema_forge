@@ -112,6 +112,7 @@ export default function BulkDocumentAction({
         // ETP-5316 — carry the AD_MESSAGE keys across the resolve→throw normalisation too,
         // otherwise this adapter would be the one path that loses them.
         err.messageKeys = result?.messageKeys;
+        err.messageParams = result?.messageParams;
         throw err;
       }
       return result;
@@ -233,6 +234,8 @@ export default function BulkDocumentAction({
         // Plain strings, so they survive the sessionStorage JSON round-trip below unchanged;
         // `undefined` drops out of JSON.stringify by itself, leaving the pre-ETP-5316 shape.
         messageKeys: o.reason?.messageKeys,
+        // ETP-5175 — the values those keys interpolate (plain JSON too).
+        messageParams: o.reason?.messageParams,
       }));
     const ok = rowsToProcess.length - failed.length;
     const result = { ok, omitted, failed };
