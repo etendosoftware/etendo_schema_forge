@@ -63,6 +63,103 @@ function buildDropHandlers({ enabled, onFile, setIsDragOver }) {
 }
 
 /**
+ * ETP-5205 — under the Solo-Lectura tier the stored document stays visible but
+ * nothing can be attached (no drop zone, no picker).
+ */
+function canAttachToRecord({ recordId, tableName, docTypeId, readOnly }) {
+  return !!(recordId && tableName && docTypeId) && !readOnly;
+}
+
+/**
+ * Handler for a file coming from the picker or a drop: ignored while busy or when
+ * attaching is not allowed, rejected with an inline error when its type is not accepted,
+ * stored otherwise.
+ */
+function buildPickedFileHandler({ isBusy, canAttach, storeFile, setPickError, ui }) {
+  return (picked) => {
+    if (!picked || isBusy || !canAttach) return;
+    if (!ACCEPTED_TYPES[picked.type]) {
+      setPickError(ui('ocrInlinePdfOnly'));
+      return;
+    }
+    setPickError(null);
+    storeFile(picked);
+  };
+}
+
+/**
+ * ETP-5518 — Replace and Delete are writes: offered under the same gate as attaching
+ * (`canAttach`), so the Solo-Lectura tier keeps the viewer and the lightbox but no menu.
+ */
+function buildStoredFileActions({ canAttach, inputRef, deleteFile }) {
+  if (!canAttach) return { openPicker: undefined, removeFile: undefined };
+  return {
+    openPicker: () => inputRef.current?.click(),
+    // A failed delete keeps the file on screen; the rejection must not go unhandled.
+    removeFile: () => deleteFile().catch(() => {}),
+  };
+}
+
+/** Inline error under the drop zone / file header: a rejected pick wins over a failed store. */
+function AttachmentErrorRow({ pickError, storeFailed }) {
+  const ui = useUI();
+  const errorText = pickError || (storeFailed ? ui('ocrSidePanelAttachError') : null);
+  if (!errorText) return null;
+  return (
+    <div className="flex items-start gap-2 text-xs text-destructive">
+      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__c851a1" />
+      <span>{errorText}</span>
+    </div>
+  );
+}
+
+/** Empty-state drop zone: a button that opens the picker and accepts a dropped file. */
+function EmptyDocumentDropzone({ canAttach, isDragOver, dropHandlers, onPick }) {
+  const ui = useUI();
+  return (
+    <button
+      type="button"
+      disabled={!canAttach}
+      onClick={onPick}
+      {...dropHandlers}
+      className={`flex min-h-[360px] flex-1 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        isDragOver ? 'border-primary bg-primary/5' : 'border-border-control hover:bg-muted'
+      }`}
+    >
+      <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+      <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
+      {canAttach && (
+        <span className="text-xs font-medium text-foreground">{ui('ocrSidePanelAttach')}</span>
+      )}
+    </button>
+  );
+}
+
+/** File name row above the viewer, with the attach button when attaching is allowed. */
+function StoredFileHeader({ fileName, canAttach, isBusy, onAttach }) {
+  const ui = useUI();
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
+      <span className="truncate">{fileName}</span>
+      {canAttach && (
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={onAttach}
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle bg-card px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isBusy
+            ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__c851a1" />
+            : <Paperclip className="h-3 w-3" data-testid="Paperclip__c851a1" />}
+          {isBusy ? ui('ocrSidePanelAttaching') : ui('ocrSidePanelAttach')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
  * Edit-mode view: renders the record's marked "main" Attachment and lets the
  * user fill it (ETP-4855).
  *
@@ -91,19 +188,8 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
     apiBaseUrl,
   });
 
-  // ETP-5205 — under the Solo-Lectura tier the stored document stays visible but
-  // nothing can be attached (no drop zone, no picker).
-  const canAttach = !!(recordId && tableName && docTypeId) && !readOnly;
-
-  const handleFile = (picked) => {
-    if (!picked || isBusy || !canAttach) return;
-    if (!ACCEPTED_TYPES[picked.type]) {
-      setPickError(ui('ocrInlinePdfOnly'));
-      return;
-    }
-    setPickError(null);
-    storeFile(picked);
-  };
+  const canAttach = canAttachToRecord({ recordId, tableName, docTypeId, readOnly });
+  const handleFile = buildPickedFileHandler({ isBusy, canAttach, storeFile, setPickError, ui });
 
   const dropHandlers = buildDropHandlers({ enabled: !readOnly, onFile: handleFile, setIsDragOver });
 
@@ -117,13 +203,12 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
     />
   );
 
-  const errorText = pickError || (storeFailed ? ui('ocrSidePanelAttachError') : null);
-  const errorRow = errorText ? (
-    <div className="flex items-start gap-2 text-xs text-destructive">
-      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" data-testid="AlertCircle__c851a1" />
-      <span>{errorText}</span>
-    </div>
-  ) : null;
+  const errorRow = (
+    <AttachmentErrorRow
+      pickError={pickError}
+      storeFailed={storeFailed}
+      data-testid="AttachmentErrorRow__c851a1" />
+  );
 
   if (isBusy && !storedFile) {
     return (
@@ -145,51 +230,27 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false
   if (!storedFile) {
     return (
       <div className="flex h-full flex-col gap-2">
-        <button
-          type="button"
-          disabled={!canAttach}
-          onClick={() => inputRef.current?.click()}
-          {...dropHandlers}
-          className={`flex min-h-[360px] flex-1 flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-            isDragOver ? 'border-primary bg-primary/5' : 'border-border-control hover:bg-muted'
-          }`}
-        >
-          <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
-          <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
-          {canAttach && (
-            <span className="text-xs font-medium text-foreground">{ui('ocrSidePanelAttach')}</span>
-          )}
-        </button>
+        <EmptyDocumentDropzone
+          canAttach={canAttach}
+          isDragOver={isDragOver}
+          dropHandlers={dropHandlers}
+          onPick={() => inputRef.current?.click()}
+          data-testid="EmptyDocumentDropzone__c851a1" />
         {errorRow}
         {hiddenInput}
       </div>
     );
   }
 
-  // ETP-5518 — Replace and Delete are writes: offered under the same gate as attaching
-  // (`canAttach`), so the Solo-Lectura tier keeps the viewer and the lightbox but no menu.
-  const openPicker = canAttach ? () => inputRef.current?.click() : undefined;
-  // A failed delete keeps the file on screen; the rejection must not go unhandled.
-  const removeFile = canAttach ? () => deleteFile().catch(() => {}) : undefined;
+  const { openPicker, removeFile } = buildStoredFileActions({ canAttach, inputRef, deleteFile });
   return (
     <div className="flex h-full min-h-0 flex-col gap-2" {...dropHandlers}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <FileText className="h-3.5 w-3.5 shrink-0" data-testid="FileText__c851a1" />
-        <span className="truncate">{storedFile.fileName}</span>
-        {canAttach && (
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={openPicker}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-border-subtle bg-card px-2 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isBusy
-              ? <Loader2 className="h-3 w-3 animate-spin" data-testid="Loader2__c851a1" />
-              : <Paperclip className="h-3 w-3" data-testid="Paperclip__c851a1" />}
-            {isBusy ? ui('ocrSidePanelAttaching') : ui('ocrSidePanelAttach')}
-          </button>
-        )}
-      </div>
+      <StoredFileHeader
+        fileName={storedFile.fileName}
+        canAttach={canAttach}
+        isBusy={isBusy}
+        onAttach={openPicker}
+        data-testid="StoredFileHeader__c851a1" />
       {errorRow}
       <div className={`min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-dashed bg-card ${
         isDragOver ? 'border-primary' : 'border-border-control'
