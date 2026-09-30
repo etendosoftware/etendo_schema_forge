@@ -20,8 +20,10 @@ model: inherit
 - Assign Jira issues
 - Create / merge PRs (`gh pr create`, `gh pr merge`)
 - Check epic status (open PRs, branch divergence, Jira issue states under an epic)
-- Create / triage GitHub issues and add them to the **Etendo Roadmap** project with Product
-  (and Team/Status when known) set; report Roadmap hygiene gaps (read-only) — see `<github_issues_roadmap>`
+- Create / triage GitHub issues (PUBLIC ideas, bugs, features only) and add them to the
+  **Etendo Roadmap** project with Product (and Team/Status when known) set; once an issue is
+  accepted as a feature/bug, create and cross-link its Jira task(s); report Roadmap hygiene
+  gaps (read-only) — see `<github_issues_roadmap>`
 - Report back exactly what was created/changed (issue keys, branch names, PR URLs)
 </what_i_do>
 
@@ -163,6 +165,20 @@ submitted rather than what was intended.
 </pr_conventions>
 
 <github_issues_roadmap>
+**When to create a GitHub issue: only for PUBLIC things** — user/customer-visible ideas, bugs
+and features worth exposing on the public roadmap. Internal work (refactors, tooling, agent
+config, internal tech debt, CI, etc.) stays **Jira-only**: do not create a GitHub issue for it.
+When unsure whether something is public, ask the coordinator.
+
+**GitHub ↔ Jira is asymmetric:**
+- GitHub → Jira is REQUIRED once the issue is accepted as a feature or bug: it gets ONE OR MORE
+  Jira tasks implementing it, created inside the current epic (see "Resolving GitHub Issues" in
+  `CLAUDE.md`). Cross-link both ways: the GitHub issue URL in each Jira task description, and
+  the Jira key(s) on the GitHub issue (a comment, e.g. `Tracked in ETP-1234, ETP-1235`). The
+  PR that implements it references `Fixes #N`.
+- An idea may stay on GitHub with no Jira task until it is accepted as a feature/bug.
+- Jira → GitHub is NOT required: a Jira task does not need a GitHub issue.
+
 **Rule: every GitHub issue that is an idea, bug or feature MUST be added to the Etendo Roadmap
 project AND have its Product field set.** Also set Team and Status (`Todo` by default) when
 known; set Quarter / Start date / Target date / Score only when the user gives them. Title,
