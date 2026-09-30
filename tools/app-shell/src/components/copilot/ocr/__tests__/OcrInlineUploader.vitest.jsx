@@ -20,8 +20,10 @@ vi.mock('@/i18n', () => ({
   },
 }));
 
+const { mockNavigate } = vi.hoisted(() => ({ mockNavigate: vi.fn() }));
+
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('@/components/CopilotContext', () => ({
@@ -41,17 +43,13 @@ vi.mock('../ocrDocTypes', () => ({
   } : null,
 }));
 
-vi.mock('../attachFile', () => ({
-  attachFile: vi.fn().mockResolvedValue({}),
-}));
-
 // ETP-4315 — post-commit the uploader attaches the source file to the new
 // record and marks it as that record's "main" Attachment, so both side panels
 // (which read the record's real, marked Attachment via useMainAttachment)
-// pick it up with no extra step.
+// pick it up with no extra step. ETP-5289 — both happen in one NEO request,
+// because the AttachFile webhook rejected the cookie session with a 401.
 vi.mock('../listAttachments', () => ({
-  listAttachments: vi.fn().mockResolvedValue([]),
-  markAttachmentAsMain: vi.fn().mockResolvedValue(true),
+  uploadAndMarkMainAttachment: vi.fn().mockResolvedValue({ id: 'att-1' }),
 }));
 
 vi.mock('../buildOcrSchema', () => ({
@@ -72,8 +70,7 @@ vi.mock('@/windows/custom/shared/PdfViewer.jsx', () => ({
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import OcrInlineUploader from '../OcrInlineUploader.jsx';
-import { attachFile } from '../attachFile';
-import { listAttachments, markAttachmentAsMain } from '../listAttachments';
+import { uploadAndMarkMainAttachment } from '../listAttachments';
 
 function createPdfFile(name = 'invoice.pdf', size = 2048) {
   return new File([new ArrayBuffer(size)], name, { type: 'application/pdf' });
@@ -270,7 +267,7 @@ describe('OcrInlineUploader', () => {
   it('shows done status with line counts', () => {
     mockExtractionReturn.status = 'done';
     mockFlowReturn.result = {
-      committed: false,
+      committed: true,
       linesCreated: 3,
       linesFailed: 1,
       unresolved: ['item-a'],
@@ -278,6 +275,15 @@ describe('OcrInlineUploader', () => {
 
     render(<OcrInlineUploader {...defaultProps} />);
     expect(screen.getByText(/ocrDone/)).toBeInTheDocument();
+  });
+
+  // ETP-5289 — a cancelled flow also leaves a `result`; it must not read as done.
+  it('does not show done status when the flow was cancelled', () => {
+    mockExtractionReturn.status = 'done';
+    mockFlowReturn.result = { committed: false, cancelled: true };
+
+    render(<OcrInlineUploader {...defaultProps} />);
+    expect(screen.queryByText(/ocrDone/)).not.toBeInTheDocument();
   });
 
   it('shows processing label when busy', () => {
@@ -315,14 +321,11 @@ describe('OcrInlineUploader', () => {
   });
 
   // ETP-4315 — the /preview-file cache and storePreviewFile() were retired:
-  // the source PDF is attached to the new record as a normal Attachment, then
-  // marked "main" via listAttachments + markAttachmentAsMain, which is what
-  // OcrSidePanel/GenericPreviewModal read through useMainAttachment.
+  // the source PDF is attached to the new record as a normal Attachment marked
+  // "main", which is what OcrSidePanel/GenericPreviewModal read through
+  // useMainAttachment.
   describe('post-commit main-attachment marking', () => {
-    it('attaches the source file and marks it as the record main attachment after a successful commit', async () => {
-      listAttachments.mockResolvedValueOnce([{ id: 'att-77' }]);
-      markAttachmentAsMain.mockResolvedValueOnce(true);
-
+    it('uploads the source file as the record main attachment after a successful commit', async () => {
       const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
       const input = container.querySelector('input[type="file"]');
       const file = createPdfFile('invoice.pdf');
@@ -332,19 +335,17 @@ describe('OcrInlineUploader', () => {
       mockFlowReturn.result = { committed: true, recordId: 'new-123' };
       rerender(<OcrInlineUploader {...defaultProps} />);
 
-      await waitFor(() => expect(attachFile).toHaveBeenCalledWith({
-        token: 'test-token', tabId: '290', recordId: 'new-123', file,
+      await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalledWith({
+        token: 'test-token', tableName: 'C_Invoice', recordId: 'new-123', file,
+        apiBaseUrl: '/sws/neo/purchase-invoice',
       }));
-      await waitFor(() => expect(listAttachments).toHaveBeenCalledWith({
-        token: 'test-token', tableName: 'C_Invoice', recordId: 'new-123', apiBaseUrl: '/sws/neo/purchase-invoice',
-      }));
-      await waitFor(() => expect(markAttachmentAsMain).toHaveBeenCalledWith({
-        token: 'test-token', attachmentId: 'att-77', isMain: true, apiBaseUrl: '/sws/neo/purchase-invoice',
-      }));
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(
+        '/purchase-invoice/new-123', { replace: true },
+      ));
     });
 
-    it('skips the mark-as-main step (non-fatal) when attaching the source file fails', async () => {
-      attachFile.mockResolvedValueOnce({ error: 'attach failed' });
+    it('still navigates to the new record (non-fatal) when the upload fails', async () => {
+      uploadAndMarkMainAttachment.mockResolvedValueOnce(null);
 
       const { container, rerender } = render(<OcrInlineUploader {...defaultProps} />);
       const input = container.querySelector('input[type="file"]');
@@ -355,12 +356,10 @@ describe('OcrInlineUploader', () => {
       mockFlowReturn.result = { committed: true, recordId: 'new-456' };
       rerender(<OcrInlineUploader {...defaultProps} />);
 
-      await waitFor(() => expect(attachFile).toHaveBeenCalled());
-      // Let the async post-commit chain settle before asserting the negative.
-      await act(async () => { await Promise.resolve(); });
-
-      expect(listAttachments).not.toHaveBeenCalled();
-      expect(markAttachmentAsMain).not.toHaveBeenCalled();
+      await waitFor(() => expect(uploadAndMarkMainAttachment).toHaveBeenCalled());
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(
+        '/purchase-invoice/new-456', { replace: true },
+      ));
     });
 
     it('does not attach anything when no source file was captured at extraction time', async () => {
@@ -372,9 +371,7 @@ describe('OcrInlineUploader', () => {
 
       await act(async () => { await Promise.resolve(); });
 
-      expect(attachFile).not.toHaveBeenCalled();
-      expect(listAttachments).not.toHaveBeenCalled();
-      expect(markAttachmentAsMain).not.toHaveBeenCalled();
+      expect(uploadAndMarkMainAttachment).not.toHaveBeenCalled();
     });
   });
 });

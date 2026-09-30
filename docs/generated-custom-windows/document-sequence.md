@@ -112,7 +112,12 @@ in the frontend:
 `decisions.json` declares `enumValues` on `name`, mapping each canonical value to a
 `genericLabels` i18n key. The generator turns that into `enumLabels` on the grid column
 (`renderEnumCell` → `tMenu` → `genericLabels`) and into a read-only `select` on the form, whose
-read-only branch renders the option's label. One declaration, both surfaces, no custom component.
+read-only branch renders the option's label. `window.titleField: "name"` makes the record title
+and the last breadcrumb segment read the same label: `getRecordTitle` looks the stored name up in
+the form field's `options` and translates the key. Without `titleField` the title falls back to the
+raw `_identifier` and shows the stored English name (*Purchase Order*, *AP Invoice*) while the grid
+and the Nombre field show *Pedido de compra* — the QA rejection of ETP-5285. One declaration, three
+surfaces, no custom component.
 
 | `AD_Sequence.Name` | i18n key | es_ES | en_US |
 |---|---|---|---|
@@ -383,7 +388,8 @@ two code paths writing the same rows. See
    confirm the value dropdown offers the six translated names.
 6. Open a series and confirm the form shows those same five fields and nothing else — in
    particular no Suffix, Increment By, Auto Numbering, Mask, Value Format or Restart every year —
-   and that **Nombre is read-only** and translated.
+   and that **Nombre is read-only** and translated. The page title and the last breadcrumb
+   segment must read the same translated name (*Pedido de compra*, not *Purchase Order*).
 7. Confirm `Document Type`, `Current Next (System)`, `Used for Record ID`, `Table` and `Column`
    do **not** appear anywhere in the UI.
 8. On a Spanish tenant, set the prefix to `fv-` and confirm the save is refused with the
@@ -419,7 +425,7 @@ two code paths writing the same rows. See
   process it.
 - `artifacts/document-sequence/decisions.json` classifies the 26 extracted fields (five visible
   after ETP-5285) and maps the six series names to i18n keys via `enumValues`, declares `entities.sequence.methods: ["GET","GETBYID","PUT","PATCH"]` (no POST,
-  no DELETE), sets `window.hideCreate` / `window.hideDeleteButton` /
+  no DELETE), sets `window.titleField: "name"`, `window.hideCreate` / `window.hideDeleteButton` /
   `entities.sequence.hideDelete`, and sets `entities.sequence.javaQualifier: "document-sequence"`.
 - `cli/test/document-sequence.contract.test.js` pins all of it: the method allowlist, the
   `post: false` / `delete: false` contract flags, the five visible fields and their grid order,

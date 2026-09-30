@@ -6,6 +6,11 @@ import { createMCPClient } from '@ai-sdk/mcp';
 import { convertToModelMessages, pipeUIMessageStreamToResponse, stepCountIs, streamText, tool } from 'ai';
 import { z } from 'zod';
 import { createTurnRecorder, usageEndpoint } from './usage.js';
+import { buildSystemPrompt } from './systemPrompt.js';
+import {
+  createHistoryStore, elideOldToolResults, fingerprintResponse, fingerprintUiMessages,
+  historyConfigFromEnv, resolveHistory,
+} from './historyCache.js';
 
 const port = Number(process.env.BFF_PORT || 3400);
 const mcpUrl = process.env.ETENDO_MCP_URL || 'http://localhost:8080/etendo/sws/mcp';
@@ -172,7 +177,7 @@ export function browserTools() {
   return {
     navigate_to: tool({
       description: [
-        'Navigate the Etendo Go application to an allowed internal route.',
+        'Navigate the Etendo application to an allowed internal route.',
         'Use this tool whenever the user asks to open or go to a window.',
         'Accepts either an internal path starting with "/" (e.g. /sales-order, /sales-order/new)',
         'or the window name as the user says it, in any UI language (e.g. "Sales Order", "Pedido de Venta").',
@@ -185,7 +190,7 @@ export function browserTools() {
     }),
     open_form: tool({
       description: [
-        'Open an Etendo Go form or window in the current application.',
+        'Open an Etendo form or window in the current application.',
         'This is a browser-side UI tool. Use it for requests to work inside a specific window.',
         'The path is required and follows the same rules as navigate_to: an internal path or a window name.',
         'Use /<window>/new only when the user explicitly asks to create a new record.',
@@ -203,7 +208,7 @@ export function browserTools() {
     }),
     inspect_page_dom: tool({
       description: [
-        'Inspect the current Etendo Go page from the browser.',
+        'Inspect the current Etendo page from the browser.',
         'Returns a compact accessibility-oriented list of visible interactive elements with temporary elementId values.',
         'Call this before interacting with a page element. Sensitive field values are not included.',
       ].join(' '),
@@ -211,7 +216,7 @@ export function browserTools() {
     }),
     interact_with_page: tool({
       description: [
-        'Interact with a visible element on the current Etendo Go page using an elementId from inspect_page_dom.',
+        'Interact with a visible element on the current Etendo page using an elementId from inspect_page_dom.',
         'Supported actions are click, fill, type, and press. Do not invent elementIds and do not use CSS selectors or JavaScript.',
         'Use fill/type only for non-sensitive visible form fields and ask the user before consequential submissions.',
       ].join(' '),
@@ -241,6 +246,9 @@ function trace(stage, payload) {
   console.log(`[ai-bff:${stage}]`, JSON.stringify(payload, null, 2).slice(0, Number(process.env.AI_BFF_TRACE_MAX || 1500)));
 }
 
+const historyConfig = historyConfigFromEnv();
+export const historyStore = createHistoryStore(historyConfig);
+
 export async function handleChat(req, res) {
   if (!hasConfiguredSecret(process.env.OPENCODE_API_KEY)) {
     return json(res, 503, { error: 'OPENCODE_API_KEY is not configured' });
@@ -255,9 +263,11 @@ export async function handleChat(req, res) {
   let mcpClient;
   const isPageHelpRequest = body.mode === 'page-help';
   const opencodeSession = opencodeSessionId(req.headers['x-opencode-session']);
+  // Without a client-provided session id there is nothing stable to key on.
+  const cacheKey = !isPageHelpRequest && req.headers['x-opencode-session'] === opencodeSession ? opencodeSession : undefined;
   const usage = createTurnRecorder({
     url: usageEndpoint(mcpUrl),
-    authorization,
+    authorization: credentials.authorization,
     sessionKey: opencodeSession,
     target: isPageHelpRequest ? 'page-help' : 'agent-chat',
     modelId,
@@ -275,9 +285,24 @@ export async function handleChat(req, res) {
       ...browserTools(),
     };
     trace('tools', { mode: isPageHelpRequest ? 'page-help' : 'chat', available: Object.keys(tools) });
+    const uiMessages = body.messages || [];
+    let modelMessages;
+    if (cacheKey) {
+      const plan = resolveHistory(historyStore.get(cacheKey), uiMessages);
+      trace('history', { session: cacheKey, cache: plan.hit ? 'hit' : plan.reason === 'miss' ? 'miss' : 'ignored', reason: plan.reason });
+      if (plan.hit) {
+        modelMessages = elideOldToolResults(
+          [...historyStore.get(cacheKey).messages, ...await convertToModelMessages(plan.trailing, { tools })],
+          historyConfig.toolResultBudget,
+        );
+      }
+    }
+    modelMessages ??= await convertToModelMessages(uiMessages, { tools });
     const result = streamText({
       model: provider.chatModel(modelId),
-      messages: await convertToModelMessages(body.messages || [], { tools }),
+      // Server-side only. A client-supplied system field is never read: the client must not be able to override it.
+      system: buildSystemPrompt({ mode: isPageHelpRequest ? 'page-help' : 'chat' }),
+      messages: modelMessages,
       tools,
       ...(isPageHelpRequest ? {
         // Page help is a lightweight observation, not an agentic task.
@@ -328,6 +353,7 @@ export async function handleChat(req, res) {
       // Recording is fire-and-forget: usage.finish() never awaits the POST.
       onFinish: async event => {
         usage.finish(event);
+        rememberTurn(cacheKey, uiMessages, modelMessages, event);
         await mcpClient?.close();
       },
     });
@@ -336,6 +362,21 @@ export async function handleChat(req, res) {
     if (mcpClient) await mcpClient.close().catch(() => {});
     json(res, 502, { error: error instanceof Error ? error.message : 'AI request failed' });
   }
+}
+
+/** Store the completed turn's full history. Aborted and failed turns never reach here with a usable result. */
+function rememberTurn(key, uiMessages, modelMessages, event) {
+  if (!key) return;
+  const responseMessages = event?.response?.messages;
+  const assistant = fingerprintResponse(responseMessages);
+  if (event?.finishReason === 'error' || !assistant) {
+    historyStore.delete(key);
+    return;
+  }
+  historyStore.set(key, {
+    fingerprints: [...fingerprintUiMessages(uiMessages), assistant],
+    messages: elideOldToolResults([...modelMessages, ...responseMessages], historyConfig.toolResultBudget),
+  });
 }
 
 export function createServer() {
