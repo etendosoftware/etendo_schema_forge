@@ -202,7 +202,6 @@ async function prepareInvitedUser(request, neoToken, email) {
       data: {
         name: 'E2E Invitation User',
         email,
-        locked: false,
       },
     });
     userResponseText = await userResponse.text();

@@ -82,17 +82,16 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     // ETP-5079 renamed the seeded starter category ("Otros" -> VALUE/NAME "Generic") and gave it
     // an es_ES `M_PRODUCT_CATEGORY_TRL` row ("Genérico"); the other seeded category, "Discounts",
     // is flagged `EM_Etgo_IsSystemCategory='Y'` and is filtered out of every window and selector.
-    //
-    // Match on the SEARCH KEY, never on a name. The category now has three identifying strings
-    // and only one of them is locale-independent:
+    // ETP-5498 renamed it again: base VALUE and NAME are now "Genérico" too (the accent is
+    // intentional), so the three identifying strings below agree once more:
     //   - `searchKey` (M_Product_Category.Value) is `AD_Column.ISTRANSLATED='N'`, so it reads
-    //     "Generic" in every locale — the translation-independent handle;
+    //     "Genérico" in every locale — the translation-independent handle;
     //   - `name` (M_Product_Category.Name) is served by `DefaultJsonDataService` with
-    //     `DataResolvingMode.FULL`, i.e. `bob.get("name")`, the raw base column: always "Generic";
+    //     `DataResolvingMode.FULL`, i.e. `bob.get("name")`, the raw base column: "Genérico";
     //   - `_identifier` is `bob.getIdentifier()`, and Name is `ISTRANSLATED='Y' ISIDENTIFIER='Y'`,
     //     so `IdentifierProvider` resolves it through the `*_Trl` row: "Genérico" in an es_ES
-    //     session. `name` and `_identifier` therefore no longer agree.
-    const SEEDED_CATEGORY_SEARCH_KEY = 'Generic';
+    //     session too. `name` and `_identifier` agree again after ETP-5498.
+    const SEEDED_CATEGORY_SEARCH_KEY = 'Genérico';
     const existingCategory = categories.find(
       (category) => String(category.searchKey ?? category.value ?? category._value ?? '').trim()
         === SEEDED_CATEGORY_SEARCH_KEY,
@@ -110,8 +109,9 @@ test.describe('ETP-4905 — Product import category resolution (Tomcat integrati
     const existingCategoryName = existingCategory.name;
     expect(existingCategoryName, 'expected the existing category to expose a base name').toBeTruthy();
     // The grid renders `productCategory$_identifier` (`resolveIdentifier()` -> DataTable), which IS
-    // translated — so the DOM assertions below use the identifier, not the base name. Both were the
-    // same string before ETP-5079, which is why one variable used to serve both roles.
+    // translated — so the DOM assertions below use the identifier, not the base name. Both are the
+    // same string again after ETP-5498 (they briefly diverged between ETP-5079 and ETP-5498), which
+    // is why one variable used to serve both roles.
     const existingCategoryLabel = existingCategory._identifier ?? existingCategoryName;
 
     const categoryCreateBodies = [];

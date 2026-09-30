@@ -7,21 +7,29 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(__dirname, '..', 'index.jsx'), 'utf8');
 
-describe('SalesOrderWindow — legacy pendingDelivery filter removed (ETP-4004)', () => {
+describe('SalesOrderWindow — pending delivery filter (ETP-5487, supersedes ETP-4004)', () => {
   it('does not import buildPendingDeliveryFilter', () => {
     assert.doesNotMatch(src, /buildPendingDeliveryFilter/,
-      'buildPendingDeliveryFilter must be removed — ' +
-      'the dashboard now navigates to goods-shipment for pending sales deliveries, not sales-order');
+      'buildPendingDeliveryFilter must not be reintroduced without updating this guard — ' +
+      'sales-order currently composes the ?filter=pendingDelivery advanced filter inline (ETP-5487)');
   });
 
-  it('does not reference isPendingDelivery', () => {
-    assert.doesNotMatch(src, /isPendingDelivery/,
-      'isPendingDelivery must be removed — sales-order no longer handles pending-delivery filtering');
+  it('reads the pendingDelivery filter param from the URL', () => {
+    assert.match(src, /isPendingDelivery\s*=\s*searchParams\.get\('filter'\)\s*===\s*'pendingDelivery'/,
+      'sales-order must read ?filter=pendingDelivery — the Dashboard "Envios" card ' +
+      'navigates here with that param (ETP-5487, replacing the old goods-shipment ' +
+      '?DocStatus=DR link that ETP-4004 originally removed)');
   });
 
-  it('does not reference the pendingDelivery filter string as an initialColumnFilter', () => {
-    assert.doesNotMatch(src, /initialColumnFilters.*pendingDelivery/s,
-      'sales-order must not pass pendingDelivery as initialColumnFilters');
+  it('builds the pendingDelivery advanced filter for completed orders with delivery < 100', () => {
+    assert.match(src, /field:\s*'documentStatus',\s*operator:\s*'equals',\s*value:\s*'CO'/,
+      'the pendingDelivery filter must scope to completed (CO) orders');
+    assert.match(src, /field:\s*'deliveryStatus',\s*operator:\s*'lessThan',\s*value:\s*100/,
+      'the pendingDelivery filter must scope to deliveryStatus < 100');
+  });
+
+  it('passes initialFiltersFromUrl so the URL filter outranks saved grid state', () => {
+    assert.match(src, /initialFiltersFromUrl=\{isPendingDelivery\}/);
   });
 
   it('exports a default function component named SalesOrderWindow', () => {

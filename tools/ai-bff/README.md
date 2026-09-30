@@ -154,6 +154,58 @@ tool failing on `args.path === undefined` while the model reports it "could not
 provide a path" — the exact ETP-5064 dead end. `test/server.test.js` fails if any
 browser tool loses its schema or goes back to `parameters`.
 
+## System prompt
+
+The BFF sends the model a server-side system prompt (`src/systemPrompt.js`,
+`buildSystemPrompt({ mode })`), with a `chat` variant (agentic, MCP + browser
+tools) and a `page-help` variant (no tools, short answers). It is never sent to
+or exposed by the UI, and a `system` field in the request body is ignored.
+
+The default rules address an end user with little technical knowledge (plain
+language, no tool names), ground answers in the MCP tools, and point only to the
+functional docs (https://etendosoftware.github.io/etendo-docs/) plus Etendo
+support when the agent cannot answer. In that case the chat variant also calls
+the MCP `neo_feedback` tool once, silently, so the team can review the gap.
+
+For local experiments set `AI_BFF_SYSTEM_PROMPT_FILE=/path/to/prompt.md`: if the
+file is readable and non-empty, its content replaces the default for both modes.
+It is read on every request, so edits apply without a restart; an unreadable or
+empty file falls back to the default.
+
+## Conversation history cache
+
+The browser already sends every UIMessage (tool calls and results included)
+while its tab stays open. A conversation resumed from the history panel, or a
+reloaded tab, only has the user/assistant text stored in the database, so the
+agent would forget the tool work it did earlier. To close that gap the BFF keeps
+the full model history (`src/historyCache.js`) in memory, keyed by the
+`x-opencode-session` id (the frontend uses the conversation UUID).
+
+- **What is stored:** the full `ModelMessage[]` at the end of the last completed
+  turn (tool calls and results included). Aborted or failed turns are not stored.
+- **Life:** sliding TTL of 1 hour (`AI_BFF_HISTORY_TTL_MS`, default `3600000`;
+  `0` disables the cache). After it expires the conversation continues from what
+  the browser sends (the DB text history).
+- **Bounds:** LRU cap of `AI_BFF_HISTORY_MAX_ENTRIES` (default 200) and a
+  per-entry guard of `AI_BFF_HISTORY_MAX_ENTRY_CHARS` (default 2000000); an
+  oversized history is simply not stored.
+- **Tool output growth:** results of previous turns larger than
+  `AI_BFF_HISTORY_TOOL_RESULT_BUDGET` chars (default 4000) are replaced by
+  `[elided N chars]`. The call/result pair is always kept, and the latest turn
+  is never elided.
+- **Consistency rule:** the cache is used only when the incoming messages are
+  exactly the cached turns (same roles and whitespace-normalized text; ids are
+  not compared because the client generates its own) followed by one or more new
+  user messages. Edit, regenerate, retry or any count mismatch ignores the cache
+  and the request uses `body.messages` as before, replacing the entry afterwards.
+- **`page-help`** never reads or writes it, and a request without an
+  `x-opencode-session` header is not cached.
+- **Trace:** one `[ai-bff:history]` line per chat request (`hit`, `miss` or
+  `ignored` + reason), never the content.
+- **Limits:** per process. It is lost on restart and is not shared between
+  replicas, so behind a load balancer use session affinity or accept the
+  fallback to the DB history on a cache miss.
+
 ## Tracing a conversation
 
 Both halves of the loop are traced, and both are needed: MCP tools (`neo_list`,
