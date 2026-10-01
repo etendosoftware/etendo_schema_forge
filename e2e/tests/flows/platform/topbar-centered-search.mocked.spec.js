@@ -1,0 +1,294 @@
+import { test, expect } from '@playwright/test';
+import { login } from '../../helpers/auth.js';
+
+/**
+ * ETP-5509 — the top bar search is centered in the bar whatever sits beside it.
+ *
+ * `TopBar.jsx` lays the header out as a 3-column grid
+ * (`minmax(0,1fr) | auto | minmax(max-content,1fr)`):
+ *
+ *   col 1  back button + `topbar-title-block` (title, count, breadcrumb) + kebab — shrinkable,
+ *          its texts elide at the column edge
+ *   col 2  `topbar-search-slot` holding the 392px `global-search-trigger`
+ *   col 3  `topbar-quick-actions`, pushed to the right edge
+ *
+ * The two side tracks are equal, so the search center must match the bar center no matter how
+ * long the title is, whether there is a back button, how wide the right group is, or how wide
+ * the navigation rail is. jsdom has no layout, so the unit suite (`TopBar.vitest.jsx`) can only
+ * pin the classes; this spec measures the geometry.
+ *
+ * Coordinate method: every rect comes from `getBoundingClientRect()` read in ONE `evaluate`, so
+ * all of them share the same coordinate space. No page-level transform or zoom was found on these
+ * routes, and because only centers and edges of elements in the same space are compared, a
+ * uniform scale would cancel out anyway.
+ *
+ * "Bar center" is the center of the header's CONTENT box (border box minus its own horizontal
+ * padding) — the box the grid tracks are laid out in. The header carries `pl-0 pr-6`, so its
+ * border-box center sits `(padRight - padLeft) / 2` = 12px to the right of it; see
+ * `measureTopBar()` → `borderBoxOffset`, which is reported in the assertion message.
+ *
+ * Pages (mock mode renders `es_ES`):
+ *   - `/warehouse`         list, short title ("Almacén")
+ *   - `/purchase-invoice`  list, longer title ("Factura de Compra")
+ *   - `/sales-order/:id`   document detail; the record has a very long document number, so the
+ *                          title AND the breadcrumb's current level must elide (no back button:
+ *                          document details do not publish one)
+ *   - `/report-viewer?report=:id`  report viewer, the page that publishes `onBack`: back button +
+ *                          very long report title + breadcrumb that must elide
+ * Each at 1280×720 and 1920×1080, with the navigation rail expanded and collapsed.
+ */
+
+// Sub-pixel allowance for centers (rounding of the 1fr tracks).
+const CENTER_TOLERANCE_PX = 1;
+// Sub-pixel / border rounding allowance for edge comparisons.
+const EDGE_TOLERANCE_PX = 1;
+
+const VIEWPORTS = [
+  { label: '1280x720', width: 1280, height: 720 },
+  { label: '1920x1080', width: 1920, height: 1080 },
+];
+// The rail is 240px expanded and 56px collapsed; the header starts right after it. The bounds
+// below only prove the seeded state really took effect (it is the variable under test).
+const RAIL_STATES = [
+  { label: 'rail expanded', expanded: 'true', headerLeft: { min: 200, max: 300 } },
+  { label: 'rail collapsed', expanded: 'false', headerLeft: { min: 0, max: 100 } },
+];
+
+// Long enough to overflow the left column even at 1920px with the rail collapsed
+// (column ≈ (1920 - 56 - 24 - 392 - 2·16) / 2 ≈ 708px; this is far wider at text-xl and text-xs).
+const LONG_DOCUMENT_NO = 'SO-2026-000123456789-PEDIDO-DE-VENTA-CON-UN-NUMERO-DE-DOCUMENTO-'
+  + 'EXTRAORDINARIAMENTE-LARGO-PARA-FORZAR-EL-TRUNCADO-DEL-TITULO-Y-DEL-BREADCRUMB';
+const LONG_RECORD = {
+  id: 'topbar-long-record',
+  documentNo: LONG_DOCUMENT_NO,
+  _identifier: LONG_DOCUMENT_NO,
+  documentStatus: 'DR',
+  'documentStatus$_identifier': 'Borrador',
+  'businessPartner$_identifier': 'Proveedor Test S.L.',
+};
+
+const LONG_REPORT_ID = 'e2e-topbar-long-report';
+const LONG_REPORT_TITLE = `Informe ${LONG_DOCUMENT_NO}`;
+// A synthetic, non-catalog report with no parameters: the per-report access filter lets it
+// through without a grant, and opening it fires no selector request
+// (same approach as report-selector-cookie.mocked.spec.js).
+const REPORT_MANIFEST = [
+  {
+    id: LONG_REPORT_ID,
+    category: 'finance',
+    type: 'listing',
+    orientation: 'portrait',
+    outputs: ['pdf'],
+    title: { en_US: `Report ${LONG_DOCUMENT_NO}`, es_ES: LONG_REPORT_TITLE },
+    parameters: [],
+  },
+];
+
+/**
+ * `expectedTitle`     text the TopBar title must show (waited for before measuring).
+ * `long`              the title and breadcrumb must elide.
+ * `back`              the back button is expected.
+ */
+const PAGES = [
+  { name: 'list, short title', path: '/warehouse', expectedTitle: 'Almacén', long: false, back: false },
+  { name: 'list, longer title', path: '/purchase-invoice', expectedTitle: 'Factura de Compra', long: false, back: false },
+  {
+    name: 'document detail, long title + breadcrumb',
+    path: `/sales-order/${LONG_RECORD.id}`,
+    expectedTitle: LONG_DOCUMENT_NO,
+    long: true,
+    back: false,
+  },
+  {
+    name: 'report viewer, back button + long title + breadcrumb',
+    path: `/report-viewer?report=${LONG_REPORT_ID}`,
+    expectedTitle: LONG_REPORT_TITLE,
+    long: true,
+    back: true,
+  },
+];
+
+/**
+ * Sales Order header mock: list and detail both answer with the long record. Must run AFTER
+ * login() (routes match in reverse registration order). Two routes, never the brace form — see
+ * docs/e2e-testing-guide.md → "a route pattern ending in a bare `word**`".
+ */
+async function installSalesOrderMock(page) {
+  const handler = async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const isDetail = new RegExp(`/header/${LONG_RECORD.id}(?:[/?]|$)`).test(url.pathname);
+    const isList = /\/header\/?$/.test(url.pathname);
+    if (req.method() !== 'GET' || !(isDetail || isList)) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: { data: [LONG_RECORD], totalRows: 1 } }),
+    });
+  };
+  await page.route('**/sws/neo/sales-order/header/**', handler);
+  await page.route('**/sws/neo/sales-order/header**', handler);
+}
+
+async function installReportMock(page) {
+  await page.route('**/api/reports', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(REPORT_MANIFEST) });
+  });
+}
+
+async function openPage(page, target, viewport, rail) {
+  await login(page);
+  await installSalesOrderMock(page);
+  await installReportMock(page);
+  // Same key SidebarContext.jsx reads; seeded before the app boots.
+  await page.addInitScript((expanded) => {
+    try { localStorage.setItem('sidebar-expanded', expanded); } catch { /* noop */ }
+  }, rail.expanded);
+  await page.setViewportSize({ width: viewport.width, height: viewport.height });
+  await page.goto(target.path);
+
+  const titleBlock = page.getByTestId('topbar-title-block');
+  await expect(titleBlock).toContainText(target.expectedTitle, { timeout: 15_000 });
+  await expect(page.getByTestId('global-search-trigger')).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+}
+
+/** Reads every geometry fact the assertions need in a single round-trip. */
+async function measureTopBar(page) {
+  return page.getByTestId('topbar-search-slot').evaluate((slot) => {
+    const rect = (el) => {
+      const b = el.getBoundingClientRect();
+      return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width, height: b.height };
+    };
+    const header = slot.closest('header');
+    const headerStyle = getComputedStyle(header);
+    const padLeft = parseFloat(headerStyle.paddingLeft);
+    const padRight = parseFloat(headerStyle.paddingRight);
+    const headerRect = rect(header);
+    const contentLeft = headerRect.left + padLeft;
+    const contentRight = headerRect.right - padRight;
+
+    const byId = (id) => header.querySelector(`[data-testid="${id}"]`);
+    const titleBlock = byId('topbar-title-block');
+    // The title is the element that elides inside the title block's first row.
+    const titleText = titleBlock?.firstElementChild?.firstElementChild ?? null;
+    // Structured breadcrumbs elide on their current level; string ones on the breadcrumb itself.
+    const breadcrumbText = byId('topbar-breadcrumb-current') ?? byId('topbar-breadcrumb');
+    const overflowFacts = (el) => (el
+      ? {
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        textOverflow: getComputedStyle(el).textOverflow,
+      }
+      : null);
+
+    const quickActions = byId('topbar-quick-actions');
+    const quickActionChildren = Array.from(quickActions.children)
+      .filter((el) => el.getBoundingClientRect().width > 0)
+      .map(rect);
+
+    const searchTrigger = byId('global-search-trigger');
+    return {
+      header: headerRect,
+      headerScrollWidth: header.scrollWidth,
+      headerClientWidth: header.clientWidth,
+      contentCenter: (contentLeft + contentRight) / 2,
+      borderBoxOffset: (headerRect.left + headerRect.right) / 2 - (contentLeft + contentRight) / 2,
+      slot: rect(slot),
+      search: rect(searchTrigger),
+      leftColumn: titleBlock ? rect(titleBlock.parentElement) : null,
+      titleBlock: titleBlock ? rect(titleBlock) : null,
+      title: overflowFacts(titleText),
+      breadcrumb: overflowFacts(breadcrumbText),
+      quickActions: rect(quickActions),
+      quickActionChildren,
+      page: {
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      },
+    };
+  });
+}
+
+const center = (r) => (r.left + r.right) / 2;
+
+for (const viewport of VIEWPORTS) {
+  for (const rail of RAIL_STATES) {
+    test.describe(`TopBar centered search — ${viewport.label}, ${rail.label} (ETP-5509)`, () => {
+      for (const target of PAGES) {
+        test(`search stays centered — ${target.name}`, async ({ page }) => {
+          await openPage(page, target, viewport, rail);
+
+          await expect(page.getByTestId('topbar-back')).toHaveCount(target.back ? 1 : 0);
+
+          // 1. The search is centered in the bar. Polled: the left column settles once the
+          //    record / report title arrives and the web fonts are applied.
+          await expect.poll(async () => {
+            const m = await measureTopBar(page);
+            return Math.abs(center(m.search) - m.contentCenter);
+          }, {
+            message: 'global-search-trigger center must match the top bar center',
+            timeout: 5_000,
+          }).toBeLessThanOrEqual(CENTER_TOLERANCE_PX);
+
+          const m = await measureTopBar(page);
+          expect(m.header.left, `navigation rail is not ${rail.label}`).toBeGreaterThanOrEqual(rail.headerLeft.min);
+          expect(m.header.left, `navigation rail is not ${rail.label}`).toBeLessThanOrEqual(rail.headerLeft.max);
+          expect(Math.abs(center(m.slot) - m.contentCenter), 'topbar-search-slot is off center')
+            .toBeLessThanOrEqual(CENTER_TOLERANCE_PX);
+          expect(m.search.width, 'the search keeps its 392px width').toBeGreaterThanOrEqual(392 - EDGE_TOLERANCE_PX);
+          // Not asserted on purpose: `m.borderBoxOffset` (12px today, from the header's asymmetric
+          // pl-0 pr-6) is a design question, not a grid regression — see the file header.
+
+          // 2. The left column never reaches the search.
+          expect(m.leftColumn, 'title column not found').not.toBeNull();
+          expect(m.leftColumn.right, 'left column overlaps the search')
+            .toBeLessThanOrEqual(m.search.left + EDGE_TOLERANCE_PX);
+          expect(m.titleBlock.right, 'title block overlaps the search')
+            .toBeLessThanOrEqual(m.search.left + EDGE_TOLERANCE_PX);
+          expect(m.leftColumn.left, 'left column starts outside the bar')
+            .toBeGreaterThanOrEqual(m.header.left - EDGE_TOLERANCE_PX);
+
+          // 3. A long title / breadcrumb elides instead of overflowing.
+          if (target.long) {
+            expect(m.title, 'title element not found').not.toBeNull();
+            expect(m.title.textOverflow).toBe('ellipsis');
+            expect(m.title.scrollWidth, 'long title must be truncated')
+              .toBeGreaterThan(m.title.clientWidth);
+            expect(m.breadcrumb, 'breadcrumb element not found').not.toBeNull();
+            expect(m.breadcrumb.textOverflow).toBe('ellipsis');
+            expect(m.breadcrumb.scrollWidth, 'long breadcrumb must be truncated')
+              .toBeGreaterThan(m.breadcrumb.clientWidth);
+          }
+
+          // 4. Right actions: inside the bar, on one line, clear of the search.
+          expect(m.quickActions.left, 'right actions overlap the search')
+            .toBeGreaterThanOrEqual(m.search.right - EDGE_TOLERANCE_PX);
+          expect(m.quickActions.right, 'right actions overflow the bar')
+            .toBeLessThanOrEqual(m.header.right + EDGE_TOLERANCE_PX);
+          expect(m.quickActions.top).toBeGreaterThanOrEqual(m.header.top - EDGE_TOLERANCE_PX);
+          expect(m.quickActions.bottom).toBeLessThanOrEqual(m.header.bottom + EDGE_TOLERANCE_PX);
+          expect(m.quickActionChildren.length, 'right group must hold at least one action').toBeGreaterThan(0);
+          const firstTop = Math.min(...m.quickActionChildren.map((r) => r.top));
+          const lastBottom = Math.max(...m.quickActionChildren.map((r) => r.bottom));
+          const tallest = Math.max(...m.quickActionChildren.map((r) => r.height));
+          expect(lastBottom - firstTop, 'right actions wrapped onto a second line')
+            .toBeLessThanOrEqual(tallest + EDGE_TOLERANCE_PX);
+
+          // 5. No horizontal overflow — neither of the header nor of the page.
+          expect(m.headerScrollWidth, 'header overflows horizontally')
+            .toBeLessThanOrEqual(m.headerClientWidth);
+          expect(m.page.scrollWidth, 'page overflows horizontally')
+            .toBeLessThanOrEqual(m.page.clientWidth);
+        });
+      }
+    });
+  }
+}
