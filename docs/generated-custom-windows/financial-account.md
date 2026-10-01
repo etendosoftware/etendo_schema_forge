@@ -1212,10 +1212,28 @@ or out, and it moves the balance once processed. A statement line (`createStatem
 reconciliation. In blind run `20261001T1949-local-a00c` an agent asked to "record a deposit" created a
 statement line because no movement route existed.
 
-Not exposed to agents yet: funds transfers between accounts and *Add payment* from the account.
+**Funds transfers (*Transferir*, `FundsTransferModal`)** are declared on the same entity, `id` =
+the source account:
+
+| Action | Kind | Parameters (required in **bold**) | What the UI allows, and so the action |
+|---|---|---|---|
+| `transferDestinations` | read | — | the destination dropdown: active accounts other than the source, in its organization tree; between two currencies, today's system rate (what the modal prefills) |
+| `transferFunds` | write | **`destinationAccountId`**, **`amount`** (> 0), **`glItemId`**, `conversionRate` (default today's system rate; required when there is none), `description` (≤ 255), `bankFeeFrom`, `bankFeeTo` | *Confirmar* needs a destination, a G/L item, an amount and, between currencies, a rate. The date is always **today**, as the modal books it |
+
+The action sends `?action=transfer` the modal's own body, so Classic `createTransfer` books both
+legs as it does for a person. A transfer cannot be deleted afterwards (each leg references the
+other; *Eliminar* answers 409 on both) — it is undone with a transfer back. Classic's *Funds
+Transfer* button (`aprmFundsTrans`) is now listed as withdrawn with `useInstead: transferFunds`.
+
+**Add payment from the account is not offered — to people or agents.** The endpoint
+(`?action=create-payment`, `AddPaymentService`) still exists, but its only SPA caller,
+`NewMovementWizard`, has been mounted nowhere since ETP-4500 replaced it with
+`NewTransactionModal`. Payments and collections are registered from the invoice
+(`registerPayment`), so the MCP does not declare it either.
+
 Posting stays on `financial-account/transaction` (`post` / `unpost`). Runtime reference:
-`com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (contracts, gates) and §4.12.9 (differences
-with the SPA's route).
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.4 (movements), §4.12.1.5 (transfers) and §4.12.9
+(differences with the SPA's route).
 
 ## MCP / agent access to bank statements (ETP-5447, ETP-5469)
 
