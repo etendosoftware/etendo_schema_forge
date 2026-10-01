@@ -362,6 +362,25 @@ Still offering what the UI does not (queued as a fix batch after Steps 4/5):
 Local data note: FC1000002's schedule detail still points at collection 1000007 (BUG-1 repro
 leftover) — do not use that invoice for Step 6 tests.
 
+## Blind-run findings (2026-10-01, run `20261001T1949-local-a00c`)
+
+| Id | Finding | Fix |
+|---|---|---|
+| BR-1 | **Surface honesty.** `neo_schema(payment-in, finPayment, view:"actions")` narrowed `aPRMProcessPayment.actionValues` to `[P]` (`MCP_CONFIG.actions.values`), but `view:"full"` — and `fields:[…]` — still listed `P`, `R`, `RE`, `V`. The agent read the full view and offered *Void* to its user. Only the actions view was shaped by `MCP_CONFIG.actions`; hidden and agent-excluded buttons leaked into the full view the same way | go `08caac76c`: `McpToolRouter.handleSchema` shapes the field array once (`McpActionsView.applyConfig`), before the view dispatch, so every projection describes the same buttons (hidden/excluded left out, redirects withdrawn with `useInstead`, values narrowed, unusable config withdraws all; matched by field name and DB column). No other MCP surface emits `actionValues`. `neo-headless.md` §4.12.1.3 |
+| BR-2 | **Parity gap — manual movements.** The UI records a deposit/withdrawal against a G/L item (*Nuevo movimiento*) and edits, processes, reactivates and deletes it, through `financial-account-transactions` — a report spec MCP refuses (422) — while `financial-account/transaction` refuses every MCP write (405) and pointed at that same spec. An agent asked to record a deposit created a **bank-statement line** instead, which is what the bank reports, not a movement of the account | go `c9778aa64`: declared actions on `financial-account/account` (`listMovements`, `movementGlItems`, `createMovement`, `updateMovement`, `processMovement`, `reactivateMovement`, `deleteMovement`, `FinancialAccountMovementActions`) that hand `FinancialAccountTransactionsHandler` the SPA's own body, after the UI's per-row gates and the modal's requirements; the transaction 405 now names them (`MCP_CONFIG.verbs.instead`, XML + DB). go `bb95bbddb`: the account's agent prompt names them and tells a movement from a statement line. `neo-headless.md` §4.12.1.4 / §4.12.6 / §4.12.9; `financial-account.md`; probe `manual-deposit` now expects a booked deposit |
+
+Ownership check of the SPA's endpoint (`FinancialAccountTransactionsHandler`), read-only, nothing
+changed on REST: the account (`handleList`, `create`), the movement (`update`/`process`/
+`reactivate`/`delete`) and every referenced id go through `TenantOwnership.loadOwned` (ETP-4950), so
+no cross-tenant read or write was found. Three weaker points, reported, not fixed: (1) a referenced
+id the tenant cannot read is silently dropped (the movement is saved without the G/L item or
+contact asked for) — the agent route refuses it with 422; (2) a movement id is not checked against
+any account, so within one tenant a movement of another account is reachable through the endpoint —
+the agent route answers 404; (3) the lookups (`glitem-lookup`, `bpartner-lookup`,
+`dimension-values`) are scoped by client only, not by the role's readable organizations, and
+mutations are gated by readable rather than writable organizations (the same known gap as the
+invoice payment actions).
+
 ## Implementation plan
 
 All work in ETP-5558 (`feature/ETP-5558` in `schema_forge` and `com.etendoerp.go`). Steps are
