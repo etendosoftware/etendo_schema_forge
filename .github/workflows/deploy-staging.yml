@@ -109,6 +109,8 @@ jobs:
           # The build knows its target, so the bundle is told its environment
           # instead of guessing it from location.hostname.
           VITE_APP_ENV: ${{ steps.target.outputs.env_label }}
+          # RUM is opt-in since ETP-4578: the IDs alone no longer switch it on.
+          VITE_RUM_ENABLED: "true"
           VITE_RUM_APP_MONITOR_ID: ${{ steps.target.outputs.rum_app_monitor_id }}
           VITE_RUM_IDENTITY_POOL_ID: ${{ steps.target.outputs.rum_identity_pool_id }}
           # Sentry — DSN as variable (public, baked into JS bundle), token as secret
