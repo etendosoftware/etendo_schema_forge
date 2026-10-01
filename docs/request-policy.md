@@ -289,6 +289,30 @@ Also not covered: hook-based writes made inside app-shell-core itself, which go 
 when the child write completes can store pre-write data as fresh (the core cache only discards such
 a response on `clear()`). That race is rare in this flow, which is a navigation after the write.
 
+### Writes to Contactos invalidate every cached selector page (ETP-5571)
+
+Selector option pages (`CreatableSearchSelect`, `SelectorInput`) are cached under
+`entity: 'selector'` for `catalogStaleTime` (5 min), keyed by the selector URL of the document
+that renders them — they belong to no spec that `WRITE_INVALIDATES_SPECS` could name. Renaming a
+contact in Contactos therefore left the Contacto selector of every Sales/Purchase document serving
+the old name until a full reload: re-opening the selector goes through `fetchQuery`, which returns
+the cached page while it is still fresh.
+
+A second map in the same module, `WRITE_INVALIDATES_ENTITIES`, covers caches keyed by entity: a
+successful non-GET whose URL has a listed path segment marks every cached query of the dependent
+entities stale (`cache.invalidate({ entity })`). Matching is the same whole-path-segment rule.
+
+| A write to | Marks stale |
+|---|---|
+| `contacts` (any entity: `businessPartner`, `basicDiscount`, …) | every `selector` entry |
+
+The invalidation is intentionally broad — a selector entry does not record which table its options
+come from, so all selector pages are marked, at the cost of one extra GET the next time each is
+opened. Only `contacts` is declared; other master-data specs are added when a ticket needs them.
+
+Not covered: the Contacts CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, so selector pages still wait out `catalogStaleTime` after an import.
+
 ## Working without an AuthProvider
 
 `useApiFetch` and `useLogout` read the session with `useAuthOptional`, so they do NOT throw in
