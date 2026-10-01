@@ -22,10 +22,15 @@ import { login } from '../../helpers/auth.js';
  * routes, and because only centers and edges of elements in the same space are compared, a
  * uniform scale would cancel out anyway.
  *
- * "Bar center" is the center of the header's CONTENT box (border box minus its own horizontal
- * padding) — the box the grid tracks are laid out in. The header carries `pl-0 pr-6`, so its
- * border-box center sits `(padRight - padLeft) / 2` = 12px to the right of it; see
- * `measureTopBar()` → `borderBoxOffset`, which is reported in the assertion message.
+ * "Bar center" is the center of the header's BORDER box — the visible bar, not a padding-shifted
+ * content box. The header has no horizontal padding (`px-0`): the 24px right inset lives on the
+ * actions group (`pr-6`, inside its own track), so the grid tracks span the whole bar and the
+ * search lands on its visual center. Before that fix the header carried `pl-0 pr-6` and the
+ * search sat 12px left of the bar center while still being centered on the content box — which
+ * is why the content box is deliberately NOT what this spec measures against.
+ *
+ * The fix must not move the sides either: the left column starts at the header's left edge (right
+ * after the rail) and the last right action ends 24px inside the header's right edge.
  *
  * Pages (mock mode renders `es_ES`):
  *   - `/warehouse`         list, short title ("Almacén")
@@ -42,6 +47,8 @@ import { login } from '../../helpers/auth.js';
 const CENTER_TOLERANCE_PX = 1;
 // Sub-pixel / border rounding allowance for edge comparisons.
 const EDGE_TOLERANCE_PX = 1;
+// The right actions keep a 24px (`pr-6`) inset from the bar's right edge.
+const RIGHT_INSET_PX = 24;
 
 const VIEWPORTS = [
   { label: '1280x720', width: 1280, height: 720 },
@@ -168,12 +175,7 @@ async function measureTopBar(page) {
       return { left: b.left, right: b.right, top: b.top, bottom: b.bottom, width: b.width, height: b.height };
     };
     const header = slot.closest('header');
-    const headerStyle = getComputedStyle(header);
-    const padLeft = parseFloat(headerStyle.paddingLeft);
-    const padRight = parseFloat(headerStyle.paddingRight);
     const headerRect = rect(header);
-    const contentLeft = headerRect.left + padLeft;
-    const contentRight = headerRect.right - padRight;
 
     const byId = (id) => header.querySelector(`[data-testid="${id}"]`);
     const titleBlock = byId('topbar-title-block');
@@ -199,8 +201,7 @@ async function measureTopBar(page) {
       header: headerRect,
       headerScrollWidth: header.scrollWidth,
       headerClientWidth: header.clientWidth,
-      contentCenter: (contentLeft + contentRight) / 2,
-      borderBoxOffset: (headerRect.left + headerRect.right) / 2 - (contentLeft + contentRight) / 2,
+      headerCenter: (headerRect.left + headerRect.right) / 2,
       slot: rect(slot),
       search: rect(searchTrigger),
       leftColumn: titleBlock ? rect(titleBlock.parentElement) : null,
@@ -232,20 +233,24 @@ for (const viewport of VIEWPORTS) {
           //    record / report title arrives and the web fonts are applied.
           await expect.poll(async () => {
             const m = await measureTopBar(page);
-            return Math.abs(center(m.search) - m.contentCenter);
+            return Math.abs(center(m.search) - m.headerCenter);
           }, {
-            message: 'global-search-trigger center must match the top bar center',
+            message: 'global-search-trigger center must match the center of the visible bar (header border box)',
             timeout: 5_000,
           }).toBeLessThanOrEqual(CENTER_TOLERANCE_PX);
 
           const m = await measureTopBar(page);
+          test.info().annotations.push({
+            type: 'geometry',
+            description: `searchCenter-barCenter=${(center(m.search) - m.headerCenter).toFixed(2)}px `
+              + `leftColumn-barLeft=${(m.leftColumn ? m.leftColumn.left - m.header.left : NaN).toFixed(2)}px `
+              + `barRight-lastAction=${(m.header.right - Math.max(...m.quickActionChildren.map((r) => r.right))).toFixed(2)}px`,
+          });
           expect(m.header.left, `navigation rail is not ${rail.label}`).toBeGreaterThanOrEqual(rail.headerLeft.min);
           expect(m.header.left, `navigation rail is not ${rail.label}`).toBeLessThanOrEqual(rail.headerLeft.max);
-          expect(Math.abs(center(m.slot) - m.contentCenter), 'topbar-search-slot is off center')
+          expect(Math.abs(center(m.slot) - m.headerCenter), 'topbar-search-slot is off the bar center')
             .toBeLessThanOrEqual(CENTER_TOLERANCE_PX);
           expect(m.search.width, 'the search keeps its 392px width').toBeGreaterThanOrEqual(392 - EDGE_TOLERANCE_PX);
-          // Not asserted on purpose: `m.borderBoxOffset` (12px today, from the header's asymmetric
-          // pl-0 pr-6) is a design question, not a grid regression — see the file header.
 
           // 2. The left column never reaches the search.
           expect(m.leftColumn, 'title column not found').not.toBeNull();
@@ -253,8 +258,10 @@ for (const viewport of VIEWPORTS) {
             .toBeLessThanOrEqual(m.search.left + EDGE_TOLERANCE_PX);
           expect(m.titleBlock.right, 'title block overlaps the search')
             .toBeLessThanOrEqual(m.search.left + EDGE_TOLERANCE_PX);
-          expect(m.leftColumn.left, 'left column starts outside the bar')
-            .toBeGreaterThanOrEqual(m.header.left - EDGE_TOLERANCE_PX);
+          // The left column starts exactly at the bar's left edge (= right after the rail, whose
+          // width is guarded above): centering the search must not have shifted it.
+          expect(Math.abs(m.leftColumn.left - m.header.left), 'left column does not start at the bar left edge')
+            .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
 
           // 3. A long title / breadcrumb elides instead of overflowing.
           if (target.long) {
@@ -281,6 +288,11 @@ for (const viewport of VIEWPORTS) {
           const tallest = Math.max(...m.quickActionChildren.map((r) => r.height));
           expect(lastBottom - firstTop, 'right actions wrapped onto a second line')
             .toBeLessThanOrEqual(tallest + EDGE_TOLERANCE_PX);
+          // The last action keeps its 24px inset from the bar's right edge.
+          const lastActionRight = Math.max(...m.quickActionChildren.map((r) => r.right));
+          expect(Math.abs((m.header.right - lastActionRight) - RIGHT_INSET_PX),
+            `last right action must end ${RIGHT_INSET_PX}px inside the bar right edge`)
+            .toBeLessThanOrEqual(EDGE_TOLERANCE_PX);
 
           // 5. No horizontal overflow — neither of the header nor of the page.
           expect(m.headerScrollWidth, 'header overflows horizontally')
