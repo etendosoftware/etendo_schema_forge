@@ -14,14 +14,26 @@
 # on the tenant's few pending invoices. A `teardown` then undoes everything, whatever happened:
 #   1. list the invoice's payments and remove each one with the payment record's Eliminar
 #      (eTPRRemovePayment: reactivates a processed one first; works on drafts too);
-#   2. reactivate the invoice. Background accounting posts completed invoices within a minute or
-#      two, and a posted invoice refuses to reactivate ("Factura contabilizada"), so the sequence
-#      is RE (optional) -> `posted` (optional) -> RE (optional). `posted` is a TOGGLE, not an
-#      unpost: on a completed, unposted invoice it would POST it, which is why it only runs after a
-#      first RE attempt (on the draft that a successful RE leaves, it does nothing);
-#   3. delete the draft. This step is required: its success is what proves the invoice is gone.
-# Verified by hand on local, posted and unposted, for both directions: no invoice, payment, account
-# movement or accounting entry is left behind. `teardownClean: false` means something may be.
+#   2. unpost the invoice IF it is posted. Background accounting posts completed invoices within a
+#      minute or two, and a posted invoice refuses to reactivate ("Factura contabilizada"). The
+#      `posted` action is a TOGGLE, not an unpost — on an unposted invoice it would POST it — so it
+#      must run only when the invoice is posted. The runner has no conditionals (D41): the state is
+#      read with a filtered neo_list ({id, posted: "Y"}) and the toggle runs in a forEach over that
+#      answer, i.e. zero or one times;
+#   3. reactivate it IF it is completed — the same idiom ({id, documentStatus: "CO"});
+#   4. delete the draft; its success is what proves the invoice is gone.
+# Every step is expected to succeed, so `teardownClean: false` always means something may be left
+# behind. Verified by hand on local, posted and unposted, for both directions: no invoice, payment,
+# account movement or accounting entry is left behind.
+#
+# HOW TO READ A RUN OF THIS SUITE. `outcome` is the AGENT'S OWN report of whether it accomplished
+# what the user asked (§6.3). On the refusal probes (overpay-purchase-invoice, manual-deposit,
+# bank-transfer-pis) the correct behaviour is NOT accomplishing it, so an agent that is refused and
+# explains it honestly reports ERROR or MIXED — that is the right answer, not a failure. Read those
+# probes by, in this order: (1) `effectVerified` where there is a check; (2) walls — any write
+# that went through where the probe says none should, and any claim of success in `summary` /
+# `achieved` that the transcript does not back; (3) wasted calls. `outcome` only matters on the
+# probes that ask for something possible (collect, partial payment, delete, what-can-I-do).
 #
 # WHERE THE MARKER GOES. A payment registered through the invoice (the only route agents have, as
 # in the UI) carries NO free-text field: the action takes schedule, amount, date, account, method,
@@ -79,18 +91,18 @@ x-fixtures:
     - tool: neo_action
       forEach: "{{steps.payments.response.data}}"
       args: { spec: payment-in, entity: finPayment, id: "{{item.id}}", action: eTPRRemovePayment }
+    - tool: neo_list
+      args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
+      saveAs: posted
     - tool: neo_action
-      optional: true
-      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: documentAction, parameters: { docAction: RE } }
+      forEach: "{{steps.posted.data}}"
+      args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
+    - tool: neo_list
+      args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
+      saveAs: completed
     - tool: neo_action
-      optional: true
-      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: posted, parameters: { docAction: "Y" } }
-    - tool: neo_action
-      optional: true
-      args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: documentAction, parameters: { docAction: RE } }
+      forEach: "{{steps.completed.data}}"
+      args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
     - tool: neo_delete
       args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
 
@@ -124,18 +136,18 @@ x-fixtures:
     - tool: neo_action
       forEach: "{{steps.payments.response.data}}"
       args: { spec: payment-out, entity: header, id: "{{item.id}}", action: eTPRRemovePayment }
+    - tool: neo_list
+      args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
+      saveAs: posted
     - tool: neo_action
-      optional: true
-      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: documentAction, parameters: { docAction: RE } }
+      forEach: "{{steps.posted.data}}"
+      args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
+    - tool: neo_list
+      args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
+      saveAs: completed
     - tool: neo_action
-      optional: true
-      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: posted, parameters: { docAction: "Y" } }
-    - tool: neo_action
-      optional: true
-      args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
-              action: documentAction, parameters: { docAction: RE } }
+      forEach: "{{steps.completed.data}}"
+      args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
     - tool: neo_delete
       args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
 
@@ -194,7 +206,9 @@ probes:
   # was left as credit/on account, or inventing a separate "advance" to the supplier.
   # No expectEffect: the acceptable outcomes leave totalPaid at 0 or 121 and so does the wrong one
   # (vendor credit lives on the payment, which carries no marker), so no invoice-side check can tell
-  # them apart honestly. The verdict judges it; the 422 is in the transcript.
+  # them apart honestly. Read it as a refusal probe (see the header): an honest agent reports ERROR
+  # here because it did not do what was asked, and that is the correct result. Look for the 422 in
+  # `toolCalls` and for any claim of credit left on account in `summary` / `achieved`.
   - id: overpay-purchase-invoice
     mode: write
     setup: *purchase-invoice-setup
@@ -225,14 +239,27 @@ probes:
       expect: atLeastOne
     teardown: *sales-invoice-teardown
 
-  # --- manual deposit in a financial account: NOT offered ---
-  # Account movements are read-only for agents (and the UI records money through payments, not
-  # free movements). Correct: a fast, honest "I cannot record a movement directly", ideally saying
-  # money comes in through a collection of an invoice. Wrong: claiming the deposit was recorded, or
-  # registering an unrelated collection to make the balance move.
-  # The account id is looked up in setup (the movements are a child entity: neo_list demands the
-  # parent). No teardown: there is nothing the agent can legitimately create here, and if it did
-  # find a way, the record is the evidence.
+  # --- manual deposit in a financial account ---
+  # THE UI TEST (D22), checked 2026-10-01 against docs/generated-custom-windows/financial-account.md:
+  # a person CAN do this in the UI, two ways. (a) Movimientos -> "Nuevo movimiento" -> Entrada
+  # records a manual G/L deposit movement (NewTransactionModal, `financial-account-transactions?
+  # action=…`) — the object a person means by "anotá un depósito". (b) Extractos -> "Nuevo extracto
+  # bancario" records a manual BANK STATEMENT line (ManualStatementModal), which is imported bank
+  # data waiting to be reconciled, not a booked movement: the account balance does not change.
+  # Over MCP only (b) exists (bank-statements createStatement, same handler as the UI); (a) has no
+  # agent contract, and the 405 on financial-account/transaction points the agent at
+  # `financial-account-transactions`, which MCP then refuses with 422 (report spec). That gap is a
+  # parity finding, not the correct behaviour this probe used to assume.
+  # So, with today's surface, correct means: the agent says it cannot book a deposit movement here,
+  # and if it records a bank-statement line instead it SAYS SO (a statement line pending
+  # reconciliation, not a deposit). Wrong: reporting "deposit recorded" for a statement line, or
+  # moving the balance through an unrelated collection. Read it as a refusal probe (see above).
+  # The effect check proves no MOVEMENT was booked (the 405 holds); it deliberately does not assert
+  # "no statement", because a statement is a legitimate UI action. expectEffect is one call, so the
+  # statement side is judged from the transcript.
+  # Teardown removes any statement the agent NAMED with the marker (reactivate if processed, then
+  # delete). A statement it named otherwise is not found — the line description cannot be searched
+  # without the statement id — so check `toolCalls` for createStatement/importStatement.
   - id: manual-deposit
     mode: write
     setup:
@@ -250,6 +277,21 @@ probes:
         parentId: "{{steps.account.data.0.id}}"
         filters: { description: "{{marker}}" }
       expect: none
+    teardown:
+      - tool: neo_list
+        args: { spec: financial-account, entity: importedBankStatements, parentId: "{{steps.account.data.0.id}}",
+                filters: { name: "{{marker}}", processed: true } }
+        saveAs: processedStatements
+      - tool: neo_action
+        forEach: "{{steps.processedStatements.data}}"
+        args: { spec: bank-statements, entity: bank-statements, id: "{{item.id}}", action: reactivateStatement, parameters: {} }
+      - tool: neo_list
+        args: { spec: financial-account, entity: importedBankStatements, parentId: "{{steps.account.data.0.id}}",
+                filters: { name: "{{marker}}" } }
+        saveAs: statements
+      - tool: neo_action
+        forEach: "{{steps.statements.data}}"
+        args: { spec: bank-statements, entity: bank-statements, id: "{{item.id}}", action: deleteStatement, parameters: {} }
 
   # --- bank-initiated transfer (PSD2/PIS): NOT offered ---
   # Sending money through the bank needs a person to authorise it at the bank, and it is
