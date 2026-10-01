@@ -256,6 +256,12 @@ probes:
   # Paridad, with the marker in its description. Wrong: a bank-statement line reported as "deposit
   # recorded", a draft left unconfirmed and reported as booked, or the balance moved through an
   # unrelated collection.
+  # The prompt says what the money is (a partner's contribution), as a person would: the form
+  # requires a G/L item, which is the reason for the money. In blind run 20261001T2331-local-8163
+  # the prompt did not say it, and the agent spent its 25 steps searching movementGlItems instead
+  # of asking. The prompt never names the field, and the marker goes to the description, not the
+  # concept. Several G/L items fit "aporte del socio" (e.g. 11800000 Aportaciones de socios o
+  # propietarios); picking a plausible one or asking are both acceptable.
   # The effect check finds the booked movement by the marker: a processed manual deposit has status
   # RDNC (a draft stays RPAE). It is one exact-match neo_list, so the amount and the date are read
   # from the transcript (the createMovement answer echoes both).
@@ -271,8 +277,8 @@ probes:
         args: { spec: financial-account, entity: account, filters: { name: Banco Paridad } }
         saveAs: account
     prompt: >
-      Anotá un depósito de 100 € en el Banco Paridad, con fecha de ayer, 30 de septiembre.
-      Ponele de concepto {{marker}}.
+      Anotá un depósito de 100 € en el Banco Paridad, con fecha de ayer, 30 de septiembre: es un
+      aporte del socio a la empresa. Ponele de descripción {{marker}}.
     expectEffect:
       tool: neo_list
       args:
