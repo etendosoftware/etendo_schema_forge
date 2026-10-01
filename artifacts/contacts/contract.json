@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-09-28T14:32:10.251Z",
-  "checksum": "aa012516b039c4c8",
+  "updatedAt": "2026-10-01T18:08:50.175Z",
+  "checksum": "be98c71d85875934",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -196,6 +196,37 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "exampleKey": "importExampleContactVendor",
+            "labelKey": "importHeaderVendor",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {
@@ -5499,6 +5530,37 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "exampleKey": "importExampleContactVendor",
+            "labelKey": "importHeaderVendor",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {
