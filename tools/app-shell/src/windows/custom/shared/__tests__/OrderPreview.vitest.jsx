@@ -543,3 +543,35 @@ describe('OrderPreview — email history wiring (ETP-5069)', () => {
     expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });
+
+// ── ETP-5205 (QA pasada 1): Solo-Lectura tier ─────────────────────────────────
+// Send is a write (mail + PDF cached as the main attachment), so it is hidden and the preview
+// never writes the attachment. Download PDF stays (D1: it only exposes readable data).
+describe('OrderPreview — Solo-Lectura tier (ETP-5205)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob: new Blob(['%PDF']), loading: false, error: null });
+  });
+
+  function lastAttachmentConfig() {
+    return vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig;
+  }
+
+  it('hides Send, keeps Download and marks the attachment read-only on a completed order', () => {
+    renderOrderPreview({ readOnly: true });
+
+    expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    expect(screen.getByTestId('download-btn')).toBeEnabled();
+    expect(vi.mocked(EmailsCard).mock.calls.at(-1)[0].onSend).toBeUndefined();
+    expect(lastAttachmentConfig().readOnly).toBe(true);
+    // storeCondition stays true: it also gates the READ of the cached PDF.
+    expect(lastAttachmentConfig().storeCondition).toBe(true);
+  });
+
+  it('keeps Send and a writable attachment under full access (control)', () => {
+    renderOrderPreview();
+
+    expect(screen.getByTestId('email-btn')).toBeInTheDocument();
+    expect(lastAttachmentConfig().readOnly).toBeFalsy();
+  });
+});

@@ -3,9 +3,15 @@ import { buildLocationAddressLines } from '@/lib/locationAddress.js';
 import {
   isAttachmentStale,
   isCachedRenderingStale,
+  isRenderedByOlderBundle,
   RENDERER_BUILD_EPOCH_MS,
+  toInstantMs,
 } from '@/lib/attachmentFreshness.js';
-import { fetchMainAttachment, fetchAttachmentBlob } from '@/components/copilot/ocr/listAttachments';
+import {
+  fetchMainAttachment,
+  fetchAttachmentBlob,
+  fetchBrandingUpdated,
+} from '@/components/copilot/ocr/listAttachments';
 
 import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 // ---------------------------------------------------------------------------
@@ -313,34 +319,46 @@ export const MOVEMENT_TEMPLATE_FOOTER = `
 // Generic PDF hook — shared by all per-window pdf hooks
 // ---------------------------------------------------------------------------
 /**
- * Which of the two causes made the cached rendering stale, for the `[pdf]` console
+ * Which of the three causes made the cached rendering stale, for the `[pdf]` console
  * line. Diagnosing a stale document from the console instead of by reading code is a
- * documented requirement (`docs/document-printables.md`, criterion 5), and the two
+ * documented requirement (`docs/document-printables.md`, criterion 5), and the
  * causes read very differently in practice: an edit invalidating one document is
- * routine, whereas a whole deploy's worth of bundle-invalidations is expected exactly
- * once per document — and neither should be mistaken for a cache that never converges.
+ * routine, whereas a whole deploy's worth of bundle-invalidations — or a logo change's
+ * (ETP-5541) — is expected exactly once per document, and none of them should be
+ * mistaken for a cache that never converges.
  */
-function staleReason(attachment, recordUpdated) {
+function staleReason(attachment, recordUpdated, brandingUpdated) {
   const writtenAt = attachment.updatedAt || attachment.uploadedAt;
   if (isAttachmentStale(attachment, recordUpdated)) {
     return `written ${writtenAt}, record updated ${recordUpdated}`;
   }
-  return `written ${writtenAt}, before this bundle built at ${new Date(RENDERER_BUILD_EPOCH_MS).toISOString()}`;
+  if (isRenderedByOlderBundle(attachment)) {
+    return `written ${writtenAt}, before this bundle built at ${new Date(RENDERER_BUILD_EPOCH_MS).toISOString()}`;
+  }
+  return `written ${writtenAt}, company branding updated ${brandingUpdated}`;
 }
 
 /**
  * The cached rendering of this record, or null when there is none or it no longer
- * matches the record (ETP-4787) or the renderer that produced it (ETP-5125) — see
- * `lib/attachmentFreshness.js`. Returning null on staleness is all the invalidation the
- * read side needs: the caller's next step is already "render fresh".
+ * matches the record (ETP-4787), the renderer that produced it (ETP-5125) or the
+ * company branding it printed (ETP-5541) — see `lib/attachmentFreshness.js`. Returning
+ * null on staleness is all the invalidation the read side needs: the caller's next step
+ * is already "render fresh".
+ *
+ * The session's `brandingUpdated` is fetched in parallel with the attachment metadata,
+ * and only for a window that passes `recordUpdated` — an opted-out window can never be
+ * invalidated, so asking would be a wasted round trip.
  */
 async function fetchCachedBlob({ token, tableName, recordId, apiBaseUrl, recordUpdated, isCancelled }) {
-  const main = await fetchMainAttachment({ token, tableName, recordId, apiBaseUrl });
+  const [main, brandingUpdated] = await Promise.all([
+    fetchMainAttachment({ token, tableName, recordId, apiBaseUrl }),
+    toInstantMs(recordUpdated) == null ? null : fetchBrandingUpdated({ token, apiBaseUrl }),
+  ]);
   if (isCancelled() || !main?.id) return null;
-  if (isCachedRenderingStale(main, recordUpdated)) {
+  if (isCachedRenderingStale(main, recordUpdated, RENDERER_BUILD_EPOCH_MS, brandingUpdated)) {
     console.info(
       `[pdf] ${tableName}/${recordId}: cached attachment is stale `
-      + `(${staleReason(main, recordUpdated)}) — re-rendering`,
+      + `(${staleReason(main, recordUpdated, brandingUpdated)}) — re-rendering`,
     );
     return null;
   }

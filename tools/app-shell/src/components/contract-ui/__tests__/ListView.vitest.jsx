@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock react-router-dom
 vi.mock('react-router-dom', () => ({
@@ -110,8 +110,11 @@ function SelectableMockTable({ data, onSelectionChange, ...rest }) {
 // A Table mock that captures the forwarded rowQuickActions prop so the test
 // can assert what ListView derived (e.g. the readOnly flag from api.window).
 let capturedRowQuickActions = null;
-function CapturingMockTable({ rowQuickActions }) {
+let capturedTableProps = null;
+function CapturingMockTable(props) {
+  const { rowQuickActions } = props;
   capturedRowQuickActions = rowQuickActions;
+  capturedTableProps = props;
   return <table data-testid="mock-table"><tbody /></table>;
 }
 
@@ -342,6 +345,68 @@ describe('ListView', () => {
       expect(capturedRowQuickActions.readOnly).toBe(true);
       expect(capturedRowQuickActions.onEdit).toBeUndefined();
       expect(capturedRowQuickActions.onDelete).toBeUndefined();
+    });
+
+    // ETP-5205 (QA pasada 1) — the row Email is a write under the runtime Solo-Lectura tier
+    // (it sends mail and caches the PDF as the main attachment). The gate itself is turned off,
+    // so RowQuickActions, the column-width estimate and the actions-column mount all agree.
+    it('turns the row Email gate off under the runtime tier (window.readOnly)', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          window={{ readOnly: true }}
+          sendDocument={{ enabled: true, allowEmail: true }}
+          rowQuickActions={{ documentPreview: true, onEmail: vi.fn() }}
+        />,
+      );
+      expect(capturedRowQuickActions.documentPreview).toBe(false);
+      expect(capturedRowQuickActions.sendDocument.enabled).toBe(false);
+      expect(capturedRowQuickActions.onEmail).toBeUndefined();
+    });
+
+    it('keeps the row Email when only the static api.window.readOnly is set', () => {
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          api={{ window: { readOnly: true }, crud: {} }}
+          sendDocument={{ enabled: true, allowEmail: true }}
+          rowQuickActions={{}}
+        />,
+      );
+      expect(capturedRowQuickActions.sendDocument.enabled).toBe(true);
+      expect(typeof capturedRowQuickActions.onEmail).toBe('function');
+    });
+
+    it('passes the runtime tier to renderPreview as readOnly', () => {
+      const renderPreview = vi.fn(() => null);
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          window={{ readOnly: true }}
+          renderPreview={renderPreview}
+          rowQuickActions={{}}
+        />,
+      );
+      act(() => { capturedTableProps.onNavigate({ id: 'r1' }); });
+      expect(renderPreview).toHaveBeenLastCalledWith(expect.objectContaining({ readOnly: true }));
+    });
+
+    it('passes readOnly false to renderPreview under full access', () => {
+      const renderPreview = vi.fn(() => null);
+      render(
+        <ListView
+          {...defaultProps}
+          Table={CapturingMockTable}
+          api={{ window: { readOnly: true }, crud: {} }}
+          renderPreview={renderPreview}
+          rowQuickActions={{}}
+        />,
+      );
+      act(() => { capturedTableProps.onNavigate({ id: 'r1' }); });
+      expect(renderPreview).toHaveBeenLastCalledWith(expect.objectContaining({ readOnly: false }));
     });
 
     it('hides the new record button when window.readOnly is true', () => {

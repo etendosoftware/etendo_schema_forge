@@ -16,6 +16,7 @@ const mockFetchAttachmentBlob = vi.fn();
 vi.mock('@/components/copilot/ocr/listAttachments', () => ({
   fetchMainAttachment: (...args) => mockFetchMainAttachment(...args),
   fetchAttachmentBlob: (...args) => mockFetchAttachmentBlob(...args),
+  fetchBrandingUpdated: vi.fn().mockResolvedValue(null),
 }));
 
 import { renderHook, waitFor } from '@testing-library/react';

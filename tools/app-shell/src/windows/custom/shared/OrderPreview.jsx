@@ -92,7 +92,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function OrderPreview({ order, token, apiBaseUrl, windowName, specName, onClose, onEdit }) {
+export default function OrderPreview({ order, token, apiBaseUrl, windowName, specName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -112,7 +112,9 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // ETP-4717 — Send is only available once the order is Confirmed (CO),
   // matching the Grid row quick-action and Form-view topbar gates. No
   // per-spec difference: sales-order and purchase-order share this rule.
+  // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
   const isSendable = order?.documentStatus === 'CO';
+  const canSend = isSendable && !readOnly;
   const ratePrecision = useCurrencyPrecision();
 
   // Dual-currency: fetch exchange rate when doc currency differs from org currency.
@@ -165,7 +167,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   // Draft gate unchanged: cache is only checked/written once Confirmed.
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: order?.updated ?? null,
+        storeCondition: true, readOnly, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: order?.updated ?? null,
         documentId: order.id, tableName: 'C_Order', token, apiBaseUrl, onFileChange: setCachedAttachment,
       }
     : {
@@ -199,7 +201,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
         ratePrecision={ratePrecision}
-        onSend={isSendable ? openEmailModal : undefined}
+        onSend={canSend ? openEmailModal : undefined}
         emailsRefreshSignal={emailsRefreshSignal}
         data-testid="OrderGeneralTab__90f59a" />,
     },
@@ -233,7 +235,7 @@ export default function OrderPreview({ order, token, apiBaseUrl, windowName, spe
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={isSendable ? openEmailModal : undefined}
+      onEmail={canSend ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={hasPdf}
       sendLabel={ui('orderPreviewSend')}
