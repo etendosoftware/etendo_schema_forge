@@ -490,9 +490,7 @@ async def _run(args: argparse.Namespace) -> int:
                 probe, "setup", target, run_id=run_id, timestamp=timestamp,
                 saved=saved, max_result_chars=max_result_chars, events=events,
             )
-            failed = next(
-                (r for r in result["setup"] if not r["ok"] and not r.get("optional")), None
-            )
+            failed = next((r for r in result["setup"] if not r["ok"]), None)
             if failed:
                 raise SetupFailed(f"setup[{failed['index']}] {failed['tool']}: {failed['error']}")
             try:
@@ -608,9 +606,9 @@ async def _run(args: argparse.Namespace) -> int:
                     probe, "teardown", target, run_id=run_id, timestamp=timestamp,
                     saved=saved, max_result_chars=max_result_chars, events=events,
                 )
-                bad = sum(1 for r in result["teardown"] if not r["ok"] and not r.get("optional"))
-                result["teardownClean"] = bad == 0
+                result["teardownClean"] = all(r["ok"] for r in result["teardown"])
                 if not result["teardownClean"]:
+                    bad = sum(1 for r in result["teardown"] if not r["ok"])
                     print(f"    teardown INCOMPLETE ({bad} failed step(s)): data may be left behind",
                           file=sys.stderr)
 

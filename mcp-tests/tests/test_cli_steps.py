@@ -166,17 +166,6 @@ class CliStepsTest(unittest.TestCase):
         self.assertEqual(probe["verdict"]["outcome"], "OKAY")
         self.assertIn("still referenced", probe["teardown"][0]["error"])
 
-    def test_an_optional_teardown_failure_keeps_it_clean(self):
-        h = Harness(self.tmp, SUITE.replace(
-            "    teardown:\n",
-            "    teardown:\n      - tool: neo_unpost\n        optional: true\n"), answers={
-            "neo_create": {"id": "INV1", "documentNo": "FV9"}, "neo_list": {"totalRows": 1},
-            "neo_unpost": RuntimeError("not posted"), "neo_delete": {}})
-        probe = h.run()
-        self.assertEqual(h.order[-2:], ["neo_unpost", "neo_delete"])
-        self.assertFalse(probe["teardown"][0]["ok"])
-        self.assertTrue(probe["teardownClean"])
-
     def test_a_probe_without_steps_is_unchanged(self):
         h = Harness(self.tmp, """
             probes:
