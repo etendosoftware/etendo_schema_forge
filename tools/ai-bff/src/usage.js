@@ -60,6 +60,9 @@ export function sumStepUsage(steps) {
 
 /** Post one event. Returns a promise that never rejects; callers must not await it. */
 export function postUsageEvent(event, { url, authorization, fetchImpl = fetch, log = console.warn } = {}) {
+  // Cookie-only sessions carry no Bearer token, and /sws/neo/usage is recorded with
+  // the caller's Bearer. Skip instead of sending `Authorization: undefined`.
+  if (!authorization) return Promise.resolve();
   return Promise.resolve()
     .then(() => fetchImpl(url, {
       method: 'POST',

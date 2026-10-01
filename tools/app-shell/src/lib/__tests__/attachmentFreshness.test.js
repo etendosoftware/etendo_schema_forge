@@ -4,6 +4,7 @@ import {
   attachmentWrittenAtMs,
   isAttachmentStale,
   isCachedRenderingStale,
+  isOlderThanBranding,
   isRenderedByOlderBundle,
   toInstantMs,
   RENDERER_BUILD_EPOCH_MS,
@@ -196,5 +197,46 @@ describe('attachmentFreshness — renderer (bundle) invalidation', () => {
       assert.equal(isCachedRenderingStale(null, RECORD_UPDATED, BUNDLE_BUILT_MS), false);
       assert.equal(isCachedRenderingStale({}, RECORD_UPDATED, BUNDLE_BUILT_MS), false);
     });
+  });
+});
+
+describe('attachmentFreshness — company branding invalidation (ETP-5541)', () => {
+  const WRITTEN = '2026-09-10T10:00:00Z';
+  const RECORD_UPDATED = '2026-09-01T00:00:00Z';
+  const file = { updatedAt: WRITTEN };
+
+  describe('isOlderThanBranding', () => {
+    const cases = [
+      ['branding changed after the file was written', file, '2026-09-10T10:00:01Z', true],
+      ['branding changed in the same second (truncated on the wire)', file, WRITTEN, false],
+      ['branding changed before the file was written', file, '2026-09-10T09:59:59Z', false],
+      ['branding unknown (null)', file, null, false],
+      ['branding unparseable', file, 'not a date', false],
+      ['attachment without usable timestamp', { updatedAt: 'garbage' }, '2026-09-10T10:00:01Z', false],
+      ['attachment null', null, '2026-09-10T10:00:01Z', false],
+    ];
+    for (const [label, attachment, branding, expected] of cases) {
+      it(`${label} -> ${expected}`, () => {
+        assert.equal(isOlderThanBranding(attachment, branding), expected);
+      });
+    }
+  });
+
+  describe('isCachedRenderingStale with brandingUpdated (4th argument)', () => {
+    const cases = [
+      ['4th argument absent keeps the pre-ETP-5541 verdict', RECORD_UPDATED, undefined, false],
+      ['branding newer than the file is stale', RECORD_UPDATED, '2026-09-10T10:00:01Z', true],
+      ['branding in the same second is fresh', RECORD_UPDATED, WRITTEN, false],
+      ['unparseable branding is fresh (fail-open)', RECORD_UPDATED, 'not a date', false],
+      ['opted-out window (recordUpdated null) ignores newer branding', null, '2026-09-10T10:00:01Z', false],
+    ];
+    for (const [label, recordUpdated, branding, expected] of cases) {
+      it(`${label} -> ${expected}`, () => {
+        const args = branding === undefined
+          ? [file, recordUpdated, 0]
+          : [file, recordUpdated, 0, branding];
+        assert.equal(isCachedRenderingStale(...args), expected);
+      });
+    }
   });
 });

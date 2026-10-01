@@ -238,3 +238,56 @@ test.describe('Not Posted Documents — filter apply', () => {
     expect(req.url()).toContain('document=SI');
   });
 });
+
+/**
+ * ETP-5485 (BUG-2, the ticket's Problem 2) — a role without the "Not Posted Documents" OBUIAPP
+ * process grant must get the access-denied screen when it opens the route directly, exactly
+ * like any window it cannot reach: no filters, no "0 registros", no raw "Forbidden".
+ */
+test.describe('Not Posted Documents — direct route without process access (ETP-5485)', () => {
+  test('a role whose menu lacks the process sees the access-denied screen and fires no data request', async ({ page }) => {
+    await login(page);
+    await installMocks(page);
+    // A non-empty role menu WITHOUT the process (an empty one would trip AppLayout's
+    // zero-access block screen instead). Mirrors a Purchasing-only role.
+    await page.route('**/sws/neo/listmenu**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        tree: [{ type: 'folder', name: 'Compras', children: [{ windowId: '181', name: 'Purchase Order' }] }],
+        count: 1,
+      }),
+    }));
+    const dataRequests = [];
+    page.on('request', (r) => {
+      if (r.url().includes(`/sws/neo/${SPEC}/${ENTITY}`)) dataRequests.push(r.url());
+    });
+
+    await page.goto(`/${SPEC}`);
+
+    const denied = page.getByTestId('window-access-denied');
+    await expect(denied).toBeVisible({ timeout: 15_000 });
+    await expect(denied).toHaveText(t('windowAccessDenied'));
+    await expect(page.getByTestId('npd-empty-state')).toHaveCount(0);
+    await expect(page.getByText('Forbidden')).toHaveCount(0);
+    expect(dataRequests).toEqual([]);
+  });
+
+  test('a backend 403 renders the access-denied screen instead of filters and the raw status text', async ({ page }) => {
+    await login(page);
+    // Menu access unreachable in mock mode → the route guard fails open (like the sidebar);
+    // the backend's 403 is then the only signal, and it must still land on the denied screen.
+    await page.route(`**/sws/neo/${SPEC}/${ENTITY}**`, (route) => route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Access denied' }),
+    }));
+
+    await page.goto(`/${SPEC}`);
+
+    await expect(page.getByTestId('window-access-denied')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Forbidden')).toHaveCount(0);
+    await expect(page.getByText('Access denied')).toHaveCount(0);
+    await expect(page.getByTestId('npd-empty-state')).toHaveCount(0);
+  });
+});

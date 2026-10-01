@@ -16,6 +16,11 @@ on:
           - production
           - staging
           - experimental
+      force_publish:
+        description: 'Publish from here even if Jenkins owns this environment (emergency only)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   deploy:
@@ -84,6 +89,19 @@ jobs:
           fi
           echo "public_origin=$PUBLIC_ORIGIN" >> $GITHUB_OUTPUT
 
+          # Environments listed in COORDINATED_TARGETS (space-separated Actions
+          # variable) are published by Jenkins at the end of the backend deploy,
+          # once the backend is live — not here. On 2026-09-22 this workflow put
+          # the production SPA live ~50 min ahead of its backend and Google login
+          # broke. For those targets this job only builds and stores the package
+          # (see "Store release package"). force_publish is the manual escape hatch.
+          if [[ " ${{ vars.COORDINATED_TARGETS }} " == *" $TARGET "* && "${{ inputs.force_publish }}" != "true" ]]; then
+            echo "publish=false" >> $GITHUB_OUTPUT
+            echo "::notice title=SPA not published from here::$TARGET is published by Jenkins after the backend deploy. This run only stores the package."
+          else
+            echo "publish=true" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -147,7 +165,36 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ vars.AWS_REGION }}
 
+      # One package per commit and environment (the build bakes in per-target
+      # values: public origin, ConfigCat key, RUM ids). Jenkins publishes it
+      # after the backend deploy, and a rollback republishes an older one
+      # without rebuilding.
+      - name: Store release package (${{ steps.target.outputs.env_label }})
+        run: |
+          set -euo pipefail
+          BUCKET="${{ vars.S3_BUCKET_FRONT_RELEASES }}"
+          if [ -z "$BUCKET" ]; then
+            echo "::warning title=Release package not stored::S3_BUCKET_FRONT_RELEASES is not set."
+            exit 0
+          fi
+          KEY="${{ steps.target.outputs.env_label }}/${{ github.sha }}"
+          tar -czf "$RUNNER_TEMP/spa.tar.gz" -C tools/app-shell/dist .
+          aws s3 cp --only-show-errors "$RUNNER_TEMP/spa.tar.gz" "s3://$BUCKET/$KEY/spa.tar.gz"
+          # release.json goes last: Jenkins treats its presence as "package complete".
+          jq -n \
+            --arg sha "${{ github.sha }}" \
+            --arg env "${{ steps.target.outputs.env_label }}" \
+            --arg public_origin "${{ steps.target.outputs.public_origin }}" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg ref "${{ github.ref_name }}" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{sha: $sha, env: $env, public_origin: $public_origin, run_id: $run_id, ref: $ref, built_at: $built_at}' \
+            > "$RUNNER_TEMP/release.json"
+          aws s3 cp --only-show-errors "$RUNNER_TEMP/release.json" "s3://$BUCKET/$KEY/release.json"
+          echo "stored s3://$BUCKET/$KEY"
+
       - name: Sync dist to S3 (${{ steps.target.outputs.env_label }})
+        if: steps.target.outputs.publish == 'true'
         run: |
           # Long-lived immutable assets (hashed files under assets/, icons, etc.)
           # .well-known/* is EXCLUDED here — OAuth2/MCP discovery metadata must
@@ -179,6 +226,7 @@ jobs:
             --content-type "application/json"
 
       - name: Upload reports manifest (${{ steps.target.outputs.env_label }})
+        if: steps.target.outputs.publish == 'true'
         run: |
           aws s3 cp tools/app-shell/dist/api/reports \
             s3://${{ steps.target.outputs.s3_bucket }}/api/reports \
@@ -186,6 +234,7 @@ jobs:
             --cache-control "no-cache, no-store, must-revalidate"
 
       - name: Invalidate CloudFront cache (${{ steps.target.outputs.env_label }})
+        if: steps.target.outputs.publish == 'true'
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ steps.target.outputs.cf_distribution }} \

@@ -73,12 +73,13 @@ export default function ReturnToVendorShipmentWindow({ windowName, recordId, api
         apiBaseUrl={apiBaseUrl}
         token={token}
         PageComponent={ReturnToVendorShipmentPage}
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <ReturnToVendorShipmentPreview
             shipment={row}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             data-testid="ReturnToVendorShipmentPreview__a5f79c" />

@@ -58,6 +58,7 @@ vi.mock('../UserRolesTab', () => ({
 vi.mock('@/lib/userRoleAssignmentsApi.js', () => ({
   fetchUserRoleAssignments: vi.fn(),
   saveUserRoleAssignments: vi.fn(),
+  ROLE_WRITE_CONFLICT_CODE: 'CONCURRENT_MODIFICATION',
 }));
 
 vi.mock('@/lib/resendInvitationApi.js', () => ({
@@ -173,7 +174,7 @@ vi.mock('@generated/user/generated/web/user/UserPage', () => ({
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent, act } from '@testing-library/react';
 import UserWindow from '../index.jsx';
 import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
@@ -431,15 +432,16 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
 
     await expect(lastUserPageProps.onAfterExistingSave({ id: 'user-1' })).resolves.not.toThrow();
 
-    // The generic AD_User save already succeeded and shown its own toast by the time this
-    // fires (`onAfterExistingSave`) — the error toast must frame the failure as "user saved,
-    // roles didn't" (`roleAssignmentSaveFailedAfterUserSaved`, not a bare domain message) and
-    // stay up longer (`duration: 8000`) so it isn't lost behind the success toast. ETP-5206 —
+    // The generic AD_User save already persisted by the time this fires
+    // (`onAfterExistingSave`) — the error toast must frame the failure as "user saved, roles
+    // didn't" (`roleAssignmentSaveFailedAfterUserSaved`, not a bare domain message), stay up
+    // longer (`duration: 8000`), and (ETP-5278) take the record-save toast id so it is the ONE
+    // toast for the click instead of stacking under a success toast. ETP-5206 —
     // `detail` is now ALWAYS `ui('roleAssignmentSaveFailed')`, regardless of the rejection's own
     // `.message`, so the raw "Admin role cannot be assigned" backend text must never appear.
     expect(toastError).toHaveBeenCalledWith(
       'roleAssignmentSaveFailedAfterUserSaved:{"detail":"roleAssignmentSaveFailed"}',
-      { duration: 8000 },
+      { id: RECORD_SAVE_TOAST_ID, action: undefined, duration: 8000 },
     );
   });
 
@@ -458,7 +460,7 @@ describe('UserWindow — handleRoleAssignmentSave (fired via onAfterExistingSave
     // which is then embedded as `{detail}` inside the after-user-saved wrapper message.
     expect(toastError).toHaveBeenCalledWith(
       'roleAssignmentSaveFailedAfterUserSaved:{"detail":"roleAssignmentSaveFailed"}',
-      { duration: 8000 },
+      { id: RECORD_SAVE_TOAST_ID, action: undefined, duration: 8000 },
     );
   });
 });
@@ -1309,5 +1311,120 @@ describe('UserWindow — self-demotion guard (ETP-5206, useAdminPromotionExtraAc
     );
 
     await screen.findByTestId('DemoteFromAdminButton');
+  });
+});
+
+// ETP-5278 (QA NO PASA, CP-6/CP-7) — the role-assignment write must never overlap another write
+// for the same user from this UI: Save stays busy (`saveBusy`) while it runs, promote/demote are
+// disabled meanwhile (and vice versa), a same-tick second call is refused, and the hook resolves
+// the save-lifecycle outcome contract so the Save button shows ONE truthful toast.
+describe('UserWindow — role save serialization + outcome contract (ETP-5278)', () => {
+  async function renderWithPendingRoleChange() {
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'user-1', templateRoleIds: [] });
+    render(<UserWindow recordId="user-1" token="tok" apiBaseUrl="/api" />);
+    await waitFor(() => expect(fetchUserRoleAssignments).toHaveBeenCalled());
+    screen.getByTestId('select-fin-sales').click();
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+  }
+
+  it('resolves undefined (success) and keeps saveBusy true only while the write is in flight', async () => {
+    let resolveSave;
+    saveUserRoleAssignments.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    await renderWithPendingRoleChange();
+    expect(lastUserPageProps.saveBusy).toBe(false);
+
+    let outcomePromise;
+    act(() => { outcomePromise = lastUserPageProps.onAfterExistingSave({ id: 'user-1' }); });
+    await waitFor(() => expect(lastUserPageProps.saveBusy).toBe(true));
+
+    await act(async () => {
+      resolveSave({ success: true, userId: 'user-1', templateRoleIds: ['role-fin', 'role-sales'] });
+      await expect(outcomePromise).resolves.toBeUndefined();
+    });
+    await waitFor(() => expect(lastUserPageProps.saveBusy).toBe(false));
+  });
+
+  it('resolves { ok: false } and shows the concurrency message on a CONCURRENT_MODIFICATION rejection', async () => {
+    const conflict = Object.assign(new Error('changed at the same time'), { code: 'CONCURRENT_MODIFICATION' });
+    saveUserRoleAssignments.mockRejectedValue(conflict);
+    await renderWithPendingRoleChange();
+
+    let outcome;
+    await act(async () => { outcome = await lastUserPageProps.onAfterExistingSave({ id: 'user-1' }); });
+
+    expect(outcome).toEqual({ ok: false });
+    expect(toastError).toHaveBeenCalledWith(
+      'roleAssignmentSaveFailedAfterUserSaved:{"detail":"roleAssignmentConcurrentModification"}',
+      { id: RECORD_SAVE_TOAST_ID, action: undefined, duration: 8000 },
+    );
+    expect(lastUserPageProps.saveBusy).toBe(false);
+  });
+
+  it('refuses a second call while the first write is still running (single request)', async () => {
+    let resolveSave;
+    saveUserRoleAssignments.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    await renderWithPendingRoleChange();
+
+    let first;
+    let second;
+    await act(async () => {
+      first = lastUserPageProps.onAfterExistingSave({ id: 'user-1' });
+      second = await lastUserPageProps.onAfterExistingSave({ id: 'user-1' });
+    });
+
+    expect(second).toEqual({ ok: false });
+    expect(saveUserRoleAssignments).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveSave({ success: true, userId: 'user-1', templateRoleIds: ['role-fin', 'role-sales'] });
+      await first;
+    });
+  });
+
+  it('disables "Make administrator" while the role write is in flight', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    let resolveSave;
+    saveUserRoleAssignments.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    fetchUserRoleAssignments.mockResolvedValue({ userId: 'u1', templateRoleIds: [] });
+    render(<UserWindow recordId="u1" token="tok" apiBaseUrl="/api" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+    const promote = await screen.findByTestId('PromoteToAdminButton');
+    expect(promote.closest('button')).not.toBeDisabled();
+    screen.getByTestId('select-fin-sales').click();
+    await waitFor(() => expect(screen.getByTestId('selected-ids')).toHaveTextContent('["role-fin","role-sales"]'));
+
+    let pending;
+    act(() => { pending = lastUserPageProps.onAfterExistingSave({ id: 'u1' }); });
+    await waitFor(() => expect(screen.getByTestId('PromoteToAdminButton').closest('button')).toBeDisabled());
+
+    await act(async () => {
+      resolveSave({ success: true, userId: 'u1', templateRoleIds: ['role-fin', 'role-sales'] });
+      await pending;
+    });
+    await waitFor(() => expect(screen.getByTestId('PromoteToAdminButton').closest('button')).not.toBeDisabled());
+  });
+
+  it('disables "Make administrator" while the record\'s own save (PATCH) is in flight — before the role write starts', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+    await screen.findByTestId('PromoteToAdminButton');
+
+    const data = { id: 'u1', isOwner: false, defaultRole: 'personal-role-1' };
+    const whileSaving = lastUserPageProps.extraActions({ data, onRefresh: vi.fn(), isSaving: true });
+    const idle = lastUserPageProps.extraActions({ data, onRefresh: vi.fn(), isSaving: false });
+
+    expect(whileSaving.find((a) => a.key === 'promote-to-admin').disabled).toBe(true);
+    expect(idle.find((a) => a.key === 'promote-to-admin').disabled).toBe(false);
+  });
+
+  it('keeps Save busy while a promote is in flight', async () => {
+    fetchRolesOverview.mockResolvedValue({ roles: [{ id: 'admin-role', isClientAdmin: true }] });
+    let resolvePromote;
+    promoteUserToAdmin.mockReturnValue(new Promise((resolve) => { resolvePromote = resolve; }));
+    render(<UserWindow recordId="u1" data={{ id: 'u1', isOwner: false, defaultRole: 'personal-role-1' }} />);
+
+    fireEvent.click(await screen.findByTestId('PromoteToAdminButton'));
+    await waitFor(() => expect(lastUserPageProps.saveBusy).toBe(true));
+
+    await act(async () => { resolvePromote({ success: true, userId: 'u1', roleId: 'admin-role' }); });
+    await waitFor(() => expect(lastUserPageProps.saveBusy).toBe(false));
   });
 });

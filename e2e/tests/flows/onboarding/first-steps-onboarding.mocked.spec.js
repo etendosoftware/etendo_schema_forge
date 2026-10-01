@@ -126,9 +126,14 @@ async function waitForCopyTranslated(page) {
  * endpoint with a fixed "already seen" answer (so every OTHER mocked spec reaches the
  * dashboard), and Playwright matches routes in reverse registration order. This is the
  * documented override hook — a spec that needs an unseen account provides its own route.
+ *
+ * `awaitFirstStepsRead` (ETP-5551) makes login() wait until the dashboard's own first-steps read
+ * was answered by that stub, and fail if it never comes. Without it a slow machine let the read
+ * arrive AFTER this override: it saw `null`, the dashboard gate called markSeen(), and a stray
+ * `seen: true` POST landed in `mock.writes` (7 writes instead of 6).
  */
 async function setupFirstSteps(page, initial = null, transferStatus = null) {
-  await login(page);
+  await login(page, { awaitFirstStepsRead: true });
   await installDemoDataTransferDisabledMock(page);
   // Transfer-enabled coverage opts in; all baseline checklist tests retain the flag-off 404.
   const mock = await installFirstStepsMock(page, initial, transferStatus);
@@ -464,7 +469,7 @@ test.describe('Dashboard gate — the one-time redirect', () => {
 });
 
 test.describe('Finalizar configuración inicial — ETP-5364', () => {
-  test('is offered only at 7/7, and removes the sidebar entry when pressed', async ({ page }) => {
+  test('is offered only at 7/7, and removes the sidebar entry and lands on Inicio', async ({ page }) => {
     const mock = await setupFirstSteps(page, null);
     await page.goto('/first-steps');
     await waitForCopyTranslated(page);
@@ -482,6 +487,8 @@ test.describe('Finalizar configuración inicial — ETP-5364', () => {
 
     await page.getByTestId('first-steps-finish-setup').click();
 
+    // The user is taken to Inicio: the page they were on just left the menu.
+    await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByTestId('menu-item-first-steps')).toHaveCount(0);
     // And it is a real write, not a local flag.
     await expect.poll(() => mock.state.value?.dismissed).toBe(true);
@@ -526,20 +533,12 @@ test.describe('Finalizar configuración inicial — ETP-5364', () => {
     expect(mock.writes.length).toBe(0);
   });
 
-  test('brings the entry back from the page, which stays routable', async ({ page }) => {
-    // Hiding a menu entry with no way back is a trap. The page is still reachable by URL and
-    // carries the undo.
-    const mock = await setupFirstSteps(page,
-      { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
+  test('sends a dismissed account that opens the page by URL to Inicio', async ({ page }) => {
+    // Product decision: finishing the setup is one-way, so the page is not reachable either.
+    await setupFirstSteps(page, { v: 1, seen: true, dismissed: true, completed: TOGGLEABLE });
 
     await page.goto('/first-steps');
-    await expect(page.getByTestId('first-steps-dismissed-notice')).toBeVisible();
-    await expect(page.getByTestId('first-steps-finish-setup')).toHaveCount(0);
-
-    await page.getByTestId('first-steps-reopen').click();
-
-    await expect.poll(() => mock.state.value?.dismissed).toBe(false);
-    await expandSidebar(page);
-    await expect(page.getByTestId('menu-item-first-steps')).toBeVisible();
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByTestId('first-steps-page')).toHaveCount(0);
   });
 });

@@ -20,6 +20,7 @@ import { LocaleChangeConfirmDialog } from './components/LocaleChangeConfirmDialo
 import { UnsavedChangesNavigationDialog } from './components/UnsavedChangesNavigationDialog.jsx';
 import { SaveConflictDialog } from './components/SaveConflictDialog.jsx';
 import { useLocaleDictionaries } from './i18n/useLocaleDictionaries.js';
+import { installErrorTranslator } from './i18n/errorTranslator.js';
 import { useServiceWorker } from './hooks/useServiceWorker.js';
 import { fetchMenuTree, collectAllowedIds, MENU_ACCESS_UNREACHABLE } from './lib/menuTree.js';
 import { useInstalledApps } from './hooks/useInstalledApps.js';
@@ -27,6 +28,7 @@ import { useAppStoreUnlock, attachKeySequenceWatcher } from './hooks/useAppStore
 import { resolveUnauthenticatedRedirect } from './lib/unauthenticatedRedirect.js';
 import { parseEnvironmentAccessDecision, setEnvironmentAccessDecision } from '@/lib/environmentAccessGate.js';
 import { ObservabilityRouteTracker } from './lib/observability/RouteTracker.jsx';
+import { ListStateRouteGuard } from './lib/ListStateRouteGuard.jsx';
 import { SurveyModal } from './components/survey/SurveyModal.jsx';
 import { useSurveyEngine } from './hooks/useSurveyEngine.js';
 import { apiFetch } from '@/auth/api.js';
@@ -425,6 +427,11 @@ export default function App() {
   const [windowMap] = useState(() => buildWindowMap());
   const [locale, setLocale] = useLocaleState();
   const { dictionaries, renderedLocale } = useLocaleDictionaries(locale, coreLoaders);
+  // ETP-5424 — core builds a NetworkError's message through this translator, so a dropped
+  // connection reads in the rendered locale at every call site that shows `err.message`.
+  // The message is resolved when the error is built, which is always after a request settles,
+  // so this effect is in place before any request of the same commit can fail.
+  useEffect(() => installErrorTranslator(dictionaries[renderedLocale]), [dictionaries, renderedLocale]);
 
   // ETP-5022 — changing the language must reload the page. Translated reference data
   // (country names, UoMs, AD_Ref_List labels) is resolved server-side from the request's
@@ -494,6 +501,7 @@ export default function App() {
         notFoundElement={<div className="p-8 text-muted-foreground">Loading...</div>}
         data-testid="AppShellRuntime__ecaf3f">
         <ObservabilityRouteTracker data-testid="ObservabilityRouteTracker__ecaf3f" />
+        <ListStateRouteGuard data-testid="ListStateRouteGuard__ecaf3f" />
         <ServiceWorkerManager data-testid="ServiceWorkerManager__ecaf3f" />
         <AppStoreKeyWatcher data-testid="AppStoreKeyWatcher__ecaf3f" />
         <SurveyManager data-testid="SurveyManager__ecaf3f" />

@@ -21,6 +21,10 @@ function getCardClass(animState) {
 function ManagedLeftPanel({ cfg, leftPanel }) {
   const ui = useUI();
   const autoFetch = !!(cfg.autoFetch);
+  // ETP-5205 — Solo-Lectura tier: keep READING the marked attachment (stored file view,
+  // download, staleness report) but never write it: no auto-store of the rendered PDF,
+  // no drop zone / file picker, no delete.
+  const readOnly = cfg.readOnly === true;
   // ETP-4315 — backed by a real, marked `Attachment` row (shared with the
   // sidebar/"Adjuntos" tab), identified by `tableName`. The retired
   // ETGO_PREVIEW_FILE-backed `usePreviewAttachment` hook (specName-keyed) was
@@ -68,7 +72,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
   }
 
   useEffect(() => {
-    if (!cfg.storeCondition) return;
+    if (!cfg.storeCondition || readOnly) return;
     const hasSource = cfg.sourceBlob || cfg.sourceUrl;
     if (!hasSource) return;
     // A stale stored file is treated as absent so the fresh rendering overwrites it —
@@ -85,7 +89,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
       attachment.storeUrl(cfg.sourceUrl, fileName).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cfg.storeCondition, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId,
+  }, [cfg.storeCondition, readOnly, cfg.sourceBlob, cfg.sourceUrl, cfg.documentId,
       attachment.storedFile, attachment.storedFileIsStale, attachment.isBusy]);
 
   const [isDragOver, setIsDragOver] = useState(false);
@@ -143,7 +147,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
             >
               <Download size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Download__152ff6" />
             </a>
-            <button
+            {!readOnly && (<button
               type="button"
               onClick={() => attachment.deleteFile().catch(() => {})}
               className="w-8 h-8 flex items-center justify-center bg-card border border-[hsl(var(--border-control))] shadow-sm rounded-lg hover:bg-muted transition-colors"
@@ -151,7 +155,7 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
               aria-label={ui('deleteDocument')}
             >
               <Trash2 size={16} className="text-[hsl(var(--text-disabled))]" data-testid="Trash2__152ff6" />
-            </button>
+            </button>)}
           </div>
         )}
         {mimeType?.startsWith('image/') ? (
@@ -169,6 +173,14 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
     return (
       <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__152ff6" />
+      </div>
+    );
+  }
+
+  if (readOnly) {
+    return (
+      <div data-testid="preview-drop-zone-readonly" className="flex flex-1 items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">{ui('dropZoneReadOnlyEmpty')}</p>
       </div>
     );
   }
@@ -251,6 +263,9 @@ function ManagedLeftPanel({ cfg, leftPanel }) {
  *                                 record's attachments, so it appears in the Attachments
  *                                 tab (ETP-4855). Omit it for generated-PDF caches —
  *                                 nobody attached those. See usePreviewAttachment.
+ *     readOnly?: boolean,       - Solo-Lectura tier (ETP-5205): the stored file is still
+ *                                 shown and downloadable, but nothing is written — no
+ *                                 auto-store, no drop zone/file picker, no delete.
  *     recordUpdated?: string,   - the record's `updated` (ETP-4787). When the marked
  *                                 attachment predates it, the cache is treated as absent:
  *                                 the fresh sourceBlob overwrites it and onFileChange
