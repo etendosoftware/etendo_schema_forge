@@ -176,7 +176,7 @@ probes:
       args:
         spec: sales-invoice
         entity: header
-        filters: { description: "{{marker}}", paymentComplete: true }
+        filters: { id: "{{steps.invoice.data.0.id}}", paymentComplete: true }
       expect: atLeastOne
     teardown: *sales-invoice-teardown
 
@@ -194,7 +194,7 @@ probes:
       args:
         spec: purchase-invoice
         entity: header
-        filters: { description: "{{marker}}", paymentComplete: false, totalPaid: 50 }
+        filters: { id: "{{steps.invoice.data.0.id}}", paymentComplete: false, totalPaid: 50 }
       expect: atLeastOne
     teardown: *purchase-invoice-teardown
 
@@ -235,7 +235,7 @@ probes:
       args:
         spec: sales-invoice
         entity: header
-        filters: { description: "{{marker}}", paymentComplete: false }
+        filters: { id: "{{steps.invoice.data.0.id}}", paymentComplete: false }
       expect: atLeastOne
     teardown: *sales-invoice-teardown
 
@@ -311,7 +311,7 @@ probes:
       args:
         spec: purchase-invoice
         entity: header
-        filters: { description: "{{marker}}", paymentComplete: true }
+        filters: { id: "{{steps.invoice.data.0.id}}", paymentComplete: true }
       expect: none
     teardown: *purchase-invoice-teardown
 
