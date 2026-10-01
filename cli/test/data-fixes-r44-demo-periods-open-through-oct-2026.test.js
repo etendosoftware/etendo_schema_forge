@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFix, parseFixTimestamp, inlineParams } from '../src/data-fixes/parse-fix.js';
@@ -59,16 +59,15 @@ describe('R44 data-fix — header metadata', () => {
     assert.ok(fix.report.length > 0);
   });
 
-  it('sorts after every other fix on this branch', () => {
-    const ts = parseFixTimestamp(FIX_ID).getTime();
-    const others = readdirSync(SQL_DIR)
-      .filter((f) => f.endsWith('.sql') && f !== FIX_FILE)
-      .map((f) => parseFixTimestamp(basename(f, '.sql')))
-      .filter(Boolean);
-    assert.ok(others.length > 0);
-    for (const other of others) {
-      assert.ok(ts > other.getTime(), `R44 must sort after ${other.toISOString()}`);
-    }
+  // Pinned to the latest fix that existed when R44 shipped, not to "every other fix", so a later
+  // fix does not break this test (the R41 precedent).
+  it('sorts after R41-personal-role-owner-backfill, the latest fix when it shipped', () => {
+    const ts = parseFixTimestamp(FIX_ID);
+    assert.equal(ts.toISOString(), '2026-10-01T12:00:00.000Z');
+    assert.ok(
+      ts.getTime() > parseFixTimestamp('20260928T140000Z__R41-personal-role-owner-backfill').getTime(),
+      'R44 must sort after R41-personal-role-owner-backfill',
+    );
   });
 });
 

@@ -160,6 +160,10 @@ const FIXES_WITH_REPORT = new Set([
   // lists the personal roles it had to leave without one (a deleted user's orphan, or a dormant
   // role with zero or several candidate owners) so an operator can review them.
   '20260928T140000Z__R41-personal-role-owner-backfill',
+  // R44 (ETP-5575, gap C4) opens the never-opened periods of DEMO tenants through October 2026.
+  // The @report lists the period-control rows it left untouched (closed by a user, permanently
+  // closed, or blocked by a future permanently closed year) and flags a calendar with no Oct-26.
+  '20261001T120000Z__R44-demo-periods-open-through-oct-2026',
 ]);
 
 async function loadCatalogFiles() {
