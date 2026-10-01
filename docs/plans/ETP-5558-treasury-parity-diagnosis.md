@@ -442,3 +442,234 @@ except the accepted BUG-4 exception.
 
 - `ApplyToInvoices.jsx` dead code (row 4).
 - The invoice-lines grid showing *Precio 0,00* — open observation above.
+
+### Step 6 checklist (consolidated)
+
+Everything Steps 3 → rollback-only left for Step 6, in one place. Steps 1–3 and the security fix
+shipped with their own tests and docs. Steps 4, 5 and the surface-honesty batch were committed
+without them, by decision. Paths: `go` = `modules/com.etendoerp.go`, `sf` = `schema_forge`. Every
+new test must be shown red first (mutation or revert) and green after.
+
+Commits covered: `8bdaea0b2`, `fbe4a0465`, `3ed1c2332` (Step 4 + review fixes), `2a507a327`,
+`7c363c467` (surface-honesty batch).
+
+#### A. Java tests (go, `src-test/src/com/etendoerp/go/...`)
+
+**A1. `schemaforge.PaymentAgentSupport` — new `PaymentAgentSupportTest`**
+
+1. `checkRegister` → schedule resolution, when `scheduleId` is absent:
+   - one pending installment → `body.scheduleId` filled, `null` returned;
+   - several → 422 with `error.installments[{id, outstandingAmount, dueDate}]` in due-date order;
+     a null due date sorts last (`Comparator.nullsLast`);
+   - none → 422 `MSG_NO_PENDING_PSD`;
+   - "pending" means a detail with `paymentDetails == null`; an installment whose details are all
+     linked to a draft does not count;
+   - edit (`paymentId` present) → takes the installment the draft pays (`schedulesPaidBy`);
+   - edit with a paymentId that is unknown, belongs to another invoice, or is a draft paying no
+     installment of this invoice → 404 `MSG_PAYMENT_NOT_FOUND`, never `MSG_NO_PENDING_PSD`
+     (review NIT 3);
+   - `scheduleId` present → untouched;
+   - unknown or foreign invoice → `null` (the service answers its own 404).
+2. Overpayment, `checkOverpayment`:
+   - funds equal to capacity pass; capacity + 0.01 → 422 with `outstandingAmount`, `excess` and
+     `allowedValues:[leave-credit, refund]`;
+   - credit counts: `actual_payment` + `creditSources[].use` (same rule as `requestedFunding`);
+   - create caps at the pending details, edit at `schedule.getAmount()`;
+   - an explicit `overpaymentAction` passes; amounts are rounded to cents HALF_UP;
+   - mutation: flip `excess.signum() <= 0` to `< 0` and the boundary test must fail.
+3. Method ↔ account, `checkMethod`:
+   - accepted method passes; rejected → 422 with `validMethods[{id, name}]`;
+   - blank `fin_paymentmethod_id` passes;
+   - foreign or unknown account → `null` (the service answers 400);
+   - unknown method → refused with the list.
+4. `withAgentDefaults` (pure JSON):
+   - per item, `defaultMethodId` is the invoice method when the account accepts it, else the first
+     of `defaultForMethodIds`, else the first of `paymentMethodIds`;
+   - `defaultPaymentMethod` is removed;
+   - top level: `defaultMethodId` → `invoiceMethodId` + `invoiceMethodAccepted` (true and false
+     cases);
+   - a non-200 response passes through as the same instance.
+5. `enrich`:
+   - register adds `paymentMethod{id,name}`, `creditUsed`, `creditGenerated`, `creditAvailable`
+     (0 after a refund), `writeoffAmount` (sum of the details), `invoice{id, documentNo,
+     outstandingAmount, totalPaid, paymentComplete}`, and `note` on a draft;
+   - confirm adds the same minus `creditUsed`;
+   - delete answers 200 `{deleted:{id, documentNo, amount, status}, invoice:{…}}`;
+   - error results pass through;
+   - `invoiceState` reads through the scalar HQL query, not `session.refresh`.
+6. `markNotEnriched`: adds `enriched:false` to `response.data`, else to the top level; a null body
+   (204) passes through unchanged.
+
+**A2. `schemaforge.PaymentActionHandlerSupport` — extend `PaymentActionHandlerSupportTest`**
+
+1. REST parity, with `isMcpOrigin()` false:
+   - missing `scheduleId` → 400 with the old message;
+   - delete → 204 with no body;
+   - `invoiceAccounts` byte-identical (no rewrite);
+   - no overpayment or method refusal;
+   - `PaymentAgentSupport` is never called (`verifyNoInteractions` on a static mock).
+2. MCP path, with `isMcpOrigin()` true:
+   - a `checkRegister` refusal returns before `dispatchMutating`; nothing is written and the
+     service is never called;
+   - register, confirm and delete answers are enriched.
+3. Enrich failure (review BLOCKER, `fbe4a0465`): enrich throws while the transaction is NOT marked
+   rollback-only → the plain result plus `enriched:false`, no `rollbackAndClose`, a 2xx.
+4. Rollback-only (`3ed1c2332`, from Alex's Hibernate 5.6 analysis): enrich throws a
+   `HibernateException` and the transaction status is `MARKED_ROLLBACK` →
+   - `rollbackAndClose` is called;
+   - 500 `MSG_PAYMENT_NOT_SAVED`, or `MSG_DRAFT_NOT_DELETED` for `deletePayment`;
+   - the invariant: either persisted + 2xx, or non-2xx + nothing persisted.
+5. `describeDraftQuietly`:
+   - throws without rollback-only → the delete still runs and answers the plain 204;
+   - throws with rollback-only → the delete is never dispatched; 500 `MSG_DRAFT_NOT_DELETED`.
+6. `isMarkedRollback` itself throws (no session) → the outer catch: rollback + 500.
+
+**A3. Contracts — extend `PaymentActionContractsTest`**
+
+1. `registerPayment.scheduleId` is optional: the required set is `actual_payment`, `payment_date`,
+   `fin_financial_account_id`, `process` (already adapted). Its description says it is resolved
+   when only one installment is pending.
+2. The `overpaymentAction` description says it is required on overpayment.
+3. The `fin_paymentmethod_id` description says the default is the account's `defaultMethodId`.
+4. The `invoiceAccounts`, `confirmPayment` and `deletePayment` descriptions name the new answer
+   fields.
+
+**A4. `mcp.McpActionsSection` / `McpActionsView` / `McpDeclaredActions` — the `actions.values` key
+(`2a507a327`)**
+
+1. Validation:
+   - `values` must be a non-empty object of non-empty arrays of non-blank strings; each violation
+     yields a problem;
+   - a section with only `values` (no `hidden`/`redirect`) is valid;
+   - `reason` is still mandatory.
+2. `View.allowedValuesOf`: the configured set; `null` for a button not listed.
+3. `McpActionsView.buildResponse`: a button's `actionValues` narrowed to the allowed set
+   (`aPRMProcessPayment` P/R/RE/V → P); buttons without `actionValues` untouched; no `values` key →
+   unchanged.
+4. `McpDeclaredActions.precheck`:
+   - `docAction` or `action` outside the set → 422 `actionParametersInvalid` with `allowedValues`;
+     the value is checked under every alias (field name, DB column, property);
+   - an allowed value passes; no value passes (the button's default — what the SPA sends, `{}`);
+   - `docAction: null` passes.
+
+**A5. `mcp.McpToolRouter` — `neo_defaults` on a create-hidden entity (`2a507a327`)**
+
+1. `MCP_CONFIG.verbs.create:false` → 405 `verbHidden` with `reason` and `instead`, the same
+   envelope as `view:"create"` and `neo_create`.
+2. An entity whose raw `ISPOST` is off but has no verbs section keeps its old `neo_defaults`
+   behaviour (only `requireVerbNotHidden` is called).
+3. The `neo_defaults` description no longer says "payments".
+
+**A6. `mcp.ToolRegistry` — catalogue with real verbs configs**
+
+1. Build a spec whose every included entity carries real `MCP_CONFIG.verbs` JSON. Do NOT mock
+   `hasEntityWithMethod`; mock only the DAL lookups and window access.
+2. Assert the spec is absent from the `neo_create`, `neo_update` and `neo_delete` enums.
+3. Assert it is present in each enum when a single entity leaves that verb enabled.
+
+Context: the live `neo_delete` report turned out to be a stale client schema. The real catalogue
+against DB 5416 excludes payment-in and payment-out from all three enums. This test locks that in.
+
+**A7. Sourcedata — extend `McpConfigSourcedataTest`**
+
+Assert the 9 rows changed in `7c363c467`, each validated by `McpEntityConfig` with no problems:
+
+- `payment-in/finPayment` (`26AAEE85…`) and `payment-out/header` (`65BF1DFD…`):
+  - `actions.hidden` = psd2GenerateBankPayment, aPRMAddScheduledpayments, aprmExecutepayment,
+    aPRMReversePayment, aPRMReconcilePayment, aeatsiiSend, etblkpBulkposting, posted;
+  - `actions.values.aPRMProcessPayment = ["P"]`;
+  - the existing `verbs` are kept;
+  - the three UI actions (aPRMProcessPayment, eTPRRemovePayment, etprReactivatePayment) are not
+    hidden.
+- `sales-invoice/paymentDetails` (`0D5FAC6A…`), `purchase-invoice/paymentDetails` (`1F7ACD05…`),
+  `sales-invoice/paymentPlan` (`28A63781…`), `purchase-invoice/paymentPlan` (`1343B400…`):
+  `verbs` create, update and delete all false, `instead` = registerPayment.
+- `financial-account/transaction` (`AF50E181…`): `verbs` all false, no `instead`.
+- `financial-account/reconciliations` (`F904BC5E…`): `verbs` all false, `instead` = bank-reconciliation.
+- `financial-account/account` (`BE3EAEED…`):
+  - `actions.hidden` = aPRMImportBankFile, aPRMMatchTransactions, aPRMMatchTransactionsForce,
+    aPRMReconcile, aprmAddMultiplePayments, aprmFundsTrans, pSD2GetBankstatement, pSD2GetConsent,
+    psd2ReconnectFa, psd2GetConnections, psd2RefreshConnections;
+  - no `verbs` (create, update and delete stay: the SPA uses them).
+
+**A8. End-to-end MCP checks (matrix rows; the live check on develop is already done)**
+
+1. One test per matrix row 1–3, 4b, 5–9, 11, 12, as planned in Step 6 above.
+2. Plus the refusals:
+   - BUG-1 unmapped parent;
+   - hidden verbs;
+   - write-off over limit;
+   - missing conversion rate;
+   - overpayment without action;
+   - wrong method;
+   - several pending installments;
+   - narrowed `docAction`.
+3. Do not use FC1000002 (BUG-1 leftover).
+
+#### B. Docs
+
+**B1. go `docs/neo-headless.md`**
+
+- §4.12.1.3, declared actions on window entities:
+  - `registerPayment`: `scheduleId` is optional for agents (resolution rules, the `installments`
+    422); overpayment needs `overpaymentAction` (the 422 shape); method ↔ account 422
+    `validMethods`;
+  - the enriched answers of register, confirm and delete; `enriched:false`; the
+    rollback-only 500 messages (safe to retry);
+  - `invoiceAccounts` reshaped for agents (per-account `defaultMethodId`, `invoiceMethodId`,
+    `invoiceMethodAccepted`, no `defaultPaymentMethod`);
+  - the `actions` key list now includes `values` (shape, view narrowing, 422 on another value,
+    empty value = the button's default).
+- §4.12.6, `MCP_CONFIG`:
+  - the applied-rows table gets the 9 rows of `7c363c467` (A7) with their reasons;
+  - in the `verbs` section: `neo_defaults` now also refuses a hidden create (405, same envelope).
+- §4.12.9, declared divergences, MCP vs REST: optional `scheduleId`; overpayment refusal; method
+  refusal (REST falls back to the default silently); delete 200 with body vs 204;
+  `invoiceAccounts` reshaped; `neo_defaults` 405 on hidden create; payment-header buttons hidden or
+  narrowed (REST still serves them).
+- Follow-ups section (or the existing known-gaps list): create does not evaluate tab auxiliary
+  inputs (`NeoMandatoryDefaultsService`) → BUG-2 `isReceipt='Y'` and BUG-3 empty `documentType` on
+  REST `POST payment-out/header`. REST-only, separate ticket.
+
+**B2. sf `docs/generated-custom-windows/`**
+
+- `sales-invoice.md`, `purchase-invoice.md`:
+  - the agent behaviour of the payment actions (optional `scheduleId`, the overpayment, method and
+    enriched answers);
+  - `paymentDetails` and `paymentPlan` read-only through MCP;
+  - fix the stale "refund retired" note (Step 6 item above).
+- `payment-in.md`, `payment-out.md`:
+  - MCP exposes only Confirmar (`aPRMProcessPayment`, value P), Eliminar (`eTPRRemovePayment`) and
+    Reactivar (`etprReactivatePayment`); the rest are hidden (list them);
+  - create, update and delete are hidden; payments go through the invoice actions.
+- `financial-account.md`:
+  - `transaction` and `reconciliations` are read-only through MCP (post/unpost actions stay);
+  - none of the account's Core buttons is exposed; PSD2 consent and reconnect are excluded (SCA).
+
+**B3. `etendo-go-docs` (`agentic/finance/`)**
+
+- `treasury.md` — rewrite (FR-8). It currently teaches routes that are now refused:
+  - `neo_create` on payment-in/finPayment and payment-out header (lines ~93, 151, 281, 496);
+  - `neo_batch` header + lines (~370, 441);
+  - `EM_APRM_Process_Payment` / `EM_Aprm_Executepayment` / `EM_APRM_ReversePayment` /
+    `EM_APRM_Reconcile_Payment` / `Posted` buttons (~219, 324–400);
+  - the account buttons `EM_APRM_ImportBankFile` / `MatchTransactions` / `Reconcile` (~120);
+  - `generate_financial_account_transactions` (~522, 529), which does not exist.
+  The new recipe:
+  - `invoiceAccounts` → `registerPayment` (draft | confirm) → `confirmPayment` / `deletePayment`;
+  - `invoicePayments` and `invoiceCreditSources` for edit and credit;
+  - the overpayment, method and installment refusals and how to answer them;
+  - the enriched answer;
+  - PIS is not available to agents.
+- `bank-reconciliation.md` — rewrite. It drives reconciliation through the account's Core buttons
+  (`EM_APRM_ImportBankFile`, `EM_APRM_MatchTransactions`, `EM_APRM_MatchTrans_Force`,
+  `EM_APRM_Reconcile`, `EM_APRM_Process_BS`; lines ~18–300) and through
+  `generate_financial_account_transactions` (~286), all hidden or nonexistent now. The routes to
+  document:
+  - the `bank-statements` spec actions (create, import, preview, process, reactivate, delete);
+  - the `bank-reconciliation` spec actions (pendingLines, candidates, autoMatch, reconcileGroup,
+    reconcileDifference, applySuggestions, undoReconciliation, removeOperation,
+    reactivateSelected), as the financial-account agentPrompt already says.
+- `agentic/finance/index.md` and `agentic/mcp/index.md` — check the links and summaries after the
+  two rewrites. `mcp/index.md` lists the payment-in / financial-account entities (~261, 271);
+  verify nothing there implies they are writable.
