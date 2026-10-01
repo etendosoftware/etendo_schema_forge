@@ -931,3 +931,127 @@ describe('getFilteredKey composed with resolveFilterMode', () => {
     assert.equal(getFilteredKey(col, resolveFilterMode(col), 'iStartsWith'), 'grupoActivo$_identifier');
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildAdvancedFilterCriteria — negative multi-value AND composition (ETP-5009)
+// ---------------------------------------------------------------------------
+
+describe('buildAdvancedFilterCriteria — negative multi-value AND composition (ETP-5009)', () => {
+  const columns = [
+    { key: 'documentStatus', column: 'DocStatus', type: 'status', filterMode: 'enumLabel' },
+    { key: 'businessPartner', column: 'C_BPartner_ID', type: 'selector' },
+    { key: 'documentNo', column: 'DocumentNo', type: 'string' },
+    { key: 'name', type: 'string' },
+  ];
+  const andOf = (fieldName, operator, values) => ({
+    _constructor: 'AdvancedCriteria',
+    operator: 'and',
+    criteria: values.map((value) => ({ fieldName, operator, value })),
+  });
+
+  // QA regression: "Estado doc. No es Borrador + Completado" returned every
+  // document because `notEqual DR OR notEqual CO` is always true.
+  it('"Estado doc. No es Borrador + Completado" AND-composes notEqual DR / CO', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'documentStatus', operator: 'notEqual', value: ['DR', 'CO'] }],
+    };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      andOf('documentStatus', 'notEqual', ['DR', 'CO']),
+    ]);
+  });
+
+  it('keeps the inner AND object intact inside an outer rowOperator OR (not flattened)', () => {
+    const filter = {
+      rowOperator: 'or',
+      conditions: [
+        { field: 'documentStatus', operator: 'notEqual', value: ['DR', 'CO'] },
+        { field: 'documentNo', operator: 'iContains', value: '100' },
+      ],
+    };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          andOf('documentStatus', 'notEqual', ['DR', 'CO']),
+          { fieldName: 'documentNo', operator: 'iContains', value: '100' },
+        ],
+      },
+    ]);
+  });
+
+  it('AND-composes notEqual on an identifier (FK) column against the id key, not $_identifier', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'businessPartner', operator: 'notEqual', value: ['id1', 'id2'] }],
+    };
+    const result = buildAdvancedFilterCriteria(filter, columns);
+    assert.deepEqual(result, [andOf('businessPartner', 'notEqual', ['id1', 'id2'])]);
+    assert.doesNotMatch(JSON.stringify(result), /\$_identifier/);
+  });
+
+  for (const op of ['notEqual', 'iNotEqual', 'notContains', 'iNotContains', 'notStartsWith', 'iNotStartsWith']) {
+    it(`AND-composes multi-value ${op}`, () => {
+      const filter = { rowOperator: 'and', conditions: [{ field: 'name', operator: op, value: ['a', 'b'] }] };
+      assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [andOf('name', op, ['a', 'b'])]);
+    });
+  }
+
+  it('still OR-composes positive multi-value equals', () => {
+    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'equals', value: ['a', 'b'] }] };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'documentStatus', operator: 'equals', value: 'a' },
+          { fieldName: 'documentStatus', operator: 'equals', value: 'b' },
+        ],
+      },
+    ]);
+  });
+
+  it('emits a plain clause (no wrapper) for a single negative value', () => {
+    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'notEqual', value: ['a'] }] };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      { fieldName: 'documentStatus', operator: 'notEqual', value: 'a' },
+    ]);
+  });
+
+  it('drops empty / null values before composing', () => {
+    const filter = {
+      rowOperator: 'and',
+      conditions: [{ field: 'documentStatus', operator: 'notEqual', value: ['', 'DR', null, undefined, 'CO'] }],
+    };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      andOf('documentStatus', 'notEqual', ['DR', 'CO']),
+    ]);
+  });
+
+  it('collapses to a plain clause when only one non-blank negative value remains', () => {
+    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'notEqual', value: ['', 'DR', null] }] };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      { fieldName: 'documentStatus', operator: 'notEqual', value: 'DR' },
+    ]);
+  });
+
+  it('returns null for a negative array with only blank values', () => {
+    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'notEqual', value: ['', null] }] };
+    assert.equal(buildAdvancedFilterCriteria(filter, columns), null);
+  });
+
+  it('leaves inSet unchanged: OR of iEquals', () => {
+    const filter = { rowOperator: 'and', conditions: [{ field: 'documentStatus', operator: 'inSet', value: 'a, b' }] };
+    assert.deepEqual(buildAdvancedFilterCriteria(filter, columns), [
+      {
+        _constructor: 'AdvancedCriteria',
+        operator: 'or',
+        criteria: [
+          { fieldName: 'documentStatus', operator: 'iEquals', value: 'a' },
+          { fieldName: 'documentStatus', operator: 'iEquals', value: 'b' },
+        ],
+      },
+    ]);
+  });
+});
