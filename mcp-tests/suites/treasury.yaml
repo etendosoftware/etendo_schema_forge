@@ -27,13 +27,14 @@
 # account movement or accounting entry is left behind.
 #
 # HOW TO READ A RUN OF THIS SUITE. `outcome` is the AGENT'S OWN report of whether it accomplished
-# what the user asked (§6.3). On the refusal probes (overpay-purchase-invoice, manual-deposit,
-# bank-transfer-pis) the correct behaviour is NOT accomplishing it, so an agent that is refused and
+# what the user asked (§6.3). On the refusal probes (overpay-purchase-invoice, bank-transfer-pis)
+# the correct behaviour is NOT accomplishing it, so an agent that is refused and
 # explains it honestly reports ERROR or MIXED — that is the right answer, not a failure. Read those
 # probes by, in this order: (1) `effectVerified` where there is a check; (2) walls — any write
 # that went through where the probe says none should, and any claim of success in `summary` /
 # `achieved` that the transcript does not back; (3) wasted calls. `outcome` only matters on the
-# probes that ask for something possible (collect, partial payment, delete, what-can-I-do).
+# probes that ask for something possible (collect, partial payment, manual deposit, delete,
+# what-can-I-do).
 #
 # WHERE THE MARKER GOES. A payment registered through the invoice (the only route agents have, as
 # in the UI) carries NO free-text field: the action takes schedule, amount, date, account, method,
@@ -243,23 +244,26 @@ probes:
   # THE UI TEST (D22), checked 2026-10-01 against docs/generated-custom-windows/financial-account.md:
   # a person CAN do this in the UI, two ways. (a) Movimientos -> "Nuevo movimiento" -> Entrada
   # records a manual G/L deposit movement (NewTransactionModal, `financial-account-transactions?
-  # action=…`) — the object a person means by "anotá un depósito". (b) Extractos -> "Nuevo extracto
-  # bancario" records a manual BANK STATEMENT line (ManualStatementModal), which is imported bank
-  # data waiting to be reconciled, not a booked movement: the account balance does not change.
-  # Over MCP only (b) exists (bank-statements createStatement, same handler as the UI); (a) has no
-  # agent contract, and the 405 on financial-account/transaction points the agent at
-  # `financial-account-transactions`, which MCP then refuses with 422 (report spec). That gap is a
-  # parity finding, not the correct behaviour this probe used to assume.
-  # So, with today's surface, correct means: the agent says it cannot book a deposit movement here,
-  # and if it records a bank-statement line instead it SAYS SO (a statement line pending
-  # reconciliation, not a deposit). Wrong: reporting "deposit recorded" for a statement line, or
-  # moving the balance through an unrelated collection. Read it as a refusal probe (see above).
-  # The effect check proves no MOVEMENT was booked (the 405 holds); it deliberately does not assert
-  # "no statement", because a statement is a legitimate UI action. expectEffect is one call, so the
-  # statement side is judged from the transcript.
-  # Teardown removes any statement the agent NAMED with the marker (reactivate if processed, then
-  # delete). A statement it named otherwise is not found — the line description cannot be searched
-  # without the statement id — so check `toolCalls` for createStatement/importStatement.
+  # action=create`) — the object a person means by "anotá un depósito"; Confirmar books it at once.
+  # (b) Extractos -> "Nuevo extracto bancario" records a manual BANK STATEMENT line
+  # (ManualStatementModal), which is what the bank reports, waiting to be reconciled — not a booked
+  # movement: the account balance does not change.
+  # Until ETP-5558 only (b) existed over MCP, and the blind run 20261001T1949-local-a00c did exactly
+  # that. Since then (a) is offered to agents as the account's declared movement actions
+  # (neo_action(spec:'financial-account', entity:'account', action:'createMovement'), same handler
+  # as the UI), and the 405 on financial-account/transaction names them.
+  # So correct now means: the agent BOOKS a deposit movement of 100 € dated 30/09/2026 in Banco
+  # Paridad, with the marker in its description. Wrong: a bank-statement line reported as "deposit
+  # recorded", a draft left unconfirmed and reported as booked, or the balance moved through an
+  # unrelated collection.
+  # The effect check finds the booked movement by the marker: a processed manual deposit has status
+  # RDNC (a draft stays RPAE). It is one exact-match neo_list, so the amount and the date are read
+  # from the transcript (the createMovement answer echoes both).
+  # Teardown, whatever happened: reactivate every booked movement carrying the marker (undoing its
+  # posting, if background accounting already posted it), then delete every movement carrying the
+  # marker. A statement the agent NAMED with the marker is still removed too (reactivate if
+  # processed, then delete), in case it took the old route; one it named otherwise is not found —
+  # check `toolCalls` for createStatement/importStatement.
   - id: manual-deposit
     mode: write
     setup:
@@ -275,9 +279,25 @@ probes:
         spec: financial-account
         entity: transaction
         parentId: "{{steps.account.data.0.id}}"
-        filters: { description: "{{marker}}" }
-      expect: none
+        filters: { description: "{{marker}}", status: RDNC }
+      expect: atLeastOne
     teardown:
+      - tool: neo_list
+        args: { spec: financial-account, entity: transaction, parentId: "{{steps.account.data.0.id}}",
+                filters: { description: "{{marker}}", status: RDNC } }
+        saveAs: bookedMovements
+      - tool: neo_action
+        forEach: "{{steps.bookedMovements.data}}"
+        args: { spec: financial-account, entity: account, id: "{{steps.account.data.0.id}}",
+                action: reactivateMovement, parameters: { movementId: "{{item.id}}" } }
+      - tool: neo_list
+        args: { spec: financial-account, entity: transaction, parentId: "{{steps.account.data.0.id}}",
+                filters: { description: "{{marker}}" } }
+        saveAs: movements
+      - tool: neo_action
+        forEach: "{{steps.movements.data}}"
+        args: { spec: financial-account, entity: account, id: "{{steps.account.data.0.id}}",
+                action: deleteMovement, parameters: { movementId: "{{item.id}}" } }
       - tool: neo_list
         args: { spec: financial-account, entity: importedBankStatements, parentId: "{{steps.account.data.0.id}}",
                 filters: { name: "{{marker}}", processed: true } }
