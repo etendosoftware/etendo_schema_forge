@@ -176,6 +176,18 @@ class RunStepsTest(unittest.TestCase):
                           server, phase="teardown", saved={"pays": {"items": []}})
         self.assertEqual((records, server.calls), ([], []))
 
+    def test_optional_failure_does_not_stop_setup(self):
+        server = FakeServer({"unpost": RuntimeError("not posted"), "b": {}})
+        records, _ = _run([{"tool": "unpost", "optional": True}, {"tool": "b"}], server, phase="setup")
+        self.assertEqual([c[0] for c in server.calls], ["unpost", "b"])
+        self.assertEqual(records[0]["optional"], True)
+        self.assertFalse(records[0]["ok"])
+        self.assertNotIn("optional", records[1])
+
+    def test_optional_is_parsed(self):
+        steps = parse_steps([{"tool": "t", "optional": True}, {"tool": "u"}], probe_id="p", phase="teardown")
+        self.assertEqual([s.optional for s in steps], [True, False])
+
     def test_foreach_over_a_non_list_fails(self):
         records, _ = _run([{"tool": "rm", "forEach": "{{steps.pays}}"}],
                           FakeServer({}), phase="teardown", saved={"pays": {"items": []}})

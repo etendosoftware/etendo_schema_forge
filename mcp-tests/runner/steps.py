@@ -13,7 +13,11 @@ Deliberately small. A step is one tool call; the only extras are:
   the prompt and the effect check as `{{steps.<name>.<path>}}`;
 * `forEach: "{{steps.<name>.<path>}}"` repeats a step once per element of a list
   result, each element readable as `{{item.<path>}}` — the one loop teardown
-  needs, because how many payments an agent left behind is not known upfront.
+  needs, because how many payments an agent left behind is not known upfront;
+* `optional: true` marks a step whose failure is expected in some states (unpost
+  a document a background process may or may not have posted yet). It is still
+  recorded, with `optional: true`, but it neither stops setup nor makes a
+  teardown unclean — a later, required step is what proves the state.
 
 `<path>` is dotted; a numeric segment indexes a list (`data.0.id`). A value that
 is EXACTLY one reference keeps the referenced value's type (a number stays a
@@ -47,6 +51,7 @@ class Step:
     args: dict[str, Any]
     save_as: str | None = None
     for_each: str | None = None
+    optional: bool = False
 
 
 def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
@@ -59,7 +64,7 @@ def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
     for i, entry in enumerate(raw):
         if not isinstance(entry, dict) or not entry.get("tool"):
             raise ValueError(f"Probe {probe_id!r}: {phase}[{i}] needs a `tool`.")
-        unknown = set(entry) - {"tool", "args", "saveAs", "forEach"}
+        unknown = set(entry) - {"tool", "args", "saveAs", "forEach", "optional"}
         if unknown:
             raise ValueError(
                 f"Probe {probe_id!r}: {phase}[{i}] has unknown key(s) {sorted(unknown)}."
@@ -76,6 +81,7 @@ def parse_steps(raw: Any, *, probe_id: str, phase: str) -> list[Step]:
                 args=entry.get("args") or {},
                 save_as=entry.get("saveAs"),
                 for_each=for_each,
+                optional=bool(entry.get("optional", False)),
             )
         )
     return steps
@@ -138,7 +144,8 @@ async def run_steps(
 ) -> list[dict[str, Any]]:
     """Run steps in order and return one record per tool call actually attempted.
 
-    Setup stops at the first failure (the state the probe needs does not exist).
+    Setup stops at the first failure of a required step (the state the probe
+    needs does not exist).
     Teardown keeps going (an undo that gave up on step 1 would leave everything
     else behind too). `saved` is updated in place, so teardown sees setup's names.
     """
@@ -151,6 +158,9 @@ async def run_steps(
 
     for index, step in enumerate(steps):
         base = {"phase": phase, "index": index, "tool": step.tool}
+        if step.optional:
+            base["optional"] = True
+        stop = stop_on_error and not step.optional
         try:
             items = [None]
             if step.for_each:
@@ -159,7 +169,7 @@ async def run_steps(
                     raise StepError(f"forEach {step.for_each} is not a list")
         except StepError as exc:
             record({**base, "ok": False, "error": str(exc)})
-            if stop_on_error:
+            if stop:
                 return records
             continue
 
@@ -171,7 +181,7 @@ async def run_steps(
                 args = resolve_refs(step.args, saved, item)
             except StepError as exc:
                 record({**rec, "ok": False, "error": str(exc)})
-                if stop_on_error:
+                if stop:
                     return records
                 continue
             rec["args"] = args
@@ -182,7 +192,7 @@ async def run_steps(
                 rec.update(ok=False, error=f"{type(exc).__name__}: {exc}")
                 rec["ms"] = int((time.monotonic() - started) * 1000)
                 record(rec)
-                if stop_on_error:
+                if stop:
                     return records
                 continue
             rec["ms"] = int((time.monotonic() - started) * 1000)
