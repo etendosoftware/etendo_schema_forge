@@ -2037,3 +2037,25 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview (drop-zone mode) and the OCR side panel (`ReadOnlyOcrSidePanel`) keep showing the supplier's document but offer no upload, drop or delete. Preview also hides **Añadir pago**.
+
+## Payment ids scoped to the invoice and the tenant — ETP-5558
+
+The invoice payment actions run in admin mode and used to resolve the ids they receive with a bare
+`OBDal.get`, which applies no client/organization filter. Now (backend only, `PaymentOwnership` /
+`TenantOwnership` in `com.etendoerp.go`):
+
+- `confirmPayment`, `deletePayment` and `registerPayment` with `paymentId` (edit a draft) act only on
+  a payment of **this** purchase invoice — one with a schedule detail against one of its installments — that the
+  caller's tenant can read. Anything else answers the same **404 "Payment not found"** as an unknown
+  id, and nothing is changed.
+- `invoiceCreditSources` honours `editPaymentId` only for a draft of this invoice; any other id is
+  ignored (the list comes back as for a new payment).
+- `creditSources[]`: accumulated credit (`paymentId`) and credit notes (`psdId`) must belong to the
+  invoice's own business partner and the caller's tenant, else the registration is refused.
+- The invoice in the URL, the installment (`scheduleId`, which must be one of this invoice's) and
+  the financial account are tenant-checked too; `invoicePayments` answers 404 for another tenant's
+  invoice.
+
+The SPA is unaffected: the history popup and the *Nuevo pago* modal only ever send the current
+invoice's id and payment/credit ids taken from that invoice's own listings.
+

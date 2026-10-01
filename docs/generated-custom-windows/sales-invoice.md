@@ -2056,3 +2056,25 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).
+
+## Payment ids scoped to the invoice and the tenant — ETP-5558
+
+The invoice payment actions run in admin mode and used to resolve the ids they receive with a bare
+`OBDal.get`, which applies no client/organization filter. Now (backend only, `PaymentOwnership` /
+`TenantOwnership` in `com.etendoerp.go`):
+
+- `confirmPayment`, `deletePayment` and `registerPayment` with `paymentId` (edit a draft) act only on
+  a collection of **this** sales invoice — one with a schedule detail against one of its installments — that the
+  caller's tenant can read. Anything else answers the same **404 "Payment not found"** as an unknown
+  id, and nothing is changed.
+- `invoiceCreditSources` honours `editPaymentId` only for a draft of this invoice; any other id is
+  ignored (the list comes back as for a new collection).
+- `creditSources[]`: accumulated credit (`paymentId`) and credit notes (`psdId`) must belong to the
+  invoice's own business partner and the caller's tenant, else the registration is refused.
+- The invoice in the URL, the installment (`scheduleId`, which must be one of this invoice's) and
+  the financial account are tenant-checked too; `invoicePayments` answers 404 for another tenant's
+  invoice.
+
+The SPA is unaffected: the history popup and the *Nuevo cobro* modal only ever send the current
+invoice's id and payment/credit ids taken from that invoice's own listings.
+
