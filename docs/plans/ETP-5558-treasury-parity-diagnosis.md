@@ -303,6 +303,13 @@ wrong even though the block itself is right.
 - `financial-account/transaction` advertised writable but `view:create` has no field;
   `aprmAddtransactionpd` discarded.
 
+**Production data check for BUG-1 (2026-10-01, read-only).** No corrupted rows. Across all
+tenants, no `FIN_Payment_ScheduleDetail` links an invoice to a payment of the opposite direction
+or another business partner. `ETGO_MCP_USAGE` shows only *Agroquímicos SA* writing payment lines
+through MCP: three `neo_create(payment-out, lines)` (2026-09-22 16:44, 17:45; 2026-09-23 13:42),
+each deleted by the agent itself 17–41 s later. Payment-detail and invoice-schedule amounts of that
+tenant reconcile with their schedule details (0 mismatches). No data-fix needed.
+
 ## Implementation plan
 
 All work in ETP-5558 (`feature/ETP-5558` in `schema_forge` and `com.etendoerp.go`). Steps are
