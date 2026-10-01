@@ -214,13 +214,22 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 
 - **Where:** `tools/app-shell/src/components/layout/TopBar/TopBar.jsx` (layout) and
   `TopBar/breadcrumb.js` (breadcrumb normalization and the >3-level split).
-- **Three blocks, one flex row:** title block → search slot (`flex-1`) → quick actions.
-  - **Title / breadcrumb** (`topbar-title-block`): capped at `max-w-[256px]`. Title and
-    breadcrumb elide with an ellipsis and show their full text in a tooltip.
-  - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, centered in
-    the free space between the title block and the actions. It is in the normal flex flow, not an
-    `absolute inset-0` overlay, so it can never cover the title (rail expanded or collapsed).
-    `max-w-full` lets it shrink rather than overlap if the free space ever drops below 392px.
+- **Three blocks, one three-column grid** (ETP-5509): `grid-template-columns:
+  minmax(0,1fr) auto minmax(max-content,1fr)` — title block (column 1) → search slot (column 2)
+  → quick actions (column 3). Each block is placed on an explicit column, so the search stays in
+  the middle column even when a page has no title and no back button.
+  - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
+    centered in the bar** whatever the width of the title block or of the actions — the two side
+    tracks are equal `1fr` tracks. It is not an `absolute inset-0` overlay, so it can never cover
+    the title (rail expanded or collapsed). `max-w-full` lets it shrink rather than overlap if the
+    bar ever gets too narrow. The right track's minimum is its own content width, so the icons
+    are never cut; only if they ever needed more than half of the free space would the search
+    shift left instead of being overlapped (cannot happen at ≥1280px thanks to the compact
+    breakpoint below).
+  - **Title / breadcrumb** (`topbar-title-block`): no fixed width cap — it is content-sized and
+    can use the whole left column (half of the space beside the search). Title and breadcrumb
+    elide with an ellipsis at the column edge and show their full text in a tooltip; the count
+    badge, `titleExtra` and the title `⋯` never shrink.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
@@ -241,17 +250,19 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   place to change it) they move into a right-side `⋯` menu (`topbar-quick-actions-overflow` →
   `topbar-quick-actions-overflow-menu`), which renders only when it has something to hold. This
   is a different control from the title `⋯` (`topbar-more-actions`: Favorites / Page help).
-  - Why 1366: with the rail expanded (240px) the full bar needs ~1076px of header, which fits
-    from 1366 up but not at 1280 (1040px). Pending UX confirmation.
+  - Why 1366: with the rail expanded (240px) each side column gets
+    `(header - 24 padding - 392 search - 32 gaps) / 2`: ~339px at 1366, enough for every action
+    inline (~304px), but only ~296px at 1280. Pending UX confirmation.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
-  — 256px cap, title and breadcrumb tooltips (opened via focus), search not absolute, back button
+  — grid placement of the three blocks, title and breadcrumb tooltips (opened via focus), search not absolute, back button
   present, ≤3 levels without `⋯`, >3 levels collapsed with the dropdown excluding the current
   page, legacy string breadcrumbs, right `⋯` hidden when empty, overflow items inside it below the
   breakpoint, all inline above it.
 - **Manual verification path:**
   1. At 1280×720 with the rail expanded, open a record with a long name: the title elides, the
      search does not cover it, and hovering shows the full name.
-  2. Collapse the rail and confirm the search re-centers in the free space.
+  2. Collapse and expand the rail, and open pages with short and long titles (with and without
+     the back button): the search stays at the exact horizontal center of the top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
   4. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
