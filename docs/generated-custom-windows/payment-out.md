@@ -404,3 +404,28 @@ the editor already models it as a source.
 When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
 a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
 the editor never opens on a record it could not save correctly.
+
+## MCP surface equals the window's — ETP-5558
+
+An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-out/header`;
+REST and the SPA are unchanged):
+
+- **Invokable buttons:** *Confirmar* (`aPRMProcessPayment`, value `P` only — `view:"actions"`
+  lists only `P`, any other `docAction`/`action` value answers 422 with `allowedValues:["P"]`,
+  and sending none uses the button's default `P`), *Eliminar* (`eTPRRemovePayment`) and
+  *Reactivar* (`etprReactivatePayment`).
+- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`, `aPRMAddScheduledpayments`,
+  `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`, `aeatsiiSend`,
+  `etblkpBulkposting`, `posted`. A bank-initiated (PSD2) payment needs a person to authorize it at
+  the bank (SCA).
+- **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
+  `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
+  editable field, and the generic delete of a draft fails on its payment details. A payment is
+  created, edited (draft) and deleted (draft) from the invoice: `neo_action(spec:'purchase-invoice',
+  entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
+  — see `purchase-invoice.md` → "MCP payment actions".
+- **No writes on the lines** (`lines`, the allocation to invoice installments) nor on
+  `bankPayments` (PIS, excluded from MCP): the hand-built header + lines route is the one ETP-5558
+  BUG-1 corrupted data through (a line attached to an unrelated processed collection), and it also
+  stored `receipt: true` and no document type (BUG-2/BUG-3, REST-only follow-up in
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.9).

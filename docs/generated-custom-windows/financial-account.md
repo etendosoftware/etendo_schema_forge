@@ -4593,3 +4593,28 @@ Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documente
 read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
 read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
 coverage.
+
+## MCP surface equals the window's — ETP-5558
+
+The `MCP_CONFIG` of three `financial-account` entities hides from agents what this window does not
+offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo-headless.md`
+§4.12.6 and §4.12.9):
+
+- **`account` — no Core button is exposed.** `aPRMImportBankFile`, `aPRMMatchTransactions`,
+  `aPRMMatchTransactionsForce`, `aPRMReconcile`, `aprmAddMultiplePayments` and `aprmFundsTrans`
+  answer 405 and are not listed by `view:"actions"`: statements are created and imported with the
+  `bank-statements` actions and reconciled with the `bank-reconciliation` actions. The PSD2 buttons
+  (`pSD2GetBankstatement`, `pSD2GetConsent`, `psd2ReconnectFa`, `psd2GetConnections`,
+  `psd2RefreshConnections`) are excluded too: consent and reconnection need a person to authorize at
+  the bank (SCA). The account's own create, update and delete stay — the SPA uses them, and an agent
+  creates accounts with the same server-side rules (country required, see above).
+- **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
+  `view:"create"` had no field, and the UI never writes a movement through this entity: deposits,
+  withdrawals and transfers go through the account's movement flow, the
+  `financial-account-transactions` spec, which agents cannot reach). Its post/unpost actions are not
+  hidden by this configuration.
+- **`reconciliations` — read-only through MCP.** Create, update and delete answer 405 with the
+  hint `neo_action` on `bank-reconciliation` (`id` = the financial account).
+
+The agent-facing recipes are in `etendo-go-docs` → `agentic/finance/bank-reconciliation.md` and
+`agentic/finance/treasury.md`.

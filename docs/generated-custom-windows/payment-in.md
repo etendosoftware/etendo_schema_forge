@@ -280,3 +280,30 @@ prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
 `maybeSaveBeforeConfirm({ isDirty, handleSave: onSave })` at the top of `handleApplyAndProcess`,
 before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
 documentAction path is the already-guarded generic process button — so it needed no change.
+
+## MCP surface equals the window's — ETP-5558
+
+An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-in/finPayment`;
+REST and the SPA are unchanged):
+
+- **Invokable buttons:** *Confirmar* (`aPRMProcessPayment`, value `P` only — `view:"actions"`
+  lists only `P`, any other `docAction`/`action` value answers 422 with `allowedValues:["P"]`,
+  and sending none uses the button's default `P`), *Eliminar* (`eTPRRemovePayment`) and
+  *Reactivar* (`etprReactivatePayment`).
+- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`, `aPRMAddScheduledpayments`,
+  `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`, `aeatsiiSend`,
+  `etblkpBulkposting`, `posted`. A bank-initiated (PSD2) collection needs a person to authorize it at
+  the bank (SCA).
+- **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
+  `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
+  editable field, and the generic delete of a draft fails on its payment details. A collection is
+  created, edited (draft) and deleted (draft) from the invoice: `neo_action(spec:'sales-invoice',
+  entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
+  — see `sales-invoice.md` → "MCP payment actions".
+- **No writes on the lines** (`finPaymentScheduleDetail`, the allocation to invoice installments):
+  the hand-built allocation route is the one ETP-5558 BUG-1 corrupted data through.
+- A collection can only apply to **one invoice**, as in the UI. The *Facturas Pendientes / Apply to
+  Invoices* component above (`ApplyToInvoices.jsx`) is not wired in `decisions.json` and the
+  backend actions it calls (`pendingInvoices`, `applyToInvoices`) do not exist, so it is not a
+  route for agents either. An advance collection without an invoice is not offered by the UI
+  (`hideCreate`) and is hidden from MCP.
