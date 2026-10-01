@@ -167,7 +167,7 @@ The result half was the later fix: the confirmation copy shipped purchase-aware 
 
 - Related payment records are downstream dependencies, not free-form links. The custom related-documents component resolves payment-out documents through payment-plan and payment-detail relationships, then links users to `/payment-out/:id`.
 - The preview modal has General, Messages, and History tabs, but only the General tab is backed by invoice/payment data in current evidence. Messages and History are present as empty states.
-- The preview modal includes a document upload/drop area for purchase invoices backed by persistent file storage: uploaded files are sent to `POST /sws/neo/preview-file` and stored in `ETGO_PREVIEW_FILE` keyed by `(clientId, specName, recordId)`. On each subsequent open a `GET /sws/neo/preview-file` restores the cached file; if one exists the drop zone is replaced by a PDF/image viewer with a delete button. The delete button sends `DELETE /sws/neo/preview-file` and restores the drop zone.
+- The preview modal includes a document upload/drop area for purchase invoices backed by the record's marked "main" `Attachment` (`useMainAttachment`, ETP-4315 — the `ETGO_PREVIEW_FILE` store it originally used is retired). When a file is stored the drop zone is replaced by a PDF/image viewer with a Download link (top-left) and, since ETP-5518, the "Más" (⋯) menu on the viewer's mini toolbar with **Reemplazar archivo** / **Eliminar archivo** (delete asks for confirmation) plus a lightbox on click — see "File sidebar actions and lightbox — ETP-5518" below. The former bare trash button (delete without confirmation) is gone. Deleting restores the drop zone.
 - Save button dirty-state tracking: the "Save Draft" button is disabled whenever there are no pending unsaved changes (`isDirty = false`). Four independent sources make `isDirty` true: (1) any header field value differs from the last-saved record; (2) an add-row form is open on the primary lines tab; (3) an add-row form is open on a secondary child tab; (4) a sidebar line edit is open. The "Confirm" button is never blocked by dirty state — completing an invoice is always allowed regardless of whether header changes are pending. New records always have Save active because backend defaults populate the form immediately on open. After a successful save, the detail view refetches the saved header once so backend-populated fiscal defaults and callout results are reflected immediately, then the button disables automatically. Reverting a changed field back to its original value also disables the button. When a line is added, `refreshHeaderTotals` updates server-computed totals in `editing` without overwriting fields the user explicitly changed, so pending header edits survive line operations.
 - **Save available on a completed invoice (ETP-4839, `decisions.json → window.draftMode.keepSaveWhenCompletedFields: ["orderReference"]`)**: on most draftMode windows, completing the document (`isDraftModeCompleted`) hides the whole Save/Confirm pair. Purchase Invoice opts into `keepSaveWhenCompletedFields`, which keeps ONLY the plain "Save" button (`action-save-draft`) visible on a completed invoice — the "Confirm" button (`action-save`) is NEVER re-exposed for a completed document (this is a unified rule across every window using this mechanism, not just purchase-invoice). Save itself is only ENABLED while every dirty header field is in the array — today just `orderReference`; if the user also has any other header field dirty (hypothetically; `readOnlyLogic` should prevent this on every other principal field in practice), Save is disabled entirely with an explanatory tooltip, never a silent partial save. This exists specifically so `orderReference` ("N° documento" / `POReference`) — which already carries its own correct `readOnlyLogic` keeping it editable while `aeatsiiIssent` is not yet `true` (see "Read-only enforcement" below and `e2e/tests/flows/purchase-invoice-readonly-processed.mocked.spec.js`) — can actually be persisted once the invoice is completed. Re-exposing "Confirm" instead was rejected: its handler always resends `documentAction: "CO"`, and `InvoiceCalloutHelper.isInvoiceCompleteAction()` on the backend is not idempotent against an already-completed purchase invoice (a repeat Complete duplicates discount lines). Plain Save never touches that code path, so it is safe. This is implemented generically in `tools/app-shell/src/components/contract-ui/saveActions.jsx` (`renderDraftModeSaveActions`'s `onlySaveButton` prop, plus `buildSaveGate`/`buildCompletedFieldsGate` for the per-field enable/disable + tooltip) and `DetailView.jsx` (which now also exposes `hook.dirtyHeaderFieldKeys` from `useEntity.js`, not just the `isDirtyHeader` boolean) — any other window can opt in the same way. `purchase-invoice` deliberately does NOT declare `completedStatuses`: that would have re-exposed both buttons in more states, reintroducing the same backend risk on "Confirm".
   **Gotcha (must-read for this window):** `purchase-invoice/index.jsx` renders `<HeaderPage draftMode={draftModeOverride}>` where `draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference'] })` — a hand-built object from the shared `windows/custom/shared/useInvoiceWindow.js` helper — NOT the generated `draftMode` prop the pipeline produces from `decisions.json`. The `decisions.json`/`contract.json`/generated-`HeaderPage.jsx` value is correct but effectively dead for this window; the real behavior comes from `getInvoiceDraftMode`'s `keepSaveWhenCompletedFields` option. `sales-invoice/index.jsx` calls the same helper WITHOUT that option, so it is unaffected. See `docs/ui-customization.md` → "Gotcha — a hand-rolled index.jsx prop can silently shadow decisions.json" for the general pattern.
@@ -2070,3 +2070,55 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview (drop-zone mode) and the OCR side panel (`ReadOnlyOcrSidePanel`) keep showing the supplier's document but offer no upload, drop or delete. Preview also hides **Añadir pago**.
+
+## File sidebar actions and lightbox — ETP-5518
+
+Once the supplier's document was uploaded it could be replaced but not deleted from the file
+sidebar, and it could not be viewed at a larger size. Both surfaces that show the uploaded file
+now behave the same way:
+
+| Surface | Component | Replace / Delete wired to |
+|---|---|---|
+| Form, new invoice (OCR upload, file not yet saved) | `OcrInlineUploader` | the local file: open the picker / clear it (same as the existing X) |
+| Form, saved invoice (file sidebar) | `OcrSidePanel` → `DocumentView` | `useMainAttachment.storeFile` / `deleteFile` |
+| List preview (`InvoicePreview` → `GenericPreviewModal`, drop-zone mode) | `StoredFileWithActions`, opted in with `attachmentConfig.fileActions: true` | `useMainAttachment.storeFile` / `deleteFile` |
+
+All three render the shared `UploadedFileViewer` (`tools/app-shell/src/windows/custom/shared/`):
+
+- **"Más" (⋯) button** — appended to the floating mini toolbar (Zoom in / Encajar / Zoom out /
+  Más; images show only Más). It opens a menu with **Reemplazar archivo** (opens the caller's
+  file picker; the new file replaces the old one, `uploadAndMark` drops the previous marked
+  attachment in the same transaction) and **Eliminar archivo** (destructive style).
+- **Delete confirmation** — Eliminar archivo, from the menu or from the lightbox, opens
+  `ConfirmDeleteDialog`; cancelling keeps the file, confirming deletes it and the empty upload
+  area comes back.
+- **Lightbox** (`FileLightbox`) — clicking the preview opens a full-viewport Radix dialog
+  (`role="dialog"`, `aria-modal`, labelled by the file name, focus moved in on open and back to
+  the preview on close). Header: file name + page count ("1 Página"), then Zoom in, Encajar,
+  Zoom out, Reemplazar archivo, Eliminar archivo, Cerrar. Encajar fits the whole page into the
+  lightbox. X or ESC closes it; ESC closes only the topmost layer (a delete confirmation opened
+  from the lightbox closes first) and is not propagated to the form or list preview underneath.
+  The lightbox is a viewer, not a drop target: a file dragged onto it is ignored — it does not
+  replace the document (the file sidebar's own drop area sits underneath it in the React tree)
+  and the browser does not navigate to the file.
+- **Button order** follows Figma and the existing mini toolbar (Zoom in, Encajar, Zoom out), not
+  the ticket's textual order.
+
+**Write gates.** Replace and Delete are offered exactly where uploading is possible today:
+`DocumentView` offers them only when `canAttach` (record saved, doc type resolved, not the
+Solo-Lectura tier); the list preview only when `attachmentConfig.readOnly` is false. Under the
+Solo-Lectura tier (ETP-5205) the "Más" button and the lightbox's Replace/Delete are not rendered;
+viewing, the lightbox and zoom stay. No document-status gate was added — uploading was never
+limited to drafts on either surface. While a write is in flight — an upload or a delete —
+Replace and Delete are disabled, in the menu and in the lightbox, on both surfaces:
+`useMainAttachment` reports `isBusy` for every write it runs (a pending counter, so one
+operation finishing cannot clear it under another). In the file sidebar the attach button also
+shows its spinner during a delete, and a drop is ignored until the delete returns. If a newer
+file was stored while a DELETE was in flight, the DELETE only removes the attachment it
+targeted; the newer file stays on screen.
+
+**Scope.** `fileActions` is opt-in on `GenericPreviewModal` and only purchase-invoice sets it;
+goods-receipt and return-material-receipt (the other drop-zone windows) keep the plain viewer
+with its download/delete buttons. `OcrSidePanel` / `OcrInlineUploader` are mounted only by
+purchase-invoice (the only OCR doc type). `PdfViewer`'s new props (`zoom`, `hideToolbar`,
+`toolbarExtra`, `onExpand`, `onNumPages`) are optional, so every other PDF preview is unchanged.

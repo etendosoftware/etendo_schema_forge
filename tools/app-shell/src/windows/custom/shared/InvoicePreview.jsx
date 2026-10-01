@@ -315,6 +315,8 @@ export default function InvoicePreview({ invoice, token, apiBaseUrl, windowName,
     storeCondition: true,
     readOnly,
     autoFetch: false,
+    // ETP-5518 — Replace / Delete menu and lightbox on the supplier's document.
+    fileActions: true,
     token,
     apiBaseUrl,
     onFileChange: setCachedAttachment,

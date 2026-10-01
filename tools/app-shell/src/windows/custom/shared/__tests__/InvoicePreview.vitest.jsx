@@ -1160,3 +1160,48 @@ describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(lastAttachmentConfig().readOnly).toBe(false);
   });
 });
+
+// ── ETP-5518: file actions menu + lightbox, purchase branch only ──────────────
+// GenericPreviewModal's `fileActions` is opt-in. Only the purchase branch sets it (the slot
+// holds the supplier's own uploaded document); the sales branch caches a PDF we generate
+// ourselves and must keep the plain viewer.
+describe('InvoicePreview — attachmentConfig.fileActions (ETP-5518)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDocumentCurrency.mockReturnValue({ orgCurrencyCode: 'EUR', isSameCurrency: true, exchangeRate: null });
+  });
+
+  function lastAttachmentConfig() {
+    return vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig;
+  }
+
+  it('purchase invoice opts into fileActions (drop-zone mode)', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook());
+
+    renderInvoicePreview();
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.fileActions).toBe(true);
+    expect(cfg.autoFetch).toBe(false);
+  });
+
+  it('purchase invoice keeps fileActions under Solo-Lectura; readOnly is what gates the writes', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook());
+
+    renderInvoicePreview({ readOnly: true });
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.fileActions).toBe(true);
+    expect(cfg.readOnly).toBe(true);
+  });
+
+  it('sales invoice does not set fileActions', () => {
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({ isSalesInvoice: true, pdfUrl: 'blob:inv' }));
+
+    renderInvoicePreview({ specName: 'sales-invoice', windowName: 'sales-invoice', apiBaseUrl: '/api/sales-invoice' });
+
+    const cfg = lastAttachmentConfig();
+    expect(cfg.autoFetch).toBe(true);
+    expect(cfg).not.toHaveProperty('fileActions');
+  });
+});
