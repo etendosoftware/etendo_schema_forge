@@ -328,6 +328,10 @@ Still offering what the UI does not (queued as a fix batch after Steps 4/5):
 | Med | financial-account `transaction`, `reconciliations` | CRUD advertised, view:create has 0 fields |
 | Med | financial-account `account` buttons | ImportBankFile / MatchTransactions / Reconcile / MatchTrans_Force invokable though its agentPrompt forbids them; PSD2 consent buttons need SCA |
 | Low | neo_selectors on hidden entities; lines configError noise | Minor |
+| High | payment headers `eTPRRemovePayment` | `ReactivatePaymentHandler.handleRemove` reactivates and removes a PROCESSED payment, which the UI never offers (Eliminar is draft-only), and gives back no consumed credit. Hidden from MCP; drafts are deleted with the invoice's `deletePayment` |
+| Med | payment headers `retryPisPayment`, `pisPaymentStatus` | PIS actions served by the same handler on the payment record: not listed but callable. Hidden (PIS is excluded) |
+| Low | financial-account `transaction` view:actions | Lists the AD buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted`, `etblkpBulkposting`; the UI only uses the handler's `post`/`unpost`. Hidden |
+| Note | payment headers `aPRMProcessPayment` | The handler always sends `action:"P"` and ignores agent parameters, so `actions.values:["P"]` keeps the catalogue honest; it is not a safety boundary |
 | High | docs tool `treasury.md`, `bank-reconciliation.md` | Recipes on neo_create payment-in, neo_batch payment-out + lines, `EM_APRM_Process_Payment`, discarded account buttons, `generate_financial_account_transactions` (no such tool); no registerPayment recipe — rewrite in Step 6 |
 
 Local data note: FC1000002's schedule detail still points at collection 1000007 (BUG-1 repro
