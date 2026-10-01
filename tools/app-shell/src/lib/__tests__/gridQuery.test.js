@@ -790,14 +790,16 @@ describe('buildAdvancedFilterCriteria', () => {
       assert.equal(build({ conditions: [{ field: 'documentNo', operator: 'inSet', value: ',' }] }), null);
     });
 
-    it('OR-composes the picked operator across a multi-value array', () => {
-      // Multi-select checkbox popover: same operator, several values.
+    it('composes the picked operator across a multi-value array (AND for negative ops)', () => {
+      // Multi-select checkbox popover: same operator, several values. A
+      // negative operator means "none of them", so it AND-composes — OR-ing
+      // `iNotContains A`, `iNotContains B` excluded nothing (ETP-5009).
       const result = build({
         conditions: [{ field: 'documentNo', operator: 'iNotContains', value: ['A', 'B'] }],
       });
       assert.deepEqual(result, [{
         _constructor: 'AdvancedCriteria',
-        operator: 'or',
+        operator: 'and',
         criteria: [
           { fieldName: 'documentNo', operator: 'iNotContains', value: 'A' },
           { fieldName: 'documentNo', operator: 'iNotContains', value: 'B' },
