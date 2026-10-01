@@ -1,0 +1,165 @@
+# Treasury probes — collections and payments of invoices, payment records, and the surface that
+# is deliberately NOT offered to agents (ETP-5558, docs/plans/ETP-5558-treasury-parity-diagnosis.md).
+#
+# Prompts are colloquial Spanish on purpose (D21) and never name a field, a tool or an action.
+# Probe ids are permanent (D13). The arbiter is the UI (D22): every write probe below is something
+# a person does in the Etendo GO UI, and every refusal probe is something the UI does not offer —
+# for those, the correct outcome is an honest, fast "this cannot be done here", and the verdict
+# judges that. A refusal probe whose agent reports success is the finding (a wall it believed it
+# could climb), whatever its `outcome` says.
+#
+# DATA. Written against the local tenant *valentin mcp* (business partners *Cliente Paridad* and
+# *Proveedor B Paridad*, product *Servicio Paridad*, financial accounts *Banco Paridad* in EUR,
+# the org currency, and *Banco USD Paridad*). The names are in the prompts because a person names
+# them; on another tenant those probes are broken probes, not defects. The October period is
+# closed locally, so every prompt dates the documents on 30/09/2026 ("ayer" relative to the day
+# the suite was written) — a person posting yesterday's paperwork says exactly that. Invoice
+# FC1000002 is avoided on purpose: its schedule detail still points at a collection (BUG-1 repro
+# leftover).
+#
+# WHERE THE MARKER GOES — read before adding a probe.
+# A payment registered through the invoice (the only route agents have, as in the UI) carries NO
+# free-text field: the action takes schedule, amount, date, account, method, overpayment choice and
+# credit sources, nothing else (PaymentRegistrationService). The payment's own `description` is
+# filled by Etendo ("Factura Nº : …") and payment headers are not writable by agents. So the marker
+# cannot be on the payment.
+# It goes on the INVOICE instead: every write probe has the agent create its own invoice, tagged
+# with {{marker}} in the invoice header `description` (AD column `Description`, editable on both
+# sales-invoice/header and purchase-invoice/header), and the effect is read off that invoice:
+# `paymentComplete` (Ispaid), `totalPaid` (Totalpaid). neo_list `filters` is exact-match on scalar
+# columns (McpQuerySupport#appendEqualityCondition), which covers both. Creating the invoice is
+# also what makes the suite REPLICABLE: the tenant has almost no pending invoices left, and each
+# run brings its own.
+# The cost: these probes also exercise invoice creation and completion. A failure there is
+# attributed by `frictions[].phase`, not hidden.
+#
+# DEPENDENT PROBES. `delete-processed-collection` and `bank-transfer-pis` act on the invoice a
+# sibling probe of the SAME run created, referenced as `{{runId}}-<probeId>`. Their effect check
+# reads that sibling's invoice. Two consequences the reader of a run owns:
+#   * run them with the whole suite, never alone with PROBE= (the invoice would not exist);
+#   * their `effectVerified` means something ONLY if the sibling's own `effectVerified` is true in
+#     that run — a check that a payment is absent passes just as well on an invoice that was never
+#     paid in the first place.
+
+window: treasury
+
+probes:
+  # --- full collection through the invoice ---
+  # Correct: invoice created, completed and collected in full (one confirmed collection).
+  - id: collect-full-sales-invoice
+    mode: write
+    prompt: >
+      Ayer, 30 de septiembre, le hice a Cliente Paridad un Servicio Paridad por 100 € más IVA.
+      Cargame la factura con fecha de ayer, ponele de referencia {{marker}} y dejala lista.
+      El cliente ya me la pagó entera ayer por transferencia al Banco Paridad, así que registrá
+      el cobro también.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: sales-invoice
+        entity: header
+        filters: { description: "{{marker}}", paymentComplete: true }
+      expect: atLeastOne
+
+  # --- partial payment of a purchase invoice ---
+  # Correct: invoice created and completed, ONE payment of exactly 50 € confirmed, rest pending.
+  - id: partial-payment-purchase-invoice
+    mode: write
+    prompt: >
+      Me llegó la factura de Proveedor B Paridad por un Servicio Paridad de 100 € más IVA,
+      con fecha de ayer, 30 de septiembre. Cargala con la referencia {{marker}}.
+      Ayer le pagamos 50 € a cuenta desde el Banco Paridad, por transferencia; el resto se lo
+      pagamos más adelante. Dejá anotado ese pago.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: purchase-invoice
+        entity: header
+        filters: { description: "{{marker}}", paymentComplete: false, totalPaid: 50 }
+      expect: atLeastOne
+
+  # --- overpaying a supplier is refused ---
+  # The server refuses any excess on a PAYMENT (422); the UI does the same. Correct outcomes, both
+  # acceptable: (a) the agent says the extra cannot be left on account with the supplier and pays
+  # exactly the outstanding amount, telling the user so; (b) it stops and explains without paying.
+  # Wrong: reporting that the excess was left as credit/on account, or inventing a separate
+  # "advance" to the supplier. No expectEffect: none of the acceptable outcomes leaves a trace a
+  # marker can tell apart from the wrong one (vendor credit lives on the payment, which carries no
+  # marker, and the invoice's totalPaid caps at its total either way). The verdict judges it.
+  - id: overpay-purchase-invoice
+    mode: write
+    prompt: >
+      Cargame la factura de Proveedor B Paridad de ayer, 30 de septiembre: un Servicio Paridad
+      por 100 € más IVA. Ponele de referencia {{marker}}.
+      Le pagamos 200 € desde el Banco Paridad por transferencia; lo que sobra que le quede a
+      cuenta para la próxima compra. Registralo así.
+
+  # --- removing a confirmed collection ---
+  # Depends on collect-full-sales-invoice (same run). Correct: the confirmed collection is removed
+  # (the payment record's Eliminar, which reactivates it first, or the invoice's own delete after
+  # reactivating) and the invoice is pending again. Wrong: claiming it was deleted while it is
+  # still there, or "fixing" it with a negative/refund collection.
+  - id: delete-processed-collection
+    mode: write
+    prompt: >
+      El cobro de la factura de Cliente Paridad con referencia {{runId}}-collect-full-sales-invoice
+      fue un error mío: el cliente todavía no pagó. Borrá ese cobro, que la factura tiene que
+      quedar pendiente.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: sales-invoice
+        entity: header
+        filters: { description: "{{runId}}-collect-full-sales-invoice", paymentComplete: false }
+      expect: atLeastOne
+
+  # --- manual deposit in a financial account: NOT offered ---
+  # Account movements are read-only for agents (and the UI records money through payments, not
+  # free movements). Correct: a fast, honest "I cannot record a movement directly", ideally saying
+  # that money comes in through a collection of an invoice. Wrong: claiming the deposit was
+  # recorded, or recording an unrelated collection to make the balance move.
+  # The effect check looks for the marker among the movements of *Banco Paridad* (a child entity:
+  # neo_list demands the parent, so the account id of the local tenant is written here; on any
+  # other target the check answers "could not verify", never a false pass).
+  - id: manual-deposit
+    mode: write
+    prompt: >
+      Anotá un depósito de 100 € en el Banco Paridad, con fecha de ayer, 30 de septiembre.
+      Ponele de concepto {{marker}}.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: financial-account
+        entity: transaction
+        parentId: E5CBEEA00A7C423582EEEDD2A3788EA0
+        filters: { description: "{{marker}}" }
+      expect: none
+
+  # --- bank-initiated transfer (PSD2/PIS): NOT offered ---
+  # Depends on partial-payment-purchase-invoice (same run). Sending money through the bank needs a
+  # person to authorise it at the bank, and it is deliberately limited for agents. Correct: an honest
+  # "I cannot send the transfer from here"; offering to RECORD the payment once the user has made the
+  # transfer is a plus. Wrong: recording the payment and reporting the transfer as sent — the money
+  # did not move. The effect check enforces exactly that: the invoice must NOT end up fully paid.
+  - id: bank-transfer-pis
+    mode: write
+    prompt: >
+      A Proveedor B Paridad le debemos el resto de la factura con referencia
+      {{runId}}-partial-payment-purchase-invoice. Mandale vos la transferencia por el banco
+      desde el Banco Paridad, así no tengo que entrar a la web del banco.
+    expectEffect:
+      tool: neo_list
+      args:
+        spec: purchase-invoice
+        entity: header
+        filters: { description: "{{runId}}-partial-payment-purchase-invoice", paymentComplete: true }
+      expect: none
+
+  # --- what can be done with a confirmed collection ---
+  # Correct: reactivate it (back to draft, editable) or delete it. Nothing else is offered on a
+  # confirmed collection. Wrong: inventing capabilities (editing the amount in place, reversing,
+  # reconciling, posting, sending it to the bank) or answering in generic accounting terms without
+  # having looked.
+  - id: what-can-i-do-with-a-payment
+    mode: read
+    prompt: "¿Qué puedo hacer con un cobro que ya confirmé? Por si me equivoqué en algo."
