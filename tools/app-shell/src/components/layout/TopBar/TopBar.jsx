@@ -55,10 +55,10 @@ import {
  * 1280×720 minimum resolution); change it here and nowhere else.
  *
  * Why 1366: with the rail expanded (240px) the header gets `viewport - 240`. The search is
- * centered in the bar (see HEADER_GRID), so each side column gets `(header - pr 24 - search 392 -
- * 2 gaps 32) / 2`: ~339px at 1366, enough for Tutorials/Copilot + 5 quick actions (~304px), but
- * only ~296px at 1280. So 1280-class screens go compact and the common 1366 laptop keeps every
- * action inline.
+ * centered in the bar (see HEADER_GRID), so each side column gets `(header - search 392 - 2 gaps
+ * 32) / 2`, and the actions get that minus their own 24px right inset: ~327px at 1366, enough for
+ * Tutorials/Copilot + 5 quick actions (~304px), but only ~284px at 1280. So 1280-class screens go
+ * compact and the common 1366 laptop keeps every action inline.
  */
 export const TOPBAR_COMPACT_BELOW_PX = 1366;
 const COMPACT_MEDIA_QUERY = `(max-width: ${TOPBAR_COMPACT_BELOW_PX - 0.02}px)`;
@@ -90,6 +90,9 @@ function useIsCompactTopBar() {
  * minimum is its `max-content`: the icons are never cut; only if they ever needed more than half
  * of the free space would the search shift left (instead of being overlapped). Each block is
  * placed on an explicit column so the search stays in the middle when there is no left block.
+ * The header itself has no horizontal padding (the 24px right inset lives on the actions group,
+ * inside its own track), so the tracks span the whole visible bar and the search is centered on
+ * the header's border box, not on a padding-shifted content box.
  */
 const HEADER_GRID = 'grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]';
 
@@ -488,7 +491,7 @@ export default function TopBar({
         <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
         <header
           className={cn(
-            'relative h-[62px] shrink-0 items-center gap-4 pl-0 pr-6 bg-page-bg',
+            'relative h-[62px] shrink-0 items-center gap-4 px-0 bg-page-bg',
             HEADER_GRID,
             className
           )}
@@ -690,7 +693,7 @@ export default function TopBar({
         </div>
 
         {/* Right: action icons */}
-        <div className="col-start-3 flex items-center justify-self-end gap-1 shrink-0" data-testid="topbar-quick-actions">
+        <div className="col-start-3 flex items-center justify-self-end gap-1 shrink-0 pr-6" data-testid="topbar-quick-actions">
           {/* ETP-5144 — guided walkthroughs. Hardcoded here rather than passed
               via `rightExtras` (which comes from per-page PageMeta) so the
               entry point is reachable from every screen. Renders nothing when

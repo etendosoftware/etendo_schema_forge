@@ -1029,7 +1029,7 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `topbar-breadcrumb-overflow` | — | Breadcrumb `⋯` trigger (>3 levels) |
 | `topbar-breadcrumb-overflow-menu` | — | Breadcrumb `⋯` dropdown |
 | `topbar-breadcrumb-overflow-item` | — | Hidden intermediate level inside the dropdown |
-| `topbar-search-slot` | — | Middle grid column holding the 392px search, centered in the bar |
+| `topbar-search-slot` | — | Middle grid column holding the 392px search, centered in the visible bar (header border box) |
 | `topbar-quick-actions` | — | Right-side quick actions group |
 | `topbar-quick-action-{id}` | `topbar-quick-action-notifications` | Page-supplied quick action (inline or in the right `⋯`) |
 | `topbar-quick-actions-overflow` | — | Right-side `⋯` trigger (compact breakpoint only) |

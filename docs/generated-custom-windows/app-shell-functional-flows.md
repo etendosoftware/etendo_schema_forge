@@ -219,8 +219,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   → quick actions (column 3). Each block is placed on an explicit column, so the search stays in
   the middle column even when a page has no title and no back button.
   - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
-    centered in the bar** whatever the width of the title block or of the actions — the two side
-    tracks are equal `1fr` tracks. It is not an `absolute inset-0` overlay, so it can never cover
+    centered in the visible bar** (the header's border box) whatever the width of the title block
+    or of the actions — the two side tracks are equal `1fr` tracks and the header has no
+    horizontal padding (the 24px right inset is `pr-6` on the actions group, inside column 3), so
+    the tracks span the whole bar. It is not an `absolute inset-0` overlay, so it can never cover
     the title (rail expanded or collapsed). `max-w-full` lets it shrink rather than overlap if the
     bar ever gets too narrow. The right track's minimum is its own content width, so the icons
     are never cut; only if they ever needed more than half of the free space would the search
@@ -251,8 +253,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `topbar-quick-actions-overflow-menu`), which renders only when it has something to hold. This
   is a different control from the title `⋯` (`topbar-more-actions`: Favorites / Page help).
   - Why 1366: with the rail expanded (240px) each side column gets
-    `(header - 24 padding - 392 search - 32 gaps) / 2`: ~339px at 1366, enough for every action
-    inline (~304px), but only ~296px at 1280. Pending UX confirmation.
+    `(header - 392 search - 32 gaps) / 2`, and the actions get that minus their 24px right
+    inset: ~327px at 1366, enough for every action inline (~304px), but only ~284px at 1280.
+    Pending UX confirmation.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — grid placement of the three blocks, title and breadcrumb tooltips (opened via focus), search not absolute, back button
   present, ≤3 levels without `⋯`, >3 levels collapsed with the dropdown excluding the current
@@ -262,7 +265,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   1. At 1280×720 with the rail expanded, open a record with a long name: the title elides, the
      search does not cover it, and hovering shows the full name.
   2. Collapse and expand the rail, and open pages with short and long titles (with and without
-     the back button): the search stays at the exact horizontal center of the top bar.
+     the back button): the search stays at the exact horizontal center of the visible top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
   4. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
