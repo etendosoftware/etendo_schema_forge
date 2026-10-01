@@ -346,6 +346,16 @@ See `docs/window-templates.md` for full `templateConfig` reference.
 
 **Real examples:** `product` (gallery), many kanban/calendar windows.
 
+**Gallery card grid (ETP-5516).** A `{Name}Gallery.jsx` must lay its cards out with the shared
+`GalleryGrid` (`tools/app-shell/src/components/ui/gallery-grid.jsx`), never with viewport
+breakpoint classes (`xl:grid-cols-6`, ...). `GalleryGrid` is width-driven: its columns are
+`repeat(auto-fill, minmax(min(GALLERY_CARD_MIN_WIDTH_PX, 100%), 1fr))`, so the number of cards per
+row follows the width of the gallery's own container. Expanding the Navigation Rail or narrowing
+the window makes cards wrap to the next row instead of shrinking below the minimum, and a wider
+container fits more cards. `GALLERY_CARD_MIN_WIDTH_PX` (220 px, taken from the Figma product
+gallery) is the single place to change that minimum. The report catalog gallery
+(`ReportViewerPage.jsx`) uses the same component, so the two galleries cannot drift apart.
+
 ---
 
 ### 6b. `window.agentPrompt` / field `agentPrompt` — AI agent guidance

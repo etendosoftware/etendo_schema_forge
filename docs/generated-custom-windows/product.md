@@ -32,7 +32,7 @@ identity of separate data series and is not a UI status or theme role.
 - **Implementation type:** generated window route loaded through `tools/app-shell/src/windows/registry.js`, with product-specific custom surfaces embedded in the generated page: `ProductGallery`, `ProductAdditionalInfoPanel`, `ProductPriceBar`, and `ProductSidebar`.
 - **Window shape:** master-child workspace. The selected product is the master entity, and product-related child datasets are attached to that record.
 
-The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
+The list surface is gallery-based rather than a plain grid. Product cards show the image when one exists and fall back to a package icon when no image is available. The cards are laid out by the shared width-driven `GalleryGrid` (ETP-5516): each card is at least `GALLERY_CARD_MIN_WIDTH_PX` (220 px) wide and the number of cards per row follows the width of the list area, not the viewport — at 1280 px wide that is 5 per row with the Navigation Rail collapsed and 4 with it expanded; cards that do not fit wrap to the next row, and long names are truncated with an ellipsis only when they exceed the card width. Opening a record takes the user into a detail screen with two primary tabs: `General` and `Additional Info`.
 
 The detail screen also changes the standard generated behavior in six visible ways:
 - the product's standard-cost history is surfaced through a **Cost** tab (classic grid+form, `CostingTable`/`CostingForm`), declared via `secondaryTabs` in `decisions.json` (ETP-5245)
