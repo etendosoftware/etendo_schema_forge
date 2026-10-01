@@ -33,6 +33,14 @@ the SDK's `clientBuilder` before it is serialized and signed (page titles, recor
 ids and query strings never leave). Cookies are off unless
 `VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy.
 
+**Production errors (as of 2026-10-01).** GlitchTip has been decommissioned and
+`VITE_SENTRY_DSN` is not set for the deploy, so the Sentry adapter is inert in production and
+**CloudWatch RUM is the only source of frontend errors**. RUM has been opt-in since ETP-4578
+(the injected IDs alone no longer switch it on); the deploy workflow turns it on with
+`VITE_RUM_ENABLED: "true"` for every target. Its session sample rate is left at the default
+`0.1` (an infra cost decision), so only 10% of sessions are sampled. RUM also calls
+`cognito-identity` at startup and keeps temporary credentials in `localStorage`.
+
 Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
 `VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
 is lazy-loaded only when the provider is enabled and used.
