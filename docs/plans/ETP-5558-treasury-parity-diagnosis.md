@@ -440,7 +440,11 @@ except the accepted BUG-4 exception.
 - Invoice-header actions served by the handlers but with no declared contract, so callable through
   `neo_action` yet not discoverable: `cloneRecord`, `createShipment`, `post`, `unpost`, and the
   `EM_Aeatsii_Send` / `EM_Tbai_Xmlgenerator` buttons (their `ETGO_SF_FIELD` rows are
-  `isincluded=N`). Declare contracts for them so the MCP surface matches the UI.
+  `isincluded=N`). Declare contracts for them so the MCP surface matches the UI. This follow-up is
+  now about discoverability only: since `a1a863f83` every action, declared or not, on both
+  channels, is refused with 404 when its record id is a row of the tab's table that the current
+  tenant cannot read (`NeoActionRecordGuard`), so an undeclared action can no longer reach another
+  tenant's record.
 - Write-off limit compared in the invoice currency against a limit in the account currency (SPA,
   payment registration and reconciliation alike) — convert in all three at once.
 
@@ -455,7 +459,7 @@ without them, by decision. Paths: `go` = `modules/com.etendoerp.go`, `sf` = `sch
 new test must be shown red first (mutation or revert) and green after.
 
 Commits covered: `8bdaea0b2`, `fbe4a0465`, `3ed1c2332` (Step 4 + review fixes), `2a507a327`,
-`7c363c467` (surface-honesty batch).
+`7c363c467` (surface-honesty batch), `a1a863f83` (action record ownership).
 
 #### A. Java tests (go, `src-test/src/com/etendoerp/go/...`)
 
@@ -609,6 +613,28 @@ Assert the 9 rows changed in `7c363c467`, each validated by `McpEntityConfig` wi
    - several pending installments;
    - narrowed `docAction`.
 3. Do not use FC1000002 (BUG-1 leftover).
+
+**A9. Action record ownership — `NeoActionRecordGuard` (`a1a863f83`)**
+
+1. Guard (unit):
+   - a row of the tab's table owned by another client → 404 `Record not found`, the same text an
+     unknown record gets;
+   - a row of an organization outside the readable ones → 404;
+   - a same-tenant row → `null` (the action runs);
+   - passes through, untouched: blank record id, entity without a tab, tab table without a DAL
+     entity, an id that is not a row of that table, a lookup that throws;
+   - a row of a table that is not client-enabled (`AD_Org` is client-enabled only, so no org
+     check) → visible.
+2. REST (`NeoHookDispatcher.dispatchWithHooks`): `POST …/<foreign id>/action/<button>` → 404 and
+   neither the customization nor the default action runs; same-tenant → unchanged result; a
+   non-ACTION endpoint type and a call without `ActionDispatchParams` are never checked.
+3. MCP (`McpToolRouter.handleAction`): `neo_action` on a foreign id → error envelope `status:404`,
+   `error:not_found`; the dispatcher and `executeButtonActionCore` are never reached; same-tenant →
+   unchanged.
+4. `ReactivatePaymentHandler`: `etprReactivatePayment`, `aPRMProcessPayment` and
+   `eTPRRemovePayment` on another tenant's `FIN_Payment` → 404 `Payment not found: <id>` even when
+   called directly (not through the guard); `clearTransferErrorFlag` leaves a foreign payment
+   untouched. The PIS actions already load their `pisPaymentId` with `loadOwned`.
 
 #### B. Docs
 
