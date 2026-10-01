@@ -415,6 +415,22 @@ except the accepted BUG-4 exception.
 - Re-run the Agroquímicos finance agent (agentic-game) and measure with `make mcp-metrics`: zero
   `neo_create payment-in/finPayment`, `neo_action registerPayment` present with `ok`.
 
+- Step 4 test checklist (from review of `8bdaea0b2`): (1) an exception inside the response
+  enrichment never fails or rolls back the payment; (2) REST parity with `isMcpOrigin` false —
+  missing scheduleId 400, delete 204, invoiceAccounts untouched, no overpayment/method refusal;
+  (3) scheduleId resolution — single pending filled, several → 422 `installments` in due-date
+  order, none → 422, edit takes the draft's installment, foreign draft 404; (4) overpayment — at
+  capacity passes, above → 422 `outstandingAmount`/`excess`/`allowedValues`, credit counts, edit
+  uses the whole installment, explicit `overpaymentAction` passes, mutation on the `> 0` boundary;
+  (5) method — accepted passes, rejected → 422 `validMethods`, blank passes, foreign falls to the
+  service 400; (6) invoiceAccounts agent defaults — invoice method, flagged default, first by name,
+  `invoiceMethodAccepted`, non-200 passthrough; (7) enriched register/confirm/delete answers.
+  Docs: §4.12.6/§4.12.9 MCP-only divergences (optional scheduleId, overpayment 422, method 422,
+  delete 200 vs 204, invoiceAccounts reshaped) and both invoice guides.
+- Follow-up: NEO create does not evaluate tab auxiliary inputs (`NeoMandatoryDefaultsService`), so
+  `FIN_Payment.isReceipt` defaults to the DB 'Y' and `documentType` stays empty on REST
+  `POST payment-out/header` (BUG-2/BUG-3 root cause). Generic REST change — separate ticket.
+
 ### Follow-ups outside ETP-5558
 
 - Invoice-header actions served by the handlers but with no declared contract, so callable through
