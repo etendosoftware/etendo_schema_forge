@@ -394,5 +394,12 @@ except the accepted BUG-4 exception.
 
 ### Follow-ups outside ETP-5558
 
+- Invoice-header actions served by the handlers but with no declared contract, so callable through
+  `neo_action` yet not discoverable: `cloneRecord`, `createShipment`, `post`, `unpost`, and the
+  `EM_Aeatsii_Send` / `EM_Tbai_Xmlgenerator` buttons (their `ETGO_SF_FIELD` rows are
+  `isincluded=N`). Declare contracts for them so the MCP surface matches the UI.
+- Write-off limit compared in the invoice currency against a limit in the account currency (SPA,
+  payment registration and reconciliation alike) — convert in all three at once.
+
 - `ApplyToInvoices.jsx` dead code (row 4).
 - The invoice-lines grid showing *Precio 0,00* — open observation above.
