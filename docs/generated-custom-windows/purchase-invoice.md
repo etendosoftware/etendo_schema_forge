@@ -2073,17 +2073,17 @@ the same contracts as `sales-invoice` (see that guide's "MCP payment actions" se
 
 The agent-only behaviour is the same as for collections (MCP only; the SPA's REST calls are
 unchanged): optional `scheduleId` (422 with `installments` when several are pending), a 422 with
-`validMethods` for a method the account does not accept, a 422 with `outstandingAmount`, `excess`
-and `allowedValues` for funds above the installment without `overpaymentAction`, the enriched
+`validMethods` for a method the account does not accept, the enriched
 answers (`paymentMethod`, `creditUsed`, `creditGenerated`, `creditAvailable`, `writeoffAmount`,
 `invoice{…}`; `deletePayment` → 200 `{deleted, invoice}`), and `enriched:false` / the 500 *"…it is
 safe to retry"* when the outcome could not be read. `conversionRate` (cross-currency) and the
 account's `writeoffLimit` are enforced on both channels.
 
-**Open gap — overpaying a payment.** The modal never lets a payment exceed the outstanding (no
-*Dejar a crédito*, no *Dar vuelto* for `dir='out'`, see F3 above). Through MCP an overpayment
-without `overpaymentAction` is refused, but one that sends `overpaymentAction` is accepted by
-`PaymentRegistrationService`, which does not check the direction. Not closed by ETP-5558.
+**An overpayment is not possible, in the UI or through MCP: lower the amount.** The modal never
+lets a payment exceed the outstanding (no *Dejar a crédito*, no *Dar vuelto* for `dir='out'`, see
+F3 above), and through MCP funds above the installment's outstanding answer 422 with
+`outstandingAmount` and `excess` — even with `overpaymentAction`, which only applies to
+collections in the organization currency.
 
 **Hidden from MCP, on purpose** (the UI does not offer them): bank-initiated payments — the five
 PIS actions (`pisSupplierAccounts`, `pisTemplates`, `pisPaymentStatus`, `cancelPisPayment`,

@@ -2100,12 +2100,13 @@ What an agent gets that the SPA settles client-side (MCP only; the SPA's REST ca
 - **`scheduleId` is optional.** With one pending installment it is filled in; editing a draft it is
   the installment the draft pays. Several pending → 422 with `installments[{id, outstandingAmount,
   dueDate}]` (re-send with one); none → 422.
-- **Overpayment needs a decision.** Funds (`actual_payment` + `creditSources[].use`) above the
-  installment's outstanding without `overpaymentAction` → 422 with `outstandingAmount`, `excess`
-  and `allowedValues:["leave-credit","refund"]` — the question the modal's excess band asks. REST
-  still leaves the excess as credit silently. Open gap, not closed by ETP-5558: the modal offers
-  the two options only when the invoice is in the organization currency (F3 above), while the
-  service accepts `overpaymentAction` on a foreign-currency collection too.
+- **Overpayment — MCP refuses it exactly where the modal does.** On an invoice in the
+  organization currency, funds (`actual_payment` + `creditSources[].use`) above the installment's
+  outstanding without `overpaymentAction` → 422 with `outstandingAmount`, `excess` and
+  `allowedValues:["leave-credit","refund"]` — the question the modal's excess band asks; with it,
+  the collection proceeds. A foreign-currency collection behaves like a payment: any excess → 422,
+  even with `overpaymentAction` (lower the amount; F3 above, *Igualar*). REST still leaves the
+  excess as credit silently.
 - **Method ↔ account.** A `fin_paymentmethod_id` the account does not accept → 422 with
   `validMethods[{id, name}]`; omit it to use the account's `defaultMethodId`. REST silently falls
   back to the default.

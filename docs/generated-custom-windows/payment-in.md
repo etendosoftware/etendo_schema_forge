@@ -286,13 +286,19 @@ documentAction path is the already-guarded generic process button — so it need
 An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-in/finPayment`;
 REST and the SPA are unchanged):
 
-- **Invokable buttons:** *Confirmar* (`aPRMProcessPayment`, value `P` only — `view:"actions"`
-  lists only `P`, any other `docAction`/`action` value answers 422 with `allowedValues:["P"]`,
-  and sending none uses the button's default `P`), *Eliminar* (`eTPRRemovePayment`) and
-  *Reactivar* (`etprReactivatePayment`).
-- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`, `aPRMAddScheduledpayments`,
-  `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`, `aeatsiiSend`,
-  `etblkpBulkposting`, `posted`. A bank-initiated (PSD2) collection needs a person to authorize it at
+- **Invokable buttons — exactly two, both with `parameters:{}`:** *Confirmar*
+  (`aPRMProcessPayment`; `view:"actions"` lists only the value `P`, another `docAction`/`action`
+  answers 422 with `allowedValues:["P"]` — cosmetic honesty, since `ReactivatePaymentHandler`
+  always sends `P` whatever arrives) and *Reactivar* (`etprReactivatePayment`; the handler injects
+  `action:"RE"` itself).
+- **Hidden buttons (405, not listed):** `eTPRRemovePayment`, `psd2GenerateBankPayment`,
+  `aPRMAddScheduledpayments`, `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`,
+  `aeatsiiSend`, `etblkpBulkposting`, `posted`, and the PIS actions `retryPisPayment` /
+  `pisPaymentStatus` the same handler serves on the record. *Eliminar* (`eTPRRemovePayment`) is
+  hidden from agents: on a processed collection it reactivates and deletes it, and it gives no consumed
+  credit back. An agent deletes a **draft** with the invoice's
+  `deletePayment`, which restores consumed credit, checks the collection belongs to the invoice and the
+  tenant, and answers what it removed. A bank-initiated (PSD2) collection needs a person to authorize it at
   the bank (SCA).
 - **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
   `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no

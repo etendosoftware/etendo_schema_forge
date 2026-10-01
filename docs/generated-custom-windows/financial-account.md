@@ -4611,8 +4611,14 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
 - **`transaction` — read-only through MCP.** Create, update and delete answer 405 (its
   `view:"create"` had no field, and the UI never writes a movement through this entity: deposits,
   withdrawals and transfers go through the account's movement flow, the
-  `financial-account-transactions` spec, which agents cannot reach). Its post/unpost actions are not
-  hidden by this configuration.
+  `financial-account-transactions` spec, which declares no agent actions). Recording a deposit,
+  withdrawal or funds transfer, and editing, processing, reactivating or deleting a movement, are
+  not available through MCP; they are done from the account's movements in the UI. The movement
+  buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted` and `etblkpBulkposting` are
+  hidden (405, not listed). What stays is posting: `neo_action(spec:'financial-account',
+  entity:'transaction', id:<transactionId>, action:'post'|'unpost', parameters:{})`, served by the
+  `document-posting` qualifier (`DocumentPostingService`, as the SPA's kebab). They are
+  handler-served, so `view:"actions"` does not list them.
 - **`reconciliations` — read-only through MCP.** Create, update and delete answer 405 with the
   hint `neo_action` on `bank-reconciliation` (`id` = the financial account).
 
