@@ -12,7 +12,8 @@
  *   3. Both lookups ignore inherited Object.prototype keys (`constructor`, `__proto__`).
  *   4. `invalidateAfterWrite(cache, request)` — when the cache is actually touched (write methods
  *      only, any case; never without a cache) and with which pattern (`{ spec }` vs `{ entity }`).
- *      `isWriteMethod` is exercised through it.
+ *      `isWriteMethod` and `isReadOnlySubEndpoint` (POSTs to `evaluate-display` / `callout`
+ *      are reads) are exercised through it.
  * The `useApiFetch` wiring (base-URL composition, ok-only) is covered in
  * `src/auth/__tests__/useApiFetch.vitest.jsx`.
  */
@@ -111,6 +112,27 @@ describe('invalidateAfterWrite', () => {
       assert.deepEqual(cache.calls, [{ entity: 'selector' }]);
     });
   }
+
+  // ETP-5571 regression caught by the ETP-4564 E2E: opening a contact POSTs `evaluate-display`
+  // and a field edit POSTs `callout` — both read-only, yet they wiped every cached selector page.
+  // The guard sits before BOTH maps, so the goods-shipment row proves the spec map is covered too.
+  for (const [label, url] of [
+    ['contacts evaluate-display', '/sws/neo/contacts/businessPartner/evaluate-display'],
+    ['contacts callout (query + fragment stripped)', '/sws/neo/contacts/businessPartner/callout?x=1#y'],
+    ['goods-shipment callout', '/sws/neo/goods-shipment/header/callout'],
+  ]) {
+    it(`POST to a read-only sub-endpoint (${label}) is not a write — cache untouched`, () => {
+      const cache = fakeCache();
+      invalidateAfterWrite(cache, { url, method: 'POST' });
+      assert.deepEqual(cache.calls, []);
+    });
+  }
+
+  it('callout as a MIDDLE path segment is not a sub-endpoint — contacts write still invalidates', () => {
+    const cache = fakeCache();
+    invalidateAfterWrite(cache, { url: '/sws/neo/contacts/callout/1', method: 'POST' });
+    assert.deepEqual(cache.calls, [{ entity: 'selector' }]);
+  });
 
   for (const [label, url, method] of [
     ['GET', WRITE_URL, 'GET'],

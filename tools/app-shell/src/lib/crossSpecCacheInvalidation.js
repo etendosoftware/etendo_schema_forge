@@ -48,9 +48,32 @@ export const WRITE_INVALIDATES_ENTITIES = Object.freeze({
 
 const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/**
+ * NEO sub-endpoints that are POSTed to but never change server state: `evaluate-display`
+ * (`useDisplayLogic`, fired on every record open) and `callout` (`useCallout`, `DetailView`,
+ * `SifTab`, fired on field edits). Treating them as writes made merely opening a contact wipe
+ * every cached selector page, and a callout on a shipment field mark the sales order stale.
+ * Add an entry only for a sub-endpoint shown to be read-only.
+ */
+export const READ_ONLY_SUB_ENDPOINTS = Object.freeze(new Set(['evaluate-display', 'callout']));
+
 /** True for a request method that can change server state. Defaults to GET like `fetch`. */
 export function isWriteMethod(method) {
   return !READ_METHODS.has(String(method || 'GET').toUpperCase());
+}
+
+/**
+ * True when the LAST path segment of `url` (query and fragment stripped) is a read-only
+ * sub-endpoint, so the request is not a write whatever its method.
+ *
+ * @param {string} url the request URL (relative or absolute, base already prepended)
+ * @returns {boolean}
+ */
+export function isReadOnlySubEndpoint(url) {
+  if (typeof url !== 'string' || !url) return false;
+  const path = url.split(/[?#]/, 1)[0];
+  const lastSegment = path.slice(path.lastIndexOf('/') + 1);
+  return READ_ONLY_SUB_ENDPOINTS.has(lastSegment);
 }
 
 /**
@@ -89,14 +112,14 @@ function dependentsByPathSegment(url, map) {
 
 /**
  * Marks the dependent specs and cache entities of a successful write stale in `cache`. No-op
- * without a cache (no DataProvider mounted), for read methods, and for URLs that target no
- * mapped spec.
+ * without a cache (no DataProvider mounted), for read methods, for read-only sub-endpoints
+ * (`READ_ONLY_SUB_ENDPOINTS`), and for URLs that target no mapped spec.
  *
  * @param {{ invalidate: (pattern: object) => number } | null | undefined} cache
  * @param {{ url: string, method?: string }} request
  */
 export function invalidateAfterWrite(cache, { url, method } = {}) {
-  if (!cache || !isWriteMethod(method)) return;
+  if (!cache || !isWriteMethod(method) || isReadOnlySubEndpoint(url)) return;
   for (const spec of specsInvalidatedByWrite(url)) {
     cache.invalidate({ spec });
   }
