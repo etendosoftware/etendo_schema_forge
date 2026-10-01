@@ -4585,7 +4585,29 @@ this window never delegates to `DetailView.jsx`/`GeneratedApp`, so `windowReadOn
 `useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded by hand into each
 tab. ETP-5205 covered the header and Movements; ETP-5457 closed the remaining three tabs
 (Reconciliation, Imported statements, Cash close), which until then carried no `windowReadOnly`
-reference at all.
+reference at all, and then the accounts list ("Cuentas", `/financial-account`), whose own toolbar,
+row actions and dialogs had been left ungated.
+
+**How the tier reaches the list.** The list IS the generated `AccountPage`, which already maps the
+`read-only` tier to `window={{ ...window, readOnly: true }}` on `ListView` — so ListView's own
+selection-bar "Eliminar seleccionados" (`bulk-delete-selected`) was already dropped by the tier.
+That is the only ListView control the tier changes here: the selection bar's print and clone
+buttons never existed on this list (`AccountPage` passes `hidePrint` and no `onCloneRow`). What it could not reach is the `AccountsHeaderTable` slot
+(`artifacts/financial-account/custom/`), which draws the whole toolbar, the row actions and the
+account dialogs itself, and does not receive `window` (ListView's `tableProps` do not forward it).
+The slot therefore calls `useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` — the same source
+`AccountPage` reads, so list and slot cannot disagree — and threads `windowReadOnly` into
+`AccountsToolbar`, `AccountRowActions` → `AccountRowMenu`, and the name cell (`NameCell` →
+`SyncStatusInline`, through the cell context).
+
+**"Reglas de matcheo" follows the OTHER window's tier.** The button only navigates to Match Rule
+(`/match-rule`, AD_Window_ID `24963D64E83B4543A7F6BD248CF944EE`, from that artifact's
+`contract.json`), which has its own guard. It is shown when the role's tier on Match Rule is
+`read-only` or `full` and hidden when it is `none` (`useWindowAccess` fails closed, so an unloaded
+access map hides it too) — being read-only on Financial Account is not a reason to hide a link to a
+different window. Under `read-only` on Match Rule, `ListModalWindow` (ETP-4950) offers no New, no
+row actions, no selection and disables the inline toggles; rows have no click handler, so no
+editable modal is reachable.
 
 The prop is **`windowReadOnly` everywhere, never `readOnly`**: in `ReconciliationSplitPanel.jsx`,
 `readOnly` already means "the selected line is already reconciled", and the two are unrelated.
@@ -4605,6 +4627,7 @@ handler, since these components still render the control.
 | Imported statements (`ImportedStatementsTab`, ETP-5457) | Import split-button (`statements-import-button`, `statements-import-split`) or bank sync (`statements-bank-sync-button`); per-row edit / delete / kebab (`StatementRowKebab` returns `null`); header and row selection checkboxes; the bulk-delete bar and its dialog; `ImportStatementModal`, `ManualStatementModal` and `StatementConfirmDialog` kept shut | — | Back, status / date / advanced filters, search, sort, refresh, row expansion (lines), CSV export |
 | Cash close (`CashCloseTab`, ETP-5457) | `CashCloseConfirmDialog` kept shut | "Confirmar cierre" (`cash-close-confirm`), "Guardar borrador" (`cash-close-save-draft`), statement date (`cash-close-statement-date`), declared balance (`cash-close-declared-balance`) | Ticking movements, hide-cleared / hide-after toggles, search, the live summary |
 | Reconciliations list | Nothing to gate — navigation only | — | Everything |
+| Accounts list (`AccountsHeaderTable`, ETP-5457) | "+ Nueva cuenta" (`cuentas-new-account-button`); row Edit (`account-row-edit-{id}`) and Sync (`account-row-refresh-{id}`) icons; every kebab item except "Abrir cuenta" (`account-row-menu-open-{id}` stays — edit, new movement, transfer, sync, disconnect, reconnect, connect, delete connection, archive / unarchive, delete are not rendered); the name cell's inline "Conectar banco" (`account-sync-connect-{id}`); the row selection checkboxes (`selectable={false}` — their only use was the bulk delete ListView already drops); `NewAccountWizard`, `EditAccountModal`, `ArchiveAccountDialog`, `DeleteAccountDialog`, the disconnect `ConfirmDialog`, `BankConnectionDeleteConfirmModal` and `FundsTransferModal` kept shut | — | Type filter, advanced filter, search, sort, refresh, KPI sidebar, row click and "Abrir cuenta" (open the detail, itself gated), the "Conciliar (N)" pill (navigation to the gated reconciliation tab), copy IBAN; "Reglas de matcheo" per the Match Rule tier (see above) |
 
 **CSV export and navigation keep working.** On Imported statements the export reads the tab's
 selection through its ref; with the checkboxes hidden the selection is always empty, so it exports
@@ -4615,7 +4638,11 @@ the filtered statement headers — the same thing a full-access user gets with n
 `requestRemoveOne`, `requestRemoveSelected`, `confirmRemove`) in the module-level
 `guardWrite(windowReadOnly, fn)`, which returns a no-op under the tier. It is the same early return
 spelled once, instead of an `if (windowReadOnly) return;` in every handler — the component already
-sits at Sonar's cognitive-complexity ceiling (javascript:S3776). `ImportedStatementsTab` (sync,
+sits at Sonar's cognitive-complexity ceiling (javascript:S3776). `AccountsHeaderTable` uses a local
+`guardWrite(fn)` the same way for the row handlers it hands out (edit, archive, delete, transfer,
+new movement) and the toolbar's new-account handler, plus plain early returns in
+`handleBankConnectionAction` and `runDisconnect`; navigation (open, reconcile pill, matching rules)
+is not wrapped. `ImportedStatementsTab` (sync,
 confirm) and `CashCloseTab` (save draft, confirm click, run confirm) use plain early returns; the
 bulk delete needs none, since neither its bar nor its dialog is rendered under the tier.
 
@@ -4623,6 +4650,13 @@ bulk delete needs none, since neither its bar nor its dialog is rendered under t
 (default `false`) that drops its post button while keeping the banner and its dismiss. Its only
 consumer is the split panel.
 
-Live verification against a real read-only-tier role was not done for either ticket (DB-confirmed:
-no role in the system currently holds a read-only grant on this window) — a deliberate scope call;
-coverage relies on unit tests.
+On the list side the same optional prop (default `false`, so any other caller is unaffected) was
+added to `AccountsToolbar`, `AccountRowActions`, `AccountRowMenu`, `NameCell` and
+`SyncStatusInline`; `AccountsToolbar` also takes `showMatchingRules` (default `true`).
+`AccountRowMenu`'s write items moved into a local `AccountRowMenuWriteItems` so the tier drops them
+in one place. The quick-actions cell reserves one button under the tier instead of three.
+
+Live verification against a real read-only-tier role was not done for the tabs (at the time,
+DB-confirmed, no role held a read-only grant on this window) — a deliberate scope call; coverage
+relies on unit tests. The accounts-list gap was later reproduced live with a real read-only role
+(`AD_Window_Access.IsReadWrite = 'N'`), which is what brought the list into ETP-5457.
