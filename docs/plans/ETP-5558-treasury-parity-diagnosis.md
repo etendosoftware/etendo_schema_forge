@@ -242,8 +242,12 @@ Update/delete of the header — **checked against the UI (2026-09-30)**: a draft
 (payment-in 1000014) and a draft payment (payment-out 1000004, created from FC1000002) both show
 only *Eliminar* and *Confirmar*; *Guardar* is disabled and no header field is editable
 (`hideFormCard`). A draft is edited from the invoice (`registerPayment` with `paymentId`).
-Decision: **hide update** on both headers, **keep delete** (the UI offers it on a draft; a
-processed payment hides it).
+Decision: **hide update** on both headers, **keep delete** (the UI offers it on a draft).
+Correction (2026-10-01): the UI *Eliminar* is not draft-only. The list row action and the detail
+trash icon both call `eTPRRemovePayment` on every status except `RPVOID`
+(`tools/app-shell/src/windows/custom/shared/PaymentHeaderTableBase.jsx` →
+`delete: { visibleWhen: "@status@!='RPVOID'" }`; `DetailView.jsx` `WINDOW_DELETE_ACTIONS`, ETP-4479),
+so a processed, deposited or cleared payment can be removed from the UI.
 
 **Mechanism.** The method flags cannot be used: REST and the SPA read them too, so turning them off
 would change UI behaviour, which this task must not do. `MCP_CONFIG` (§4.12.6 of
@@ -328,7 +332,7 @@ Still offering what the UI does not (queued as a fix batch after Steps 4/5):
 | Med | financial-account `transaction`, `reconciliations` | CRUD advertised, view:create has 0 fields |
 | Med | financial-account `account` buttons | ImportBankFile / MatchTransactions / Reconcile / MatchTrans_Force invokable though its agentPrompt forbids them; PSD2 consent buttons need SCA |
 | Low | neo_selectors on hidden entities; lines configError noise | Minor |
-| High | payment headers `eTPRRemovePayment` | `ReactivatePaymentHandler.handleRemove` reactivates and removes a PROCESSED payment, which the UI never offers (Eliminar is draft-only), and gives back no consumed credit. Hidden from MCP; drafts are deleted with the invoice's `deletePayment` |
+| High | payment headers `eTPRRemovePayment` | `ReactivatePaymentHandler.handleRemove` reactivates and removes a PROCESSED payment, and gives back no consumed credit. The UI *does* offer it on every status but `RPVOID` (see the correction under the header check), so hiding it from MCP is a **deliberate narrowing, not parity**: declared in `neo-headless.md` §4.12.9. Agents delete drafts with the invoice's `deletePayment`; removing a processed payment is UI-only |
 | Med | payment headers `retryPisPayment`, `pisPaymentStatus` | PIS actions served by the same handler on the payment record: not listed but callable. Hidden (PIS is excluded) |
 | Low | financial-account `transaction` view:actions | Lists the AD buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted`, `etblkpBulkposting`; the UI only uses the handler's `post`/`unpost`. Hidden |
 | Note | payment headers `aPRMProcessPayment` | The handler always sends `action:"P"` and ignores agent parameters, so `actions.values:["P"]` keeps the catalogue honest; it is not a safety boundary |
@@ -669,8 +673,10 @@ Assert the 9 rows changed in `7c363c467`, each validated by `McpEntityConfig` wi
   - `paymentDetails` and `paymentPlan` read-only through MCP;
   - fix the stale "refund retired" note (Step 6 item above).
 - `payment-in.md`, `payment-out.md`:
-  - MCP exposes only Confirmar (`aPRMProcessPayment`, value P), Eliminar (`eTPRRemovePayment`) and
-    Reactivar (`etprReactivatePayment`); the rest are hidden (list them);
+  - MCP exposes only Confirmar (`aPRMProcessPayment`, value P) and Reactivar
+    (`etprReactivatePayment`); the rest are hidden (list them). Eliminar (`eTPRRemovePayment`) is
+    hidden too since `b86eade1d`, a declared narrowing: the UI offers it on every status but
+    `RPVOID`;
   - create, update and delete are hidden; payments go through the invoice actions.
 - `financial-account.md`:
   - `transaction` and `reconciliations` are read-only through MCP (post/unpost actions stay);
