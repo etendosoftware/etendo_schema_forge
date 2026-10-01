@@ -20,6 +20,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ProductGallery from '../ProductGallery.jsx';
 import { useNeoImage } from '@/hooks/useNeoImage';
+import { GALLERY_GRID_TEMPLATE_COLUMNS } from '@/components/ui/gallery-grid';
 
 describe('ProductGallery', () => {
   beforeEach(() => {
@@ -94,6 +95,53 @@ describe('ProductGallery', () => {
 
       await user.click(screen.getByText('Clickable'));
       expect(onNavigate).toHaveBeenCalledWith('row-42');
+    });
+  });
+  describe('width-driven grid (ETP-5516)', () => {
+    const BREAKPOINT_COLS = /(?:^|\s)(?:sm|md|lg|xl|2xl):grid-cols-/;
+    const ROWS = [
+      { id: 'p1', name: 'Card One' },
+      { id: 'p2', name: 'Card Two' },
+      { id: 'p3', name: 'Card Three' },
+    ];
+
+    it('renders every card inside the shared gallery-grid', () => {
+      render(<ProductGallery data={ROWS} onNavigate={vi.fn()} />);
+      const grid = screen.getByTestId('gallery-grid');
+      expect(grid.children).toHaveLength(ROWS.length);
+      for (const row of ROWS) {
+        expect(grid).toContainElement(screen.getByText(row.name));
+      }
+    });
+
+    it('uses the shared min-width track template and keeps its top padding', () => {
+      render(<ProductGallery data={ROWS} onNavigate={vi.fn()} />);
+      const grid = screen.getByTestId('gallery-grid');
+      expect(grid.style.gridTemplateColumns).toBe(GALLERY_GRID_TEMPLATE_COLUMNS);
+      expect(grid).toHaveClass('grid', 'gap-4', 'pt-2');
+    });
+
+    it('carries no viewport-breakpoint column classes anywhere', () => {
+      const { container } = render(<ProductGallery data={ROWS} onNavigate={vi.fn()} />);
+      for (const el of container.querySelectorAll('[class]')) {
+        expect(el.getAttribute('class')).not.toMatch(BREAKPOINT_COLS);
+      }
+    });
+
+    it('renders a single card inside the grid', () => {
+      render(<ProductGallery data={[ROWS[0]]} onNavigate={vi.fn()} />);
+      expect(screen.getByTestId('gallery-grid').children).toHaveLength(1);
+    });
+
+    it('does not render the grid for the empty state', () => {
+      render(<ProductGallery data={[]} onNavigate={vi.fn()} />);
+      expect(screen.queryByTestId('gallery-grid')).not.toBeInTheDocument();
+    });
+
+    it('keeps a long name on one truncated line', () => {
+      const longName = 'Extra virgin olive oil from the Sierra de Cazorla cooperative, 5 litre tin';
+      render(<ProductGallery data={[{ id: 'long', name: longName }]} onNavigate={vi.fn()} />);
+      expect(screen.getByText(longName)).toHaveClass('truncate');
     });
   });
 });
