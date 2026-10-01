@@ -410,24 +410,26 @@ the editor never opens on a record it could not save correctly.
 An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-out/header`;
 REST and the SPA are unchanged):
 
-- **Invokable buttons — exactly two, both with `parameters:{}`:** *Confirmar*
+- **Invokable buttons — exactly three, all with `parameters:{}`:** *Confirmar*
   (`aPRMProcessPayment`; `view:"actions"` lists only the value `P`, another `docAction`/`action`
   answers 422 with `allowedValues:["P"]` — cosmetic honesty, since `ReactivatePaymentHandler`
-  always sends `P` whatever arrives) and *Reactivar* (`etprReactivatePayment`; the handler injects
-  `action:"RE"` itself).
-- **Hidden buttons (405, not listed):** `eTPRRemovePayment`, `psd2GenerateBankPayment`,
+  always sends `P` whatever arrives), *Reactivar* (`etprReactivatePayment`; the handler injects
+  `action:"RE"` itself) and *Eliminar* (`eTPRRemovePayment`) with the UI's own gate: it works at
+  any status except void (`RPVOID`) and except while the payment is `pisLocked` (its bank transfer
+  is live), where an agent gets **422** and nothing changes. On a processed payment it reactivates
+  it first and then removes it, and it gives back **no** credit the payment consumed — exactly as
+  the trash icon does. To delete a **draft** and get its consumed credit back, use the invoice's
+  `deletePayment` instead.
+- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`,
   `aPRMAddScheduledpayments`, `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`,
   `aeatsiiSend`, `etblkpBulkposting`, `posted`, and the PIS actions `retryPisPayment` /
-  `pisPaymentStatus` the same handler serves on the record. *Eliminar* (`eTPRRemovePayment`) is
-  hidden from agents: on a processed payment it reactivates and deletes it, and it gives no consumed
-  credit back. An agent deletes a **draft** with the invoice's
-  `deletePayment`, which restores consumed credit, checks the payment belongs to the invoice and the
-  tenant, and answers what it removed. A bank-initiated (PSD2) payment needs a person to authorize it at
-  the bank (SCA).
+  `pisPaymentStatus` the same handler serves on the record. The PIS (PSD2) actions stay hidden
+  because fiscal and bank integrations are limited for agents (a declared narrowing, not a parity
+  gap; a bank-initiated payment also needs a person to authorize it at the bank, SCA).
 - **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
   `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
   editable field, and the generic delete of a draft fails on its payment details. A payment is
-  created, edited (draft) and deleted (draft) from the invoice: `neo_action(spec:'purchase-invoice',
+  created, edited (draft) and deleted (draft, with credit given back) from the invoice: `neo_action(spec:'purchase-invoice',
   entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
   — see `purchase-invoice.md` → "MCP payment actions".
 - **No writes on the lines** (`lines`, the allocation to invoice installments) nor on

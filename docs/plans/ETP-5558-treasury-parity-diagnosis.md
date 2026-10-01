@@ -248,6 +248,27 @@ trash icon both call `eTPRRemovePayment` on every status except `RPVOID`
 (`tools/app-shell/src/windows/custom/shared/PaymentHeaderTableBase.jsx` →
 `delete: { visibleWhen: "@status@!='RPVOID'" }`; `DetailView.jsx` `WINDOW_DELETE_ACTIONS`, ETP-4479),
 so a processed, deposited or cleared payment can be removed from the UI.
+It is also withheld while `pisLocked` (the payment belongs to a live bank transfer).
+
+**Decision (b), 2026-10-01 — Eliminar is offered to agents with the UI's gate.** User criterion:
+*"si desde la ui lo reactiva y borra, deberia poderse tambien del mcp"*. `eTPRRemovePayment` left
+`actions.hidden` on both payment headers (go `2b582fe84`, XML + DB row together), and
+`ReactivatePaymentHandler` refuses an MCP-origin call with **422** when the payment is `RPVOID` or
+`pisLocked` (go `bed7968e5`, same `PisDeferredPaymentService.isLifecycleLockedByTransfer` predicate
+the GET emits). REST is unchanged: it does not refuse those two cases server-side; the SPA just
+does not offer the button there. On any other status it reactivates a processed payment and
+removes it, as the UI does.
+
+**Criterion — fiscal and regulatory integrations.** Fiscal/regulatory integrations (AFIP,
+Verifactu, TicketBAI, Hacienda/SII/AEAT, PSD2/PIS bank integration) stay limited in the MCP for
+now, even when the UI offers them. This is a deliberate, declared narrowing, not a parity gap.
+Everything else follows full UI parity, destructive actions included. The PIS actions on the
+payment record (`retryPisPayment`, `pisPaymentStatus`) stay hidden under it; Eliminar is not a
+fiscal integration, so it follows parity.
+
+**Follow-up (REST, not fixed here).** `eTPRRemovePayment` gives back no credit the payment
+consumed, while the invoice's `deletePayment` does. The UI behaves the same (its trash icon calls
+`eTPRRemovePayment`), so this is parity, and a REST/handler issue to be ticketed separately.
 
 **Mechanism.** The method flags cannot be used: REST and the SPA read them too, so turning them off
 would change UI behaviour, which this task must not do. `MCP_CONFIG` (§4.12.6 of
@@ -332,7 +353,7 @@ Still offering what the UI does not (queued as a fix batch after Steps 4/5):
 | Med | financial-account `transaction`, `reconciliations` | CRUD advertised, view:create has 0 fields |
 | Med | financial-account `account` buttons | ImportBankFile / MatchTransactions / Reconcile / MatchTrans_Force invokable though its agentPrompt forbids them; PSD2 consent buttons need SCA |
 | Low | neo_selectors on hidden entities; lines configError noise | Minor |
-| High | payment headers `eTPRRemovePayment` | `ReactivatePaymentHandler.handleRemove` reactivates and removes a PROCESSED payment, and gives back no consumed credit. The UI *does* offer it on every status but `RPVOID` (see the correction under the header check), so hiding it from MCP is a **deliberate narrowing, not parity**: declared in `neo-headless.md` §4.12.9. Agents delete drafts with the invoice's `deletePayment`; removing a processed payment is UI-only |
+| High | payment headers `eTPRRemovePayment` | `ReactivatePaymentHandler.handleRemove` reactivates and removes a PROCESSED payment, and gives back no consumed credit. The UI offers it on every status but `RPVOID` and not while `pisLocked`. **Decision (b):** offered to agents with exactly that gate (422 on `RPVOID` / `pisLocked`, MCP origin only); see the decision under the header check. The missing credit give-back is a REST follow-up (parity with the UI) |
 | Med | payment headers `retryPisPayment`, `pisPaymentStatus` | PIS actions served by the same handler on the payment record: not listed but callable. Hidden (PIS is excluded) |
 | Low | financial-account `transaction` view:actions | Lists the AD buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted`, `etblkpBulkposting`; the UI only uses the handler's `post`/`unpost`. Hidden |
 | Note | payment headers `aPRMProcessPayment` | The handler always sends `action:"P"` and ignores agent parameters, so `actions.values:["P"]` keeps the catalogue honest; it is not a safety boundary |
@@ -673,10 +694,10 @@ Assert the 9 rows changed in `7c363c467`, each validated by `McpEntityConfig` wi
   - `paymentDetails` and `paymentPlan` read-only through MCP;
   - fix the stale "refund retired" note (Step 6 item above).
 - `payment-in.md`, `payment-out.md`:
-  - MCP exposes only Confirmar (`aPRMProcessPayment`, value P) and Reactivar
-    (`etprReactivatePayment`); the rest are hidden (list them). Eliminar (`eTPRRemovePayment`) is
-    hidden too since `b86eade1d`, a declared narrowing: the UI offers it on every status but
-    `RPVOID`;
+  - MCP exposes Confirmar (`aPRMProcessPayment`, value P), Reactivar
+    (`etprReactivatePayment`) and Eliminar (`eTPRRemovePayment`, any status but `RPVOID` /
+    `pisLocked`, reactivates a processed payment first, no consumed credit given back); the rest
+    are hidden (list them);
   - create, update and delete are hidden; payments go through the invoice actions.
 - `financial-account.md`:
   - `transaction` and `reconciliations` are read-only through MCP (post/unpost actions stay);

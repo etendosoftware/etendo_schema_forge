@@ -30,6 +30,19 @@ description: >
   something it cannot. A clear refusal is the fallback for an agent that ignored the surface, not
   the design.
 
+### The one declared exception — fiscal and regulatory integrations
+
+Fiscal/regulatory integrations (AFIP, Verifactu, TicketBAI, Hacienda/SII/AEAT, PSD2/PIS bank
+integration) stay limited in the MCP for now, even when the UI offers them. This is a deliberate,
+declared narrowing, not a parity gap. Everything else follows full UI parity, destructive actions
+included.
+
+When auditing: a hidden fiscal/PIS action is **not** a finding, as long as the narrowing is
+declared (`neo-headless.md` §4.12.9) and the `reason` says so. Anything else the UI offers and the
+MCP hides **is** a finding, however destructive. Give the MCP the UI's own gate instead — e.g. the
+payment's *Eliminar* (`eTPRRemovePayment`, ETP-5558) is offered at every status except the ones the
+UI withholds it on (`RPVOID`, `pisLocked`), which the handler refuses with 422 for an agent.
+
 ## Step 0 — Choose the mode
 
 Look for the repos: a `schema_forge` checkout (`artifacts/`, `docs/generated-custom-windows/`) and

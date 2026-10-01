@@ -2085,14 +2085,18 @@ F3 above), and through MCP funds above the installment's outstanding answer 422 
 `outstandingAmount` and `excess` — even with `overpaymentAction`, which only applies to
 collections in the organization currency.
 
-**Hidden from MCP, on purpose** (the UI does not offer them): bank-initiated payments — the five
+**Hidden from MCP, on purpose:** bank-initiated payments — fiscal and bank integrations stay
+limited for agents even though the UI offers them (a declared narrowing) — the five
 PIS actions (`pisSupplierAccounts`, `pisTemplates`, `pisPaymentStatus`, `cancelPisPayment`,
 `retryPisPayment`), the `pis` key of `registerPayment` (422) and the `psd2GenerateBankPayment`
-button (405): the transfer needs a person to authorize it at the bank (SCA), so an agent pays by
-manual transfer through `registerPayment`. Also hidden: Classic's `aPRMAddpayment` button (405,
+button (405): the transfer also needs a person to authorize it at the bank (SCA), so an agent pays
+by manual transfer through `registerPayment`. Also hidden, because the UI does not offer them: Classic's `aPRMAddpayment` button (405,
 redirected to `registerPayment`) and every write on `paymentDetails` and `paymentPlan` (readable;
-create / update / delete answer 405 with `registerPayment` as the hint). Nor can an agent create,
-edit or delete a payment header in `payment-out` (see `payment-out.md`).
+create / update / delete answer 405 with `registerPayment` as the hint). Nor can an agent create
+or edit a payment header in `payment-out`; it can delete one there with the window's *Eliminar*
+(`eTPRRemovePayment`, any status but `RPVOID` / `pisLocked`, reactivating a processed payment first
+and giving back no consumed credit — see `payment-out.md`). The `deletePayment` above deletes a
+draft and does give its credit back.
 
 Full contract, refusal shapes and the declared REST ↔ MCP divergences:
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.3, §4.12.6 and §4.12.9.

@@ -2120,12 +2120,16 @@ What an agent gets that the SPA settles client-side (MCP only; the SPA's REST ca
   `conversionRate` (400 otherwise), and `writeoffDifference` is refused (400
   `ETGO_WriteoffLimitExceeded`) above the account's `writeoffLimit`.
 
-**Hidden from MCP, on purpose** (the UI does not offer them): the PIS actions and the
-`psd2GenerateBankPayment` button (405; a person must authorize at the bank); Classic's
+**Hidden from MCP, on purpose:** the PIS actions and the `psd2GenerateBankPayment` button (405) —
+fiscal and bank integrations stay limited for agents even though the UI offers them (a declared
+narrowing; a person must also authorize at the bank). The UI does not offer the rest: Classic's
 `aPRMAddpayment` button (405, redirected to `registerPayment`); and every write on
 `paymentDetails` and `paymentPlan` — both stay readable (a `paymentPlan` id is a valid
 `scheduleId`), but create / update / delete answer 405 with `registerPayment` as the hint. Nor can
-an agent create, edit or delete a collection header in `payment-in` (see `payment-in.md`).
+an agent create or edit a collection header in `payment-in`; it can delete one there with the
+window's *Eliminar* (`eTPRRemovePayment`, any status but `RPVOID` / `pisLocked`, reactivating a
+processed collection first and giving back no consumed credit — see `payment-in.md`). The
+`deletePayment` above deletes a draft and does give its credit back.
 
 Full contract, refusal shapes and the declared REST ↔ MCP divergences:
 `com.etendoerp.go/docs/neo-headless.md` §4.12.1.3, §4.12.6 and §4.12.9.
