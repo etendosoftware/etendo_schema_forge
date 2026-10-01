@@ -310,6 +310,29 @@ through MCP: three `neo_create(payment-out, lines)` (2026-09-22 16:44, 17:45; 20
 each deleted by the agent itself 17–41 s later. Payment-detail and invoice-schedule amounts of that
 tenant reconcile with their schedule details (0 mismatches). No data-fix needed.
 
+## Surface honesty audit (2026-10-01, develop, read-only)
+
+Honest: write-tool enums of neo_create/neo_update, neo_discover methods of the payment entities,
+view:create / neo_delete / neo_batch refusals with the right hint, the 8 declared invoice actions,
+`aPRMAddpayment` redirect, `paymentPlan` ids usable as `scheduleId`.
+
+Still offering what the UI does not (queued as a fix batch after Steps 4/5):
+
+| Sev | Surface | Gap |
+|---|---|---|
+| High | payment headers view:actions | `psd2GenerateBankPayment`, `aPRMAddScheduledpayments`, `aprmExecutepayment`, reverse/reconcile, SII, bulk posting listed invokable; the UI offers only Confirmar / Eliminar (`eTPRRemovePayment`) / Reactivar |
+| High | invoice `paymentDetails` | Writable in MCP: hand-built allocation, same class as BUG-1 |
+| Med | invoice `paymentPlan` | Writable; the UI never hand-creates an installment |
+| Med | neo_delete tool enum | Still lists payment-in / payment-out (every entity refuses delete) |
+| Med | neo_defaults on create-hidden entities | Answers a `confirm` block "to review before neo_create" |
+| Med | financial-account `transaction`, `reconciliations` | CRUD advertised, view:create has 0 fields |
+| Med | financial-account `account` buttons | ImportBankFile / MatchTransactions / Reconcile / MatchTrans_Force invokable though its agentPrompt forbids them; PSD2 consent buttons need SCA |
+| Low | neo_selectors on hidden entities; lines configError noise | Minor |
+| High | docs tool `treasury.md`, `bank-reconciliation.md` | Recipes on neo_create payment-in, neo_batch payment-out + lines, `EM_APRM_Process_Payment`, discarded account buttons, `generate_financial_account_transactions` (no such tool); no registerPayment recipe — rewrite in Step 6 |
+
+Local data note: FC1000002's schedule detail still points at collection 1000007 (BUG-1 repro
+leftover) — do not use that invoice for Step 6 tests.
+
 ## Implementation plan
 
 All work in ETP-5558 (`feature/ETP-5558` in `schema_forge` and `com.etendoerp.go`). Steps are
