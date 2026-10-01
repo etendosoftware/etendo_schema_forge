@@ -238,8 +238,12 @@ buttons (`etprReactivatePayment`). Yet every payment entity has every verb enabl
 | `payment-out/lines` | `FIN_Payment_ScheduleDetail` | Y/Y/Y/Y | none | hide writes |
 | `payment-out/bankPayments` | `PSD2_pis_payment` | Y/Y/Y/Y | PIS flow (row 13) | decide with row 13 |
 
-Update/delete of the header need their own check against the UI (the *Cobro* window shows a
-delete button on a draft) before being hidden.
+Update/delete of the header — **checked against the UI (2026-09-30)**: a draft collection
+(payment-in 1000014) and a draft payment (payment-out 1000004, created from FC1000002) both show
+only *Eliminar* and *Confirmar*; *Guardar* is disabled and no header field is editable
+(`hideFormCard`). A draft is edited from the invoice (`registerPayment` with `paymentId`).
+Decision: **hide update** on both headers, **keep delete** (the UI offers it on a draft; a
+processed payment hides it).
 
 **Mechanism.** The method flags cannot be used: REST and the SPA read them too, so turning them off
 would change UI behaviour, which this task must not do. `MCP_CONFIG` (§4.12.6 of
@@ -328,8 +332,7 @@ except the accepted BUG-4 exception.
   - `payment-in/finPaymentScheduleDetail`, `payment-out/lines`: every write hidden.
   - `payment-out/header`: create hidden.
   - `payment-out/bankPayments`: every write hidden (PIS excluded).
-  - Update/delete of the payment headers: decided after checking what the *Cobro*/*Pago* windows
-    allow on a draft (the list shows a delete button).
+  - Payment headers: update hidden, delete kept (UI check above).
 - Doc: `neo-headless.md` §4.12.6 (new section) and §4.12.9 (declared divergence: the MCP hides
   verbs REST still serves).
 
