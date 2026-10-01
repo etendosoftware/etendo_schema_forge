@@ -289,6 +289,37 @@ describe('DataTable — render coverage', () => {
       render(<DataTable columns={cols} data={rows} rowQuickActions={{ enabled: true, onEdit: vi.fn() }} selectable={false} />);
       expect(screen.getByTestId('rqa-rq1')).toBeInTheDocument();
     });
+
+    // ETP-5205 — ListView turns the Email gate off under the Solo-Lectura tier by rewriting
+    // exactly these keys. With Email as the only row action, no actions column may mount
+    // (no empty ~200px column, the ETP-5268 regression).
+    it('mounts no quick actions when read-only and the Email gate is off', () => {
+      const cols = [{ key: 'n', label: 'N', type: 'string' }];
+      const rows = [{ id: 'rq1', n: 'a' }];
+      render(
+        <DataTable
+          columns={cols}
+          data={rows}
+          rowQuickActions={{ enabled: true, readOnly: true, documentPreview: false, sendDocument: { enabled: false } }}
+          selectable={false}
+        />,
+      );
+      expect(screen.queryByTestId('rqa-rq1')).not.toBeInTheDocument();
+    });
+
+    it('still mounts quick actions when read-only but Email is enabled (static read-only window)', () => {
+      const cols = [{ key: 'n', label: 'N', type: 'string' }];
+      const rows = [{ id: 'rq1', n: 'a' }];
+      render(
+        <DataTable
+          columns={cols}
+          data={rows}
+          rowQuickActions={{ enabled: true, readOnly: true, sendDocument: { enabled: true }, onEmail: vi.fn() }}
+          selectable={false}
+        />,
+      );
+      expect(screen.getByTestId('rqa-rq1')).toBeInTheDocument();
+    });
   });
 
   // --- Inline add row ---

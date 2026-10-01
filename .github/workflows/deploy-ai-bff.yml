@@ -1,0 +1,327 @@
+name: Deploy AI BFF
+
+# The image tag is the git tree hash of tools/ai-bff, so the same BFF content
+# maps to the same tag on every branch. An image is built (and tested) only
+# when that tag is missing from both ECR repositories; if the other repository
+# already holds it, it is copied byte-for-byte instead of rebuilt. Every ECS
+# service is pinned to the image DIGEST, never to the tag.
+#
+#   develop -> experimental + demo1   (ECR etendo/ai-bff-experimental)
+#   main    -> production             (ECR etendo/ai-bff-production)
+#
+# Full reference: tools/ai-bff/README.md, section "Deployment".
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'tools/ai-bff/**'
+      - '.github/workflows/deploy-ai-bff.yml'
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Environments to deploy (auto = develop -> experimental+demo1, main -> production)'
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - develop
+          - experimental
+          - demo1
+          - production
+
+permissions:
+  contents: read
+  # Root `npm install` pulls @etendosoftware/* from GitHub Packages.
+  packages: read
+
+env:
+  AWS_REGION: eu-west-3
+  CONTAINER_NAME: ai-bff
+  ECS_SERVICE: ai-bff-service
+  ECR_REPOSITORY_NONPROD: etendo/ai-bff-experimental
+  ECR_REPOSITORY_PROD: etendo/ai-bff-production
+
+jobs:
+  plan:
+    name: Resolve targets and image tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      tree: ${{ steps.plan.outputs.tree }}
+      ecr_repository: ${{ steps.plan.outputs.ecr_repository }}
+      other_ecr_repository: ${{ steps.plan.outputs.other_ecr_repository }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Resolve targets
+        id: plan
+        env:
+          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.targets || 'auto' }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TARGETS="$REQUESTED"
+          if [[ "$TARGETS" == "auto" ]]; then
+            case "$REF_NAME" in
+              main)    TARGETS=production ;;
+              develop) TARGETS=develop ;;
+              *) echo "::error::No automatic target for ref '$REF_NAME'; pick one explicitly."; exit 1 ;;
+            esac
+          fi
+          # Production only ever runs what main holds.
+          if [[ "$TARGETS" == "production" && "$REF_NAME" != "main" ]]; then
+            echo "::error::production can only be deployed from main (ref is '$REF_NAME')."
+            exit 1
+          fi
+
+          case "$TARGETS" in
+            develop)      ENVS=(experimental demo1) ;;
+            experimental) ENVS=(experimental) ;;
+            demo1)        ENVS=(demo1) ;;
+            production)   ENVS=(production) ;;
+            *) echo "::error::Unknown target '$TARGETS'"; exit 1 ;;
+          esac
+          if [[ "$TARGETS" == "production" ]]; then
+            REPO="$ECR_REPOSITORY_PROD"; OTHER="$ECR_REPOSITORY_NONPROD"
+          else
+            REPO="$ECR_REPOSITORY_NONPROD"; OTHER="$ECR_REPOSITORY_PROD"
+          fi
+
+          TREE=$(git rev-parse HEAD:tools/ai-bff)
+          TAG="bff-${TREE:0:12}"
+          # Environment name -> cluster etendo-<env>, task family ai-bff-<env>.
+          MATRIX=$(printf '%s\n' "${ENVS[@]}" | jq -R . | jq -sc '{environment: .}')
+
+          {
+            echo "tag=$TAG"
+            echo "tree=$TREE"
+            echo "ecr_repository=$REPO"
+            echo "other_ecr_repository=$OTHER"
+            echo "matrix=$MATRIX"
+          } >> "$GITHUB_OUTPUT"
+          echo "Targets: ${ENVS[*]} | image $REPO:$TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  image:
+    name: Resolve or build image
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.digest.outputs.image }}
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      TREE: ${{ needs.plan.outputs.tree }}
+      REPO: ${{ needs.plan.outputs.ecr_repository }}
+      OTHER_REPO: ${{ needs.plan.outputs.other_ecr_repository }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Look up tag in ECR
+        id: lookup
+        run: |
+          set -euo pipefail
+          has_tag() {
+            aws ecr describe-images --repository-name "$1" --image-ids imageTag="$TAG" \
+              --query 'imageDetails[0].imageDigest' --output text 2>/dev/null
+          }
+          if has_tag "$REPO" >/dev/null; then
+            ACTION=reuse
+          elif has_tag "$OTHER_REPO" >/dev/null; then
+            ACTION=copy
+          else
+            ACTION=build
+          fi
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "Image $TAG: **$ACTION**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Docker Buildx
+        if: steps.lookup.outputs.action != 'reuse'
+        uses: docker/setup-buildx-action@v3
+
+      # --prefer-index=false makes a carbon copy (same manifest, same digest)
+      # instead of wrapping the image in a new index; layers are cross-repo
+      # mounted inside the registry, nothing is rebuilt or re-tested.
+      - name: Copy image from the other repository
+        if: steps.lookup.outputs.action == 'copy'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create --prefer-index=false \
+            --tag "$REGISTRY/$REPO:$TAG" "$REGISTRY/$OTHER_REPO:$TAG"
+
+      - name: Set up Node.js
+        if: steps.lookup.outputs.action == 'build'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+
+      # The Copilot suite runs through the tools/app-shell workspace, whose
+      # vitest is hoisted to the root node_modules: install the root workspaces
+      # the same way the PR test workflow does, plus the standalone BFF.
+      - name: Install dependencies
+        if: steps.lookup.outputs.action == 'build'
+        run: |
+          npm install
+          npm ci --prefix tools/ai-bff
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run BFF regression tests
+        if: steps.lookup.outputs.action == 'build'
+        run: npm test --prefix tools/ai-bff
+
+      - name: Run Copilot regression tests
+        if: steps.lookup.outputs.action == 'build'
+        run: npm run test:vitest --workspace=tools/app-shell -- --run src/components/copilot/__tests__/useAiCopilotChat.vitest.jsx src/components/copilot/__tests__/ChatView.vitest.jsx
+
+      # Provenance/SBOM off so the push is a single linux/amd64 manifest, the
+      # same shape as every image the ECS services already run.
+      - name: Build and push linux/amd64 image
+        if: steps.lookup.outputs.action == 'build'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          docker buildx build --platform linux/amd64 \
+            --provenance=false --sbom=false \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            --label "ai-bff.tree=$TREE" \
+            -f tools/ai-bff/Dockerfile \
+            -t "$REGISTRY/$REPO:$TAG" \
+            --push tools/ai-bff
+
+      - name: Resolve image digest
+        id: digest
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          DIGEST=$(aws ecr describe-images --repository-name "$REPO" --image-ids imageTag="$TAG" \
+            --query 'imageDetails[0].imageDigest' --output text)
+          IMAGE="$REGISTRY/$REPO@$DIGEST"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Pinned image: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy to ${{ matrix.environment }}
+    needs: [plan, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    concurrency:
+      group: deploy-ai-bff-${{ matrix.environment }}
+      cancel-in-progress: false
+    env:
+      IMAGE: ${{ needs.image.outputs.image }}
+      TREE: ${{ needs.plan.outputs.tree }}
+      ECS_CLUSTER: etendo-${{ matrix.environment }}
+      ECS_TASK_FAMILY: ai-bff-${{ matrix.environment }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Register task definition and update ECS service
+        run: |
+          set -euo pipefail
+          PREV_TD=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          RUNNING_IMAGE=$(aws ecs describe-task-definition --task-definition "$PREV_TD" \
+            --query "taskDefinition.containerDefinitions[?name=='$CONTAINER_NAME'].image | [0]" --output text)
+          if [[ "$RUNNING_IMAGE" == "$IMAGE" ]]; then
+            echo "$ECS_CLUSTER already runs $IMAGE ($PREV_TD); nothing to deploy." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Base = latest revision of the family, so configuration registered
+          # by hand (env vars, secrets, sizing) is carried forward; only the
+          # container image changes.
+          aws ecs describe-task-definition --task-definition "$ECS_TASK_FAMILY" \
+            --include TAGS --output json > td.json
+          if ! jq -e --arg c "$CONTAINER_NAME" \
+              'any(.taskDefinition.containerDefinitions[]; .name == $c)' td.json >/dev/null; then
+            echo "::error::Container '$CONTAINER_NAME' not found in $ECS_TASK_FAMILY"
+            exit 1
+          fi
+
+          jq --arg c "$CONTAINER_NAME" --arg image "$IMAGE" \
+             --arg tree "$TREE" --arg commit "${{ github.sha }}" --arg run "${{ github.run_id }}" '
+            (.tags // [] | map(select(.key | startswith("ai-bff.") | not))) as $kept
+            | .taskDefinition
+            | .containerDefinitions |= map(if .name == $c then .image = $image else . end)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy, .deregisteredAt)
+            | .tags = $kept + [
+                {key: "ai-bff.tree",   value: $tree},
+                {key: "ai-bff.commit", value: $commit},
+                {key: "ai-bff.run",    value: $run}
+              ]
+          ' td.json > td-new.json
+
+          # Tagging needs ecs:TagResource; a credential without it must not
+          # block the deploy, the image digest still identifies the build.
+          if ! NEW_TD=$(aws ecs register-task-definition --cli-input-json file://td-new.json \
+                --query taskDefinition.taskDefinitionArn --output text 2>register.err); then
+            if grep -q 'TagResource' register.err; then
+              echo "::warning::No ecs:TagResource permission; registering without traceability tags."
+              jq 'del(.tags)' td-new.json > td-untagged.json
+              NEW_TD=$(aws ecs register-task-definition --cli-input-json file://td-untagged.json \
+                --query taskDefinition.taskDefinitionArn --output text)
+            else
+              cat register.err >&2
+              exit 1
+            fi
+          fi
+          echo "Registered $NEW_TD (previous $PREV_TD)"
+
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --task-definition "$NEW_TD" --query service.serviceName --output text
+
+          # services-stable alone is not enough: with the deployment circuit
+          # breaker enabled, ECS may roll back on its own and then report the
+          # service stable on the OLD revision.
+          STABLE=true
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" || STABLE=false
+          CURRENT_TD=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+
+          if [[ "$STABLE" == "true" && "$CURRENT_TD" == "$NEW_TD" ]]; then
+            echo "Deployed $NEW_TD to $ECS_CLUSTER" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error::$NEW_TD did not stabilize on $ECS_CLUSTER (stable=$STABLE, current=$CURRENT_TD); rolling back to $PREV_TD."
+          if [[ "$CURRENT_TD" != "$PREV_TD" ]]; then
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+              --task-definition "$PREV_TD" --query service.serviceName --output text
+          fi
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            || echo "::error::Rollback to $PREV_TD did not stabilize either; check the service by hand."
+          echo "Rolled back $ECS_CLUSTER to $PREV_TD" >> "$GITHUB_STEP_SUMMARY"
+          exit 1

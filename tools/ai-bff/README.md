@@ -225,3 +225,63 @@ truncated to `AI_BFF_TRACE_MAX` characters (default 1500) because a single
 
 Note this process has **no hot reload** (`npm run start`, not `--watch`), so a
 change here needs a restart of `make dev` before the model sees it.
+
+## Deployment
+
+`.github/workflows/deploy-ai-bff.yml` builds the image from `Dockerfile`
+(`linux/amd64`) and rolls it out to the ECS service `ai-bff-service` in
+`eu-west-3`. It runs on every push to `develop` or `main` that touches
+`tools/ai-bff/**` or the workflow itself.
+
+| Branch | Environments | Cluster / task family | ECR repository |
+|---|---|---|---|
+| `develop` | experimental, demo1 | `etendo-<env>` / `ai-bff-<env>` | `etendo/ai-bff-experimental` |
+| `main` | production | `etendo-production` / `ai-bff-production` | `etendo/ai-bff-production` |
+
+There is no approval gate: a merge to `main` that touches this directory deploys
+production.
+
+**Tag = content.** The image tag is `bff-<first 12 chars of git rev-parse HEAD:tools/ai-bff>`,
+the git tree hash of this directory. The same content has the same tag on any
+branch, and any file under `tools/ai-bff/` (this README included) changes it.
+For that tag the workflow does exactly one of:
+
+| Tag found in | Action |
+|---|---|
+| the target repository | reuse it — no build, no tests |
+| only the other repository | copy it with `docker buildx imagetools create --prefer-index=false` (same manifest, same digest), no rebuild |
+| neither | install, run the BFF tests and the Copilot regression vitest suite, build, push |
+
+Tests therefore run only when an image is built; a reused or copied image was
+tested when it was first built. A `develop` → `main` promotion with no BFF
+change in between is a copy, so production runs the byte-identical image
+experimental ran.
+
+**Pinned by digest.** The task definition is the latest revision of the family
+with only the `ai-bff` container's image replaced by `<repository>@sha256:…`,
+never by the tag, so a re-pushed tag cannot change what a revision runs. Every
+new revision carries the tags `ai-bff.tree`, `ai-bff.commit` and `ai-bff.run`
+(the Actions run id); if the credential lacks `ecs:TagResource` the revision is
+registered untagged with a warning. If the service already runs the resolved
+image, the job is a no-op.
+
+**Rollback.** After `update-service` the job waits for `services-stable` and then
+checks the service still points at the new revision (the ECS circuit breaker,
+enabled on demo1 and production, may already have rolled it back on its own).
+If either check fails, the service is set back to the revision it ran before
+and the job fails. Rolling back needs that previous revision to still be
+`ACTIVE`, so do not deregister the running revision by hand.
+
+**Deploying by hand.** Actions → *Deploy AI BFF* → *Run workflow*, pick the ref
+and `targets`: `auto` (develop → experimental + demo1, main → production),
+`develop`, `experimental`, `demo1` or `production`. Non-production targets can
+run from any ref, which is how a feature branch is tried on experimental;
+`production` is refused unless the ref is `main`. Each environment has its own
+concurrency group, and a running deploy is never cancelled by a newer one.
+To inspect what a service runs:
+
+```bash
+aws ecs describe-task-definition --task-definition ai-bff-<env> --include TAGS \
+  --query '{image: taskDefinition.containerDefinitions[0].image, tags: tags}' \
+  --profile go --region eu-west-3
+```

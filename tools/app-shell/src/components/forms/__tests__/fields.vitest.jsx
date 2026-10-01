@@ -412,3 +412,35 @@ describe('Note & SectionLabel', () => {
     expect(screen.getByText('Section A')).toBeInTheDocument();
   });
 });
+
+// ETP-5479 — ChipSelect draws the same field shell as CreatableSearchSelect, so it must
+// share the unified hover fill and the disabled fill/border (no opacity dimming).
+describe('ChipSelect unified field states (ETP-5479)', () => {
+  const noResults = () => ({ results: [], loading: false });
+
+  function shellOf(props) {
+    render(
+      <ChipSelect value={null} onChange={vi.fn()} useLookup={noResults} testId="state-chip" {...props} />,
+    );
+    return screen.getByTestId('state-chip-search').closest('.group.relative');
+  }
+
+  it('enabled: control border, card fill and the shared --field-hover hover', () => {
+    const cls = shellOf().className.split(/\s+/);
+    expect(cls).toEqual(expect.arrayContaining([
+      'border-[hsl(var(--border-control))]', 'bg-card', 'hover:bg-[hsl(var(--field-hover))]',
+    ]));
+    expect(cls).not.toContain('hover:bg-[hsl(var(--muted))]');
+  });
+
+  it('disabled: shared disabled fill/border and text, no hover, no opacity', () => {
+    const shell = shellOf({ disabled: true });
+    const cls = shell.className.split(/\s+/);
+    expect(cls).toEqual(expect.arrayContaining([
+      'bg-[hsl(var(--field-hover))]', 'border-[hsl(var(--field-disabled-border))]',
+      'text-text-disabled', 'cursor-not-allowed',
+    ]));
+    expect(cls).not.toContain('border-[hsl(var(--border-control))]');
+    expect(shell.className).not.toMatch(/opacity-|hover:bg-/);
+  });
+});

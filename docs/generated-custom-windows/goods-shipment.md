@@ -374,6 +374,14 @@ visible at `DocStatus='CO'`), now the only route back to `DR`.
 - `MultiDocumentInvoiceSupport.java` (new, shared with `CreatePurchaseInvoiceHandler` — see `goods-receipt.md`) now owns `parseShipmentIds`/`loadAndValidateShipments`/`resolveShipmentLineQty`'s implementations; `CreateDraftInvoiceHandler` keeps the same `protected` method signatures as thin delegating wrappers, so its existing subclass-override test seams are unaffected — `CreateDraftInvoiceHandlerTest.java` (147 tests) passes unchanged.
 - `artifacts/goods-shipment/custom/__tests__/BulkInvoiceFromShipment.test.js` was rewritten for the shared-modal integration: it now asserts the component opens `CreateInvoiceConfirmModal` (not a bespoke one), the `cardAmountLabel`/`pendingQtyTotal` props, the `receiptIds`/`shipmentIds`-free-of-`lines` request body, and that the result renders through the shared `ConfirmResultModal` (which already badges confirmed-vs-draft off `documentStatus`, ETP-5381).
 
+## Solo Lectura (read-only window-access tier) — preview writes (ETP-5205)
+
+Under the runtime Solo-Lectura tier, the list row "Enviar" is hidden generically by `ListView`
+(the Email gate is switched off), and `ListView` passes `readOnly` to `renderPreview`. The preview hides **Enviar** and never writes the cached PDF (`attachmentConfig.readOnly`); **Descargar PDF** stays and is now gated on the document status (`CO`) alone instead of on the Send gate.
+Backend: the email send contract and every attachment write answer 403 for this tier
+(`com.etendoerp.go` — `DefaultDocumentSendEmailContract.authorize`, `NeoAttachmentAuthorizer`).
+Print and Download PDF are deliberately NOT restricted (they only expose readable data).
+
 ## Related documents — form and list preview share one definition — ETP-5527
 
 Content is unchanged: sales orders (`linkedOrders`), sales invoices (`linkedInvoices`) and return

@@ -84,7 +84,7 @@ describe('ImageField — behaviour', () => {
       // `credentials: 'include'` comes from the shared helper now (ETP-5022).
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/etendo/sws/neo/image/IMG-1',
-        { credentials: 'include', headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
+        { credentials: 'include', signal: expect.any(AbortSignal), headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       );
       const img = await screen.findByRole('img');
       expect(img).toHaveAttribute('src', BLOB_URL);
@@ -94,7 +94,7 @@ describe('ImageField — behaviour', () => {
       render(<ImageField imageId="IMG-1" token="tk" onChange={vi.fn()} />);
       await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(
         '/sws/neo/image/IMG-1',
-        { credentials: 'include', headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
+        { credentials: 'include', signal: expect.any(AbortSignal), headers: { Authorization: 'Bearer tk', 'Accept-Language': 'es_ES' } },
       ));
     });
 

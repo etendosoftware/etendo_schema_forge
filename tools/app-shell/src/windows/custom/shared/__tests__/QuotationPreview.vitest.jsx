@@ -426,3 +426,26 @@ describe('QuotationPreview — email history wiring (ETP-5069)', () => {
     expect(lastEmailsCardProps().refreshSignal).toBe(before);
   });
 });
+
+// ── ETP-5205 (QA pasada 1): Solo-Lectura tier ─────────────────────────────────
+describe('QuotationPreview — Solo-Lectura tier (ETP-5205)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useQuotationPdf.mockReturnValue({ pdfUrl: 'blob:q', pdfBlob: new Blob(['%PDF']), loading: false, error: null });
+  });
+
+  it('hides Send, keeps Download and marks the attachment read-only', () => {
+    renderQuotationPreview({ readOnly: true, quotation: { ...defaultQuotation, documentStatus: 'CO' } });
+
+    expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    expect(screen.getByTestId('download-btn')).toBeEnabled();
+    expect(vi.mocked(EmailsCard).mock.calls.at(-1)[0].onSend).toBeUndefined();
+    expect(vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig.readOnly).toBe(true);
+  });
+
+  it('keeps Send under full access (control)', () => {
+    renderQuotationPreview({ quotation: { ...defaultQuotation, documentStatus: 'CO' } });
+
+    expect(screen.getByTestId('email-btn')).toBeInTheDocument();
+  });
+});

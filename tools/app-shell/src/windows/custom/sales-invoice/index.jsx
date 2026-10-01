@@ -287,7 +287,7 @@ export default function SalesInvoiceWindow(props) {
         hideLink
         bulkActions={SalesInvoiceBulkAction}
         refreshTrigger={refreshKey}
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <InvoicePreview
             invoice={row}
             specName="sales-invoice"
@@ -295,6 +295,7 @@ export default function SalesInvoiceWindow(props) {
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             onInvoiceUpdated={() => setRefreshKey(k => k + 1)}

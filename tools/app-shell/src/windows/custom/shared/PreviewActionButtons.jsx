@@ -20,7 +20,7 @@ export default function PreviewActionButtons({
           size="sm"
           className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-[hsl(var(--foreground))] hover:bg-[hsl(var(--foreground))] text-primary-foreground [&_svg]:size-5"
           onClick={onEmail}
-          data-testid="Button__9ccdc3">
+          data-testid="preview-action-send">
           <Mail data-testid="Mail__9ccdc3" />
           {sendLabel}
         </Button>
@@ -31,7 +31,7 @@ export default function PreviewActionButtons({
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:size-5"
         disabled={!hasPdf || !onDownloadPdf}
         onClick={hasPdf && onDownloadPdf ? onDownloadPdf : undefined}
-        data-testid="Button__9ccdc3">
+        data-testid="preview-action-download">
         <Download className="text-[hsl(var(--text-disabled))]" data-testid="Download__9ccdc3" />
         {downloadLabel}
       </Button>
@@ -40,7 +40,7 @@ export default function PreviewActionButtons({
         variant="outline"
         className="gap-1 px-2 py-1 h-8 rounded-lg text-sm font-medium bg-card border-[hsl(var(--border-control))] shadow-sm text-[hsl(var(--foreground))] [&_svg]:size-5"
         onClick={triggerEdit}
-        data-testid="Button__9ccdc3">
+        data-testid="preview-action-edit">
         <Edit2 className="text-[hsl(var(--text-disabled))]" data-testid="Edit2__9ccdc3" />
         {editLabel}
       </Button>

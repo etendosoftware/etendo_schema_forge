@@ -61,11 +61,19 @@ export async function fetchRolesOverview() {
  * client-admin row (e.g. the Users grid's role filter/chips, which must still surface classic
  * Admin users).
  *
+ * **`includeMatrix` (ETP-5485, opt-in).** Appends `?includeMatrix=true`, which makes the backend
+ * also return `matrix` + `reportsMatrix` — the same shape `fetchRolesOverview()` returns, built
+ * by the same backend class (`RoleAccessMatrix`), with one `access` column per template role id.
+ * Only `UserRolesTab.jsx` needs it; the other callers keep the cheaper default shape.
+ *
+ * @param {{ includeMatrix?: boolean }} [options]
  * @returns {Promise<{roles: Array<{id: string, name: string,
- *   windows: Array<{id: string, name: string, tier: string}>}>}>}
+ *   windows: Array<{id: string, name: string, tier: string}>}>, matrix?: object,
+ *   reportsMatrix?: object}>}
  */
-export async function fetchTemplateRoles() {
-  return fetchNeoWebhookJson(`${NEO_BASE}/systemroletemplates`, 'SFSystemRoleTemplates', rolesFallback);
+export async function fetchTemplateRoles({ includeMatrix = false } = {}) {
+  const query = includeMatrix ? '?includeMatrix=true' : '';
+  return fetchNeoWebhookJson(`${NEO_BASE}/systemroletemplates${query}`, 'SFSystemRoleTemplates', rolesFallback);
 }
 
 // ETP-5402 QA follow-up — `data.reportAccess` present (even `{}`) is a valid response; only a

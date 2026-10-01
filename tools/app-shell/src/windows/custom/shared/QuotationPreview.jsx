@@ -61,7 +61,7 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function QuotationPreview({ quotation, token, apiBaseUrl, windowName, onClose, onEdit }) {
+export default function QuotationPreview({ quotation, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const modalRef = useRef(null);
@@ -118,6 +118,8 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   // while still Draft (DR). Matches the Grid row quick-action and Form-view
   // topbar gates.
   const isSendable = quotation.documentStatus !== 'DR';
+  // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
+  const canSend = isSendable && !readOnly;
 
   const openEmailModal = () => {
     setSendModalClosing(false);
@@ -167,6 +169,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const attachmentConfig = !isDraft
     ? {
         storeCondition: true,
+        readOnly,
         sourceBlob: pdfBlob,
         autoFetch: true,
         recordUpdated: quotation?.updated ?? null,
@@ -193,7 +196,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
       label: ui('quotationPreviewGeneral'),
       content: <QuotationGeneralTab
         quotation={quotation}
-        onSend={isSendable ? openEmailModal : undefined}
+        onSend={canSend ? openEmailModal : undefined}
         token={token}
         apiBaseUrl={apiBaseUrl}
         orgCurrencyCode={orgCurrencyCode}
@@ -213,7 +216,7 @@ export default function QuotationPreview({ quotation, token, apiBaseUrl, windowN
   const actionButtons = (
     <PreviewActionButtons
       triggerEdit={() => modalRef.current?.triggerEdit?.()}
-      onEmail={isSendable ? openEmailModal : undefined}
+      onEmail={canSend ? openEmailModal : undefined}
       onDownloadPdf={isSendable ? handleDownloadPdf : undefined}
       hasPdf={hasPdf}
       sendLabel={ui('quotationPreviewSend')}
