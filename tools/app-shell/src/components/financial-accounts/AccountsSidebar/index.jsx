@@ -1,13 +1,26 @@
 import { Info, Check } from 'lucide-react';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
+import { localeFromUi } from '@/lib/dashboardNumberFormat.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { getDashboardValueTypography } from '@/lib/dashboardValueTypography.js';
+import { buildBalanceDisplay } from './balanceDisplay.js';
 
 /**
  * Cuentas sidebar — single column matching Figma frame `3012:25602`.
  *
  * Layout (top → bottom):
  *   1. Header — "Saldo" + info icon, sync pill underneath.
- *   2. Big balance number (30 / 32 / medium).
+ *   2. Big balance number (30 / 32 / medium) — the total converted to the
+ *      organization currency (ETP-5580): `≈` when a conversion was applied, a
+ *      warning for currencies with no exchange rate. Always in the dashboard's
+ *      compact K/M/B notation and sized like the dashboard's financial summary;
+ *      the exact value is in the hover title (see `balanceDisplay.js`).
  *   3. Currency breakdown card (gray, rounded).
  *   4. Pending reconcile card (bordered, rounded).
  */
@@ -95,12 +108,53 @@ function PendingCard({ pending, ui }) {
   );
 }
 
+function BalanceInfoButton({ ui }) {
+  const label = ui('financeAccountsBalanceInfo');
+  return (
+    <TooltipProvider data-testid="TooltipProvider__5d6a4a">
+      <Tooltip delayDuration={150} data-testid="Tooltip__5d6a4a">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__5d6a4a">
+          <button
+            type="button"
+            aria-label={label}
+            data-testid="balance-info-button"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
+          >
+            <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-[260px]" data-testid="balance-info-tooltip">
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+const LOADING_TYPOGRAPHY = getDashboardValueTypography('—');
+
 export function AccountsSidebar({ summary, loading }) {
   const ui = useUI();
-  const primaryIso = summary?.byCurrency?.[0]?.currencyIso ?? 'EUR';
+  // Same number-locale resolution as the dashboard's FinancialSummaryCard.
+  const { locale } = useLocaleSwitch();
+  const numberLocale = localeFromUi(locale);
+  // ETP-5580: the total is converted server-side to the organization currency, so its
+  // ISO comes from `totalBalanceCurrencyIso`. Older backends do not send it — fall back
+  // to the first breakdown row as before. `||` (not `??`) so an empty string is treated
+  // as unknown too. Breakdown rows keep their own ISO.
+  const primaryIso = summary?.totalBalanceCurrencyIso
+    || summary?.byCurrency?.[0]?.currencyIso
+    || 'EUR';
   const totalBalance = summary?.totalBalance ?? 0;
   const byCurrency = summary?.byCurrency ?? [];
   const pending = summary?.pending ?? {};
+  const missingRateCurrencies = Array.isArray(summary?.missingRateCurrencies)
+    ? summary.missingRateCurrencies
+    : [];
+  const balance = buildBalanceDisplay(primaryIso, totalBalance, {
+    approximate: summary?.totalBalanceApproximate === true,
+    locale: numberLocale,
+  });
 
   return (
     <aside
@@ -112,23 +166,31 @@ export function AccountsSidebar({ summary, loading }) {
           <h2 className="text-xl font-semibold leading-7 text-[hsl(var(--foreground))]">
             {ui('financeAccountsBalanceTitle')}
           </h2>
-          <button
-            type="button"
-            aria-label={ui('financeAccountsBalanceInfo')}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--muted))]"
-          >
-            <Info className="h-4 w-4" data-testid="Info__5d6a4a" />
-          </button>
+          <BalanceInfoButton ui={ui} data-testid="BalanceInfoButton__5d6a4a" />
         </div>
         <SyncPill ui={ui} data-testid="SyncPill__5d6a4a" />
       </header>
-      <div className="flex items-center px-3" style={{ minHeight: 32 }}>
-        <span
-          className="text-[30px] font-medium leading-8 text-[hsl(var(--foreground))] tabular-nums"
-          data-testid="balance-card"
-        >
-          {loading ? '—' : formatCurrency(primaryIso, totalBalance)}
-        </span>
+      <div className="flex flex-col px-3">
+        <div className="flex min-w-0 items-center" style={{ minHeight: 32 }}>
+          <span
+            className="min-w-0 whitespace-nowrap font-medium text-[hsl(var(--foreground))] tabular-nums"
+            style={loading ? LOADING_TYPOGRAPHY : balance.style}
+            title={loading ? undefined : balance.title}
+            data-testid="balance-card"
+          >
+            {loading ? '—' : balance.text}
+          </span>
+        </div>
+        {!loading && missingRateCurrencies.length > 0 ? (
+          <p
+            className="mt-1 text-xs font-normal leading-4 text-[var(--status-warning-fg)]"
+            data-testid="balance-missing-rate"
+          >
+            {ui('financeAccountsBalanceMissingRate', {
+              currencies: missingRateCurrencies.join(', '),
+            })}
+          </p>
+        ) : null}
       </div>
       <div className="px-3 py-3">
         <CurrencyBreakdown
