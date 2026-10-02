@@ -1,6 +1,7 @@
 import { describe, it, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { buildOperations } from '@etendosoftware/app-shell-core/lib/import/buildOperations.js';
+import { runImportRowValidator } from '@etendosoftware/app-shell-core/lib/import/rowValidators.js';
 import '../contactsImportDescriptor.js';
 
 const baseRow = {
@@ -265,6 +266,42 @@ describe('contacts import descriptor', () => {
     });
   });
 
+  // ETP-5544: before the Cliente/Proveedor columns existed every imported row landed on the DB
+  // defaults (IsCustomer='Y', IsVendor='N'), so a supplier list became a list of customers. The
+  // two cells are read TOGETHER: only when both are blank do the old defaults apply.
+  describe('Cliente / Proveedor roles (ETP-5544)', () => {
+    const config = { spec: 'contacts', descriptorName: 'contacts', token: 't' };
+
+    it.each([
+      ['both columns absent (template from before ETP-5544)', {}, 'Y', 'N'],
+      ['both cells blank or whitespace', { customer: '', vendor: '   ' }, 'Y', 'N'],
+      ['only Proveedor = Sí (vendor-only, the reported bug)', { vendor: 'Sí' }, 'N', 'Y'],
+      ['only Proveedor = Sí, Cliente present but blank', { customer: '  ', vendor: 'Sí' }, 'N', 'Y'],
+      ['only Cliente = No', { customer: 'No' }, 'N', 'N'],
+      ['only Cliente = Sí', { customer: 'Sí' }, 'Y', 'N'],
+      ['both Sí', { customer: 'Sí', vendor: 'Sí' }, 'Y', 'Y'],
+      ['both No (neither role is allowed)', { customer: 'No', vendor: 'No' }, 'N', 'N'],
+      ['accent/case variants "si" / "SÍ"', { customer: 'si', vendor: 'SÍ' }, 'Y', 'Y'],
+      ['spreadsheet tick "x" and a lower-case "no"', { customer: ' x ', vendor: 'no' }, 'Y', 'N'],
+      ['raw AD codes from an Etendo export', { customer: 'n', vendor: 'Y' }, 'N', 'Y'],
+    ])('%s -> customer %s / vendor %s', async (_label, cells, customer, vendor) => {
+      const [bp] = await buildOperations({ name: 'Acme Corp', ...cells }, config);
+      // Strict equality to the code also proves the raw cell text ('Sí', 'x', …) never travels.
+      assert.equal(bp.body.customer, customer);
+      assert.equal(bp.body.vendor, vendor);
+    });
+
+    it('flags an unrecognized value against its own cell in review, and fails the row at send', async () => {
+      for (const target of ['customer', 'vendor']) {
+        const row = { name: 'Acme Corp', [target]: 'Quizás' };
+        const errors = runImportRowValidator('contacts', row);
+        assert.deepEqual(errors.map((e) => e.target), [target]);
+        assert.match(errors[0].message, /Quizás.*Accepted values.*Y \(Sí\).*N \(No\)/s);
+        await assert.rejects(() => buildOperations(row, config), /Quizás.*Accepted values/s);
+      }
+    });
+  });
+
   // ETP-4995: a CSV whose only name column was "nombre" used to map to etgoFirstname,
   // leaving both the commercial name and the derived searchKey empty — a silently
   // malformed business partner. "nombre" now maps to `name`; this guards the descriptor
@@ -319,6 +356,9 @@ describe('contacts import descriptor', () => {
       // BusinessPartnerHandler's server-side domain-shape check now requires.
       etgoWeb: 'acme.example',
       taxID: 'B12345678',
+      // ETP-5544 — no Cliente/Proveedor columns on the row: the pre-ETP-5544 defaults.
+      customer: 'Y',
+      vendor: 'N',
       searchKey: 'Acme Iberia',
     });
   });

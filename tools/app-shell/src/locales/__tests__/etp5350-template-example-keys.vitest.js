@@ -20,7 +20,7 @@ import esAR from '../es_AR.json';
  *
  * Only values whose language actually changes carry a key. The rest deliberately do not, and the
  * last test below pins that boundary rather than leaving it to memory:
- *  - codes, emails, phones, a NIF, a postcode: identical in every language;
+ *  - codes, emails, phones, a NIF, a postcode, a bare "No": identical in every language;
  *  - person names (María, García, Lucía, Fernández): proper nouns, translating them adds nothing;
  *  - city and region (Sevilla): matched against real AD records, so an English spelling would
  *    name a place the database does not have.
@@ -105,6 +105,9 @@ describe('ETP-5350 — the template example keys', () => {
     expect(unkeyed.contacts).toEqual([
       'city', 'email', 'etgoEmail', 'etgoFirstname', 'etgoLastname', 'etgoPhone', 'etgoWeb',
       'firstName', 'lastName', 'oBTIKTaxIDKey', 'phone', 'postal', 'region', 'taxID',
+      // ETP-5544: "No" is the same word in English and Spanish (and a valid YES_NO_VALUES
+      // synonym in both), so the vendor example needs no key. `customer` ("Yes"/"Sí") has one.
+      'vendor',
     ]);
   });
 });
