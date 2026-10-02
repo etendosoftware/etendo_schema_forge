@@ -1,6 +1,6 @@
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { JSDOM } from 'jsdom';
 
 // ETP-4578 H4b — what Mixpanel actually puts on the wire.
 //
@@ -8,9 +8,6 @@ import { createRequire } from 'node:module';
 // (through the host's SDK entry point) in jsdom with an XMLHttpRequest that captures every
 // request, so it fails if a Mixpanel upgrade starts sending something the adapter does not
 // filter. Everything below is synthetic.
-
-const require = createRequire(import.meta.url);
-const { JSDOM } = require('jsdom');
 
 const HEX32 = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const EMAIL = 'jane.doe@example.com';
@@ -74,8 +71,6 @@ before(async () => {
 });
 
 describe('real Mixpanel requests (ETP-4578 H4b)', () => {
-  after(() => { setTimeout(() => process.exit(process.exitCode ?? 0), 50).unref?.(); });
-
   async function realMixpanel({ persisted } = {}) {
     requests = [];
     // Mixpanel persists its identity in a cookie/localStorage, and the SDK only emits `$identify`

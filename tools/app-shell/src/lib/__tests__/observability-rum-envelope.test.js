@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { JSDOM } from 'jsdom';
 
 // ETP-4578 H4c — what AWS RUM actually puts on the wire.
 //
@@ -9,9 +9,6 @@ import { createRequire } from 'node:module';
 // so it fails if a RUM upgrade stops calling `clientBuilder` as a method, drops the private
 // `defaultClientBuilder` the adapter relies on, or starts sending a field the adapter does not
 // rebuild. Everything below is synthetic.
-
-const require = createRequire(import.meta.url);
-const { JSDOM } = require('jsdom');
 
 const HEX32 = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const EMAIL = 'jane.doe@example.com';
@@ -26,11 +23,12 @@ let AwsRum;
 let createRumProvider;
 let createTelemetryGateway;
 let requests;
+let dom;
 
 const settle = (ms = 150) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 before(async () => {
-  const dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
+  dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
     url: `https://go.etendo.cloud/go/sales-order/${HEX32}?code=${SHORT_CODE}#access_token=${TOKEN}`,
     referrer: `https://mail.example.com/inbox?u=${EMAIL}`,
   });
@@ -84,7 +82,15 @@ const offlineAwsRum = (tweak) => class OfflineAwsRum extends AwsRum {
 const dataPlane = () => requests.filter((request) => request.url.startsWith(DATA_PLANE));
 
 describe('real AWS RUM requests (ETP-4578 H4c)', () => {
-  after(() => { setTimeout(() => process.exit(process.exitCode ?? 0), 50).unref?.(); });
+  // The real SDK keeps a dispatch interval alive, and also a jsdom interval its disable() leaves
+  // running. Stop every SDK through the gateway (the kill-switch path), then close the jsdom
+  // window, which cancels its timers, so the file ends on its own. Forcing process.exit here
+  // raced the test runner's report and failed the whole file on slower CI runners.
+  const gateways = [];
+  after(async () => {
+    await Promise.all(gateways.map((gateway) => gateway.disable('aws-rum')));
+    dom?.window.close();
+  });
 
   async function realRum(overrides = {}) {
     requests = [];
@@ -96,6 +102,7 @@ describe('real AWS RUM requests (ETP-4578 H4c)', () => {
       logger,
     });
     const gateway = createTelemetryGateway({ adapters: [provider], allowedKeys: [], logger });
+    gateways.push(gateway);
     await gateway.init({});
     // An SDK that fails to start would make every "nothing leaked" assertion pass for free.
     assert.deepEqual(warnings, [], `the real SDK failed to start: ${warnings.join(' | ')}`);

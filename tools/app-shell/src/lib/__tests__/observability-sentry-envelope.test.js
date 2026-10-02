@@ -1,6 +1,6 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
+import { JSDOM } from 'jsdom';
 
 // ETP-4578 H3 — what Sentry actually puts on the wire.
 //
@@ -8,9 +8,6 @@ import { createRequire } from 'node:module';
 // (through the host's single SDK entry point) with a transport that captures the serialized
 // envelopes, so it fails if a Sentry upgrade starts sending a field the adapter does not
 // rebuild, or if a hook stops running. Everything below is synthetic.
-
-const require = createRequire(import.meta.url);
-const { JSDOM } = require('jsdom');
 
 const HEX32 = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const EMAIL = 'jane.doe@example.com';
@@ -27,6 +24,7 @@ let createSentryProvider;
 let createTelemetryGateway;
 let createTransport;
 const envelopes = [];
+let dom;
 
 /** The Sentry envelope wire format: newline-delimited JSON, header / item header / payload. */
 function parseEnvelopes(bodies) {
@@ -41,7 +39,7 @@ const itemsOfType = (type) => parseEnvelopes(envelopes).filter((item) => item.he
 const flush = () => Sentry.flush(2000);
 
 before(async () => {
-  const dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
+  dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
     url: `https://go.etendo.cloud/go/sales-order/${HEX32}?tab=lines&code=${SHORT_CODE}#access_token=${TOKEN}`,
     referrer: `https://mail.example.com/inbox?u=${EMAIL}`,
   });
@@ -65,7 +63,14 @@ function realSentry() {
     envelopes.push(typeof request.body === 'string' ? request.body : new TextDecoder().decode(request.body));
     return { statusCode: 200 };
   });
-  const sdk = { ...Sentry, init: (options) => Sentry.init({ ...options, transport }) };
+  const sdk = {
+    ...Sentry,
+    init: (options) => Sentry.init({ ...options, transport }),
+    // Each pageload/navigation idle span arms a 30 s deadline timer that nothing cancels, so the
+    // file would idle 30 s before exiting. The span still ends on its own idle timeout; only the
+    // safety deadline is shortened.
+    browserTracingIntegration: (options) => Sentry.browserTracingIntegration({ ...options, finalTimeout: 1000 }),
+  };
   return createSentryProvider({
     dsn: 'https://pub@o1.ingest.sentry.io/1',
     sentry: sdk,
@@ -75,8 +80,13 @@ function realSentry() {
 }
 
 describe('real Sentry envelopes (ETP-4578 H3)', () => {
-  // The real SDK leaves timers and listeners behind; without this the test file never exits.
-  after(() => { setTimeout(() => process.exit(process.exitCode ?? 0), 50).unref?.(); });
+  // The real SDK leaves timers behind. Close the client and the jsdom window (which cancels
+  // its timers), with the short tracing deadline above, so the file ends on its own. Forcing process.exit here raced the test runner's
+  // report and could fail the whole file on slower CI runners.
+  after(async () => {
+    await Sentry.close(0);
+    dom?.window.close();
+  });
 
   it('lets no planted secret, record id or page title leave, whatever path the error takes', async () => {
     const provider = realSentry();
