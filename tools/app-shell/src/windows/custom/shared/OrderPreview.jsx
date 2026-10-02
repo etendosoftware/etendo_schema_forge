@@ -11,32 +11,8 @@ import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js'
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { fetchByCriteria, fetchChild, fetchById } from '@/components/related-documents';
+import { SALES_RELATED_DOCS } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-
-// ── SO related-documents helpers ─────────────────────────────────────────────
-
-const SO_SPECS = [
-  { key: 'shipment',      type: 'shipment',      fetch: (id, token, base) => fetchByCriteria('goods-shipment', 'goodsShipment', 'salesOrder', id, token, base) },
-  { key: 'sales-invoice', type: 'sales-invoice', fetch: (id, token, base) => fetchByCriteria('sales-invoice',  'header',        'salesOrder', id, token, base) },
-];
-
-async function fetchPaymentsIn(orderId, token, apiBaseUrl) {
-  const plans = await fetchChild('sales-order', 'paymentPlan', orderId, token, apiBaseUrl);
-  if (plans.length === 0) return [];
-  const detailResults = await Promise.all(
-    plans.map(plan => fetchChild('sales-order', 'paymentDetails', plan.id, token, apiBaseUrl))
-  );
-  const seen = new Set();
-  const paymentIds = detailResults.flat()
-    .filter(d => d.payment && !seen.has(d.payment))
-    .map(d => { seen.add(d.payment); return d.payment; });
-  if (paymentIds.length === 0) return [];
-  const results = await Promise.all(
-    paymentIds.map(id => fetchById('payment-in', 'finPayment', id, token, apiBaseUrl))
-  );
-  return results.filter(Boolean).map(doc => ({ type: 'payment-in', doc }));
-}
 
 // ── General tab content ───────────────────────────────────────────────────────
 
@@ -66,6 +42,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         statusLabel={statusLabel}
         invoicePercent={invoicePercent}
         deliveryPercent={deliveryPercent != null ? deliveryPercent : undefined}
+        deliveryLabel={isSalesOrder ? undefined : ui('previewCardReceivedPercent')}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}
@@ -82,8 +59,9 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
           documentId={order.id}
           token={token}
           apiBaseUrl={apiBaseUrl}
-          specs={SO_SPECS}
-          fetchExtra={fetchPaymentsIn}
+          // ETP-5527 — same definition as the sales-order form's RelatedDocuments
+          // section (purchase orders render no related-documents card here).
+          definition={SALES_RELATED_DOCS['sales-order']}
           data-testid="RelatedDocumentsCard__90f59a" />
       )}
     </div>

@@ -540,6 +540,8 @@ i18n key: `fiscalMonitor.refresh` → "Actualizar" / "Refresh".
 
 ## Fiscal Status in InvoicePreviewModal
 
+**Related documents (ETP-5527):** `FiscalMonitorPage` passes `relatedDocs={getSalesRelatedDocs(previewSpec)}` to `InvoicePreviewModal`, so a sales invoice opened from the monitor lists the same related documents as its form (`SALES_RELATED_DOCS['sales-invoice']`); for a purchase invoice it is `null` and the preview keeps its legacy specs. See `docs/ui-customization.md` §7.a.
+
 `StatsPanel` (inside `InvoicePreviewModal`) renders per-system submission status rows directly below the document "Estado" row. Visibility is driven by `getInvoiceFiscalTargets(specName, profile, territory)` — only rows where `showSii`/`showTbai`/`showVerifactu` is `true` are rendered. `territory` (the active TBAI config's `etsgSifTerritory`) additionally restricts purchase-invoice TBAI to the Bizkaia territory — see `purchase-invoice.md` §"TBAI territory gating for purchase invoices (Batuz) — ETP-5087"; sales invoices are unaffected.
 
 Status is fetched by `useFiscalStatus(invoiceId, specName, profile, apiBaseUrl, orgId, territory)` from `tools/app-shell/src/windows/custom/shared/useFiscalStatus.js`. It queries in parallel (via `Promise.all`) once per active system on mount:

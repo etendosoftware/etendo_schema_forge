@@ -43,7 +43,7 @@ function chunkIban(iban) {
 // drag-and-drop library at all — so it advertised a row reordering that does not exist.
 // Removed with its slot; COLUMN_CHROME.name's left padding in AccountsHeaderTable
 // mirrors this cell's leading offset and was reduced to match.
-export function NameCell({ account, ui, onConnect }) {
+export function NameCell({ account, ui, onConnect, windowReadOnly = false }) {
   const isCashLike = account.type === ACCOUNT_TYPE.CASH;
   // In T1 the connection column is not yet populated, so anything not explicitly
   // bankConnected === true is treated as offline for bank/card rows.
@@ -75,6 +75,7 @@ export function NameCell({ account, ui, onConnect }) {
         <SyncStatusInline
           account={account}
           onConnect={onConnect ? () => onConnect(account) : undefined}
+          windowReadOnly={windowReadOnly}
           data-testid="SyncStatusInline__dc050f" />
       </div>
     </div>

@@ -162,4 +162,62 @@ describe('StatementsToolbar', () => {
     // Menu closes after choosing an item.
     expect(screen.queryByTestId('statements-manual-create')).not.toBeInTheDocument();
   });
+
+  // ── ETP-5457 — the window's "read-only" access tier ──────────────────────
+  // The import split-button (import + "create manually") and the bank-sync button are the
+  // toolbar's only write entry points; under read-only they are not rendered. Everything else is
+  // browsing and stays.
+  describe('window read-only access tier (ETP-5457)', () => {
+    it('hides the import button and its split arrow under read-only (ETP-5457)', () => {
+      renderToolbar({ windowReadOnly: true, onManualClick: vi.fn() });
+      expect(screen.queryByTestId('statements-import-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('statements-import-split')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('statements-manual-create')).not.toBeInTheDocument();
+    });
+
+    it('renders the import button and its split arrow without read-only (ETP-5457)', () => {
+      renderToolbar({ windowReadOnly: false, onManualClick: vi.fn() });
+      expect(screen.getByTestId('statements-import-button')).toBeInTheDocument();
+      expect(screen.getByTestId('statements-import-split')).toBeInTheDocument();
+    });
+
+    it('hides the bank-sync button of a bank-connected account under read-only (ETP-5457)', () => {
+      renderToolbar({ windowReadOnly: true, bankConnectionSynced: true, onSyncClick: vi.fn() });
+      expect(screen.queryByTestId('statements-bank-sync-button')).not.toBeInTheDocument();
+      // Not swapped for the manual import either — neither write entry point is offered.
+      expect(screen.queryByTestId('statements-import-button')).not.toBeInTheDocument();
+    });
+
+    it('renders the bank-sync button of a bank-connected account without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      const onSyncClick = vi.fn();
+      renderToolbar({ bankConnectionSynced: true, onSyncClick });
+      await user.click(screen.getByTestId('statements-bank-sync-button'));
+      expect(onSyncClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps back, filters, search, sort and refresh under read-only (ETP-5457)', () => {
+      renderToolbar({
+        windowReadOnly: true,
+        onRefresh: vi.fn(),
+        sortControl: <button type="button" data-testid="sort-control">sort</button>,
+      });
+      expect(screen.getByTestId('statements-toolbar-back')).toBeInTheDocument();
+      expect(screen.getByTestId('date-range-popover')).toBeInTheDocument();
+      expect(screen.getByTestId('status-filter')).toBeInTheDocument();
+      expect(screen.getByTestId('statements-search-input')).toBeInTheDocument();
+      expect(screen.getByTestId('sort-control')).toBeInTheDocument();
+      expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+    });
+
+    it('still wires search and refresh under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      const onRefresh = vi.fn();
+      const { props } = renderToolbar({ windowReadOnly: true, onRefresh });
+      await user.type(screen.getByTestId('statements-search-input'), 'a');
+      expect(props.onSearchChange).toHaveBeenCalledWith('a');
+      await user.click(screen.getByTestId('finance-refresh-button'));
+      expect(onRefresh).toHaveBeenCalledTimes(1);
+    });
+  });
 });
