@@ -24,7 +24,6 @@ let createSentryProvider;
 let createTelemetryGateway;
 let createTransport;
 const envelopes = [];
-let dom;
 
 /** The Sentry envelope wire format: newline-delimited JSON, header / item header / payload. */
 function parseEnvelopes(bodies) {
@@ -39,7 +38,7 @@ const itemsOfType = (type) => parseEnvelopes(envelopes).filter((item) => item.he
 const flush = () => Sentry.flush(2000);
 
 before(async () => {
-  dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
+  const dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
     url: `https://go.etendo.cloud/go/sales-order/${HEX32}?tab=lines&code=${SHORT_CODE}#access_token=${TOKEN}`,
     referrer: `https://mail.example.com/inbox?u=${EMAIL}`,
   });
@@ -80,12 +79,11 @@ function realSentry() {
 }
 
 describe('real Sentry envelopes (ETP-4578 H3)', () => {
-  // The real SDK leaves timers behind. Close the client and the jsdom window (which cancels
-  // its timers), with the short tracing deadline above, so the file ends on its own. Forcing process.exit here raced the test runner's
+  // The real SDK leaves timers behind. Closing the client, with the short tracing deadline
+  // above, lets the file end on its own. Forcing process.exit here raced the test runner's
   // report and could fail the whole file on slower CI runners.
   after(async () => {
     await Sentry.close(0);
-    dom?.window.close();
   });
 
   it('lets no planted secret, record id or page title leave, whatever path the error takes', async () => {

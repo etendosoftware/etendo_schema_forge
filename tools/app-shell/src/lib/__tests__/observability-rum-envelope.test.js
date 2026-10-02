@@ -23,16 +23,25 @@ let AwsRum;
 let createRumProvider;
 let createTelemetryGateway;
 let requests;
-let dom;
+// Every timer the SDK arms on the jsdom window, so the suite can cancel the ones its disable() leaves.
+const windowTimers = [];
 
 const settle = (ms = 150) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 before(async () => {
-  dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
+  const dom = new JSDOM(`<!doctype html><title>${PAGE_TITLE}</title>`, {
     url: `https://go.etendo.cloud/go/sales-order/${HEX32}?code=${SHORT_CODE}#access_token=${TOKEN}`,
     referrer: `https://mail.example.com/inbox?u=${EMAIL}`,
   });
   const window = dom.window;
+  for (const [arm, cancel] of [['setTimeout', 'clearTimeout'], ['setInterval', 'clearInterval']]) {
+    const original = window[arm].bind(window);
+    window[arm] = (...args) => {
+      const id = original(...args);
+      windowTimers.push(() => window[cancel](id));
+      return id;
+    };
+  }
   for (const key of ['window', 'document', 'location', 'history', 'screen', 'localStorage', 'sessionStorage', 'HTMLElement', 'Element', 'Node', 'Event', 'MutationObserver', 'XMLHttpRequest', 'History', 'Location', 'EventTarget', 'CustomEvent', 'DOMParser', 'Document', 'HTMLDocument', 'ErrorEvent', 'PromiseRejectionEvent']) {
     try { globalThis[key] = window[key]; } catch { /* read-only in node */ }
   }
@@ -83,13 +92,14 @@ const dataPlane = () => requests.filter((request) => request.url.startsWith(DATA
 
 describe('real AWS RUM requests (ETP-4578 H4c)', () => {
   // The real SDK keeps a dispatch interval alive, and also a jsdom interval its disable() leaves
-  // running. Stop every SDK through the gateway (the kill-switch path), then close the jsdom
-  // window, which cancels its timers, so the file ends on its own. Forcing process.exit here
-  // raced the test runner's report and failed the whole file on slower CI runners.
+  // running. Stop every SDK through the gateway (the kill-switch path), then cancel the timers it
+  // armed on the window, so the file ends on its own. Closing the window instead fires its unload
+  // listeners on a torn-down window, which threw after the test ended on CI; forcing
+  // process.exit raced the test runner's report. Both failed the whole file.
   const gateways = [];
   after(async () => {
     await Promise.all(gateways.map((gateway) => gateway.disable('aws-rum')));
-    dom?.window.close();
+    for (const cancel of windowTimers.splice(0)) cancel();
   });
 
   async function realRum(overrides = {}) {
