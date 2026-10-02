@@ -410,7 +410,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           codes={statusCodes}
           labelFor={statusLabel}
           renderLabel={(token) => (token === ALL_ERRORS_TOKEN
-            ? <span className="font-medium">{statusLabel(token)}</span>
+            ? statusLabel(token) // plain text, same weight as the "Todos los estados" row
             : (
               <Tag
                 variant={statusDefForToken(token).variant}
