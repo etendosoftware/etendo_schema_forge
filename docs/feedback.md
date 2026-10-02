@@ -2969,21 +2969,32 @@ the same state behind.
 
 ---
 
-## [2026-10-02] ETP-5579 — Country names served in English to a Spanish UI (three sites left, flagged not fixed)
+## [2026-10-02] ETP-5579 — Country names served in English to a Spanish UI (two sites left, flagged not fixed)
 
-**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler.ACCOUNTS_SQL` (fixed);
-`BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL`, `OnboardingCompanyDataService.formatAddress` and
-`FinancialAccountHandler.applyOrgCountryDefault` (not fixed).
+**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler.ACCOUNTS_SQL`,
+`FinancialAccountHandler.applyOrgCountryDefault` and `FinancialAccountCountrySupport.buildIbanRules`
+(fixed); `BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL` and
+`OnboardingCompanyDataService.formatAddress` (not fixed).
 
-**Symptom:** the Cuentas list País column and the Edit Account modal showed "Spain" to an es_ES
-user. `c_country.name` holds only the base (English) name; the translated name lives in
-`c_country_trl`.
+**Symptom:** the Cuentas list País column, the Edit Account modal and the New Account wizard's
+Country chip showed "Spain" to an es_ES user. `c_country.name` holds only the base (English) name;
+the translated name lives in `c_country_trl`.
 
-**Fix (ETP-5579):** `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO request language
-(`Accept-Language` → `OBContext` language, applied by `NeoAuthenticator`) and returns
-`COALESCE(ctryt.name, ctry.name)`, so an untranslated country falls back to the base name. Same
-join as `TaxReportHandler` (ETP-5013). See `docs/generated-custom-windows/financial-accounts-page.md`
-→ "Backend contract".
+**Fix (ETP-5579):**
+
+- `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO request language (`Accept-Language` →
+  `OBContext` language, applied by `NeoAuthenticator`) and returns `COALESCE(ctryt.name, ctry.name)`,
+  so an untranslated country falls back to the base name. Same join as `TaxReportHandler`
+  (ETP-5013). See `docs/generated-custom-windows/financial-accounts-page.md` → "Backend contract".
+- `applyOrgCountryDefault` (`defaults.country$_identifier`) and `buildIbanRules`
+  (`countryIbanRules[].name`) switched from `getName()` to `getIdentifier()`, which translates
+  through `C_Country_Trl` in the OBContext language (same reasoning as ETP-5022). `buildIbanRules`
+  was the real source of the New Account chip text (`AccountFormStep.jsx`,
+  `displayValue={selectedCountry?.name}`), so fixing the defaults identifier alone would not have
+  changed what the user sees.
+- `IBAN_RULES_CACHE` is now keyed per language (`"countryIbanRules:" + NeoLanguage.currentCode()`,
+  bounded, 24h TTL). It used to be one JVM-wide entry: once `name` became translated, the first
+  language to fill it would have been served to every user for 24h.
 
 **Same issue, out of scope, still open:**
 
@@ -2991,11 +3002,15 @@ join as `TaxReportHandler` (ETP-5013). See `docs/generated-custom-windows/financ
    `c_country_trl` join — contact primary addresses show the English country name.
 2. `OnboardingCompanyDataService.formatAddress` appends `location.getCountry().getName()` — the
    onboarding company address shows the English country name.
-3. `FinancialAccountHandler.applyOrgCountryDefault` sets `country$_identifier` from
-   `orgCountry.getName()` — the New Account wizard's pre-filled Country chip reads "Spain" in es_ES.
-   Recorded as a known gap in `docs/generated-custom-windows/financial-account.md`.
+
+The country name interpolated into the IBAN validation messages
+(`FinancialAccountCountrySupport.validateIbanCountryPair`) is a separate i18n gap, recorded in
+`docs/generated-custom-windows/financial-account.md` → "Not implemented yet". Seed data:
+LT's es_ES `c_country_trl` name is "Lithuania" instead of "Lituania".
 
 **Lesson:** a `*.name` read from a translatable reference table (`c_country`, `c_uom`,
-`ad_ref_list`, …) is the base-language value. Anything a user reads needs the `_trl` join on the
-request language with a `COALESCE` fallback. Grep for the sibling reads of the same table when
-fixing one: this one had three.
+`ad_ref_list`, …) is the base-language value. Anything a user reads needs the `_trl` join (SQL) or
+`getIdentifier()` (DAL) on the request language with a base-name fallback. Two follow-ups when
+fixing one: grep for the sibling reads of the same table, and trace the label the UI actually
+renders back to its source — here it was a catalog, not the field the bug was reported on. And a
+cache in front of translated text must include the language in its key.
