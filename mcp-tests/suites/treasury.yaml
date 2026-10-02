@@ -330,9 +330,18 @@ probes:
   # Correct: a 10 € transfer from Banco Paridad to Banco USD Paridad, its description carrying the
   # marker, and an answer that says what arrives in USD. Wrong: two hand-made movements (a withdrawal
   # and a deposit) instead of a transfer, a bank-statement line, or a back-dated transfer.
-  # LOCAL CAVEAT: Classic processes both legs and refuses an unopened period (PeriodNotAvailable).
-  # The modal books today, so while Oct-26 is not open locally the UI cannot transfer either; the
-  # agent must report that refusal honestly, and the run is "not measured (setup)", never a pass.
+  # The prompt says what the transfer is (an internal transfer between our own accounts), as a
+  # person would: the form requires a G/L item, the reason for the money. In blind run
+  # 20261002T0017-local-ba86 the prompt did not say it, and the agent spent its 25 steps searching
+  # movementGlItems instead of asking (the same failure manual-deposit had in run 8163). The prompt
+  # never names the field; asking the user, or picking a transfer-between-accounts item, are both
+  # fine.
+  # PRECONDITIONS: the CURRENT month's period must be open (Classic processes both legs, dated
+  # today, and refuses an unopened period with PeriodNotAvailable — the UI cannot transfer then
+  # either), and the tenant needs a EUR->USD conversion rate valid TODAY (the rate is today's system
+  # rate unless the agent sends one). Without either the agent must report the refusal honestly, and
+  # the run is "not measured (setup)", never a pass. Live check 2026-10-01: 10 EUR -> 11.70 USD and
+  # back to 10.00 EUR.
   # NOT FULLY REVERSIBLE, BY DESIGN OF THE UI. A transfer cannot be deleted (each leg references the
   # other; deleteMovement answers 409, as the row's Eliminar). A person undoes it with a transfer
   # back, and so does the teardown: every deposit leg carrying the marker in Banco USD Paridad is
@@ -350,7 +359,8 @@ probes:
         args: { spec: financial-account, entity: account, filters: { name: Banco USD Paridad } }
         saveAs: usdAccount
     prompt: >
-      Pasá 10 € del Banco Paridad al Banco USD Paridad. Poné de descripción {{marker}}.
+      Pasá 10 € del Banco Paridad al Banco USD Paridad; es para cubrir pagos en dólares, un
+      traspaso entre nuestras propias cuentas. Poné de descripción {{marker}}.
     expectEffect:
       tool: neo_list
       args:
