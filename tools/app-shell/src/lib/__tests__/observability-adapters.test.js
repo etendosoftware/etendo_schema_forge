@@ -10,10 +10,9 @@ import {
 } from '../rum.js';
 import {
   createSentryProvider,
-  DEFAULT_SENTRY_SEND_DEFAULT_PII,
+  SENTRY_SEND_DEFAULT_PII,
   resolveSentryEnvironment,
   resolveSentryRelease,
-  resolveSentrySendDefaultPii,
 } from '../sentry.js';
 
 describe('sentry observability adapter', () => {
@@ -64,12 +63,35 @@ describe('sentry observability adapter', () => {
     assert.equal(provider.enabled, false);
   });
 
-  it('enables Sentry PII only when explicitly requested via env', () => {
-    assert.equal(resolveSentrySendDefaultPii(undefined), DEFAULT_SENTRY_SEND_DEFAULT_PII);
-    assert.equal(resolveSentrySendDefaultPii('true'), true);
-    assert.equal(resolveSentrySendDefaultPii('1'), true);
-    assert.equal(resolveSentrySendDefaultPii('false'), false);
-    assert.equal(resolveSentrySendDefaultPii('unexpected'), DEFAULT_SENTRY_SEND_DEFAULT_PII);
+  it('never enables Sentry PII, whatever VITE_SENTRY_SEND_DEFAULT_PII says, in any environment (ETP-4578, D4)', () => {
+    assert.equal(SENTRY_SEND_DEFAULT_PII, false);
+    for (const appEnv of ['production', 'staging', 'experimental', 'development', undefined]) {
+      for (const value of ['true', '1', 'yes', 'on', true]) {
+        const calls = [];
+        const provider = createSentryProvider({
+          dsn: 'dsn-123',
+          sentry: { browserTracingIntegration: () => 'bt', init: (options) => calls.push(options) },
+          env: { VITE_APP_ENV: appEnv, VITE_SENTRY_SEND_DEFAULT_PII: value },
+        });
+        provider.init();
+        assert.equal(calls[0].sendDefaultPii, false, `env=${appEnv} value=${value}`);
+      }
+    }
+  });
+
+  it('installs the SDK egress hooks, which is where the traffic the gateway never sees is sanitized', () => {
+    const calls = [];
+    const provider = createSentryProvider({
+      dsn: 'dsn-123',
+      sentry: { init: (options) => calls.push(options) },
+      env: {},
+    });
+    provider.init();
+
+    for (const hook of ['beforeSend', 'beforeSendTransaction', 'beforeSendSpan', 'beforeBreadcrumb']) {
+      assert.equal(typeof calls[0][hook], 'function', `${hook} must be installed`);
+    }
+    assert.equal(calls[0].sampleRate, 1);
   });
 
   it('resolves Sentry release from env first and then build metadata', () => {
@@ -108,7 +130,7 @@ describe('AWS RUM observability adapter', () => {
 
   it('stays disabled when the build did not inject RUM IDs', () => {
     const provider = createRumProvider({
-      env: {},
+      env: { VITE_RUM_ENABLED: 'true' },
       AwsRumCtor: class {
         constructor() {
           throw new Error('must not be constructed');
@@ -121,7 +143,18 @@ describe('AWS RUM observability adapter', () => {
     assert.equal(provider.enabled, false);
   });
 
-  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', () => {
+  it('is optional: the injected IDs alone no longer switch it on, it needs an explicit VITE_RUM_ENABLED (ETP-4578, D3)', () => {
+    const ids = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const off = createRumProvider({ env: ids, AwsRumCtor: class {}, logger: { warn() {} } });
+    assert.equal(off.enabled, false);
+
+    for (const flag of ['false', '1', 'yes', '']) {
+      assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: flag }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, false, flag);
+    }
+    assert.equal(createRumProvider({ env: { ...ids, VITE_RUM_ENABLED: 'true' }, AwsRumCtor: class {}, logger: { warn() {} } }).enabled, true);
+  });
+
+  it('initializes AWS RUM with the existing region, endpoint, telemetries, and bounded sample rate', async () => {
     const calls = [];
     class FakeAwsRum {
       constructor(...args) {
@@ -131,6 +164,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
         VITE_RUM_SESSION_SAMPLE_RATE: '0.25',
@@ -138,26 +172,41 @@ describe('AWS RUM observability adapter', () => {
       AwsRumCtor: FakeAwsRum,
       logger: { warn() {} },
     });
-    provider.init();
+    await provider.init();
 
     assert.equal(provider.name, 'aws-rum');
     assert.equal(provider.enabled, true);
-    assert.deepEqual(calls[0], [
-      'monitor-id',
-      '1.0.0',
-      'eu-west-3',
-      {
-        sessionSampleRate: 0.25,
-        identityPoolId: 'pool-id',
-        endpoint: 'https://dataplane.rum.eu-west-3.amazonaws.com',
-        telemetries: ['performance', 'errors', 'http'],
-        allowCookies: true,
-        enableXRay: false,
-      },
-    ]);
+    const [appMonitorId, version, region, config] = calls[0];
+    assert.equal(appMonitorId, 'monitor-id');
+    assert.equal(version, '1.0.0');
+    assert.equal(region, 'eu-west-3');
+    assert.equal(config.sessionSampleRate, 0.25);
+    assert.equal(config.identityPoolId, 'pool-id');
+    assert.equal(config.endpoint, 'https://dataplane.rum.eu-west-3.amazonaws.com');
+    assert.deepEqual(config.telemetries, ['performance', 'errors', 'http']);
+    assert.equal(config.enableXRay, false);
+    // ETP-4578: batches are sanitized through the client builder, before they are signed.
+    assert.equal(typeof config.clientBuilder, 'function');
   });
 
-  it('logs and contains AWS RUM init failures', () => {
+  it('keeps cookies off unless VITE_RUM_ALLOW_COOKIES=true (open question for Privacy)', async () => {
+    const seen = [];
+    class FakeAwsRum {
+      constructor(...args) {
+        seen.push(args[3].allowCookies);
+      }
+    }
+    const base = {
+      VITE_RUM_ENABLED: 'true',
+      VITE_RUM_APP_MONITOR_ID: 'monitor-id',
+      VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
+    };
+    await createRumProvider({ env: base, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    await createRumProvider({ env: { ...base, VITE_RUM_ALLOW_COOKIES: 'true' }, AwsRumCtor: FakeAwsRum, logger: { warn() {} } }).init();
+    assert.deepEqual(seen, [false, true]);
+  });
+
+  it('logs and contains AWS RUM init failures', async () => {
     const warnings = [];
     class BrokenAwsRum {
       constructor() {
@@ -167,6 +216,7 @@ describe('AWS RUM observability adapter', () => {
 
     const provider = createRumProvider({
       env: {
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
@@ -178,8 +228,8 @@ describe('AWS RUM observability adapter', () => {
       },
     });
 
-    assert.doesNotThrow(() => provider.init());
-    assert.deepEqual(warnings, [['CloudWatch RUM init failed', 'rum unavailable']]);
+    await assert.doesNotReject(() => provider.init());
+    assert.deepEqual(warnings, [['[observability] aws-rum init failed', 'rum unavailable']]);
   });
 
   it('keeps legacy no-op behavior when no hostname config matches', () => {
@@ -197,8 +247,9 @@ describe('AWS RUM observability adapter', () => {
       logger: { warn() {} },
     });
 
+    // A disabled adapter is never started: the gateway (and the facade's isProviderEnabled)
+    // skip it, so the SDK constructor is not reached.
     assert.equal(provider.enabled, false);
-    assert.doesNotThrow(() => provider.init());
     assert.deepEqual(calls, []);
 
     const nullEnvProvider = createRumProvider({
@@ -209,7 +260,6 @@ describe('AWS RUM observability adapter', () => {
     });
 
     assert.equal(nullEnvProvider.enabled, false);
-    assert.doesNotThrow(() => nullEnvProvider.init());
     assert.deepEqual(calls, []);
   });
 
@@ -241,6 +291,7 @@ describe('browser observability config', () => {
     const config = buildBrowserObservabilityConfig({
       env: {
         VITE_SENTRY_DSN: 'dsn-123',
+        VITE_RUM_ENABLED: 'true',
         VITE_RUM_APP_MONITOR_ID: 'monitor-id',
         VITE_RUM_IDENTITY_POOL_ID: 'pool-id',
       },
@@ -256,5 +307,45 @@ describe('browser observability config', () => {
     });
     assert.deepEqual(config.providers.map(provider => provider.name), ['sentry', 'aws-rum', 'mixpanel']);
     assert.deepEqual(config.providers.map(provider => provider.enabled), [true, true, false]);
+  });
+
+  // ETP-4578 H6 (D3): Sentry is the only provider a build can rely on; RUM and Mixpanel are
+  // opt-in and each needs its own explicit switch.
+  describe('optional providers are off by default', () => {
+    const enabledOf = (env) => Object.fromEntries(
+      buildBrowserObservabilityConfig({ env, location: { hostname: 'h' }, logger: { warn() {} } })
+        .providers.map((provider) => [provider.name, provider.enabled]),
+    );
+    const RUM_IDS = { VITE_RUM_APP_MONITOR_ID: 'monitor-id', VITE_RUM_IDENTITY_POOL_ID: 'pool-id' };
+    const MIXPANEL_TOKEN = { VITE_MIXPANEL_TOKEN: 'fake-project-token' };
+
+    it('starts nothing from an empty environment', () => {
+      assert.deepEqual(enabledOf({}), { sentry: false, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('does not start RUM or Mixpanel from their IDs and tokens alone', () => {
+      assert.deepEqual(enabledOf({ ...RUM_IDS, ...MIXPANEL_TOKEN }), { sentry: false, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('starts Sentry from the DSN alone, and nothing else', () => {
+      assert.deepEqual(enabledOf({ VITE_SENTRY_DSN: 'dsn', ...RUM_IDS, ...MIXPANEL_TOKEN }), { sentry: true, 'aws-rum': false, mixpanel: false });
+    });
+
+    it('needs the explicit switch AND the configuration, for each optional provider', () => {
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true' }), { sentry: false, 'aws-rum': false, mixpanel: false }, 'RUM switch without IDs');
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true' }), { sentry: false, 'aws-rum': false, mixpanel: false }, 'Mixpanel switch without a token');
+      assert.deepEqual(enabledOf({ VITE_RUM_ENABLED: 'true', ...RUM_IDS }), { sentry: false, 'aws-rum': true, mixpanel: false });
+      assert.deepEqual(enabledOf({ VITE_MIXPANEL_ENABLED: 'true', ...MIXPANEL_TOKEN }), { sentry: false, 'aws-rum': false, mixpanel: true });
+    });
+
+    it('takes only the literal "true" as opt-in', () => {
+      for (const value of ['1', 'yes', 'TRUE', 'on', ' true']) {
+        assert.deepEqual(
+          enabledOf({ VITE_RUM_ENABLED: value, ...RUM_IDS, VITE_MIXPANEL_ENABLED: value, ...MIXPANEL_TOKEN }),
+          { sentry: false, 'aws-rum': false, mixpanel: false },
+          value,
+        );
+      }
+    });
   });
 });

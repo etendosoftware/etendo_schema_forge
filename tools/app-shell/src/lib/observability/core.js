@@ -1,41 +1,36 @@
-import { buildEventPayload } from './payload.js';
+import { createTelemetryGateway } from '@etendosoftware/app-shell-core/observability/gateway';
+import { buildEventPayload, SAFE_EVENT_PROPERTY_KEYS } from './payload.js';
 
+/**
+ * The host's observability facade (ETP-4578). Callers keep this API; every payload now
+ * leaves through the core's sanitizing gateway instead of being handed to the providers
+ * directly:
+ *
+ *  - the host still COMPOSES an event (`buildEventPayload`: metadata + context + properties
+ *    + timestamp + normalized route), then the gateway sanitizes it again with the host
+ *    allowlist before any provider sees it — a second boundary, on purpose;
+ *  - `identify`, `group`, `groupSet` and `captureException` used to reach providers with no
+ *    sanitization at all, and now cross the same boundary;
+ *  - provider failures, timeouts, the kill switch and the start/stop lifecycle are the
+ *    gateway's.
+ *
+ * The gateway contract requires `init()` before anything else: it is what starts the
+ * adapters, and a `disable()` only stops an adapter that was started. So the gateway is
+ * created and `init()`-ed inside `initObservability()`, flagged synchronously before its
+ * first await, and every other operation is a no-op until then.
+ */
 function isProviderEnabled(provider) {
   return provider && provider.enabled !== false;
 }
 
-function getProviderName(provider) {
-  return provider?.name || 'unknown-provider';
-}
-
-function warn(logger, message, error) {
-  if (typeof logger?.warn === 'function') {
-    logger.warn(message, error);
-  }
-}
-
 export function createObservability(options = {}) {
   let logger = options.logger ?? console;
+  const allowedKeys = options.allowedKeys ?? SAFE_EVENT_PROPERTY_KEYS;
+  let gateway;
   let providers = [];
   let context = {};
   let metadata = {};
   let initialized = false;
-
-  async function callProvider(provider, methodName, args) {
-    const method = provider?.[methodName];
-    if (typeof method !== 'function') return undefined;
-
-    try {
-      return await method.apply(provider, args);
-    } catch (error) {
-      warn(
-        logger,
-        `[observability] ${getProviderName(provider)}.${methodName} failed`,
-        error
-      );
-      return undefined;
-    }
-  }
 
   function getContext() {
     return { ...context };
@@ -47,97 +42,73 @@ export function createObservability(options = {}) {
       providers = (config.providers ?? []).filter(isProviderEnabled);
       context = { ...(config.context ?? {}) };
       metadata = { ...(config.metadata ?? {}) };
+      gateway = createTelemetryGateway({
+        adapters: providers,
+        allowedKeys,
+        logger,
+        disabled: config.disabled,
+        adapterTimeoutMs: config.adapterTimeoutMs,
+      });
       initialized = true;
 
-      await Promise.all(
-        providers.map(provider => callProvider(provider, 'init', [{ context: getContext() }]))
-      );
+      await gateway.init(getContext());
     },
 
     async track(eventName, properties = {}) {
       if (!initialized || !eventName) return;
       const payload = buildEventPayload({ properties, context, metadata });
-
-      await Promise.all(
-        providers.map(provider =>
-          callProvider(provider, 'track', [eventName, payload, { context: getContext() }])
-        )
-      );
+      await gateway.track(eventName, payload);
     },
 
     async page(path, properties = {}) {
       if (!initialized || !path) return;
       const payload = buildEventPayload({ properties, context, metadata, route: path });
-
-      await Promise.all(
-        providers.map(provider =>
-          callProvider(provider, 'page', [payload.route, payload, { context: getContext() }])
-        )
-      );
+      await gateway.page(payload.route, payload);
     },
 
     async identify(userId, traits = {}) {
       if (!initialized || !userId) return;
-
-      await Promise.all(
-        providers.map(provider =>
-          callProvider(provider, 'identify', [userId, { ...traits }, { context: getContext() }])
-        )
-      );
+      await gateway.identify(userId, traits);
     },
 
     async group(groupKey, groupId, traits = {}) {
       if (!initialized || !groupKey || !groupId) return;
-
-      await Promise.all(
-        providers.map(provider =>
-          callProvider(provider, 'group', [groupKey, groupId, { ...traits }, { context: getContext() }])
-        )
-      );
+      await gateway.group(groupKey, groupId, traits);
     },
 
     async groupSet(groupKey, groupId, properties = {}) {
       if (!initialized || !groupKey || !groupId) return;
-
-      await Promise.allSettled(
-        providers.map(provider =>
-          callProvider(provider, 'groupSet', [groupKey, groupId, { ...properties }, { context: getContext() }])
-        )
-      );
+      await gateway.groupSet(groupKey, groupId, properties);
     },
 
     async captureException(error, details = {}) {
       if (!initialized || !error) return;
-
-      await Promise.all(
-        providers.map(provider =>
-          callProvider(provider, 'captureException', [error, { ...details }, { context: getContext() }])
-        )
-      );
+      await gateway.captureException(error, details);
     },
 
     async flush() {
       if (!initialized) return;
-
-      await Promise.all(
-        providers.map(provider => callProvider(provider, 'flush', [{ context: getContext() }]))
-      );
+      await gateway.flush();
     },
 
     async reset() {
-      await Promise.all(
-        providers.map(provider => callProvider(provider, 'reset', [{ context: getContext() }]))
-      );
+      if (!initialized) return;
+      await gateway.reset();
     },
 
     async setContext(nextContext = {}) {
       context = { ...context, ...nextContext };
-
       if (!initialized) return;
+      await gateway.setContext(nextContext);
+    },
 
-      await Promise.all(
-        providers.map(provider => callProvider(provider, 'setContext', [getContext()]))
-      );
+    /** Kill switch, per provider name or global (no argument). Needs initObservability() first. */
+    async disable(name) {
+      if (gateway) await gateway.disable(name);
+    },
+
+    async enable(name) {
+      if (gateway) await gateway.enable(name);
     },
 
     getContext,

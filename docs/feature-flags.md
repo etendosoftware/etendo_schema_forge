@@ -403,6 +403,13 @@ To move to Mixpanel instead:
 5. Remove the exposure hook (below) — Mixpanel reports exposures natively, and
    keeping both would double-count.
 
+## Telemetry kill switches
+
+`telemetry-kill-all` and `telemetry-kill-<sentry|aws-rum|mixpanel>` are operational
+switches read by the observability layer, not feature flags: `true` STOPS telemetry, the
+default is `false`, they are never exposed as flag exposures and they are not tracked in
+`flags-registry.json`. See [Kill Switch](ops/app-shell-observability.md#kill-switch).
+
 ## Flag exposure events
 
 `lib/flags/flag-exposure.js` registers an OpenFeature evaluation hook that

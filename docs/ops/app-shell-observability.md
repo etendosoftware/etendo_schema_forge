@@ -11,11 +11,11 @@ The browser initializer registers these providers:
 | Provider | Enabled when | Purpose |
 |----------|--------------|---------|
 | Sentry | `VITE_SENTRY_DSN` is set | Error capture, tracing, and app context |
-| AWS RUM | Hostname has matching RUM IDs | Browser performance, error, and HTTP telemetry |
+| AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set | Browser performance, error, and HTTP telemetry |
 | Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set | Product analytics events |
 
-Sentry defaults to `sendDefaultPii: false`. Only enable it with an explicit
-environment override after reviewing the privacy and legal impact. Release is
+Sentry sends with `sendDefaultPii: false` in every environment; there is no
+override (ETP-4578). Release is
 set from `VITE_SENTRY_RELEASE` when present, otherwise from available build
 metadata such as `SENTRY_RELEASE.id` injected at build time.
 
@@ -25,6 +25,21 @@ target, so a domain change is an Actions variable edit (`PUBLIC_ORIGIN_*`) plus 
 redeploy, with no code change. `VITE_RUM_SESSION_SAMPLE_RATE` is parsed as a
 bounded number from `0` to `1`; invalid or missing values fall back to the
 conservative default `0.1`. Missing RUM IDs are a no-op.
+
+AWS RUM is opt-in (ETP-4578). The injected IDs alone no longer switch it on: the
+build also needs `VITE_RUM_ENABLED=true`, so a deploy that does not set it runs
+without RUM. Its SDK has no before-send hook, so every batch is sanitized through
+the SDK's `clientBuilder` before it is serialized and signed (page titles, record
+ids and query strings never leave). Cookies are off unless
+`VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy.
+
+**Production errors (as of 2026-10-01).** GlitchTip has been decommissioned and
+`VITE_SENTRY_DSN` is not set for the deploy, so the Sentry adapter is inert in production and
+**CloudWatch RUM is the only source of frontend errors**. RUM has been opt-in since ETP-4578
+(the injected IDs alone no longer switch it on); the deploy workflow turns it on with
+`VITE_RUM_ENABLED: "true"` for every target. Its session sample rate is left at the default
+`0.1` (an infra cost decision), so only 10% of sessions are sampled. RUM also calls
+`cognito-identity` at startup and keeps temporary credentials in `localStorage`.
 
 Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
 `VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
@@ -36,11 +51,14 @@ is lazy-loaded only when the provider is enabled and used.
 |----------|-------------|
 | `VITE_SENTRY_DSN` | Enables Sentry. |
 | `VITE_SENTRY_RELEASE` | Optional explicit Sentry release. If unset, the app falls back to available build metadata. |
-| `VITE_SENTRY_SEND_DEFAULT_PII` | Optional explicit Sentry PII gate. Defaults to `false`; set to `true` only with approved privacy review. |
+| `VITE_SENTRY_SEND_DEFAULT_PII` | **Ignored** (ETP-4578). `sendDefaultPii` is fixed to `false` in every environment; the variable can no longer turn it on. |
 | `VITE_APP_ENV` | Deploy target (`production`, `experimental`, `staging`). Sentry `environment`; unset means `development`. |
+| `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; the IDs below are also required. |
+| `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
 | `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
 | `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |
 | `VITE_RUM_SESSION_SAMPLE_RATE` | Optional RUM session sample rate. Values are clamped to `0..1`; invalid values fall back to `0.1`. |
+| `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See Kill Switch. |
 | `VITE_MIXPANEL_ENABLED` | Set to `true` to enable Mixpanel. |
 | `VITE_MIXPANEL_TOKEN` | Mixpanel project token. Required when Mixpanel is enabled. |
 | `VITE_MIXPANEL_DEBUG` | Optional Mixpanel debug flag. |
@@ -56,6 +74,97 @@ VITE_MIXPANEL_ENABLED=true
 
 Staging reads `VITE_MIXPANEL_TOKEN` from the `${{ secrets.VITE_MIXPANEL_TOKEN }}`
 GitHub Actions secret.
+
+## Kill Switch
+
+Telemetry can be stopped without a deploy (ETP-4578). Two layers decide whether a
+provider may run, and a provider stopped by either is not "paused": before start it
+is never started (its SDK is not even imported, so nothing goes out), and after start
+it is shut down in place.
+
+| Layer | How | Scope |
+|-------|-----|-------|
+| Build default | `VITE_TELEMETRY_KILL=true`, or a comma list such as `mixpanel,aws-rum` | Holds from the first millisecond, needs no network, and cannot be lifted remotely. |
+| Runtime flag | `telemetry-kill-all`, `telemetry-kill-sentry`, `telemetry-kill-aws-rum`, `telemetry-kill-mixpanel` in the OpenFeature control plane (ConfigCat, or `VITE_FEATURE_FLAGS` locally) | Applies to a running tab when the control plane pushes the change (poll interval `VITE_CONFIGCAT_POLL_SECONDS`, 60 s by default). Setting it back to `false` restarts the provider. |
+
+The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpanel`.
+
+- A flag can only STOP telemetry the build allows; it never starts a provider the build
+  did not configure, and it never lifts a kill the build asked for.
+- The defaults are `false` for every switch, so an unreachable control plane keeps
+  today's behaviour instead of silently turning telemetry off.
+- If the flag client itself breaks, a running gateway keeps its current state: a broken
+  read never revives a stopped provider.
+- Startup waits at most 1.5 s for the flag provider (`FLAGS_READY_WAIT_MS`) before starting
+  telemetry. A kill flag that answers later still applies, in place, **but traffic has
+  already gone out by then**: RUM has made its 2 `cognito-identity` calls and Sentry has
+  started and may have sent. Measured with the real SDKs: a late flag gave 2 Cognito calls
+  before it and 0 after. **For a kill that holds from the very first request, use
+  `VITE_TELEMETRY_KILL` (a build default), not the flag.** The wait is deliberately not
+  longer: it would delay the first errors of every session for the sake of a rare case.
+- The switches are not reported as flag exposures (they would emit telemetry about the
+  telemetry they control) and are operational controls, not feature flags, so they are
+  not in `flags-registry.json` and do not enter the flag-debt scorecard.
+
+### Verifying egress in a browser
+
+`e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
+providers' hosts (Sentry/GlitchTip, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
+are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
+one and passes `VITE_*` through to it. The fake values below never reach a real account.
+
+Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
+it. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+
+```bash
+# 2. Positive control, providers configured and NOT killed: requests are attempted.
+(
+  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export E2E_TELEMETRY=configured E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
+
+# 3. Providers configured and killed by the build default: zero requests.
+(
+  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export VITE_TELEMETRY_KILL=true
+  export E2E_TELEMETRY=killed E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
+```
+
+- One `export` per line, inside a subshell: a single long command line gets wrapped by the
+  terminal, the variables before the break never reach the build, and scenario 2 then fails
+  while scenario 3 passes without proving anything. The `grep` confirms the configuration made
+  it into the bundle; if it prints `0`, the run is void.
+- Each run executes the whole mocked suite (about 5 minutes): since ETP-5307 the script runs
+  `--project=mocked --project=mocked-serial` and `E2E_FILES` no longer narrows the mocked suite.
+
+Run 2 before trusting 3: if the control sees no request, the interceptor is what is broken.
+
+## Known limits
+
+- **`/oauth2-clients` is reported as `/:id`.** A route whose FIRST segment is 12+ characters
+  mixing letters and digits (`oauth2-clients`: 14 characters and a `2`) reads as an id to the
+  core's scrub, which runs on the route after it is normalized and cannot tell it is a route.
+  The host has always kept a first segment as the screen name, so this loses the page's name in
+  Sentry, Mixpanel and RUM. It over-collapses and leaks nothing. Follow-up (a core change, so a
+  new preview and repin): a route's first segment must never collapse, which means routing
+  `gateway.page` and the three adapters through a route-aware sanitize. Anchor:
+  `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
+  turns red when it is fixed.
 
 ## Events
 
