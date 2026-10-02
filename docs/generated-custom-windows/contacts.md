@@ -1271,6 +1271,32 @@ bypasses `useEntity` mutations altogether via its raw fetch, so the generic `han
 alone does not reach it — `buildCustomAddModalOnSaved`'s own extra `invalidateEntityCache()` call
 is what closes the gap for this window's Location tab.
 
+## ETP-5571 — Renaming a contact no longer leaves document Contacto selectors stale
+
+**Symptom.** After editing a contact's Razón Social here and saving, the Contacto selector of a
+Sales/Purchase document that had already been opened in the session kept listing the old name
+until a full reload (F5).
+
+**Root cause.** Selector option pages are cached in the shared cache under `entity: 'selector'`
+for `catalogStaleTime` (5 min — ETP-4564's table above), and re-opening a selector reads through
+`fetchQuery`, which serves a fresh entry. `useContactsCacheInvalidation` only marks the Contacts
+window's own keys (`businessPartner`, `bp-stats`, `bp-trend`) stale, so nothing touched the
+selector entries the document windows had cached.
+
+**Fix.** Central, not per-window: `WRITE_INVALIDATES_ENTITIES` in
+`tools/app-shell/src/lib/crossSpecCacheInvalidation.js` maps `contacts → selector`, and the local
+`useApiFetch` applies it after every successful non-GET whose URL has the `contacts` path segment
+(see `docs/request-policy.md` → *Writes to Contactos invalidate every cached selector page*). It
+covers every Contacts write that goes through the hook — header save (`useEntity`), inline table
+edit/delete, bulk delete, the financial panel, billing preferences, the Location modal, and the
+"+ Crear contacto" dialog opened from a document — and every document window with a Contacto
+field, since they all render it through `CreatableSearchSelect`. All selector pages are marked
+stale, not only Contacto ones; the cost is one extra GET when each is next opened.
+
+**Not covered:** the CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, which has no access to the cache, so names changed by an import still
+wait out the 5-minute `catalogStaleTime`.
+
 ## Solo Lectura (read-only window-access tier) gating — ETP-5205
 
 Etendo GO's per-role window-access tier (`useWindowAccess('123')` → `'none' | 'read-only' |
