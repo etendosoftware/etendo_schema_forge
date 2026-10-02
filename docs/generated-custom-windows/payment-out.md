@@ -404,3 +404,17 @@ the editor already models it as a source.
 When the invoice cannot be resolved — no application at all (an abandoned shell), more than one, or
 a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
 the editor never opens on a record it could not save correctly.
+
+## Confirming a payment on a posted foreign-currency invoice, and Reactivar on a reconciled payment — ETP-5547
+
+Payments out share this fix with payments in, and the same code runs on both sides. The full
+description (the posted-invoice rate sync, the detail refresh after the confirm, and the
+`ReconciledPaymentReactivation` bracket around Reactivar) lives in `payment-in.md` § "Confirming a
+payment on a posted foreign-currency invoice, and Reactivar on a reconciled payment — ETP-5547".
+
+What differs on this side:
+- The confirm from the invoice's payment editor posts the payment-registration action on the purchase
+  invoice header (routed to `RegisterPaymentOutHandler`); the rate-row sync of that POST is skipped
+  the same way (see `purchase-invoice.md`).
+- A reconciled payment is aligned to `PWNC` (not `RDNC`) before Reactivar when that is its method's
+  paid status, following the same rule as payments in.
