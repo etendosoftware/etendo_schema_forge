@@ -2007,4 +2007,138 @@ describe('ReconciliationSplitPanel', () => {
     });
   });
 
+  // ── ETP-5457 — the window's "read-only" access tier ──────────────────────────
+  // `windowReadOnly` is the host window's access tier (ETP-5205), NOT the panel's own `readOnly`
+  // (which means "the selected line is already reconciled"). Under it every write entry point is
+  // closed while browsing and selecting stay available. Every read-only case has a twin without
+  // the prop, so a test cannot pass merely because the control never renders in this fixture.
+  describe('window read-only access tier (ETP-5457)', () => {
+    it('disables Conciliar on a balanced selection under read-only (ETP-5457)', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      // CAND_MATCH is suggested → pre-checked → the selection balances; only the tier disables it.
+      expect(candidateCheckbox('C1')).toBeChecked();
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+    });
+
+    it('keeps Conciliar enabled on the same balanced selection without read-only (ETP-5457)', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+    });
+
+    it('keeps Cancelar enabled under read-only — clearing the selection is pure UI state (ETP-5457)', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      const cancel = screen.getByTestId('recon-action-cancel');
+      expect(cancel).not.toBeDisabled();
+      fireEvent.click(cancel);
+      expect(screen.getByTestId('recon-line-radio-L1')).not.toBeChecked();
+      expect(screen.getByTestId('recon-right-empty')).toBeInTheDocument();
+    });
+
+    it('never calls reconcile when Conciliar is clicked under read-only (ETP-5457)', async () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH]);
+      const { props } = renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      // Flush any microtask a (wrongly) fired async handler would have queued.
+      await Promise.resolve();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+      expect(props.onReconcileSuccess).not.toHaveBeenCalled();
+      expect(linesState.reload).not.toHaveBeenCalled();
+    });
+
+    it('still lets candidates be checked and unchecked under read-only (ETP-5457)', () => {
+      setLines([LINE_A]);
+      setCandidates([CAND_MATCH, CAND_OTHER]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-L1'));
+      expect(candidateCheckbox('C2')).not.toBeChecked();
+      fireEvent.click(screen.getByTestId('recon-cand-check-C2'));
+      expect(candidateCheckbox('C2')).toBeChecked();
+    });
+
+    it('hides the per-document unlink buttons of a reconciled line under read-only (ETP-5457)', () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      // The linked documents are still listed (browsing stays)...
+      expect(screen.getByTestId('recon-cand-row-T3')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-cand-row-T4')).toBeInTheDocument();
+      // ...but the "−" that un-links each one is not rendered.
+      expect(screen.queryByTestId('recon-unlink-T3')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-unlink-T4')).not.toBeInTheDocument();
+    });
+
+    it('renders the per-document unlink buttons of the same reconciled line without read-only (ETP-5457)', () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      expect(screen.getByTestId('recon-unlink-T3')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-unlink-T4')).toBeInTheDocument();
+    });
+
+    it('disables Desconciliar (N) under read-only and never opens the cartel nor calls removeOperation (ETP-5457)', async () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      const btn = screen.getByTestId('recon-action-reconcile');
+      // Both docs pre-checked (removeCount 2) — the tier alone disables the bulk action.
+      expect(btn).toHaveTextContent('financeReconcileActionRemoveCount');
+      expect(btn).toBeDisabled();
+      fireEvent.click(btn);
+      await Promise.resolve();
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+
+    it('hides the unlink button inside an expanded PARTIAL "conciliado" block under read-only (ETP-5457)', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel({ windowReadOnly: true });
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      // The block still expands — reading what is matched is browsing.
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.getByTestId('recon-matched-list')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-matched-row-T1')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-unlink-T1')).not.toBeInTheDocument();
+    });
+
+    it('renders the unlink button inside the same expanded PARTIAL block without read-only (ETP-5457)', () => {
+      setLines([LINE_PARTIAL]);
+      renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LP1'));
+      fireEvent.click(screen.getByTestId('recon-matched-toggle'));
+      expect(screen.getByTestId('recon-unlink-T1')).toBeInTheDocument();
+    });
+
+    it('forces the un-reconcile cartel shut once the tier turns read-only, without calling removeOperation (ETP-5457)', async () => {
+      setLines([LINE_RECONCILED_MULTI]);
+      setCandidates([RECON_CAND_T3, RECON_CAND_T4]);
+      const { rerender, props } = renderPanel();
+      fireEvent.click(screen.getByTestId('recon-line-radio-LR2'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      // Opened while writable...
+      expect(screen.getByTestId('recon-remove-modal')).toBeInTheDocument();
+
+      // ...then the same panel re-renders under the read-only tier: the dialog's own open state is
+      // still set, but the tier keeps it shut.
+      rerender(<ReconciliationSplitPanel {...props} windowReadOnly />);
+      expect(screen.queryByTestId('recon-remove-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('recon-remove-accept')).not.toBeInTheDocument();
+      await Promise.resolve();
+      expect(removeState.removeOperation).not.toHaveBeenCalled();
+    });
+  });
+
 });

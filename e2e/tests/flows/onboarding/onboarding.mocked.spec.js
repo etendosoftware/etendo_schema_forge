@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 const LOCALE_LABELS = {
   es_ES: {
@@ -34,6 +35,7 @@ function labelsFor(locale) {
 }
 
 async function installOnboardingMocks(page, { invalidDocumentType = false, expectedLanguage = 'es_ES' } = {}) {
+  await declareNoSession(page);
   await page.route('**/sws/go/me', async route => {
     await route.fulfill({
       status: 401,

@@ -31,6 +31,8 @@ import { ReconcilePill } from './ReconcilePill.jsx';
  *   - `ui`          the i18n resolver
  *   - `onConnect`   starts the PSD2 connect flow for an account
  *   - `onReconcile` deep-links to the account's reconciliation tab
+ *   - `windowReadOnly` the window's "read-only" access tier (ETP-5457) — drops the name
+ *                   cell's inline "Conectar banco" CTA
  *
  * An unknown cellType resolves to undefined, and AccountsHeaderTable then leaves the
  * column without a `render`, so DataTable falls back to its generic type-based
@@ -41,6 +43,7 @@ export const ACCOUNT_CELL_TYPES = {
     account={row}
     ui={ctx.ui}
     onConnect={ctx.onConnect}
+    windowReadOnly={ctx.windowReadOnly}
     data-testid="NameCell__c4cfe9" />,
 
   accountType: (row, ctx) => <TypeCell account={row} ui={ctx.ui} data-testid="TypeCell__c4cfe9" />,
