@@ -39,7 +39,7 @@ If unsure, ask: _"Would this also happen if we ran the pipeline on a different w
 
 **Before concluding it's a bug, ALWAYS verify in the code (MANDATORY):**
 
-1. Search the relevant CLI files (`cli/src/extract-fields.js`, `cli/src/generate-contract.js`, `cli/src/generate-frontend.js`, `cli/src/pipeline.js`) for any handling of the reported concept.
+1. Search the relevant CLI files in `schema_forge_core` (`cli/src/extract-fields.js`, `cli/src/generate-contract.js`, `cli/src/generate-frontend.js`, `cli/src/pipeline.js`) for any handling of the reported concept.
 2. Search the frontend components (`tools/app-shell/src/`) for any existing implementation.
 3. Check `core-maps/` for any reference data that might already model the concept.
 
@@ -108,7 +108,7 @@ gh issue create \
 
 ## Steps to reproduce
 
-1. Run the pipeline for any window (`node cli/src/pipeline.js ...`)
+1. Run the pipeline for any window (`make regen ONLY=<window>`)
 2. [Specific step]
 3. [Observe the failure]
 

@@ -1,4 +1,4 @@
--- @id: R43-pool-claim-placeholder-names
+-- @id: R45-pool-claim-placeholder-names
 -- @gap: Pooled tenant claim kept the POOL-<id> placeholder in derived names
 -- @risk: low
 -- @type: sql

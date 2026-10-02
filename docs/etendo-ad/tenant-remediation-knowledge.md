@@ -3408,3 +3408,25 @@ restart — but it argues for running this fix close to a restart.
   to the data-fix as the reliable seeding path (as R40 already does) and treat the sourcedata XML as
   effective on a fresh `install.source`/CI build, not as something verifiable by flag-flipping an
   already-provisioned local dev DB.
+
+- **2026-10-01 — Fiscal period control facts behind R44 (ETP-5575).**
+  (1) `'N'` in `C_PeriodControl.PeriodStatus` reliably means "never opened": `C_PERIOD_PROCESS`
+  (AD Process 167, the only open/close action) only ever writes `'O'`, `'C'` or `'P'`. A fix that
+  flips only `'N'` therefore never undoes a user decision.
+  (2) Two readers disagree on what "open" means. The posting gate (`AcctServer_data.xsql`
+  `periodOpen`) and completion (`C_CHK_OPEN_PERIOD`) need ANY `'O'` row for the doc base type; the
+  costing closed-check (`CostingUtils_data.xsql`) reads ANY non-`'O'` row of the period as closed and
+  ignores the doc base type. A period is open for both only when EVERY row is `'O'`.
+  (3) Every onboarded tenant carries TWO control rows per (period, doc base type, org): the dataset
+  copy (`C_PERIODCONTROL.xml`) and the copy `AD_ORG_READY` inserts with no existence check, created
+  after `wirePeriodControl`. So any opener must flip every `'N'` copy, not "one row per key"; this is
+  also why the Calendar window shows "Mixto" on months the chain opened (dedup is ETP-5577).
+  (4) `ETGO_EnvironmentType` is stored in two shapes: runtime (`AD_Client_ID=<tenant>`) and legacy
+  (`AD_Client_ID='0'` + `VisibleAt_Client_ID=<tenant>`, 2 demos on the local DB). An effective DEMO
+  also has no active `ETGO_TenantPlan='productive'` row.
+  (5) A pooled tenant (ETP-5389) has no `ETGO_EnvironmentType` until it is claimed
+  (`markDemoReady` runs at claim time), so a DEMO-gated data-fix cannot see unclaimed pool tenants;
+  only the post-commit claim step covers them.
+  **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
+  applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
+  Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.

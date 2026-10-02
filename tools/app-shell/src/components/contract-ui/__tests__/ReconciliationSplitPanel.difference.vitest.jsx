@@ -662,3 +662,119 @@ describe('partial reconcile result (ETP-5472)', () => {
     expect(toast.info).not.toHaveBeenCalled();
   });
 });
+
+// ── 8. the window's "read-only" access tier (ETP-5457) ────────────────────────
+//
+// Every path in this file ends in a write (post a difference, reconcile with one, store the
+// account's concept). Under the host window's read-only tier the banner's post action is hidden,
+// Conciliar is disabled and the three dialogs are kept shut whatever their own open state says.
+// The forced-close cases open a dialog while writable and then re-render the SAME panel under the
+// tier — the only way to reach a set open state, since the tier hides every control that sets it.
+
+// A partially reconciled line with a 0,50 € remainder: inside the account's 5% tolerance, so the
+// "post the difference" banner is offered (same numbers as ReconciliationDifference.vitest.jsx).
+const LINE_PARTIAL_DIFF = {
+  id: 'LP1', date: '2026-05-13T00:00:00Z', description: 'Partial line',
+  status: 'pending', reconcileStatus: 'PARTIAL', partial: true,
+  amount: 12.5, reconciledAmount: 12, pendingAmount: 0.5, reconciledPct: 96,
+  matchGroupId: 'G1', remainderLineId: 'LP1-rem',
+  txns: [{ transactionId: 'T1', documentNo: '1000034', contact: 'ACME', amount: 12, autoCreated: false }],
+};
+
+/** Same props as renderPanel(), for `rerender` — which needs the full element again. */
+function panelElement(props = {}) {
+  return (
+    <ReconciliationSplitPanel
+      accountId="ACC-1"
+      currency="EUR"
+      amountTolerance={AMOUNT_TOLERANCE_PCT}
+      accountUpdated={ACCOUNT_UPDATED}
+      onReconcileSuccess={vi.fn()}
+      {...props}
+    />
+  );
+}
+
+describe('window read-only access tier (ETP-5457)', () => {
+  describe('difference banner inside the panel', () => {
+    beforeEach(() => {
+      linesState.lines = [LINE_PARTIAL_DIFF];
+      linesState.total = 1;
+      candidatesState.candidates = [];
+    });
+
+    it('keeps the banner and "Dejar pendiente" but hides the post action under read-only (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true });
+      selectLine('LP1');
+      expect(screen.getByTestId('recon-difference-banner')).toBeInTheDocument();
+      expect(screen.getByTestId('recon-difference-dismiss')).toBeInTheDocument();
+      expect(screen.queryByTestId('recon-difference-open')).toBeNull();
+    });
+
+    it('renders the post action, which opens the confirmation, without read-only (ETP-5457)', async () => {
+      renderPanel();
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-open'));
+      await screen.findByTestId('recon-difference-dialog');
+    });
+
+    it('"Dejar pendiente" still dismisses the banner under read-only — it changes no data (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true });
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-dismiss'));
+      expect(screen.queryByTestId('recon-difference-banner')).toBeNull();
+      expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
+    });
+
+    it('forces the difference confirmation shut once the tier turns read-only (ETP-5457)', async () => {
+      const { rerender } = render(panelElement());
+      selectLine('LP1');
+      fireEvent.click(screen.getByTestId('recon-difference-open'));
+      await screen.findByTestId('recon-difference-dialog');
+
+      rerender(panelElement({ windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-difference-dialog')).toBeNull());
+      expect(reconcileDifferenceState.reconcileDifference).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Conciliar on a postable difference', () => {
+    it('disables Conciliar on the near match under read-only (ETP-5457)', () => {
+      renderPanel({ windowReadOnly: true, glItemDifference: GL_DIFFERENCE });
+      selectLine();
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      clickReconcile();
+      expect(screen.queryByTestId('recon-difference-dialog')).toBeNull();
+      expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+
+    it('keeps Conciliar on the same near match enabled without read-only (ETP-5457)', () => {
+      renderPanel({ glItemDifference: GL_DIFFERENCE });
+      selectLine();
+      expect(screen.getByTestId('recon-action-reconcile')).not.toBeDisabled();
+    });
+
+    it('forces the account setup dialog shut once the tier turns read-only, storing nothing (ETP-5457)', async () => {
+      const { rerender } = render(panelElement());
+      selectLine();
+      clickReconcile();
+      await screen.findByTestId('recon-glitem-setup-modal');
+
+      rerender(panelElement({ windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-glitem-setup-modal')).toBeNull());
+      expect(accountMutations.updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('forces the reconcile-with-difference confirmation shut once the tier turns read-only (ETP-5457)', async () => {
+      const { rerender } = render(panelElement({ glItemDifference: GL_DIFFERENCE }));
+      selectLine();
+      clickReconcile();
+      await screen.findByTestId('recon-difference-dialog');
+
+      rerender(panelElement({ glItemDifference: GL_DIFFERENCE, windowReadOnly: true }));
+      await waitFor(() => expect(screen.queryByTestId('recon-difference-dialog')).toBeNull());
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
+  });
+});

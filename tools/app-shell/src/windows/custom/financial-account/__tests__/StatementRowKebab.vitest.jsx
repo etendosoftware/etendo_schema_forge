@@ -131,4 +131,39 @@ describe('StatementRowKebab', () => {
       expect(props.onReactivate).toHaveBeenCalledWith(PROCESSED);
     });
   });
+
+  // ETP-5457 — the window's "read-only" access tier. Every item in this menu is a mutation
+  // (Procesar / Reactivar / Eliminar), so the whole trigger is not rendered, mirroring
+  // MovementRowKebab.
+  describe('window read-only access tier (ETP-5457)', () => {
+    it('renders nothing for a draft under read-only (ETP-5457)', () => {
+      const { container } = renderKebab(DRAFT, { windowReadOnly: true, onDelete: vi.fn() });
+      expect(screen.queryByTestId('statement-row-menu-d1')).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing for a processed statement under read-only (ETP-5457)', () => {
+      const { container } = renderKebab(PROCESSED, { windowReadOnly: true });
+      expect(screen.queryByTestId('statement-row-menu-p1')).not.toBeInTheDocument();
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders nothing under read-only even on a bank-connected account (ETP-5457)', () => {
+      const { container } = renderKebab(PROCESSED, { windowReadOnly: true, bankConnected: true });
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it('renders the trigger for the same statements without read-only (ETP-5457)', () => {
+      renderKebab(DRAFT, { windowReadOnly: false });
+      expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+    });
+
+    it('opens the menu and fires Procesar without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      const { props } = renderKebab(DRAFT, { windowReadOnly: false });
+      await openMenu(user, 'd1');
+      await user.click(screen.getByTestId('statement-row-process'));
+      expect(props.onProcess).toHaveBeenCalledWith(DRAFT);
+    });
+  });
 });

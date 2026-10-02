@@ -6,6 +6,12 @@ This guide explains how to write automated end-to-end tests for Schema Forge UI 
 2. **Discover + Automate** — Explore with agent-browser, then write Playwright tests
 3. **Manual** — Write tests from scratch using known selectors
 
+**Before writing a spec**, follow the reuse-first protocol in
+[`testing/test-reuse-policy.md`](testing/test-reuse-policy.md): run
+`make find-tests FILE=<path>` and extend an existing spec when one covers the flow, add
+`// @covers <path>` for the component(s) the spec drives, and never name a spec after a ticket.
+Playwright specs are written by the `tester-functional` agent.
+
 ## Prerequisites
 
 ```bash
@@ -1057,8 +1063,12 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `row-quick-action-delete-confirm` | — | Destructive button inside the row delete confirm dialog |
 | `generic-preview-modal` | — | `GenericPreviewModal` card (the right-anchored panel) |
 | `preview-drop-zone` | — | Drop zone inside GenericPreviewModal managed left panel |
-| `filter-{name}` | `filter-todos`, `filter-personas` | ListView subset filter buttons |
+| `filter-{key}` | `filter-alltab`, `filter-invoicestab`, `filter-rectificativeinvoicestab` (invoices); `filter-all`, `filter-persons`, `filter-companies` (contacts) | ListView subset filter buttons (second toolbar row). `{key}` is the entry's `key`, or else its `label` as declared (the i18n key, not the translated text) lowercased — so there is no `filter-todos` |
+| `filter-status`, `filter-type`, `filter-date`, `filter-advanced` | — | ListFilterBar triggers in the first toolbar row (status, type — a column flagged `isTypeFilter` —, date range, "Filters"), each present only when the window has that filter. They share the `filter-` prefix with the subset buttons: scope a `[data-testid^="filter-"]` query to `list-toolbar-tabs-row` or `list-toolbar-main-row` |
 | `quick-filter-{name}` | `quick-filter-active` | ListView quick filter toggle buttons |
+| `list-toolbar` | — | ListView idle toolbar container; carries the toolbar/body separator (absent under `hideListBar`) |
+| `list-toolbar-main-row` | — | ListView toolbar first row: filters on the left, main actions on the right |
+| `list-toolbar-tabs-row` | — | ListView toolbar second row: subset filter buttons and the list/gallery `view-toggle`. Rendered only when the window has one of them |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
 | `list-progress-bar` | — | ListView loading progress indicator |
 | `global-search-trigger` | — | CommandPalette trigger button |
@@ -1068,13 +1078,13 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `topbar-notifications` | — | TopBar notification bell |
 | `topbar-back` | — | TopBar back navigation button |
 | `topbar-more-actions` | — | TopBar kebab / 3-dot menu |
-| `topbar-title-block` | — | TopBar title + breadcrumb block (256px cap) |
+| `topbar-title-block` | — | TopBar title + breadcrumb block (left grid column, elides) |
 | `topbar-breadcrumb` | — | TopBar breadcrumb line |
 | `topbar-breadcrumb-current` | — | Current page level when the breadcrumb is collapsed/structured |
 | `topbar-breadcrumb-overflow` | — | Breadcrumb `⋯` trigger (>3 levels) |
 | `topbar-breadcrumb-overflow-menu` | — | Breadcrumb `⋯` dropdown |
 | `topbar-breadcrumb-overflow-item` | — | Hidden intermediate level inside the dropdown |
-| `topbar-search-slot` | — | Flex slot that centers the 392px search |
+| `topbar-search-slot` | — | Middle grid column holding the 392px search, centered in the visible bar (header border box) |
 | `topbar-quick-actions` | — | Right-side quick actions group |
 | `topbar-quick-action-{id}` | `topbar-quick-action-notifications` | Page-supplied quick action (inline or in the right `⋯`) |
 | `topbar-quick-actions-overflow` | — | Right-side `⋯` trigger (compact breakpoint only) |
@@ -1120,7 +1130,7 @@ Every new UI component MUST include:
 
 `{context}-{element}` or `{context}-{element}-{identifier}`
 
-Examples: `filter-todos`, `subtab-row-{id}`, `location-field-city`, `action-bulk-delete`
+Examples: `filter-status`, `subtab-row-{id}`, `location-field-city`, `action-bulk-delete`
 
 ### Codemod
 
@@ -1277,7 +1287,33 @@ The glob-crossing bug described above is not a permanent Playwright limitation �
 
 ### Canonical reference
 
-`e2e/tests/flows/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
+`e2e/tests/flows/platform/row-quick-actions.mocked.spec.js` covers the four pilot windows (sales-order, purchase-order, sales-invoice, purchase-invoice) and is the recommended starting point for any list-row UI test. It demonstrates: mocked list+detail endpoints, per-window expected-button matrix, hover→overlay assertion, edit-navigates-to-detail flow, and delete-opens-dialog flow.
+
+### Layout reference: list toolbar at 1280×720 (ETP-5509)
+
+`e2e/tests/flows/platform/list-toolbar-1280.mocked.spec.js` is the only automated guard for the
+list toolbar's **geometry** — jsdom has no layout, so the unit suite
+(`ListView.toolbarLayout.vitest.jsx`) can only pin where each control lives in the DOM. At
+1280×720 with the navigation rail expanded it checks, for purchase-invoice, sales-invoice,
+contacts, product, warehouse, payment-in and payment-out: the second row
+(`list-toolbar-tabs-row`) exists exactly when the window has a tab group and sits below the main
+row; the main row does not overflow, none of its buttons is clipped and its two clusters do not
+overlap; the toolbar paints its bottom border and ends above the grid. It also re-measures
+sales-invoice with a date range and a status applied, and payment-in at 1920×1080. Layout
+reference: `docs/list-filters.md` → "Toolbar layout (ETP-5509)".
+
+```bash
+cd e2e
+CI=1 E2E_RETRIES=0 npx playwright test tests/flows/platform/list-toolbar-1280.mocked.spec.js --project=mocked
+```
+
+- Run it against plain `make dev`, **not** `make dev-mock` — it feeds the lists through
+  `page.route()` (see the `VITE_MOCK` gotcha below). `CI=1` runs headless and `E2E_RETRIES=0`
+  turns retries off, so a layout failure is reported on the first attempt.
+- The `login()` mock session renders in `es_ES`, the wider of the two locales. That is kept on
+  purpose: the fit assertions are measured against the longer labels.
+- The "view toggle placement on Product" describe is isolated because that placement is still
+  pending product confirmation; the comments in the spec say what to flip if it is reversed.
 
 ## Mock-mode Tests (No Backend Required)
 

@@ -101,13 +101,13 @@ The owner is the GitHub username (issue assignee). The `--owner` param must be t
 Before ANY classification work, verify the window is locked by the current user:
 
 ```bash
-node cli/src/lock-window.js check --window {windowName} --owner {ghUsername}
+npx sf-lock check --window {windowName} --owner {ghUsername}
 ```
 
 If NOT locked → STOP. Tell the user:
 ```
 Window "{windowName}" is not locked. Lock it first:
-  node cli/src/lock-window.js lock --window {windowName} --owner {ghUsername} --reason "Classifying fields and rules"
+  npx sf-lock lock --window {windowName} --owner {ghUsername} --reason "Classifying fields and rules"
 ```
 
 Do NOT proceed without a lock. This prevents two people classifying the same window simultaneously.
@@ -118,7 +118,7 @@ Do NOT proceed without a lock. This prevents two people classifying the same win
 
 | File | Required for | What if missing |
 |------|-------------|-----------------|
-| `artifacts/{window}/schema-raw.json` | Schema classification | STOP — run extraction first: `node cli/src/extract-fields.js <windowId> <windowName>` |
+| `artifacts/{window}/schema-raw.json` | Schema classification | STOP — run extraction first: `npx sf-extract <windowId> <windowName>` |
 | `artifacts/{window}/rules-raw.json` | Rules classification | Skip rules phase (some windows have no rules) |
 | `core-maps/system-columns.json` | Schema classification | STOP — critical reference file |
 
@@ -463,13 +463,13 @@ Rules: {totalRules} rules
 Use the pipeline which automatically resolves `raw + decisions → curated` in memory:
 
 ```bash
-node cli/src/pipeline.js --window {windowName} --steps resolve-curated,generate-contract,check-version
+make regen ONLY={windowName}
 ```
 
 Or manually (for inspection):
 
 ```bash
-node cli/src/resolve-curated.js --window {windowName} --dump
+npx sf-resolve-curated --window {windowName} --dump
 ```
 
 This resolves `schema-raw.json + rules-raw.json + decisions.json` into a curated schema in memory, then generates `contract.json`.
@@ -477,7 +477,7 @@ This resolves `schema-raw.json + rules-raw.json + decisions.json` into a curated
 ### Step 3: Check version
 
 ```bash
-node cli/src/check-version.js {windowName} {owner}
+npx sf-check-version {windowName} {owner}
 ```
 
 Report the version bump (if any) and classification (breaking/additive/patch).

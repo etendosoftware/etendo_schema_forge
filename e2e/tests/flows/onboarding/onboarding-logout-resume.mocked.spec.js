@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 /**
  * ETP-4584 — authenticated onboarding logout and resume (mocked boundary).
@@ -18,6 +19,7 @@ function json(route, body, status = 200) {
 }
 
 async function installOnboardingMocks(page, { failDraftSave = false, holdProvisioning = false } = {}) {
+  await declareNoSession(page);
   const state = { draft: null, events: [], releaseProvisioning: null };
 
   // ETP-4798: /me carries the email-confirmation state. This account is already confirmed, which

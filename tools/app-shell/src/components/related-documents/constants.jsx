@@ -17,6 +17,7 @@ export const STATUS_KEYS = {
   VO: 'statusVoided',
   CL: 'statusClosed',
   CA: 'statusOrderCreated',
+  UE: 'statusUnderEvaluation',
   CJ: 'statusRejected',
   ETGO_CI: 'statusInvoiceCreated',
   RPPC: 'statusReceived',

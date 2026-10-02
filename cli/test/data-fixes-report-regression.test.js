@@ -165,6 +165,10 @@ const FIXES_WITH_REPORT = new Set([
   '20260929T180000Z__R41-demo-legacy-trial-start',
   // R42 reports the canonical productive preferences restored for paid provisioned tenants.
   '20260929T190000Z__R42-paid-provisioning-commercial-metadata',
+  // R44 (ETP-5575, gap C4) opens the never-opened periods of DEMO tenants through October 2026.
+  // The @report lists the period-control rows it left untouched (closed by a user, permanently
+  // closed, or blocked by a future permanently closed year) and flags a calendar with no Oct-26.
+  '20261001T120000Z__R44-demo-periods-open-through-oct-2026',
 ]);
 
 async function loadCatalogFiles() {
