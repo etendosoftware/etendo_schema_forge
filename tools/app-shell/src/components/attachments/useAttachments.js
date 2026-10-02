@@ -163,7 +163,8 @@ export function useAttachments({
   // AbortController shared by all read requests for the current record.
   const abortRef = useRef(null);
   // Separate controller + generation for count reads: a count read must never
-  // abort (or be aborted by) a list read, and only the latest one commits.
+  // abort (or be aborted by) a list read, and only the latest one commits. The
+  // controller is used only on the uncached path — see fetchCount.
   const countAbortRef = useRef(null);
   const countGenerationRef = useRef(0);
 
@@ -259,9 +260,6 @@ export function useAttachments({
     if (!hasRealRecord) return;
     const key = recordKey(tableName, recordId);
     const generation = ++countGenerationRef.current;
-    if (countAbortRef.current) countAbortRef.current.abort();
-    const ctrl = new AbortController();
-    countAbortRef.current = ctrl;
     const fetcher = async (signal) => {
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${recordId}/count`,
@@ -276,14 +274,28 @@ export function useAttachments({
     try {
       let value;
       if (dataCache?.cache && cacheScope) {
+        // No consumer signal on the shared cached read. The cache hands ONE
+        // in-flight promise to every concurrent caller, and that promise runs
+        // with the signal of whoever started it: aborting it on unmount or on
+        // a re-call killed the request for everybody — the caller that joined
+        // got an AbortError and kept `null`, and a consumer mounting after the
+        // rejection found neither an in-flight request nor a cached entry and
+        // asked again (two /count requests for one record open). Letting the
+        // tiny COUNT read finish populates the cache for the next reader; a
+        // superseded or unmounted caller is kept from writing state by the
+        // generation guard below (bumped on unmount too).
         value = await dataCache.cache.fetchQuery({
           key: countKey(recordId),
-          fetcher: ({ signal }) => fetcher(signal),
+          fetcher: () => fetcher(undefined),
           force,
           staleTime: dataCache.recordStaleTime,
-          signal: ctrl.signal,
         });
       } else {
+        // Uncached: the request belongs to this caller alone, so cancelling the
+        // superseded one is safe.
+        if (countAbortRef.current) countAbortRef.current.abort();
+        const ctrl = new AbortController();
+        countAbortRef.current = ctrl;
         value = await fetcher(ctrl.signal);
       }
       // Out-of-order guard: a slower read started for an earlier record (or an
@@ -383,6 +395,8 @@ export function useAttachments({
   useEffect(() => () => {
     if (abortRef.current) abortRef.current.abort();
     if (countAbortRef.current) countAbortRef.current.abort();
+    // Discard any count read still pending (the cached one is not aborted).
+    countGenerationRef.current += 1;
   }, []);
 
   // Lazy load: fetch only once the tab is active (ETP-4564). `active` defaults to
