@@ -99,13 +99,15 @@ vi.mock('../preview-cards/EmailsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: () => <div data-testid="rel-docs-card" />,
+  default: ({ definition }) => <div data-testid="rel-docs-card" data-definition-spec={definition?.spec} />,
 }));
 
+// ETP-5527 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
-  fetchChild: vi.fn(),
-  fetchById: vi.fn(),
+  SALES_RELATED_DOCS: {
+    'sales-order': { spec: 'sales-order' },
+    'sales-quotation': { spec: 'sales-quotation' },
+  },
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -222,6 +224,18 @@ describe('OrderPreview', () => {
     useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob: new Blob(), loading: false, error: null });
     renderOrderPreview({ specName: 'sales-order' });
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+  });
+
+  // ETP-5527 — sales orders render the shared sales-order definition (same as the form);
+  // purchase orders keep rendering no related-documents card at all.
+  it.each([
+    ['sales-order', 'sales-order'],
+    ['purchase-order', undefined],
+  ])('related-documents card for %s', (specName, expectedDefinitionSpec) => {
+    renderOrderPreview({ specName });
+    const card = screen.queryByTestId('rel-docs-card');
+    if (expectedDefinitionSpec) expect(card).toHaveAttribute('data-definition-spec', expectedDefinitionSpec);
+    else expect(card).not.toBeInTheDocument();
   });
 
   it('uses Purchase Order window label when specName is purchase-order', () => {

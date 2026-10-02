@@ -388,6 +388,43 @@ Adds a "Related Documents" tab/section to the detail view. Requires a hand-writt
 
 **Real examples:** `goods-shipment`, `payment-in`, `sales-invoice`.
 
+#### 7.a Sales documents: one definition for the form and the list preview (ETP-5527)
+
+For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
+
+| Piece | Location (`tools/app-shell/src/components/related-documents/`) | Role |
+|---|---|---|
+| `SALES_RELATED_DOCS`, `getSalesRelatedDocs(spec)` | `salesRelatedDocs.js` | One entry per sales spec: `spec`, `entity` (header entity), optional `refreshEvent`, optional `depsKey(record)`, and `sources[]`. Each source has a `key`, a `type` (a `DOCUMENT_CHIP_TYPES` key, or `(doc) => key`) and either `select(record)` (synchronous, read from the record) or `fetch({ id, record, token, apiBaseUrl })` (async). `getSalesRelatedDocs` returns `null` for any non-sales spec. |
+| `useRelatedDocuments({ definition, id, record, token, apiBaseUrl, refreshSignal })` | `useRelatedDocuments.js` | Resolves a definition into `{ items: [{ type, doc }], loading, refresh }`, deduplicating by chip type + id. `record === undefined` → the hook loads the **detail** record itself (preview mode); `record === null` → waits for it (form still loading). Listens to `refreshEvent`; refetches async sources when `depsKey` or `refreshSignal` changes. |
+| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `artifacts/<spec>/custom/RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
+| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines). |
+
+Payments (cobros) are deliberately **not** related documents: no sales order or invoice lists its payments as chips (functional decision, ETP-5527). Do not add a payments source to a definition.
+
+The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+
+`RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
+
+- `definition` — a `SALES_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
+- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too.)
+
+Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior; purchase documents still use it (their migration is ETP-5539). `InvoicePreview` likewise accepts an optional `relatedDocs` definition — the sales-invoice list and the fiscal monitor pass it for sales invoices; without it (purchase invoices) the legacy order/shipment specs are used.
+
+Each preview row (`DocRow`) is a single line: the document title and amount are never truncated; when space runs out the status tag shrinks with an ellipsis and shows the full status on hover.
+
+```jsx
+// Preview: the card loads the detail record and lists what the form lists.
+<RelatedDocumentsCard documentId={row.id} token={token} apiBaseUrl={apiBaseUrl}
+  definition={SALES_RELATED_DOCS['sales-order']} />
+
+// Form (artifacts/sales-order/custom/RelatedDocuments.jsx)
+<RelatedDocumentsSection definition={SALES_RELATED_DOCS['sales-order']}
+  recordId={recordId ?? data?.id} record={data} token={token} apiBaseUrl={apiBaseUrl}
+  docsRefreshSignal={docsRefreshSignal} />
+```
+
+Parity is locked by `tools/app-shell/src/components/related-documents/__tests__/relatedDocumentsParity.vitest.jsx`; per-window sources by `salesRelatedDocs.vitest.js` and the hook by `useRelatedDocuments.vitest.jsx`.
+
 ---
 
 ### 7.b `window.attachments` — file attachments tab

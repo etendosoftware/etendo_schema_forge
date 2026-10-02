@@ -56,6 +56,15 @@ export const DOCUMENT_CHIP_TYPES = {
     statusField: 'documentStatus',
     routePrefix: '/sales-order',
   },
+  'sales-quotation': {
+    iconKey: 'quotation',
+    titleKey: 'quotationDoc',
+    titleField: 'documentNo',
+    amountField: 'grandTotalAmount',
+    currencyField: 'currency$_identifier',
+    statusField: 'documentStatus',
+    routePrefix: '/sales-quotation',
+  },
   'sales-invoice': {
     iconKey: 'invoice',
     titleKey: 'invoiceDoc',
