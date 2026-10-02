@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import CreateRejectReasonModal from './CreateRejectReasonModal';
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -152,10 +153,7 @@ export default function RejectQuotationModal({
           style={{ ...closeBtnStyle, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
           aria-label={ui('cancel')}
         >
-          <svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="hsl(var(--icon-secondary))" strokeWidth="2"
-               strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 5l10 10M15 5l-10 10" />
-          </svg>
+          <X size={20} />
         </button>
 
         <div style={headerStyle}>
@@ -326,6 +324,7 @@ const closeBtnStyle = {
   width: 24, height: 24, borderRadius: 360,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   background: 'transparent', border: 'none', padding: 2,
+  color: 'hsl(var(--icon-secondary))',
 };
 
 const headerStyle = {
@@ -444,8 +443,8 @@ const buttonsRowStyle = {
   alignItems: 'center', gap: 12, padding: '12px 20px', alignSelf: 'stretch',
 };
 
-// Button widths match the Figma frame (Screenshot 2026-04-30 11-39-55):
-// Cancelar = 132×40, Rechazar presupuesto = 191×40. Both centered.
+// Button widths match the Figma frame "PopUps" (ETP-5398): Cancelar = 132×40,
+// Rechazar presupuesto sizes to its label at 40px high. Both centered.
 // Palette mirrors EntityCreationModal / CreateRejectReasonModal.
 const btnSecondary = {
   width: 132, height: 40,
@@ -457,15 +456,15 @@ const btnSecondary = {
 };
 
 const btnPrimary = {
-  width: 191, height: 40,
-  fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
+  height: 40,
+  fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 20px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
   border: 'none', background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
 };
 
 const btnPrimaryDisabled = {
-  width: 191, height: 40,
-  fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 12px',
+  height: 40,
+  fontSize: 14, fontWeight: 500, lineHeight: '24px', padding: '8px 20px',
   borderRadius: 360, fontFamily: 'Inter, sans-serif',
   // ETP-5378 QA follow-up — the disabled fill is `border-control`, NOT `card`.
   // ETP-4554 (commit 1538c6d1a) migrated this file off hex literals by replacing every
