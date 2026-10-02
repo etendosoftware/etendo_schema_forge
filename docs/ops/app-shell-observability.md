@@ -113,18 +113,44 @@ providers' hosts (Sentry/GlitchTip, Mixpanel, CloudWatch RUM data plane and Cogn
 are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
 one and passes `VITE_*` through to it. The fake values below never reach a real account.
 
+Scenario 1 is the default bundle, so the regular mocked suite (and the pre-push) already runs
+it. Scenarios 2 and 3 each need a bundle built with the fake provider configuration:
+
 ```bash
-FAKE='VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1 VITE_MIXPANEL_ENABLED=true VITE_MIXPANEL_TOKEN=fake-project-token VITE_RUM_ENABLED=true VITE_RUM_APP_MONITOR_ID=fake-monitor VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool'
-
-# 1. Default bundle, no provider configuration: zero requests.
-E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
-
 # 2. Positive control, providers configured and NOT killed: requests are attempted.
-env $FAKE E2E_TELEMETRY=configured E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
+(
+  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export E2E_TELEMETRY=configured E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
 
 # 3. Providers configured and killed by the build default: zero requests.
-env $FAKE VITE_TELEMETRY_KILL=true E2E_TELEMETRY=killed E2E_SUITE=mocked E2E_FILES=tests/flows/telemetry-egress.mocked.spec.js scripts/run-e2e-full.sh
+(
+  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_MIXPANEL_ENABLED=true
+  export VITE_MIXPANEL_TOKEN=fake-project-token
+  export VITE_RUM_ENABLED=true
+  export VITE_RUM_APP_MONITOR_ID=fake-monitor
+  export VITE_RUM_IDENTITY_POOL_ID=eu-west-3:fake-pool
+  export VITE_TELEMETRY_KILL=true
+  export E2E_TELEMETRY=killed E2E_SUITE=mocked
+  scripts/run-e2e-full.sh
+  grep -rlF fake-monitor tools/app-shell/dist-e2e/assets | wc -l   # must be 1 or more
+)
 ```
+
+- One `export` per line, inside a subshell: a single long command line gets wrapped by the
+  terminal, the variables before the break never reach the build, and scenario 2 then fails
+  while scenario 3 passes without proving anything. The `grep` confirms the configuration made
+  it into the bundle; if it prints `0`, the run is void.
+- Each run executes the whole mocked suite (about 5 minutes): since ETP-5307 the script runs
+  `--project=mocked --project=mocked-serial` and `E2E_FILES` no longer narrows the mocked suite.
 
 Run 2 before trusting 3: if the control sees no request, the interceptor is what is broken.
 
