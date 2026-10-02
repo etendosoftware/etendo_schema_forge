@@ -48,7 +48,7 @@ export default function ActionChoiceModal({
         style={dialogStyle}
       >
         <button type="button" onClick={onCancel} aria-label={ui('close')} style={closeBtnStyle}>
-          <X size={20} />
+          <X size={20} data-testid="X__6f7a22" />
         </button>
 
         <div style={headerStyle}>
@@ -56,7 +56,10 @@ export default function ActionChoiceModal({
         </div>
 
         <div style={bodyStyle}>
-          <SummaryTable columns={summaryColumns} data={summaryData} />
+          <SummaryTable
+            columns={summaryColumns}
+            data={summaryData}
+            data-testid="SummaryTable__6f7a22" />
 
           <div style={sectionStyle}>
             <div style={choiceGroupStyle}>
@@ -69,7 +72,7 @@ export default function ActionChoiceModal({
                     selected={option.id === selectedId}
                     disabled={loading}
                     onSelect={() => setSelectedId(option.id)}
-                  />
+                    data-testid="OptionCard__6f7a22" />
                 ))}
               </div>
             </div>
@@ -87,7 +90,7 @@ export default function ActionChoiceModal({
                 disabled={loading}
                 style={getPrimaryBtnStyle(loading)}
               >
-                <PrimaryIcon loading={loading} />
+                <PrimaryIcon loading={loading} data-testid="PrimaryIcon__6f7a22" />
                 {loading ? ui('soProcessing') : ui('continue')}
               </button>
             </div>
@@ -124,7 +127,7 @@ function OptionCard({ option, selected, disabled, onSelect }) {
       style={variant.card}
     >
       <span style={iconBoxStyle}>
-        <ReceiptText size={24} />
+        <ReceiptText size={24} data-testid="ReceiptText__6f7a22" />
       </span>
       <span style={{ ...radioSlotStyle, top: variant.radioInset, right: variant.radioInset }}>
         <span style={variant.radioRing}>
@@ -144,9 +147,9 @@ function OptionCard({ option, selected, disabled, onSelect }) {
 
 function PrimaryIcon({ loading }) {
   if (loading) {
-    return <Loader2 size={24} className="animate-spin" />;
+    return <Loader2 size={24} className="animate-spin" data-testid="Loader2__6f7a22" />;
   }
-  return <ArrowRight size={24} style={{ opacity: 0.9 }} />;
+  return <ArrowRight size={24} style={{ opacity: 0.9 }} data-testid="ArrowRight__6f7a22" />;
 }
 
 function getPrimaryBtnStyle(loading) {
