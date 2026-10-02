@@ -418,3 +418,21 @@ What differs on this side:
   the same way (see `purchase-invoice.md`).
 - A reconciled payment is aligned to `PWNC` (not `RDNC`) before Reactivar when that is its method's
   paid status, following the same rule as payments in.
+
+## List toolbar / body separator — ETP-5509
+
+The list showed no line between the toolbar and the body: the toolbar ended and the summary
+sidebar and the grid started directly below it, the sidebar's right border hanging from nothing.
+`PaymentHeaderTableBase.jsx` (shared with Payment In) never drew one, and neither did the shared list bar.
+
+The line is now part of the shared list bar itself (`ListView.jsx`, a `border-b` in
+`--border-subtle` on the toolbar container, full card width), so this window gets it without any
+change to `PaymentHeaderTableBase.jsx` — and so does every other window that keeps the native
+bar. Payment In gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
+toolbar stays single-row.
+
+The list toolbar has no "New …" button here (`window.hideCreate: true`), so the ticket's
+acceptance line about the "New" button staying visible does not apply to this window.
+
+Manual verification: open `/payment-out` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
+runs under the toolbar, above both the sidebar and the grid, across the full width of the card.

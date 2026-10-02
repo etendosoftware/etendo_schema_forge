@@ -616,6 +616,11 @@ never renders rows that can be picked — so it never sees a selection bar eithe
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
 
+Dropping the idle bar also drops the toolbar/body separator that comes with it
+(ETP-5509 — the line is a `border-b` on the native bar, see `docs/list-filters.md`
+→ "Toolbar layout"). A slot that draws its own toolbar draws its own line, as
+`AccountsHeaderTable.jsx` does.
+
 `ListView` forwards its authoritative **`selectedRows`** in the Table-slot props, read-only for the
 slot. **What you must do with it is destructure it out of the spread**, whether or not you use it:
 
@@ -2507,7 +2512,9 @@ declared by hand rather than derived from grid fields.
 **What it does:** lets a custom `headerTable` component expose a second component as a static
 property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
 in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
-"Ordenar por"/"Actualizar"/subset filters/quick filters. Same convention `DetailView.jsx` already
+"Ordenar por"/"Actualizar"/quick filters — that is row 1 of the toolbar; since ETP-5509 the
+subset-filter tab group sits on a second row below it (`docs/list-filters.md` → "Toolbar
+layout"). Same convention `DetailView.jsx` already
 uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
 component so the generic shell can special-case how it renders.
 

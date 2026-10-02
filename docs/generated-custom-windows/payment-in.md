@@ -293,3 +293,21 @@ documentAction path is the already-guarded generic process button — so it need
 - **After, on failure** (the payment is still processed and still reconciled): it puts `RPPC` back. The module commits partway through (`ResetAccounting`), so this is an explicit compensating step, not an assumed rollback. When the delegated call throws, the request transaction is rolled back first (`finishAfterFailure`), because PostgreSQL rejects every statement in an aborted transaction. The revert then runs on a fresh transaction.
 - **The transaction is never poisoned.** The status change and its revert are raw-JDBC UPDATEs under a savepoint (`JdbcSavepoints`), and so is the statement-line cleanup. If the reactivation's own pending writes fail to flush, that failure is not swallowed: the request answers an error instead of 2xx.
 - **Expected DB state after a successful Reactivar:** the payment is `RPAP` with no `FIN_Finacc_Transaction`. The invoice's `outstandingamt` equals total − other payments, and `ispaid = 'N'`. The statement line has no transaction and no matching metadata.
+
+## List toolbar / body separator — ETP-5509
+
+The list showed no line between the toolbar and the body: the toolbar ended and the summary
+sidebar and the grid started directly below it, the sidebar's right border hanging from nothing.
+`PaymentHeaderTableBase.jsx` (shared with Payment Out) never drew one, and neither did the shared list bar.
+
+The line is now part of the shared list bar itself (`ListView.jsx`, a `border-b` in
+`--border-subtle` on the toolbar container, full card width), so this window gets it without any
+change to `PaymentHeaderTableBase.jsx` — and so does every other window that keeps the native
+bar. Payment Out gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
+toolbar stays single-row.
+
+The list toolbar has no "New …" button here (`window.hideCreate: true`), so the ticket's
+acceptance line about the "New" button staying visible does not apply to this window.
+
+Manual verification: open `/payment-in` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
+runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
