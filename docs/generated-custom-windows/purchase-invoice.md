@@ -1672,6 +1672,53 @@ on one of the two paths. What remains is the typing, which is what
 - `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
   `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
 
+## OCR reader — lookups without `_neoWhere` (production WAF)
+
+Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
+UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
+string (`taxID = '…' and active = true`, `lower(name) like '%…%'`). The production edge WAF
+blocks that shape as SQL injection and answers **403**; locally there is no WAF, so it worked.
+In production the vendor was never auto-matched, the vendor picker listed nothing, and the
+address lookup failed silently, so the batch posted the header without `partnerAddress` and
+died on the `C_Invoice.C_BPartner_Location_ID` NOT NULL constraint.
+
+All of them now go through `src/components/copilot/ocr/ocrQuery.js`, which builds one of the
+two shapes the rest of the app already sends in production:
+
+| Lookup | Endpoint | Filter |
+|---|---|---|
+| Vendor (auto-match, fuzzy, picker) | `purchase-invoice/header/selectors/C_BPartner_ID` | `q=<name>` + `isSOTrx=N&isVendor=Y` |
+| Vendor address (`partnerAddress`) | `purchase-invoice/header/selectors/C_BPartner_Location_ID` | `C_BPartner_ID=<id>` + `isSOTrx=N&isVendor=Y` |
+| Product (unmatched-lines popup) | `purchase-invoice/intrastat/selectors/M_Product_ID` | `q=<text>` |
+| Tax (lines review) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
+| UoM / tax category (product create) | `product/product/selectors/…` | `q=<text>` |
+
+Two selectors are deliberately **not** the line's own:
+
+- The line's `M_Product_ID` is `ProductSimple`, built over `PricingProductPrice`: it hides every
+  product without a price (a product just created from the popup included) and repeats the rest
+  once per price list version. The intrastat tab's `M_Product_ID` is the plain product search
+  (reference `800060`, no validation rule).
+- The line's `C_Tax_ID` carries `C_Tax_IsSOTrx_Date`, which reads `@DateInvoiced@`. NEO
+  substitutes an unresolved variable with `NULL` (`SelectorValidationResolver`), so the search
+  would list nothing. The invoice tax tab's `C_Tax_ID` is a TableDir with no rule.
+
+`buildSearchUrl` still accepts a CRUD list URL and sends `criteria=` (the grid's filter
+parameter) for an `entitySpec` field, but no OCR field uses one today.
+
+The vendor is matched **by name only** — the tax id lookup was dropped. The selector's `q` is a
+contains-search, so `findBp` keeps only rows whose label equals the extracted name
+(case-insensitive) and resolves when exactly one does; otherwise the fuzzy fallback accepts a
+single contains-match, and anything else is left to the picker. A vendor whose name on the
+invoice differs from the stored one therefore needs one click in the picker.
+
+**Rule:** no OCR lookup may put an HQL predicate in a URL. Use `buildSearchUrl` from
+`ocrQuery.js`.
+
+Tests: `src/components/copilot/ocr/__tests__/ocrQuery.vitest.js`,
+`ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx` (`findBp`, `checkBpHasLocation`),
+`kinds/__tests__/entityLookup.vitest.jsx`.
+
 ## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
 
 ### Three removals
