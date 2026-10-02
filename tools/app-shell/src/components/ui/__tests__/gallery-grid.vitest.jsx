@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/ui/gallery-grid.jsx
+
 import { render, screen } from '@testing-library/react';
 import GalleryGrid, {
   GALLERY_CARD_MIN_WIDTH_PX,

@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/product/ProductGallery.jsx
+// @covers tools/app-shell/src/components/ui/gallery-grid.jsx
+
 // Mocks must come before imports (Vitest hoisting)
 
 vi.mock('@/i18n', () => ({

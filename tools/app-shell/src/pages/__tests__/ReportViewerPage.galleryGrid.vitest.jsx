@@ -1,3 +1,6 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
+// @covers tools/app-shell/src/components/ui/gallery-grid.jsx
+
 // ETP-5516: the report catalog gallery renders one width-driven `GalleryGrid` per category
 // (shared with the Products gallery) instead of viewport-breakpoint `grid-cols-*` classes, so
 // the column count follows the container width and no card goes below the 220 px minimum.
