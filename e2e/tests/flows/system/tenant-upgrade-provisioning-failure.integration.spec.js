@@ -98,7 +98,12 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
       expect(status.requestId).toBe(fixture.requestId);
       expect(status.status).toBe('provisioning_failed');
       expect(status.retryAllowed).toBe(true);
-      expect(status.failureReason).toContain('E2E fixture forced pooled tenant finalization failure');
+      // The polling contract carries a stable code and a fixed description. The raw cause stays
+      // in the backend (it can hold exception text or internal ids), so it must not leak here.
+      expect(status.failureCode).toBe('PROVISIONING_FAILED');
+      expect(status.failureReason).toBeTruthy();
+      expect(status.failureReason).not.toContain('E2E fixture forced');
+      expect(Number.isNaN(Date.parse(status.updatedAt))).toBe(false);
 
       const purchaseResponse = await authenticatedJson(
         page, `/sws/go/billing/purchases/${encodeURIComponent(fixture.requestId)}`,

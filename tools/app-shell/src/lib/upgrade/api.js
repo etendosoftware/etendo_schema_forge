@@ -33,8 +33,18 @@ export const UPGRADE_ERROR_CODES = {
   // apart from "can't open the portal" apart from "checkout failed".
   subscriptionUnavailable: 'upgradeSubscriptionUnavailable',
   portalUnavailable: 'upgradePortalUnavailable',
+  // ETP-5548: the account already has a productive environment with this company name. Refused
+  // before the provider is contacted, because a paid checkout fixes its name.
+  tenantNameInUse: 'upgradeTenantNameInUse',
   failed: 'upgradeGenericError',
 };
+
+/** Backend code of the pre-payment company-name collision (EtendoGoJwtServlet). */
+const CLIENT_NAME_IN_USE = 'CLIENT_NAME_IN_USE';
+
+function isClientNameInUse(response, data) {
+  return response.status === 409 && data?.error?.code === CLIENT_NAME_IN_USE;
+}
 
 /**
  * Creates a provider-hosted checkout session for a known paid action.
@@ -60,6 +70,9 @@ export async function createCheckoutSession(baseUrl, input = {}) {
 
   const data = await readJsonSafely(response);
   if (!response.ok) {
+    if (isClientNameInUse(response, data)) {
+      throw buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
+    }
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
       : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
   }
@@ -103,6 +116,9 @@ export async function createBillingPurchase(baseUrl, input = {}) {
         data.status || 'Purchase already exists', response.status);
       error.purchase = data;
       throw error;
+    }
+    if (isClientNameInUse(response, data)) {
+      throw buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
     }
     throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
       : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);

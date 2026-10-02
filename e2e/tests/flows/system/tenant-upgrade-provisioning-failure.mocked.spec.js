@@ -49,7 +49,13 @@ function failedProvisioningStream() {
   ].join('\n');
 }
 
-async function installFailureBoundary(page) {
+const RETRYABLE_FAILURE = {
+  retryAllowed: true,
+  failureCode: 'PROVISIONING_FAILED',
+  failureReason: 'The environment setup did not complete',
+};
+
+async function installFailureBoundary(page, failure = RETRYABLE_FAILURE) {
   const state = { onboardingRequests: [], statusReads: 0 };
 
   await page.route('**/sws/go/environments{/**,}**', route => (
@@ -80,9 +86,9 @@ async function installFailureBoundary(page) {
     return json(route, {
       requestId: REQUEST_ID,
       status: 'provisioning_failed',
-      retryAllowed: true,
       clientName: TENANT_NAME,
-      failureReason: 'Pooled tenant finalization failed',
+      // The status endpoint exposes a stable code plus a fixed description, never the raw cause.
+      ...failure,
     });
   });
 
@@ -127,6 +133,33 @@ test.describe('Paid tenant provisioning failure recovery', () => {
     await expect.poll(() => state.onboardingRequests.length).toBe(1);
     expect(state.onboardingRequests[0].paymentToken).toBe(REQUEST_ID);
     await expect(page.getByTestId('upgrade-error')).toBeVisible();
+  });
+
+  test('a deterministic failure offers support instead of an endless retry', async ({ page }) => {
+    await login(page);
+    const state = await installFailureBoundary(page, {
+      retryAllowed: false,
+      failureCode: 'CLIENT_NAME_IN_USE',
+      failureReason: 'The account already has a productive environment with this company name',
+    });
+
+    await page.evaluate(({ requestId, tenantName }) => {
+      localStorage.setItem('schema-forge-locale', 'es_ES');
+      sessionStorage.setItem('sf_pending_checkout_tenant_name', tenantName);
+      sessionStorage.setItem('sf_pending_checkout_action', 'create-productive');
+      sessionStorage.setItem('sf_pending_checkout_started_at', String(Date.now()));
+      sessionStorage.setItem('sf_pending_checkout_data_transfer', '{}');
+      window.history.replaceState({}, '', `/upgrade?checkout=success&requestId=${requestId}`);
+    }, { requestId: REQUEST_ID, tenantName: TENANT_NAME });
+
+    await page.goto(`/upgrade?checkout=success&requestId=${REQUEST_ID}`);
+
+    await expect(page.getByTestId('upgrade-error')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('upgrade-error')).toContainText('Ya tienes un entorno productivo');
+    await expect(page.getByTestId('upgrade-provisioning-recovery-body'))
+      .toContainText('Contacta con soporte');
+    await expect(page.getByTestId('upgrade-provisioning-retry')).toHaveCount(0);
+    expect(state.onboardingRequests).toHaveLength(0);
   });
 
   for (const checkoutStatus of ['provisioning', 'provisioned']) {
