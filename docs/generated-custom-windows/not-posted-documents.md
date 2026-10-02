@@ -432,10 +432,13 @@ paged NEO entity grid, and this handler serves a custom, unpaged contract):
 | Empty | `DataTable` `emptyState` | Default filters: "No hay documentos sin contabilizar". Other filters: "No encontramos documentos" + description + Limpiar filtros. Load error: translated message |
 
 **Filters live in the URL** (`notPostedDocumentsFilters.js`): `?document=SI&status=N,E&date=last30`.
-`status` holds page tokens (`N`, `p`, `i`, `E`), not backend values, because the "Error" option's
-backend value is the composite `"E,C"`. `date` is a preset id, `all` (any date) or
+`status` holds page tokens (`N`, `p`, `i`, `NC`, `E`), not backend values, because the "Error"
+option's backend value is the composite `"E,C"`. `date` is a preset id, `all` (any date) or
 `yyyy-mm-dd_yyyy-mm-dd`; absent means the 12-month default. Default values are left out, so the
 bare URL is the default view. Dates go to the backend as local calendar days (`toDateParam`).
+The URL is kept **canonical**: unknown statuses, a malformed date and (once the options have
+loaded) a document type the tenant does not offer are rewritten away, so the toolbar, the request
+and what "Share" copies always agree.
 
 **"Abrir documento" targets** (`OPEN_DOCUMENT_SPECS` in `NotPostedRowActions.jsx`, page-local):
 `SI` sales-invoice, `PI` purchase-invoice, `GS` goods-shipment, `GR` goods-receipt, `RMR`
@@ -448,12 +451,14 @@ code, or a missing id, shows no link. It opens in the same tab; Back restores th
 ### Lifecycle
 
 1. **Mount** — fetches filter options; reads the filters from the URL and fetches rows
-   (default: last 12 months, backend default statuses N+E+C+i+p).
+   (default: last 12 months, backend default statuses N+E+C+i+p+NC).
 2. **Filter change** — written to the URL (`replace`), which refetches at once (no "Buscar"); the
    previous request is aborted; the selection is cleared. While refetching, the current rows stay
    on screen under a `ListProgressBar`; only the first load shows the table skeleton.
 3. **Contabilizar (row)** — `POST /header/{id}/action/post` (`timeout: 0`, ETP-5424); the link is
-   disabled while in flight; on success: toast, row deselected, reload.
+   disabled while in flight; on success: toast, row deselected, reload. Every reload (after a
+   post, or "Actualizar") uses the filters in effect **when it runs**, so a post that finishes
+   after the user changed a filter never brings back the old results.
 4. **Contabilizar (selection)** — `POST /header/0/action/bulk-post` (`timeout: 0`); outcome via
    the shared `showBulkActionToast` (same toast as every other list's bulk "Contabilizar"; a single
    failed row shows its real backend error). Selected rows without `tableId` are never sent and are

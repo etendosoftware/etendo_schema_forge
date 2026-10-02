@@ -553,3 +553,68 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
   });
 });
+
+// ETP-5591 QA (BUG-1) — a post that finishes after the filters changed must reload with the
+// CURRENT filters, not the ones captured when the post started.
+describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
+  it('a single post resolving after a filter change reloads with the new filters', async () => {
+    let resolvePost;
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ success: true }) }); }),
+    });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
+
+    await act(async () => { resolvePost(); });
+
+    await waitFor(() => expect(rowRequests().length).toBeGreaterThanOrEqual(3));
+    expect(rowRequests().at(-1).get('document')).toBe('GS');
+  });
+
+  it('a bulk post resolving after a filter change reloads with the new filters', async () => {
+    let resolvePost;
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/bulk-post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ ok: 1, total: 1, results: [{ success: true }] }) }); }),
+    });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    fireEvent.click(await screen.findByTestId('npd-post-selected'));
+    await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
+
+    await act(async () => { resolvePost(); });
+
+    await waitFor(() => expect(rowRequests().length).toBeGreaterThanOrEqual(3));
+    expect(rowRequests().at(-1).get('document')).toBe('GS');
+  });
+});
+
+// ETP-5591 QA (BUG-4) — a hand-edited or stale link never leaves junk in the URL or the toolbar.
+describe('NotPostedDocumentsPage — URL clean-up', () => {
+  it('rewrites unknown or malformed values to their canonical form', async () => {
+    renderPage('/not-posted-documents?status=X,,NC,NC&date=bogus');
+    await waitFor(() => expect(location.search).toBe('?status=NC'));
+    expect(rowRequests().at(-1).get('accountingStatus')).toBe('NC');
+  });
+
+  it('drops a document type that is not among the options, once they have loaded', async () => {
+    renderPage('/not-posted-documents?document=ZZZ');
+    await waitFor(() => expect(location.search).toBe(''));
+    expect(screen.getByTestId('npd-filter-document-type')).toHaveTextContent('allDocuments');
+    expect(rowRequests().at(-1).has('document')).toBe(false);
+  });
+
+  it('keeps a known document type', async () => {
+    renderPage('/not-posted-documents?document=SI');
+    await waitFor(() => rowOf('doc-1'));
+    expect(location.search).toBe('?document=SI');
+  });
+});

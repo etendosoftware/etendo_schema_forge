@@ -89,6 +89,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   // ── Filter options (fetched once) ────────────────────────────────────────────
   const [documentTypeOptions, setDocumentTypeOptions] = useState([]);
+  const [optionsLoaded, setOptionsLoaded] = useState(false);
   const documentTypeLabels = useMemo(
     () => new Map(documentTypeOptions.map((o) => [o.value, o.label])),
     [documentTypeOptions],
@@ -98,7 +99,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     const ctrl = new AbortController();
     apiFetch('/header?_mode=filter-options', { token, signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j) setDocumentTypeOptions(j.documentTypes ?? []); })
+      .then((j) => {
+        if (!j) return;
+        setDocumentTypeOptions(j.documentTypes ?? []);
+        setOptionsLoaded(true);
+      })
       .catch(() => {});
     return () => ctrl.abort();
   }, [apiFetch, token]);
@@ -107,7 +112,15 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchKey = searchParams.toString();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- re-parse only when the query changes
-  const filters = useMemo(() => parseFilters(searchParams), [searchKey]);
+  const parsedFilters = useMemo(() => parseFilters(searchParams), [searchKey]);
+  // A document type the tenant does not offer (a stale or hand-edited link) is dropped once the
+  // options are known; before that it is kept, so a valid link is never cleared while loading.
+  const filters = useMemo(
+    () => (optionsLoaded && parsedFilters.document && !documentTypeLabels.has(parsedFilters.document)
+      ? { ...parsedFilters, document: null }
+      : parsedFilters),
+    [parsedFilters, optionsLoaded, documentTypeLabels],
+  );
   const filtersAreDefault = isDefaultFilters(filters);
   const rowsQuery = useMemo(() => buildRowsQuery(filters), [filters]);
 
@@ -117,6 +130,13 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
   const resetFilters = useCallback(() => {
     setSearchParams(serializeFilters(defaultFilters()), { replace: true });
   }, [setSearchParams]);
+
+  // Keep the URL canonical: unknown statuses, a malformed date or a dropped document type are
+  // rewritten away, so the toolbar, the request and what "Share" copies always agree (ETP-5591 QA).
+  useEffect(() => {
+    const canonical = serializeFilters(filters).toString();
+    if (canonical !== searchKey) setSearchParams(canonical, { replace: true });
+  }, [filters, searchKey, setSearchParams]);
 
   // ── Document rows ─────────────────────────────────────────────────────────────
   const [rows, setRows] = useState([]);
@@ -165,7 +185,11 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
     }
   }, [apiFetch, token]);
 
-  const reload = useCallback(() => fetchRows(rowsQuery), [fetchRows, rowsQuery]);
+  // Reads the query through a ref: a post that finishes after the user changed the filters must
+  // reload what the toolbar shows now, not the filters captured when the post started (ETP-5591 QA).
+  const rowsQueryRef = useRef(rowsQuery);
+  rowsQueryRef.current = rowsQuery;
+  const reload = useCallback(() => fetchRows(rowsQueryRef.current), [fetchRows]);
 
   // Abort an in-flight rows request when the page unmounts.
   useEffect(() => () => fetchAbortRef.current?.abort(), []);
@@ -483,7 +507,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           emptyState={emptyState()}
           rowQuickActions={{
             enabled: true,
-            reservedWidthPx: 220,
+            // Fits both Spanish links ("Abrir documento" + "Contabilizar" ≈ 241px) so the pill
+            // never spills over the Organización column.
+            reservedWidthPx: 260,
             render: (row) => (
               <NotPostedRowActions
                 row={row}
