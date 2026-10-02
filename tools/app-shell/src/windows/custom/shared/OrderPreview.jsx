@@ -42,6 +42,7 @@ function OrderGeneralTab({ order, specName, token, apiBaseUrl, orgCurrencyCode, 
         statusLabel={statusLabel}
         invoicePercent={invoicePercent}
         deliveryPercent={deliveryPercent != null ? deliveryPercent : undefined}
+        deliveryLabel={isSalesOrder ? undefined : ui('previewCardReceivedPercent')}
         orgCurrencyCode={orgCurrencyCode}
         exchangeRate={exchangeRate}
         orgGrandTotal={orgGrandTotal}

@@ -106,7 +106,8 @@ export function MovementSummaryCard({ title, rows, statusRowLabel, statusLabel, 
  *   validUntil      string?  — ISO date, shown only when truthy (quotations)
  *   dueDate         string?  — ISO date, shown between Date and Status when provided (invoices)
  *   invoicePercent  number?  — 0-100, shows "X%" row when provided (orders)
- *   deliveryPercent number?  — 0-100, shows "X%" row when provided (orders)
+ *   deliveryPercent number?  — 0-100, shows "X%" row when provided (orders, invoices)
+ *   deliveryLabel   string?  — overrides the delivery row label (default "Delivered:"; purchase docs pass "Received:")
  *   orgCurrencyCode string?  — e.g. "EUR". Shown below grand total when different from currencyCode.
  *   exchangeRate    number?  — e.g. 1.09. Shown as rate note next to orgGrandTotal.
  *   orgGrandTotal   number?  — pre-computed equivalent in org currency. Shown below grand total.
@@ -123,6 +124,7 @@ export default function SummaryCard({
   dueDate,
   invoicePercent,
   deliveryPercent,
+  deliveryLabel,
   orgCurrencyCode,
   exchangeRate,
   orgGrandTotal,
@@ -191,7 +193,7 @@ export default function SummaryCard({
           </InfoRow>
         )}
         {deliveryPercent != null && (
-          <InfoRow label={ui('previewCardDeliveryPercent')} data-testid="InfoRow__a696d7">
+          <InfoRow label={deliveryLabel ?? ui('previewCardDeliveryPercent')} data-testid="InfoRow__a696d7">
             <PercentBar value={deliveryPercent} data-testid="PercentBar__a696d7" />
           </InfoRow>
         )}

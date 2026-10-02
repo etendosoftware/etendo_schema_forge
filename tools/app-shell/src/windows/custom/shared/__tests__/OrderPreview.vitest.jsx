@@ -589,3 +589,28 @@ describe('OrderPreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(lastAttachmentConfig().readOnly).toBeFalsy();
   });
 });
+
+describe('OrderPreview — delivery row label (ETP-5549)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+    usePurchaseOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
+
+  it('sales order leaves deliveryLabel undefined so SummaryCard shows the default Delivered label', () => {
+    renderOrderPreview({ specName: 'sales-order' });
+    expect(lastSummaryProps().deliveryLabel).toBeUndefined();
+    expect(lastSummaryProps().deliveryPercent).toBe(75);
+  });
+
+  it('purchase order passes the previewCardReceivedPercent label', () => {
+    renderOrderPreview({
+      specName: 'purchase-order',
+      order: { ...defaultOrder, deliveryStatusPurchase: 30 },
+    });
+    expect(lastSummaryProps().deliveryLabel).toBe('previewCardReceivedPercent');
+    expect(lastSummaryProps().deliveryPercent).toBe(30);
+  });
+});

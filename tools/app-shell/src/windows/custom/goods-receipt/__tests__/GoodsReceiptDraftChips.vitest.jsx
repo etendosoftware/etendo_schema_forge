@@ -1,5 +1,6 @@
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
+  useLocale: () => ({ genericLabels: {}, statuses: {} }),
 }));
 
 vi.mock('@/lib/progressTone', () => ({
@@ -34,18 +35,41 @@ describe('GoodsReceiptDraftChips', () => {
   it('renders the invoice badge when documentStatus is CO', () => {
     render(<GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 50 }} />);
     expect(screen.getByTestId('goods-receipt-invoice-badge')).toBeInTheDocument();
-    expect(screen.getByText('50%')).toBeInTheDocument();
+    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveTextContent(/50%/);
+    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveAttribute('data-tone', 'warning').toBeInTheDocument();
   });
 
-  it('renders nothing when invoiceStatus is 0 (badge hidden until invoiced)', () => {
+  it('renders a neutral 0% badge when CO and invoiceStatus is 0', () => {
+    render(<GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 0 }} />);
+    const el = screen.getByTestId('goods-receipt-invoice-badge');
+    expect(el).toHaveTextContent(/0%/);
+    expect(el).toHaveAttribute('data-tone', 'neutral');
+  });
+
+  it('renders nothing when DR and invoiceStatus is 0', () => {
     const { container } = render(
-      <GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 0 }} />,
+      <GoodsReceiptDraftChips data={{ documentStatus: 'DR', invoiceStatus: 0 }} />,
     );
     expect(container.firstChild).toBeNull();
   });
 
+  it('renders a success badge for a draft already fully invoiced (ETP-5381)', () => {
+    render(<GoodsReceiptDraftChips data={{ documentStatus: 'DR', invoiceStatus: 100 }} />);
+    const el = screen.getByTestId('goods-receipt-invoice-badge');
+    expect(el).toHaveTextContent(/100%/);
+    expect(el).toHaveAttribute('data-tone', 'success');
+  });
+
+  it('renders a warning badge for a partially invoiced draft', () => {
+    render(<GoodsReceiptDraftChips data={{ documentStatus: 'DR', invoiceStatus: 40 }} />);
+    const el = screen.getByTestId('goods-receipt-invoice-badge');
+    expect(el).toHaveTextContent(/40%/);
+    expect(el).toHaveAttribute('data-tone', 'warning');
+  });
+
   it('shows 100% when fully invoiced', () => {
     render(<GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 100 }} />);
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveTextContent(/100%/);
+    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveAttribute('data-show-icon', 'false').toBeInTheDocument();
   });
 });

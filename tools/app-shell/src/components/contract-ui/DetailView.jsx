@@ -2907,7 +2907,7 @@ export function DetailView({
         {/* Action bar: Cancel + status | actions + save */}
         {embedded ? renderEmbeddedStatusPill(statusField, data, statusEnumLabels) : (
         <div className={getLinesToolbarClassName(linesLayout, toolbarPaddingX, toolbarBorderBottom)}>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <DetailCancelButton
               chromeless={chromeless}
               label={ui('cancel')}
