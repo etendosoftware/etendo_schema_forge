@@ -10,34 +10,39 @@ Phased delivery: `docs/plans/2026-04-16-pipeline-validator-implementation.md`.
 ## Quick Start
 
 The validator source lives in `schema_forge_core`; this repo consumes the published
-`sf-validate-pipeline` bin (or the `LOCAL_CORE=1` dispatcher). Always drive it through
-`make`, which exports `SF_ROOT` — see the warning below.
+`sf-validate-pipeline` bin (or the `LOCAL_CORE=1` dispatcher). Prefer driving it through
+`make`, which exports `SF_ROOT` — see the note below on running the bin directly.
 
 ```bash
 # Validate every artifact in the repo (CI mode)
 make validate-pipeline
 
 # Validate a single window
-SF_ROOT=$PWD npx sf-validate-pipeline --scope=product
+npx sf-validate-pipeline --scope=product
 
 # Validate only staged files (what the pre-commit hook runs)
-SF_ROOT=$PWD npx sf-validate-pipeline --staged
+npx sf-validate-pipeline --staged
 
 # Promote warnings to blocking errors / machine-readable output
-SF_ROOT=$PWD npx sf-validate-pipeline --strict
-SF_ROOT=$PWD npx sf-validate-pipeline --format=json
+npx sf-validate-pipeline --strict
+npx sf-validate-pipeline --format=json
 
 # Skip specific rules — escape hatch, must be justified in the commit body
-SF_ROOT=$PWD npx sf-validate-pipeline --skip=F4,F7
+npx sf-validate-pipeline --skip=F4,F7
 ```
 
-> **`SF_ROOT` is mandatory when invoking the bin directly.** The validator resolves
-> `ROOT = process.env.SF_ROOT || join(__dirname, '..', '..')`, and `__dirname` is the
-> *installed package's* `src/`, so without `SF_ROOT` the root points inside
-> `node_modules`, no artifacts are found, and the run prints
-> `Pipeline validation: OK` **having validated nothing** — a silent false pass.
-> `make` sets it (`export SF_ROOT := $(CURDIR)`, Makefile line 3) and so does
-> `.githooks/pre-commit`; a bare `npx sf-validate-pipeline` does not.
+> **Where the bin looks for artifacts.** The validator resolves its root with
+> `resolveRepoRoot()` (`schema_forge_core`, `cli/src/lib/repo-root.js`): `SF_ROOT` if set,
+> otherwise — for the installed package — the nearest ancestor of the cwd that holds
+> `artifacts/`. So a bare `npx sf-validate-pipeline` works from this repo's root or any
+> subdirectory of it. Set `SF_ROOT=$PWD` when running from outside the repo.
+> `make` and `.githooks/pre-commit` set `SF_ROOT` either way.
+>
+> This needs a `@etendosoftware/schema-forge-cli` release that includes ETP-5511. Older
+> releases resolved the root from the installed package's own location (inside
+> `node_modules`): without `SF_ROOT`, no artifacts were found and the run printed
+> `Pipeline validation: OK` **having validated nothing** — a silent false pass. If the
+> pinned version predates ETP-5511, keep prefixing `SF_ROOT=$PWD`.
 
 Accepted CLI flags are `--scope=`, `--staged`, `--strict`, `--format=`, `--skip=` and
 `--changed-since=`. Note there is **no** flag for the F19/F20 allowlist paths: those

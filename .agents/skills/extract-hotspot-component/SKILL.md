@@ -187,8 +187,8 @@ Class C is legitimate to touch, under all four conditions:
    indistinguishable from weakening a test.
 4. **Prefer upgrading.** These tests read source *because* `DetailView` was too heavy to mount —
    their own comments say so. Once the region is its own small component that reason is gone: a real
-   RTL render test is strictly better coverage. Delegate writing it to the `test-generator` subagent
-   (Tester) per CLAUDE.md — never write tests inline.
+   RTL render test is strictly better coverage. Delegate writing it to the `tester-functional`
+   subagent per CLAUDE.md — never write tests inline.
 
 **If you cannot tell whether a failure is Class A or Class C, it is Class A.** Assume you broke
 behaviour until the verbatim diff proves otherwise.
@@ -213,9 +213,9 @@ Cross-check the coverage table in the June report §11.4 — it marks some regio
 and names the E2E spec to reuse per task.
 
 **If no test covers the region: STOP.** Do not extract, and do not write the golden master yourself.
-Delegate it to the `test-generator` subagent (Tester) per CLAUDE.md's mandatory delegation rule, and
+Delegate it to the `tester-functional` subagent per CLAUDE.md's mandatory delegation rule, and
 require `docs/e2e-testing-guide.md` be read first for any Playwright spec (canonical reference:
-`e2e/tests/flows/row-quick-actions.mocked.spec.js`). Extraction resumes only once the golden master
+`e2e/tests/flows/platform/row-quick-actions.mocked.spec.js`). Extraction resumes only once the golden master
 exists and is green.
 
 **E2E results need their server verified.** Playwright here has no `webServer` block and inherits

@@ -17,6 +17,7 @@
     },
     "noHeaderBorder": true,
     "customComponents": {
+      "topbarExtra": "InvoiceDeliveryBadge",
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "InvoiceBottomPanel",
       "topbarRight": "InvoiceTopbarExtra"

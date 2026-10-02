@@ -97,6 +97,25 @@ describe('ACCOUNT_CELL_TYPES — accountName', () => {
   });
 });
 
+// ETP-5457 — the cell context carries the window's "read-only" access tier; the accountName
+// renderer must hand it to NameCell, or the inline "Conectar banco" CTA survives the tier.
+describe('ACCOUNT_CELL_TYPES — accountName under the read-only access tier (ETP-5457)', () => {
+  const OFFLINE = { ...ACCOUNT, bankConnected: false };
+
+  it('drops the connect affordance when the context says windowReadOnly (ETP-5457)', () => {
+    renderCell('accountName', OFFLINE, { ui: UI, onConnect: vi.fn(), windowReadOnly: true });
+
+    expect(screen.getByTestId('cell')).toHaveTextContent('BBVA Principal');
+    expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('keeps the connect affordance when the context says full access (ETP-5457 twin)', () => {
+    renderCell('accountName', OFFLINE, { ui: UI, onConnect: vi.fn(), windowReadOnly: false });
+
+    expect(screen.getByTestId('account-sync-connect-acc-1')).toBeInTheDocument();
+  });
+});
+
 describe('ACCOUNT_CELL_TYPES — accountType', () => {
   it('renders the translated type label and the chunked IBAN', () => {
     renderCell('accountType', ACCOUNT, { ui: UI });
