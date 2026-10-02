@@ -3,10 +3,6 @@ vi.mock('@/i18n', () => ({
   useLocale: () => ({ genericLabels: {}, statuses: {} }),
 }));
 
-vi.mock('@/lib/progressTone', () => ({
-  getProgressTone: (pct) => (pct >= 1 ? 'success' : pct > 0 ? 'warning' : 'neutral'),
-}));
-
 vi.mock('@/components/ui/status-tag-tokens.js', () => ({
   TONE_STYLES: {
     success: { background: '#d1fae5', color: '#065f46' },
@@ -36,7 +32,7 @@ describe('GoodsReceiptDraftChips', () => {
     render(<GoodsReceiptDraftChips data={{ documentStatus: 'CO', invoiceStatus: 50 }} />);
     expect(screen.getByTestId('goods-receipt-invoice-badge')).toBeInTheDocument();
     expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveTextContent(/50%/);
-    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveAttribute('data-tone', 'warning').toBeInTheDocument();
+    expect(screen.getByTestId('goods-receipt-invoice-badge')).toHaveAttribute('data-tone', 'neutral');
   });
 
   it('renders a neutral 0% badge when CO and invoiceStatus is 0', () => {
@@ -60,11 +56,11 @@ describe('GoodsReceiptDraftChips', () => {
     expect(el).toHaveAttribute('data-tone', 'success');
   });
 
-  it('renders a warning badge for a partially invoiced draft', () => {
+  it('renders a neutral badge for a partially invoiced draft', () => {
     render(<GoodsReceiptDraftChips data={{ documentStatus: 'DR', invoiceStatus: 40 }} />);
     const el = screen.getByTestId('goods-receipt-invoice-badge');
     expect(el).toHaveTextContent(/40%/);
-    expect(el).toHaveAttribute('data-tone', 'warning');
+    expect(el).toHaveAttribute('data-tone', 'neutral');
   });
 
   it('shows 100% when fully invoiced', () => {

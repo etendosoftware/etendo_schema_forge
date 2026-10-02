@@ -1,3 +1,4 @@
+import { ProgressCircle } from '@/components/contract-ui/ProgressCircle.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import { formatCalendarDate } from '@/lib/dateOnly';
@@ -44,23 +45,7 @@ export function InfoRow({ label, value, underline, children }) {
 }
 
 export function PercentBar({ value }) {
-  const pct = isNaN(Number(value)) ? 0 : Math.min(Number(value), 100);
-  let trackColor;
-  if (pct >= 100) trackColor = 'bg-status-success';
-  else if (pct > 0) trackColor = 'bg-status-warning';
-  else trackColor = 'bg-muted';
-  let textColor;
-  if (pct >= 100) textColor = 'text-status-success-foreground';
-  else if (pct > 0) textColor = 'text-status-warning-foreground';
-  else textColor = 'text-muted-foreground';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${trackColor}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className={`text-xs tabular-nums ${textColor}`}>{pct}%</span>
-    </div>
-  );
+  return <ProgressCircle value={value} data-testid="ProgressCircle__a696d7" />;
 }
 
 // ── MovementSummaryCard ───────────────────────────────────────────────────────

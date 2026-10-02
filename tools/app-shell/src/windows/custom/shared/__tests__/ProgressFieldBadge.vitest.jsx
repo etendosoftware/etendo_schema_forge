@@ -18,11 +18,11 @@ describe('ProgressFieldBadge', () => {
     expect(el).toHaveAttribute('data-show-icon', 'false');
   });
 
-  it('renders warning at 67%', () => {
+  it('renders neutral at 67% (in progress)', () => {
     renderBadge({ value: 67 });
     const el = screen.getByTestId('p-badge');
     expect(el).toHaveTextContent('Delivered 67%');
-    expect(el).toHaveAttribute('data-tone', 'warning');
+    expect(el).toHaveAttribute('data-tone', 'neutral');
   });
 
   it('renders success at 100%', () => {
@@ -74,6 +74,38 @@ describe('ProgressFieldBadge', () => {
   it.each([['DR'], ['VO'], [undefined], [null]])('renders nothing when documentStatus is %j', (documentStatus) => {
     const { container } = renderBadge({ value: 100, documentStatus });
     expect(container).toBeEmptyDOMElement();
+  });
+
+  describe('progress ring icon', () => {
+    it.each([[0], [50], [100]])('renders the ring at %i%% with data-has-icon and data-show-icon=false', (value) => {
+      renderBadge({ value });
+      const el = screen.getByTestId('p-badge');
+      expect(screen.getByTestId('p-badge-ring')).toBeInTheDocument();
+      expect(el).toHaveTextContent(`Delivered ${value}%`);
+      expect(el).toHaveAttribute('data-show-icon', 'false');
+      expect(el).toHaveAttribute('data-has-icon', 'true');
+      expect(el.firstElementChild).toBe(screen.getByTestId('p-badge-ring'));
+    });
+
+    it('0%: no arc and neutral tone', () => {
+      renderBadge({ value: 0 });
+      expect(screen.queryByTestId('ProgressRing__2c9a76-arc')).toBeNull();
+      expect(screen.getByTestId('p-badge')).toHaveAttribute('data-tone', 'neutral');
+    });
+
+    it('50%: currentColor arc and neutral tone', () => {
+      renderBadge({ value: 50 });
+      const arc = screen.getByTestId('ProgressRing__2c9a76-arc');
+      expect(arc).toHaveAttribute('stroke', 'currentColor');
+      expect(screen.getByTestId('p-badge')).toHaveAttribute('data-tone', 'neutral');
+    });
+
+    it('100%: green arc class and success tone', () => {
+      renderBadge({ value: 100 });
+      const arc = screen.getByTestId('ProgressRing__2c9a76-arc');
+      expect(arc.getAttribute('class')).toContain('status-done-badge');
+      expect(screen.getByTestId('p-badge')).toHaveAttribute('data-tone', 'success');
+    });
   });
 
   describe('showWhenPositive', () => {
