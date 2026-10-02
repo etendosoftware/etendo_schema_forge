@@ -64,6 +64,13 @@ before(async () => {
     return new Response('{}', { status: 200 });
   };
   window.fetch = globalThis.fetch;
+  // jsdom fires the window load asynchronously. If it lands after the SDK is enabled, the
+  // navigation plugin reads performance.timing, which node's performance lacks, on a node timer
+  // and throws after the test ended (it failed the file on CI, where the imports beat the load).
+  // The app starts RUM on a loaded page anyway, so wait for it.
+  if (window.document.readyState !== 'complete') {
+    await new Promise((resolve) => { window.addEventListener('load', resolve, { once: true }); });
+  }
 
   ({ AwsRum } = await import('../observability/sdk.js'));
   ({ createRumProvider } = await import('../rum.js'));
