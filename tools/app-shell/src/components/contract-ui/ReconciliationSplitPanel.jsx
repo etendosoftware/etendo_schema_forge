@@ -609,7 +609,7 @@ function MatchedTxnAmount({ txn, currency }) {
   );
 }
 
-function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle }) {
+function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle, windowReadOnly = false }) {
   const ui = useUI();
   const txns = line.txns || [];
   if (txns.length === 0) {
@@ -666,16 +666,19 @@ function ReconciledOperationsSection({ line, currency, onRemove, open, onToggle 
               </div>
               <div className="flex items-center gap-3">
                 <MatchedTxnAmount txn={t} currency={currency} data-testid="MatchedTxnAmount__d0f4d5" />
-                <button
-                  type="button"
-                  onClick={() => onRemove(t)}
-                  aria-label={ui('financeReconcileActionRemoveOne')}
-                  title={ui('financeReconcileActionRemoveOne')}
-                  data-testid={`recon-unlink-${t.transactionId}`}
-                  className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                >
-                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
-                </button>
+                {/* ETP-5457 — un-linking is a write; hidden under the read-only access tier. */}
+                {windowReadOnly ? null : (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(t)}
+                    aria-label={ui('financeReconcileActionRemoveOne')}
+                    title={ui('financeReconcileActionRemoveOne')}
+                    data-testid={`recon-unlink-${t.transactionId}`}
+                    className="flex h-[26px] w-[26px] items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                  >
+                    <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -690,6 +693,9 @@ function CandidateOperationsPanel({
   source, onSourceChange, sourceCounts = {}, dateRange, onDateRangeChange, footer, readOnly = false,
   onRemoveOperation, reconciledMode = false, differenceBanner = null,
   sortKey = null, sortDirection = 'asc', onSort,
+  // ETP-5457 — the window's "read-only" access tier. NOT the same thing as `readOnly` above, which
+  // means "this line is already reconciled": this one hides the per-document un-link buttons.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   // Holded parity: while the "conciliado" block is expanded, the candidate list below is frozen for
@@ -793,16 +799,18 @@ function CandidateOperationsPanel({
                 secondaryCurrency={cand.baseCurrency || currency}
                 baseOnTop={hasBase}
                 data-testid="DualAmount__d0f4d5" />
-              <button
-                type="button"
-                onClick={() => onRemoveOperation({ transactionId: cand.id })}
-                aria-label={ui('financeReconcileActionRemoveOne')}
-                title={ui('financeReconcileActionRemoveOne')}
-                data-testid={`recon-unlink-${cand.id}`}
-                className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-              >
-                <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
-              </button>
+              {windowReadOnly ? null : (
+                <button
+                  type="button"
+                  onClick={() => onRemoveOperation({ transactionId: cand.id })}
+                  aria-label={ui('financeReconcileActionRemoveOne')}
+                  title={ui('financeReconcileActionRemoveOne')}
+                  data-testid={`recon-unlink-${cand.id}`}
+                  className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border border-border bg-card text-[hsl(var(--muted-foreground))] transition-colors hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
+                >
+                  <Minus className="h-4 w-4" data-testid="Minus__d0f4d5" />
+                </button>
+              )}
             </div>
           </TableCell>)
         ) : (
@@ -836,6 +844,7 @@ function CandidateOperationsPanel({
           onRemove={onRemoveOperation}
           open={matchedExpanded}
           onToggle={() => setMatchedExpanded((v) => !v)}
+          windowReadOnly={windowReadOnly}
           data-testid="ReconciledOperationsSection__d0f4d5" />
       ) : null}
       <ToolbarShell
@@ -923,6 +932,10 @@ function CandidateOperationsPanel({
 function ReconciliationActionBar({
   currency, selectedSum, remaining, canReconcile, isReconciledLine, reconcileCount, removeCount = 0,
   busy, onCancel, onReconcile, differenceNotice = null,
+  // ETP-5457 — the window's "read-only" access tier. The primary button is DISABLED rather than
+  // hidden (hiding it would leave Cancel alone and shift the bar's layout); Cancel stays usable,
+  // since clearing the selection is pure UI state.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   return (
@@ -977,7 +990,7 @@ function ReconciliationActionBar({
           onClick={onReconcile}
           // A reconciled line shows "Desconciliar (N)" acting on the checked documents (N = checked
           // count, disabled when none); a pending line gates "Conciliar" on a balanced selection.
-          disabled={busy || (isReconciledLine ? removeCount === 0 : !canReconcile)}
+          disabled={busy || windowReadOnly || (isReconciledLine ? removeCount === 0 : !canReconcile)}
           data-testid="recon-action-reconcile"
           className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[hsl(var(--foreground))] px-3 text-sm font-medium text-primary-foreground hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] disabled:cursor-not-allowed disabled:bg-[hsl(var(--border-control))] disabled:text-primary-foreground disabled:hover:bg-[hsl(var(--border-control))] disabled:hover:text-primary-foreground"
         >
@@ -1021,6 +1034,26 @@ const WARNING_KEY = 'financeReconcileConfirmRemoveWarning';
 
 /** Stable no-op used to swallow the confirm while a request is already in flight. */
 const NOOP = () => {};
+
+/**
+ * ETP-5457 — defense in depth for the window's "read-only" access tier: `handler` itself, or
+ * {@link NOOP} when the tier is read-only. Every write entry point of the panel is already hidden
+ * or disabled under that tier and its dialogs are forced closed; wrapping each mutating handler as
+ * well means a control that ever slips through is a no-op instead of a write.
+ *
+ * Module-level on purpose — it is the same early return every handler would otherwise open with,
+ * and spelling that `if` out in the panel's handlers is what would push `ReconciliationSplitPanel`
+ * over Sonar's cognitive-complexity ceiling (javascript:S3776) — the same reason
+ * `notifyReconcileResult` and `resolveVisibleCandidates` live at module level.
+ *
+ * @template {Function} F
+ * @param {boolean} windowReadOnly
+ * @param {F} handler
+ * @returns {F}
+ */
+function guardWrite(windowReadOnly, handler) {
+  return windowReadOnly ? NOOP : handler;
+}
 
 /** One bullet per effect that actually applies to this selection. Order is part of the contract. */
 function resolveUnreconcileItems(ui, { hasAuto }) {
@@ -1296,7 +1329,7 @@ function resolveVisibleCandidates({ candidates, selectedLine, search, selectedOp
  * Composes the backend at /sws/neo/bank-reconciliation — it never reimplements
  * Etendo's reconciliation logic; the POST just hands the grouped ids over.
  *
- * @param {{ accountId: string|null, currency?: string, paymentMethods?: Array<object>, onBack?: () => void, onReconcileSuccess?: () => void }} props
+ * @param {{ accountId: string|null, currency?: string, paymentMethods?: Array<object>, onBack?: () => void, onReconcileSuccess?: () => void, windowReadOnly?: boolean }} props
  */
 export function ReconciliationSplitPanel({
   accountId, currency = 'EUR', paymentMethods = [], onBack, onReconcileSuccess,
@@ -1314,6 +1347,12 @@ export function ReconciliationSplitPanel({
   // The account's record version, echoed back when the setup dialog stores the difference account
   // (ETP-5073's optimistic-locking guard). Threaded from the host with glItemDifference.
   accountUpdated = null,
+  // ETP-5457 — the host window's "read-only" access tier (ETP-5205). Named `windowReadOnly`, never
+  // `readOnly`: in this file `readOnly` already means "the selected line is already reconciled".
+  // Under it every write path is closed — Conciliar / Desconciliar disabled, the per-document
+  // un-link and the difference post hidden, every confirmation dialog kept shut, and each mutating
+  // handler wrapped in `guardWrite`. Browsing, filtering and selecting stay available.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -1620,7 +1659,7 @@ export function ReconciliationSplitPanel({
    *   confirmation modal. No `glItemId` counterpart: the accounting account is the financial
    *   account's own setting and the backend resolves it (`effectiveGlItemId`).
    */
-  const submitReconcile = async (methodId, description) => {
+  const submitReconcile = guardWrite(windowReadOnly, async (methodId, description) => {
     try {
       const payload = {
         // For a PARTIAL line, reconcile the remainder against its pending sub-line
@@ -1676,12 +1715,12 @@ export function ReconciliationSplitPanel({
       }
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   // Only ever bound to the "Conciliar" button, whose `disabled` is exactly `busy || !canReconcile`
   // (see the non-reconciled branch of ReconciliationActionBar) — so by the time this runs,
   // `canReconcile` is already guaranteed true; a runtime re-check here was unreachable dead code.
-  const handleReconcile = () => {
+  const handleReconcile = guardWrite(windowReadOnly, () => {
     // A pure existing-transaction match needs no method (each transaction already has one); only
     // creating new invoice payments requires picking one, and only when the account actually has
     // methods configured for this direction — otherwise fall back to the backend's auto-resolve.
@@ -1709,14 +1748,14 @@ export function ReconciliationSplitPanel({
       return;
     }
     submitReconcile(null);
-  };
+  });
 
   /**
    * Stores the chosen accounting account on the FINANCIAL ACCOUNT, then closes. Deliberately does
    * not chain into the reconciliation: the user confirms that separately, now seeing the read-only
    * destination in the difference modal.
    */
-  const confirmGlItemSetup = async (glItem) => {
+  const confirmGlItemSetup = guardWrite(windowReadOnly, async (glItem) => {
     if (!glItem?.id) return;
     setSavingGlItem(true);
     try {
@@ -1737,7 +1776,7 @@ export function ReconciliationSplitPanel({
     } finally {
       setSavingGlItem(false);
     }
-  };
+  });
 
   const confirmMethodAndReconcile = () => {
     submitReconcile(selectedMethodId);
@@ -1748,7 +1787,7 @@ export function ReconciliationSplitPanel({
    * sub-line), never the merged head. No amount is sent: the backend recomputes it and would ignore
    * one anyway.
    */
-  const confirmDifference = async ({ glItemId, description }) => {
+  const confirmDifference = guardWrite(windowReadOnly, async ({ glItemId, description }) => {
     try {
       await reconcileDifference({
         financialAccountId: accountId,
@@ -1765,7 +1804,7 @@ export function ReconciliationSplitPanel({
     } catch (err) {
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   // Whether any of the given transaction ids is an auto-created payment (drives the confirm hint that
   // the invoice returns to unpaid). Matched-doc auto-created flags live on selectedLine.txns.
@@ -1776,23 +1815,23 @@ export function ReconciliationSplitPanel({
 
   // Un-reconcile ("desvincular") — always confirmed (destructive: removes auto-created payments and
   // returns invoices to unpaid). One row (per-row "−") OR the bulk checked selection (bottom button).
-  const requestRemoveOne = (txn) => {
+  const requestRemoveOne = guardWrite(windowReadOnly, (txn) => {
     const id = txn?.transactionId;
     if (!selectedLine || !id) return;
     setRemoveRequest({ ids: [id], hasAuto: anyAutoCreated([id]), count: 1 });
-  };
+  });
 
   // Only bound to the "Desconciliar (N)" button, disabled whenever `removeCount` (= this same
   // `selectedOpIds.size`) is 0 — so `ids` is already guaranteed non-empty here.
-  const requestRemoveSelected = () => {
+  const requestRemoveSelected = guardWrite(windowReadOnly, () => {
     const ids = Array.from(selectedOpIds);
     setRemoveRequest({ ids, hasAuto: anyAutoCreated(ids), count: ids.length });
-  };
+  });
 
   // Only wired to RemoveOperationConfirmDialog's confirm button, itself only rendered while
   // `open={!!removeRequest}` — so `removeRequest` (and, transitively, `selectedLine`, which every
   // setter of it already required) is already guaranteed non-null here.
-  const confirmRemove = async () => {
+  const confirmRemove = guardWrite(windowReadOnly, async () => {
     try {
       const payload = {
         financialAccountId: accountId,
@@ -1832,7 +1871,7 @@ export function ReconciliationSplitPanel({
     } catch (err) {
       toast.error(translateBackendError(err?.message, ui) || ui('financeReconcileToastError'));
     }
-  };
+  });
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -1877,12 +1916,14 @@ export function ReconciliationSplitPanel({
           onRemoveOperation={requestRemoveOne}
           reconciledMode={isReconciledLine}
           readOnly={isReconciledLine}
+          windowReadOnly={windowReadOnly}
           differenceBanner={
             <DifferenceBanner
               info={differenceInfo}
               currency={currency}
               onDismiss={() => setDiffDismissed(true)}
               onPost={() => setDiffModalOpen(true)}
+              windowReadOnly={windowReadOnly}
               data-testid="DifferenceBanner__d0f4d5" />
           }
           source={rightSource}
@@ -1905,6 +1946,7 @@ export function ReconciliationSplitPanel({
               onCancel={cancelSelection}
               onReconcile={isReconciledLine ? requestRemoveSelected : handleReconcile}
               differenceNotice={differenceNotice}
+              windowReadOnly={windowReadOnly}
               data-testid="ReconciliationActionBar__d0f4d5" />
           ) : null}
           data-testid="CandidateOperationsPanel__d0f4d5" />
@@ -1913,8 +1955,10 @@ export function ReconciliationSplitPanel({
           direction — the user pressed Conciliar on a match with a postable difference and the
           account has no concept configured, so the backend asked for one. Reused rather than
           duplicated: its `info` only needs {lineTotal, reconciled, remainder}. */}
+      {/* ETP-5457 — every dialog below leads to a write, so under the read-only tier they are kept
+          shut regardless of their own open state (same pattern as the host's EditAccountModal). */}
       <DifferenceModal
-        open={!!glItemPrompt}
+        open={!!glItemPrompt && !windowReadOnly}
         info={glItemPrompt}
         currency={currency}
         defaultGlItem={glItemDifference}
@@ -1926,13 +1970,13 @@ export function ReconciliationSplitPanel({
         onClose={() => setGlItemPrompt(null)}
         data-testid="DifferenceModal__gl-item-required" />
       <GlItemSetupDialog
-        open={glItemSetupOpen}
+        open={glItemSetupOpen && !windowReadOnly}
         busy={savingGlItem}
         onConfirm={confirmGlItemSetup}
         onClose={() => setGlItemSetupOpen(false)}
         data-testid="GlItemSetupDialog__d0f4d5" />
       <RemoveOperationConfirmDialog
-        open={!!removeRequest}
+        open={!!removeRequest && !windowReadOnly}
         count={removeRequest?.count ?? 0}
         hasAuto={!!removeRequest?.hasAuto}
         busy={removing}
@@ -1940,7 +1984,7 @@ export function ReconciliationSplitPanel({
         onClose={() => setRemoveRequest(null)}
         data-testid="RemoveOperationConfirmDialog__d0f4d5" />
       <PaymentMethodModal
-        open={methodModalOpen}
+        open={methodModalOpen && !windowReadOnly}
         methods={directionMethods}
         methodId={selectedMethodId}
         onSelect={setSelectedMethodId}
@@ -1954,7 +1998,7 @@ export function ReconciliationSplitPanel({
         isReceipt={lineAmount >= 0}
         data-testid="PaymentMethodModal__d0f4d5" />
       <DifferenceModal
-        open={diffModalOpen}
+        open={diffModalOpen && !windowReadOnly}
         info={differenceInfo}
         currency={currency}
         defaultGlItem={glItemDifference}

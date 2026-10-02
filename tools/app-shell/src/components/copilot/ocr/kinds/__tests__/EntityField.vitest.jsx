@@ -27,7 +27,7 @@ const baseField = {
   entitySpec: 'contacts/business-partner',
   extractFrom: ['vendorName', 'fallbackVendor'],
   extracted: { vendorName: 'Acme Raw' },
-  filter: 'active = true',
+  selectorParams: { isVendor: 'Y' },
   createLabel: 'createVendor',
   createDocumentType: 'business-partner',
   createPrefilledFrom: { name: 'vendorName', taxId: 'taxId' },
@@ -64,6 +64,7 @@ describe('EntityField', () => {
     expect(screen.getByText('ocrReviewVendorNoMatches')).toBeInTheDocument();
     expect(deriveEntityEndpoint).toHaveBeenCalledWith({
       entitySpec: 'contacts/business-partner',
+      selector: undefined,
       apiBaseUrl: '/api/purchase-invoice',
       contactsBase: '/contacts',
     });
@@ -72,7 +73,7 @@ describe('EntityField', () => {
       endpoint: '/sws/neo/business-partner',
       token: 'tok',
       query: 'Acme Raw',
-      filter: 'active = true',
+      params: { isVendor: 'Y' },
       limit: 20,
     });
   });

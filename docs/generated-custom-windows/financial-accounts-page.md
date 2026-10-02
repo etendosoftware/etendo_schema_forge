@@ -214,6 +214,15 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 10. Click a row and confirm the navigation to `/financial-account/{id}`.
 11. Click the pending pill of a row with `pendingCount > 0` and confirm the toast points to T6.
 
+## Read-only access tier (ETP-5457)
+
+A role whose tier on Financial Account is `read-only` gets this list browse-only: no
+"+ Nueva cuenta", no row edit / sync icons, a kebab reduced to "Abrir cuenta", no inline
+"Conectar banco", no selection checkboxes and no account dialogs. "Reglas de matcheo" is shown
+whenever the role can see the Match Rule window at all (`read-only` or `full`). UI only — the
+backend remains the boundary. Full per-control table: `financial-account.md` → "Read-only access
+tier (ETP-5205 / ETP-5457)".
+
 ## Tests
 
 - Backend: `FinancialAccountsPageHandlerTest` (list page) and `FinancialAccountHandlerTest`

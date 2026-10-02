@@ -92,10 +92,12 @@ vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
   default: () => <div data-testid="rel-docs-card" />,
 }));
 
+// ETP-5527 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
-  fetchChild: vi.fn(),
-  fetchById: vi.fn(),
+  SALES_RELATED_DOCS: {
+    'sales-order': { spec: 'sales-order' },
+    'sales-quotation': { spec: 'sales-quotation' },
+  },
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({

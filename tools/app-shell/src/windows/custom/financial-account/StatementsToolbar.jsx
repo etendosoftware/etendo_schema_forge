@@ -105,7 +105,12 @@ function SyncStatementsButton({ ui, onClick, syncing }) {
  *   onSyncClick?: () => void;
  *   syncing?: boolean;
  *   onRefresh?: () => void;
+ *   windowReadOnly?: boolean;
  * }} props
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: the import split-button and
+ * the bank-sync button — the toolbar's only write entry points — are not rendered. Back, filters,
+ * search, sort and refresh stay.
  */
 export function StatementsToolbar({
   search,
@@ -123,6 +128,7 @@ export function StatementsToolbar({
   onSyncClick,
   syncing = false,
   onRefresh,
+  windowReadOnly = false,
   // Rendered node, not sort props: the toolbar stays presentational and the tab that owns the
   // sort state decides what goes here. Absent = nothing rendered.
   sortControl = null,
@@ -181,8 +187,8 @@ export function StatementsToolbar({
         label={ui('refresh')}
         data-testid="RefreshButton__8a428c" />
       {/* bank-synced accounts: a single "sync statements" action (Salt Edge fetch) replaces the
-          manual import / manual create split-button. */}
-      {bankConnectionSynced ? (
+          manual import / manual create split-button. Neither is offered under read-only. */}
+      {!windowReadOnly && (bankConnectionSynced ? (
         <SyncStatementsButton
           ui={ui}
           onClick={onSyncClick}
@@ -194,7 +200,7 @@ export function StatementsToolbar({
           onImportClick={onImportClick}
           onManualClick={onManualClick}
           data-testid="ImportSplitButton__8a428c" />
-      )}
+      ))}
     </div>
   );
 }
