@@ -7,10 +7,11 @@ import { ReconciliationTab } from '../ReconciliationTab';
 // `data-tolerance` / `data-gl-difference` exist so the difference-banner plumbing (which the tab
 // derives, rather than passes straight through) is assertable at this level.
 vi.mock('@/components/contract-ui/ReconciliationSplitPanel.jsx', () => ({
-  ReconciliationSplitPanel: ({ accountId, currency, amountTolerance, glItemDifference }) => (
+  ReconciliationSplitPanel: ({ accountId, currency, amountTolerance, glItemDifference, windowReadOnly }) => (
     <div
       data-testid="split-panel"
       data-account={accountId}
+      data-window-read-only={JSON.stringify(windowReadOnly ?? null)}
       data-currency={currency}
       data-tolerance={JSON.stringify(amountTolerance ?? null)}
       data-gl-difference={JSON.stringify(glItemDifference ?? null)}
@@ -19,10 +20,10 @@ vi.mock('@/components/contract-ui/ReconciliationSplitPanel.jsx', () => ({
 }));
 
 /** Renders the tab for `account` and returns the mocked panel element. */
-const renderTab = (account) => {
+const renderTab = (account, extraProps = {}) => {
   render(
     <MemoryRouter>
-      <ReconciliationTab account={account} />
+      <ReconciliationTab account={account} {...extraProps} />
     </MemoryRouter>,
   );
   return screen.getByTestId('split-panel');
@@ -123,6 +124,26 @@ describe('ReconciliationTab', () => {
     it('is null when there is no account at all', () => {
       const panel = renderTab(null);
       expect(panel.getAttribute('data-gl-difference')).toBe('null');
+    });
+  });
+
+  // ── windowReadOnly: the host window's access tier (ETP-5457) ──────────────
+  // The tab owns no write path of its own; it only hands the tier to the split panel, which closes
+  // every write under it. A dropped prop would silently leave the panel fully writable.
+  describe('windowReadOnly forwarding (ETP-5457)', () => {
+    it('forwards windowReadOnly=true to the split panel (ETP-5457)', () => {
+      const panel = renderTab({ id: 'ACC-1' }, { windowReadOnly: true });
+      expect(panel.getAttribute('data-window-read-only')).toBe('true');
+    });
+
+    it('forwards windowReadOnly=false to the split panel (ETP-5457)', () => {
+      const panel = renderTab({ id: 'ACC-1' }, { windowReadOnly: false });
+      expect(panel.getAttribute('data-window-read-only')).toBe('false');
+    });
+
+    it('defaults to writable (false) when the prop is omitted (ETP-5457)', () => {
+      const panel = renderTab({ id: 'ACC-1' });
+      expect(panel.getAttribute('data-window-read-only')).toBe('false');
     });
   });
 });

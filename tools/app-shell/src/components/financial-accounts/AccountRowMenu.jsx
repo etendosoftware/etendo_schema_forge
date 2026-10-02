@@ -23,6 +23,176 @@ import { ACCOUNT_TYPE } from './tokens';
 import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
 
 /**
+ * Every item of the kebab except "Abrir cuenta" — all of them write (edit, new movement,
+ * transfer, the bank-connection group, archive / unarchive, delete). Split out so the
+ * read-only tier (ETP-5457) can drop the whole group in one place.
+ */
+function AccountRowMenuWriteItems({
+  account, ui, onEdit, onArchive, onDelete, onBankConnectionAction, onTransfer, onNewMovement,
+}) {
+  const isCash = account.type === ACCOUNT_TYPE.CASH;
+  const bankConnected = account.bankConnected === true;
+  const isArchived = account.active === false;
+  // Soft-disconnected: not connected, but the bank link survives and can be revived.
+  const bankReconnectable = account.bankReconnectable === true;
+
+  return (
+    <>
+      <DropdownMenuItem
+        onClick={() => onEdit?.(account)}
+        data-testid={`account-row-menu-edit-${account.id}`}
+      >
+        <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
+        <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+          {ui('financeAccountsMenuEdit')}
+        </span>
+      </DropdownMenuItem>
+
+      <DropdownMenuItem
+        onClick={() => onNewMovement?.(account)}
+        data-testid={`account-row-menu-new-movement-${account.id}`}
+      >
+        <Plus className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
+        <span className="text-sm font-normal leading-6 text-[hsl(var(--text-primary))]">
+          {ui('financeAccountTxNewAction')}
+        </span>
+      </DropdownMenuItem>
+
+      <DropdownMenuItem
+        onClick={() => onTransfer?.(account)}
+        data-testid={`account-row-menu-transfer-${account.id}`}
+      >
+        <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
+        <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+          {ui('financeAccountTransferAction')}
+        </span>
+      </DropdownMenuItem>
+
+      {!isCash ? (
+        <>
+          {bankConnected ? (
+            <>
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('syncNow', account)}
+                data-testid={`account-row-menu-sync-${account.id}`}
+              >
+                <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                  {ui('financeAccountsMenuSyncNow')}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('disconnect', account)}
+                data-testid={`account-row-menu-disconnect-${account.id}`}
+              >
+                <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                  {ui('financeAccountsMenuDisconnect')}
+                </span>
+              </DropdownMenuItem>
+            </>
+          ) : null}
+
+          {/* Soft-disconnected: the link survives, so offer to revive it rather than a
+              from-scratch connect, which would orphan the existing connection. */}
+          {!bankConnected && bankReconnectable ? (
+            <>
+              <DropdownMenuItem
+                onClick={() => onBankConnectionAction?.('reconnect', account)}
+                data-testid={`account-row-menu-reconnect-${account.id}`}
+              >
+                <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
+                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                  {ui('financeAccountsBankConnectionReconnect')}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+            </>
+          ) : null}
+
+          {/* ETP-4896: Salt Edge is contracted for Spain only, so a non-ES account is never
+              offered the connect action. Hidden rather than disabled, matching how every other
+              item in this menu handles inapplicability (conditional render — the menu has no
+              disabled-item styling); the edit modal is where the rule gets explained, since
+              that is where the Country field lives. Rule owned by saltEdgeEligibility.js. */}
+          {!bankConnected && !bankReconnectable && canConnectToSaltEdge(account) ? (
+            <DropdownMenuItem
+              onClick={() => onBankConnectionAction?.('connect', account)}
+              data-testid={`account-row-menu-connect-${account.id}`}
+            >
+              <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
+                {ui('financeAccountsMenuConnect')}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
+
+          {/* Permanent deletion is offered wherever a bank link exists — live or deactivated. */}
+          {bankConnected || bankReconnectable ? (
+            <DropdownMenuItem
+              onClick={() => onBankConnectionAction?.('deleteConnection', account)}
+              data-testid={`account-row-menu-delete-connection-${account.id}`}
+            >
+              <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
+              <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+                {ui('financeAccountsBankConnectionDeleteAction')}
+              </span>
+            </DropdownMenuItem>
+          ) : null}
+        </>
+      ) : null}
+
+      <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
+      {/* Archived accounts (the "Inactivas" view) get the inverse action instead — otherwise the
+          only thing on offer is archiving something that is already archived, with no way back.
+          Restoring is not destructive, so it drops the red treatment. */}
+      {isArchived ? (
+        <DropdownMenuItem
+          onClick={() => onArchive?.(account)}
+          data-testid={`account-row-menu-unarchive-${account.id}`}
+        >
+          <RotateCcw
+            className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
+            data-testid="RotateCcw__ffaf9f" />
+          <span className="text-sm font-normal leading-6">
+            {ui('financeAccountsMenuUnarchive')}
+          </span>
+        </DropdownMenuItem>
+      ) : (
+        <DropdownMenuItem
+          onClick={() => onArchive?.(account)}
+          data-testid={`account-row-menu-archive-${account.id}`}
+        >
+          <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
+          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+            {ui('financeAccountsMenuArchive')}
+          </span>
+        </DropdownMenuItem>
+      )}
+
+      {/* ETP-4871 — independent of Archivar/Desarchivar above: a still-active account can be
+          archived OR deleted, whichever the user prefers, so this never replaces the item above
+          it.
+          ETP-5111 — and it is now offered on EVERY row, not only where `account.deletable` is
+          true. Hiding it was the same "don't let them touch it" pattern this ticket inverted for
+          the movements kebab and the three bulk-delete trash buttons: the user could not tell an
+          account that cannot be deleted from one where the action simply does not exist. The
+          confirmation dialog opens either way and the backend's 409 explains the refusal. */}
+      <DropdownMenuItem
+        onClick={() => onDelete?.(account)}
+        data-testid={`account-row-menu-delete-${account.id}`}
+      >
+        <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
+        <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
+          {ui('financeAccountsMenuDelete')}
+        </span>
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+/**
  * Per-row kebab menu. Shows every action available on a financial account so
  * the surface matches the Figma `3012:25602` mock end-to-end, even before the
  * downstream features ship. Items follow this order:
@@ -47,16 +217,15 @@ import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
  * cuenta": both surfaced the same account data, so editing is now unified.
  * Cash accounts (type=C) never expose the bank connection group because the connection
  * does not apply to manual cash drawers.
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: only item 1 (Abrir
+ * cuenta, pure navigation) is kept; every other item writes and is not rendered.
  */
 export function AccountRowMenu({
   account, onOpen, onEdit, onArchive, onDelete, onBankConnectionAction, onTransfer, onNewMovement,
+  windowReadOnly = false,
 }) {
   const ui = useUI();
-  const isCash = account.type === ACCOUNT_TYPE.CASH;
-  const bankConnected = account.bankConnected === true;
-  const isArchived = account.active === false;
-  // Soft-disconnected: not connected, but the bank link survives and can be revived.
-  const bankReconnectable = account.bankReconnectable === true;
 
   return (
     <DropdownMenu data-testid="DropdownMenu__ffaf9f">
@@ -84,156 +253,18 @@ export function AccountRowMenu({
           </span>
         </DropdownMenuItem>
 
-        <DropdownMenuItem
-          onClick={() => onEdit?.(account)}
-          data-testid={`account-row-menu-edit-${account.id}`}
-        >
-          <Pencil className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Pencil__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-            {ui('financeAccountsMenuEdit')}
-          </span>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          onClick={() => onNewMovement?.(account)}
-          data-testid={`account-row-menu-new-movement-${account.id}`}
-        >
-          <Plus className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plus__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--text-primary))]">
-            {ui('financeAccountTxNewAction')}
-          </span>
-        </DropdownMenuItem>
-
-        <DropdownMenuItem
-          onClick={() => onTransfer?.(account)}
-          data-testid={`account-row-menu-transfer-${account.id}`}
-        >
-          <ArrowLeftRight className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="ArrowLeftRight__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-            {ui('financeAccountTransferAction')}
-          </span>
-        </DropdownMenuItem>
-
-        {!isCash ? (
-          <>
-            {bankConnected ? (
-              <>
-                <DropdownMenuItem
-                  onClick={() => onBankConnectionAction?.('syncNow', account)}
-                  data-testid={`account-row-menu-sync-${account.id}`}
-                >
-                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCw__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                    {ui('financeAccountsMenuSyncNow')}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-                <DropdownMenuItem
-                  onClick={() => onBankConnectionAction?.('disconnect', account)}
-                  data-testid={`account-row-menu-disconnect-${account.id}`}
-                >
-                  <Unlink2 className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Unlink2__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                    {ui('financeAccountsMenuDisconnect')}
-                  </span>
-                </DropdownMenuItem>
-              </>
-            ) : null}
-
-            {/* Soft-disconnected: the link survives, so offer to revive it rather than a
-                from-scratch connect, which would orphan the existing connection. */}
-            {!bankConnected && bankReconnectable ? (
-              <>
-                <DropdownMenuItem
-                  onClick={() => onBankConnectionAction?.('reconnect', account)}
-                  data-testid={`account-row-menu-reconnect-${account.id}`}
-                >
-                  <RefreshCw className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="RefreshCwReconnect__ffaf9f" />
-                  <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                    {ui('financeAccountsBankConnectionReconnect')}
-                  </span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-              </>
-            ) : null}
-
-            {/* ETP-4896: Salt Edge is contracted for Spain only, so a non-ES account is never
-                offered the connect action. Hidden rather than disabled, matching how every other
-                item in this menu handles inapplicability (conditional render — the menu has no
-                disabled-item styling); the edit modal is where the rule gets explained, since
-                that is where the Country field lives. Rule owned by saltEdgeEligibility.js. */}
-            {!bankConnected && !bankReconnectable && canConnectToSaltEdge(account) ? (
-              <DropdownMenuItem
-                onClick={() => onBankConnectionAction?.('connect', account)}
-                data-testid={`account-row-menu-connect-${account.id}`}
-              >
-                <Plug className="h-5 w-5 text-[hsl(var(--text-disabled))]" data-testid="Plug__ffaf9f" />
-                <span className="text-sm font-normal leading-6 text-[hsl(var(--foreground))]">
-                  {ui('financeAccountsMenuConnect')}
-                </span>
-              </DropdownMenuItem>
-            ) : null}
-
-            {/* Permanent deletion is offered wherever a bank link exists — live or deactivated. */}
-            {bankConnected || bankReconnectable ? (
-              <DropdownMenuItem
-                onClick={() => onBankConnectionAction?.('deleteConnection', account)}
-                data-testid={`account-row-menu-delete-connection-${account.id}`}
-              >
-                <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Trash2__ffaf9f" />
-                <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-                  {ui('financeAccountsBankConnectionDeleteAction')}
-                </span>
-              </DropdownMenuItem>
-            ) : null}
-          </>
-        ) : null}
-
-        <DropdownMenuSeparator data-testid="DropdownMenuSeparator__ffaf9f" />
-        {/* Archived accounts (the "Inactivas" view) get the inverse action instead — otherwise the
-            only thing on offer is archiving something that is already archived, with no way back.
-            Restoring is not destructive, so it drops the red treatment. */}
-        {isArchived ? (
-          <DropdownMenuItem
-            onClick={() => onArchive?.(account)}
-            data-testid={`account-row-menu-unarchive-${account.id}`}
-          >
-            <RotateCcw
-              className="h-5 w-5 text-[hsl(var(--muted-foreground))]"
-              data-testid="RotateCcw__ffaf9f" />
-            <span className="text-sm font-normal leading-6">
-              {ui('financeAccountsMenuUnarchive')}
-            </span>
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            onClick={() => onArchive?.(account)}
-            data-testid={`account-row-menu-archive-${account.id}`}
-          >
-            <Archive className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="Archive__ffaf9f" />
-            <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-              {ui('financeAccountsMenuArchive')}
-            </span>
-          </DropdownMenuItem>
+        {windowReadOnly ? null : (
+          <AccountRowMenuWriteItems
+            account={account}
+            ui={ui}
+            onEdit={onEdit}
+            onArchive={onArchive}
+            onDelete={onDelete}
+            onBankConnectionAction={onBankConnectionAction}
+            onTransfer={onTransfer}
+            onNewMovement={onNewMovement}
+            data-testid="AccountRowMenuWriteItems__ffaf9f" />
         )}
-
-        {/* ETP-4871 — independent of Archivar/Desarchivar above: a still-active account can be
-            archived OR deleted, whichever the user prefers, so this never replaces the item above
-            it.
-            ETP-5111 — and it is now offered on EVERY row, not only where `account.deletable` is
-            true. Hiding it was the same "don't let them touch it" pattern this ticket inverted for
-            the movements kebab and the three bulk-delete trash buttons: the user could not tell an
-            account that cannot be deleted from one where the action simply does not exist. The
-            confirmation dialog opens either way and the backend's 409 explains the refusal. */}
-        <DropdownMenuItem
-          onClick={() => onDelete?.(account)}
-          data-testid={`account-row-menu-delete-${account.id}`}
-        >
-          <Trash2 className="h-5 w-5 text-[hsl(var(--destructive))]" data-testid="TrashDelete__ffaf9f" />
-          <span className="text-sm font-normal leading-6 text-[hsl(var(--destructive))]">
-            {ui('financeAccountsMenuDelete')}
-          </span>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

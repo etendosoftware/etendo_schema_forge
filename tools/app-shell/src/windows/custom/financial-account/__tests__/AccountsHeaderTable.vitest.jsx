@@ -34,6 +34,25 @@ vi.mock('@/i18n', () => ({
   useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
 }));
 
+// ETP-5457 — the slot reads the access tier of this window and of match-rule through
+// useWindowAccess, which reaches useAuth. The tier is configurable per test and keyed by
+// AD_Window_ID (`mockWindowAccess.tiers[windowId]`); a window id the test never configured
+// resolves to 'full', which keeps every pre-existing assertion valid. A CONFIGURED value mirrors
+// the real hook, which fails closed: anything outside none / read-only / full resolves 'none'.
+// `calls` records the ids the slot asked for.
+const VALID_ACCESS_TIERS = new Set(['none', 'read-only', 'full']);
+const mockWindowAccess = { tiers: {}, calls: [] };
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: (windowId) => {
+    mockWindowAccess.calls.push(windowId);
+    if (!Object.prototype.hasOwnProperty.call(mockWindowAccess.tiers, windowId)) return 'full';
+    const tier = mockWindowAccess.tiers[windowId];
+    return VALID_ACCESS_TIERS.has(tier) ? tier : 'none';
+  },
+}));
+const FINANCIAL_ACCOUNT_WINDOW_ID = '94EAA455D2644E04AB25D93BE5157B6D';
+const MATCH_RULE_WINDOW_ID = '24963D64E83B4543A7F6BD248CF944EE';
+
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
@@ -259,6 +278,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   tableProps = null;
   advancedFilterProps = null;
+  mockWindowAccess.tiers = {};
+  mockWindowAccess.calls = [];
 });
 
 describe('AccountsHeaderTable — layout', () => {
@@ -1206,5 +1227,288 @@ describe('AccountsHeaderTable — "Ordenar por" control (ETP-4921)', () => {
 
     const toolbar = screen.getByTestId('cuentas-toolbar');
     expect(toolbar).toContainElement(screen.getByTestId('list-sort-toggle'));
+  });
+});
+
+/**
+ * ETP-5457 — the list honours the financial-account window's "read-only" access tier.
+ *
+ * Under read-only every WRITE entry point is gone ("Nueva cuenta", the row edit / sync icons,
+ * the kebab's write items, the inline "Conectar banco" CTA, the row checkboxes) while every
+ * READING tool stays (filters, search, sort, refresh, KPI sidebar, row click / "Abrir cuenta",
+ * copy IBAN, the "Conciliar (N)" pill). "Reglas de matcheo" follows the match-rule window's tier
+ * instead, independently of this window's. Every read-only case has a full-access twin.
+ */
+describe('AccountsHeaderTable — read-only access tier (ETP-5457)', () => {
+  // Spanish + offline so the inline "Conectar banco" CTA is eligible (saltEdgeEligibility.js).
+  const OFFLINE_ES = {
+    id: 'acc-es', name: 'Sabadell', type: 'B', currentBalance: 10, currencyIso: 'EUR',
+    countryIso: 'ES', iban: 'ES9900000000000000000009', eTGOPendingCount: 0,
+    bankConnected: false, active: true,
+  };
+  const READ_ONLY_DATA = [...BASE_ACCOUNTS, OFFLINE_ES];
+
+  function setTiers({ fa = 'full', mr = 'full' } = {}) {
+    mockWindowAccess.tiers = { [FINANCIAL_ACCOUNT_WINDOW_ID]: fa, [MATCH_RULE_WINDOW_ID]: mr };
+  }
+
+  function openRowMenu(id) {
+    fireEvent.pointerDown(
+      screen.getByTestId(`account-row-menu-trigger-${id}`),
+      { button: 0, ctrlKey: false, pointerType: 'mouse' },
+    );
+  }
+
+  it('reads the tier of the financial-account window and of the match-rule window (ETP-5457)', () => {
+    renderTable();
+
+    expect(mockWindowAccess.calls).toContain(FINANCIAL_ACCOUNT_WINDOW_ID);
+    expect(mockWindowAccess.calls).toContain(MATCH_RULE_WINDOW_ID);
+    expect(new Set(mockWindowAccess.calls)).toEqual(
+      new Set([FINANCIAL_ACCOUNT_WINDOW_ID, MATCH_RULE_WINDOW_ID]),
+    );
+  });
+
+  describe('write entry points', () => {
+    it('hides "Nueva cuenta" under the read-only tier (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+
+      expect(screen.getByTestId('cuentas-toolbar')).toBeInTheDocument();
+      expect(screen.queryByTestId('cuentas-new-account-button')).not.toBeInTheDocument();
+    });
+
+    it('shows "Nueva cuenta" under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+
+      expect(screen.getByTestId('cuentas-new-account-button')).toBeInTheDocument();
+    });
+
+    it('turns the row checkboxes off under the read-only tier (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+
+      expect(tableProps.selectable).toBe(false);
+    });
+
+    it('keeps the row checkboxes on under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+
+      expect(tableProps.selectable).not.toBe(false);
+    });
+
+    it('reserves the width of a single quick action under the read-only tier (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+
+      expect(tableProps.rowQuickActions).toMatchObject({ enabled: true, buttonCount: 1 });
+      expect(typeof tableProps.rowQuickActions.render).toBe('function');
+    });
+
+    it('reserves the width of three quick actions under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+
+      expect(tableProps.rowQuickActions).toMatchObject({ enabled: true, buttonCount: 3 });
+    });
+
+    it('drops the row edit and sync icons but keeps the kebab under the read-only tier (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+
+      expect(screen.queryByTestId('account-row-edit-acc-1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('account-row-refresh-acc-1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
+    });
+
+    it('renders the row edit and sync icons under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+
+      expect(screen.getByTestId('account-row-edit-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-refresh-acc-1')).toBeInTheDocument();
+      expect(screen.getByTestId('account-row-menu-trigger-acc-1')).toBeInTheDocument();
+    });
+
+    it('reduces the row kebab to "Abrir cuenta" under the read-only tier (ETP-5457)', async () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+      openRowMenu('acc-1');
+
+      expect(await screen.findByTestId('account-row-menu-open-acc-1')).toBeInTheDocument();
+      for (const item of ['edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'delete-connection', 'archive', 'delete']) {
+        expect(screen.queryByTestId(`account-row-menu-${item}-acc-1`), item).not.toBeInTheDocument();
+      }
+    });
+
+    it('keeps the row kebab write items under full access (ETP-5457 twin)', async () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+      openRowMenu('acc-1');
+
+      expect(await screen.findByTestId('account-row-menu-open-acc-1')).toBeInTheDocument();
+      for (const item of ['edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'delete-connection', 'archive', 'delete']) {
+        expect(screen.getByTestId(`account-row-menu-${item}-acc-1`), item).toBeInTheDocument();
+      }
+    });
+
+    it('drops the inline "Conectar banco" CTA from the name cell under the read-only tier (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable({ data: READ_ONLY_DATA });
+
+      expect(screen.getByTestId('account-row-name-acc-es')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-sync-connect-acc-es')).not.toBeInTheDocument();
+    });
+
+    it('renders the inline "Conectar banco" CTA under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable({ data: READ_ONLY_DATA });
+
+      expect(screen.getByTestId('account-sync-connect-acc-es')).toBeInTheDocument();
+    });
+
+    it('rebuilds the columns when the tier changes after mount (ETP-5457)', () => {
+      setTiers({ fa: 'full' });
+      const { rerender } = renderTable({ data: READ_ONLY_DATA });
+      expect(screen.getByTestId('account-sync-connect-acc-es')).toBeInTheDocument();
+
+      setTiers({ fa: 'read-only' });
+      rerender(<AccountsHeaderTable data={READ_ONLY_DATA} meta={{ summary: SUMMARY }} />);
+
+      expect(screen.queryByTestId('account-sync-connect-acc-es')).not.toBeInTheDocument();
+      expect(tableProps.selectable).toBe(false);
+      expect(tableProps.rowQuickActions.buttonCount).toBe(1);
+    });
+  });
+
+  describe('reading tools that stay', () => {
+    it.each(['read-only', 'full'])('keeps filters, search, sort, refresh and the KPI sidebar under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      renderTable();
+
+      expect(screen.getByTestId('account-type-filter-trigger')).toBeInTheDocument();
+      expect(screen.getByTestId('cuentas-advanced-filter')).toBeInTheDocument();
+      expect(screen.getByTestId('cuentas-search-input')).toBeInTheDocument();
+      expect(screen.getByTestId('list-sort-toggle')).toBeInTheDocument();
+      expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+      expect(screen.getByTestId('cuentas-sidebar')).toBeInTheDocument();
+      expect(screen.getByTestId('balance-card')).toHaveTextContent('930,00');
+    });
+
+    it.each(['read-only', 'full'])('still filters the grid by type and search under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      renderTable();
+
+      fireEvent.change(screen.getByTestId('cuentas-search-input'), { target: { value: 'visa' } });
+
+      expect(screen.queryByTestId('row-acc-1')).not.toBeInTheDocument();
+      expect(screen.getByTestId('row-acc-3')).toBeInTheDocument();
+    });
+
+    it.each(['read-only', 'full'])('still refreshes the list from the toolbar under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      const onDataMutated = vi.fn();
+      renderTable({ onDataMutated });
+
+      fireEvent.click(screen.getByTestId('finance-refresh-button'));
+
+      expect(onDataMutated).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['read-only', 'full'])('still opens the detail on row click under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      renderTable();
+
+      fireEvent.click(screen.getByTestId('row-acc-1'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/financial-account/acc-1');
+    });
+
+    it.each(['read-only', 'full'])('still opens the detail from the kebab "Abrir cuenta" under the %s tier (ETP-5457)', async (fa) => {
+      setTiers({ fa });
+      renderTable();
+      openRowMenu('acc-1');
+
+      fireEvent.click(await screen.findByTestId('account-row-menu-open-acc-1'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/financial-account/acc-1');
+    });
+
+    it.each(['read-only', 'full'])('still deep-links from the "Conciliar (N)" pill under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      renderTable();
+
+      fireEvent.click(
+        screen.getByTestId('cell-eTGOPendingCount-acc-1').querySelector('[data-testid="reconcile-status-pending"]'),
+      );
+
+      expect(mockNavigate).toHaveBeenCalledWith('/financial-account/acc-1?tab=reconciliation&autoMatch=true');
+    });
+
+    it.each(['read-only', 'full'])('still offers copy IBAN under the %s tier (ETP-5457)', (fa) => {
+      setTiers({ fa });
+      renderTable();
+
+      expect(screen.getByTestId('account-row-copy-iban-acc-1')).toBeInTheDocument();
+    });
+  });
+
+  describe('dialogs', () => {
+    it('keeps every write dialog closed on a read-only mount (ETP-5457)', () => {
+      setTiers({ fa: 'read-only' });
+      renderTable();
+
+      expect(screen.getByTestId('wizard')).toHaveAttribute('data-open', 'false');
+      expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'false');
+      expect(screen.getByTestId('archive-dialog')).toHaveAttribute('data-open', 'false');
+      expect(screen.getByTestId('delete-dialog')).toHaveAttribute('data-open', 'false');
+      expect(screen.queryByTestId('transfer-modal')).not.toBeInTheDocument();
+    });
+
+    it('opens the edit modal from the row icon under full access (ETP-5457 twin)', () => {
+      setTiers({ fa: 'full' });
+      renderTable();
+
+      fireEvent.click(screen.getByTestId('account-row-edit-acc-1'));
+
+      expect(screen.getByTestId('edit-modal')).toHaveAttribute('data-open', 'true');
+    });
+  });
+
+  // "Reglas de matcheo" leads to the match-rule window, which guards itself: the button follows
+  // the role's access to THAT window and is independent of this window's tier.
+  describe('"Reglas de matcheo" — match-rule tier matrix', () => {
+    it.each([
+      { fa: 'read-only', mr: 'none', visible: false },
+      { fa: 'read-only', mr: 'read-only', visible: true },
+      { fa: 'read-only', mr: 'full', visible: true },
+      { fa: 'full', mr: 'none', visible: false },
+      { fa: 'full', mr: 'read-only', visible: true },
+      { fa: 'full', mr: 'full', visible: true },
+      // Fails closed like the real hook: an unloaded access map hides the link.
+      { fa: 'read-only', mr: undefined, visible: false },
+      { fa: 'full', mr: undefined, visible: false },
+    ])('financial-account $fa + match-rule $mr → button visible=$visible (ETP-5457)', ({ fa, mr, visible }) => {
+      // Set directly, not through setTiers: its `mr = 'full'` default would swallow `undefined`.
+      mockWindowAccess.tiers = { [FINANCIAL_ACCOUNT_WINDOW_ID]: fa, [MATCH_RULE_WINDOW_ID]: mr };
+      renderTable();
+
+      if (visible) {
+        expect(screen.getByTestId('cuentas-matching-rules-button')).toBeInTheDocument();
+      } else {
+        expect(screen.queryByTestId('cuentas-matching-rules-button')).not.toBeInTheDocument();
+      }
+    });
+
+    it('navigates to the match-rule window under financial-account read-only + match-rule read-only (ETP-5457)', () => {
+      setTiers({ fa: 'read-only', mr: 'read-only' });
+      renderTable();
+
+      fireEvent.click(screen.getByTestId('cuentas-matching-rules-button'));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/match-rule');
+    });
   });
 });
