@@ -733,7 +733,7 @@ describe('FirstStepsPage — finishing the setup (ETP-5364)', () => {
     setHook({ completed: ALL_DONE });
     render(<FirstStepsPage />);
     expect(screen.getByTestId('first-steps-finish-setup')).toHaveTextContent('firstStepsFinishSetup');
-    // The hint is what keeps this from reading as a destructive, one-way action.
+    // The hint tells the user where the click takes them and that the entry goes away.
     expect(screen.getByTestId('first-steps-finish-setup-hint'))
       .toHaveTextContent('firstStepsFinishSetupHint');
   });
@@ -747,59 +747,51 @@ describe('FirstStepsPage — finishing the setup (ETP-5364)', () => {
     expect(setDismissed).toHaveBeenCalledWith(true);
   });
 
-  it('keeps the user on the page rather than navigating away', async () => {
-    // The entry has just vanished from the sidebar; leaving the user in front of the banner
-    // that explains it — and undoes it — is what makes the action reversible.
+  it('sends the user to the dashboard once the dismissal is saved', async () => {
+    // The entry has just vanished from the sidebar, so the page the user is on is no longer
+    // somewhere they can navigate to.
     const user = userEvent.setup();
     setHook({ completed: ALL_DONE });
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-finish-setup'));
-    expect(navigateMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/dashboard'));
   });
 
-  it('surfaces a failed write, because the rollback alone is invisible', async () => {
+  it('surfaces a failed write and stays on the page', async () => {
+    // The rollback alone is invisible, and leaving would hide that nothing was saved.
     const user = userEvent.setup();
     setHook({ completed: ALL_DONE, dismissResult: false });
     render(<FirstStepsPage />);
 
     await user.click(screen.getByTestId('first-steps-finish-setup'));
     await waitFor(() => expect(toastMock.error).toHaveBeenCalledWith('genericError'));
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  it('replaces the button with the way back once dismissed', () => {
+  it('redirects a dismissed account that opens the page by URL to the dashboard', () => {
+    // Finishing is one-way: there is no page left to show once the checklist is put away.
     setHook({ completed: ALL_DONE, dismissed: true });
-    render(<FirstStepsPage />);
+    render(
+      <MemoryRouter initialEntries={['/first-steps']}>
+        <Routes>
+          <Route path="/first-steps" element={<FirstStepsPage />} />
+          <Route path="/dashboard" element={<div data-testid="dashboard-landed" />} />
+        </Routes>
+      </MemoryRouter>
+    );
 
-    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
-    expect(screen.getByTestId('first-steps-reopen')).toHaveTextContent('firstStepsReopen');
-    expect(screen.queryByTestId('first-steps-finish-setup')).not.toBeInTheDocument();
-    // Creating the first invoice is still the point of reaching 8/8.
-    expect(screen.getByTestId('first-steps-create-invoice')).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-landed')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-steps-page')).not.toBeInTheDocument();
   });
 
-  it('brings the checklist back from the banner', async () => {
-    const user = userEvent.setup();
-    const { setDismissed } = setHook({ completed: ALL_DONE, dismissed: true });
-    render(<FirstStepsPage />);
-
-    await user.click(screen.getByTestId('first-steps-reopen'));
-    expect(setDismissed).toHaveBeenCalledWith(false);
-  });
-
-  it('shows the banner even mid-checklist, so a dismissal is never a dead end', () => {
-    // `dismissed` is independent of completion: a user can dismiss at 8/8 and later un-tick a
-    // step. Without this the banner would disappear and the entry would be unrecoverable.
-    setHook({ completed: ['company-data'], dismissed: true });
-    render(<FirstStepsPage />);
-    expect(screen.getByTestId('first-steps-dismissed-notice')).toBeInTheDocument();
-    expect(screen.getByTestId('first-steps-reopen')).toBeInTheDocument();
-  });
-
-  it('shows no banner while the checklist is still offered', () => {
+  it('does not redirect while the state is still unknown', () => {
+    // `undefined` is "not answered yet" — redirecting on it would throw every user off the page.
     setHook({ completed: ALL_DONE });
+    // Set directly: `setHook`'s destructuring default would turn an explicit `undefined` into `false`.
+    hookState.value = { ...hookState.value, dismissed: undefined };
     render(<FirstStepsPage />);
-    expect(screen.queryByTestId('first-steps-dismissed-notice')).not.toBeInTheDocument();
+    expect(screen.getByTestId('first-steps-page')).toBeInTheDocument();
   });
 });
 

@@ -173,11 +173,37 @@ describe('useDashboardData — inferPendingTaskKey (PENDING_TASK_RULES)', () => 
     expect(result.current.pendingTasks[0].taskKey).toBe('pendingReceptions');
   });
 
+  // ETP-5487 — the new /purchase-order?filter=pendingReception link (emitted once
+  // com.etendoerp.go carries the fix) must resolve to the same taskKey as the legacy
+  // /goods-receipt link, so neither rule shadows the other during a rolling deploy.
+  it('infersPendingTaskKeyFromLinkPurchaseOrderNewPath — new link startsWith match, count > 1 → plural', async () => {
+    mockFetchWithPendingTasks([
+      { link: '/purchase-order?filter=pendingReception', text: '3 pending', count: 3 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('pendingReceptions_plural');
+  });
+
   // ---- Rule 3: goods-shipment / pending delivery ----
 
   it('infersPendingTaskKeyFromLinkGoodsShipment — link startsWith match, count > 1 → plural', async () => {
     mockFetchWithPendingTasks([
       { link: '/goods-shipment?DocStatus=DR', text: '5 pending', count: 5 },
+    ]);
+
+    const { result } = renderHook(() => useDashboardData());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.pendingTasks[0].taskKey).toBe('pendingSalesDeliveries_plural');
+  });
+
+  // ETP-5487 — same shadowing check as pendingReceptions above, for the sales-order side.
+  it('infersPendingTaskKeyFromLinkSalesOrderNewPath — new link startsWith match, count > 1 → plural', async () => {
+    mockFetchWithPendingTasks([
+      { link: '/sales-order?filter=pendingDelivery', text: '4 pending', count: 4 },
     ]);
 
     const { result } = renderHook(() => useDashboardData());

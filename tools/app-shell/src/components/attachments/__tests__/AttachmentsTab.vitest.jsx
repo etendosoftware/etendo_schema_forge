@@ -275,3 +275,43 @@ describe('AttachmentsTab — respects isDocumentReadOnly (ETP-5205)', () => {
   });
 });
 
+// ETP-5432/ETP-5205 merge fix — `effectiveReadOnly = !!isDocumentReadOnly || !!readOnly`.
+// A develop merge had dropped the bespoke `readOnly` prop (kept only
+// `isDocumentReadOnly`), silently reopening delete for FmModel303Page/FmModel349Page's
+// own `readOnly={status !== 'draft'}` usage. These cases pin the OR gate itself —
+// each flag alone must hide delete, and upload stays gated by isDocumentReadOnly only.
+describe('AttachmentsTab — effectiveReadOnly OR gate (readOnly + isDocumentReadOnly, ETP-5432)', () => {
+  beforeEach(() => {
+    hookState.items = [{ id: '1', name: 'first.pdf', size: 100 }];
+  });
+
+  it('hides per-row delete and delete-all when readOnly=true but isDocumentReadOnly=false', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('does NOT disable the upload dropzone when only readOnly=true (upload is gated by isDocumentReadOnly alone)', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly={false} />);
+    expect(screen.getByTestId('attachments-dropzone').querySelector('[disabled]')).toBeFalsy();
+  });
+
+  it('hides per-row delete and delete-all when isDocumentReadOnly=true but readOnly=false', () => {
+    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('hides per-row delete and delete-all when BOTH readOnly and isDocumentReadOnly are true', () => {
+    render(<AttachmentsTab {...baseProps} readOnly isDocumentReadOnly />);
+    expect(screen.queryByTestId('attachment-delete-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachments-delete-all')).not.toBeInTheDocument();
+  });
+
+  it('regression: shows per-row delete and delete-all when BOTH flags are false/absent', () => {
+    render(<AttachmentsTab {...baseProps} readOnly={false} isDocumentReadOnly={false} />);
+    expect(screen.getByTestId('attachment-delete-1')).toBeInTheDocument();
+    expect(screen.getByTestId('attachments-delete-all')).toBeInTheDocument();
+  });
+});
+

@@ -35,7 +35,7 @@ A user should be able to:
 - Window shape: master-child. The primary entity is the invoice `header`, with editable `lines` plus an additional `paymentPlan` child surface.
 - Lines tab layout: this window uses `window.linesLayout = "inlineEditable"`. Rows render at 40 px with pencil and trash hover-action icons on the right; clicking pencil flips the row into inline edit; trash removes the row after confirmation. FK fields in line rows (product, tax) use `InlineSearchCombo`: a text input with server-side search that lets the user filter by typing — for example, typing "IVA" filters all matching tax rates. The add-line button, related-documents panel, notes panel, and totals panel are unchanged from the classic layout. See `docs/ui-customization.md` section 13 for the full reference. **ETP-5133:** the `product` column no longer ellipsizes — it declares `noTruncate: true` in the generated `LinesTable.jsx`, so the full product name is always visible, scrolling horizontally within its own cell when it overflows; `description` is unchanged (still truncates with a hover tooltip). The add-row form is now a genuine child of the same scrollable element the saved rows scroll in (a shared-registry portal, `tools/app-shell/src/lib/linesScrollHost.js`), so scrolling the grid horizontally while adding a line keeps both in sync — previously the add-row was a separate, independently-scrolled table that stayed put while saved rows scrolled underneath it. The expand-row "Dimensiones contables" panel (`project`/`costcenter`) now also truncates a long selector value with a native hover tooltip showing the full text, instead of letting it overflow the panel's fixed-width grid cell.
 - **Create a product from the line's product selector (ETP-5254):** the product lookup drawer opened from a line shows a pinned `+ Crear producto` row at the top. It opens a popup that **mounts the Products window itself** — its own form, its own primary tabs and its own **Precio / Costo / Contabilidad / Adjuntos** strip — on a private memory router inside this page, with the app chrome dropped. Nothing is reimplemented, so a tab or field added to the Products window appears here with no change. Saving happens with the window's own `Guardar`; `Completado` then closes the popup and selects the new product in the line. Cancelling before saving leaves the invoice untouched, and Escape closes only the popup — the drawer comes back with the search intact. The line still arrives at **price 0** unless a price is set for the document's tariff, in which case the user types it on the line. The popup creates no cost line: that rule belongs to the Products window, which states and enforces it there (ETP-5245), so a stockable product created here still needs its cost set. The create row is reachable by pointer and Tab, not through the arrow-key ring. Full mechanism, why nesting a router is legal, the seven in-scope specs and the known limitations: `docs/ui-customization.md` section 19.
-- List behavior: the custom list now uses the richer `InvoiceHeaderTable` custom component (previously the list view used the plain generated `HeaderTable`). The visible columns, in order, are: Invoice Date (no dot indicator), Document No., Due Date (4-state dot computed from the row's `outstandingAmount` and the maximum `dueDate` across all payment-plan installments — fetched in parallel via `paymentPlan?parentId=` and shown as "—" when no payment plan exists). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status (pure AD `DocStatus` value rendered as a native status badge — DR/CO/VO/CL — not a payment-derived status), Total Gross Amount, **Outstanding Amount** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Outstanding Amount" / "Saldo pendiente" so the grid reads in payment terms rather than ledger terms; ETP-5106 also added an `es_AR` override, which previously fell through to the raw AD label "Total Pendiente"), and **Delivery Status** (a percent progress bar driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the grid. When the fiscal profile enables a given target for the organisation, fiscal status badge columns are injected between Document Status and Total Gross Amount: an **SII Status** column when SII is active (reads `row.aeatsiiEstado`), a **TBAI Status** column when TBAI is active (reads `row.eTGOTbaiStatus`, the stored computed AD column `EM_ETGO_Tbai_Status` on `c_invoice` — ETP-5216 replaced the former server-injected `tbaiSyncEstado`, which could be neither filtered nor sorted), and a **Verifactu Status** column when Verifactu is active (reads `row. **ETP-5216 follow-up — the adoption-date gate now lives in the database.** An invoice dated before its organization joined TicketBAI (or belonging to an organization with no active `tbai_config` row) gets the literal `NoAplica` from `ETGO_GET_TBAI_STATUS`, and the cell renders it as a dash via `isTbaiStatusNotApplicable()` (`shared/fiscalTargets.js`). ETP-5122 had put that gate in the cell as `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`, which had two defects once the column became filterable: the backend could not see the rule (so filtering by "Pendiente" returned rows the grid drew as a dash), and `useFiscalConfig(orgId)` is called with the SELECTED organization, so every row was measured against one adoption date instead of its own organization's. The gate is unchanged for SII and VERI*FACTU, whose columns are not stored computed columns.etvfacInvoiceStatus` and normalises short codes AC/AE/ER/IN/PE via `normalizeVerifactuStatus()`). All three statuses come directly from the list API response without any secondary batch fetch — the `useInvoiceListFiscalStatus` hook was eliminated in ETP-4125 to fix HTTP 403 errors on large lists caused by nginx URL-length limits. The grid opens rows into a lateral preview modal instead of immediately navigating away, supports cloning from the grid, accepts `?DocStatus=<status>` as a column pre-filter, and accepts `?filter=overdue` as a quick filter for invoices with remaining outstanding amount.
+- List behavior: the custom list now uses the richer `InvoiceHeaderTable` custom component (previously the list view used the plain generated `HeaderTable`). The visible columns, in order, are: Invoice Date (no dot indicator), Document No., Due Date (4-state dot computed from the row's `outstandingAmount` and the maximum `dueDate` across all payment-plan installments — fetched in parallel via `paymentPlan?parentId=` and shown as "—" when no payment plan exists). The four states use the Etendo Figma tokens: **paid** (`outstandingAmount ≤ 0`, dot `green-600 #26A95F`) wins over any date-based state, **overdue** (dueDate before today and outstanding still pending, dot `red-500 #F53D6B` with the date text reinforced in `red-700 #D50B3E`), **soon** (dueDate within the next 7 days with outstanding pending, dot `yellow-600 #FAAF00`), and **ok** (anything further out, dot `gray-400 #8A8AA3`). Date-only invoice and due-date values are normalized as local calendar dates before rendering so same-day invoices do not shift backward because of timezone conversion, and the final rendered date follows the active app locale just like `Invoice Date`. Business Partner, Document Status (pure AD `DocStatus` value rendered as a native status badge — DR/CO/VO/CL — not a payment-derived status), Total Gross Amount, **Outstanding Amount** (the AD `OutstandingAmt` column relabeled via `window.labelOverrides` from "Total Outstanding" to "Outstanding Amount" / "Saldo pendiente" so the grid reads in payment terms rather than ledger terms; ETP-5106 also added an `es_AR` override, which previously fell through to the raw AD label "Total Pendiente"), and **Delivery Status** (a compact percent progress circle with the percentage beside it — ETP-5545, see `docs/decisions-reference.md` "Percent column rendering" — driven by the virtual AD column `em_etgo_delivery_status` on `c_invoice` — calculated server-side from `m_matchinv` + `m_matchsi` quantity-weighted against `qtyinvoiced`; 0% when no matching exists yet, 100% when fully matched, intermediate when partial) complete the grid. When the fiscal profile enables a given target for the organisation, fiscal status badge columns are injected between Document Status and Total Gross Amount: an **SII Status** column when SII is active (reads `row.aeatsiiEstado`), a **TBAI Status** column when TBAI is active (reads `row.eTGOTbaiStatus`, the stored computed AD column `EM_ETGO_Tbai_Status` on `c_invoice` — ETP-5216 replaced the former server-injected `tbaiSyncEstado`, which could be neither filtered nor sorted), and a **Verifactu Status** column when Verifactu is active (reads `row. **ETP-5216 follow-up — the adoption-date gate now lives in the database.** An invoice dated before its organization joined TicketBAI (or belonging to an organization with no active `tbai_config` row) gets the literal `NoAplica` from `ETGO_GET_TBAI_STATUS`, and the cell renders it as a dash via `isTbaiStatusNotApplicable()` (`shared/fiscalTargets.js`). ETP-5122 had put that gate in the cell as `isSifEligibleByDate(row.invoiceDate, tbaiRecord?.tbaisystemdate)`, which had two defects once the column became filterable: the backend could not see the rule (so filtering by "Pendiente" returned rows the grid drew as a dash), and `useFiscalConfig(orgId)` is called with the SELECTED organization, so every row was measured against one adoption date instead of its own organization's. The gate is unchanged for SII and VERI*FACTU, whose columns are not stored computed columns.etvfacInvoiceStatus` and normalises short codes AC/AE/ER/IN/PE via `normalizeVerifactuStatus()`). All three statuses come directly from the list API response without any secondary batch fetch — the `useInvoiceListFiscalStatus` hook was eliminated in ETP-4125 to fix HTTP 403 errors on large lists caused by nginx URL-length limits. The grid opens rows into a lateral preview modal instead of immediately navigating away, supports cloning from the grid, accepts `?DocStatus=<status>` as a column pre-filter, and accepts `?filter=overdue` as a quick filter for invoices with remaining outstanding amount.
 - **List subset tabs (ETP-4737):** the segmented control above the list has 3 entries — **Todos** (all), **Facturas** (plain `FAC` invoices), and **Facturas rectificativas** (the unified rectificative subtype, replacing the former separate credit-note and return-invoice tabs). Both filters are declared in `decisions.json → window.subsetFilters` as backend `criteria=` filters (see `docs/list-filters.md`). "Facturas" filters on `transactionDocument$documentCategory = ARI` AND `transactionDocument$etsgIsRectificative ≠ true`; "Facturas rectificativas" ORs three conditions — `transactionDocument$etsgIsRectificative = true` (the new "Factura Rectificativa" doc type), `transactionDocument$documentCategory = ARC`, and `= ARI_RM` (either legacy doc type, kept so historical invoices under the old categories still show under the merged tab). The discriminator is needed because the new "Factura Rectificativa" doc type shares the plain-invoice `ARI` category — `documentCategory` alone cannot tell them apart, only the `etsgIsRectificative` flag on `C_DocType` can. See the `_note` on each `subsetFilters` entry in `decisions.json` for the full investigation trail. **Architecture note:** this window has a hand-rolled `SalesInvoiceWindow` component (`tools/app-shell/src/windows/custom/sales-invoice/index.jsx`) that `registry.js` routes to instead of the generated `HeaderPage.jsx` — so the generator's normal `decisions.json → contract.json → HeaderPage.jsx` flow never reaches the actual rendered list. `index.jsx` keeps its own hand-written `SUBSET_FILTERS` constant, deliberately kept byte-identical to `decisions.json → window.subsetFilters` (see the comment above `SUBSET_FILTERS` in that file). Any future edit to the subset-filter criteria MUST update both places, or the two will silently diverge again (as happened here: the `rectificativeInvoicesTab` merge landed in `decisions.json` and the generated `HeaderPage.jsx` but not in `index.jsx`, so the real app kept showing the old 4-tab / undifferentiated behavior until this was caught in review).
 - Detail behavior: the detail route keeps the generated invoice page, adds a custom top bar, custom bottom totals/documents panel, a `Related Documents` tab, a business-partner guard before adding lines, and invoice-specific extra actions such as shipment import, order import, return-shipment import, source-invoice import (rectificative invoices only — see below), and clone.
 - An **Attachments** tab is available in the detail tab strip, allowing files to be attached to the current record.
@@ -860,8 +860,10 @@ invoice that predates the system's existence for the org entirely.
 **Where the earliest-cutover date lives:** `useFiscalConfig.js` now fetches ALL rows per
 system (`fetchAllRows`, not just the previously-preferred active-or-first row) and derives
 `earliestSiiCutoverDate` / `earliestTbaiCutoverDate` / `earliestVerifactuCutoverDate` from
-them (`earliestCutoverDate()`, `MIN` over `monitordate` / `tbaisystemdate` /
-`inVfactuSystem` across active AND inactive rows). This required **no new API call** — NEO
+them (`earliestCutoverDate()`, `MIN` over `fechaAcogidaSII` / `tbaisystemdate` /
+`inVfactuSystem` across active AND inactive rows — see "SII cutover field was reading the
+wrong column (ETP-5432, item #1)" below for a correction to the SII field name). This
+required **no new API call** — NEO
 already reads fiscal-config specs with `NO_ACTIVE_FILTER=true`, so the existing 3 requests
 already returned inactive rows; only the page size (`_limit`) was bumped from 10 to 50 and
 the "pick one row" step was split from the "compute the minimum" step. `siiRecord` /
@@ -961,6 +963,60 @@ Regression coverage (added on top of the sets above):
 Each covers, per system: eligible + never-sent → pending marker (not dash); not-eligible
 (pre-cutover) → still dash (regression guard); eligible + already-has-a-real-status →
 unchanged real status (regression guard).
+
+### SII cutover field was reading the wrong column (ETP-5432, item #1)
+
+**Bug:** `useFiscalConfig.js`'s `CUTOVER_FIELD.sii` read `aeatsii_config.monitordate` — the
+"SII monitor start date", a separate, cosmetic field (see `sii-config.md`) — instead of
+`fechaAcogidaSII` (`aeatsii_config.insiisystemdate`, NEO apiKey `fechaAcogidaSII`), the real
+SII enrollment/"fecha de acogida" date. Classic's own gate
+(`UpdateInvoicesPreSii.java`'s `siiConfig.getFechaAcogidaSII()`, and the
+`AEATSII_PreSII_Invoice` auxiliary input) never looks at `monitordate` for this purpose. An
+org whose SII monitor happened to start earlier than its real enrollment date could show a
+live SII status — and offer "Enviar a SIF" (see the next item) — for invoices dated before it
+was ever SII-enrolled. Live-tested on invoice 10000075 (accountingDate 22/09/2026,
+`fechaAcogidaSII` 24/09/2026).
+
+**Fix:** `CUTOVER_FIELD.sii` now reads `fechaAcogidaSII`. This is the single source
+`earliestSiiCutoverDate` is derived from (see "Second correction" above), so the fix
+propagates to every consumer of that value for free: the SII status badge (`useFiscalStatus`,
+this window and `purchase-invoice.md`), the invoice-preview "Estado SII" `InfoRow`, and the
+list columns' eligibility gate. `CUTOVER_FIELD.tbai`/`.verifactu` were already correct and are
+unchanged.
+
+### SII had no date gate at all on "Enviar a SIF" eligibility (ETP-5432, item #3)
+
+**Bug:** unlike TBAI (gated on `isSifEligibleByDate(invoice.invoiceDate,
+tbaiRecord?.tbaisystemdate)` since ETP-5122), `sifSending.js`'s `getPendingSifTargets()` had
+**no date gate at all** for SII — `sendSii: showSii && (!isSent(invoice?.aeatsiiIssent) ||
+pendingRegistralCorrection)`. Combined with the `monitordate` bug above, "Enviar a SIF" could
+offer to send an invoice dated before the org was ever SII-enrolled. Same live repro as above
+(invoice 10000075).
+
+**Fix:** `getPendingSifTargets(specName, profile, invoice, territory, tbaiRecord,
+siiCutoverDate)` gained a 6th parameter — `useFiscalConfig().earliestSiiCutoverDate` — and
+`sendSii` is now `siiEligibleByDate && (!isSent(...) || pendingRegistralCorrection)`, where
+`siiEligibleByDate = showSii && isSifEligibleByDate(invoice?.accountingDate,
+siiCutoverDate)`. SII books by accounting date, not invoice date — same rule
+`useFiscalStatus.js`'s own `siiEligible` check and `isSifEligibleByDate`'s doc already use.
+Fail-safe: with no cutover date on file, SII is never pending, mirroring
+`isSifEligibleByDate`'s own default. `SendToSifButton.jsx` and `useInvoicePreview.js` (both
+callers of `getPendingSifTargets`) were updated to pass `earliestSiiCutoverDate` through.
+
+### SIF tab's own SII status badge had no eligibility concept (ETP-5432)
+
+**Bug:** `SifTab.jsx`'s `SiiStatusBadge` (the "Estado SII" pill inside the SII panel of the
+SIF tab itself) had no eligibility concept at all — any falsy/unmapped `estado` fell through
+to `SII_DEFAULT` ("Pendiente"). `PurchaseInvoiceHeaderTable.jsx`'s list column and
+`useFiscalStatus.js`'s preview `InfoRow` both already applied the not-eligible-means-dash
+rule (ETP-5229 item #16); this third surface didn't, so an invoice dated before the org's SII
+cutover showed "Pendiente" here while correctly showing a dash everywhere else.
+
+**Fix:** `SiiStatusBadge` gained an `eligible` prop — renders a dash immediately when falsy,
+before touching `estado` at all. `useSifFieldPatcher.js` computes it as `siiEligible = showSii
+&& isSifEligibleByDate(data?.accountingDate, earliestSiiCutoverDate)` (same accounting-date
+rule as above) and returns it in its hook result; `SifTab.jsx` passes `data?.aeatsiiEstado`
+and the new `siiEligible` value into the badge.
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -1511,6 +1567,42 @@ transaction, so a raise would mean users cannot save invoices at all. See §5.8 
 [`../plans/2026-09-08-tbai-status-computed-column-migration.md`](../plans/2026-09-08-tbai-status-computed-column-migration.md)
 for the five edge cases and the reasoning behind each.
 
+### Missing recompute dependency on `C_Invoice` itself (ETP-5432, item #5)
+
+**Bug:** `EM_ETGO_Tbai_Status`'s `AD_COLUMN_COMP_DEPENDENCY` rows only ever watched
+`tbai_config` and `tbai_syncinvoice` — there was **no dependency on `c_invoice` itself**. A
+stored computed column only recomputes when its recompute trigger actually fires, so a
+**newly created invoice** kept `eTGOTbaiStatus` as `NULL` (never computed at all) until the
+org's `tbai_config` changed again or a sync attempt was made — confirmed live (`SELECT
+tgname FROM pg_trigger WHERE tgrelid='c_invoice'::regclass` returned no `ad_scd_*` row for
+this column, while `tbai_config`/`tbai_syncinvoice` both had one). A `NULL` value is
+indistinguishable from "not sent yet", so it fell straight into `isSent()`/`'Pendiente'` in
+`useFiscalStatus.js`, showing "Pendiente" for an invoice that may predate the org's TBAI
+enrollment entirely — a status it never actually belonged to.
+
+**Fix — backend (`com.etendoerp.go`):** a new `AD_COLUMN_COMP_DEPENDENCY` row on
+`EM_ETGO_Tbai_Status`, watching `C_Invoice` (`SOURCE_TABLE_ID = 318`) for INSERT and UPDATE,
+with watched columns `DateInvoiced` (`AD_COLUMN_ID = 3783`) and `DocStatus`
+(`AD_COLUMN_ID = 3494`) — the two invoice-own columns the computation function's eligibility
+logic actually reads. `TARGET_ID_RESOLVER_SQL` follows the same
+`SELECT COALESCE(NEW.c_invoice_id, OLD.c_invoice_id) FROM dual` shape already used by the
+`tbai_syncinvoice` dependency. See `com.etendoerp.go`'s `docs/STORED-COMPUTED-COLUMNS.md` for
+the dependency-catalogue conventions this follows.
+
+**Fix — frontend defense-in-depth (`useFiscalStatus.js`):** because a stored column's
+recompute is only as reliable as its trigger wiring, `useFiscalStatus` also gained a
+client-side fallback that only kicks in when `eTGOTbaiStatus` is genuinely `null`/`undefined`
+(never computed) — any REAL value the DB already produced, including a literal `'NoAplica'`
+or `'Pendiente'` it wrote itself, is trusted as-is and never second-guessed:
+`tbaiUncomputed = invoice.eTGOTbaiStatus == null`; `tbaiDateEligible = !tbaiUncomputed ||
+isSifEligibleByDate(invoice.invoiceDate, tbaiCutover)`. The hook's `cutoverDates` parameter
+gained a `tbai` key (`{ sii, tbai, verifactu }`, was `{ sii, verifactu }`) — consulted ONLY as
+this fallback, never as TBAI's primary gate (that stays the DB's own `NoAplica` answer, per
+"TicketBAI status is a real column" above). This is a safety net for the window before the
+backend dependency fix (and any environment it hasn't been deployed to yet) — SII and
+Verifactu have no equivalent stored column and keep their own unconditional client-side
+`earliestCutoverDate` gating.
+
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
@@ -1690,7 +1782,9 @@ never reappears in this window's custom `index.jsx`.
 
 The pending-payment control uses the warning background, border, and foreground
 roles; settled invoices use the corresponding success roles. Delivery progress is
-rendered by the shared percent cell renderer and remains neutral at zero progress.
+rendered by the shared percent cell renderer (`renderPercentCell` -> `ProgressCircle`,
+ETP-5545): the arc is grey (track only) at zero progress, foreground/black for 1-99%
+and green at 100% or more, while the percentage label is always foreground/black.
 
 ### Write off the invoice difference (ETP-4797)
 
@@ -1927,3 +2021,24 @@ and the notes field / total-discount input (shared `DetailView`/`LinesBottomSect
 live-testable in this session — this role has `full`, not `read-only`, access to Sales Invoice, and
 `lockWhenProcessed` is `null` in `decisions.json`, so no completed-invoice state can be reached
 either way; relies on unit-test coverage.
+
+### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
+
+Under the runtime Solo-Lectura tier (tier only — the static `decisions.json → window.readOnly`
+does not trigger any of this):
+
+- **Row "Enviar" (list hover)** is gone. `ListView` turns the Email gate itself off
+  (`documentPreview: false`, `sendDocument.enabled: false`, no `onEmail`), so `RowQuickActions`,
+  `DataTable`'s column-width estimate and its actions-column mount stay consistent. The default
+  `SendDocumentModal` mount is gated too.
+- **Preview**: no Send; **Download PDF stays** (decision D1: printing/downloading only exposes
+  data the role can already read). `ListView` passes `readOnly` (the tier) to `renderPreview`,
+  and the preview forwards it as `attachmentConfig.readOnly`: the marked attachment is still
+  READ (cached PDF shown, Download works) but never written — no auto-store of the rendered PDF,
+  no overwrite of a stale cache, no drop zone, no delete.
+- **Detail Print** (`action-document-print`) and the detail Mail/preview button **stay** (D1).
+- **Backend**: `POST /sws/neo/email-contracts/<window>-send/send` answers 403 (`UNAUTHORIZED`
+  → "No tenés autorización para enviar este documento") and every attachment write
+  (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
+  role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
+- Preview also hides **Añadir cobro** and **Enviar a SIF** under the tier (both write).

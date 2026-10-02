@@ -30,24 +30,28 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 ## Account management (create / edit / archive)
 
 > **Story:** ETP-4096. The toolbar's **+ Nueva cuenta** button and two row-kebab
-> actions (**Editar cuenta**, **Archivar cuenta**) are now active. All of this is the
-> *offline* flow — accounts created without a bank connection. The "Con conexión"
-> (bank connection) path is visible but disabled; it ships in a later iteration.
+> actions (**Editar cuenta**, **Archivar cuenta**) are active. The wizard covers both the
+> *offline* flow (accounts created without a bank connection) and, through "Con conexión",
+> the connect-with-creation flow. Full detail: `financial-account.md` → "New Account Wizard".
 
 ### New account wizard (`NewAccountWizard`)
 
 A multi-step modal launched from **+ Nueva cuenta**:
 
 1. **Tipo** — three cards: Banco, Caja, Tarjeta.
-2. **Banco → conexión** — a "Con conexión / Sin conexión" toggle. "Con conexión" is
-   disabled (badge "Próximamente"); only "Sin conexión" proceeds.
-3. **Banco** — a search box plus a "Populares" grid of banks (static catalog in
-   `bankCatalog.js` until a real source is wired).
-4. **Institución** — the bank's variants plus an "Añadir &lt;banco&gt; · Sin conexión" row.
-5. **Formulario** — Nombre (obligatorio) / IBAN / BIC-SWIFT / Moneda → **Añadir cuenta**.
+2. **Banco / Tarjeta → conexión** — "Con conexión" / "Sin conexión" cards. "Con conexión"
+   hands off to the bank-connection flow (`onConnectWithCreation` → Salt Edge), which creates
+   the account from the chosen bank account; "Sin conexión" continues offline.
+3. **Banco** — a search box plus a grid of banks from the live Salt Edge provider catalog
+   for the selected country (with the provider logo); falls back to the static
+   `bankCatalog.js` when the catalog is unavailable. "Continuar sin seleccionar banco" skips it.
+4. **Institución** — only for static-catalog banks (Salt Edge providers go straight to the form).
+5. **Formulario** — Nombre (obligatorio) / País / IBAN / BIC-SWIFT / Moneda → **Añadir cuenta**
+   (Tarjeta: Nombre / País / Moneda).
 
-- **Caja** skips straight to a simplified form (Nombre + Moneda — no IBAN/BIC).
-- **Tarjeta** shows a "Próximamente" placeholder (depends on the bank connection).
+- **Caja** skips straight to a simplified form (Nombre + País + Moneda — no IBAN/BIC).
+- Picking a Salt Edge provider (Banco or Tarjeta) stores it on the account (`psd2Provider` FK)
+  together with its logo on `PSD2_PROVIDER.LOGO_URL` (ETP-5521), so the list row shows the bank logo.
 - IBAN is validated client-side with the ISO 13616 mod-97 checksum
   (`lib/validateIban.js`) before submit; an invalid IBAN blocks the form with an
   inline error. A duplicate account name surfaces inline (backend HTTP 409).

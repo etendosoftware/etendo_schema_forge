@@ -339,9 +339,11 @@ export function useAttachments({ tableName, recordId, token, apiBaseUrl, isActiv
   const downloadAll = useCallback(async () => {
     if (!tableName || !recordId) return;
     try {
+      // ETP-5424 — the server builds the whole archive before it answers, so a record with many
+      // attachments can outlive the default read timeout; opt out.
       const res = await apiFetch(
         `/sws/neo/attachments/${tableName}/${recordId}/zip`,
-        { token },
+        { token, timeout: 0 },
       );
       if (!res.ok) {
         const msg = await extractErrorMessage(res);

@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
-import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
+import { useUI } from '@/i18n';
+import { extractBackendMessageKeys, extractBackendMessageParams } from '@/lib/backendErrors.js';
 /**
  * useNeoAction — invokes a generic NEO action endpoint (ETP-4298).
  *
@@ -16,7 +17,7 @@ import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
  * (defaults to 'header' — the document header entity).
  *
  * Unlike useDocumentAction (which throws on error), this hook resolves to a
- * structured `{ success, message, messageKeys }` result so the RowQuickActions consumer can
+ * structured `{ success, message, messageKeys, messageParams }` result so the RowQuickActions consumer can
  * forward it to `onMenuActionExecuted(action, result)` without try/catch.
  *
  * @param {object}  opts
@@ -30,11 +31,12 @@ import { extractBackendMessageKeys } from '@/lib/backendErrors.js';
  * request root — e.g. Internal Consumption's `processNow`, which needs `{ action: 'CO' }` — that
  * would otherwise be rejected with "Missing mandatory parameter".
  *
- * @returns {{ execute: (recordId: string, actionName: string, requestBody?: object) => Promise<{success: boolean, message?: string, messageKeys?: string[]}>, loading: boolean }}
+ * @returns {{ execute: (recordId: string, actionName: string, requestBody?: object) => Promise<{success: boolean, message?: string, messageKeys?: string[], messageParams?: object}>, loading: boolean }}
  */
 export function useNeoAction({ specName: _specName, entityName = 'header', apiBaseUrl, token } = {}) {
   const [loading, setLoading] = useState(false);
   const apiFetch = useApiFetch(apiBaseUrl);
+  const ui = useUI();
 
   const execute = useCallback(async (recordId, actionName, requestBody) => {
     if (!apiBaseUrl || !recordId || !actionName) {
@@ -57,16 +59,22 @@ export function useNeoAction({ specName: _specName, entityName = 'header', apiBa
         // ETP-5316 — `messageKeys` rides alongside `message` so the consumer's
         // `translateBackendError(result.message, ui, { messageKeys: result.messageKeys })` can map
         // by AD_MESSAGE key. Absent (undefined) against a backend that does not send it.
-        return { success: false, message: message || res.statusText, messageKeys: extractBackendMessageKeys(body) };
+        // ETP-5175 — `messageParams` (the values those keys interpolate) rides along the same way.
+        return {
+          success: false,
+          message: message || res.statusText,
+          messageKeys: extractBackendMessageKeys(body),
+          messageParams: extractBackendMessageParams(body),
+        };
       }
       const success = nested?.success ?? body?.success ?? true;
       return { success, message };
     } catch (err) {
-      return { success: false, message: err?.message || 'Network error' };
+      return { success: false, message: err?.message || ui('networkErrorRetry') };
     } finally {
       setLoading(false);
     }
-  }, [apiBaseUrl, entityName, apiFetch]);
+  }, [apiBaseUrl, entityName, apiFetch, ui]);
 
   return { execute, loading };
 }

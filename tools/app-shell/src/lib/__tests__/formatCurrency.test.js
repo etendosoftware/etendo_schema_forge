@@ -282,6 +282,47 @@ describe('formatCurrency', () => {
   });
 });
 
+describe('exact-decimal-string fast path (ETP-5456)', () => {
+  // fiscal-models' `buildValidatedBoxValue`/`buildExactDecimalValue` deliberately hand
+  // formatCurrency a STRING (not a Number) once a box's magnitude exceeds float64's exact-decimal
+  // range (15+ integer digits) — `Number(value)` would silently re-corrupt exactly the digits
+  // that string was built to preserve. This describe block is the first DIRECT unit coverage of
+  // that fast path in formatCurrency.js itself (previously only exercised indirectly, through
+  // fiscal-models' own component tests) — added by QA (ETP-5456) because the ticket's commit
+  // touched formatCurrency.js (a MANDATORY-policy shared money formatter) without a single direct
+  // test asserting on the new EXACT_DECIMAL_STRING/groupExactDecimalString code path.
+  it('preserves a 15-integer-digit + 2-decimal string EXACTLY (Number() alone would corrupt it)', () => {
+    assert.equal(
+      formatCurrency('EUR', '123456789012345.35'),
+      `123.456.789.012.345,35${NBSP}€`,
+    );
+  });
+
+  it('handles a negative exact-decimal string at the boundary', () => {
+    assert.equal(
+      formatCurrency('EUR', '-999999999999999.99'),
+      `-999.999.999.999.999,99${NBSP}€`,
+    );
+  });
+
+  it('pads a plain integer string (no decimal part) to 2 decimals — the exact regression this ' +
+     'ticket introduced and fixed (a decimal-less string used to fall through without padding)', () => {
+    assert.equal(formatCurrency('EUR', '8000'), `8.000,00${NBSP}€`);
+    assert.equal(formatCurrency('EUR', '0'), `0,00${NBSP}€`);
+  });
+
+  it('a string with only 1 decimal digit is padded to 2, not left short', () => {
+    assert.equal(formatCurrency('EUR', '50.5'), `50,50${NBSP}€`);
+  });
+
+  it('a garden-variety small numeric string (not just the 15-digit fast path) still formats correctly', () => {
+    // EXACT_DECIMAL_STRING matches ANY '-?digits(.dd)?' string, not only boundary magnitudes —
+    // this confirms the fast path is correct for the overwhelming majority of ordinary values
+    // too, not just the extreme case it was built for.
+    assert.equal(formatCurrency('EUR', '1234.56'), `1.234,56${NBSP}€`);
+  });
+});
+
 describe('getCurrencySymbol (ETP-4314)', () => {
   // Regression coverage for the bug this ticket fixed: AmountInput used to
   // hardcode a literal '€' suffix regardless of the actual account/document

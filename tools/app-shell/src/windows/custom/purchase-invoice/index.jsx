@@ -14,7 +14,7 @@ import HeaderPage from '@generated/purchase-invoice/generated/web/purchase-invoi
 import InvoicePreview from '../shared/InvoicePreview.jsx';
 import PurchaseInvoiceTopbar from './PurchaseInvoiceTopbar.jsx';
 import PurchaseInvoiceSecondaryActions from '@generated/purchase-invoice/custom/PurchaseInvoiceSecondaryActions';
-import OcrSidePanel from '../shared/OcrSidePanel.jsx';
+import OcrSidePanel, { ReadOnlyOcrSidePanel } from '../shared/OcrSidePanel.jsx';
 import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
@@ -221,7 +221,7 @@ export default function PurchaseInvoiceWindow(props) {
           summary={summary}
           topbarRight={PurchaseInvoiceTopbar}
           topbarSecondary={PurchaseInvoiceSecondaryActions}
-          sidePanel={OcrSidePanel}
+          sidePanel={windowAccessTier === 'read-only' ? ReadOnlyOcrSidePanel : OcrSidePanel}
           sidePanelStyle={{ width: 360 }}
           notesField="description"
           breadcrumb={breadcrumb}
@@ -301,13 +301,14 @@ export default function PurchaseInvoiceWindow(props) {
         hidePrint
         hideEyeCount
         refreshTrigger={refreshKey}
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <InvoicePreview
             invoice={row}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
             specName="purchase-invoice"
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             onInvoiceUpdated={() => setRefreshKey(k => k + 1)}

@@ -58,7 +58,9 @@ function fmtAmount(n) {
 
 /**
  * Map KPI handler response to the shape expected by DashboardPage.
- * Handler returns: [{key, label, value, format, trend, icon}, ...]
+ * Handler returns: [{key, label, value, format, trend, hasPrevious, icon}, ...]
+ * `hasPrevious === false` means the comparison period is empty (trend is meaningless); an
+ * older handler that does not send the flag is treated as having a previous period.
  */
 function mapKpis(handlerData) {
   if (!handlerData) return null;
@@ -72,21 +74,23 @@ function mapKpis(handlerData) {
 
   return kpisConfig.map((cfg) => {
     const h = byKey[cfg.key];
-    if (!h) return { ...cfg, value: 0, trend: 0, previousValue: 0 };
+    if (!h) return { ...cfg, value: 0, trend: 0, previousValue: 0, hasPrevious: false };
     const trend = h.trend || 0;
     const value = h.value || 0;
     const previousValue = trend !== 0
       ? Math.round(value / (1 + trend / 100))
       : value;
-    return { ...cfg, value, trend, previousValue };
+    return { ...cfg, value, trend, previousValue, hasPrevious: h.hasPrevious !== false };
   });
 }
 
 /**
  * Map trends handler response.
- * Handler returns: [{labels, values}]
+ * Handler returns: [{labels, values, expenseValues, dates, granularity, growthPct, hasPrevious}]
+ * (the last four are ETP-5493 additions, absent from older backends). `range` is the range the
+ * data was fetched with, so the chart copy always matches the data on screen.
  */
-function mapTrends(handlerData) {
+function mapTrends(handlerData, range) {
   if (!handlerData || handlerData.length === 0) return null;
   const trend = handlerData[0];
 
@@ -107,6 +111,11 @@ function mapTrends(handlerData) {
     labels: Array.isArray(trend.labels) ? trend.labels : [],
     values,
     expenseValues: values.map((_, idx) => rawExpenseValues[idx] ?? 0),
+    dates: Array.isArray(trend.dates) ? trend.dates : null,
+    granularity: typeof trend.granularity === 'string' ? trend.granularity : null,
+    growthPct: Number.isFinite(Number(trend.growthPct)) ? Number(trend.growthPct) : 0,
+    hasPrevious: trend.hasPrevious === true,
+    range,
   };
 }
 
@@ -144,10 +153,12 @@ function mapPendingTasks(handlerData) {
         collectionsDueToday_plural: '/sales-invoice?filter=overdue',
         paymentsDueToday: '/purchase-invoice?filter=overdue',
         paymentsDueToday_plural: '/purchase-invoice?filter=overdue',
-        pendingReceptions: '/goods-receipt?DocStatus=DR',
-        pendingReceptions_plural: '/goods-receipt?DocStatus=DR',
-        pendingSalesDeliveries: '/goods-shipment?DocStatus=DR',
-        pendingSalesDeliveries_plural: '/goods-shipment?DocStatus=DR',
+        // ETP-5487 — source moved from M_InOut drafts (goods-receipt/goods-shipment) to
+        // completed C_Order rows filtered by delivery status (purchase-order/sales-order).
+        pendingReceptions: '/purchase-order?filter=pendingReception',
+        pendingReceptions_plural: '/purchase-order?filter=pendingReception',
+        pendingSalesDeliveries: '/sales-order?filter=pendingDelivery',
+        pendingSalesDeliveries_plural: '/sales-order?filter=pendingDelivery',
       };
       if (FILTER_LINKS[mapped.taskKey]) {
         mapped.link = FILTER_LINKS[mapped.taskKey];
@@ -160,8 +171,12 @@ function mapPendingTasks(handlerData) {
 
 const PENDING_TASK_RULES = [
   { match: (l, t) => l === '/sales-invoice' || t.includes('overdue invoices'),            singular: 'overdueInvoices',        plural: 'overdueInvoices_plural'        },
-  { match: (l, t) => l.startsWith('/goods-receipt') || t.includes('pending reception'),   singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
-  { match: (l, t) => l.startsWith('/goods-shipment') || t.includes('pending delivery'),   singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
+  // Backward-compatible link fallback while handlers migrate to navigation: a
+  // com.etendoerp.go backend without the ETP-5487 fix may still emit the legacy
+  // /goods-receipt /goods-shipment links during a rolling deploy, so both the
+  // new and old prefixes must match here.
+  { match: (l, t) => l.startsWith('/purchase-order') || l.startsWith('/goods-receipt') || t.includes('pending reception'),  singular: 'pendingReceptions',      plural: 'pendingReceptions_plural'      },
+  { match: (l, t) => l.startsWith('/sales-order') || l.startsWith('/goods-shipment') || t.includes('pending delivery'),      singular: 'pendingSalesDeliveries', plural: 'pendingSalesDeliveries_plural' },
   { match: (l, t) => t.includes('collection') && t.includes('due today'),                 singular: 'collectionsDueToday',    plural: 'collectionsDueToday_plural'    },
   { match: (l, t) => t.includes('payment') && t.includes('overdue'),                      singular: 'paymentsOverdue',        plural: 'paymentsOverdue_plural'        },
   { match: (l, t) => t.includes('payment') && t.includes('due today'),                    singular: 'paymentsDueToday',       plural: 'paymentsDueToday_plural'       },
@@ -311,6 +326,7 @@ function buildEmptyFallback() {
     value: 0,
     trend: 0,
     previousValue: 0,
+    hasPrevious: false,
   }));
   return {
     kpis,
@@ -373,9 +389,9 @@ export function useDashboardData() {
         invoicesRes, bestProductsRes, bestSellersRes, pendingAmountsRes,
         topClientsRes,
       ] = await Promise.allSettled([
-        // ETP-5011: the Financial Summary widget is always a calendar-year figure
-        // and does not follow the date-range selector, so `kpis` is fetched without `range`.
-        skipUnlessVisible(isWidgetVisible('kpis'), () => fetchWidget(apiFetch, 'kpis', null)),
+        // ETP-5493: the Financial Summary follows the date-range selector (it superseded the
+        // ETP-5011 calendar-year-only behaviour), so `kpis` is fetched with `range` like the rest.
+        skipUnlessVisible(isWidgetVisible('kpis'), () => fetchWidget(apiFetch, 'kpis', range)),
         skipUnlessVisible(isWidgetVisible('trends'), () => fetchWidget(apiFetch, 'trends', range)),
         // Feed widgets are always fetched and then filtered PER ITEM below — each entry carries
         // its own target window, so the widget stays and only unreachable rows drop out.
@@ -423,10 +439,13 @@ export function useDashboardData() {
 
       const empty = buildEmptyFallback();
       const mappedKpis = mapKpis(kpisData);
-      const mappedTrends = mapTrends(trendsData);
+      const mappedTrends = mapTrends(trendsData, range);
 
       setData({
         kpis: mappedKpis !== null ? mappedKpis : empty.kpis,
+        // ETP-5493: the range these kpis were fetched with, so the Financial Summary copy
+        // ("this year" / "vs previous 30 days") always matches the numbers on screen.
+        kpisRange: range,
         revenueTrend: mappedTrends ?? empty.revenueTrend,
         expenseTrend: mappedTrends?.expenseValues ?? [],
         topClients: mapTopClients(topClientsData) ?? [],
@@ -462,6 +481,7 @@ export function useDashboardData() {
 
   return {
     kpis: resolved.kpis,
+    kpisRange: resolved.kpisRange,
     revenueTrend: resolved.revenueTrend,
     expenseTrend: resolved.expenseTrend ?? [],
     topClients: resolved.topClients ?? [],

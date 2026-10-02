@@ -536,8 +536,14 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   // uses). Without the dirty check, every legacy account with a stored IBAN and no country (a
   // common pre-ETP-4896 state) would show this error — and block Save — on open, for an edit that
   // has nothing to do with either field.
+  // ETP-5473: editing the IBAN counts too (`ibanDirty`). The PUT then carries `iBAN`, so the
+  // backend re-validates the pair against the stored country — and it no longer derives a missing
+  // one from the IBAN prefix, so a legacy country-less bank account whose IBAN is edited while
+  // Country stays empty would otherwise pass here and come back as a 400. A rename-only edit of
+  // such an account (IBAN untouched) still saves.
+  const ibanDirty = ibanEditable && normalizeIban(iban) !== normalizeIban(snapshot.iban);
   const countryRequiredForIban = isBankType && iban.trim() !== ''
-    && countryId === '' && countryId !== snapshot.countryId;
+    && countryId === '' && (countryId !== snapshot.countryId || ibanDirty);
   // The country IS set, but to one that cannot carry an IBAN (the ~198 without IBAN metadata) —
   // which the DB trigger rejects. Carries the SAME `countryId !== snapshot.countryId` dirty guard
   // as countryRequiredForIban above, and for the same reason: a legacy account already stored with
@@ -554,7 +560,6 @@ function useAccountFields(open, account, hasBankLink, hasTransactions) {
   );
   const nameDirty = name.trim() !== snapshot.name.trim();
   const typeDirty = typeEditable && type !== snapshot.type;
-  const ibanDirty = ibanEditable && normalizeIban(iban) !== normalizeIban(snapshot.iban);
   const currencyDirty = currencyEditable && currencyId !== snapshot.currencyId;
   const countryDirty = countryEditable && countryId !== snapshot.countryId;
   // Compared case-insensitively on the normalized value actually persisted (trimmed + upper-cased,

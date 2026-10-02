@@ -735,11 +735,15 @@ test.describe('Fiscal Config — smart deactivation (deleted:true response)', ()
 
     await expect(page.getByTestId('ChangeSifDialog__content')).toBeVisible({ timeout: 4_000 });
 
-    // Confirm the SIF change and wait for the PUT to complete
-    const [putReq] = await Promise.all([
-      page.waitForRequest(req => req.method() === 'PUT' && req.url().includes(`/${c.spec}/`)),
+    // Confirm the SIF change. Use waitForResponse (not waitForRequest) so the
+    // promise resolves AFTER route.fulfill() completes and state.deleted is
+    // guaranteed to have been mutated by the mock's PUT branch — waitForRequest
+    // only guarantees the browser issued the request, racing the mock handler.
+    const [putResp] = await Promise.all([
+      page.waitForResponse(res => res.request().method() === 'PUT' && res.url().includes(`/${c.spec}/`)),
       page.getByTestId('ChangeSifDialog__confirm').click(),
     ]);
+    const putReq = putResp.request();
     expect(putReq.url()).toContain(c.record.id);
     expect(state.deleted).toBe(true);
 

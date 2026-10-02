@@ -173,6 +173,25 @@ still offers "Contabilizar" — which is correct, it genuinely is not posted. If
 attempt leaves `posted` at `E`/`p`, the action ran and core's accounting engine rejected
 it (accounting error / closed period) — that is engine behavior, not a wiring failure.
 
+### Invalid-account posting error (ETP-5175)
+
+When the engine fails with `STATUS_InvalidAccount` (the usual case here: the product has no
+**Invoice Price Variance** / **Product Expense** account, or the contact category misses one),
+the toast names the contact, its contact category and the unconfigured accounts:
+
+> No se pudo encontrar la cuenta. (Contacto: Piensos del Ebro S.L., Categoría de contacto: Proveedores)
+> Revise las siguientes cuentas contables del producto: Desviación Pr. Factura.
+
+The SPA composes that sentence itself from the `messageKeys` + `messageParams` the backend
+sends (`DocumentPostingService`, see `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md`
+— ETP-5175 pasada 1), in `backendErrors.js` `translateInvalidAccount`. It does **not** trust the
+backend's prose: the Spanish `AD_MESSAGE_TRL` rows for these messages are not versioned and
+production says "Grupo de Terceros", a term Etendo GO does not use. Both entry points render the
+same text: the kebab **Contabilizar** in the detail (`DetailMoreActionsMenu`) and the row action in
+the list (`buildMenuActionExecutedHandler`). Documentos no contabilizados shows it too (see
+`not-posted-documents.md`). A backend that predates the change sends no params, and the backend
+prose is shown as before.
+
 ## Bulk posting from the list
 
 Selecting rows in the list surfaces **Procesar** in the floating selection toolbar; it

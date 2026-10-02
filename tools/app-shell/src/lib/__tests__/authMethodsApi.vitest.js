@@ -255,11 +255,15 @@ describe('removeAuthMethod', () => {
       await expect(removeAuthMethod('google', undefined, 'https://base')).resolves.toBeNull();
     });
 
-    it('lets a transport failure through untouched', async () => {
-      globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+    // ETP-5424 — apiFetch now turns the browser TypeError into a NetworkError (translated
+    // message, original on `cause`). What this guards is unchanged: removeAuthMethod does not
+    // reinterpret a transport failure as one of its own error envelopes.
+    it('lets a transport failure through untouched (as apiFetch\'s NetworkError)', async () => {
+      const cause = new TypeError('Failed to fetch');
+      globalThis.fetch.mockRejectedValue(cause);
 
       await expect(removeAuthMethod('google', undefined, 'https://base'))
-        .rejects.toThrow('Failed to fetch');
+        .rejects.toMatchObject({ name: 'NetworkError', code: 'NETWORK', reason: 'offline', cause });
     });
 
     /**

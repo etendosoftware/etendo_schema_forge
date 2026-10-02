@@ -213,12 +213,14 @@ describe('useNeoAction', () => {
     expect(res).toEqual({ success: false, message: 'Connection refused' });
   });
 
-  it('returns failure with generic message when error has no message', async () => {
+  // ETP-5424 — the fallback is the translated networkErrorRetry label, not a hardcoded English
+  // 'Network error'. No LocaleProvider is mounted here, so useUI() echoes the key.
+  it('returns failure with the translated networkErrorRetry fallback when error has no message', async () => {
     globalThis.fetch.mockRejectedValue({});
     const { result } = renderHook(() => useNeoAction(baseOpts));
     let res;
     await act(async () => { res = await result.current.execute('rec-11', 'post'); });
-    expect(res).toEqual({ success: false, message: 'Network error' });
+    expect(res).toEqual({ success: false, message: 'networkErrorRetry' });
   });
 
   it('URL-encodes special characters in recordId', async () => {
@@ -280,6 +282,25 @@ describe('useNeoAction', () => {
 
       expect(res.messageKeys).toEqual(['lockedProduct']);
       expect(res.message).toBe('boom');
+    });
+
+    it('returns messageParams alongside messageKeys when the backend sends them (ETP-5175)', async () => {
+      globalThis.fetch.mockResolvedValue({
+        ok: false,
+        statusText: 'Unprocessable Entity',
+        json: async () => ({
+          success: false,
+          message: 'Account could not be found. (Contact: Acme)',
+          messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+          messageParams: { bpName: 'Acme' },
+        }),
+      });
+      const { result } = renderHook(() => useNeoAction(baseOpts));
+      let res;
+      await act(async () => { res = await result.current.execute('rec-p1', 'post'); });
+
+      expect(res.messageKeys).toEqual(['InvalidAccount', 'ETGO_InvalidAccountBpOnly']);
+      expect(res.messageParams).toEqual({ bpName: 'Acme' });
     });
 
     it('leaves messageKeys undefined against a backend that does not send them', async () => {

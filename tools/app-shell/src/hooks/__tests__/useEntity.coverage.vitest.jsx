@@ -938,7 +938,9 @@ describe('useEntity — coverage paths', () => {
       expect(toast.error).toHaveBeenCalledWith('Net fail');
     });
 
-    it('shows generic error when error has no message', async () => {
+    // ETP-5424 — the fallback used to be a hardcoded English 'Network error'; it is the
+    // translated networkErrorRetry label now (the i18n mock echoes the key).
+    it('shows the translated networkErrorRetry fallback when the error has no message', async () => {
       globalThis.fetch.mockImplementation(async (url, opts) => {
         if (opts?.method === 'DELETE') throw new Error();
         return mockFetchOk([]);
@@ -949,7 +951,8 @@ describe('useEntity — coverage paths', () => {
 
       await act(async () => { await result.current.handleDelete(); });
 
-      expect(toast.error).toHaveBeenCalledWith('Network error');
+      expect(toast.error).toHaveBeenCalledWith('networkErrorRetry');
+      expect(toast.error).not.toHaveBeenCalledWith('Network error');
     });
 
     // ETP-4656 — same FK/RESTRICT normalization `useEntity-delete-errors.test.js`
@@ -1041,7 +1044,8 @@ describe('useEntity — coverage paths', () => {
       expect(result.current.saveError).toBe('Custom error');
     });
 
-    it('falls back to "Network error" when error has no message', async () => {
+    // ETP-5424 — see the handleDelete case above: the fallback is ui('networkErrorRetry').
+    it('falls back to the translated networkErrorRetry label when the error has no message', async () => {
       globalThis.fetch.mockImplementation(async (url, opts) => {
         if (url.includes('/defaults')) return { ok: true, json: async () => ({ defaults: {} }) };
         if (opts?.method === 'POST') throw new Error();
@@ -1054,7 +1058,8 @@ describe('useEntity — coverage paths', () => {
 
       await act(async () => { await result.current.handleSave(); });
 
-      expect(result.current.saveError).toBe('Network error');
+      expect(result.current.saveError).toBe('networkErrorRetry');
+      expect(toast.error).toHaveBeenCalledWith('networkErrorRetry');
     });
   });
 

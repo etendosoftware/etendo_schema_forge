@@ -2907,3 +2907,62 @@ equivalent) call before assuming the wiring is complete, and confirm the field t
 visibility gate reads is actually declared in `decisions.json`, not left as an implicit AD-button
 action. Also: a duplicate JSON key in `decisions.json` is a silent last-wins, not a validation
 error — `sf-validate-pipeline` does not currently catch it (candidate for a future F-rule).
+
+---
+
+## Dashboard Pending-Tasks Cards Moved from Draft M_InOut to Completed C_Order (ETP-5487) — Known Debt Flagged, Not Fixed
+
+**Component:** `WidgetPendingTasksHandler.java` + `useDashboardData.js` + `docs/widget-endpoints.md`
+
+**Context (not a bug in this entry, a documentation flag):** ETP-5487 changed the "Recepciones"
+and "Envíos" dashboard cards from counting draft (`DocStatus='DR'`) `M_InOut` records to counting
+completed (`docstatus='CO'`) `C_Order` rows whose delivery/reception percentage is below 100%
+(core virtual columns `DeliveryStatusPurchase`/`DeliveryStatus`), and changed the click-through
+navigation from `/goods-receipt?DocStatus=DR` / `/goods-shipment?DocStatus=DR` to
+`/purchase-order?filter=pendingReception` / `/sales-order?filter=pendingDelivery` (legacy fallback
+preserved for rolling deploy). `docs/widget-endpoints.md` in both `schema_forge` and
+`schema_forge_core` was updated to match during this same review cycle.
+
+**Two pre-existing gaps found while verifying doc freshness for ETP-5487 — neither introduced by
+this ticket, neither fixed here, flagged so they are not lost:**
+
+1. **`schema_forge_core/docs/widget-endpoints.md`'s Task Inventory table is missing the
+   `paymentsOverdue` row** (added to `schema_forge/docs/widget-endpoints.md` by ETP-5012, never
+   back-ported to the core repo's duplicate copy). The two files already drift outside of this
+   ticket's scope; the core copy needs its own follow-up sync pass.
+2. **No E2E spec exists for the "Recepciones" (pending-reception) pending-tasks card** — only
+   `e2e/tests/flows/dashboard/pending-shipments-card.mocked.spec.js` exists, covering "Envíos"
+   (pending-delivery). The receptions side of ETP-5487 has no equivalent mocked spec.
+
+**Lesson:** When two repos keep independent copies of the same reference doc
+(`schema_forge/docs/widget-endpoints.md` and `schema_forge_core/docs/widget-endpoints.md` per the
+repo-split topology), a review that only checks the copy it touched can miss that the other copy
+was already stale for an unrelated, older reason. Diff both copies against each other, not just
+each one against the code, when auditing freshness.
+
+---
+
+## [2026-09-28] ETP-5502 — Removing Admin restored another user's personal role (same name)
+
+**Component:** `com.etendoerp.go` `UserRoleCompositionService#demoteFromAdmin` and
+`PersonalRoleAccessProvisioningService#buildPersonalRoleName`; data-fix
+`cli/src/data-fixes/sql/20260928T140000Z__R41-personal-role-owner-backfill.sql`.
+
+**Symptom:** a user created after a same-named user was deleted, promoted to Admin and then demoted, came back
+with the deleted user's permissions. A user whose personal role was `"Personal – X (2)"`, or who had been renamed,
+came back with an empty role instead of their own.
+
+**Root cause:** demote found the dormant personal role by name only (`"Personal – <name>"`, never the `" (n)"`
+variants) and accepted it when it had zero `AD_User_Roles` rows. A deleted user's rows cascade away, so their
+orphan role looks exactly like a promoted user's dormant one. The same name builder also appended the collision
+suffix before truncating to 60 characters, so a user name of 47+ characters looped forever on the first collision.
+
+**Fix:** every personal role now stores its owner (`AD_Role.EM_ETGO_Personal_Owner_ID`, FK to `AD_User`, `ON DELETE SET NULL`, set once).
+Demote restores by owner; a hardened name fallback (suffix variants, not older than the user, claims the owner it
+finds) covers legacy roles, and R41 backfills the unambiguous ones. The suffix is kept when truncating and the
+attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real DB, scenarios A–D + legacy),
+`PersonalRoleAccessProvisioningServiceTest`.
+
+**Lesson:** a display name is not an identity. When a row must be found again later by "who it belongs to",
+store that link when the row is created. "Nobody else is assigned to it" is not proof it is yours: deletion leaves
+the same state behind.

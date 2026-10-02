@@ -125,6 +125,9 @@
       }
     },
     "importedBankStatements": {
+      "readOnly": true,
+      "javaQualifier": "bankStatementEntityHandler",
+      "agentPrompt": "#REF#agent-prompts/financial-account/importedBankStatements.md",
       "fields": {
         "documentNo": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "name": { "visibility": "editable", "grid": true, "gridOrder": 2 },
@@ -140,6 +143,8 @@
       }
     },
     "bankStatementLines": {
+      "readOnly": true,
+      "javaQualifier": "bankStatementEntityHandler",
       "fields": {
         "transactionDate": { "visibility": "readOnly", "grid": true, "gridOrder": 1 },
         "description": { "visibility": "editable", "grid": true, "gridOrder": 2 },
