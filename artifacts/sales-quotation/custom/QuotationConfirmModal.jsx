@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
-import { ClipboardList, FileText } from 'lucide-react';
 import { useUI } from '@/i18n';
+import ActionChoiceModal from '@/components/contract-ui/ActionChoiceModal.jsx';
 import { fetchOptionalJson } from '@/windows/custom/shared/pdfUtils.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+
+const OPTION_ORDER = 'order';
+const OPTION_INVOICE = 'invoice';
+// Shown in the summary table while the line count is still being fetched.
+const LINE_COUNT_PENDING = '...';
 
 /**
  * Confirmation modal for Sales Quotation in Under Evaluation (UE) state.
@@ -20,7 +25,6 @@ export default function QuotationConfirmModal({
   onRefresh,
 }) {
   const ui = useUI();
-  const [selected, setSelected] = useState('order');
   const [loading, setLoading] = useState(false);
   const [createdDoc, setCreatedDoc] = useState(null);
   const [error, setError] = useState(null);
@@ -78,7 +82,7 @@ export default function QuotationConfirmModal({
   const totalLines     = Number(d.summedLineAmount ?? d.totalLines ?? d.grandTotalAmount ?? 0) || 0;
   const currency       = d['currency$_identifier'] || '';
 
-  const handleConfirm = async () => {
+  const handleConfirm = async (optionId) => {
     if (loading) return;
     setLoading(true);
     setError(null);
@@ -123,7 +127,7 @@ export default function QuotationConfirmModal({
         } catch { /* non-fatal — allow confirmation to proceed */ }
       }
 
-      if (selected === 'order') {
+      if (optionId === OPTION_ORDER) {
         const res = await apiFetch(
           `${entityUrl}/${quotationId}/action/Convertquotation`,
           { method: 'POST', body: JSON.stringify({ fieldValues: {} }) },
@@ -166,7 +170,7 @@ export default function QuotationConfirmModal({
 
             const status = finalStatus === 'DR' ? 'Draft' : 'Completed';
             setCreatedDoc({
-              type: 'order', id: order.id,
+              type: OPTION_ORDER, id: order.id,
               documentNo: order.documentNo,
               total: formatCurrency(currency, order.grandTotalAmount ?? order.grandTotal),
               status,
@@ -174,7 +178,7 @@ export default function QuotationConfirmModal({
             return;
           }
         }
-        setCreatedDoc({ type: 'order', id: null, documentNo: '?', total: '', status: 'Draft' });
+        setCreatedDoc({ type: OPTION_ORDER, id: null, documentNo: '?', total: '', status: 'Draft' });
 
       } else {
         const res = await apiFetch(
@@ -191,7 +195,7 @@ export default function QuotationConfirmModal({
         window.dispatchEvent(new CustomEvent('sales-quotation:document-created'));
         const doc = (await res.json())?.response?.data;
         setCreatedDoc({
-          type: 'invoice',
+          type: OPTION_INVOICE,
           id: doc?.id ?? null,
           documentNo: doc?.documentNo ?? '',
           total: formatCurrency(currency, doc?.grandTotalAmount ?? grandTotal),
@@ -208,10 +212,6 @@ export default function QuotationConfirmModal({
     }
   };
 
-  const primaryLabel = selected === 'order'
-    ? ui('sqConfirmActionOrder')
-    : ui('soConfirmActionInvoice');
-
   const handleGoToDoc = () => {
     if (!createdDoc?.id) { handleCloseAfterCreate(); return; }
     // ETP-5378 — this modal now also opens from the LIST row kebab, whose path is
@@ -223,7 +223,7 @@ export default function QuotationConfirmModal({
     // pedido" from a list-confirmed quotation). The trailing segment is optional
     // now, so both origins strip to the same, correct app-root basePath.
     const basePath = window.location.pathname.replace(/\/sales-quotation(\/.*)?$/, '');
-    const target = createdDoc.type === 'order' ? 'sales-order' : 'sales-invoice';
+    const target = createdDoc.type === OPTION_ORDER ? 'sales-order' : 'sales-invoice';
     window.location.href = `${basePath}/${target}/${createdDoc.id}`;
   };
 
@@ -238,8 +238,8 @@ export default function QuotationConfirmModal({
 
   // ── Success state ──────────────────────────────────────────
   if (createdDoc) {
-    const docLabel = createdDoc.type === 'order' ? ui('sqOrderCreated') : ui('soInvoiceCreated');
-    const goLabel  = createdDoc.type === 'order' ? ui('sqViewOrder')    : ui('soViewInvoice');
+    const docLabel = createdDoc.type === OPTION_ORDER ? ui('sqOrderCreated') : ui('soInvoiceCreated');
+    const goLabel  = createdDoc.type === OPTION_ORDER ? ui('sqViewOrder')    : ui('soViewInvoice');
     const isDraft = createdDoc.status === 'Draft';
     const badgeColor = isDraft ? { bg: 'var(--status-warning-bg)', text: 'var(--status-warning-fg)' } : { bg: 'var(--status-success-bg)', text: 'var(--status-success-fg)' };
     const badgeLabel = isDraft ? ui('statusDraft') : ui('statusCompleted');
@@ -263,7 +263,7 @@ export default function QuotationConfirmModal({
             <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
               {createdDoc.documentNo && (
                 <span>
-                  {ui(createdDoc.type === 'invoice' ? 'invoiceDoc' : 'orderDoc',
+                  {ui(createdDoc.type === OPTION_INVOICE ? 'invoiceDoc' : 'orderDoc',
                       { number: createdDoc.documentNo })}
                 </span>
               )}
@@ -295,153 +295,49 @@ export default function QuotationConfirmModal({
   }
 
   // ── Selection state ────────────────────────────────────────
+  const summaryColumns = [
+    { key: 'documentNo', label: ui('quotation') },
+    { key: 'contact', label: ui('contact') },
+    { key: 'lines', label: ui('lines') },
+    { key: 'subtotal', label: ui('subtotal'), testId: 'confirm-summary-subtotal' },
+    { key: 'total', label: ui('total'), testId: 'confirm-summary-total' },
+  ];
+  const summaryData = {
+    documentNo,
+    contact: bpName,
+    lines: lineCount ?? LINE_COUNT_PENDING,
+    subtotal: formatCurrency(currency, totalLines),
+    total: formatCurrency(currency, grandTotal),
+  };
+  const options = [
+    {
+      id: OPTION_ORDER,
+      label: ui('sqCreateOrder'),
+      description: ui('sqCreateOrderDesc'),
+      badge: ui('soRecommended'),
+      testId: 'confirm-option-order',
+    },
+    {
+      id: OPTION_INVOICE,
+      label: ui('soInvoiceDirectly'),
+      description: ui('sqInvoiceDirectlyDesc'),
+      testId: 'confirm-option-invoice',
+    },
+  ];
+
   return (
-    <div onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={cardStyle}>
-
-        {/* Blue card header */}
-        <div style={{ padding: '14px 16px 0', position: 'relative' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              position: 'absolute', top: 10, right: 12,
-              fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
-            }}
-          >
-            &times;
-          </button>
-          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
-            {ui('quotationDocumentLabel')} #{documentNo}
-          </div>
-          <div style={{
-            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
-            padding: '14px 16px', marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
-              {bpName}
-            </div>
-            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {formatCurrency(currency, grandTotal)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Options */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8, borderBottom: '0.5px solid hsl(var(--card))' }}>
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))', marginBottom: 2 }}>
-            {ui('sqWhatToDo')}
-          </div>
-          <OptionCard
-            testId="confirm-option-order"
-            selected={selected === 'order'}
-            onClick={() => setSelected('order')}
-            icon={<ClipboardList size={16} />}
-            title={ui('sqCreateOrder')}
-            badge={ui('soRecommended')}
-            subtitle={ui('sqCreateOrderDesc')}
-          />
-          <OptionCard
-            testId="confirm-option-invoice"
-            selected={selected === 'invoice'}
-            onClick={() => setSelected('invoice')}
-            icon={<FileText size={16} />}
-            title={ui('soInvoiceDirectly')}
-            subtitle={ui('sqInvoiceDirectlyDesc')}
-          />
-        </div>
-
-        {/* Error */}
-        {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
-            {error}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
-          <button type="button" onClick={onClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-            {ui('cancel')}
-          </button>
-          <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading}
-            style={{
-              ...btnPrimary,
-              opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-            {loading && (
-              <svg style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            )}
-            {loading ? ui('soProcessing') : primaryLabel}
-          </button>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Option card ───────────────────────────────────────────────── */
-
-function OptionCard({ selected, onClick, icon, title, badge, subtitle, disabled, testId }) {
-  return (
-    <div
-      data-testid={testId}
-      onClick={disabled ? undefined : onClick}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-        border: selected ? '2px solid var(--status-info-border)' : '0.5px solid hsl(var(--border-subtle))',
-        borderRadius: 8, padding: selected ? '11px 13px' : '12px 14px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        opacity: disabled ? 0.5 : 1,
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
-    >
-      <div style={{
-        width: 32, height: 32, borderRadius: 6, flexShrink: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: selected ? 'hsl(var(--card))' : 'hsl(var(--card))',
-        color: selected ? 'var(--status-info-fg)' : 'hsl(var(--muted))',
-      }}>
-        {icon}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: selected ? 'var(--status-info-border)' : 'hsl(var(--foreground))' }}>
-            {title}
-          </span>
-          {badge && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
-              background: 'var(--status-success-bg)', color: 'var(--status-success-fg)',
-              letterSpacing: '0.3px',
-            }}>
-              {badge}
-            </span>
-          )}
-        </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 3, lineHeight: 1.4 }}>
-          {subtitle}
-        </div>
-      </div>
-      <div style={{
-        width: 18, height: 18, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-        border: selected ? 'none' : '1.5px solid hsl(var(--border-subtle))',
-        background: selected ? 'var(--status-info-fg)' : 'hsl(var(--card))',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'hsl(var(--card))' }} />}
-      </div>
-    </div>
+    <ActionChoiceModal
+      title={ui('sqConfirmQuotationTitle')}
+      summaryColumns={summaryColumns}
+      summaryData={summaryData}
+      question={ui('sqWhatToDo')}
+      options={options}
+      defaultOptionId={OPTION_ORDER}
+      onCancel={onClose}
+      onContinue={handleConfirm}
+      loading={loading}
+      error={error}
+    />
   );
 }
 

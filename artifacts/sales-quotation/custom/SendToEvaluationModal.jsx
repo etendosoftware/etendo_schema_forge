@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react';
+import { Info, Loader2, X } from 'lucide-react';
 import { useUI } from '@/i18n';
+import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
+import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+
+// Shown in the summary table while the line count is still being fetched.
+const LINE_COUNT_PENDING = '...';
 
 export default function SendToEvaluationModal({
   quotationId,
@@ -9,6 +15,7 @@ export default function SendToEvaluationModal({
   token,
   apiBaseUrl,
   onClose,
+  onRefresh,
 }) {
   const ui = useUI();
   const [loading, setLoading] = useState(false);
@@ -91,89 +98,92 @@ export default function SendToEvaluationModal({
         const rawMsg = errJson?.response?.message || errJson?.message || `Error (${res.status})`;
         throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('sqNoLinesError') : rawMsg);
       }
+      // ETP-5398 — refresh only the record (status, Save/Confirm, kebab, Send gating all
+      // derive from it), like QuotationConfirmModal does, instead of a full page reload.
       onClose();
-      window.location.reload();
+      onRefresh?.();
     } catch (err) {
       setError(err.message || ui('soErrorOccurred'));
       setLoading(false);
     }
   };
 
+  const submitDisabled = loading || lineCount === 0;
+  const summary = [
+    { key: 'documentNo', label: ui('quotation'), value: documentNo },
+    { key: 'contact', label: ui('contact'), value: bpName },
+    { key: 'lines', label: ui('lines'), value: lineCount ?? LINE_COUNT_PENDING },
+    { key: 'subtotal', label: ui('subtotal'), value: formatCurrency(currency, totalLines), testId: 'confirm-summary-subtotal' },
+    { key: 'total', label: ui('total'), value: formatCurrency(currency, grandTotal), testId: 'confirm-summary-total' },
+  ];
+
   return (
     <div onClick={onClose} style={overlayStyle}>
-      <div onClick={e => e.stopPropagation()} style={cardStyle}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={ui('sqSendToEvalTitle')}
+        onClick={e => e.stopPropagation()}
+        style={dialogStyle}
+      >
+        <button type="button" onClick={onClose} aria-label={ui('close')} style={closeBtnStyle}>
+          <X size={20} />
+        </button>
 
-        <div style={{ padding: '14px 16px 0', position: 'relative' }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              position: 'absolute', top: 10, right: 12,
-              fontSize: 18, lineHeight: 1, padding: '2px 6px', borderRadius: 4,
-              background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))',
-            }}
-          >
-            &times;
-          </button>
-          <div style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', letterSpacing: '0.04em', marginBottom: 8 }}>
-            {ui('quotationDocumentLabel')} #{documentNo}
-          </div>
-          <div style={{
-            background: 'var(--status-info-bg)', border: '0.5px solid var(--status-info-border)', borderRadius: 10,
-            padding: '14px 16px', marginBottom: 14,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--status-info-border)' }}>
-              {bpName}
-            </div>
-            <div data-testid="confirm-summary-total" style={{ fontSize: 28, fontWeight: 500, color: 'var(--status-info-fg)', lineHeight: 1, marginTop: 4, marginBottom: 6 }}>
-              {formatCurrency(currency, grandTotal)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--status-info-fg)' }}>
-              {lineCount != null ? ui('soLines', { count: lineCount }) : '...'} <span style={{ color: 'var(--status-info-fg)' }}>·</span> {ui('soSubtotal')} <span data-testid="confirm-summary-subtotal" style={{ fontWeight: 500, color: 'var(--status-info-fg)' }}>{formatCurrency(currency, totalLines)}</span>
-            </div>
-          </div>
+        <div style={headerStyle}>
+          <h2 style={MODAL_STYLES.title}>{ui('sqSendToEvalTitle')}</h2>
         </div>
 
-        <div style={{ padding: '0 16px 14px', borderBottom: '0.5px solid hsl(var(--card))' }}>
-          <div style={{ fontSize: 14, fontWeight: 500, color: 'hsl(var(--foreground))', marginBottom: 4 }}>
-            {ui('sqSendToEvalTitle')}
+        <div style={bodyStyle}>
+          <div style={summaryTableStyle}>
+            {summary.map(({ key, label, value, testId }) => (
+              <div key={key} style={summaryCellStyle}>
+                <span style={summaryLabelStyle}>{label}</span>
+                <span data-testid={testId} style={summaryValueStyle}>{value}</span>
+              </div>
+            ))}
           </div>
-          <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', lineHeight: 1.5 }}>
-            {ui('sqSendToEvalDesc')}
-          </div>
-        </div>
 
-        {error && (
-          <div style={{ padding: '8px 16px', fontSize: 12, color: 'hsl(var(--destructive))', background: 'hsl(var(--card))', borderTop: '0.5px solid hsl(var(--destructive))' }}>
-            {error}
-          </div>
-        )}
+          <div style={sectionStyle}>
+            <div style={alertStyle}>
+              <Info size={24} style={alertIconStyle} />
+              <p style={alertTextStyle}>{ui('sqSendToEvalDesc')}</p>
+            </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, padding: '12px 16px' }}>
-          <button type="button" onClick={onClose} disabled={loading}
-            style={{ ...btnSecondary, opacity: loading ? 0.5 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
-            {ui('cancel')}
-          </button>
-          <button type="button" data-testid="action-confirm-modal" onClick={handleConfirm} disabled={loading || lineCount === 0}
-            style={{
-              ...btnPrimary,
-              opacity: loading || lineCount === 0 ? 0.5 : 1, cursor: loading || lineCount === 0 ? 'not-allowed' : 'pointer',
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-            }}>
-            {loading && (
-              <svg style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }}
-                viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            )}
-            {loading ? ui('soProcessing') : ui('sqSendToEvalConfirm')}
-          </button>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            {error && <div role="alert" style={errorStyle}>{error}</div>}
+
+            <div style={footerStyle}>
+              <button type="button" onClick={onClose} disabled={loading} style={cancelBtnStyle}>
+                {ui('cancel')}
+              </button>
+              <button
+                type="button"
+                data-testid="action-confirm-modal"
+                onClick={handleConfirm}
+                disabled={submitDisabled}
+                style={getPrimaryBtnStyle(submitDisabled)}
+              >
+                {loading && <Loader2 size={24} className="animate-spin" />}
+                {loading ? ui('soProcessing') : ui('sqSendToEvalConfirm')}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+function getPrimaryBtnStyle(disabled) {
+  if (disabled) {
+    return primaryBtnDisabledStyle;
+  }
+  return primaryBtnStyle;
+}
+
+/* ── Styles (Figma "PopUps" — Enviar a evaluación) ───────────────── */
+
+const FONT_FAMILY = 'Inter, sans-serif';
 
 const overlayStyle = {
   position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50,
@@ -181,18 +191,90 @@ const overlayStyle = {
   backgroundColor: 'hsl(var(--foreground) / 0.3)',
 };
 
-const cardStyle = {
-  width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-  overflow: 'hidden', borderRadius: 12, backgroundColor: 'hsl(var(--card))',
-  boxShadow: '0 8px 30px hsl(var(--foreground) / 0.12)', border: '0.5px solid hsl(var(--border-subtle))',
+const dialogStyle = {
+  ...MODAL_STYLES.dialog,
+  position: 'relative',
+  width: 720,
+  fontFamily: FONT_FAMILY,
 };
 
-const btnSecondary = {
-  fontSize: 12, padding: '7px 14px', borderRadius: 6,
-  border: '1px solid hsl(var(--border-subtle))', background: 'transparent', color: 'hsl(var(--muted-foreground))', cursor: 'pointer',
+const closeBtnStyle = {
+  position: 'absolute', top: 6, right: 8,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: 2, borderRadius: 360, border: 'none', background: 'transparent',
+  color: 'hsl(var(--icon-secondary))', cursor: 'pointer',
 };
 
-const btnPrimary = {
-  fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 6,
-  border: 'none', background: 'var(--status-info-fg)', color: 'hsl(var(--card))', cursor: 'pointer',
+const headerStyle = {
+  display: 'flex', flexDirection: 'column', gap: 2,
+  padding: '8px 20px', alignSelf: 'stretch',
+};
+
+const bodyStyle = {
+  display: 'flex', flexDirection: 'column', gap: 12,
+  padding: '4px 20px 8px', alignSelf: 'stretch',
+};
+
+const summaryTableStyle = {
+  display: 'flex', alignItems: 'flex-start', gap: 20,
+  padding: '8px 12px', borderRadius: 8,
+  border: '1px solid hsl(var(--border-subtle))',
+};
+
+const summaryCellStyle = {
+  flex: '1 0 0', minWidth: 0,
+  display: 'flex', flexDirection: 'column',
+};
+
+const summaryLabelStyle = {
+  fontSize: 12, lineHeight: '16px', letterSpacing: '-0.06px',
+  color: 'var(--status-neutral-fg)',
+};
+
+const summaryValueStyle = {
+  fontSize: 16, lineHeight: '24px', fontWeight: 500,
+  color: 'hsl(var(--foreground))', overflowWrap: 'anywhere',
+};
+
+const sectionStyle = { display: 'flex', flexDirection: 'column', gap: 20 };
+
+const alertStyle = {
+  display: 'flex', alignItems: 'flex-start',
+  padding: '12px 8px', borderRadius: 8,
+  background: 'var(--status-info-bg)',
+};
+
+const alertIconStyle = { flexShrink: 0, marginLeft: 4, color: 'var(--status-info-fg)' };
+
+// The alert copy uses the Figma info text color (#0075AD), already shared as the
+// `info` tone of the status-tag tokens.
+const alertTextStyle = {
+  margin: 0, padding: '0 8px', flex: 1,
+  fontSize: 14, lineHeight: '24px', color: TONE_STYLES.info.color,
+};
+
+const errorStyle = {
+  fontSize: 12, padding: '8px 0', color: 'hsl(var(--destructive))',
+  borderTop: '0.5px solid hsl(var(--destructive))',
+};
+
+const footerStyle = { display: 'flex', alignItems: 'center', justifyContent: 'space-between' };
+
+const cancelBtnStyle = {
+  ...MODAL_STYLES.btnCancel,
+  width: 'auto', padding: '8px 20px', lineHeight: '24px',
+};
+
+const primaryBtnStyle = {
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+  height: 40, padding: '8px 20px', borderRadius: 360, border: 'none',
+  background: 'hsl(var(--foreground))', color: 'hsl(var(--card))',
+  fontFamily: FONT_FAMILY, fontSize: 14, fontWeight: 500, lineHeight: '24px',
+  cursor: 'pointer',
+};
+
+const primaryBtnDisabledStyle = {
+  ...primaryBtnStyle,
+  background: 'hsl(var(--border-control))',
+  cursor: 'not-allowed',
 };
