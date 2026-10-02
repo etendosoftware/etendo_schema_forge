@@ -193,14 +193,27 @@ describe('SendToEvaluationModal — Figma layout (ETP-5398)', () => {
     expectAmount('confirm-summary-total', 12.1);
   });
 
-  it('sends the quotation to evaluation with the same DocAction request', async () => {
+  it('sends the quotation to evaluation and refreshes only the record, without reloading the page', async () => {
     const fetchMock = stubFetch([linesRoute(1)]);
-    const props = modalProps();
+    const props = modalProps({ onRefresh: vi.fn() });
     await renderAndSettle(<SendToEvaluationModal {...props} />);
     await clickPrimary();
     expect(calledUrls(fetchMock)).toContain(`${API_BASE}/quotation/${QUOTATION_ID}/action/DocAction`);
     expect(props.onClose).toHaveBeenCalled();
-    expect(window.location.reload).toHaveBeenCalled();
+    expect(props.onRefresh).toHaveBeenCalledTimes(1);
+    expect(window.location.reload).not.toHaveBeenCalled();
+  });
+
+  it('does not refresh when the request fails', async () => {
+    stubFetch([
+      linesRoute(1),
+      ['/action/DocAction', () => jsonResponse({ message: 'boom' }, false, 500)],
+    ]);
+    const props = modalProps({ onRefresh: vi.fn() });
+    await renderAndSettle(<SendToEvaluationModal {...props} />);
+    await clickPrimary();
+    expect(props.onRefresh).not.toHaveBeenCalled();
+    expect(props.onClose).not.toHaveBeenCalled();
   });
 
   it('disables the primary button with the disabled fill when the quotation has no lines', async () => {

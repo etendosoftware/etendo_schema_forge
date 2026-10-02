@@ -15,6 +15,7 @@ export default function SendToEvaluationModal({
   token,
   apiBaseUrl,
   onClose,
+  onRefresh,
 }) {
   const ui = useUI();
   const [loading, setLoading] = useState(false);
@@ -97,8 +98,10 @@ export default function SendToEvaluationModal({
         const rawMsg = errJson?.response?.message || errJson?.message || `Error (${res.status})`;
         throw new Error(rawMsg.includes('@OrderWithoutLines@') ? ui('sqNoLinesError') : rawMsg);
       }
+      // ETP-5398 — refresh only the record (status, Save/Confirm, kebab, Send gating all
+      // derive from it), like QuotationConfirmModal does, instead of a full page reload.
       onClose();
-      window.location.reload();
+      onRefresh?.();
     } catch (err) {
       setError(err.message || ui('soErrorOccurred'));
       setLoading(false);
