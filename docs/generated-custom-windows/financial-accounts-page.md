@@ -11,7 +11,7 @@ Use this page as the entry point to the reconciliation module. It lists the fina
 
 - List `FIN_Financial_Account` records for the current client and accessible organizations — active accounts in the type views, plus archived (inactive) accounts behind a dedicated **Inactivas** filter.
 - Show the aggregated sidebar widgets:
-  - Total balance across visible accounts.
+  - Total balance across active accounts, converted to the organization currency (approximate when another currency with a non-zero balance is converted — see the `summary` notes below).
   - Balance broken down by ISO currency (EUR, USD, …).
   - Pending counters: accounts with unreconciled `FIN_Bank_Statement_Line`s plus placeholders for the matching engine (introduced in T5).
 - Filter the table by account type (Banco, Caja, Tarjeta), by **Inactivas** (all archived accounts regardless of type), and search by name / IBAN / currency.
@@ -112,8 +112,13 @@ Response shape (envelope `response.data`):
   ],
   "summary": {
     "totalBalance": 54321.0,
+    "totalBalanceCurrencyIso": "EUR",
+    "totalBalanceApproximate": true,
+    "missingRateCurrencies": ["GBP"],
     "byCurrency": [
-      { "currencyIso": "EUR", "total": 32000.0 }
+      { "currencyIso": "EUR", "total": 32000.0 },
+      { "currencyIso": "USD", "total": 24000.0 },
+      { "currencyIso": "GBP", "total": 1500.0 }
     ],
     "pending": {
       "accountsWithPending": 3,
@@ -126,7 +131,13 @@ Response shape (envelope `response.data`):
 
 - `accounts` is filtered by `AD_Client_ID = current client` and the accessible organization tree from `OrganizationStructureProvider`. It returns **both active and archived** accounts; each row carries an `active` boolean (`IsActive`). The UI shows active accounts in the type views (Todas / Banco / Caja / Tarjeta) and archived ones only under the dedicated **Inactivas** filter.
 - `pendingCount` counts active `FIN_Bank_Statement_Line` rows linked to the account (through `FIN_BankStatement`) whose `fin_finacc_transaction_id IS NULL`.
-- `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`. (`summary.totalBalance` is the raw sum of `CurrentBalance`; currency normalisation against the GL schema arrives with later stories.)
+- `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`.
+- `summary` is built by `FinancialAccountsPageHandler.buildSummary(accounts, resolveOrgCurrency())`, the same method the `financial-account` W spec uses for the live Cuentas sidebar, so the two cannot drift apart (ETP-5580). In short:
+  - `totalBalance` is expressed in the **login organization's currency** (`totalBalanceCurrencyIso`). Each foreign-currency subtotal is converted once at **today's system exchange rate**, and the organization-currency subtotal is added as is.
+  - `totalBalanceApproximate` is `true` only when a **non-zero** foreign subtotal was converted. A foreign subtotal of exactly 0 is skipped before the rate lookup.
+  - A non-zero currency with **no exchange rate** is **excluded** from `totalBalance` (never added unconverted) and listed in `missingRateCurrencies`.
+  - `byCurrency` always carries the **real, unconverted** balance per currency.
+- The full rules (rate lookup direction, org-tree anchor, rounding, the no-org-currency fallback) and how `AccountsSidebar` renders them (`≈`, the "No incluye: …" warning, the ⓘ tooltip, the always-compact total — like the dashboard's financial summary, with the exact value on hover and the exact per-currency values in the breakdown) are documented once, in `financial-account.md` → "List summary — `response.summary` and its currency (ETP-5580)".
 - `summary.pending.suggestionsReady` and `summary.pending.byRule` always return `0` in T1 because the `ETBR_Match_Suggestion` table lands with T5.
 
 ### Account mutations endpoint (ETP-4096)
@@ -168,7 +179,7 @@ tools/app-shell/src/
 ├── components/financial-accounts/
 │   ├── index.js, tokens.js
 │   ├── AccountsToolbar.jsx                    # + Nueva cuenta button
-│   ├── AccountsSidebar/index.jsx
+│   ├── AccountsSidebar/index.jsx, balanceDisplay.js  # Saldo panel; always-compact total + hover title
 │   ├── AccountsTable/accountColumns.jsx       # cell bodies only (NameCell/TypeCell/BalanceCell)
 │   ├── accountCellTypes.jsx                   # binds contract `cellType` → renderer
 │   ├── contractColumns.js                     # reads the grid columns from contract.json
@@ -196,7 +207,7 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 
 1. Start the dev server with `make dev` and visit `http://localhost:3100/finance/accounts` after logging in.
 2. The sidebar should match the Figma frame `3012:25602`:
-   - Total balance reflects the sum of every active account.
+   - Total balance reflects every active account converted to the organization currency (`≈` prefix when a non-zero foreign balance was converted; a "No incluye: …" warning when a currency has no exchange rate). It is always shown compact, like the dashboard (e.g. "12,60K €"); hover the amount to see the exact value. Hover the ⓘ icon to see the explanation tooltip.
    - "Por moneda" lists each ISO code with its aggregated total.
    - "Pendientes de conciliar" shows the number of accounts with non-zero `pendingCount`.
 3. Toggle the type filter (Banco / Caja / Tarjeta / Todas) and confirm the table updates. Select **Inactivas** and confirm only archived accounts are listed (across all types) and the sidebar totals stay unchanged.
@@ -230,7 +241,16 @@ tier (ETP-5205 / ETP-5457)".
 - Frontend: `*.vitest.jsx` files under `components/financial-accounts/__tests__/` and
   `windows/custom/financial-account/__tests__/` (wizard, form, connection toggle, edit
   modal, archive dialog), plus `hooks/__tests__/` (`useAccountMutations`) and
-  `lib/__tests__/` (`validateIban`).
+  `lib/__tests__/` (`validateIban`). The sidebar's ETP-5580 tests live in
+  `components/financial-accounts/AccountsSidebar/__tests__/` (`index.vitest.jsx`,
+  `balanceDisplay.vitest.js`, `balanceDisplay.symbolSide.vitest.js`), plus
+  `lib/__tests__/dashboardValueTypography.test.js` for the typography rule shared with the
+  dashboard.
+- E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the compact
+  total with its exact `title`, the `≈` converted total and the missing-rate line.
+- See `financial-account.md` → "List summary" for the full list and the known gaps: an E2E check
+  for the ⓘ tooltip (vitest already covers it), the Spanish "B" suffix, and the exact value being
+  only in `title`.
 
 ## Deployment notes
 

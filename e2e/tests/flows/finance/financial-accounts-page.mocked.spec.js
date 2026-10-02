@@ -114,13 +114,42 @@ const ACCOUNTS = [
   },
 ];
 
+// ETP-5580 contract: the total is converted server-side to the organization currency
+// (`totalBalanceCurrencyIso`), flagged `totalBalanceApproximate` when another currency was
+// converted, and `missingRateCurrencies` lists the ISOs left out for lack of an exchange rate.
+// The only non-EUR balance here is 0, so nothing is converted: exact, not approximate.
 const SUMMARY = {
   totalBalance: 273853.46,
+  totalBalanceCurrencyIso: 'EUR',
+  totalBalanceApproximate: false,
+  missingRateCurrencies: [],
   byCurrency: [
     { currencyIso: 'EUR', total: 273853.46 },
     { currencyIso: 'USD', total: 0 },
   ],
   pending: { accountsWithPending: 3, suggestionsReady: 0, byRule: 0 },
+};
+
+// A USD balance converted into the EUR total → approximate.
+const SUMMARY_CONVERTED = {
+  ...SUMMARY,
+  totalBalance: 274773.46,
+  totalBalanceApproximate: true,
+  byCurrency: [
+    { currencyIso: 'EUR', total: 273853.46 },
+    { currencyIso: 'USD', total: 1000 },
+  ],
+};
+
+// An ARS balance with no exchange rate → excluded from the total and reported.
+const SUMMARY_MISSING_RATE = {
+  ...SUMMARY,
+  missingRateCurrencies: ['ARS'],
+  byCurrency: [
+    { currencyIso: 'EUR', total: 273853.46 },
+    { currencyIso: 'USD', total: 0 },
+    { currencyIso: 'ARS', total: 150000 },
+  ],
 };
 
 /**
@@ -141,7 +170,7 @@ const SUMMARY = {
  * AD column and serves the same value as `eTGOPendingCount`. The shared ACCOUNTS fixture carries
  * the W key, so it is mapped here rather than duplicated.
  */
-async function installAccountDetailMock(page, getRows = () => ACCOUNTS) {
+async function installAccountDetailMock(page, getRows = () => ACCOUNTS, summary = SUMMARY) {
   await page.route('**/sws/neo/financial-accounts-page', async (route) => {
     const accounts = getRows().map(({ eTGOPendingCount, ...rest }) => ({
       ...rest, pendingCount: eTGOPendingCount,
@@ -149,7 +178,7 @@ async function installAccountDetailMock(page, getRows = () => ACCOUNTS) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ response: { data: { accounts, summary: SUMMARY } } }),
+      body: JSON.stringify({ response: { data: { accounts, summary } } }),
     });
   });
 }
@@ -165,10 +194,10 @@ async function installAccountDetailMock(page, getRows = () => ACCOUNTS) {
  *
  * `getRows` is a callback, not an array, so a suite that mutates server state between
  * requests (bulk delete: the archived ids) re-reads it on every fetch and a refetch really
- * reflects the mutation.
+ * reflects the mutation. `summary` lets a test feed a different sidebar aggregate (ETP-5580).
  */
-async function installAccountsMock(page, getRows = () => ACCOUNTS) {
-  await installAccountDetailMock(page, getRows);
+async function installAccountsMock(page, getRows = () => ACCOUNTS, summary = SUMMARY) {
+  await installAccountDetailMock(page, getRows, summary);
   await page.route('**/sws/neo/financial-account/account{/**,}**', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' && !/\/account\/[^/?]+/.test(req.url())) {
@@ -177,7 +206,7 @@ async function installAccountsMock(page, getRows = () => ACCOUNTS) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: { data: rows, totalRows: rows.length, summary: SUMMARY },
+          response: { data: rows, totalRows: rows.length, summary },
         }),
       });
       return;
@@ -259,11 +288,15 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // generated as `Table`, and AccountsHeaderTable reads `meta?.summary`. Before that the
   // sidebar rendered 0.00 no matter what the backend sent (unit coverage:
   // `tools/app-shell/src/components/contract-ui/__tests__/ListView.headerContentMeta.vitest.jsx`).
+  //
+  // ETP-5580: the total is ALWAYS shown in the dashboard's compact notation ("273,85K €"); the
+  // exact value is only in the `title`. Amount and symbol are separated by a non-breaking space:
+  // `toHaveText` normalizes whitespace, `toHaveAttribute` does not, so the title uses `\s`.
   test('sidebar aggregate values match the summary sibling of response.data', async ({ page }) => {
-    // formatCurrency uses es-ES locale + EUR (dot-thousands, comma-decimal, symbol-after): "273.853,46 €"
     const balance = page.getByTestId('balance-card');
-    await expect(balance).toContainText('273.853,46');
-    await expect(balance).toContainText('€');
+    await expect(balance).toHaveText('273,85K €');
+    await expect(balance).toHaveAttribute('title', /^273\.853,46\s€$/);
+    await expect(page.getByTestId('balance-missing-rate')).toHaveCount(0);
 
     await expect(page.getByTestId('balance-by-currency-EUR')).toBeVisible();
     await expect(page.getByTestId('balance-by-currency-USD')).toBeVisible();
@@ -430,6 +463,41 @@ test.describe('Financial Accounts list — Cuentas', () => {
  * The mock tracks archived ids in memory so the list mock and the DELETE mock stay consistent
  * across the refetch the batch outcome triggers.
  */
+// ETP-5580 — the converted-total contract of the "Saldo" sidebar. Each test installs its own
+// summary before navigating, so it does not share the default beforeEach above.
+test.describe('Financial Accounts list — Saldo converted total (ETP-5580)', () => {
+  async function openWithSummary(page, summary) {
+    await login(page);
+    await installAccountsMock(page, () => ACCOUNTS, summary);
+    await page.goto('/financial-account');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+  }
+
+  test('a converted total shows the "≈" prefix in the text and the title', async ({ page }) => {
+    await openWithSummary(page, SUMMARY_CONVERTED);
+
+    const balance = page.getByTestId('balance-card');
+    await expect(balance).toHaveText('≈ 274,77K €');
+    await expect(balance).toHaveAttribute('title', /^≈ 274\.773,46\s€$/);
+    // The breakdown keeps the real per-currency balances, without the marker.
+    await expect(page.getByTestId('balance-by-currency-USD')).toBeVisible();
+    await expect(page.getByTestId('balance-by-currency-USD')).not.toContainText('≈');
+  });
+
+  test('a currency without exchange rate is reported under the total', async ({ page }) => {
+    await openWithSummary(page, SUMMARY_MISSING_RATE);
+
+    const balance = page.getByTestId('balance-card');
+    await expect(balance).toHaveText('273,85K €');
+    await expect(page.getByTestId('balance-missing-rate')).toBeVisible();
+    await expect(page.getByTestId('balance-missing-rate')).toHaveText(
+      /^(No incluye|Excludes): ARS \((sin tasa de cambio|no exchange rate)\)$/,
+    );
+    // The excluded currency is still listed with its own balance.
+    await expect(page.getByTestId('balance-by-currency-ARS')).toBeVisible();
+  });
+});
+
 test.describe('Financial Accounts — bulk delete selection bar (ETP-4656)', () => {
   /** @type {{ failIds: Set<string> }} */
   let deleteState;
