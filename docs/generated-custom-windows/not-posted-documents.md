@@ -163,8 +163,9 @@ ORDER BY t.tablename;
 ## Accounting status filter
 
 The "Estado" multi-select (heading "Estado", trigger "Todos los estados" / the one picked status /
-"{n} Estados") offers 4 curated statuses, each shown as a coloured `Tag`. The request sends search
-keys (`N`, `E,C`, `i`, `p`), but `NoPostedDocumentDS` requires `ad_ref_list_id` UUIDs internally —
+"Todos los errores" / "{n} Estados") offers 5 curated statuses, each shown as a coloured `Tag`,
+plus the **"Todos los errores"** shortcut. The request sends search keys (`N`, `E,C`, `i`, `p`,
+`NC`), but `NoPostedDocumentDS` requires `ad_ref_list_id` UUIDs internally —
 `getValues()` queries `AD_Ref_List` by primary key, not by search key. The handler translates via
 `ACCOUNTING_STATUS_KEY_TO_ID`.
 
@@ -173,14 +174,45 @@ keys (`N`, `E,C`, `i`, `p`), but `NoPostedDocumentDS` requires `ad_ref_list_id` 
 | No contabilizado (`notPostedStatusUnposted`) | yellow | `N` | `D16B6411F4CB4708AE05E7F6E109920E` | |
 | Periodo cerrado (`postedStatusPeriodClosed`) | orange | `p` | `D1EAA8BCC3E649C398D4E544282E5292` | |
 | Cuenta no válida (`notPostedStatusInvalidAccount`) | red | `i` | `A12420CC6D4144768EEC57143859EFD6` | |
+| Coste no calculado (`postedStatusCostNotCalculated`) | red | `NC` | `EF3E057A84CD4BE88A9EF57BE9598DA3` | Added by ETP-5591 (see below) |
 | Error (`notPostedStatusError`) | red | `E`, `C` | `420D49CD77304D32BE49582002C315BE`, `4AE29BF062D4484E976B1BEEF34A7913` | Unified: Error + Error-No-Cost |
+
+**`NC` — Coste no calculado (ETP-5591).** Until ETP-5591 the handler never requested `NC`
+(ETP-4355 left it out of the curated set), so every goods receipt / shipment whose posting stopped
+on an uncalculated cost — a common failure: 1176 such rows on the local sandbox — never appeared on
+the page meant to surface exactly that. It is now a curated option and part of
+`DEFAULT_ACCOUNTING_STATUS_KEYS` (`N, E, C, i, p, NC`).
+
+**"Todos los errores" shortcut.** First row of the dropdown (after "Todos los estados"). Ticking it
+selects every status that means a posting attempt **failed** — Periodo cerrado, Cuenta no válida,
+Coste no calculado, Error (`ERROR_TOKENS`, i.e. all but "No contabilizado") — and unticking it
+clears them. It is not a status of its own: it is ticked exactly when all of them are, the trigger
+then reads "Todos los errores", and it is never written to the URL (`applyStatusSelection` in
+`notPostedDocumentsFilters.js`).
 
 The labels are the page's own i18n keys in the design's sentence case, not the AD's Title Case
 translations ("Cuenta No Válida"), and the order and tones are the design's. They live in
 `notPostedDocumentsFilters.js` (`STATUS_DEFS`), the single place that maps a row's raw key to its
 badge. The same table drives the row **Estado** column — see "Row accounting status" below.
 
-When no filter is selected (initial load), the handler defaults to all curated keys — `["N","E","C","i","p"]` (the 4 UI options, with "Error" expanded to its 2 underlying keys) — because passing an empty list to `searchAllDocuments(org, emptyList)` returns zero results (the datasource short-circuits on empty status list).
+When no filter is selected (initial load), the handler defaults to all curated keys — `["N","E","C","i","p","NC"]` (the 5 UI options, with "Error" expanded to its 2 underlying keys) — because passing an empty list to `searchAllDocuments(org, emptyList)` returns zero results (the datasource short-circuits on empty status list).
+
+### Known gap — documents stuck in "Pendiente de refresco" (`l`)
+
+The page filters on bulk.posting's own column, `EM_Etblkp_Accountingstatus`, not on `Posted`. That
+column defaults to `l` (Pending Refresh) on INSERT, and a per-table trigger
+(`etblkp_<table>_status_trg`) copies `POSTED` into it on every UPDATE; the background process
+`RefreshAccountingStatus` ("Days Back to Refresh Accounting", `ETBLKP_Amount_Of_Days`) back-fills
+remaining `l` rows within a date window. So any document touched since bulk.posting was installed is
+in sync, and an `l` row is one that was never updated afterwards — and it never shows here, whatever
+its real `Posted` value.
+
+Investigated during ETP-5591: on the local sandbox the `l` rows are legacy/seed data only (F&B
+demo documents from 2013–2021, QA Testing, 9 rows of GOClient reference data); a freshly
+provisioned tenant has none, because completing and posting a document are UPDATEs. No
+`AD_Process_Request` schedules the refresh process there. Not fixed: if real tenants ever show `l`
+rows (e.g. data imported with triggers disabled), the remedy is to schedule/run the refresh process
+or a data-fix setting the column from `Posted`, not to change this page.
 
 Full reference for all 18 accounting statuses (excluded from UI):
 ```sql
@@ -447,7 +479,7 @@ failed, it shows that row's translated error (same identity); otherwise only the
 
 1. Open `/not-posted-documents` — the toolbar shows "Todos los documentos", "Todos los estados", "Últimos 12 meses" and, on the right, link / sort / refresh. No "Buscar", no "N registros" row; the count is in the title badge.
 2. Tipo de documento lists the enabled types A→Z with a search box; on a tenant whose `c_acctschema_table` row for `800168` is active (GOClient, or any tenant after data-fix R40) that includes **Consumo interno** (ETP-5445). Never present: payments, bank statements, reconciliation, work effort, doubtful debt, cost adjustment, bill of materials production, landed cost, landed cost cost.
-3. Every row shows a translated type and a status badge (yellow / orange / red). Picking a type or statuses refetches immediately; two statuses read "2 Estados". "Limpiar filtros" appears and resets.
+3. Every row shows a translated type and a status badge (yellow / orange / red). Picking a type or statuses refetches immediately; two statuses read "2 Estados"; "Todos los errores" ticks Periodo cerrado / Cuenta no válida / Coste no calculado / Error at once. Goods receipts with "Coste no calculado" appear. "Limpiar filtros" appears and resets.
 4. Copy the link, open it in another tab → same filters.
 5. Hover a row → "Abrir documento" opens the source document (a transaction opens its financial account); Back returns with the filters intact. "Contabilizar" posts it (success toast, row disappears).
 6. Select rows → floating toolbar "{n} Seleccionados · Contabilizar · ✕"; Contabilizar → outcome toast, table refreshes.
@@ -468,4 +500,4 @@ failed, it shows that row's translated error (same identity); otherwise only the
 - `tools/app-shell/src/windows/custom/not-posted-documents/index.jsx` — route entry wrapped in `ProcessAccessGuard` (ETP-5485); covered by `__tests__/index.access.vitest.jsx`, `components/access/__tests__/ProcessAccessGuard.vitest.jsx`, the 403/error cases in `__tests__/NotPostedDocumentsPage.vitest.jsx`, and the "direct route without process access" block of `e2e/tests/flows/accounting/not-posted-documents.mocked.spec.js`.
 - `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/NotPostedDocumentsHandler.java` — `@Named("not-posted-documents")`; dynamic `c_acctschema_table` check + `APRM_DISABLED_TYPES` static exclusion set (includes BS, PIN, POT, R plus the ETP-4452 global exclusions BMP, DD, LC, LCC, CA); `DS_LABEL_TO_DOCUMENT_TYPE_CODE` + `tableIdForLabel` row enrichment (ETP-5591; replaced `DOCUMENT_TYPE_TO_TABLE_ID`), `enrichWithAccountingState` / `loadAccountingStates` (row status + transaction account), all covered by `NotPostedDocumentsHandlerTest`; `ACCOUNTING_STATUS_KEY_TO_ID` UUID map; `DEFAULT_ACCOUNTING_STATUS_KEYS`; `AccessibleDS` inner subclass.
 - `modules/com.etendoerp.go/src-db/database/sourcedata/ETGO_SF_ENTITY.xml` — `isget=Y, ispost=Y`.
-- i18n keys (`en_US.json` / `es_ES.json`): `notPostedDocuments`, `allDocuments`, `statusesCount`, `openDocument`, `notPostedStatusUnposted`, `notPostedStatusInvalidAccount`, `notPostedStatusError`, `notPostedEmptyFilteredTitle`, `notPostedEmptyFilteredDescription`, `notPostedEmptyNoneTitle`, plus shared `postedStatusPeriodClosed`, `statusLabel`, `documentType`, `resetFilters`, `selected`, `post`, `postingFailed`, `documentPosted`, `documentsLoadError`, `linkCopied`, `copyFailed`, `copyLink`, `accountingDate`.
+- i18n keys (`en_US.json` / `es_ES.json`): `notPostedDocuments`, `allDocuments`, `allErrors`, `postedStatusCostNotCalculated` (shared), `statusesCount`, `openDocument`, `notPostedStatusUnposted`, `notPostedStatusInvalidAccount`, `notPostedStatusError`, `notPostedEmptyFilteredTitle`, `notPostedEmptyFilteredDescription`, `notPostedEmptyNoneTitle`, plus shared `postedStatusPeriodClosed`, `statusLabel`, `documentType`, `resetFilters`, `selected`, `post`, `postingFailed`, `documentPosted`, `documentsLoadError`, `linkCopied`, `copyFailed`, `copyLink`, `accountingDate`.

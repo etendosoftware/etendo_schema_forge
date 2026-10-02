@@ -17222,6 +17222,7 @@
     "documentConfirmed": "Documento confirmado correctamente",
     "notPostedDocuments": "Documentos no contabilizados",
     "allDocuments": "Todos los documentos",
+    "allErrors": "Todos los errores",
     "statusesCount": "{count} Estados",
     "openDocument": "Abrir documento",
     "notPostedStatusUnposted": "No contabilizado",

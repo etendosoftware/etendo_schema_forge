@@ -41,6 +41,10 @@ const ROWS = [
     tableId: '4D8C3B3C31D1410DA046140C9F024D17', financialAccountId: 'acc-9',
   },
   {
+    documentId: 'doc-5', documentType: 'Goods Receipt', documentTypeCode: 'GR', accountingStatus: 'NC',
+    description: 'GR-005', accountingDate: '2024-06-02', organization: 'Main Org', tableId: '319',
+  },
+  {
     documentId: 'doc-4', documentType: 'Some Future Type', documentTypeCode: null, accountingStatus: null,
     description: 'FUT-004', accountingDate: '2024-06-01', organization: 'Main Org', tableId: null,
   },
@@ -171,6 +175,33 @@ describe('NotPostedDocumentsPage — toolbar', () => {
     expect(screen.queryByPlaceholderText('searchValues')).not.toBeInTheDocument();
   });
 
+  it('"Todos los errores" ticks every error status, reads as such on the trigger, and unticks them all', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'allErrors' }));
+
+    await waitFor(() => expect(location.search).toBe('?status=p%2Ci%2CNC%2CE'));
+    expect(rowRequests().at(-1).get('accountingStatus')).toBe('p,i,NC,E,C');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('allErrors');
+    expect(screen.getByRole('checkbox', { name: 'allErrors' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('checkbox', { name: 'notPostedStatusUnposted' })).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'allErrors' }));
+    await waitFor(() => expect(location.search).toBe(''));
+  });
+
+  it('unticking one error status drops "Todos los errores" and counts the rest', async () => {
+    renderPage('/not-posted-documents?status=p,i,NC,E');
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'postedStatusCostNotCalculated' }));
+
+    await waitFor(() => expect(location.search).toBe('?status=p%2Ci%2CE'));
+    expect(screen.getByRole('checkbox', { name: 'allErrors' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('statusesCount(3)');
+  });
+
   it('restores filters from the URL on load (Share / browser Back)', async () => {
     renderPage('/not-posted-documents?document=SI&status=N&date=all');
     await waitFor(() => expect(rowRequests().length).toBe(1));
@@ -234,6 +265,7 @@ describe('NotPostedDocumentsPage — rows', () => {
     expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('notPostedStatusError');
     expect(screen.getByTestId('npd-status-doc-2')).toHaveTextContent('notPostedStatusError');
     expect(screen.getByTestId('npd-status-doc-3')).toHaveTextContent('postedStatusPeriodClosed');
+    expect(screen.getByTestId('npd-status-doc-5')).toHaveTextContent('postedStatusCostNotCalculated');
     expect(screen.queryByTestId('npd-status-doc-4')).not.toBeInTheDocument();
   });
 
@@ -302,8 +334,9 @@ describe('NotPostedDocumentsPage — rows', () => {
     await waitFor(() => rowOf('doc-1'));
     fireEvent.click(within(screen.getAllByTestId('column-header-documentTypeLabel')[0]).getByRole('button'));
     const order = screen.getAllByTestId(/^row-doc-/).map((r) => r.getAttribute('data-testid'));
-    // docTypeMatchedInvoices < Factura (Cliente) < Some Future Type < Transacción
-    expect(order).toEqual(['row-doc-2', 'row-doc-1', 'row-doc-4', 'row-doc-3']);
+    // docTypeMatchedInvoices < Factura (Cliente) < Goods Receipt (no option, raw label)
+    // < Some Future Type < Transacción
+    expect(order).toEqual(['row-doc-2', 'row-doc-1', 'row-doc-5', 'row-doc-4', 'row-doc-3']);
   });
 });
 

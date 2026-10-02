@@ -16992,6 +16992,7 @@
     "documentConfirmed": "Document confirmed successfully",
     "notPostedDocuments": "Not Posted Documents",
     "allDocuments": "All documents",
+    "allErrors": "All errors",
     "statusesCount": "{count} Statuses",
     "openDocument": "Open document",
     "notPostedStatusUnposted": "Unposted",

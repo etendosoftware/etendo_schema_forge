@@ -12,21 +12,57 @@ import { parseCalendarDate } from '@/lib/dateOnly';
  */
 
 /**
- * The four statuses the page offers, in the order the design lists them (yellow → orange →
- * red). Each one is a URL `token` and the backend `keys` it stands for: "Error" covers both
+ * The statuses the page offers, in the order the design lists them (yellow → orange →
+ * red). The design had four; ETP-5591 QA added "Coste no calculado" (`NC`), which the backend
+ * had never requested, so goods receipts stuck on an uncalculated cost never appeared. Each one is a URL `token` and the backend `keys` it stands for: "Error" covers both
  * `E` and `C` (Error, no cost), which the backend's own filter option already merges as the
  * value `"E,C"`. That composite value is why the URL does not store backend values: `N,E,C`
  * could not be split back into options.
  *
  * Labels are the page's own i18n keys, in the design's sentence case, not the AD's Title Case
  * translations ("Cuenta No Válida"). The badge tones are the design's.
+ *
+ * `error: true` marks the statuses the "Todos los errores" shortcut selects: every status that
+ * means a posting attempt FAILED, i.e. all but "No contabilizado" (never attempted).
  */
 export const STATUS_DEFS = [
-  { token: 'N', keys: ['N'], labelKey: 'notPostedStatusUnposted', variant: 'yellow' },
-  { token: 'p', keys: ['p'], labelKey: 'postedStatusPeriodClosed', variant: 'orange' },
-  { token: 'i', keys: ['i'], labelKey: 'notPostedStatusInvalidAccount', variant: 'red' },
-  { token: 'E', keys: ['E', 'C'], labelKey: 'notPostedStatusError', variant: 'red' },
+  { token: 'N', keys: ['N'], labelKey: 'notPostedStatusUnposted', variant: 'yellow', error: false },
+  { token: 'p', keys: ['p'], labelKey: 'postedStatusPeriodClosed', variant: 'orange', error: true },
+  { token: 'i', keys: ['i'], labelKey: 'notPostedStatusInvalidAccount', variant: 'red', error: true },
+  { token: 'NC', keys: ['NC'], labelKey: 'postedStatusCostNotCalculated', variant: 'red', error: true },
+  { token: 'E', keys: ['E', 'C'], labelKey: 'notPostedStatusError', variant: 'red', error: true },
 ];
+
+/** The status tokens "Todos los errores" stands for. */
+export const ERROR_TOKENS = STATUS_DEFS.filter((def) => def.error).map((def) => def.token);
+
+/**
+ * Pseudo-option of the status dropdown: ticking it selects every {@link ERROR_TOKENS} status,
+ * unticking it clears them. It is never stored in the filters or the URL — it is ticked exactly
+ * when all the error statuses are.
+ */
+export const ALL_ERRORS_TOKEN = 'errors';
+
+/** Whether a status selection includes every error status. */
+export function hasAllErrors(statuses) {
+  return ERROR_TOKENS.every((token) => statuses.includes(token));
+}
+
+/**
+ * Applies a change reported by the status dropdown, whose options are the statuses plus the
+ * {@link ALL_ERRORS_TOKEN} pseudo-option. Returns the new status tokens in canonical order.
+ *
+ * @param {string[]} previous the current status tokens (no pseudo-option)
+ * @param {string[]} next what the dropdown reported (may include the pseudo-option)
+ */
+export function applyStatusSelection(previous, next) {
+  const hadAll = hasAllErrors(previous);
+  const hasAll = next.includes(ALL_ERRORS_TOKEN);
+  let tokens = next.filter((token) => token !== ALL_ERRORS_TOKEN);
+  if (hasAll && !hadAll) tokens = [...tokens, ...ERROR_TOKENS];
+  else if (!hasAll && hadAll) tokens = tokens.filter((token) => !ERROR_TOKENS.includes(token));
+  return STATUS_DEFS.map((def) => def.token).filter((token) => tokens.includes(token));
+}
 
 const STATUS_BY_TOKEN = new Map(STATUS_DEFS.map((def) => [def.token, def]));
 const STATUS_BY_KEY = new Map(STATUS_DEFS.flatMap((def) => def.keys.map((key) => [key, def])));

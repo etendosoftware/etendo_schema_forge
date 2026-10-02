@@ -1,6 +1,10 @@
 // ETP-5591 — the Not Posted Documents filter state: defaults, URL form, backend query.
 import {
   STATUS_DEFS,
+  ERROR_TOKENS,
+  ALL_ERRORS_TOKEN,
+  hasAllErrors,
+  applyStatusSelection,
   statusDefForKey,
   statusDefForToken,
   defaultFilters,
@@ -13,10 +17,14 @@ import {
 const params = (query) => new URLSearchParams(query);
 
 describe('status definitions', () => {
-  it('lists the four statuses in the design order, yellow → orange → red', () => {
+  it('lists the statuses in the design order, yellow → orange → red, with Coste no calculado', () => {
     expect(STATUS_DEFS.map((d) => [d.token, d.variant])).toEqual([
-      ['N', 'yellow'], ['p', 'orange'], ['i', 'red'], ['E', 'red'],
+      ['N', 'yellow'], ['p', 'orange'], ['i', 'red'], ['NC', 'red'], ['E', 'red'],
     ]);
+  });
+
+  it('counts every failed-posting status as an error, but not "No contabilizado"', () => {
+    expect(ERROR_TOKENS).toEqual(['p', 'i', 'NC', 'E']);
   });
 
   it('maps both E and C row keys to the single "Error" status', () => {
@@ -29,6 +37,33 @@ describe('status definitions', () => {
     expect(statusDefForKey(null)).toBeNull();
     expect(statusDefForKey('')).toBeNull();
     expect(statusDefForToken('C')).toBeNull();
+  });
+});
+
+describe('"Todos los errores" shortcut', () => {
+  it('is ticked only when every error status is selected', () => {
+    expect(hasAllErrors(['p', 'i', 'NC', 'E'])).toBe(true);
+    expect(hasAllErrors(['N', 'p', 'i', 'NC', 'E'])).toBe(true);
+    expect(hasAllErrors(['p', 'i', 'E'])).toBe(false);
+    expect(hasAllErrors([])).toBe(false);
+  });
+
+  it('ticking it adds every error status, keeping the others, in canonical order', () => {
+    expect(applyStatusSelection(['N'], ['N', ALL_ERRORS_TOKEN])).toEqual(['N', 'p', 'i', 'NC', 'E']);
+    expect(applyStatusSelection(['E'], ['E', ALL_ERRORS_TOKEN])).toEqual(['p', 'i', 'NC', 'E']);
+  });
+
+  it('unticking it removes every error status and keeps "No contabilizado"', () => {
+    expect(applyStatusSelection(['N', 'p', 'i', 'NC', 'E'], ['N', 'p', 'i', 'NC', 'E'])).toEqual(['N']);
+  });
+
+  it('unticking one error status while all were selected drops just that one', () => {
+    expect(applyStatusSelection(['p', 'i', 'NC', 'E'], [ALL_ERRORS_TOKEN, 'p', 'i', 'E'])).toEqual(['p', 'i', 'E']);
+  });
+
+  it('plain toggles never store the pseudo-option', () => {
+    expect(applyStatusSelection([], ['NC'])).toEqual(['NC']);
+    expect(applyStatusSelection(['NC'], [])).toEqual([]);
   });
 });
 
@@ -89,6 +124,10 @@ describe('parseFilters / serializeFilters', () => {
 
 describe('buildRowsQuery', () => {
   afterEach(() => vi.useRealTimers());
+
+  it('sends NC for Coste no calculado', () => {
+    expect(params(buildRowsQuery({ document: null, statuses: ['NC'], date: null })).get('accountingStatus')).toBe('NC');
+  });
 
   it('expands the Error status into both backend keys', () => {
     const query = buildRowsQuery({ document: null, statuses: ['N', 'E'], date: null });

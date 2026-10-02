@@ -26,6 +26,10 @@ import {
 import { AccessDeniedMessage } from '@/components/access/ProcessAccessGuard.jsx';
 import {
   STATUS_DEFS,
+  ERROR_TOKENS,
+  ALL_ERRORS_TOKEN,
+  hasAllErrors,
+  applyStatusSelection,
   statusDefForKey,
   statusDefForToken,
   defaultFilters,
@@ -352,8 +356,18 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
         .localeCompare(docTypeLabel(b, ui, documentTypeLabels) ?? b)),
     [documentTypeOptions, documentTypeLabels, ui],
   );
-  const statusTokens = useMemo(() => STATUS_DEFS.map((def) => def.token), []);
-  const statusLabel = useCallback((token) => ui(statusDefForToken(token).labelKey), [ui]);
+  // "Todos los errores" sits first, before the individual statuses. It is a shortcut, not a
+  // status: ticked exactly when every error status is, and never written to the URL.
+  const statusCodes = useMemo(() => [ALL_ERRORS_TOKEN, ...STATUS_DEFS.map((def) => def.token)], []);
+  const allErrorsSelected = hasAllErrors(filters.statuses);
+  const statusValue = allErrorsSelected ? [ALL_ERRORS_TOKEN, ...filters.statuses] : filters.statuses;
+  const statusLabel = useCallback(
+    (token) => (token === ALL_ERRORS_TOKEN ? ui('allErrors') : ui(statusDefForToken(token).labelKey)),
+    [ui],
+  );
+  const statusTriggerLabel = () => (allErrorsSelected && filters.statuses.length === ERROR_TOKENS.length
+    ? ui('allErrors')
+    : ui('statusesCount', { count: filters.statuses.length }));
 
   function emptyState() {
     if (loadError) return { title: loadErrorText(), testId: 'npd-load-error' };
@@ -391,18 +405,20 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           data-testid="DistinctValuesFilter__npddoc" />
         <DistinctValuesFilter
           multiple
-          value={filters.statuses}
-          onChange={(tokens) => updateFilters({ statuses: tokens })}
-          codes={statusTokens}
+          value={statusValue}
+          onChange={(next) => updateFilters({ statuses: applyStatusSelection(filters.statuses, next) })}
+          codes={statusCodes}
           labelFor={statusLabel}
-          renderLabel={(token) => (
-            <Tag
-              variant={statusDefForToken(token).variant}
-              label={statusLabel(token)}
-              data-testid="Tag__npdstatus" />
-          )}
+          renderLabel={(token) => (token === ALL_ERRORS_TOKEN
+            ? <span className="font-medium">{statusLabel(token)}</span>
+            : (
+              <Tag
+                variant={statusDefForToken(token).variant}
+                label={statusLabel(token)}
+                data-testid="Tag__npdstatus" />
+            ))}
           allLabel={ui('allStatuses')}
-          multipleLabel={(count) => ui('statusesCount', { count })}
+          multipleLabel={statusTriggerLabel}
           heading={ui('statusLabel')}
           searchable={false}
           searchPlaceholder={ui('searchValues')}

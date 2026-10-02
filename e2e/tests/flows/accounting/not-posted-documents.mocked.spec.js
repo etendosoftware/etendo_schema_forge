@@ -208,8 +208,9 @@ test.describe('Not Posted Documents — filters', () => {
     const { rowRequests } = await openPage(page);
 
     await page.getByTestId('npd-filter-accounting-status').click();
-    await page.getByRole('checkbox', { name: t('notPostedStatusUnposted') }).click();
-    await page.getByRole('checkbox', { name: t('notPostedStatusError') }).click();
+    // `exact`: a plain name match is a substring match, and "Todos los errores" contains "Error".
+    await page.getByRole('checkbox', { name: t('notPostedStatusUnposted'), exact: true }).click();
+    await page.getByRole('checkbox', { name: t('notPostedStatusError'), exact: true }).click();
 
     await expect.poll(() => rowRequests.at(-1)?.get('accountingStatus')).toBe('N,E,C');
     await expect(page.getByTestId('npd-filter-accounting-status')).toContainText(t('statusesCount', { count: 2 }));
@@ -220,6 +221,20 @@ test.describe('Not Posted Documents — filters', () => {
     await page.getByTestId('npd-reset-filters').click();
     await expect(page).toHaveURL(new RegExp(`/${SPEC}$`));
     await expect(page.getByTestId('npd-reset-filters')).toHaveCount(0);
+  });
+});
+
+test.describe('Not Posted Documents — "Todos los errores"', () => {
+  test('ticks every error status at once and the trigger says so', async ({ page }) => {
+    const { rowRequests } = await openPage(page);
+
+    await page.getByTestId('npd-filter-accounting-status').click();
+    await page.getByRole('checkbox', { name: t('allErrors'), exact: true }).click();
+
+    await expect.poll(() => rowRequests.at(-1)?.get('accountingStatus')).toBe('p,i,NC,E,C');
+    await expect(page.getByTestId('npd-filter-accounting-status')).toContainText(t('allErrors'));
+    await expect(page.getByRole('checkbox', { name: t('postedStatusCostNotCalculated'), exact: true }))
+      .toHaveAttribute('aria-checked', 'true');
   });
 });
 
