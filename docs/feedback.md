@@ -2966,3 +2966,36 @@ attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real 
 **Lesson:** a display name is not an identity. When a row must be found again later by "who it belongs to",
 store that link when the row is created. "Nobody else is assigned to it" is not proof it is yours: deletion leaves
 the same state behind.
+
+---
+
+## [2026-10-02] ETP-5579 — Country names served in English to a Spanish UI (three sites left, flagged not fixed)
+
+**Component:** `com.etendoerp.go` — `FinancialAccountsPageHandler.ACCOUNTS_SQL` (fixed);
+`BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL`, `OnboardingCompanyDataService.formatAddress` and
+`FinancialAccountHandler.applyOrgCountryDefault` (not fixed).
+
+**Symptom:** the Cuentas list País column and the Edit Account modal showed "Spain" to an es_ES
+user. `c_country.name` holds only the base (English) name; the translated name lives in
+`c_country_trl`.
+
+**Fix (ETP-5579):** `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO request language
+(`Accept-Language` → `OBContext` language, applied by `NeoAuthenticator`) and returns
+`COALESCE(ctryt.name, ctry.name)`, so an untranslated country falls back to the base name. Same
+join as `TaxReportHandler` (ETP-5013). See `docs/generated-custom-windows/financial-accounts-page.md`
+→ "Backend contract".
+
+**Same issue, out of scope, still open:**
+
+1. `BusinessPartnerHandler.PRIMARY_LOCATIONS_SQL` selects `cty.name AS country` with no
+   `c_country_trl` join — contact primary addresses show the English country name.
+2. `OnboardingCompanyDataService.formatAddress` appends `location.getCountry().getName()` — the
+   onboarding company address shows the English country name.
+3. `FinancialAccountHandler.applyOrgCountryDefault` sets `country$_identifier` from
+   `orgCountry.getName()` — the New Account wizard's pre-filled Country chip reads "Spain" in es_ES.
+   Recorded as a known gap in `docs/generated-custom-windows/financial-account.md`.
+
+**Lesson:** a `*.name` read from a translatable reference table (`c_country`, `c_uom`,
+`ad_ref_list`, …) is the base-language value. Anything a user reads needs the `_trl` join on the
+request language with a `COALESCE` fallback. Grep for the sibling reads of the same table when
+fixing one: this one had three.
