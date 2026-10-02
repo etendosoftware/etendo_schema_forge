@@ -35,6 +35,10 @@ PROBE_FINISHED = "probe_finished"
 #: tailing UI spinning forever on a probe that is already dead.
 PROBE_ABORTED = "probe_aborted"
 EFFECT_CHECKED = "effect_checked"
+#: One deterministic call the runner made around the agent (D41). Never a
+#: `tool_call`: those are the agent's, and a fixture must not inflate its count.
+SETUP_STEP = "setup_step"
+TEARDOWN_STEP = "teardown_step"
 RUN_FINISHED = "run_finished"
 
 #: How much of a tool result (and of a serialised argument blob) a single event
