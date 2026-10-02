@@ -129,11 +129,13 @@ vi.mock('@/components/ui/dropdown-menu.jsx', async () => {
     // Mirrors the asChild-cloning behavior of DropdownMenuTrigger above so items
     // like the "Report a bug" <a> (rendered via asChild) keep their own tag,
     // href, and data-testid instead of being wrapped in an extra <div>.
-    DropdownMenuItem: ({ children, asChild, ...props }) => {
+    DropdownMenuItem: ({ children, asChild, onSelect, ...props }) => {
       if (asChild && React.isValidElement(children)) {
         return React.cloneElement(children, props);
       }
-      return <div {...props}>{children}</div>;
+      // Radix fires `onSelect` when the item is clicked; React's own `onSelect` on a <div> never
+      // fires (it only exists for text inputs), so the mock maps it to the click.
+      return <div onClick={onSelect} {...props}>{children}</div>;
     },
     DropdownMenuLabel: ({ children }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
@@ -385,10 +387,10 @@ describe('SideMenu', () => {
 
     render(<SideMenu {...defaultProps} />);
 
-    // The menu mock renders items as plain <div>s, where `onSelect` is React's DOM select event.
-    fireEvent.select(screen.getByTestId('company-option-prod-1'));
+    // The menu mock maps an item's `onSelect` to its click, as Radix does.
+    fireEvent.click(screen.getByTestId('company-option-prod-1'));
     expect(switchTo).not.toHaveBeenCalled();
-    fireEvent.select(screen.getByTestId('company-option-demo-1'));
+    fireEvent.click(screen.getByTestId('company-option-demo-1'));
     expect(switchTo).toHaveBeenCalledWith(environments[1]);
   });
 

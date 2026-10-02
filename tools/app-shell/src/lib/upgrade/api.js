@@ -111,22 +111,27 @@ export async function createBillingPurchase(baseUrl, input = {}) {
   });
   const data = await readJsonSafely(response);
   if (!response.ok) {
-    if (response.status === 409 && data?.purchaseId) {
-      const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
-        data.status || 'Purchase already exists', response.status);
-      error.purchase = data;
-      throw error;
-    }
-    if (isClientNameInUse(response, data)) {
-      throw buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
-    }
-    throw buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
-      : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
+    throw billingPurchaseError(response, data);
   }
   if (!data?.checkoutUrl || !data?.requestId) {
     throw buildError(UPGRADE_ERROR_CODES.checkoutUnavailable);
   }
   return { checkoutUrl: data.checkoutUrl, requestId: data.requestId, expiresAt: data.expiresAt || null };
+}
+
+/** Maps a refused billing purchase to its upgrade error; a 409 for an existing one carries it. */
+function billingPurchaseError(response, data) {
+  if (response.status === 409 && data?.purchaseId) {
+    const error = buildError(UPGRADE_ERROR_CODES.purchaseAlreadyExists,
+      data.status || 'Purchase already exists', response.status);
+    error.purchase = data;
+    return error;
+  }
+  if (isClientNameInUse(response, data)) {
+    return buildError(UPGRADE_ERROR_CODES.tenantNameInUse, data.error.message, response.status);
+  }
+  return buildError(response.status === 401 ? UPGRADE_ERROR_CODES.sessionExpired
+    : UPGRADE_ERROR_CODES.checkoutCreationFailed, data?.error?.message || data?.message, response.status);
 }
 
 export async function getCheckoutStatus(baseUrl, requestId) {

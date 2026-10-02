@@ -51,13 +51,19 @@ describe('R41 data-fix — header metadata', () => {
     assert.ok(fix.report.length > 0, '@report lists the roles left without an owner');
   });
 
-  it('sorts after every other fix in the catalog', () => {
+  // The runner's watermark is strict (run.js skips every fix dated at or before the newest one a
+  // tenant already processed), so this fix must sort after every fix that existed when it
+  // shipped — R1..R40. Fixes added later (R41+ from other branches, R42, R43...) are newer on
+  // purpose and are allowed to sort after it.
+  it('sorts after every fix that predates it (R1..R40)', () => {
     const ts = parseFixTimestamp(FIX_ID);
     assert.equal(ts.toISOString(), '2026-09-28T14:00:00.000Z');
-    const others = readdirSync(SQL_DIR)
+    const earlier = readdirSync(SQL_DIR)
       .filter((f) => f.endsWith('.sql') && f !== FIX_FILE)
-      .map((f) => basename(f, '.sql'));
-    for (const other of others) {
+      .map((f) => basename(f, '.sql'))
+      .filter((id) => Number((/__R(\d+)-/.exec(id) || [])[1]) < 41);
+    assert.ok(earlier.length > 0, 'the catalog must still hold the fixes this one follows');
+    for (const other of earlier) {
       assert.ok(other < FIX_ID, `${FIX_ID} must sort after ${other}`);
     }
   });

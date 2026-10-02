@@ -809,7 +809,7 @@ export default function SideMenu({
                       onSwitch={switchTo}
                       logoSrc={logoSrc}
                       ui={ui}
-                    />
+                      data-testid="CompanyOption__247c75" />
                   ))
                 ) : (
                   // No platform token, or the list could not be read: showing the
