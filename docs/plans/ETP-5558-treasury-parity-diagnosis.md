@@ -34,6 +34,7 @@ production it made 23 failing `neo_create` calls on `payment-in/finPayment` and 
 | Row 10 — advance payment without an invoice | Not in the UI → hidden from MCP |
 | Row 13 — PIS | Excluded from MCP (PIS actions and `payment-out/bankPayments`); agents pay by manual transfer through `registerPayment` |
 | BUG-4 — write-off limit | Enforced in `PaymentRegistrationService` (single source for SPA, REST and MCP). Accepted exception to the "no REST change": it only affects callers that bypass the SPA |
+| Write-off blocked hint (SPA) | Accepted exception to the "no SPA change": `writeoffMath.js:30-36` (`f0f72f243`) now returns the effective `limit`, so the blocked hint shows the account's real limit instead of "0,00 €". The `blocked` decision is equivalent — blocked exactly when a positive limit is set and the amount exceeds it, as before (`cap > 0 && amount > cap` ≡ `cap !== null && amount > cap` with `cap = limit > 0 ? limit : null`) |
 | Ticketing | Every payment fix lives in ETP-5558, BUG-1 included (done first inside the task) |
 
 ## Method
@@ -395,7 +396,7 @@ invoice payment actions).
 
 All work in ETP-5558 (`feature/ETP-5558` in `schema_forge` and `com.etendoerp.go`). Steps are
 ordered; each one ships with its tests and its doc update. REST/SPA behaviour does not change,
-except the accepted BUG-4 exception.
+except the accepted BUG-4 and write-off-hint exceptions (Decisions above).
 
 ### Step 1 — BUG-1: refuse a child write whose `parentId` cannot be mapped (MCP layer)
 
