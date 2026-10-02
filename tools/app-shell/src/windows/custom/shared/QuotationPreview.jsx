@@ -10,14 +10,8 @@ import { downloadFromCachedAttachment } from './downloadFromCachedAttachment.js'
 import SummaryCard from './preview-cards/SummaryCard.jsx';
 import EmailsCard from './preview-cards/EmailsCard.jsx';
 import RelatedDocumentsCard from './preview-cards/RelatedDocumentsCard.jsx';
-import { fetchByCriteria } from '@/components/related-documents';
+import { SALES_RELATED_DOCS } from '@/components/related-documents';
 import { useCurrencyPrecision } from '@/hooks/useCurrencyPrecision.js';
-
-// ── Quotation related-documents specs ────────────────────────────────────────
-
-const QUOTATION_SPECS = [
-  { key: 'sales-order', type: 'sales-order', fetch: (id, token, base) => fetchByCriteria('sales-order', 'header', 'quotation', id, token, base) },
-];
 
 // Statuses that mean the quotation is no longer editable
 
@@ -58,7 +52,8 @@ function QuotationGeneralTab({ quotation, onSend, token, apiBaseUrl, orgCurrency
         documentId={quotation.id}
         token={token}
         apiBaseUrl={apiBaseUrl}
-        specs={QUOTATION_SPECS}
+        // ETP-5527 — same definition as the form's RelatedDocuments section.
+        definition={SALES_RELATED_DOCS['sales-quotation']}
         data-testid="RelatedDocumentsCard__7eb018" />
     </div>
   );

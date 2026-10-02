@@ -1,31 +1,15 @@
 /**
- * Tests for entityLookup helpers and hooks — escHql, deriveEntityEndpoint,
+ * Tests for entityLookup helpers and hooks — deriveEntityEndpoint,
  * useClickOutside, and the debounced useEntitySearch (with fake timers + mocked fetch).
  */
 
 import { renderHook, act } from '@testing-library/react';
 import {
   SEARCH_DEBOUNCE_MS,
-  escHql,
   deriveEntityEndpoint,
   useClickOutside,
   useEntitySearch,
 } from '../entityLookup.js';
-
-describe('escHql', () => {
-  it('escapes single quotes by doubling them', () => {
-    expect(escHql("O'Brien")).toBe("O''Brien");
-  });
-
-  it('returns the value unchanged when no quotes are present', () => {
-    expect(escHql('plain')).toBe('plain');
-  });
-
-  it('coerces non-string values to string', () => {
-    expect(escHql(42)).toBe('42');
-    expect(escHql(null)).toBe('null');
-  });
-});
 
 describe('deriveEntityEndpoint', () => {
   it('returns null when called with no argument', () => {
@@ -52,6 +36,19 @@ describe('deriveEntityEndpoint', () => {
 
   it('falls back to /sws/neo when no apiBaseUrl is provided', () => {
     expect(deriveEntityEndpoint({ entitySpec: 'product/product' })).toBe('/sws/neo/product/product');
+  });
+
+  it('builds a selector endpoint from `<spec>/<entity>/<COLUMN>`', () => {
+    expect(
+      deriveEntityEndpoint({
+        selector: 'purchase-invoice/header/C_BPartner_ID',
+        apiBaseUrl: '/etendo/sws/neo/purchase-invoice',
+      }),
+    ).toBe('/etendo/sws/neo/purchase-invoice/header/selectors/C_BPartner_ID');
+  });
+
+  it('returns null for an incomplete selector', () => {
+    expect(deriveEntityEndpoint({ selector: 'purchase-invoice/header' })).toBeNull();
   });
 
   it('replaces the trailing spec segment of apiBaseUrl', () => {
@@ -135,7 +132,7 @@ describe('useEntitySearch', () => {
     endpoint: '/sws/neo/product/product',
     token: 'tok',
     query: '',
-    filter: undefined,
+    params: undefined,
     limit: 20,
   };
 
@@ -222,7 +219,9 @@ describe('useEntitySearch', () => {
     expect(result.current.loading).toBe(false);
   });
 
-  it('uses the base filter for an empty query', async () => {
+  // The production WAF answers an HQL `_neoWhere` in the query string with 403, which left
+  // every OCR picker empty. A CRUD list is searched with `criteria`, a selector with `q`.
+  it('searches a CRUD list with active-only criteria for an empty query', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
     renderHook(() => useEntitySearch({ ...baseParams, query: '   ' }));
 
@@ -232,24 +231,15 @@ describe('useEntitySearch', () => {
     });
 
     const url = globalThis.fetch.mock.calls[0][0];
-    expect(url).toContain(`_neoWhere=${encodeURIComponent('active = true')}`);
-    expect(url).toContain('limit=20');
+    const params = new URL(url, 'http://x').searchParams;
+    expect(JSON.parse(params.get('criteria')).criteria).toEqual([
+      { fieldName: 'active', operator: 'equals', value: true },
+    ]);
+    expect(params.get('limit')).toBe('20');
+    expect(url).not.toContain('_neoWhere');
   });
 
-  it('honors a custom filter prop for an empty query', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
-    renderHook(() => useEntitySearch({ ...baseParams, filter: 'isActive = true' }));
-
-    await act(async () => {
-      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
-      await vi.runOnlyPendingTimersAsync();
-    });
-
-    const url = globalThis.fetch.mock.calls[0][0];
-    expect(url).toContain(`_neoWhere=${encodeURIComponent('isActive = true')}`);
-  });
-
-  it('builds a lower(name) like clause for a trimmed query', async () => {
+  it('adds a case-insensitive name criterion for a trimmed query, quotes untouched', async () => {
     globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
     renderHook(() => useEntitySearch({ ...baseParams, query: "  O'Brien  " }));
 
@@ -258,11 +248,32 @@ describe('useEntitySearch', () => {
       await vi.runOnlyPendingTimersAsync();
     });
 
-    // Auth headers are now `useApiFetch`'s responsibility, covered by its own
-    // tests — this hook only owns the HQL `where` clause it builds.
     const [url] = globalThis.fetch.mock.calls[0];
-    const expectedWhere = "lower(name) like lower('%O''Brien%') and active = true";
-    expect(url).toContain(`_neoWhere=${encodeURIComponent(expectedWhere)}`);
+    const criteria = JSON.parse(new URL(url, 'http://x').searchParams.get('criteria')).criteria;
+    expect(criteria[0]).toEqual({ fieldName: 'name', operator: 'iContains', value: "O'Brien" });
+    expect(url).not.toContain('_neoWhere');
+  });
+
+  it('searches a selector with q plus its context params, and reads items by label', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [{ id: 'bp-1', label: 'Acme' }] }) });
+    const { result } = renderHook(() => useEntitySearch({
+      ...baseParams,
+      endpoint: '/sws/neo/purchase-invoice/header/selectors/C_BPartner_ID',
+      params: { isSOTrx: 'N', isVendor: 'Y' },
+      query: 'Acm',
+    }));
+
+    await act(async () => {
+      vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    const params = new URL(globalThis.fetch.mock.calls[0][0], 'http://x').searchParams;
+    expect(params.get('q')).toBe('Acm');
+    expect(params.get('isVendor')).toBe('Y');
+    expect(params.get('isSOTrx')).toBe('N');
+    expect(params.has('criteria')).toBe(false);
+    expect(result.current.items).toEqual([{ id: 'bp-1', label: 'Acme', name: 'Acme' }]);
   });
 
   it('cancels an in-flight request when params change (does not set items after cancel)', async () => {

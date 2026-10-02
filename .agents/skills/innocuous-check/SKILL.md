@@ -206,7 +206,7 @@ full suite for speed; fall back to the full suite when mapping is unclear.
 
 3. If no specific test maps to a RISKY hunk, **say so explicitly** — an unverified RISKY change is
    the headline of the report, not a footnote. Offer to run the full suite (`make test`) or to
-   delegate writing a covering test to the `test-generator` subagent (Tester).
+   delegate writing a covering test to the repo's tester (`tester-functional` or `tester-go`).
 
 4. **Extracted-function coverage (MANDATORY for extraction refactors).** A green suite proves
    nothing if it never calls the new code. For EACH function the refactor extracted, decide whether
@@ -221,8 +221,8 @@ full suite for speed; fall back to the full suite when mapping is unclear.
    extracted functions, as much as the code allows — especially any with restructured logic (not a
    verbatim move). Unexported module-private helpers with no exercising test count as **uncovered**;
    to close the gap, either export them for a unit test or add a test that drives the calling path.
-   For uncovered extractions, delegate test-writing to the `test-generator` subagent (Tester) — never
-   write the tests inline (CLAUDE.md delegation rule).
+   For uncovered extractions, delegate test-writing to the repo's tester (`tester-functional` or
+   `tester-go`) — never write the tests inline (CLAUDE.md delegation rule).
 
 5. If the change touches a window's `decisions.json` or generator, the relevant verification is the
    Window Change Integrity Protocol (CLAUDE.md), not unit tests — point the user there.
@@ -395,5 +395,5 @@ React components are extracted the same way, but with extra rules — flag these
   just simpler. If you cannot convince yourself a hunk is equivalent, it is RISKY.
 - Test commands and the full suite live in the project `Makefile` (`make test`) and root
   `package.json`. Targeted `node --test` / `vitest run` are preferred for fast iteration.
-- To compare cognitive-complexity metrics before/after, the user can run `./cli/sonar-check.sh`
+- To compare cognitive-complexity metrics before/after, the user can run `./cli/sonar-check.sh` from `schema_forge_core`
   on the changed Java files (this skill does not do that automatically).

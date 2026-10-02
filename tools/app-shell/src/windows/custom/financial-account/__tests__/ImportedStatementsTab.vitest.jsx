@@ -72,10 +72,11 @@ vi.mock('../StatementsToolbar', () => ({
   StatementsToolbar: ({
     search, onSearchChange, dateRange, onDateRangeChange,
     status, onStatusChange, onAdvancedFilterChange, onImportClick, onManualClick,
-    bankConnectionSynced, onSyncClick, syncing, onRefresh,
+    bankConnectionSynced, onSyncClick, syncing, onRefresh, windowReadOnly,
   }) => (
     <div
       data-testid="stub-toolbar"
+      data-window-read-only={windowReadOnly ? 'true' : 'false'}
       data-search={search}
       data-status={status ?? ''}
       data-bank-connection-synced={bankConnectionSynced ? 'true' : 'false'}
@@ -103,10 +104,11 @@ vi.mock('../StatementsToolbar', () => ({
 vi.mock('../StatementsTable', () => ({
   StatementsTable: ({
     statements, loading, currency, actions, selectedIds, onSelectionChange,
-    sortKey, sortDirection, onSort, linesRefreshToken, bankConnected,
+    sortKey, sortDirection, onSort, linesRefreshToken, bankConnected, windowReadOnly,
   }) => (
     <div
       data-testid="stub-table"
+      data-window-read-only={windowReadOnly ? 'true' : 'false'}
       data-len={statements.length}
       data-loading={loading ? 'true' : 'false'}
       data-currency={currency}
@@ -960,5 +962,143 @@ describe('ImportedStatementsTab', () => {
     await user.click(screen.getByTestId('confirm-run'));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('financeAccountStatementsDeleteError'));
+  });
+
+  // ── ETP-5457 — the window's "read-only" access tier ──────────────────────
+  // The toolbar and table stubs expose their callbacks whatever the tier (the REAL components hide
+  // those controls — see StatementsToolbar/StatementsTable suites), so these cases prove the tab's
+  // own defense in depth: dialogs kept shut, mutating handlers returning early.
+  describe('window read-only access tier (ETP-5457)', () => {
+    const CONNECTED = { ...ACCOUNT, bankConnected: true };
+
+    it('forwards windowReadOnly to the toolbar and the table (ETP-5457)', () => {
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-window-read-only', 'true');
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-window-read-only', 'true');
+    });
+
+    it('forwards windowReadOnly=false (the default) to the toolbar and the table (ETP-5457)', () => {
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-window-read-only', 'false');
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-window-read-only', 'false');
+    });
+
+    it('does not render the bulk-delete bar for a selection under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      await user.click(screen.getByTestId('row-select-s4'));
+      expect(screen.queryByTestId('bulk-delete-selection-count')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('bulk-delete-selection-trigger')).not.toBeInTheDocument();
+      expect(deleteStatement).not.toHaveBeenCalled();
+    });
+
+    it('renders the bulk-delete bar for the same selection without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      await user.click(screen.getByTestId('row-select-s4'));
+      expect(screen.getByTestId('bulk-delete-selection-trigger')).toBeInTheDocument();
+    });
+
+    it('keeps the import modal shut when onImportClick fires under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      await user.click(screen.getByTestId('toolbar-import'));
+      expect(screen.getByTestId('stub-import-modal')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('opens the import modal from the same click without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly={false} />);
+      await user.click(screen.getByTestId('toolbar-import'));
+      expect(screen.getByTestId('stub-import-modal')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('forces an already-open import modal shut once the tier turns read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(<ImportedStatementsTab account={ACCOUNT} />);
+      await user.click(screen.getByTestId('toolbar-import'));
+      expect(screen.getByTestId('stub-import-modal')).toHaveAttribute('data-open', 'true');
+      rerender(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      expect(screen.getByTestId('stub-import-modal')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('keeps the manual modal shut for "create manually" and row Edit under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      await user.click(screen.getByTestId('toolbar-manual'));
+      expect(screen.getByTestId('stub-manual-modal')).toHaveAttribute('data-open', 'false');
+      await user.click(screen.getByTestId('row-edit-s1'));
+      expect(screen.getByTestId('stub-manual-modal')).toHaveAttribute('data-open', 'false');
+    });
+
+    it('opens the manual modal for row Edit without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      await user.click(screen.getByTestId('row-edit-s1'));
+      expect(screen.getByTestId('stub-manual-modal')).toHaveAttribute('data-open', 'true');
+    });
+
+    it('keeps the confirm dialog shut (null variant) for row process / reactivate / delete under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      for (const action of ['process', 'reactivate', 'delete']) {
+        await user.click(screen.getByTestId(`row-${action}-s2`));
+        expect(screen.queryByTestId('stub-confirm')).not.toBeInTheDocument();
+        expect(confirmProps.value.variant).toBeNull();
+      }
+    });
+
+    it('runConfirm is a no-op under read-only even with a statement requested (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      await user.click(screen.getByTestId('row-process-s2'));
+      // The request itself is recorded — only the tier stands between it and the write.
+      expect(confirmProps.value.statement?.id).toBe('s2');
+
+      await confirmProps.value.onConfirm();
+
+      expect(processStatement).not.toHaveBeenCalled();
+      expect(reactivateStatement).not.toHaveBeenCalled();
+      expect(deleteStatement).not.toHaveBeenCalled();
+      expect(toastSuccess).not.toHaveBeenCalled();
+      expect(reloadFn).not.toHaveBeenCalled();
+    });
+
+    it('runConfirm processes the same requested statement without read-only (ETP-5457)', async () => {
+      processStatement.mockResolvedValueOnce({ id: 's2', processed: true });
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} />);
+      await user.click(screen.getByTestId('row-process-s2'));
+      expect(confirmProps.value.variant).toBe('process');
+
+      await confirmProps.value.onConfirm();
+
+      expect(processStatement).toHaveBeenCalledWith('s2');
+    });
+
+    it('does not sync bank statements when onSyncClick fires under read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} windowReadOnly />);
+      await user.click(screen.getByTestId('toolbar-sync'));
+      expect(bankSync).not.toHaveBeenCalled();
+      expect(screen.getByTestId('stub-toolbar')).toHaveAttribute('data-syncing', 'false');
+      expect(toastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('syncs bank statements from the same click without read-only (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={CONNECTED} />);
+      await user.click(screen.getByTestId('toolbar-sync'));
+      await waitFor(() => expect(bankSync).toHaveBeenCalledWith('acc-1'));
+    });
+
+    it('keeps browsing under read-only: filters narrow the table and refresh reloads (ETP-5457)', async () => {
+      const user = userEvent.setup();
+      render(<ImportedStatementsTab account={ACCOUNT} windowReadOnly />);
+      await user.click(screen.getByTestId('toolbar-advanced'));
+      expect(screen.getByTestId('stub-table')).toHaveAttribute('data-len', '1');
+      await user.click(screen.getByTestId('toolbar-refresh'));
+      expect(reloadFn).toHaveBeenCalled();
+    });
   });
 });

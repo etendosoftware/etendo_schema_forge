@@ -95,11 +95,15 @@ vi.mock('../preview-cards/EmailsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: () => <div data-testid="rel-docs-card" />,
+  default: ({ definition }) => <div data-testid="rel-docs-card" data-definition-spec={definition?.spec} />,
 }));
 
+// ETP-5527 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
+  SALES_RELATED_DOCS: {
+    'sales-order': { spec: 'sales-order' },
+    'sales-quotation': { spec: 'sales-quotation' },
+  },
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -185,6 +189,11 @@ describe('QuotationPreview', () => {
 
   // ETP-4855 — Messages and History were empty placeholders and were removed
   // from every preview. Only the general tab is left.
+  it('renders the related-documents card from the shared sales-quotation definition (ETP-5527)', () => {
+    renderQuotationPreview();
+    expect(screen.getByTestId('rel-docs-card')).toHaveAttribute('data-definition-spec', 'sales-quotation');
+  });
+
   it('renders the general tab alone: no messages or history tab', () => {
     renderQuotationPreview();
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();

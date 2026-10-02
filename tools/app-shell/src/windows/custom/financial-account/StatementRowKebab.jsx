@@ -38,16 +38,25 @@ import {
  *
  * Procesar is deliberately NOT gated by it: completing a draft is not editing its content.
  *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: every item here is a
+ * mutation (Procesar / Reactivar / Eliminar), so the whole trigger is hidden, mirroring
+ * {@link MovementRowKebab}.
+ *
  * @param {{
  *   statement: object,
  *   onProcess: (s: object) => void,
  *   onReactivate: (s: object) => void,
  *   onDelete: (s: object) => void,
  *   bankConnected?: boolean,
+ *   windowReadOnly?: boolean,
  * }} props
  */
-export function StatementRowKebab({ statement: s, onProcess, onReactivate, onDelete, bankConnected = false }) {
+export function StatementRowKebab({
+  statement: s, onProcess, onReactivate, onDelete, bankConnected = false, windowReadOnly = false,
+}) {
   const ui = useUI();
+  // After every hook (Rules of Hooks), same as MovementRowKebab.
+  if (windowReadOnly) return null;
   const isDraft = isDraftStatement(s);
   const lockedTip = ui('financeAccountStatementsRowProcessedTooltip');
   // Its own wording rather than the "already processed" one: the user must not be left thinking

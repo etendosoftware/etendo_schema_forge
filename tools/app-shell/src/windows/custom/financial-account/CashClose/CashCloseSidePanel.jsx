@@ -17,6 +17,10 @@ import { FieldRow } from '../formFields.jsx';
  * matching the standard product windows. Padding is 20/24 so it lines up with the table grid.
  *
  * Purely presentational — every number arrives already computed by `cashCloseMath.summarize()`.
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: both actions are DISABLED
+ * rather than hidden (hiding them would leave the pinned footer empty), and so are the two inputs,
+ * which only feed those actions. The live summary keeps rendering.
  */
 
 const SECTION = 'border-b border-[hsl(var(--border-subtle))] px-6 py-5 last:border-b-0';
@@ -44,7 +48,7 @@ function SummaryRow({ label, children, separated = false, testId }) {
 export function CashCloseSidePanel({
   currency, summary, statementDate, onStatementDateChange,
   declaredInput, onDeclaredInputChange, glItemDifference,
-  busy, onConfirm, onSaveDraft,
+  busy, onConfirm, onSaveDraft, windowReadOnly = false,
 }) {
   const ui = useUI();
   // ETP-4314 follow-up: symbol side read from C_CURRENCY.ISSYMBOLRIGHTSIDE, not hardcoded.
@@ -63,6 +67,7 @@ export function CashCloseSidePanel({
               <DateField
                 value={statementDate}
                 onChange={onStatementDateChange}
+                disabled={windowReadOnly}
                 data-testid="cash-close-statement-date" />
             </FieldRow>
             <FieldRow
@@ -78,6 +83,7 @@ export function CashCloseSidePanel({
                   placeholder={ui('financeAccountAmountPlaceholder')}
                   value={declaredInput}
                   onChange={(clean) => onDeclaredInputChange(clean)}
+                  disabled={windowReadOnly}
                   data-testid="cash-close-declared-balance" />
                 <span
                   className={`pointer-events-none absolute ${rightSide ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-[13px] font-medium text-muted-foreground`}>
@@ -199,7 +205,7 @@ export function CashCloseSidePanel({
         <button
           type="button"
           className={BTN_PRIMARY}
-          disabled={busy}
+          disabled={busy || windowReadOnly}
           onClick={onConfirm}
           data-testid="cash-close-confirm"
         >
@@ -209,7 +215,7 @@ export function CashCloseSidePanel({
         <button
           type="button"
           className={BTN_SECONDARY}
-          disabled={busy}
+          disabled={busy || windowReadOnly}
           onClick={onSaveDraft}
           data-testid="cash-close-save-draft"
         >
