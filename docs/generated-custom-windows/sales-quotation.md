@@ -271,14 +271,30 @@ lines directly without touching `PriceActual` or `ListPrice`. Returning a
 non-null `NeoResponse` from `handle()` short-circuits the default NEO handler,
 so the overriding parameter is guaranteed to take effect.
 
-The backend action response body is `{ "salesOrderId": "<id>" }`. The frontend
-(`QuotationConfirmModal.jsx`) does not read `salesOrderId` from this response —
-instead it fires a follow-up
+**The order is left in Draft by the backend (ETP-5528).** Core always completes
+the order it creates. The handler then reactivates it in the same request,
+running `C_Order_Post` with `DocAction = 'RE'` through `OrderDocActionSupport`.
+That is the same procedure the UI's DocAction button reaches. So the SPA and
+the MCP (`neo_action Convertquotation`) both end with a Draft order; before
+ETP-5528 an order created through the MCP stayed Completed. The step is
+best-effort only for **reported** failures. If `C_Order_Post` reports a failure,
+or the role has no access to it, the conversion is kept, the order stays
+Completed and the failure is logged. A thrown error is different: a failed
+flush, a DB exception or a statement timeout leaves the transaction aborted.
+It is not swallowed, so the whole request fails and nothing is persisted. The
+client never gets a `salesOrderId` for an order that was rolled back.
+
+The backend action response body is
+`{ "salesOrderId": "<id>", "documentStatus": "DR" }`. The frontend
+(`QuotationConfirmModal.jsx`) does not read either field from this response.
+Instead it fires a follow-up
 `GET {baseNeoUrl}/sales-order/header?criteria=[{fieldName:'quotation',operator:'equals',value:quotationId}]`
 to resolve the created order and display its document number and total in the
-success state. If the order was auto-completed (`documentStatus === 'CO'`), the
-modal issues a best-effort `POST DocAction { docAction: 'RE' }` to reactivate it
-to Draft before surfacing the result.
+success state. The modal still issues its best-effort
+`POST DocAction { docAction: 'RE' }` (ETP-3570) only when the fetched order is
+`documentStatus === 'CO'`. Now that the backend returns it in Draft, that guard
+is false and the call does not fire. It only acts as a fallback if the backend
+reactivation failed. What the user sees is unchanged.
 
 `afterHandle()` copies `EM_ETGO_Currency_Rate` from the quotation header to the
 new order header via JDBC:
