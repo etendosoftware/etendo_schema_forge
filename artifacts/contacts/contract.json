@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-10-01T18:08:50.175Z",
-  "checksum": "be98c71d85875934",
+  "updatedAt": "2026-10-02T11:19:26.533Z",
+  "checksum": "b50ab64e2e2cbdcd",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -224,7 +224,6 @@
             "label": "Vendor",
             "required": false,
             "example": "No",
-            "exampleKey": "importExampleContactVendor",
             "labelKey": "importHeaderVendor",
             "column": "IsVendor",
             "type": "boolean"
@@ -5558,7 +5557,6 @@
             "label": "Vendor",
             "required": false,
             "example": "No",
-            "exampleKey": "importExampleContactVendor",
             "labelKey": "importHeaderVendor",
             "column": "IsVendor",
             "type": "boolean"

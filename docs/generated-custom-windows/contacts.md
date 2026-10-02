@@ -1297,7 +1297,7 @@ contact type:
 | Target | Column | Header (es / en) | Aliases | Example |
 | --- | --- | --- | --- | --- |
 | `customer` | `IsCustomer` | Cliente / Customer (`importHeaderCustomer`) | `cliente`, `es cliente`, `customer` | Sí (`importExampleContactCustomer`) |
-| `vendor` | `IsVendor` | Proveedor / Vendor (`importHeaderVendor`) | `proveedor`, `es proveedor`, `vendor`, `supplier` | No (`importExampleContactVendor`) |
+| `vendor` | `IsVendor` | Proveedor / Vendor (`importHeaderVendor`) | `proveedor`, `es proveedor`, `vendor`, `supplier` | No (static `example` — identical in both languages, so no `exampleKey`) |
 
 `mapColumns` matches a header by exact equality after accent/case/whitespace normalization, so
 `tipo cliente` (an alias of `etgoIsperson`) and `cliente` cannot steal each other; no other field
