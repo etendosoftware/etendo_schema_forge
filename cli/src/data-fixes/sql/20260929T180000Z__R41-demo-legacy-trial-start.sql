@@ -7,7 +7,9 @@
 -- PGOPTIONS='-c etendo_go.demo_transition_started_at=<UTC-ISO-INSTANT>'
 -- Missing/invalid settings fail apply atomically; dry-run needs no date.
 -- Existing dates (including malformed values) are left untouched for manual review.
--- Conservative exclusion: an owner's paid checkout also protects their separate demo.
+-- Conservative exclusion: an owner's paid checkout also protects their separate demo. A
+-- checkout is tied to the demo by its id or its owner's email, never by company name: names
+-- are not unique, so another account buying the same name must not exclude this demo.
 
 -- @check
 SELECT c.ad_client_id, c.name FROM ad_client c
@@ -45,7 +47,7 @@ WHERE c.ad_client_id = :client_id
            OR (p.attribute = 'ETGO_TenantPlan' AND upper(trim(coalesce(p.value, ''))) <> 'FREE')
            OR (p.attribute = 'ETGO_EnvironmentType' AND upper(trim(coalesce(p.value, ''))) <> 'DEMO')))
   AND NOT EXISTS (SELECT 1 FROM etgo_checkout_request q
-      WHERE (q.created_client_id = c.ad_client_id OR lower(q.client_name) = lower(c.name)
+      WHERE (q.created_client_id = c.ad_client_id OR q.demo_client_id = c.ad_client_id
           OR EXISTS (SELECT 1 FROM ad_user u WHERE u.ad_client_id = c.ad_client_id
               AND u.isactive = 'Y' AND u.em_etgo_is_owner = 'Y'
               AND lower(u.email) = lower(q.account_email)))
@@ -112,7 +114,7 @@ WHERE c.ad_client_id = :client_id
            OR (p.attribute = 'ETGO_TenantPlan' AND upper(trim(coalesce(p.value, ''))) <> 'FREE')
            OR (p.attribute = 'ETGO_EnvironmentType' AND upper(trim(coalesce(p.value, ''))) <> 'DEMO')))
   AND NOT EXISTS (SELECT 1 FROM etgo_checkout_request q
-      WHERE (q.created_client_id = c.ad_client_id OR lower(q.client_name) = lower(c.name)
+      WHERE (q.created_client_id = c.ad_client_id OR q.demo_client_id = c.ad_client_id
           OR EXISTS (SELECT 1 FROM ad_user u WHERE u.ad_client_id = c.ad_client_id
               AND u.isactive = 'Y' AND u.em_etgo_is_owner = 'Y'
               AND lower(u.email) = lower(q.account_email)))

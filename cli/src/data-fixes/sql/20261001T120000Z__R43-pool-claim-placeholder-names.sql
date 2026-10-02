@@ -41,7 +41,8 @@ JOIN (SELECT 'ad_role' AS tbl, r.name, r.description FROM ad_role r
 UPDATE ad_role r
 SET name = left(replace(r.name, p.placeholder, '@name_client@'), 60),
     description = left(replace(r.description, p.placeholder, '@name_client@'), 255),
-    updated = now()
+    updated = now(),
+    updatedby = '0'
 FROM (SELECT 'POOL-' || t.etgo_tenant_pool_id AS placeholder
       FROM etgo_tenant_pool t
       JOIN ad_client c ON c.ad_client_id = t.pool_client_id
@@ -55,7 +56,8 @@ WHERE r.ad_client_id = :client_id
 UPDATE ad_tree tr
 SET name = left(replace(tr.name, p.placeholder, '@name_client@'), 255),
     description = left(replace(tr.description, p.placeholder, '@name_client@'), 255),
-    updated = now()
+    updated = now(),
+    updatedby = '0'
 FROM (SELECT 'POOL-' || t.etgo_tenant_pool_id AS placeholder
       FROM etgo_tenant_pool t
       JOIN ad_client c ON c.ad_client_id = t.pool_client_id
@@ -68,7 +70,8 @@ WHERE tr.ad_client_id = :client_id
 
 UPDATE c_acctschema s
 SET name = left(replace(s.name, p.placeholder, '@name_client@'), 60),
-    updated = now()
+    updated = now(),
+    updatedby = '0'
 FROM (SELECT 'POOL-' || t.etgo_tenant_pool_id AS placeholder
       FROM etgo_tenant_pool t
       JOIN ad_client c ON c.ad_client_id = t.pool_client_id
@@ -81,7 +84,8 @@ WHERE s.ad_client_id = :client_id
 UPDATE c_element e
 SET name = left(replace(e.name, p.placeholder, '@name_client@'), 60),
     description = left(replace(e.description, p.placeholder, '@name_client@'), 255),
-    updated = now()
+    updated = now(),
+    updatedby = '0'
 FROM (SELECT 'POOL-' || t.etgo_tenant_pool_id AS placeholder
       FROM etgo_tenant_pool t
       JOIN ad_client c ON c.ad_client_id = t.pool_client_id
@@ -94,7 +98,8 @@ WHERE e.ad_client_id = :client_id
 
 UPDATE c_calendar cal
 SET name = left(replace(cal.name, p.placeholder, '@name_client@'), 60),
-    updated = now()
+    updated = now(),
+    updatedby = '0'
 FROM (SELECT 'POOL-' || t.etgo_tenant_pool_id AS placeholder
       FROM etgo_tenant_pool t
       JOIN ad_client c ON c.ad_client_id = t.pool_client_id

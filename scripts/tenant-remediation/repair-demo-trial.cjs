@@ -58,7 +58,7 @@ async function main(){
  exists(select 1 from ad_user u where u.ad_client_id=c.ad_client_id and u.isactive='Y' and u.em_etgo_is_owner='Y') owned,
  exists(select 1 from etgo_tenant_pool t where t.pool_client_id=c.ad_client_id and t.isactive='Y' and upper(t.status)<>'CLAIMED') pool_reserved,
  exists(select 1 from etgo_tenant_pool t where t.pool_client_id=c.ad_client_id and t.isactive='Y' and coalesce(t.error_message,'') ilike '%fixture%') fixture,
- exists(select 1 from etgo_checkout_request q where (q.created_client_id=c.ad_client_id or lower(q.client_name)=lower(c.name) or exists(select 1 from ad_user u where u.ad_client_id=c.ad_client_id and u.isactive='Y' and u.em_etgo_is_owner='Y' and lower(u.email)=lower(q.account_email))) and (q.paid_at is not null or upper(q.checkout_status) in ('PAID','PROVISIONING','PROVISIONED') or q.stripe_subscription_id is not null)) paid
+ exists(select 1 from etgo_checkout_request q where (q.created_client_id=c.ad_client_id or q.demo_client_id=c.ad_client_id or exists(select 1 from ad_user u where u.ad_client_id=c.ad_client_id and u.isactive='Y' and u.em_etgo_is_owner='Y' and lower(u.email)=lower(q.account_email))) and (q.paid_at is not null or upper(q.checkout_status) in ('PAID','PROVISIONING','PROVISIONED') or q.stripe_subscription_id is not null)) paid
  from ad_client c where c.ad_client_id<>'0' and c.isactive='Y' order by c.ad_client_id`)).rows;
  for(const c of clients){
  const prefs=(await db.query("select * from ad_preference where isactive=$2 and ((ad_client_id=$1 and attribute=ANY($3::text[])) or (attribute='ETGO_TenantPlan' and visibleat_client_id=$1)) order by ad_preference_id",[c.ad_client_id,'Y',attributes])).rows;

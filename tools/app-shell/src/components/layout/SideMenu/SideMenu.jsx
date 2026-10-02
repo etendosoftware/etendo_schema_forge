@@ -234,8 +234,9 @@ export function findActiveGroup(menuGroups, pathname, search) {
 }
 
 /**
- * One company in the switcher. The name wraps (up to two lines) instead of being cut, and the
- * plan / commercial / relationship labels go on their own line below it. The current company is
+ * One company in the switcher. The name is shown in full, wrapping over as many lines as it needs
+ * (the row grows; the menu scrolls), and the plan / commercial / relationship labels go on their
+ * own line below it. The current company is
  * NOT a disabled item: a disabled Radix item is dimmed to half opacity, which made the one row
  * that answers "where am I?" the least visible. It is highlighted, marked with a check and
  * `aria-current`, and selecting it simply closes the menu.
@@ -259,7 +260,7 @@ function CompanyOption({ env, isCurrent, switching, onSwitch, logoSrc, ui }) {
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span
           className={cn(
-            'line-clamp-2 break-words text-sm leading-snug',
+            'whitespace-normal break-words [overflow-wrap:anywhere] text-sm leading-snug',
             isCurrent ? 'font-semibold text-primary' : 'font-medium text-foreground'
           )}
           title={name}
