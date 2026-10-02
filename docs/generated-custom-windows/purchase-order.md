@@ -106,7 +106,7 @@ The current evidence shows a purchase-order-specific experience rather than a ge
 ## Manual verification
 
 1. Open `/purchase-order` and confirm the list shows exactly Order Date (no red dot), Document No., Business Partner, Document Status, Total Gross Amount, Invoice Status, and Reception Status in that order, and that legacy columns such as transaction document, warehouse, price list, and priority are no longer present.
-2. Open `/purchase-order?filter=pendingDelivery` and confirm fully delivered orders are excluded while orders with remaining delivery progress stay visible.
+2. Open `/purchase-order?filter=pendingReception` and confirm fully received orders are excluded while orders with remaining reception progress stay visible (ETP-5487; the query param navigated to from the dashboard's pending-tasks widget, see `docs/widget-endpoints.md`).
 3. Verify the header now exposes `Warehouse` as a visible field in the second row of the header form (between Scheduled Delivery Date and Payment Method). The grid column remains hidden. Confirm it is editable on a draft order.
 4. Open a draft order at `/purchase-order/:recordId` and confirm the detail page allows line editing and exposes the draft top-bar actions for confirmation, deletion, and cloning — the Send/"Enviar" action must **not** be shown yet. Open a line for edit and confirm the `Impuesto`/`Tax` field opens a dropdown listing the configured purchase taxes (filtered by `IsSOTrx=N` and validity against the order date), not a free-text search that returns "Sin resultados". Confirm the order and verify Send/"Enviar" now appears in the detail topbar and as a row quick action in the list.
 5. Confirm a draft order and verify the confirmation flow offers downstream procurement follow-up rather than only a status change. Confirm with **both** `Create receipt` and `Create invoice` left unchecked and verify **no** result modal appears — instead an auto-dismissing green `sonner` toast reads `confirmedTitle || poConfirmedTitle` ("Pedido de compra confirmado" / "Purchase order confirmed") and the page refreshes (ETP-5063). Confirm the result modal still appears, listing the created document(s), when at least one of the two checkboxes is selected.
@@ -190,6 +190,14 @@ See [Shared validation & UX changes — ETP-4005](app-shell-functional-flows.md#
 - `tools/app-shell/src/windows/custom/shared/usePurchaseOrderPdf.js` proves the purchase-order PDF hook that fetches header and lines from the PO NEO API endpoints and renders the shared `documentPdf.js` template with discount breakdown support.
 - **ETP-4468 — Confirm no longer discards an unsaved header edit**: previously, editing a header field (e.g. Currency, Business Partner) and clicking **Confirmar** without hitting **Save** first silently confirmed the order with the OLD header values — the confirm modal fetched its own stale server copy (`freshData`) and prioritized it over the in-memory `data` prop, and the confirm POST never triggered a save. Fixed by (1) `DetailView.jsx` now passes `onSave={() => hook.handleSave({ silent: true })}` into the `topbarRight` slot alongside `onProcess`/`onRefresh`; (2) `PurchaseOrderActions.jsx` threads `onSave` into its internal `ConfirmModal`, which force-saves (`await onSave()`, aborting with an error if it fails) before the `documentAction` POST; (3) the modal's data-source priority was flipped to `const d = data || freshData || {}` so the in-memory (possibly unsaved-but-present) `data` wins over the stale fetch. `artifacts/purchase-order/custom/__tests__/PurchaseOrderActions.test.js` locks the prop threading, the `data`-over-`freshData` priority, and the save-before-confirm ordering via source-reading regex assertions. This fix is implemented independently of the near-identical `OrderCreateInvoice.jsx` fix on Sales Order — the two files are deliberately kept duplicated rather than consolidated.
 - **ETP-4940 — save-before-confirm guard centralized into DetailView**: the ETP-4468 fix above was a per-window patch inside `PurchaseOrderActions.jsx`'s own `ConfirmModal`. ETP-4940 moved the same guarantee one level up: `DetailView.jsx`'s `renderDraftModeSaveActions` now calls `maybeSaveBeforeConfirm` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) — gated on the fuller `isDirty` (header OR any pending line-edit/add-row state) — *before* firing `draftMode.onConfirm()`, i.e. before this window's confirm modal even opens. In the normal flow this makes the ETP-4468 `onSave()` call inside `PurchaseOrderActions.jsx` a no-op (the header is already clean by the time the modal mounts); it was intentionally **kept**, not removed, as defense-in-depth for the modal's own submit path, and because `PurchaseOrderActions.test.js` pins that exact save-before-confirm behavior. See `detailViewHelpers.jsx` for the full centralized contract (also covers the kebab-menu documentAction path via `DetailMoreActionsMenu.jsx`, with a narrower header-only-dirty gap documented there).
+
+## Currency field styling — ETP-5479
+
+The header **Moneda** field is rendered by `CurrencyRatePicker` (see
+`sales-quotation.md` → "CurrencyRatePicker on quotations"). It uses the same
+field shell, `--field-hover` hover fill, focus ring and disabled look as every
+other selector, so it matches the plain selector Moneda renders in windows
+outside `isCurrencyRateSelectorField` (Albaranes: goods-receipt / goods-shipment).
 
 ## Dual-currency display — ETP-4027
 
@@ -533,3 +541,24 @@ compra / Crear Recepción), and the secondary-actions bar's Clone/Send (shared
 `PurchaseOrderReactivateBulkAction.jsx`, in the same bulk-selection toolbar, does not consume
 `windowReadOnly` yet — flagged during the ticket's own review, deliberately deferred as a
 follow-up.
+
+### QA reject pasada 1 — Send and attachment writes (ETP-5205, 2026-09-29)
+
+Under the runtime Solo-Lectura tier (tier only — the static `decisions.json → window.readOnly`
+does not trigger any of this):
+
+- **Row "Enviar" (list hover)** is gone. `ListView` turns the Email gate itself off
+  (`documentPreview: false`, `sendDocument.enabled: false`, no `onEmail`), so `RowQuickActions`,
+  `DataTable`'s column-width estimate and its actions-column mount stay consistent. The default
+  `SendDocumentModal` mount is gated too.
+- **Preview**: no Send; **Download PDF stays** (decision D1: printing/downloading only exposes
+  data the role can already read). `ListView` passes `readOnly` (the tier) to `renderPreview`,
+  and the preview forwards it as `attachmentConfig.readOnly`: the marked attachment is still
+  READ (cached PDF shown, Download works) but never written — no auto-store of the rendered PDF,
+  no overwrite of a stale cache, no drop zone, no delete.
+- **Detail Print** (`action-document-print`) and the detail Mail/preview button **stay** (D1).
+- **Backend**: `POST /sws/neo/email-contracts/<window>-send/send` answers 403 (`UNAUTHORIZED`
+  → "No tenés autorización para enviar este documento") and every attachment write
+  (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
+  role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
+- **"Gestionar recepción y factura"** (`PurchaseOrderActions`, topbarRight) renders nothing under `windowReadOnly`, same fix as the sales-order twin (fetch skipped, `open-*-modal` handlers no-op).

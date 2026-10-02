@@ -172,6 +172,25 @@ because they were template literals rather than a `DEFAULT_LABELS` entry — a t
 is invisible to every "find the hardcoded label" review. Grep for `` toast.success(` `` and
 `` toast.info(` `` before calling a flow translated.
 
+### Errors core builds for you: `NetworkError` (ETP-5424)
+
+`apiFetch` turns a dropped connection or a timeout into a `NetworkError` whose `message` is
+**already translated** — core resolves `genericLabels.networkErrorRetry` through a translator
+the app registers once. That is why the ~150 call sites that show `err.message` need no change.
+
+- **Key:** `networkErrorRetry` — `en_US` "Could not complete the action. Try again.", `es_ES` /
+  `es_AR` "No se pudo completar la acción. Intenta nuevamente." A missing entry is silent: the
+  user gets core's English fallback, not the key.
+- **Registration:** `installErrorTranslator(dictionary)` in `src/i18n/errorTranslator.js`, called
+  from an effect in `App.jsx` with `dictionaries[renderedLocale]` and re-run on every locale
+  change. It resolves with `resolveUI`, so it reads the same dictionary as `useUI()`. Do not
+  register a second translator anywhere else.
+- **A fallback that was a hardcoded `'Network error'`** is `ui('networkErrorRetry')` now
+  (`useEntity` save/delete/add-line/process).
+- **A raw `fetch`** (the `/jsreport` proxy) gets none of this. Map a `TypeError` yourself with
+  `new NetworkError({ reason: 'offline', cause: err })` from `@etendosoftware/app-shell-core/auth`
+  — see `renderViaJsreport` in `ReportDrawer.jsx`.
+
 ## Rules for Adding New Translations
 
 ### 1. NEVER hardcode user-visible strings
@@ -361,6 +380,35 @@ Three matching mechanisms coexist — know all three before adding a new backend
    several windows for free: `productWithoutAttributeSet` is raised under the same name by
    `M_INOUT_POST`, `M_MOVEMENT_POST`, `M_INVENTORY_POST` and `M_INTERNAL_CONSUMPTION_POST1`, so the
    locale string must be worded generically ("hay líneas…"), not per document type.
+
+   **Keys with params (`messageParams`, ETP-5175).** A key alone renders a fixed sentence. When
+   the sentence needs values, the backend also sends `messageParams`, an object with the values
+   those keys interpolate, and the SPA composes the whole sentence. `extractBackendMessageParams(payload)`
+   is the only reader of the wire field (next to `extractBackendMessageKeys`). Callers pass it as
+   `{ messageKeys, messageParams }`: `useNeoAction` returns `result.messageParams`,
+   `BulkDocumentAction` carries it on `failed[i].messageParams`, and `NotPostedDocumentsPage`
+   reads it from the response.
+
+   The reference case is the posting failure *"No se pudo encontrar la cuenta. (Contacto: …,
+   Categoría de contacto: …) Revise las siguientes cuentas contables del producto: …"*.
+   `DocumentPostingService` sends `messageKeys: ["InvalidAccount", "ETGO_InvalidAccountBpAndGroup",
+   "ETGO_InvalidAccountMissingProductAccounts"]` and `messageParams: { bpName, bpGroup,
+   missingProductAccounts: ["invoicePriceVariance"] }`. `translateInvalidAccount` renders it with
+   `backendError.invalidAccount.*` and labels each account code with `backendError.account.<code>`.
+   The backend could not own this wording: `com.etendoerp.go` is not a translation module, so its
+   `AD_MESSAGE_TRL` rows are never exported and drift per environment (production said
+   "Grupo de Terceros").
+
+   Rules for a params composer:
+   - It runs **before** `BACKEND_ERROR_KEY_MAP` and only when params are present. Do not also add
+     its keys to the map: that route is param-less and the first recognised key wins, so the rich
+     backend prose would be replaced by a bare sentence whenever a caller forgets the params.
+   - It fails as a whole. A missing param, a code with no label in this build, or a missing locale
+     entry returns `null`, and the backend prose is shown. A half-translated sentence is worse
+     than the backend's own.
+   - Account codes and other enumerations cross the wire as **stable codes**, never labels.
+     Every code the backend can send needs an entry in all three top-level locales
+     (`backendErrors.test.js` checks this for the invalid-account codes).
 
 `translateBackendError` tries the message keys first (they are a stable identity; the text is not),
 then the exact-match map, then the parameterized matchers, and returns the original (untranslated)

@@ -819,11 +819,24 @@ export function ListView({
     // and inject a default onEmail when the window is eligible but the host
     // didn't wire one.
     if (effectiveSendDocument && !merged.sendDocument) merged.sendDocument = effectiveSendDocument;
+    // ETP-5205 (QA pasada 1): under the runtime Solo-Lectura tier the row Email
+    // is a write (it sends mail and caches the PDF as the main attachment), so
+    // turn the email gate itself off. RowQuickActions (button), and DataTable's
+    // column-width estimate and actions-column mount all read `documentPreview`
+    // / `sendDocument.enabled`, so disabling them here keeps the three in sync.
+    // Must run AFTER the `sendDocument` fallback above, which would otherwise
+    // put an enabled policy back. Static `window.readOnly` keeps Email.
+    if (customActionsReadOnly) {
+      merged.documentPreview = false;
+      merged.sendDocument = merged.sendDocument ? { ...merged.sendDocument, enabled: false } : null;
+      merged.onEmail = undefined;
+      return merged;
+    }
     if (sendDocumentEnabled && !merged.onEmail) {
       merged.onEmail = (row) => setEmailRow(row);
     }
     return merged;
-  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled, windowReadOnly]);
+  }, [quickActionsEnabled, rowQuickActions, navigate, windowName, entity, defaultRequestDelete, effectiveSendDocument, sendDocumentEnabled, windowReadOnly, customActionsReadOnly]);
   const tMenu = useMenuLabel();
   const t = useLabel(labelOverrides);
   const ui = useUI();
@@ -1435,7 +1448,7 @@ export function ListView({
           that did not bring its own `onEmail`. Custom windows that mount the
           modal manually (sales-invoice, purchase-invoice) keep doing so because
           their `rowQuickActions.onEmail` wins over the default injected above. */}
-        {emailRow && sendDocumentEnabled && !rowQuickActions?.onEmail && (
+        {emailRow && sendDocumentEnabled && !customActionsReadOnly && !rowQuickActions?.onEmail && (
           <SendDocumentModal
             documentType={tMenu(entityLabel) || entityLabel || entity}
             documentNo={emailRow.documentNo}
@@ -1474,6 +1487,9 @@ export function ListView({
         row: activePreviewRow,
         onClose: handlePreviewClose,
         onEdit: handlePreviewEdit,
+        // ETP-5205 — runtime Solo-Lectura tier, so a preview can hide its writes
+        // (Send, PDF auto-store, drop zone) without each window re-reading the tier.
+        readOnly: customActionsReadOnly,
       })}
     </>
   );

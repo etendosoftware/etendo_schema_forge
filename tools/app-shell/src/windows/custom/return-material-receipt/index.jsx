@@ -73,12 +73,13 @@ export default function ReturnMaterialReceiptWindow({ windowName, recordId, apiB
         apiBaseUrl={apiBaseUrl}
         token={token}
         PageComponent={ReturnMaterialReceiptPage}
-        renderPreview={({ row, onClose, onEdit }) => (
+        renderPreview={({ row, onClose, onEdit, readOnly }) => (
           <ReturnMaterialReceiptPreview
             receipt={row}
             token={token}
             apiBaseUrl={apiBaseUrl}
             windowName={windowName}
+            readOnly={readOnly}
             onClose={onClose}
             onEdit={onEdit}
             data-testid="ReturnMaterialReceiptPreview__4e1c28" />

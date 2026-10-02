@@ -8,7 +8,9 @@ Let finance users print the full journal book for a date range — every account
 - Filter by date range, organization, accounting schema, account range (from/to), business partner, product, and project.
 - Render the report inline as HTML preview and download it as PDF, XLSX, or CSV in landscape orientation.
 - Group rows by `fact_acct_group_id` (one group = one accounting entry) with a `DENSE_RANK`-derived sequential entry number per date.
-- For each group show the entry date, document type label (defaults to `Journal` when no `c_doctype` is linked), and the journal lines with account number, account name, debit, and credit amounts.
+- For each group show the entry date, document type label, and the journal lines with account number, account name, debit, and credit amounts. When the posting carries no `c_doctype_id`, the document base type is derived from the source table (`M_Inventory` → `MMI`, `M_MatchInv` → `MXI`, `FIN_FinAcc_Transaction` → `FAT`, `A_Amortization` → `AMZ`, `M_Movement` → `MMM`, `M_Internal_Consumption` → `MIC`) so the label still resolves from `ad_ref_list`; only a table outside that list falls back to the literal `Journal`.
+- Link each entry number to its source document: the `doc_window` CASE maps the source table to the window slug (e.g. `M_Movement` → `/goods-movements`, `M_Internal_Consumption` → `/internal-consumption`, ETP-5273). A table with no mapping renders the entry number as plain text.
+- Relabel document types whose Etendo wording does not fit a report row through `DOC_TYPE_LABEL_OVERRIDES` (`schema_forge_core/cli/src/report-i18n.js`, applied by the `translateDocType` helper) — e.g. `MMM` shows **Movimiento entre almacenes** / **Goods Movement** and `MIC` shows **Consumo interno** / **Internal Consumption** (ETP-5273). This relabel is SPA-only; the MCP tool returns the `ad_ref_list` name.
 - Filter `factaccttype` to `C, N, O, R, D` (the entry-producing fact types) and drop rows where both debit and credit sum to zero.
 
 ## Interaction model
@@ -26,7 +28,8 @@ Let finance users print the full journal book for a date range — every account
 
 ## Gap assessment
 - The report keeps `Journal Entries` as the English title — the IFRS/accounting standard equivalent is also "General Journal" but the contract uses the shorter form already used in the codebase.
-- Document type fallback to the literal string `Journal` (when `c_doctype` is null) is not localized — Spanish users will still see the English word for these rows.
+- Document type fallback to the literal string `Journal` (when `c_doctype` is null and the source table is not in the table-based fallback list) is not localized — Spanish users will still see the English word for these rows.
+- The Java handler (`JournalEntriesReportHandler`, used by the MCP tool) is a hand-kept copy of this contract's SQL; no test enforces parity, so a mapping change must be applied to both.
 - Multi-currency display is not part of the current contract; debit and credit are shown in the accounting schema's base currency only.
 
 ## Manual verification

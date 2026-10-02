@@ -15,7 +15,9 @@ async function openFirstSteps(page, { enabled = true, status = 'RUNNING' } = {})
   };
   const retryRequests = [];
 
-  // Install these after login(): its generic /sws/** route otherwise wins.
+  // Install these after login(): its generic /sws/** route otherwise wins. No
+  // `awaitFirstStepsRead` needed: the first-steps override answers "already seen" exactly like
+  // login()'s own stub, so a late dashboard read gets the same state either way (ETP-5551).
   await page.route('**/sws/go/environments', (route) => route.fulfill({
     status: 200, contentType: 'application/json',
     body: JSON.stringify({ environments: [PRODUCTIVE_ENVIRONMENT] }),

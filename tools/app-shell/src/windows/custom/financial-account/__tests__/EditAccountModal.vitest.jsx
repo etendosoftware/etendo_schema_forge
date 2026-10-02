@@ -723,7 +723,9 @@ describe('EditAccountModal', () => {
   describe('non-connected editing', () => {
     it('shows the IBAN validation error after blur on an invalid IBAN', async () => {
       const user = userEvent.setup();
-      renderModal();
+      // A stored country keeps this about the IBAN itself: on a country-less bank account, editing
+      // the IBAN now reports the missing country first (ETP-5473).
+      renderModal({ account: { ...BANK_ACCOUNT, countryId: '106', countryName: 'Spain' } });
       const ibanInput = screen.getByTestId('edit-account-iban');
       await user.clear(ibanInput);
       await user.type(ibanInput, 'INVALID-IBAN');
@@ -2169,9 +2171,16 @@ describe('EditAccountModal', () => {
 
     it('lets the IBAN itself be edited and saved even while bank-connected (ETP-4896 follow-up)', async () => {
       const user = userEvent.setup();
-      // No country selected, so only mod-97 applies — isolates "is the field actually editable
-      // and persisted" from the pair cross-check already covered by the tests above.
-      renderModal({ account: { ...CONNECTED_ACCOUNT, countryId: '', countryName: '' } });
+      // The stored country is Italy, matching the IT IBAN typed below, so the pair check passes
+      // and the test isolates "is the field actually editable and persisted". A country-less bank
+      // account can no longer save an IBAN edit (ETP-5473 — covered by its own tests below).
+      fetchDefaults.mockResolvedValue({
+        currencies: [{ id: '102', iso: 'EUR' }],
+        countryIbanRules: [
+          { id: '107', iso: 'IT', name: 'Italy', ibanPrefix: 'IT', ibanLength: 27 },
+        ],
+      });
+      renderModal({ account: { ...CONNECTED_ACCOUNT, countryId: '107', countryName: 'Italy' } });
       const ibanInput = screen.getByTestId('edit-account-iban');
       expect(ibanInput).toHaveValue(CONNECTED_ACCOUNT.iban);
 
@@ -2184,6 +2193,58 @@ describe('EditAccountModal', () => {
 
       await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
       expect(updateAccount).toHaveBeenCalledWith('acc-9', { iban: 'IT60X0542811101000000123456' });
+    });
+
+    // ETP-5473: the backend no longer derives a missing country from the IBAN prefix, so editing
+    // the IBAN of a legacy country-less bank account must require a country here — otherwise the
+    // PUT would come back as a 400.
+    const SECOND_ES_IBAN = 'ES7921000813610123456789';
+
+    async function editLegacyIban(user) {
+      const ibanInput = screen.getByTestId('edit-account-iban');
+      await user.clear(ibanInput);
+      await user.type(ibanInput, SECOND_ES_IBAN);
+      await user.tab(); // blur → ibanTouched, so the error is rendered
+    }
+
+    it('blocks Save when the IBAN of a country-less bank account is edited and Country stays empty (ETP-5473)', async () => {
+      const user = userEvent.setup();
+      // BANK_ACCOUNT carries no countryId: the legacy pre-ETP-4896 state.
+      renderModal();
+
+      await editLegacyIban(user);
+
+      expect(screen.getByTestId('edit-account-iban-error'))
+        .toHaveTextContent('financeAccountsNewCountryRequiredForIban');
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+      expect(updateAccount).not.toHaveBeenCalled();
+    });
+
+    it('re-enables Save once a country is picked for the edited IBAN of a country-less bank account (ETP-5473)', async () => {
+      const user = userEvent.setup();
+      mockCountrySelectorFetch([{ id: '106', label: 'Spain' }]);
+      fetchDefaults.mockResolvedValue({
+        currencies: [{ id: '102', iso: 'EUR' }],
+        countryIbanRules: [
+          { id: '106', iso: 'ES', name: 'Spain', ibanPrefix: 'ES', ibanLength: 24 },
+        ],
+      });
+      renderModal();
+
+      await editLegacyIban(user);
+      expect(screen.getByTestId('edit-account-save')).toBeDisabled();
+
+      await user.click(screen.getByTestId('field-edit-account-country'));
+      await user.click(await screen.findByTestId('option-edit-account-country-106'));
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('edit-account-iban-error')).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('edit-account-save')).toBeEnabled();
+      await user.click(screen.getByTestId('edit-account-save'));
+
+      await waitFor(() => expect(updateAccount).toHaveBeenCalledTimes(1));
+      expect(updateAccount).toHaveBeenCalledWith('acc-1', { iban: SECOND_ES_IBAN, countryId: '106' });
     });
 
     it('does not flag a legacy account whose country was already empty, when left untouched', async () => {
