@@ -20,6 +20,11 @@ function makeFetch() {
   const bump = (k) => { counts[k] = (counts[k] || 0) + 1; };
   const fetchMock = vi.fn(async (url, opts = {}) => {
     const method = (opts.method || 'GET').toUpperCase();
+    // ETP-5526: the badge count endpoint — matched before the list, whose URL it extends.
+    if (method === 'GET' && url.endsWith('/attachments/C_BPartner/BP1/count')) {
+      bump('count');
+      return { ok: true, json: async () => ({ count: 1 }) };
+    }
     if (method === 'GET' && url.includes('/attachments/C_BPartner/BP1')) {
       bump('list');
       return { ok: true, json: async () => ({ items: [{ id: 'a1', name: 'a1.pdf' }] }) };
@@ -104,6 +109,70 @@ describe('useAttachments — cache + lazy load (ETP-4564)', () => {
 
     renderHook(() => useAttachments(opts({ isActive: true })), { wrapper: makeWrapper(cache) });
     await waitFor(() => expect(counts.list).toBe(2));
+  });
+
+  // ETP-5526: the count and the list are cached under separate keys — one read
+  // never answers the other, in either order.
+  it.each([
+    ['a cached count does not answer the list', 'count-first'],
+    ['a cached list does not answer the count', 'list-first'],
+  ])('count and list use separate cache keys: %s', async (_label, order) => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+    const wrapper = makeWrapper(cache);
+
+    if (order === 'count-first') {
+      const { result, rerender } = renderHook(
+        ({ active }) => useAttachments(opts({ isActive: active, prefetchCount: true })),
+        { wrapper, initialProps: { active: false } },
+      );
+      await waitFor(() => expect(result.current.count).toBe(1));
+      expect(counts.list).toBeUndefined();
+
+      rerender({ active: true });
+      await waitFor(() => expect(counts.list).toBe(1)); // not served by the cached count
+      expect(counts.count).toBe(1);
+    } else {
+      const a = renderHook(() => useAttachments(opts({ isActive: true, prefetchCount: true })), { wrapper });
+      await waitFor(() => expect(counts.list).toBe(1));
+      expect(counts.count).toBeUndefined(); // active → the list length is the count
+      a.unmount();
+
+      const { result } = renderHook(() => useAttachments(opts({ isActive: false, prefetchCount: true })), { wrapper });
+      await waitFor(() => expect(counts.count).toBe(1)); // not served by the cached list
+      await waitFor(() => expect(result.current.count).toBe(1));
+      expect(counts.list).toBe(1);
+    }
+  });
+
+  it('reuses a cached count on reopen and re-requests it after an upload', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+    const wrapper = makeWrapper(cache);
+    const openBadgeOnly = () => renderHook(
+      () => useAttachments(opts({ isActive: false, prefetchCount: true })),
+      { wrapper },
+    );
+
+    const first = openBadgeOnly();
+    await waitFor(() => expect(first.result.current.count).toBe(1));
+    first.unmount();
+
+    const second = openBadgeOnly();
+    await waitFor(() => expect(second.result.current.count).toBe(1));
+    expect(counts.count).toBe(1); // fresh cached count reused, no new request
+    second.unmount();
+
+    // Upload from an open tab (list loaded): marks the cached count stale too.
+    const tab = renderHook(() => useAttachments(opts({ isActive: true })), { wrapper });
+    await waitFor(() => expect(counts.list).toBe(1));
+    await act(async () => { await tab.result.current.upload(new File(['x'], 'f.txt')); });
+    expect(counts.upload).toBe(1);
+    expect(counts.count).toBe(1); // the tab itself does not read the count
+    tab.unmount();
+
+    openBadgeOnly();
+    await waitFor(() => expect(counts.count).toBe(2)); // invalidated → re-requested
   });
 
   it('cached attachments do not leak across organizations', async () => {
