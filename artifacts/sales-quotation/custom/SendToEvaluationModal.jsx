@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Info, Loader2, X } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { MODAL_STYLES } from '@/components/contract-ui/modal-styles.js';
+import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
@@ -242,9 +243,11 @@ const alertStyle = {
 
 const alertIconStyle = { flexShrink: 0, marginLeft: 4, color: 'var(--status-info-fg)' };
 
+// The alert copy uses the Figma info text color (#0075AD), already shared as the
+// `info` tone of the status-tag tokens.
 const alertTextStyle = {
   margin: 0, padding: '0 8px', flex: 1,
-  fontSize: 14, lineHeight: '24px', color: 'var(--status-info-fg)',
+  fontSize: 14, lineHeight: '24px', color: TONE_STYLES.info.color,
 };
 
 const errorStyle = {
