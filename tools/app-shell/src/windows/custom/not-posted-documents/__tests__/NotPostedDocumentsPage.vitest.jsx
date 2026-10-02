@@ -329,6 +329,20 @@ describe('NotPostedDocumentsPage — rows', () => {
     expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
   });
 
+  it('aborts the in-flight rows request when the page unmounts', async () => {
+    let rowsSignal;
+    const base = mkFetch(ROWS, { 'dateFrom=': () => new Promise(() => {}) });
+    globalThis.fetch = vi.fn((url, init) => {
+      if (String(url).includes('dateFrom=')) rowsSignal = init?.signal;
+      return base(url, init);
+    });
+    const { unmount } = renderPage();
+    await waitFor(() => expect(rowsSignal).toBeDefined());
+    expect(rowsSignal.aborted).toBe(false);
+    unmount();
+    expect(rowsSignal.aborted).toBe(true);
+  });
+
   it('sorts by the translated type when its column header is clicked', async () => {
     renderPage();
     await waitFor(() => rowOf('doc-1'));
@@ -487,7 +501,7 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     expect(toast.error).toHaveBeenCalledWith('Period closed for this date');
   });
 
-  it('counts a selected row without tableId as failed instead of dropping it', async () => {
+  it('counts a selected row without tableId as omitted instead of dropping it', async () => {
     globalThis.fetch = mkFetch(ROWS, {
       '/action/bulk-post': () => json({ ok: 1, total: 1, success: true, results: [{ recordId: 'doc-1', success: true }] }),
     });
@@ -498,8 +512,8 @@ describe('NotPostedDocumentsPage — selection and bulk post', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
     const call = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
     expect(JSON.parse(call[1].body).rows.map((r) => r.recordId)).toEqual(['doc-1']);
-    // 1 ok + 1 failed (the row that could not be sent) → mixed-outcome summary.
-    expect(toast.warning).toHaveBeenCalledWith('processExecuted');
+    // 1 ok + 1 omitted (the row that could not be sent) → mixed-outcome summary with omitted.
+    expect(toast.warning).toHaveBeenCalledWith('processExecutedWithOmitted');
   });
 
   it('only rows without tableId: fails without calling the backend', async () => {

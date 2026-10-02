@@ -46,7 +46,7 @@ The **enabled** column reflects two mechanisms combined:
 | `RVS` | Return to Vendor Ship.   | `M_InOut`                 | `319` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `SI`  | Sales Invoice            | `C_Invoice`               | `318` | ✅ isactive=Y | ✅ Working (N+Y records) | ✅ | — |
 | `T`   | Transaction              | `FIN_Finacc_Transaction`  | `4D8C3B3C31D1410DA046140C9F024D17` | ✅ isactive=Y | ✅ Working (N+E+Y records) | ✅ | APRM primary posting table |
-| `WE`  | Work Effort              | `S_TimeExpense`           | `486` | ❌ Not present | ❌ N/A | ❌ | No accounting schema entry |
+| `WE`  | Work Effort              | `M_Production`            | `325` | ✅ isactive=Y | ✅ Working | ❌ | **Globally excluded (ETP-4452)**, with BMP — bulk.posting emits "Work Effort" from its production search, so these are `M_Production` records. Mapped to `486` (`S_TimeExpense`) until ETP-5591, which would have posted them against the wrong table once the label got a code |
 
 ### Why APRM disables BS, PIN, POT, R
 
@@ -456,8 +456,9 @@ code, or a missing id, shows no link. It opens in the same tab; Back restores th
    disabled while in flight; on success: toast, row deselected, reload.
 4. **Contabilizar (selection)** — `POST /header/0/action/bulk-post` (`timeout: 0`); outcome via
    the shared `showBulkActionToast` (same toast as every other list's bulk "Contabilizar"; a single
-   failed row shows its real backend error). Selected rows without `tableId` are counted as failed,
-   not silently dropped. Then: selection cleared, reload.
+   failed row shows its real backend error). Selected rows without `tableId` are never sent and are
+   reported in the toast's **omitted** count (ETP-5209 bucket), not silently dropped. Then:
+   selection cleared, reload. Leaving the page aborts an in-flight rows request.
 
 ### Invalid-account posting error (ETP-5175)
 

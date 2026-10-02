@@ -167,6 +167,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   const reload = useCallback(() => fetchRows(rowsQuery), [fetchRows, rowsQuery]);
 
+  // Abort an in-flight rows request when the page unmounts.
+  useEffect(() => () => fetchAbortRef.current?.abort(), []);
+
   // ── Selection (owned by DataTable; we mirror it and send it resets) ──────────
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionTrigger, setClearSelectionTrigger] = useState(0);
@@ -277,10 +280,9 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
 
   async function postSelected() {
     const postable = selectedRows.filter((r) => r.tableId);
-    // A row without a table cannot be posted; report it as failed rather than drop it silently.
-    const unpostable = selectedRows
-      .filter((r) => !r.tableId)
-      .map(() => ({ message: null }));
+    // A row without a table cannot be posted. It is never sent, so the outcome toast counts it
+    // as omitted (ETP-5209's bucket for rows not sent to the API) rather than dropping it silently.
+    const omitted = selectedRows.filter((r) => !r.tableId);
     if (!postable.length) {
       toast.error(ui('postingFailed'));
       return;
@@ -313,7 +315,7 @@ export default function NotPostedDocumentsPage({ token, apiBaseUrl }) {
           messageKeys: extractBackendMessageKeys(r),
           messageParams: extractBackendMessageParams(r),
         }));
-      showBulkActionToast(ui, { ok: json.ok ?? 0, failed: [...failed, ...unpostable] });
+      showBulkActionToast(ui, { ok: json.ok ?? 0, omitted, failed });
       clearSelection();
       reload();
     } catch {

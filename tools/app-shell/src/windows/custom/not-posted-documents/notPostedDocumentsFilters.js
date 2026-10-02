@@ -14,7 +14,9 @@ import { parseCalendarDate } from '@/lib/dateOnly';
 /**
  * The statuses the page offers, in the order the design lists them (yellow → orange →
  * red). The design had four; ETP-5591 QA added "Coste no calculado" (`NC`), which the backend
- * had never requested, so goods receipts stuck on an uncalculated cost never appeared. Each one is a URL `token` and the backend `keys` it stands for: "Error" covers both
+ * had never requested, so goods receipts stuck on an uncalculated cost never appeared.
+ *
+ * Each one is a URL `token` and the backend `keys` it stands for: "Error" covers both
  * `E` and `C` (Error, no cost), which the backend's own filter option already merges as the
  * value `"E,C"`. That composite value is why the URL does not store backend values: `N,E,C`
  * could not be split back into options.
@@ -139,7 +141,7 @@ export function serializeFilters(filters) {
 
 /**
  * Filters → the rows request's query string. Only the filters that are set are sent; no
- * statuses means the backend's own default set (the four above). Dates are local calendar
+ * statuses means the backend's own default set (the statuses above). Dates are local calendar
  * days (`toDateParam`), never `toISOString()`, which would shift them across UTC.
  */
 export function buildRowsQuery(filters) {
