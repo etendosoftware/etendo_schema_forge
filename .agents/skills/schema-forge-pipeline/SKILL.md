@@ -22,8 +22,7 @@ F2:  validate        ─┤── Requires DB connection
 F3:  pre-classify    ─┘
 F4:  human-decisions ──── Interactive (Decision Panel)
 F6:  generate-contract ─┐
-F7:  generate-backend  ─┤── From curated artifacts
-F8:  generate-frontend ─┤
+F8:  generate-frontend ─┤── From curated artifacts
 F9:  run-tests         ─┘
 ```
 
@@ -31,11 +30,9 @@ F9:  run-tests         ─┘
 
 | Task | Command |
 |------|---------|
-| Full pipeline | `node cli/src/pipeline.js <windowId> [windowName]` |
-| Generate frontend only | `node cli/src/generate-frontend.js artifacts/<window>/contract.json` |
-| Generate mock data | `node cli/src/generate-mock-data.js artifacts/<window>/contract.json` |
+| Full pipeline (canonical) | `make regen ONLY=<window>` (`PUSH_TO_NEO=1` to push) |
+| Generate frontend only | `npx sf-generate-frontend artifacts/<window>/contract.json` |
 | Generate contract | Read schema-curated + rules-curated + processes, call `generateContract()` |
-| Run contract tests | `node cli/src/run-contract-tests.js artifacts/<window>/contract.json` |
 | Run all CLI tests | `make test` or `cd cli && node --test 'test/*.test.js'` |
 | Dev server | `make dev` (localhost:3100) |
 
@@ -152,7 +149,7 @@ export default function OrderTable(props) {
 
 ### Regenerate a single window
 ```bash
-node cli/src/generate-frontend.js artifacts/sales-order/contract.json
+npx sf-generate-frontend artifacts/sales-order/contract.json
 ```
 
 ### Regenerate all Base windows
@@ -160,14 +157,14 @@ node cli/src/generate-frontend.js artifacts/sales-order/contract.json
 for contract in artifacts/*/contract.json; do
   window=$(echo "$contract" | cut -d/ -f2)
   # Skip enterprise windows
-  node cli/src/generate-frontend.js "$contract"
+  npx sf-generate-frontend "$contract"
 done
 ```
 
 ### Modify how fields are generated
 1. Edit `cli/src/generate-frontend.js` (the generator)
 2. Run tests: `make test`
-3. Regenerate a sample: `node cli/src/generate-frontend.js artifacts/sales-order/contract.json`
+3. Regenerate a sample: `npx sf-generate-frontend artifacts/sales-order/contract.json`
 4. Review diff: `git diff artifacts/sales-order/generated/`
 
 ### Add a new contract-ui component
@@ -178,7 +175,7 @@ done
 ### Change field visibility (curate schema)
 1. Edit `artifacts/{window}/schema-curated.json`
 2. Regenerate contract: update `contract.json` via `generateContract()`
-3. Regenerate frontend: `node cli/src/generate-frontend.js artifacts/{window}/contract.json`
+3. Regenerate frontend: `npx sf-generate-frontend artifacts/{window}/contract.json`
 
 ## Window Categories
 

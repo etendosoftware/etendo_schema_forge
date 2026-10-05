@@ -185,6 +185,20 @@ public interface NeoHandler {
 }
 ```
 
+Besides the two hooks, `NeoHandler` carries **declarations** — `default` methods a customization
+overrides to tell the shared layer something only it knows. Each is empty/`false` by default, so a
+handler opts in only when it needs to:
+
+| Declaration | Default | Says | Section |
+|---|---|---|---|
+| `servesActions()` | `false` (`true` if `actionContracts()` is non-empty) | this handler answers ACTION requests | §2.7 |
+| `actionContracts()` | empty map | which named actions it answers, with their parameters | §2.7.1 |
+| `serverResolvedCreateFields()` | empty set | which mandatory fields the server derives on create | §2.7.2 |
+| `protectedCreateCalloutFields(ctx)` | empty set | which caller values the create callout cascade must not overwrite | — |
+
+This is how the structure-vs-identity rule (Golden Rule) is kept: the shared MCP/REST code reads
+the declaration and never names an entity; the customization is the one that declares.
+
 ### 2.2 Registration
 
 1. Annotate your class with `@Named("qualifierName")` **only** — do **not** add `@ApplicationScoped` or any other normal scope (see the warning below).
@@ -428,11 +442,30 @@ public NeoResponse handle(NeoContext context) {
 - `NeoActionContract.resolve(spec)` — the first included entity whose handler declares contracts;
   the MCP layer uses it to find the `entity` to pass.
 
-**What reads it — the MCP only.** `neo_schema({spec, view:"actions"})` returns the declared catalog
-(`{action, description, mutating, invokeVia:"neo_action", idDescription?, parameters:<JSON Schema>}`);
-`neo_discover` marks the R spec `status:"actions_only"` with `actionEntity` and `actions[]`; the spec
-joins the `neo_schema` / `neo_action` enums only (never `neo_list` / `neo_get`). The call is
-`neo_action {spec, entity, id, action, parameters}`.
+**What reads it — the MCP only.** Each declared entry renders as
+`{action, description, mutating, invokeVia:"neo_action", idDescription?, parameters:<JSON Schema>}`.
+What `neo_schema` does with them depends on the entity's **shape**, decided structurally by
+`McpReportActionsSchema.isActionOnlyEntity` (ETP-5535) — never by its name:
+
+| Entity shape | `neo_schema` answer | Examples |
+|---|---|---|
+| **Action-only** — declares actions and has **no** `ETGO_SF_FIELD` row (its AD tab exists only for role gating) | the declared catalog **replaces** the schema, for **every** `view` | `bank-statements`, `bank-reconciliation` (ETP-5468) |
+| **Window entity** — declares actions **and** has field rows | keeps its normal schema for every view; in `view:"actions"` the declared entries are **appended** after the AD buttons, counted in `invokableCount`, with a `declaredActionsHint` | `sales-quotation` header: `rejectQuotation`, `createRejectReason` (ETP-5535) |
+
+With nothing declared, `view:"actions"` is byte-for-byte unchanged. For R specs only, `neo_discover`
+also marks the spec `status:"actions_only"` with `actionEntity` and `actions[]`, and the spec joins
+the `neo_schema` / `neo_action` enums only (never `neo_list` / `neo_get`); a W spec is already in
+those enums. The call is `neo_action {spec, entity, id, action, parameters}`.
+
+**Contracts are for discovery; the handler still owns its body.** A declaration tells the agent
+what to send — it does not, by itself, validate anything. The bank handlers call
+`NeoActionContract.validate` in their dispatcher (below); the sales-quotation handlers do not, and
+keep reading the body exactly as the UI modals send it. Either way, the handler's own validation is
+what protects the write.
+
+> **Lookup caveat.** `declaredActionsOf` resolves the customization by `ETGO_SF_ENTITY.Java_Qualifier`
+> only, so an `@NeoExtension`-only customization's contracts are not found yet. Bind the entity with
+> a qualifier if it declares actions.
 
 **The dispatcher pattern** (both current implementations): validate the contract → require a
 non-blank `id` → check the same report-spec role gate the SPA passes (`POST` for mutating actions,
@@ -447,9 +480,11 @@ scope flushes once and restores a null context).
 |---|---|---|
 | `ReconciliationHandler` / `bank-reconciliation` (ETP-5468) | `ReconciliationAgentActions` | `pendingLines`, `candidates`, `autoMatch`, `reconcileGroup`, `reconcileDifference`, `applySuggestions`, `undoReconciliation`, `removeOperation`, `reactivateSelected` |
 | `BankStatementsHandler` / `bank-statements` (ETP-5447) | `BankStatementAgentActions` | `createStatement`, `previewStatement`, `importStatement` (id = financial account); `updateStatement`, `processStatement`, `reactivateStatement`, `deleteStatement` (id = bank statement) |
+| `SalesQuotationHeaderHandler` / `sales-quotation` header (ETP-5535) — window entity, appended | `RejectQuotationHandler.CONTRACT`, `CreateRejectReasonHandler.CONTRACT` | `rejectQuotation` (`rejectReason`), `createRejectReason` (`name`, `description`) |
 
 Full runtime reference (tables of parameters, refusals, engine routes):
-`com.etendoerp.go/docs/neo-headless.md` §4.12.1.1 and §4.12.1.2.
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.1 and §4.12.1.2; the replace-vs-append split and
+the sales-quotation case in §4.12.22.
 
 **The rule — declare only what you answer.** Declare an action only if the dispatcher demonstrably
 serves it, with the parameters the engine reads. A declared-but-ignored action is the same silent
@@ -457,6 +492,42 @@ lie as a declared-but-ignored report parameter. Named actions on W-spec handlers
 declared this way — the order / shipment / invoice header handlers' `createDraftInvoice`,
 `listInvoices`, … — stay invisible in the catalog, and GET-only ones remain unreachable through
 `neo_action` (IMP-49).
+
+### 2.7.2 `serverResolvedCreateFields()`: declare what the server derives on create (ETP-5535)
+
+`neo_schema({spec, entity, view:"create"})` learns what the server fills from two generic sources:
+what `neo_defaults` resolves without input, and the selector policies' wrapper fields. Neither can
+see a value derived **from another field of the same body** — e.g. a line's tax, set by
+`SL_Order_Product` once the product is known. Without a declaration such a field is listed as
+`required`, and the agent goes looking for a value the server would have chosen differently.
+
+```java
+// SalesQuotationLineHandler (sales-quotation / quotationLine)
+@Override
+public Set<String> serverResolvedCreateFields() {
+  return Set.of("tax");   // DAL property of C_OrderLine.C_Tax_ID — derived from the product
+}
+```
+
+- **Effect:** `view:"create"` moves the names to `optional` with `serverDefaulted:true`. A caller
+  may still send a value; it is honoured like any other field.
+- **Resolution:** `McpServerResolvedFields.forCreate` = selector-policy names ∪ this declaration,
+  the customization found through `NeoExtensionDispatcher.resolveOnly` — so both `@NeoExtension`
+  and `Java_Qualifier` bindings work. Nothing is invoked; only the declaration is read.
+
+**The rule — declare only fields the create callout cascade derives.** The `neo_create` mandatory
+pre-check does **not** skip declared fields: it runs *after* the create callout cascade and
+*before* your `handle()` pre-hook. A field the cascade filled is not missing there; one filled only
+by your `handle()` would still be refused with a 422 `missingFields`, while the schema told the
+agent it was optional. If your pre-hook is the one that derives it, the field is not a candidate
+for this declaration.
+
+> **Related (ETP-5535), no declaration needed:** on `neo_create` / `neo_batch`, a child entity's
+> FK given by name is resolved with its **parent record** as selector context (the child's own body
+> keys win; a parent outside the caller's tenant is ignored). See `com.etendoerp.go/docs/neo-headless.md`
+> §4.12.3 *Selector context*.
+
+Full runtime reference: `com.etendoerp.go/docs/neo-headless.md` §4.12.22 (point 3).
 
 ---
 

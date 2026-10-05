@@ -11,6 +11,7 @@ import RelatedDocuments from '../../../custom/RelatedDocuments';
 import { AttachmentsTab } from '@/components/attachments';
 import ReturnToVendorShipmentBottomPanel from '../../../custom/ReturnToVendorShipmentBottomPanel';
 import ConfirmWithCreditButton from '@/windows/custom/return-to-vendor-shipment/ConfirmWithCreditButton';
+import ReturnToVendorShipmentInvoicedBadge from '../../../custom/ReturnToVendorShipmentInvoicedBadge';
 import catalogs from './mockCatalogs';
 
 
@@ -318,6 +319,7 @@ export default function ReturnToVendorShipmentPage({ windowName, recordId, ...pr
         customTabs={[{ key: 'related', labelKey: 'relatedDocuments', Component: RelatedDocuments }, { key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "M_InOut", config: {} } }]}
         bottomSection={ReturnToVendorShipmentBottomPanel}
         topbarRight={ConfirmWithCreditButton}
+        topbarExtra={ReturnToVendorShipmentInvoicedBadge}
         menuActions={({ data, status }) => [
           { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true) && (data?.processed === 'Y' || data?.processed === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
