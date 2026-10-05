@@ -11,6 +11,8 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency (read-only), Opening, and Multi-Ledger. (Document Date is hidden — see below.)
 - **Single date:** the form exposes only **Accounting Date** ("Fecha"). Document Date is hidden (`system`); `GlJournalHeaderHandler` mirrors `accountingDate` into `documentDate` on every CRUD write (ETP-5611), so both DB columns always carry the date the user chose.
 - **Reactivate** a completed, not-yet-posted journal back to Draft (ETP-5611).
+- **Post** only a completed journal, and **Delete** only a draft one (ETP-5611). There is no Print action.
+- Start from an empty lines state ("Sin líneas todavía") that offers "+ Añadir líneas" once the header is saved (ETP-5611).
 - Add one or more journal lines under a header, each with an account, a debit amount, and a credit amount. **Lines no longer carry their own Description field** (ETP-5210, revised scope — see "Line description column removed" below); the journal's header `Description` remains the single place to annotate the entry.
 - Optionally flag a line as **Open Items** to reveal the **Asset** dimension in the add-row form. **Business Partner**, **Product**, **Project**, and **Cost Center** are reached separately, per saved line, via the grid's "Añadir dimensiones" hover action, gated by the client's accounting-dimension configuration (ETP-4529 — see "Accounting dimension visibility per section" below).
 - See a live **balance footer** below the lines: total debit and total credit (see ETP-4917 note below — the difference amount and the balanced ✓/✗ badge were trimmed from the display).
@@ -23,12 +25,12 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 - **Visibility:** visible from the **Finance** menu as **Manual Journals** (es: **Asientos Manuales**), wired via `menus["Manual Journals"]` in both locales.
 - **Implementation type:** generated window with one custom component, `custom/SimpleGLJournalBottomPanel.jsx` (registers the lines empty state — ETP-5611). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST, forces the schema currency (DEFAULTS + POST), mirrors the date into `documentDate`, and routes Complete (CO) and Reactivate (RE) through `FIN_AddPaymentFromJournal` — see "ETP-5611" below.
 - **Window shape:** master-detail. The header entity is `gLJournal` (table `GL_Journal`) and the line entity is `gLJournalLine` (table `GL_JournalLine`). The two Classic auxiliary tabs — `Fact_Acct` (posting result) and `C_Conversion_Rate_Document` (document rates) — are **dropped** (`exclude: true`) for V1.
-- **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows the four core columns (ETP-5210 dropped Description — see "Line description column removed" below); existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
+- **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows three columns — Account, Debit, Credit (ETP-5210 dropped Description, ETP-5611 dropped LineNo; see "Line entry" below); existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
 - An **Attachments** tab is available in the detail tab strip.
 
 ## Header fields
 
-The header form shows **6 always-visible editable fields**, in this order: Accounting Date, Period, Description, Currency, Opening, Multi-Ledger (`seq` drives the ordering — description sits after the date/period block). Four more fields — the accounting dimensions `businessPartner`, `product`, `project`, `costCenter` — are also `visibility: editable`, but config-gated (ETP-4529): they render on the main form only when the client's accounting-dimension display configuration enables them for GL Journal headers. See "Accounting dimension visibility per section — ETP-4529" below. Everything else is hidden (system) or discarded.
+The header form shows **6 always-visible fields** — 5 editable plus the read-only Currency (ETP-5611) — in this order: Accounting Date, Period, Description, Currency, Opening, Multi-Ledger (`seq` drives the ordering — description sits after the date/period block). Four more fields — the accounting dimensions `businessPartner`, `product`, `project`, `costCenter` — are also `visibility: editable`, but config-gated (ETP-4529): they render on the main form only when the client's accounting-dimension display configuration enables them for GL Journal headers. See "Accounting dimension visibility per section — ETP-4529" below. Everything else is hidden (system) or discarded.
 
 | Field (curated) | Column | Visibility | Notes |
 |---|---|---|---|
@@ -284,7 +286,8 @@ and `com.etendoerp.go`'s `DocumentPostingService`:
   it ships today.
 - **`window.menuActions`** declares real **Post** and **Unpost** actions (`action: "post"` /
   `"unpost"`), gated by `visibleWhenFieldFalse: "posted"` / `visibleWhenFieldTrue: "posted"`
-  respectively, with `unpost` marked `destructive: true`. These route through NEO Headless's
+  respectively, with `unpost` marked `destructive: true`. (ETP-5611: Post additionally requires
+  `visibleWhenStatus: "CO"`, and a **Reactivate** action sits next to them.) These route through NEO Headless's
   generic `DocumentPostingService` (`com.etendoerp.go.schemaforge.handlers.DocumentPostingService`,
   which dispatches on `"post"`/`"unpost"` and calls the classic `post()`/`unpost()` accounting
   routines) — this is a real, working posting integration, not a stub reserved for a later
