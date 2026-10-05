@@ -1,3 +1,4 @@
+// @covers cli/src/data-fixes/sql/20261005T180000Z__R37-tenant-subscription-backfill.sql
 import { describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -27,9 +28,14 @@ import { formatReportDetail } from '../src/data-fixes/run.js';
  * transaction. The cutover is therefore a per-tenant state transition with an observable end
  * condition (`select count(*) from ad_preference where attribute='ETGO_TenantPlan'` reaching 0)
  * rather than a fleet-wide flag day, and the specs below pin the three things that make it safe:
- * the DELETE is scoped by `visibleat_client_id` and NEVER by `ad_client_id`, it is guarded on an
- * open subscription EXISTING (self-healing, not "we just inserted"), and @report records the
+ * the DELETE is scoped by `visibleat_client_id` and NEVER by `ad_client_id`, it is guarded on ANY
+ * subscription row EXISTING (self-healing, not "we just inserted"), and @report records the
  * retirement — the only audit trail left once the row is gone.
+ *
+ * <p>WIDENED RETIREMENT: @check selects a tenant on either of two branches — (A) the original
+ * backfill (active productive marker, no open subscription) and (B) any ETGO_TenantPlan marker
+ * next to any etgo_subscription row. Branch (B) catches the marker develop's R42 re-inserts for a
+ * tenant that is already on the row model; without it that marker survives forever.
  */
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -119,6 +125,21 @@ describe('R37 data-fix — header metadata', () => {
     assert.match(fix.description, /ETGO_SUBSCRIPTION/i);
     assert.match(fix.description, /legacy-productive/);
     assert.match(fix.description, /ETGO_TenantPlan/);
+  });
+
+  it('describes the widened retirement: the marker goes for any tenant with any subscription row', () => {
+    assert.match(fix.description, /any ETGO_SUBSCRIPTION row/);
+  });
+
+  it('documents the widened retirement and the R42 interaction in the header', () => {
+    assert.match(rawText, /WIDENED RETIREMENT/);
+    // develop's R42 re-inserts the marker — the reason branch (B) exists.
+    assert.match(rawText, /20260929T190000Z__R42-paid-provisioning-commercial-/);
+    // The one way to run R42 after R37 is a forced run; the header says what must follow it.
+    assert.match(rawText, /run\.js --fix <R42>/);
+    // The watermark argument names the CURRENT timestamp of this file, not a stale re-date.
+    assert.match(rawText, /2026-10-05T18:00:00Z/);
+    assert.doesNotMatch(rawText, /2026-09-24T15:00:00Z/);
   });
 
   it('explains, in the file header, why three tables are not scoped by ad_client_id', () => {
@@ -212,6 +233,34 @@ describe('R37 data-fix — @check (productive tenant without an open subscriptio
       normCheck,
       /NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/,
     );
+  });
+
+  it('keeps branch (A) intact: active productive marker AND no open subscription', () => {
+    const branchA = normCheck.slice(0, normCheck.indexOf(' OR ( '));
+    assert.match(branchA, /tp\.isactive = 'Y' AND upper\(trim\(tp\.value\)\) = 'PRODUCTIVE'/);
+    assert.match(
+      branchA,
+      /AND NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/,
+    );
+  });
+
+  it('adds branch (B): ANY ETGO_TenantPlan marker next to ANY etgo_subscription row (R42 re-insert)', () => {
+    assert.match(
+      normCheck,
+      /OR \( EXISTS \( SELECT 1 FROM ad_preference tp WHERE tp\.attribute = 'ETGO_TenantPlan' AND tp\.visibleat_client_id = :client_id \) AND EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id \) \)/,
+    );
+  });
+
+  it('branch (B) filters neither the marker\'s isactive/value nor the subscription\'s openness', () => {
+    // A marker R42 wrote, an inactive leftover or a non-productive value are all stale once the
+    // tenant is on the row model; a closed row is still proof it is on the row model.
+    const idx = normCheck.indexOf(' OR ( ');
+    assert.ok(idx > 0, 'expected branch (B) after an OR');
+    const branchB = normCheck.slice(idx);
+    assert.doesNotMatch(branchB, /tp\.isactive/);
+    assert.doesNotMatch(branchB, /tp\.value/);
+    assert.doesNotMatch(branchB, /s\.isactive/);
+    assert.doesNotMatch(branchB, /s\.end_date/);
   });
 
   it('limits the probe to a single row (0 rows => SKIPPED_NOT_NEEDED)', () => {
@@ -384,14 +433,18 @@ describe('R37 data-fix — @apply statement 3 (per-tenant retirement of the ETGO
     assert.match(deleteStatement, /tp\.attribute = 'ETGO_TenantPlan'/);
   });
 
-  it('is guarded on an OPEN SUBSCRIPTION EXISTING, not on "the INSERT above just ran"', () => {
+  it('is guarded on ANY SUBSCRIPTION ROW EXISTING, not on "the INSERT above just ran"', () => {
     // Guarding on existence makes the statement self-healing: a tenant that obtained its
     // subscription by any other route (the runtime paid-upgrade path, a manual correction, an
-    // earlier partial run) is retired the next time the fix is invoked for it.
+    // earlier partial run) is retired the next time the fix is invoked for it. Widened from an
+    // OPEN row to ANY row: a closed row still proves the tenant is on the row model, and a marker
+    // next to a closed row is exactly what resurrects a canceled tenant through the fallback.
     assert.match(
       deleteStatement,
-      /AND EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/,
+      /AND EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id \)\s*$/,
     );
+    assert.doesNotMatch(deleteStatement, /s\.isactive/);
+    assert.doesNotMatch(deleteStatement, /s\.end_date/);
     assert.doesNotMatch(deleteStatement, /NOT EXISTS/);
   });
 
@@ -497,8 +550,20 @@ describe('R37 data-fix — @report (manual pre-check + per-row Stripe outcome)',
       '@report must also cover the case where there was nothing left to retire');
     assert.ok(normReport.includes('ETGO_TenantPlan preference STILL PRESENT for this tenant'),
       '@report must flag a tenant whose preference was NOT retired');
+    assert.ok(normReport.includes('subscription row at all'),
+      '@report must say a still-present marker means the tenant has no subscription row at all');
     // Driven by ad_client, so the line is emitted for every applied tenant, exactly once.
     assert.match(normReport, /END AS outcome, c\.ad_client_id AS ref FROM ad_client c WHERE c\.ad_client_id = :client_id ORDER BY 1, 3/);
+  });
+
+  it('reports a retirement for ANY subscription row, matching the widened DELETE guard', () => {
+    const retired = normReport.match(
+      /WHEN EXISTS \( SELECT 1 FROM etgo_subscription s2 WHERE ([^)]*)\) THEN 'ETGO_TenantPlan preference retired/,
+    );
+    assert.ok(retired, 'expected the retired branch to probe etgo_subscription s2');
+    assert.match(retired[1], /s2\.environment_client_id = :client_id/);
+    assert.doesNotMatch(retired[1], /s2\.isactive/);
+    assert.doesNotMatch(retired[1], /s2\.end_date/);
   });
 
   it('keeps the existing manual-pre-check line alongside the retirement line', () => {
