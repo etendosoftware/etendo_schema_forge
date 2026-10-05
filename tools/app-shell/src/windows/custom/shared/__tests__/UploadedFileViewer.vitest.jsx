@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/UploadedFileViewer.jsx
 /**
  * ETP-5518 — UploadedFileViewer: the uploaded file's "Más" menu (Reemplazar / Eliminar),
  * the delete confirmation and the write gates. The real PdfViewer, FileLightbox,

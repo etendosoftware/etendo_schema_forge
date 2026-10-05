@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx
 // --- Mocks (before imports) ---
 
 vi.mock('@/i18n', () => ({

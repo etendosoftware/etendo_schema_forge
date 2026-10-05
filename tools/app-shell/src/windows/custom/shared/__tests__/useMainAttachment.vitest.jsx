@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/useMainAttachment.js
 // Mock listAttachments BEFORE imports (Vitest hoisting)
 vi.mock('@/components/copilot/ocr/listAttachments', () => ({
   fetchMainAttachment: vi.fn(),

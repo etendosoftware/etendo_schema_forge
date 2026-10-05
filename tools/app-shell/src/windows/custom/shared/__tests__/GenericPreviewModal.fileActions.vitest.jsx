@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/GenericPreviewModal.jsx
 /**
  * ETP-5518 — `attachmentConfig.fileActions` on GenericPreviewModal's drop-zone mode. Opted
  * in, the stored file keeps its Download link and gains the "Más" menu (Replace / Delete

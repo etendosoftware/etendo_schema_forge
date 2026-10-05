@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/InvoicePreview.jsx
 // Mocks must come before imports (Vitest hoisting).
 // Mirrors OrderPreview.vitest.jsx's isolated-mock approach so we can assert
 // directly on the dual-currency props passed to SummaryCard (ETP-4029).

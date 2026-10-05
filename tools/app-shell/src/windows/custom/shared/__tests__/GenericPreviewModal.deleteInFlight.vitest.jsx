@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/GenericPreviewModal.jsx
+// @covers tools/app-shell/src/windows/custom/shared/useMainAttachment.js
 /**
  * ETP-5518 review follow-up (W1) — GenericPreviewModal's drop-zone mode with the REAL
  * useMainAttachment, UploadedFileViewer, FileLightbox, PdfViewer and ConfirmDeleteDialog.

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/copilot/ocr/OcrInlineUploader.jsx
+// @covers tools/app-shell/src/windows/custom/shared/UploadedFileViewer.jsx
 /**
  * ETP-5518 — the new purchase invoice's OCR uploader renders the picked (still local, not
  * yet saved) PDF through UploadedFileViewer. Its "Más" menu acts on that local file:

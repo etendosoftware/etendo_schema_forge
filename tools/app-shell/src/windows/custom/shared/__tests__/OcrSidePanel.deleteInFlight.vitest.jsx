@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/shared/OcrSidePanel.jsx
+// @covers tools/app-shell/src/windows/custom/shared/useMainAttachment.js
 /**
  * ETP-5518 review follow-up — OcrSidePanel's DocumentView with the REAL useMainAttachment,
  * UploadedFileViewer, FileLightbox and ConfirmDeleteDialog. Only the network layer

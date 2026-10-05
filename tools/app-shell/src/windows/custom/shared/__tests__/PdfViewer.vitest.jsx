@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/PdfViewer.jsx
 /**
  * ETP-5518 — PdfViewer's new optional props (`zoom`, `hideToolbar`, `toolbarExtra`,
  * `onExpand`, `onNumPages`) and the extracted `usePdfZoom` hook. Without any of them the

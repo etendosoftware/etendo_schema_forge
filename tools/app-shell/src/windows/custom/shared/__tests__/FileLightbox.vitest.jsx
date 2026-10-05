@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/shared/FileLightbox.jsx
 /**
  * ETP-5518 — FileLightbox, reached the way users reach it: by clicking (or pressing Enter
  * on) the preview rendered by UploadedFileViewer. Real Radix dialogs, real PdfViewer and
