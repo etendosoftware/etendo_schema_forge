@@ -1,5 +1,8 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { test, expect } from '@playwright/test';
 import { login, MOCK_ORG_ID } from '../helpers/auth.js';
+import { installPlansMock, PRODUCTIVE_PLAN } from '../helpers/plan-catalog-mock.js';
 
 /**
  * Two tabs, one browser session (ETP-5550).
@@ -28,6 +31,7 @@ function createSessionServer() {
     revoked: false,
     revokes: [],
     purchases: [],
+    purchasedPlanKeys: [],
     environmentEntries: 0,
   };
 }
@@ -88,6 +92,7 @@ async function installSessionServer(page, server) {
     if (request.method() !== 'POST') return route.fallback();
     const proof = request.headers()['x-go-csrf'];
     server.purchases.push(proof);
+    server.purchasedPlanKeys.push(request.postDataJSON()?.planKey);
     if (proof !== server.csrf) return json(route, 403, STALE_PROOF_REFUSAL);
     return json(route, 201, {
       requestId: 'purchase-request-1',
@@ -103,6 +108,9 @@ async function installSessionServer(page, server) {
 async function openTab(page, server, path = '/dashboard') {
   await login(page);
   await installSessionServer(page, server);
+  // The upgrade submit stays disabled until the plan catalog loads (ETP-5046); without this the
+  // login() catch-all answers an empty catalog and the write under test is never sent.
+  await installPlansMock(page);
   await page.goto(path);
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
@@ -112,6 +120,8 @@ async function reachPaymentStep(page) {
   await page.getByTestId('upgrade-plan-select').click();
   await page.getByTestId('upgrade-addons-continue').click();
   await expect(page.getByTestId('upgrade-checkout')).toBeVisible();
+  // The single catalog plan is auto-selected; the submit is enabled from here on.
+  await expect(page.getByTestId('upgrade-plan-single')).toBeVisible();
   await page.getByTestId('upgrade-tenant-name-input').fill('Acme Productive');
 }
 
@@ -129,6 +139,8 @@ test.describe('A session rotated in another tab (ETP-5550)', () => {
 
     await expect(stale).toHaveURL(/__mock-checkout__/, { timeout: 10_000 });
     expect(server.purchases).toEqual([FIRST_PROOF, ROTATED_PROOF]);
+    // The resend is the same write, only with the live proof: the plan key travels again.
+    expect(server.purchasedPlanKeys).toEqual([PRODUCTIVE_PLAN.planKey, PRODUCTIVE_PLAN.planKey]);
   });
 
   test('the stale tab does not adopt the proof once the session moved to another company', async ({ page, context }) => {

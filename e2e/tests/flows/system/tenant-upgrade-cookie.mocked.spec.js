@@ -1,5 +1,9 @@
+// @covers tools/app-shell/src/pages/UpgradePage.jsx
+// @covers tools/app-shell/src/lib/upgrade/api.js
 import { test, expect } from '@playwright/test';
 import { login, declareCookieSession } from '../../helpers/auth.js';
+// The upgrade submit stays disabled without a plan catalog (ETP-5046) — see the helper.
+import { installPlansMock, PRODUCTIVE_PLAN } from '../../helpers/plan-catalog-mock.js';
 
 /**
  * Tenant upgrade under the COOKIE session scheme (ETP-5443 follow-up).
@@ -32,33 +36,6 @@ const CURRENT_ENV = {
   adminUserName: 'admin',
   plan: 'free',
 };
-
-/**
- * The Subscription Plan Catalog (ETP-5046), shaped exactly like `GET /sws/go/plans` answers — note
- * there is no provider price id; the server never sends one. The upgrade page keeps its submit
- * DISABLED until this catalog has loaded with at least one plan (`canCheckout` in UpgradePage.jsx),
- * and the generic `**\/sws/**` stub from `login()` carries no catalog, so every checkout test here
- * needs this route. A single plan is auto-selected, which is the v1 catalog.
- */
-const PRODUCTIVE_PLAN = {
-  planKey: 'productive-monthly',
-  name: 'Productive',
-  description: 'A second tenant for real work',
-  displayPrice: '49.00',
-  currency: 'EUR',
-  billingInterval: 'month',
-};
-
-async function installPlansMock(page, plans = [PRODUCTIVE_PLAN]) {
-  await page.route('**/sws/go/plans', async (route) => {
-    if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ plans }),
-    });
-  });
-}
 
 async function installEnvironmentsMock(page, environments) {
   await page.route('**/sws/go/environments{/**,}**', async (route) => {
