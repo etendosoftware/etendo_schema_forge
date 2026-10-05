@@ -24,7 +24,8 @@ skipped with no ledger row, no error and no report line. So:
   to `develop` is dead on arrival on every environment that ran them. Re-date it before merging;
   renaming is allowed while the fix is unapplied (rule 3 below forbids it only once applied).
   ETP-5046's `R37-tenant-subscription-backfill` was authored as `20260918T120000Z` — the same stamp
-  as `R38-org-legalentity-pointer` — and had to be re-dated to `20260924T150000Z`.
+  as `R38-org-legalentity-pointer` — and had to be re-dated to `20260924T150000Z`, then again to
+  `20261005T180000Z` when develop had moved past that.
 
 `cli/test/data-fixes-catalog-ordering.test.js` fails the build when two fixes share a timestamp
 prefix (seven already-applied pairs are frozen by exact file name; do not extend that allowlist,

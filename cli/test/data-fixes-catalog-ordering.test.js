@@ -19,8 +19,8 @@ import { parseFixTimestamp } from '../src/data-fixes/parse-fix.js';
  *   - A new fix dated at or before a fix that is already processed anywhere is skipped silently
  *     there too. This is exactly what nearly happened to ETP-5046's R37 subscription backfill:
  *     it was authored as `20260918T120000Z`, the same stamp as develop's
- *     `R38-org-legalentity-pointer`, and had to be re-dated to `20260924T150000Z` before it
- *     reached a shared environment.
+ *     `R38-org-legalentity-pointer`, and had to be re-dated to `20260924T150000Z` — and later to
+ *     `20261005T180000Z` — before it reached a shared environment.
  *
  * Renaming a fix is only allowed while it is UNAPPLIED (`sql/README.md` rule 3: applied fixes
  * are immutable). The historical pairs listed in `APPLIED_SHARED_TIMESTAMPS` below were already
@@ -33,9 +33,9 @@ import { parseFixTimestamp } from '../src/data-fixes/parse-fix.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SQL_DIR = join(__dirname, '..', 'src', 'data-fixes', 'sql');
 
-const R37_BACKFILL = '20260924T150000Z__R37-tenant-subscription-backfill.sql';
+const R37_BACKFILL = '20261005T180000Z__R37-tenant-subscription-backfill.sql';
 /** The newest fix in develop when ETP-5046 merged it; R37 was re-dated to sort after it. */
-const NEWEST_DEVELOP_FIX_AT_MERGE = '20260922T130000Z__R39-document-sequence-clear-descriptions.sql';
+const NEWEST_DEVELOP_FIX_AT_MERGE = '20261005T120000Z__R46-acct-rpt-definitions-redelivery.sql';
 
 /**
  * Already-applied fixes that share a timestamp prefix. Immutable (README rule 3), so they are
