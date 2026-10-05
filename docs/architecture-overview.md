@@ -412,6 +412,8 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `TransactionalEmailService` | `...schemaforge.email` | Executes email contracts; single choke point that writes both the audit row and the history row |
 | `DalEmailSendLogStore` | same | Writes `ETGO_EMAIL_SEND_LOG` rows, without admin mode, so the row carries the real tenant and sender |
 | `DalEmailSafetyStore` | same | Writes the client-0 anti-abuse ledger `ETGO_Email_Safety` (hashed recipients, no copy) |
+| `TemplateAccessPropagationService` | `com.etendoerp.go.roles` | Realigns personal roles' inherited access rows with the system template roles they inherit (ETP-5565, `neo-headless.md` §8d.1) |
+| `TemplateRoleAccessStartup` | `com.etendoerp.go.startup` | Startup + 10-minute tick: detects template changes by fingerprint and sweeps the affected personal roles under a lease (ETP-5565) |
 
 ### Database Tables
 
@@ -422,6 +424,8 @@ The runtime module is at `modules/com.etendoerp.go/`. Full API reference: `modul
 | `ETGO_SF_FIELD` | 1 per exposed column | Field: included/excluded, read-only, default value |
 | `ETGO_EMAIL_SEND_LOG` | 1 per send attempt, for the six document-send email contracts only | Readable per-document email history: recipients, subject, operator message, download link, status, sender — **in clear**. Client/Organization level (`ACCESSLEVEL` 3). Backoffice window: *Email Send History* (read-only). Indexed on `RECORD_ID` and `SENT_AT`. |
 | `ETGO_Email_Safety` | 1 per send attempt, every contract, plus throttle and kill-switch rows | Anti-abuse ledger, discriminated by `RECORD_TYPE`. Client 0; recipients SHA-256 hashed; no subject, no body. Not a readable history — see `ops/transactional-email-security.md`. |
+| `ETGO_TPL_ROLE_SYNC` | 1 per system template role | Last fingerprint of the template's active grants that was fully swept onto personal roles (ETP-5565). Live-database state: never in a dataset, source data or deploy delta. |
+| `ETGO_TPL_ROLE_LEASE` | 1 (seeded at startup) | Lease so only one task runs the template sweep at a time, plus the last tick error (ETP-5565). Same never-travels rule. |
 
 ### API Endpoints
 

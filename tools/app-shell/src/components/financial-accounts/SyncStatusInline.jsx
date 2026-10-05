@@ -12,8 +12,10 @@ import { canConnectToSaltEdge } from './saltEdgeEligibility.js';
  * - Pending accounts surface a warning treatment.
  * - Default state (no connection data, as in T1 before ETP-4097) renders the
  *   underlined "Conectar banco" CTA per Figma — inert in T1.
+ * - `windowReadOnly` (ETP-5457, the window's "read-only" access tier): connecting a bank is a
+ *   write, so that CTA is not rendered at all. The status lines above are unaffected.
  */
-export function SyncStatusInline({ account, onConnect }) {
+export function SyncStatusInline({ account, onConnect, windowReadOnly = false }) {
   const ui = useUI();
 
   if (!account || account.type === ACCOUNT_TYPE.CASH) {
@@ -42,7 +44,7 @@ export function SyncStatusInline({ account, onConnect }) {
   // all — this cell is a bare inline affordance with nowhere to explain a disabled state, so the
   // rule is surfaced (with its reason) in the edit modal instead, next to the Country field.
   // Rule owned by saltEdgeEligibility.js.
-  if (!canConnectToSaltEdge(account)) {
+  if (windowReadOnly || !canConnectToSaltEdge(account)) {
     return null;
   }
 

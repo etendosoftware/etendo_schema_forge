@@ -127,6 +127,9 @@ vi.mock('@etendosoftware/etendo-go-core/onboarding/state', () => ({
   ],
   isCompanyStepValid: () => true,
   isProfileStepValid: () => true,
+  // ETP-5426: CompanyStep reads it to decide whether to render the sample-data opt-in. False keeps
+  // the checkbox out of these flows, which predate it; its own coverage lives in etendo-go-core.
+  isSampleDataOffered: () => false,
   // ETP-5195: OnboardingFlow.jsx and SetupProgressStep.jsx both call this during
   // auto-login/environment-entry (right after loginEnvironment resolves a token) to
   // replace the ambient session + persist the sf_auth_* keys. Its return value is

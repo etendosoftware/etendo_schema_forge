@@ -37,8 +37,12 @@ export { differenceState, differenceLimit, isNegligible, DIFFERENCE_EPSILON }
  * @param {() => void} props.onDismiss "Dejar pendiente" — hides the banner for this line, this
  *     session only, and changes no data
  * @param {() => void} props.onPost opens the confirmation modal
+ * @param {boolean} [props.windowReadOnly=false] ETP-5457 — the window's "read-only" access tier.
+ *     The banner stays (it tells the user the line has a postable remainder) but the post action,
+ *     the one control here that leads to a write, is not rendered. "Dejar pendiente" stays: it
+ *     changes no data.
  */
-export function DifferenceBanner({ info, currency, onDismiss, onPost }) {
+export function DifferenceBanner({ info, currency, onDismiss, onPost, windowReadOnly = false }) {
   const ui = useUI();
   if (!info?.visible) {
     return null;
@@ -76,15 +80,19 @@ export function DifferenceBanner({ info, currency, onDismiss, onPost }) {
           {ui('financeReconcileDiffLeavePending')}
         </button>
         {/* Always enabled: the concept is chosen inside the modal, whose own confirm stays disabled
-            until one is picked. The account's configured default only preselects it. */}
-        <Button
-          onClick={onPost}
-          className="h-9 gap-1.5 px-3.5 text-[13px] font-semibold bg-[hsl(var(--text-primary))] text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
-          data-testid="recon-difference-open"
-        >
-          <BookText className="h-[15px] w-[15px]" data-testid="BookText__recon-diff" />
-          {ui('financeReconcileDiffAction')}
-        </Button>
+            until one is picked. The account's configured default only preselects it. Hidden, not
+            disabled, under the read-only tier (ETP-5457): there is no state in which it would ever
+            become usable for that role. */}
+        {windowReadOnly ? null : (
+          <Button
+            onClick={onPost}
+            className="h-9 gap-1.5 px-3.5 text-[13px] font-semibold bg-[hsl(var(--text-primary))] text-primary-foreground hover:bg-accent-highlight hover:text-accent-highlight-foreground"
+            data-testid="recon-difference-open"
+          >
+            <BookText className="h-[15px] w-[15px]" data-testid="BookText__recon-diff" />
+            {ui('financeReconcileDiffAction')}
+          </Button>
+        )}
       </div>
     </div>
   );
