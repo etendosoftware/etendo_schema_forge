@@ -4,12 +4,19 @@
 // client-side cut while the server still commits would report "posting failed" for documents
 // that were in fact posted, so both opt out with `timeout: 0`. The real client performs the
 // request; only its options are recorded (see `@/test/recordApiFetch.js`).
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 const { stableUi } = vi.hoisted(() => ({ stableUi: (key) => key }));
-vi.mock('@/i18n', () => ({ useUI: () => stableUi }));
+vi.mock('@/i18n', () => ({
+  useUI: () => stableUi,
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => ({}),
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
+}));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 
 vi.mock('@/auth/useApiFetch.js', async (importOriginal) => {
   const { wrapUseApiFetchModule } = await import('@/test/recordApiFetch.js');
@@ -34,13 +41,21 @@ function mkFetch() {
       return Promise.resolve({ ok: true, json: async () => ({ documentTypes: [], accountingStatuses: [] }) });
     }
     if (u.includes('/action/bulk-post')) {
-      return Promise.resolve({ ok: true, json: async () => ({ ok: 1, total: 1 }) });
+      return Promise.resolve({ ok: true, json: async () => ({ ok: 1, total: 1, results: [] }) });
     }
     if (u.includes('/action/post')) {
       return Promise.resolve({ ok: true, json: async () => ({ success: true }) });
     }
     return Promise.resolve({ ok: true, json: async () => ({ rows: ROWS, total: ROWS.length }) });
   });
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/not-posted-documents']}>
+      <NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />
+    </MemoryRouter>,
+  );
 }
 
 beforeEach(() => {
@@ -51,7 +66,7 @@ beforeEach(() => {
 
 describe('NotPostedDocumentsPage — posting timeout opt-out (ETP-5424)', () => {
   it('posting a single row passes timeout: 0', async () => {
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    renderPage();
     await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
 
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
@@ -61,9 +76,9 @@ describe('NotPostedDocumentsPage — posting timeout opt-out (ETP-5424)', () => 
   });
 
   it('the bulk post passes timeout: 0', async () => {
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
+    renderPage();
+    await waitFor(() => screen.getByTestId('row-doc-1'));
+    fireEvent.click(within(screen.getByTestId('row-doc-1')).getByRole('checkbox'));
 
     await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
 
@@ -72,7 +87,7 @@ describe('NotPostedDocumentsPage — posting timeout opt-out (ETP-5424)', () => 
   });
 
   it('the list and filter-option reads keep the default timeout', async () => {
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    renderPage();
     await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
     const reads = apiFetchCalls.filter(({ options }) => !options?.method || options.method === 'GET');
     expect(reads.length).toBeGreaterThanOrEqual(1);

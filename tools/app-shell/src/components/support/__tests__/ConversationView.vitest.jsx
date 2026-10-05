@@ -472,17 +472,17 @@ describe('ConversationView', () => {
         const messages = [{
           id: 'm1',
           sender: 'ai',
-          text: 'Fuente: https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/'
+          text: 'Fuente: https://github.com/etendosoftware/etendo-docs/blob/main/docs/es/'
             + 'comercial/ventas/factura-de-venta/factura-de-venta.md',
         }];
         const { container } = render(<ConversationView {...baseProps({ messages })} />);
         const link = container.querySelector('.sc-bubble a');
         expect(link).toHaveAttribute(
           'href',
-          'https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
+          'https://github.com/etendosoftware/etendo-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
         );
         expect(link).toHaveTextContent(
-          'https://github.com/etendosoftware/etendo-go-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
+          'https://github.com/etendosoftware/etendo-docs/blob/main/docs/es/comercial/ventas/factura-de-venta/factura-de-venta.md',
         );
         expect(link).toHaveAttribute('target', '_blank');
         expect(link).toHaveAttribute('rel', 'noopener noreferrer');

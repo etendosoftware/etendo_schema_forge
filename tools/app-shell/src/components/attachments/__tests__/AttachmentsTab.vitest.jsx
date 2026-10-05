@@ -21,6 +21,7 @@ vi.mock('sonner', () => ({
 // without touching the network.
 const hookState = {
   items: [],
+  count: null,
   loading: false,
   error: null,
   uploadingFiles: new Map(),
@@ -34,8 +35,13 @@ const hookState = {
   formatBytes: (n) => `${n} B`,
 };
 
+// Options each render passed to the hook, so tests can assert what the tab asks for.
+const hookCalls = [];
 vi.mock('../useAttachments', () => ({
-  useAttachments: () => hookState,
+  useAttachments: (opts) => {
+    hookCalls.push(opts);
+    return hookState;
+  },
 }));
 
 // ETP-5038: the accepted types now come from GET /sws/neo/attachments/config. Pin them
@@ -67,7 +73,9 @@ const baseProps = {
 beforeEach(() => {
   vi.clearAllMocks();
   hookState.items = [];
+  hookState.count = null;
   hookState.loading = false;
+  hookCalls.length = 0;
   hookState.uploadingFiles = new Map();
 });
 
@@ -244,6 +252,39 @@ describe('AttachmentsTab', () => {
       expect(onSaveHeader).not.toHaveBeenCalled();
       expect(hookState.upload).toHaveBeenCalledWith(file);
     });
+  });
+});
+
+// ETP-5526: the tab badge showed "0" before the lazy list was ever read. The
+// tab reports the hook's `count` as-is (null = unknown, never a fake 0), only
+// when not loading, and asks the hook for the count prefetch only when there
+// is a badge to feed.
+describe('AttachmentsTab — onCountChange reports the hook count (ETP-5526)', () => {
+  it.each([
+    ['unknown count → null (even with items on screen)', { count: null, items: [{ id: '1', name: 'a.pdf' }] }, null],
+    ['known count → that number', { count: 2, items: [] }, 2],
+    ['known zero → 0', { count: 0, items: [] }, 0],
+  ])('%s', (_label, state, expected) => {
+    Object.assign(hookState, state);
+    const onCountChange = vi.fn();
+    render(<AttachmentsTab {...baseProps} onCountChange={onCountChange} />);
+    expect(onCountChange).toHaveBeenLastCalledWith(expected);
+  });
+
+  it('does not report any count while the list is loading', () => {
+    Object.assign(hookState, { count: 1, loading: true, items: [{ id: '1', name: 'a.pdf' }] });
+    const onCountChange = vi.fn();
+    render(<AttachmentsTab {...baseProps} onCountChange={onCountChange} />);
+    expect(onCountChange).not.toHaveBeenCalled();
+  });
+
+  it('asks the hook to prefetch the count only when onCountChange is passed', () => {
+    const { unmount } = render(<AttachmentsTab {...baseProps} onCountChange={vi.fn()} />);
+    expect(hookCalls.at(-1).prefetchCount).toBe(true);
+    unmount();
+
+    render(<AttachmentsTab {...baseProps} />);
+    expect(hookCalls.at(-1).prefetchCount).toBe(false);
   });
 });
 
