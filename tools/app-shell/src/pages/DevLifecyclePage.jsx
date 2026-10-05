@@ -13,9 +13,9 @@ function toInputDate(value) {
 export default function DevLifecyclePage() {
   const ui = useUI();
   const apiFetch = useApiFetch('');
-  const [state, setState] = useState({ environments: [], trialDays: 15, renewalGraceDays: 15 });
+  const [state, setState] = useState({ environments: [], trialDays: 14, renewalGraceDays: 15 });
   const [selected, setSelected] = useState('');
-  const [trialDays, setTrialDays] = useState('15');
+  const [trialDays, setTrialDays] = useState('14');
   const [graceDays, setGraceDays] = useState('15');
   const [trialStartedAt, setTrialStartedAt] = useState('');
   const [subscriptionStatus, setSubscriptionStatus] = useState('NONE');
@@ -28,7 +28,7 @@ export default function DevLifecyclePage() {
     const data = await response.json();
     const normalized = data && typeof data === 'object'
       ? { environments: [], ...data }
-      : { environments: [], trialDays: 15, renewalGraceDays: 15 };
+      : { environments: [], trialDays: 14, renewalGraceDays: 15 };
     setState(normalized);
     setTrialDays(String(normalized.trialDays));
     setGraceDays(String(normalized.renewalGraceDays));
