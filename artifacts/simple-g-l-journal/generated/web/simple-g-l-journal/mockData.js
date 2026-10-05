@@ -4,7 +4,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-001",
     "description": "Standard order for Q1 delivery",
-    "documentDate": "2026-01-15",
     "accountingDate": "2026-01-15",
     "period": "Sample period",
     "currency": "USD",
@@ -20,7 +19,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-002",
     "description": "Rush order - priority shipping required",
-    "documentDate": "2026-01-16",
     "accountingDate": "2026-01-16",
     "period": "Sample period",
     "currency": "EUR",
@@ -36,7 +34,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-003",
     "description": "Bulk purchase for warehouse restocking",
-    "documentDate": "2026-01-17",
     "accountingDate": "2026-01-17",
     "period": "Sample period",
     "currency": "GBP",
@@ -52,7 +49,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-004",
     "description": "Sample order for client evaluation",
-    "documentDate": "2026-01-18",
     "accountingDate": "2026-01-18",
     "period": "Sample period",
     "currency": "USD",
@@ -68,7 +64,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-005",
     "description": "Recurring monthly supply order",
-    "documentDate": "2026-01-19",
     "accountingDate": "2026-01-19",
     "period": "Sample period",
     "currency": "EUR",
@@ -84,7 +79,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-006",
     "description": "Special pricing agreement applies",
-    "documentDate": "2026-01-20",
     "accountingDate": "2026-01-20",
     "period": "Sample period",
     "currency": "GBP",
@@ -100,7 +94,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-007",
     "description": "Consolidated order from multiple requests",
-    "documentDate": "2026-01-21",
     "accountingDate": "2026-01-21",
     "period": "Sample period",
     "currency": "USD",
@@ -116,7 +109,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-008",
     "description": "Trial order for new product line",
-    "documentDate": "2026-01-22",
     "accountingDate": "2026-01-22",
     "period": "Sample period",
     "currency": "EUR",
@@ -132,7 +124,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-009",
     "description": "Replacement for damaged goods",
-    "documentDate": "2026-01-23",
     "accountingDate": "2026-01-23",
     "period": "Sample period",
     "currency": "GBP",
@@ -148,7 +139,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-010",
     "description": "Pre-season inventory build-up",
-    "documentDate": "2026-01-24",
     "accountingDate": "2026-01-24",
     "period": "Sample period",
     "currency": "USD",
@@ -164,7 +154,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-011",
     "description": "Customer-specific configuration",
-    "documentDate": "2026-01-25",
     "accountingDate": "2026-01-25",
     "period": "Sample period",
     "currency": "EUR",
@@ -180,7 +169,6 @@ export const gLJournal = [
   {
     "id": "mock-gLJournal-012",
     "description": "Government contract fulfillment",
-    "documentDate": "2026-01-26",
     "accountingDate": "2026-01-26",
     "period": "Sample period",
     "currency": "GBP",
