@@ -1,10 +1,13 @@
 // @covers tools/app-shell/src/components/CommandPalette.jsx
 // @covers tools/app-shell/src/lib/globalSearchMenu.js
 // Mocks BEFORE any import
+const MENU_TRANSLATIONS = vi.hoisted(() => ({ 'General Ledger Configuration': 'Esquema contable' }));
 
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
-  useMenuLabel: () => (key) => `translated:${key}`,
+  // A few labels translate to something unrelated to their source text, like the real
+  // es_ES menu ("General Ledger Configuration" → "Esquema contable").
+  useMenuLabel: () => (key) => MENU_TRANSLATIONS[key] ?? `translated:${key}`,
 }));
 
 const mockNavigate = vi.hoisted(() => vi.fn());
@@ -50,6 +53,14 @@ vi.mock('../../menu.json', () => ({
           { name: 'acct-process-monitor', label: 'Accounting Process', hidden: false, featureFlag: 'acct-process-monitor', capability: 'isAdminOrClientAdmin' },
           { name: 'api-keys', label: 'Public API Keys', hidden: false, featureFlag: 'public-api-keys', capability: 'isAdminOrClientAdmin' },
           { name: 'deal', label: 'Deal', hidden: true },
+        ],
+      },
+      {
+        group: 'Finance',
+        icon: 'Calculator',
+        hidden: false,
+        items: [
+          { name: 'general-ledger-configuration', label: 'General Ledger Configuration', hidden: false },
         ],
       },
       {
@@ -312,7 +323,7 @@ describe('CommandPalette', () => {
   describe('filters the menu windows by the query', () => {
     it('lists only the windows of a section whose name matches the query', async () => {
       renderWithQuery('Configura');
-      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role']));
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role', 'general-ledger-configuration']));
       expect(screen.getByTestId('cmd-group-translated:Configuración')).toBeInTheDocument();
       expect(screen.queryByTestId('cmd-group-translated:Sales')).not.toBeInTheDocument();
     });
@@ -357,7 +368,25 @@ describe('CommandPalette', () => {
 
     it('keeps every visible window when the query is empty', () => {
       renderWithQuery('');
-      expect(renderedWindowNames()).toEqual(['sales-order', 'user', 'role', 'goods-shipment', 'warehouse']);
+      expect(renderedWindowNames()).toEqual(['sales-order', 'general-ledger-configuration', 'user', 'role', 'goods-shipment', 'warehouse']);
+    });
+
+    // QA ETP-5602: "Configura" matched the SOURCE label of "Esquema contable" (General Ledger
+    // Configuration), whose section comes first in menu order, so Enter opened the wrong window.
+    it('ranks a matching section above windows that match only by source label or route name', async () => {
+      renderWithQuery('Configura');
+      await waitFor(() => expect(renderedWindowNames())
+        .toEqual(['user', 'role', 'general-ledger-configuration']));
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+      expect(mockNavigate).toHaveBeenCalledWith('/user');
+    });
+
+    it('ranks a translated-label match above a route-name-only match', async () => {
+      renderWithQuery('ledger');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['general-ledger-configuration']));
+      cleanup();
+      renderWithQuery('esquema');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['general-ledger-configuration']));
     });
 
     it('opens the first matching window on Enter', async () => {
@@ -396,7 +425,7 @@ describe('CommandPalette', () => {
       const firstRecord = items.findIndex((item) => records.contains(item));
       expect(firstRecord).toBeGreaterThan(0);
       expect(items.slice(0, firstRecord).map((item) => item.dataset.testid.split(' ').at(-1)))
-        .toEqual(['user', 'role']);
+        .toEqual(['user', 'role', 'general-ledger-configuration']);
     });
 
     it('opens the first matching window on Enter even when records also match', async () => {

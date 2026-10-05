@@ -7,6 +7,11 @@
  * matches by its group label — typing "Configura" brings up every window of
  * "Configuración". Matching ignores case and accents, because Spanish is the primary
  * locale and users type "albaran" for "Albarán".
+ *
+ * Matches are ranked in tiers, because Enter opens the first one: whole sections
+ * whose label matches, then windows whose translated label matches, then windows
+ * that match only by their source label or route name (kept, so English route
+ * names such as "contacts" still find the window). Within a tier, menu order holds.
  */
 import { normalizeLabel } from './matchOptionLabel.js';
 
@@ -19,17 +24,28 @@ function matchesAny(values, needle) {
  *   the menu groups already reduced to what the user may see
  * @param {string} query raw search text
  * @param {(label: string) => string} translate menu label translator
- * @returns the groups to list: unchanged for an empty query, otherwise only the
- *   matching sections (whole) and the matching windows of the other sections
+ * @returns the groups to list: unchanged for an empty query, otherwise the matches
+ *   ranked by tier. A section may appear once per tier, so each listed group carries
+ *   its `tier` (1 section, 2 translated label, 3 source label or route name).
  */
 export function filterMenuGroups(groups, query, translate) {
   const needle = normalizeLabel(query);
   if (!needle) return groups;
-  return groups.flatMap((group) => {
-    if (matchesAny([translate(group.group), group.group], needle)) return [group];
-    const items = group.items.filter((item) => matchesAny([translate(item.label), item.label, item.name], needle));
-    return items.length > 0 ? [{ ...group, items }] : [];
-  });
+  const sections = [];
+  const translated = [];
+  const others = [];
+  for (const group of groups) {
+    if (matchesAny([translate(group.group), group.group], needle)) {
+      sections.push({ ...group, tier: 1 });
+      continue;
+    }
+    const byTranslation = group.items.filter((item) => matchesAny([translate(item.label)], needle));
+    const bySource = group.items.filter((item) => !byTranslation.includes(item)
+      && matchesAny([item.label, item.name], needle));
+    if (byTranslation.length > 0) translated.push({ ...group, items: byTranslation, tier: 2 });
+    if (bySource.length > 0) others.push({ ...group, items: bySource, tier: 3 });
+  }
+  return [...sections, ...translated, ...others];
 }
 
 function foldChar(char) {

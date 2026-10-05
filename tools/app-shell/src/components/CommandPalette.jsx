@@ -518,7 +518,7 @@ export function CommandPalette() {
           const Icon = ICON_MAP[group.icon] || Package;
           return (
             <CommandGroup
-              key={group.group}
+              key={`${group.tier ?? 0}:${group.group}`}
               heading={tMenu(group.group)}
               data-testid="CommandGroup__73263e">
               {group.items.map((item) => {
