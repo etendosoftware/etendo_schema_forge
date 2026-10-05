@@ -99,13 +99,26 @@ function useIsCompactTopBar() {
 const HEADER_GRID = 'grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]';
 
 /**
- * ETP-5504 QA (OBS-1) — shrink priority of the breadcrumb levels. Ancestor levels keep their own
- * width up to this cap (beyond it they elide; the whole trail is in the tooltip) and only shrink
- * once the current page has given way down to its minimum; the current page absorbs the shortage
- * first (a far higher flex-shrink weight). Cap value pending UX confirmation.
+ * ETP-5504 QA (OBS-1) — shrink priority of the breadcrumb levels. The structured breadcrumb is a
+ * one-row grid, not a flex row: with flex, every shrinkable level takes a share of the shortage,
+ * and even a sub-pixel share makes `text-overflow: ellipsis` eat the end of a short ancestor
+ * ("Compr…"). Grid sizing gives the `minmax(0,max-content)` ancestor tracks their whole width
+ * first and hands only the leftover to the current page's `minmax(4rem,1fr)` track, so the
+ * current page elides first; the ancestors give way (equally) only when even 4rem is not left.
+ * Each ancestor label is also capped (beyond it, it elides; the whole trail is in the tooltip).
+ * Cap value pending UX confirmation.
  */
 const BREADCRUMB_ANCESTOR_CLASS = 'max-w-[160px]';
-const BREADCRUMB_CURRENT_CLASS = 'min-w-[4rem] shrink-[1000] truncate';
+const BREADCRUMB_ANCESTOR_TRACK = 'minmax(0,max-content)';
+const BREADCRUMB_OVERFLOW_TRACK = 'max-content';
+const BREADCRUMB_CURRENT_TRACK = 'minmax(4rem,1fr)';
+
+function breadcrumbGridColumns(ancestorCount, hasOverflow) {
+  const tracks = Array.from({ length: ancestorCount }, () => BREADCRUMB_ANCESTOR_TRACK);
+  if (hasOverflow) tracks.push(BREADCRUMB_OVERFLOW_TRACK);
+  tracks.push(BREADCRUMB_CURRENT_TRACK);
+  return tracks.join(' ');
+}
 
 function BreadcrumbLevel({ item, onNavigate, className }) {
   const navigable = Boolean(item.href || item.onClick);
@@ -172,11 +185,12 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
       <TooltipTrigger asChild data-testid="TooltipTrigger__topbar-breadcrumb">
         <nav
           aria-label={ui('topbarBreadcrumb')}
-          className="flex min-w-0 items-center text-xs leading-4 text-topbar-breadcrumb"
+          className="grid min-w-0 items-center text-xs leading-4 text-topbar-breadcrumb"
+          style={{ gridTemplateColumns: breadcrumbGridColumns(head.length, hidden.length > 0) }}
           data-testid="topbar-breadcrumb"
         >
           {head.map((item, index) => (
-            <span key={`${item.label}-${index}`} className="flex min-w-0 shrink items-center">
+            <span key={`${item.label}-${index}`} className="flex min-w-0 items-center">
               <BreadcrumbLevel
                 item={item}
                 onNavigate={handleNavigate}
@@ -220,7 +234,7 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
             </span>
           )}
           <span
-            className={BREADCRUMB_CURRENT_CLASS}
+            className="min-w-0 truncate"
             aria-current="page"
             data-testid="topbar-breadcrumb-current"
           >
@@ -531,7 +545,10 @@ export default function TopBar({
                 (`min-w-0`), so it uses the whole left grid column when needed and a long
                 title/breadcrumb (e.g. a bank account's full name + IBAN) elides at the column
                 edge instead of pushing the search. No `items-start`: the title row and the
-                breadcrumb must stretch to this block's width for their `truncate` to act. */}
+                breadcrumb must stretch to this block's width for their `truncate` to act.
+                ETP-5504 QA: the title `⋯` lives in the title row, right after the title, not
+                beside this block — so a long breadcrumb or title reaches the column edge (20px
+                before the search) instead of stopping a kebab's width short of it. */}
             <div
               className="flex flex-col justify-center min-w-0 h-12"
               data-testid="topbar-title-block"
@@ -553,63 +570,62 @@ export default function TopBar({
                 {titleExtra && (
                   <span className="flex items-center shrink-0">{titleExtra}</span>
                 )}
+                {hasMenu && (
+                  <DropdownMenu data-testid="DropdownMenu__133e64">
+                    <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__133e64">
+                      <button
+                        type="button"
+                        aria-label={ui('more')}
+                        data-testid="topbar-more-actions"
+                        className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
+                      >
+                        <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-52" data-testid="DropdownMenuContent__133e64">
+                      {onAddToFavorites && (
+                        <DropdownMenuItem onClick={onAddToFavorites} data-testid="DropdownMenuItem__133e64">
+                          <Star
+                            className={cn(
+                              'h-4 w-4 mr-2',
+                              isFavorite
+                                ? 'fill-accent-highlight text-accent-highlight'
+                                : 'text-muted-foreground'
+                            )}
+                            data-testid="Star__133e64" />
+                          {isFavorite ? ui('removeFromFavorites') : ui('addToFavorites')}
+                        </DropdownMenuItem>
+                      )}
+                      {onPageHelp && (
+                        <DropdownMenuItem onClick={onPageHelp} data-testid="DropdownMenuItem__133e64">
+                          <HelpCircle
+                            className="h-4 w-4 mr-2 text-muted-foreground"
+                            data-testid="HelpCircle__133e64" />
+                          {ui('pageHelp')}
+                        </DropdownMenuItem>
+                      )}
+                      {menuAction && (onAddToFavorites || onPageHelp) && (
+                        <DropdownMenuSeparator data-testid="DropdownMenuSeparator__133e64" />
+                      )}
+                      {menuAction && (
+                        <DropdownMenuItem
+                          onClick={menuAction.onClick}
+                          disabled={menuAction.disabled}
+                          data-testid="DropdownMenuItem__133e64">
+                          {menuAction.icon && (
+                            <menuAction.icon className="h-4 w-4 mr-2 text-muted-foreground" />
+                          )}
+                          {menuAction.label}
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
               {breadcrumb && (
                 <TopBarBreadcrumb breadcrumb={breadcrumb} ui={ui} data-testid="TopBarBreadcrumb__133e64" />
               )}
             </div>
-
-            {hasMenu && (
-              <DropdownMenu data-testid="DropdownMenu__133e64">
-                <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__133e64">
-                  <button
-                    type="button"
-                    aria-label={ui('more')}
-                    data-testid="topbar-more-actions"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-topbar-icon hover:bg-muted hover:text-foreground transition-colors"
-                  >
-                    <MoreVertical className="h-4 w-4" data-testid="MoreVertical__133e64" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-52" data-testid="DropdownMenuContent__133e64">
-                  {onAddToFavorites && (
-                    <DropdownMenuItem onClick={onAddToFavorites} data-testid="DropdownMenuItem__133e64">
-                      <Star
-                        className={cn(
-                          'h-4 w-4 mr-2',
-                          isFavorite
-                            ? 'fill-accent-highlight text-accent-highlight'
-                            : 'text-muted-foreground'
-                        )}
-                        data-testid="Star__133e64" />
-                      {isFavorite ? ui('removeFromFavorites') : ui('addToFavorites')}
-                    </DropdownMenuItem>
-                  )}
-                  {onPageHelp && (
-                    <DropdownMenuItem onClick={onPageHelp} data-testid="DropdownMenuItem__133e64">
-                      <HelpCircle
-                        className="h-4 w-4 mr-2 text-muted-foreground"
-                        data-testid="HelpCircle__133e64" />
-                      {ui('pageHelp')}
-                    </DropdownMenuItem>
-                  )}
-                  {menuAction && (onAddToFavorites || onPageHelp) && (
-                    <DropdownMenuSeparator data-testid="DropdownMenuSeparator__133e64" />
-                  )}
-                  {menuAction && (
-                    <DropdownMenuItem
-                      onClick={menuAction.onClick}
-                      disabled={menuAction.disabled}
-                      data-testid="DropdownMenuItem__133e64">
-                      {menuAction.icon && (
-                        <menuAction.icon className="h-4 w-4 mr-2 text-muted-foreground" />
-                      )}
-                      {menuAction.label}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </div>
         )}
 

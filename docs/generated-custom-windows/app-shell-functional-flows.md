@@ -232,9 +232,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     breakpoint below).
   - **Title / breadcrumb** (`topbar-title-block`): no fixed width cap — it is content-sized and
     can use the whole left column (half of the space beside the search), so its right edge stops
-    at most 20px before the search. Title and breadcrumb elide with an ellipsis at the column edge
-    and show their full text in a tooltip; the count badge, `titleExtra` and the title `⋯` never
-    shrink.
+    exactly 20px before the search when its content is long. Title and breadcrumb elide with an
+    ellipsis at the column edge and show their full text in a tooltip; the count badge,
+    `titleExtra` and the title `⋯` never shrink. The title `⋯` (`topbar-more-actions`) sits in the
+    title row, right after the title (and count / `titleExtra`), not beside the whole block, so it
+    no longer keeps a long breadcrumb a kebab's width short of the column edge.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
@@ -246,8 +248,11 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   - **Shrink priority** (ETP-5504 QA, OBS-1) of a structured breadcrumb (array, or any breadcrumb
     with a navigable level / with `⋯`): when the trail does not fit, the **current page level
     gives way first** (it elides down to a 4rem minimum) and the ancestor levels keep their own
-    width, each capped at **160px** (`max-w-[160px]`, pending UX confirmation) beyond which it
-    elides; only once the current page is at its minimum do the ancestors shrink. So
+    width, each label capped at **160px** (`max-w-[160px]`, pending UX confirmation) beyond which
+    it elides; only once the current page is at its minimum do the ancestors shrink (equally). The
+    row is a one-line CSS grid (`minmax(0,max-content)` per ancestor, `max-content` for `⋯`,
+    `minmax(4rem,1fr)` for the current page), not a flex row: in a flex row every level takes a
+    share of the shortage, and even a sub-pixel share makes the ellipsis eat a short ancestor. So
     `Configuración / Tarifa / Tarifa de venta princ…` instead of
     `Configurac… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
     plain ≤3-level string breadcrumb with no navigable level stays one line that elides at the end.
