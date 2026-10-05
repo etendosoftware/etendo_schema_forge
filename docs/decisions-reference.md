@@ -710,7 +710,7 @@ Each override entry supports the following properties:
 | Property | Type | Purpose |
 |----------|------|---------|
 | `label` | string | Override the default process label. |
-| `style` | string | Button style: `"positive"`, `"destructive"`, `"neutral"`. Default inferred from name. |
+| `style` | string | Button style. Default inferred from name. Values: `"positive"` (Primary, check icon), `"destructive"` (soft-red outline), `"neutral"`, `"ghost-danger"` (red outline + Undo icon), `"primary-danger"` (filled red Primary destructive — design-system `Button` `destructive` variant — + Undo icon; ETP-5519). Both `ghost-danger` and `primary-danger` open the window's `customComponents.processConfirmModal` before running. `primary-danger` applies to HEADER process buttons only: detail-entity (line) process buttons keep a fixed outline variant whatever their `style`. |
 | `displayLogicRaw` | string | JavaScript expression controlling button visibility (e.g., `"data.status === 'DR'"`). |
 | `exclude` | boolean | If `true`, hides this process button entirely. |
 | `add` | boolean | If `true`, defines a new process button not present in the backend contract. |

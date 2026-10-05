@@ -346,3 +346,51 @@ acceptance line about the "New" button staying visible does not apply to this wi
 
 Manual verification: open `/payment-in` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
 runs under the toolbar, above both the sidebar and the grid, across the full width of the card.
+
+## Reactivar as the filled Primary destructive button — ETP-5519
+
+From the 1280×720 UX review: on a collected payment ("Cobro depositado", `RPR`) **Reactivar** was a
+red-outline button (`style: "ghost-danger"`). It is now the **Primary button in its destructive
+variant** — filled red, white label and Undo icon — via
+`decisions.json → window.processOverrides.etprReactivatePayment.style: "primary-danger"`.
+
+`primary-danger` is a new, generic process-button style in `detailViewHelpers.jsx`
+(`getProcessButtonVariant` → design-system `Button` `variant="destructive"`; `getButtonClass` adds
+no colour override and ignores `salesTheme`). It behaves exactly like `ghost-danger` otherwise:
+`isDangerProcess()` makes it open the window's `processConfirmModal` (`ReactivarConfirmModal`) and
+carry the `Undo2` icon (white instead of red). Documented in `docs/decisions-reference.md` →
+Process Overrides.
+
+Position: on a non-draft payment Save is hidden (`hideSaveStatuses`), Confirmar is hidden
+(`@status@ = 'RPAP'`), and this window has no `topbarRight` slot, so Reactivar is the rightmost
+action of the detail toolbar. Visibility is unchanged (`@status@ != 'RPAP'`).
+
+**Manual verification.** Cobro (`/payment-in`) → open a payment in status *Cobro depositado* → the rightmost
+toolbar button is a filled red **Reactivar**; clicking it still opens the reactivation confirm
+modal.
+
+### "Datos del cobro": truncation with tooltip, date never cut — ETP-5519 (option A)
+
+At 1280×720 with the Navigation Rail expanded, Cliente, Fecha and Depositar en were cut in the
+"Datos del cobro" block (`artifacts/payment-in/custom/PaymentBottomPanel.jsx`, `DatosSection` /
+`FieldItem`). The layout is kept as-is (option A); only the overflow behaviour changed:
+
+- Every value that does not fit ends in an ellipsis and shows the full value in a tooltip, through
+  the shared `TruncatedText` (`tools/app-shell/src/components/ui/truncated-text.jsx`). The tooltip
+  opens only when the value is actually clipped.
+- **Fecha is never truncated.** Its cell is `noTruncate`: `white-space: nowrap` and a minimum width
+  of its own content.
+- Both rows are now ONE 4-column grid (`DATOS_COLS`), so the columns stay aligned. Columns 1, 2 and 4
+  shrink freely, and column 3 (Fecha / Referencia) never shrinks below the date. Truncatable cells
+  use `contain: inline-size`, so a long Referencia in the date column truncates instead of widening
+  it.
+- New test ids: `PaymentBottomPanel__field-{docNo,customer,date,method,depositTo,currency,reference}`
+  on each cell, `…-value` on the value, and `…-value-tooltip` on the tooltip.
+
+Payment Out has its own copy of this block (`artifacts/payment-out/custom/PaymentOutBottomPanel.jsx`,
+the same `FieldItem`) and is **not** changed here.
+
+**Manual verification.** At 1280×720 with the rail expanded, open Cobro (`/payment-in`) and then any
+payment whose customer or deposit account has a long name. The date shows in full, for example
+`23/09/2026`, and the long values end in "…". Hovering a cut value shows the full text, and hovering
+a value that fits shows no tooltip.

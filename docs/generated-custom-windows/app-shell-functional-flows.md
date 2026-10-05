@@ -233,6 +233,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     elide with an ellipsis at the column edge and show their full text in a tooltip; the count
     badge, `titleExtra` and the title `⋯` never shrink.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
+    The report viewer (`/report-viewer?report=<id>`, every category) does **not** pass `onBack`
+    since ETP-5519, so no ← button shows there; its in-page **Cancelar** button (`action-cancel`)
+    returns to the report catalog.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
   more than 3: first level, `⋯` (`topbar-breadcrumb-overflow`), current page

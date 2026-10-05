@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx
+//
 // Direct unit tests for the helper module extracted from DetailView (ETP-4730).
 //
 // The pre-existing DetailView.*Helpers suites reach these same functions through
@@ -50,6 +52,10 @@ import {
   maybeSaveBeforeConfirm,
   buildHeaderFormData,
   buildCustomAddModalOnSaved,
+  getButtonClass,
+  getProcessButtonVariant,
+  getDangerIconClass,
+  isDangerProcess,
 } from '../detailViewHelpers.jsx';
 
 describe('evalDisplayLogicRaw', () => {
@@ -952,5 +958,49 @@ describe('buildCustomAddModalOnSaved (ETP-5366)', () => {
     expect(() => onSaved()).not.toThrow();
     expect(secondaryHooks[0].handleSelect).toHaveBeenCalledWith(parent);
     expect(setCustomModalState).toHaveBeenCalledWith({ key: null, rowId: null });
+  });
+});
+
+describe('header process button styles (primary-danger / ghost-danger)', () => {
+  it('maps primary-danger to the design-system destructive variant', () => {
+    expect(getProcessButtonVariant({ style: 'primary-danger' })).toBe('destructive');
+  });
+
+  it('keeps positive as the default (filled) variant', () => {
+    expect(getProcessButtonVariant({ style: 'positive' })).toBe('default');
+  });
+
+  it('falls back to outline for every other style', () => {
+    expect(getProcessButtonVariant({ style: 'ghost-danger' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'destructive' })).toBe('outline');
+    expect(getProcessButtonVariant({ style: 'outline' })).toBe('outline');
+    expect(getProcessButtonVariant({})).toBe('outline');
+  });
+
+  it('adds no colour classes for primary-danger, with or without salesTheme', () => {
+    const p = { style: 'primary-danger' };
+    const plain = getButtonClass(false, p, false);
+    const themed = getButtonClass(true, p, false);
+    expect(plain).toBe('font-medium');
+    // salesTheme would otherwise repaint a button amber (bg-status-warning).
+    expect(themed).toBe(plain);
+    expect(plain).not.toMatch(/\b(bg|text|border)-/);
+  });
+
+  it('still paints ghost-danger red (contrast with primary-danger)', () => {
+    expect(getButtonClass(false, { style: 'ghost-danger' }, false)).toContain('text-[hsl(var(--destructive))]');
+  });
+
+  it('colours the Undo icon red only on ghost-danger', () => {
+    expect(getDangerIconClass({ style: 'ghost-danger' })).toBe('mr-1 text-[hsl(var(--destructive))]');
+    expect(getDangerIconClass({ style: 'primary-danger' })).toBe('mr-1');
+    expect(getDangerIconClass({ style: 'positive' })).toBe('mr-1');
+  });
+
+  it('treats both danger styles, and only them, as danger processes', () => {
+    expect(isDangerProcess({ style: 'ghost-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'primary-danger' })).toBe(true);
+    expect(isDangerProcess({ style: 'destructive' })).toBe(false);
+    expect(isDangerProcess(null)).toBe(false);
   });
 });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/contacts/FiscalDefaultsSection.jsx
 /**
  * Tests for FiscalDefaultsSection — the grouped SII/TicketBAI fiscal-defaults
  * block (ETP-4784). Faithful to Classic: no "SII/TBAI active" gating — the
@@ -6,7 +7,8 @@
  * Cliente block), and the TicketBAI block (`tbaiIssimplifiedinv`) always
  * renders.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import FiscalDefaultsSection from '../FiscalDefaultsSection';
 import { EntityForm } from '@/components/contract-ui';
 // Real (non-mocked) generated module + contract: the SII key-list options must
@@ -15,15 +17,24 @@ import { EntityForm } from '@/components/contract-ui';
 import CustomerForm from '@generated/contacts/generated/web/contacts/CustomerForm';
 import contract from '@generated/contacts/contract.json';
 
+// `useRealEntityForm` switches the EntityForm stub to the real component, for the one
+// behavior that only the real form can show: the key list's displayLogic gating.
+const formMode = vi.hoisted(() => ({ useRealEntityForm: false }));
+
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
   useLabel: () => (column) => `label:${column}`,
+  useMenuLabel: () => (k) => k,
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
 }));
-vi.mock('@/components/contract-ui', () => ({
-  EntityForm: vi.fn(({ fields }) => (
-    <div data-testid="entity-form">{fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>
-  )),
-}));
+vi.mock('@/components/contract-ui', async () => {
+  const { EntityForm: RealEntityForm } = await vi.importActual('@/components/contract-ui/EntityForm');
+  return {
+    EntityForm: vi.fn((props) => (formMode.useRealEntityForm
+      ? <RealEntityForm {...props} />
+      : <div data-testid="entity-form">{props.fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>)),
+  };
+});
 
 function findFieldsCall(fieldKey) {
   return EntityForm.mock.calls.find(([props]) =>
@@ -57,6 +68,7 @@ function contractEnumValues() {
 describe('FiscalDefaultsSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    formMode.useRealEntityForm = false;
   });
 
   it('always renders the section title and description', () => {
@@ -80,6 +92,8 @@ describe('FiscalDefaultsSection', () => {
       expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
       expect(screen.queryByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalDefaultsSection__tbai-block')).toBeInTheDocument();
     });
 
     it('does not render the SII block when customer is undefined', () => {
@@ -224,6 +238,79 @@ describe('FiscalDefaultsSection', () => {
       expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
+    });
+  });
+
+  // ETP-5519: SII and TicketBAI sit side by side in one 2-column grid row, and each switch has
+  // its label right next to it (switch first), as in EntityForm's own `toggle` field.
+  describe('layout — both blocks in one row, label beside each switch', () => {
+    const SWITCHES = [
+      { testId: 'FiscalToggle__aeatsii-default', label: 'label:EM_Aeatsii_Defaultsiikey', key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey' },
+      { testId: 'FiscalToggle__tbai-simplified', label: 'label:EM_Tbai_Issimplifiedinv', key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv' },
+    ];
+
+    it('places the SII and TicketBAI blocks as cells of the same 2-column grid', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      const tbai = screen.getByTestId('FiscalDefaultsSection__tbai-block');
+      const grid = sii.parentElement;
+      expect(tbai.parentElement).toBe(grid);
+      expect(grid.className.split(/\s+/)).toEqual(expect.arrayContaining(['grid', 'grid-cols-2']));
+      expect(Array.from(grid.children)).toEqual([sii, tbai]);
+    });
+
+    it.each(SWITCHES)('renders the $key label right after its switch, bound to it', ({ testId, label }) => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sw = screen.getByTestId(testId);
+      const lbl = sw.nextElementSibling;
+      expect(lbl.tagName).toBe('LABEL');
+      expect(lbl).toHaveTextContent(label);
+      expect(sw.id).toBeTruthy();
+      expect(lbl.htmlFor).toBe(sw.id);
+      // Same row: the switch and its label share one flex container.
+      expect(sw.parentElement.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'items-center']));
+    });
+
+    it.each(SWITCHES)('clicking the $key label toggles the switch', async ({ key, column, label }) => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+      render(<FiscalDefaultsSection data={{ customer: true, [key]: false }} onChange={onChange} />);
+      await user.click(screen.getByText(label, { selector: 'label' }));
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith(key, true, column);
+    });
+
+    it('gives the two switches distinct ids so each label targets its own switch', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      expect(screen.getByTestId(SWITCHES[0].testId).id).not.toBe(screen.getByTestId(SWITCHES[1].testId).id);
+    });
+  });
+
+  // Rendered through the REAL EntityForm: "Clave tipo factura" appears only while the
+  // "Clave por defecto" switch is on.
+  describe('key list visibility (real EntityForm)', () => {
+    const KEY_LIST_LABEL = 'label:EM_Aeatsii_Siikeylist';
+
+    it('hides the key list while "Clave por defecto" is off', () => {
+      formMode.useRealEntityForm = true;
+      render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: false }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      expect(within(sii).queryByText(KEY_LIST_LABEL)).toBeNull();
+    });
+
+    it('shows the key list once "Clave por defecto" is on', () => {
+      formMode.useRealEntityForm = true;
+      render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: true }} onChange={vi.fn()} />);
+      const sii = screen.getByTestId('FiscalDefaultsSection__sii-block');
+      expect(within(sii).getByText(KEY_LIST_LABEL)).toBeInTheDocument();
+    });
+
+    it('reveals the key list when the switch flips on', () => {
+      formMode.useRealEntityForm = true;
+      const { rerender } = render(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: false }} onChange={vi.fn()} />);
+      expect(screen.queryByText(KEY_LIST_LABEL)).toBeNull();
+      rerender(<FiscalDefaultsSection data={{ customer: true, aeatsiiDefaultsiikey: true }} onChange={vi.fn()} />);
+      expect(screen.getByText(KEY_LIST_LABEL)).toBeInTheDocument();
     });
   });
 

@@ -1,17 +1,23 @@
+// @covers tools/app-shell/src/windows/custom/contacts/BillingPreferencesForm.jsx
 /**
  * Tests for BillingPreferencesForm — pure helper logic + basic render.
  */
 import {
-  render, screen, fireEvent, waitFor,
+  render, screen, fireEvent, waitFor, within,
 } from '@testing-library/react';
 import BillingPreferencesForm from '../BillingPreferencesForm';
+import { EntityForm } from '@/components/contract-ui';
 
 vi.mock('@/i18n', () => ({
   useUI: () => (k) => k,
 }));
 vi.mock('@/components/contract-ui', () => ({
-  EntityForm: vi.fn(({ fields }) => (
-    <div data-testid="entity-form">{fields?.map(f => <span key={f.key}>{f.key}</span>)}</div>
+  // Renders the `trailing` slot as the real EntityForm does (an extra grid cell after the fields).
+  EntityForm: vi.fn(({ fields, trailing, 'data-testid': testId }) => (
+    <div data-testid="entity-form" data-form-id={testId}>
+      {fields?.map(f => <span key={f.key}>{f.key}</span>)}
+      {trailing}
+    </div>
   )),
 }));
 
@@ -86,6 +92,109 @@ describe('BillingPreferencesForm', () => {
         />,
       );
       expect(screen.getAllByTestId('entity-form').length).toBeGreaterThan(0);
+    });
+  });
+
+  // ETP-5519: each side's Financiero controls live in ONE EntityForm grid; the Bloquear switch
+  // is that grid's `trailing` cell, right after the payment-terms field.
+  describe('financial grid per side (payment terms + Bloquear in one EntityForm)', () => {
+    const SIDES = [
+      {
+        side: 'customer', terms: 'paymentTerms', method: 'paymentMethod', account: 'account',
+        blockKey: 'customerBlocking', blockColumn: 'Customer_Blocking', label: 'customerBlockField',
+      },
+      {
+        side: 'vendor', terms: 'pOPaymentTerms', method: 'pOPaymentMethod', account: 'pOFinancialAccount',
+        blockKey: 'vendorBlocking', blockColumn: 'Vendor_Blocking', label: 'vendorBlockField',
+      },
+    ];
+
+    function renderBoth(onChange = vi.fn(), extra = {}) {
+      render(
+        <BillingPreferencesForm
+          data={{ id: 'BP1', customer: true, vendor: true, ...extra }}
+          token="t"
+          apiBaseUrl="/api"
+          onChange={onChange}
+        />,
+      );
+      return onChange;
+    }
+
+    /** Props of the latest EntityForm render that carries `fieldKey`. */
+    function lastPropsWithField(fieldKey) {
+      const calls = EntityForm.mock.calls.filter(([p]) => p.fields?.some((f) => f.key === fieldKey));
+      return calls.at(-1)?.[0];
+    }
+
+    it('renders exactly one EntityForm per side', () => {
+      renderBoth();
+      expect(screen.getAllByTestId('entity-form')).toHaveLength(2);
+    });
+
+    it.each(SIDES)('$side: the payment-terms field and the Bloquear switch share one EntityForm', ({ side, terms }) => {
+      renderBoth();
+      const forms = screen.getAllByTestId('entity-form');
+      const withTerms = forms.filter((f) => within(f).queryByText(terms));
+      expect(withTerms).toHaveLength(1);
+      const form = withTerms[0];
+      expect(form).toHaveAttribute('data-form-id', `EntityForm__7f0756-${side}`);
+      // The switch is inside that same grid, not in a sibling row.
+      expect(within(form).getByTestId(`BlockingToggle__7f0756-${side}`)).toBeInTheDocument();
+    });
+
+    it.each(SIDES)('$side: payment terms is the last field and Bloquear is passed as `trailing`', ({ terms, label }) => {
+      renderBoth();
+      const props = lastPropsWithField(terms);
+      expect(props.fields.at(-1).key).toBe(terms);
+      expect(props.fields).toHaveLength(4);
+      expect(props.trailing).toBeTruthy();
+      expect(props.trailing.props.label).toBe(label);
+    });
+
+    it.each(SIDES)('$side: the BlockingToggle test id lands on the switch itself', ({ side, label }) => {
+      renderBoth();
+      const sw = screen.getByTestId(`BlockingToggle__7f0756-${side}`);
+      expect(sw).toHaveAttribute('role', 'switch');
+      expect(sw).toHaveAccessibleName(label);
+      expect(screen.queryByTestId('PillToggle__7f0756')).toBeNull();
+    });
+
+    it.each(SIDES)('$side: toggling Bloquear calls onChange with the blocking key and AD column', ({ side, blockKey, blockColumn }) => {
+      const onChange = renderBoth(vi.fn(), { [blockKey]: false });
+      fireEvent.click(screen.getByTestId(`BlockingToggle__7f0756-${side}`));
+      expect(onChange).toHaveBeenCalledWith(blockKey, true, blockColumn);
+    });
+
+    it.each(SIDES)('$side: turning Bloquear off sends false', ({ side, blockKey, blockColumn }) => {
+      const onChange = renderBoth(vi.fn(), { [blockKey]: true });
+      fireEvent.click(screen.getByTestId(`BlockingToggle__7f0756-${side}`));
+      expect(onChange).toHaveBeenCalledWith(blockKey, false, blockColumn);
+    });
+
+    it.each(SIDES)('$side: changing the payment method clears the account', ({ terms, method, account }) => {
+      const onChange = renderBoth();
+      onChange.mockClear();
+      lastPropsWithField(terms).onChange(method, 'PM-2', 'COL');
+      expect(onChange).toHaveBeenNthCalledWith(1, method, 'PM-2', 'COL');
+      expect(onChange).toHaveBeenCalledWith(account, null);
+      expect(onChange).toHaveBeenCalledWith(`${account}$_identifier`, null);
+    });
+
+    it.each(SIDES)('$side: changing the payment terms leaves the account alone', ({ terms, account }) => {
+      const onChange = renderBoth();
+      onChange.mockClear();
+      lastPropsWithField(terms).onChange(terms, 'PT-2');
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith(terms, 'PT-2');
+      expect(onChange).not.toHaveBeenCalledWith(account, null);
+    });
+
+    it('shows only the customer grid when vendor is off', () => {
+      renderBoth(vi.fn(), { vendor: false });
+      expect(screen.getAllByTestId('entity-form')).toHaveLength(1);
+      expect(screen.getByTestId('BlockingToggle__7f0756-customer')).toBeInTheDocument();
+      expect(screen.queryByTestId('BlockingToggle__7f0756-vendor')).toBeNull();
     });
   });
 

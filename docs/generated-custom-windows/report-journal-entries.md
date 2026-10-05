@@ -15,6 +15,7 @@ Let finance users print the full journal book for a date range — every account
 
 ## Interaction model
 - Route: `/report-viewer?report=report-journal-entries`.
+- No ← back button in the TopBar breadcrumb (ETP-5519, shared by every report in `ReportViewerPage.jsx`); the in-page **Cancelar** button (`action-cancel`) returns to the report catalog.
 - Visibility: Finance / Reports menu, category `finance`.
 - Implementation type: contract-driven SQL report served by the `report-api` Vite plugin in dev and by the static manifest in production.
 - Layout: grouped listing (`type: grouped-listing`) in landscape orientation.

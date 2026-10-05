@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/pages/ReportViewerPage.jsx
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { assertAllActionsDisabledWhileRequiredEmpty } from './reportViewerTestHelpers';
@@ -83,6 +84,7 @@ import ReportViewerPage, {
   applyProductSelectorScopeParams,
 } from '../ReportViewerPage.jsx';
 import { useWindowAccess } from '@/auth/AuthContext.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 
 describe('getSelectorPlaceholderLabel', () => {
   it('shows count when multi and items selected', () => {
@@ -962,6 +964,25 @@ describe('ReportViewer (viewer sub-component)', () => {
     expect(mockSetSearchParams).toHaveBeenCalled();
     const paramsArg = mockSetSearchParams.mock.calls.at(-1)[0];
     expect(paramsArg.has('report')).toBe(false);
+  });
+
+  // ETP-5519: the report view publishes no `onBack`, so the TopBar renders no ← (`topbar-back`
+  // only exists when the page meta carries `onBack`). The in-page Cancel is the way back.
+  it('publishes page meta without onBack (no TopBar back button)', async () => {
+    useSetPageMeta.mockClear();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    });
+    const viewerMetas = useSetPageMeta.mock.calls
+      .map(([meta]) => meta)
+      // The catalog publishes title 'Reports'; every other meta is the report viewer's.
+      .filter((meta) => meta && meta.title !== 'Reports');
+    expect(viewerMetas.length).toBeGreaterThan(0);
+    for (const meta of viewerMetas) {
+      expect(meta).not.toHaveProperty('onBack');
+      expect(meta.title).toBeTruthy();
+    }
   });
 
   it('renders ReportSidebar with parameter sections', async () => {
