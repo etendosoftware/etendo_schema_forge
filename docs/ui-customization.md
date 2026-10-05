@@ -2451,7 +2451,8 @@ options: {
     badgeKey, badgeTone,           // optional badge; tone 'success' (green, default) | 'info' (blue)
     actionLabelKey,                // primary button in the single-option layout («Crear albarán»)
     icon,                          // lucide component
-    titleKey, buttonLabelKey,      // used when this is the only follow-up offered (no «?» in the title)
+    titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
+                                   // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
     resultDocType,                 // ConfirmResultModal type: 'salida' | 'entrada' | 'facturaVenta' | 'facturaCompra'
     resultTitleKey,
   },

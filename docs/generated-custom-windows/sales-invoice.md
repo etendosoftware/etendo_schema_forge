@@ -226,8 +226,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   `draftMode.afterProcess = createFollowUpAfterProcess('sales-invoice', …)` runs after the process
   succeeded. With a pending `shipment` it returns `{ stay: true }` and the modal opens on the
   invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
-- **Modal** (single follow-up → direct confirmation, no radio): title «Gestionar envío» (no question
-  mark), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+- **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar envío?»
+  (`titleKey: 'followUpManageShipmentTitle'`; the topbar button keeps «Gestionar envío» through its own
+  `buttonLabelKey: 'soManageShipment'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
   count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
   'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de venta» + blue «Borrador» badge
   — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de envío.»,

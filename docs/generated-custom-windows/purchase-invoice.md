@@ -190,8 +190,9 @@ generated document differ) — see `docs/ui-customization.md` §20.
   `draftMode.afterProcess = createFollowUpAfterProcess('purchase-invoice', …)` runs after the process
   succeeded. With a pending `receipt` it returns `{ stay: true }` and the modal opens on the
   invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
-- **Modal** (single follow-up → direct confirmation, no radio): title «Gestionar recepción» (no question
-  mark), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+- **Modal** (single follow-up → direct confirmation, no radio): title «¿Gestionar recepción?»
+  (`titleKey: 'followUpManageReceiptTitle'`; the topbar button keeps «Gestionar recepción» through its own
+  `buttonLabelKey: 'poManageReceipt'`), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
   count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
   'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de compra» + blue «Borrador» badge
   — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de recepción.»,

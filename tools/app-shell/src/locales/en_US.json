@@ -17355,6 +17355,8 @@
     "followUpCreateShipmentAction": "Create shipment",
     "followUpCreateReceiptAction": "Create receipt",
     "followUpManageTitle": "Manage pending documents?",
+    "followUpManageShipmentTitle": "Manage shipment?",
+    "followUpManageReceiptTitle": "Manage receipt?",
     "followUpManageButton": "Manage pending",
     "followUpDocumentCreated": "Document created",
     "followUpErrorSourceNotFound": "The source document no longer exists.",

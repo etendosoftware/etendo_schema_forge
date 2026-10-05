@@ -31,7 +31,7 @@ export const SALES_INVOICE_FOLLOW_UP = {
   summary: { ...INVOICE_SUMMARY, documentNoField: 'documentNo' },
   options: {
     shipment: {
-      titleKey: 'soManageShipment',
+      titleKey: 'followUpManageShipmentTitle',
       buttonLabelKey: 'soManageShipment',
       labelKey: 'followUpCreateShipmentLabel',
       descriptionKey: 'followUpCreateShipmentDescription',
@@ -54,7 +54,7 @@ export const PURCHASE_INVOICE_FOLLOW_UP = {
   summary: { ...INVOICE_SUMMARY, documentNoField: 'orderReference' },
   options: {
     receipt: {
-      titleKey: 'poManageReceipt',
+      titleKey: 'followUpManageReceiptTitle',
       buttonLabelKey: 'poManageReceipt',
       labelKey: 'followUpCreateReceiptLabel',
       descriptionKey: 'followUpCreateReceiptDescription',

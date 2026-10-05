@@ -40,6 +40,17 @@ for (const [window, config] of Object.entries(CONFIGS)) {
         assert.deepEqual(missing, []);
       });
 
+      // The modal title asks («¿Gestionar envío?») while the topbar button names the action
+      // («Gestionar envío»): two distinct keys, so the button never inherits the «?».
+      it(`${locale} words the modal title as a question and the button label without one`, () => {
+        const labels = dictionary.genericLabels;
+        for (const option of Object.values(config.options)) {
+          assert.notEqual(option.titleKey, option.buttonLabelKey);
+          assert.match(labels[option.titleKey], /\?$/);
+          assert.doesNotMatch(labels[option.buttonLabelKey], /\?/);
+        }
+      });
+
       it(`${locale} keeps the {count} placeholder only in the plural description`, () => {
         const labels = dictionary.genericLabels;
         for (const option of Object.values(config.options)) {

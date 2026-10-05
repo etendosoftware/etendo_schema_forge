@@ -17421,6 +17421,8 @@
     "followUpCreateShipmentAction": "Crear albarán",
     "followUpCreateReceiptAction": "Crear recepción",
     "followUpManageTitle": "¿Gestionar documentos pendientes?",
+    "followUpManageShipmentTitle": "¿Gestionar envío?",
+    "followUpManageReceiptTitle": "¿Gestionar recepción?",
     "followUpManageButton": "Gestionar pendientes",
     "followUpDocumentCreated": "Documento creado",
     "followUpErrorSourceNotFound": "El documento de origen ya no existe.",
