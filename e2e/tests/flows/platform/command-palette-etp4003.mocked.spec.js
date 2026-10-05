@@ -177,4 +177,17 @@ test.describe('CommandPalette window search and picker (1280x720)', () => {
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('vector-search-scope-panel')).toBeHidden();
   });
+
+  test('focus leaving a picker checkbox for an element outside the palette closes the palette', async ({ page }) => {
+    // The Esc exception (focusout from a picker that removed itself) must not widen to the
+    // user leaving: focus moving from a mounted checkbox to the sidebar closes everything.
+    await openPalette(page, '/product');
+    await page.getByTestId('vector-search-target-picker-trigger').click();
+    await expect(page.getByTestId('vector-search-target-option').first()).toBeFocused();
+
+    await page.getByTestId('sidebar-expand').focus();
+
+    await expect(page.getByTestId('vector-search-target-picker')).toBeHidden();
+    await expect(page.getByTestId('vector-search-scope-panel')).toBeHidden();
+  });
 });
