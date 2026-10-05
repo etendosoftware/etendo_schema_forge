@@ -315,6 +315,105 @@ describe('StatementsTable', () => {
   });
 });
 
+// ETP-5457 — the window's "read-only" access tier. The per-row actions (edit, kebab, delete) and
+// the selection checkboxes — whose only purpose is the bulk delete — are not rendered. The row
+// itself, its expansion into the lines view and the sort headers stay.
+describe('StatementsTable — window read-only access tier (ETP-5457)', () => {
+  const DRAFT = {
+    id: 'd1', documentNo: 'BS-D', name: 'Borrador',
+    importDate: '2026-06-01T00:00:00Z', transactionDate: '2026-06-01T00:00:00Z',
+    lineCount: 1, matchedCount: 0, status: 'DRAFT', processed: 'N',
+  };
+  const actions = () => ({
+    onEdit: vi.fn(), onDelete: vi.fn(), onProcess: vi.fn(), onReactivate: vi.fn(),
+  });
+
+  it('hides Edit, Delete and the kebab of a draft under read-only (ETP-5457)', () => {
+    render(
+      <StatementsTable statements={[DRAFT]} loading={false} actions={actions()} windowReadOnly />,
+    );
+    expect(screen.getByTestId('statement-row-d1')).toBeInTheDocument();
+    expect(screen.queryByTestId('statement-row-edit-d1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('statement-row-delete-d1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('statement-row-menu-d1')).not.toBeInTheDocument();
+  });
+
+  it('renders Edit, Delete and the kebab of the same draft without read-only (ETP-5457)', () => {
+    render(
+      <StatementsTable
+        statements={[DRAFT]}
+        loading={false}
+        actions={actions()}
+        windowReadOnly={false}
+      />,
+    );
+    expect(screen.getByTestId('statement-row-edit-d1')).toBeInTheDocument();
+    expect(screen.getByTestId('statement-row-delete-d1')).toBeInTheDocument();
+    expect(screen.getByTestId('statement-row-menu-d1')).toBeInTheDocument();
+  });
+
+  it('hides the kebab of every processed row under read-only (ETP-5457)', () => {
+    render(<StatementsTable statements={ROWS} loading={false} actions={actions()} windowReadOnly />);
+    for (const { id } of ROWS) {
+      expect(screen.getByTestId(`statement-row-${id}`)).toBeInTheDocument();
+      expect(screen.queryByTestId(`statement-row-menu-${id}`)).not.toBeInTheDocument();
+    }
+  });
+
+  it('renders the kebab of every processed row without read-only (ETP-5457)', () => {
+    render(<StatementsTable statements={ROWS} loading={false} actions={actions()} />);
+    for (const { id } of ROWS) {
+      expect(screen.getByTestId(`statement-row-menu-${id}`)).toBeInTheDocument();
+    }
+  });
+
+  it('renders no selection checkbox — header nor rows — under read-only (ETP-5457)', () => {
+    render(
+      <StatementsTable
+        statements={ROWS}
+        loading={false}
+        selectedIds={new Set(['s1'])}
+        onSelectionChange={vi.fn()}
+        windowReadOnly
+      />,
+    );
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    expect(screen.queryAllByTestId('Checkbox__3acaeb')).toHaveLength(0);
+  });
+
+  it('renders the header + one checkbox per row without read-only (ETP-5457)', () => {
+    render(
+      <StatementsTable
+        statements={ROWS}
+        loading={false}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByRole('checkbox')).toHaveLength(ROWS.length + 1);
+  });
+
+  it('still expands a row into its lines view under read-only (ETP-5457)', async () => {
+    const user = userEvent.setup();
+    render(
+      <StatementsTable
+        statements={ROWS}
+        loading={false}
+        currency="USD"
+        actions={actions()}
+        windowReadOnly
+      />,
+    );
+    await user.click(screen.getByTestId('statement-row-s1'));
+    expect(screen.getByTestId('stub-inline-s1')).toHaveAttribute('data-currency', 'USD');
+  });
+
+  it('keeps the empty state under read-only (ETP-5457)', () => {
+    render(<StatementsTable statements={[]} loading={false} windowReadOnly />);
+    expect(screen.getByText('financeAccountStatementsEmpty')).toBeInTheDocument();
+  });
+});
+
 describe('StatementsTable — column sorting (ETP-4921)', () => {
   const rowIds = () => [...document.querySelectorAll('[data-testid^="statement-row-"]')]
     .map((el) => el.getAttribute('data-testid').replace('statement-row-', ''));

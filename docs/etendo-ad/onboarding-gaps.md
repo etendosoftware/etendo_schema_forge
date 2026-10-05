@@ -25,6 +25,7 @@ These are field-validation findings from creating a new client/org (`TaxesOrg`) 
 | B1 | Organization hierarchy | "Lines org does not depend on header org" on same-org invoice | *Set Organization as Ready* — populate `AD_ORG_TREE` | — |
 | C1 | Period control | *Open/Close Period Control* is empty; posting fails (no open periods) | Set `isperiodcontrolallowed` and calendar fields before creating periods | — |
 | C2 | Period control | `c_periodcontrol` rows not created by trigger | Set `isperiodcontrolallowed='Y'` and `ad_inheritedcalendar_id` before creating periods | — |
+| C4 | Period control | A demo cannot post during the rest of its trial: periods are open only through the month the tenant was built (a late-month signup, or a pooled tenant built in an earlier month) | Both fronts closed: preventive `OnboardingPeriodControlService.openDemoTrialWindow` (post-commit, best effort, open-only, demos only) widens the window to the trial end; corrective `R44-demo-periods-open-through-oct-2026` opens the never-opened rows of existing demos through October 2026. CUT deliberately NOT bumped | ETP-5575 |
 | D1 | Legal entity | SII fields empty; legal-entity resolution returns NULL | *Initial Client Setup* — verify/recompute `AD_LegalEntity_Org_ID` after `AD_Org_Ready` | ETP-4177 |
 | E1 | Session / user | Session org stuck at `*`; handlers look in org `'0'` | Onboarding — set `AD_User.ad_org_id` to tenant org at user creation | — |
 | H3 | Costing | Goods Receipt posting fails: "cost of product X has not been calculated" — a product with zero `M_Costing` history whose earliest transaction (by `TrxProcessDate`, not `MovementDate`) is an outbound movement halts the ENTIRE org-wide Average-Cost background queue for every product processed after it | Not an onboarding gap — recurs for any product shipped before ever received, at any point in a tenant's life, not just at birth; recommend a real-time Shipment-flow guard (separate ticket) instead of an onboarding step | ETP-4736 |
@@ -2431,6 +2432,17 @@ JVM, while the XMLs are re-read on every provisioning — **a filter change need
 before it affects a newly provisioned tenant. Expected end state: GOClient at 5 products / 3
 financial accounts / 2 warehouses / 3 categories; a fresh tenant at 1 product (`ETGO_DTO` only) / 0
 accounts / 1 warehouse / 2 categories with `Generic` + `Genérico`.
+
+**Update (ETP-5426) — the demo rows now have a third, opt-in consumer.** A signup that ticks
+"Include sample data" (Spain/EUR demo environments only) receives these very rows **and** the
+transactional chain that references them, through a second normalizer pass
+(`OnboardingDatasetProfile.SAMPLE_DATA`) run after the onboarding commit. That pass keeps exactly
+what `DemoMasterDataFilter` drops, so the split above still holds: the source stays complete, and
+each consumer decides at import time what it takes. The expected end state above is the default
+(unticked) signup; a ticked one adds the 4 products, 3 accounts, the secondary warehouse and
+`Beverages`, plus the documents — imported unposted, with no `FACT_ACCT`, and then posted by the
+system-wide `AcctServerProcess` on its next cycle with the tenant's own accounts. Full description:
+`com.etendoerp.go/docs/onboarding-flow.md` § "Optional sample data".
 
 ---
 

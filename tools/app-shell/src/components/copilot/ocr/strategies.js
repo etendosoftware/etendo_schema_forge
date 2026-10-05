@@ -1,48 +1,28 @@
 import CreateContactModalAdapter from './CreateContactModalAdapter.jsx';
-import { findBp as findBpLegacy, findTax } from './ingest/purchaseInvoiceDescriptor.js';
-import { deriveContactsApiBase } from './contactApi.js';
+import { findBp as findBpExact, findTax, searchVendors } from './ingest/purchaseInvoiceDescriptor.js';
 
-import { apiFetch } from '@etendosoftware/app-shell-core/auth/api';
-function escHql(value) {
-  return String(value).replace(/'/g, "''");
-}
-
-// Fuzzy fallback: the legacy findBp only accepts an exact taxID or name match
+// Fuzzy fallback: the exact findBp only accepts a name that matches the extracted one
 // (and only when exactly one row matches). OCR routinely returns variants
-// ("ACME, S.L." vs "ACME SL"), so we also try a case-insensitive LIKE that
-// resolves when the result is unambiguous.
+// ("ACME, S.L." vs "ACME SL"), so we also accept the vendor selector's contains-search
+// when the result is unambiguous.
 async function findBpFuzzy({ token, apiBaseUrl, name }) {
-  if (!apiBaseUrl || !name || !String(name).trim()) return null;
-  const contactsBase = deriveContactsApiBase(apiBaseUrl);
-  const where = encodeURIComponent(
-    `lower(name) like lower('%${escHql(String(name).trim())}%') and active = true`,
-  );
-  const url = `${contactsBase}/businessPartner?_neoWhere=${where}&limit=2`;
-  try {
-    const res = await apiFetch(url, { baseUrl: '', token });
-    if (!res.ok) return null;
-    const json = await res.json().catch(() => null);
-    const data = json?.response?.data ?? json?.data ?? [];
-    // Auto-resolve only when the LIKE yields exactly one candidate. With
-    // multiple matches we let the user disambiguate in EntityField (which is
-    // primed with the same hint).
-    if (data.length !== 1) return null;
-    const row = data[0];
-    return row?.id ? { id: row.id, label: row.name || name } : null;
-  } catch {
-    return null;
-  }
+  const rows = await searchVendors({ token, apiBaseUrl, name: name ? String(name).trim() : name, limit: 2 });
+  // Auto-resolve only when the search yields exactly one candidate. With
+  // multiple matches we let the user disambiguate in EntityField (which is
+  // primed with the same hint).
+  if (!rows || rows.length !== 1) return null;
+  const row = rows[0];
+  return row?.id ? { id: row.id, label: row.name || name } : null;
 }
 
-// Adapter: bridge the legacy {taxId, name} signature of findBp to the generic
-// PRE_RESOLVERS contract ({token, apiBaseUrl, value, extracted}) and return
-// the same {id, label, bpId, bpCreate, locationCreate} shape EntityField emits
-// when the user picks an item — so OcrReviewModal and purchaseInvoiceDescriptor
-// can treat pre-resolved and user-picked vendors identically.
+// Adapter: bridge the {name} signature of findBp to the generic PRE_RESOLVERS
+// contract ({token, apiBaseUrl, value, extracted}) and return the same
+// {id, label, bpId, bpCreate, locationCreate} shape EntityField emits when the
+// user picks an item — so OcrReviewModal and purchaseInvoiceDescriptor can treat
+// pre-resolved and user-picked vendors identically.
 async function findBp({ token, apiBaseUrl, value, extracted }) {
-  const taxId = extracted?.tax_id;
   const name = extracted?.vendor_name ?? value;
-  const exactId = await findBpLegacy({ token, apiBaseUrl, taxId, name });
+  const exactId = await findBpExact({ token, apiBaseUrl, name });
   if (exactId) {
     return {
       id: exactId,
