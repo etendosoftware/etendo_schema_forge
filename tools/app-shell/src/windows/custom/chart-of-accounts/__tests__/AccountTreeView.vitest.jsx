@@ -1203,6 +1203,54 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('coa-search-input')).toHaveValue('aplicada');
     });
 
+    // Review W1 — ListView's partial page can arrive before the full self-fetch.
+    it('a URL filter re-seeds once the full dataset replaces the partial first page', async () => {
+      let resolveFetch;
+      globalThis.fetch = vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; }));
+      const partial = [HIERARCHY_DATA[0]]; // only 20000000 — its match is not on this page
+      const full = [
+        ...HIERARCHY_DATA,
+        {
+          id: 'acc-57000001', searchKey: '57000001', name: 'Caja aplicada', accountType: 'A',
+          summaryLevel: 'N', ancestors: [{ value: 'B', name: 'OTROS', elementLevel: 'E' }], hasChildren: false,
+        },
+      ];
+      renderTree(
+        <AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={partial} />,
+        { entry: '/chart-of-accounts?q=aplicada' },
+      );
+      await act(async () => resolveFetch({ ok: true, json: async () => ({ response: { data: full } }) }));
+
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument());
+      expect(screen.getByTestId('account-tree-row-acc-57000001')).toBeInTheDocument();
+    });
+
+    // Review W2 — the store outlives the tree; a filter's temporary expansion must not.
+    it('a remount without a filter shows the persisted expansion, not the last filter\'s', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      typeIntoSearch('aplicada');
+      expect(screen.getByTestId('account-tree-row-acc-20000001')).toBeInTheDocument();
+      unmount();
+
+      renderTree(<AccountTreeView {...defaultProps} data={HIERARCHY_DATA} />);
+      expect(screen.queryByTestId('account-tree-row-acc-20000001')).not.toBeInTheDocument();
+      expect(screen.getByTestId('coa-toggle-expand-all')).toHaveTextContent('expandAll');
+    });
+
+    it('clearing a filter that came back with the URL restores the persisted expansion', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-5000')); // persisted: {5000}
+      typeIntoSearch('Sales'); // seeds 4000, not persisted
+      unmount();
+
+      // Back to the list with the filter still in the URL, then clear it.
+      renderTree(<AccountTreeView {...defaultProps} />, { entry: '/chart-of-accounts?q=Sales' });
+      typeIntoSearch('');
+      expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument();
+      expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('sf.chartOfAccounts.expandedFolderIds'))).toEqual(['group-5000']);
+    });
+
     it('ignores an unknown account type in the URL (shows every type)', () => {
       renderTree(<AccountTreeView {...defaultProps} />, { entry: '/chart-of-accounts?accountType=ZZ' });
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();

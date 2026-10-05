@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel, ELEMENT_LEVEL_UI_KEYS, elementLevelLabel } from './accountTypeLabels';
 import { useChartOfAccountsFilters } from './chartOfAccountsFilters';
 import {
+  restorePersistedExpanded,
   setExpanded,
   setSelectedRecord,
   setTreeData,
@@ -670,28 +671,28 @@ export default function AccountTreeView({
 
   // Filter × expansion. When the filter changes, open every folder leading to a match
   // (`persist: false` — a filter's expansion is temporary). The user can still collapse
-  // afterwards: later refetches under the same filter do NOT re-seed. The expansion the
-  // user had before filtering is kept aside and restored when the filter is cleared.
+  // afterwards: later refetches under the same filter do NOT re-seed. Clearing the filter
+  // restores the user's own (persisted) expansion.
+  //
+  // With a self-fetch, the first rows on screen may be ListView's partial page; a seed
+  // made from them only counts once the full dataset has loaded, so a filter that came
+  // in the URL (a shared link) also opens the folders whose matches were not on that page.
+  const fullDataReady = !apiBaseUrl || hasLoadedOnce;
   const filterKey = hasActiveFilter ? `${filters.accountType ?? ''}|${filters.text}` : null;
-  const seedRef = useRef({ key: null, seeded: false, beforeFilter: null });
+  const seedRef = useRef({ key: null, seeded: false });
   useEffect(() => {
     const seed = seedRef.current;
     if (filterKey === null) {
       if (seed.key !== null) {
-        setExpanded(seed.beforeFilter ?? new Set());
-        seedRef.current = { key: null, seeded: false, beforeFilter: null };
+        restorePersistedExpanded();
+        seedRef.current = { key: null, seeded: false };
       }
       return;
     }
-    const keyChanged = seed.key !== filterKey;
-    // A filter that arrived before the accounts (URL on first load) seeds once they do.
-    if (!keyChanged && (seed.seeded || tree.length === 0)) return;
-    const beforeFilter = seed.key === null ? expanded : seed.beforeFilter;
+    if (seed.key === filterKey && (seed.seeded || tree.length === 0)) return;
     setExpanded(new Set(collectVirtualIds(filteredTree)), { persist: false });
-    seedRef.current = { key: filterKey, seeded: tree.length > 0, beforeFilter };
-    // `expanded` is read only to remember the pre-filter state, never to re-run.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, filteredTree, tree.length]);
+    seedRef.current = { key: filterKey, seeded: tree.length > 0 && fullDataReady };
+  }, [filterKey, filteredTree, tree.length, fullDataReady]);
 
   // Share the accounts and the folders currently shown (for "Expandir todo") with the
   // toolbar slot and the create modal.
@@ -710,8 +711,16 @@ export default function AccountTreeView({
   useEffect(() => {
     setSelectedRecord(selectedId ? (indexById.get(selectedId) ?? null) : null);
   }, [selectedId, indexById]);
-  // A selection belongs to this mount: coming back from a record starts with none.
-  useEffect(() => () => setSelectedRecord(null), []);
+  // A selection belongs to this mount: coming back from a record starts with none. The
+  // same goes for a filter's temporary expansion — the next mount starts from the
+  // persisted one.
+  // Resetting the seed ref matters under StrictMode's simulated remount, which keeps refs:
+  // without it a URL filter would not re-seed after this cleanup.
+  useEffect(() => () => {
+    setSelectedRecord(null);
+    restorePersistedExpanded();
+    seedRef.current = { key: null, seeded: false };
+  }, []);
 
   const handleToggle = useCallback((id) => {
     setExpanded((prev) => {

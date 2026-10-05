@@ -85,6 +85,16 @@ export function setExpanded(next, { persist = true } = {}) {
   setState({ expanded: value });
 }
 
+/**
+ * Puts back the user's own expansion — the persisted one. Every write made while a
+ * filter is active skips persistence, so localStorage always holds the unfiltered state.
+ * Used when a filter is cleared and when the tree unmounts, so a filter's temporary
+ * expansion never outlives it.
+ */
+export function restorePersistedExpanded() {
+  setState({ expanded: loadPersistedExpanded() });
+}
+
 /** Expands every folder currently shown by the tree (filtered or not). */
 export function expandAll(options) {
   setExpanded(new Set(getSnapshot().shownFolderIds), options);
