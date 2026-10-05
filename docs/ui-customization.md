@@ -464,6 +464,7 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 **Limitations (v1):**
 - Only available on `layoutType: "default"`. Kanban, calendar, gallery, and custom layouts ignore the option entirely.
 - No pagination — the list does a single lazy fetch when the tab becomes active.
+- The tab label shows the real number of attachments as soon as the record opens (ETP-5526): while the tab is inactive only the count is fetched (`.../count` endpoint below), the full list stays lazy. Once the list is read the label follows its length. If the count cannot be fetched (older backend without the endpoint, network error) the label shows no number — never `0` — until the tab is opened; no error is shown for it.
 - Hard upload limit of **10 MB** enforced by the NEO servlet (`MultipartConfig`). `maxSizeMB > 10` will fail at upload time.
 
 **Endpoints exposed by NEO Headless:**
@@ -471,6 +472,7 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 | Method | URL | Action |
 |--------|-----|--------|
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}` | List attachments for the record |
+| `GET` | `/sws/neo/attachments/{tableName}/{recordId}/count` | `{ "count": N }` — number of attachments without loading them (tab badge, ETP-5526) |
 | `POST` | `/sws/neo/attachments/{tableName}/{recordId}` (multipart/form-data) | Upload a new attachment |
 | `GET` | `/sws/neo/attachments/file/{attachmentId}` | Download a single attachment |
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip` | Download all attachments as a ZIP archive |
