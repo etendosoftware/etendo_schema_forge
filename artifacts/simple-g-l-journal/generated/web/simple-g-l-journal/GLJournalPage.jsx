@@ -283,6 +283,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hideDeleteWhenComplete
         hidePrint
         dimensionsPanelFieldKeys={["businessPartner","product","project","costCenter"]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "GL_Journal", config: {} } }]}
@@ -310,7 +311,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hidePrint
-      rowQuickActions={{}}
+      rowQuickActions={{"actions":{"delete":{"visibleWhen":"@DocumentStatus@='DR'"}}}}
       {...props} window={effectiveWindow}
     />
   );

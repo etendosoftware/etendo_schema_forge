@@ -35,6 +35,14 @@
       }
     ],
     "hidePrint": true,
+    "hideDeleteWhenComplete": true,
+    "rowQuickActions": {
+      "actions": {
+        "delete": {
+          "visibleWhen": "@DocumentStatus@='DR'"
+        }
+      }
+    },
     "summaryFields": [],
     "customComponents": {
       "bottomSection": "SimpleGLJournalBottomPanel"

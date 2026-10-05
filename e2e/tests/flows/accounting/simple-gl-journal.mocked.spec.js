@@ -239,6 +239,16 @@ test.describe('Simple G/L Journal — detail view (ETP-5611)', () => {
     await expect(page.getByTestId('menu-action-unpost')).toHaveCount(0);
   });
 
+  test('Delete is offered on a draft and hidden once the journal is completed', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, DRAFT);
+    await expect(page.getByTestId('balance-footer-row')).toBeVisible();
+    await expect(page.getByTestId('action-delete')).toBeVisible();
+
+    await openJournalWith(page, BALANCED_LINES, COMPLETED);
+    await expect(page.getByTestId('action-more')).toBeVisible();
+    await expect(page.getByTestId('action-delete')).toHaveCount(0);
+  });
+
   test('hovering a line keeps the Credit cell on screen', async ({ page }) => {
     await openJournalWith(page, BALANCED_LINES, DRAFT);
     const row = page.getByTestId('line-row-line-2');

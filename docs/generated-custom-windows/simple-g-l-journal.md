@@ -319,6 +319,7 @@ and one shared input change.
 | 8 | Post offered in any status | `menuActions.post` gains `visibleWhenStatus: "CO"` (AND `posted = false`). |
 | 9 | 0,00 not cleared on focus | `MaskedAmountInput` `clearZeroOnFocus`, enabled for every line grid (`DataTable` add-row + `InlineLinesPanel` inline edit). Leaving the cell blank without typing keeps the 0 and commits nothing. |
 | 10 | Hover actions covered Crédito | `lines.foreignCurrencyCredit.noTrailing: true`. |
+| QA | Delete offered on completed/posted journals | Found in QA (not in the ticket). The backend already refuses it (`Document posted/processed`), so the button only produced an error. Detail view: `window.hideDeleteWhenComplete: true`; list row: `window.rowQuickActions.actions.delete.visibleWhen: "@DocumentStatus@='DR'"`. Delete stays available on drafts. |
 
 **Reactivate / Complete dispatch.** `FIN_AddPaymentFromJournal` reads the action from the HTTP
 parameter `inpdocaction` (falling back to CO), never from the body, so without help a `RE` request
