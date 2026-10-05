@@ -23,6 +23,16 @@ vi.mock('@/lib/flags', () => ({
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }));
 
+// Record (vector) results are remote. By default the real hook runs (and finds nothing in
+// jsdom); a test that needs record matches sets `vectorSearchOverride.current`.
+const vectorSearchOverride = vi.hoisted(() => ({ current: null }));
+vi.mock('@/hooks/useVectorSearch.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    useVectorSearch: (args) => vectorSearchOverride.current ?? actual.useVectorSearch(args),
+  };
+});
+
 // Controlled menu fixture: one visible group with a visible and a hidden item,
 // plus one fully hidden group.
 // The component at src/components/CommandPalette.jsx imports '../menu.json'
@@ -145,6 +155,7 @@ async function waitForVectorSearchIdle() {
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vectorSearchOverride.current = null;
   });
 
   it('renders nothing (dialog closed) by default', () => {
@@ -354,6 +365,65 @@ describe('CommandPalette', () => {
       await waitFor(() => expect(renderedWindowNames()[0]).toBe('user'));
       fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
       expect(mockNavigate).toHaveBeenCalledWith('/user');
+    });
+  });
+
+  describe('orders window matches above record matches', () => {
+    // 'sales-invoice' is a real vector-search target (artifacts/sales-invoice/contract.json).
+    const recordMatch = (documentNo, id = 'INV-1') => ({
+      target: 'sales-invoice', id, score: 0.9, fields: { documentNo },
+    });
+
+    // Record results only resolve to a route once the window contracts have loaded.
+    async function waitForRecordResults() {
+      await screen.findByTestId('vector-search-scope');
+      return screen.findByTestId('cmd-group-exactSearchResults');
+    }
+
+    function dropdownItems() {
+      return Array.from(document.querySelectorAll('[data-testid="CommandDropdown__8e5d1a"] [data-global-search-item="true"]'));
+    }
+
+    it('renders the matching window groups above the record result groups', async () => {
+      vectorSearchOverride.current = { matches: [recordMatch('Configura-001')], isLoading: false };
+      renderWithQuery('Configura');
+
+      const records = await waitForRecordResults();
+      const windows = screen.getByTestId('cmd-group-translated:Configuración');
+      expect(windows.compareDocumentPosition(records) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      const items = dropdownItems();
+      const firstRecord = items.findIndex((item) => records.contains(item));
+      expect(firstRecord).toBeGreaterThan(0);
+      expect(items.slice(0, firstRecord).map((item) => item.dataset.testid.split(' ').at(-1)))
+        .toEqual(['user', 'role']);
+    });
+
+    it('opens the first matching window on Enter even when records also match', async () => {
+      vectorSearchOverride.current = { matches: [recordMatch('Configura-001')], isLoading: false };
+      renderWithQuery('Configura');
+      await waitForRecordResults();
+
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/user');
+    });
+
+    it('opens the first record result on Enter when no window matches', async () => {
+      vectorSearchOverride.current = {
+        matches: [recordMatch('zzzqqq-001', 'INV-1'), recordMatch('zzzqqq-002', 'INV-2')],
+        isLoading: false,
+      };
+      renderWithQuery('zzzqqq');
+      await waitForRecordResults();
+      expect(renderedWindowNames()).toEqual([]);
+      expect(screen.queryByTestId('cmd-empty')).not.toBeInTheDocument();
+
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+
+      expect(mockNavigate).toHaveBeenCalledTimes(1);
+      expect(mockNavigate).toHaveBeenCalledWith('/sales-invoice/INV-1');
     });
   });
 
