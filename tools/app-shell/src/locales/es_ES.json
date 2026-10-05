@@ -16479,6 +16479,9 @@
     "Quick Purchase Order": {
       "label": "Compra Rápida"
     },
+    "Unified Calendar": {
+      "label": "Calendario unificado"
+    },
     "Connections": {
       "label": "Conexiones"
     },
@@ -16640,6 +16643,16 @@
     }
   },
   "genericLabels": {
+    "ucalSources": "Fuentes de eventos",
+    "ucalSourcesHint": "Elige qué calendarios superponer.",
+    "ucalSourcePurchaseInvoices": "Vencimientos de facturas de compra",
+    "ucalSourceHolidays": "Festivos",
+    "ucalSourceVacations": "Vacaciones de empleados",
+    "ucalToday": "Hoy",
+    "ucalPrevMonth": "Mes anterior",
+    "ucalNextMonth": "Mes siguiente",
+    "ucalDayEvents": "{n} eventos",
+    "ucalMockNotice": "Prueba de concepto: datos de demostración, sin conexión con el sistema.",
     "acctProcessPageTitle": "Proceso contable",
     "acctProcessPageSubtitle": "Estado e historial de ejecuciones del proceso contable programado.",
     "acctProcessNoAccessTitle": "No tienes acceso a esta vista",

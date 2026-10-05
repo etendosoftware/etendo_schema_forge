@@ -16354,6 +16354,9 @@
     "Quick Purchase Order": {
       "label": "Quick Purchase Order"
     },
+    "Unified Calendar": {
+      "label": "Unified Calendar"
+    },
     "Connections": {
       "label": "Connections"
     },
@@ -16404,6 +16407,16 @@
     }
   },
   "genericLabels": {
+    "ucalSources": "Event sources",
+    "ucalSourcesHint": "Choose which calendars to overlay.",
+    "ucalSourcePurchaseInvoices": "Purchase invoice due dates",
+    "ucalSourceHolidays": "Holidays",
+    "ucalSourceVacations": "Employee vacations",
+    "ucalToday": "Today",
+    "ucalPrevMonth": "Previous month",
+    "ucalNextMonth": "Next month",
+    "ucalDayEvents": "{n} events",
+    "ucalMockNotice": "Proof of concept: demo data, not connected to the system.",
     "acctProcessPageTitle": "Accounting Process",
     "acctProcessPageSubtitle": "Status and execution history of the scheduled accounting server process.",
     "acctProcessNoAccessTitle": "You don't have access to this view",

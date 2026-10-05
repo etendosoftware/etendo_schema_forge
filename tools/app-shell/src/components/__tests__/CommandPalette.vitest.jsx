@@ -17,6 +17,7 @@ vi.mock('@/lib/flags', () => ({
   ACCT_PROCESS_MONITOR: 'acct-process-monitor',
   PUBLIC_API_KEYS: 'public-api-keys',
   PROOF_OF_CONCEPT_MENU: 'proof-of-concept-menu',
+  UNIFIED_CALENDAR_POC: 'unified-calendar-poc',
 }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => mockUseAuth() }));
 
