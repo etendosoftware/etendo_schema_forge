@@ -78,10 +78,10 @@ describe('FiscalDefaultsSection', () => {
   });
 
   describe('SII block — shown only when data.customer is true', () => {
-    it('renders the SII block title and fields when customer is true', () => {
+    it('renders the SII caption and fields when customer is true', () => {
       render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeTruthy();
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
     });
@@ -89,7 +89,7 @@ describe('FiscalDefaultsSection', () => {
     it('does not render the SII block when customer is false', () => {
       render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
       expect(findFieldsCall('aeatsiiSiikeylist')).toBeUndefined();
       expect(screen.queryByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).not.toBeInTheDocument();
       expect(screen.queryByTestId('FiscalDefaultsSection__sii-block')).not.toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('FiscalDefaultsSection', () => {
     it('does not render the SII block when customer is undefined', () => {
       render(<FiscalDefaultsSection data={{}} onChange={vi.fn()} />);
 
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
     });
 
     it('wires the aeatsiiDefaultsiikey toggle to onChange with the AD column name', () => {
@@ -214,10 +214,10 @@ describe('FiscalDefaultsSection', () => {
   });
 
   describe('TicketBAI block — always shown', () => {
-    it('renders the TicketBAI block title and toggle regardless of customer', () => {
+    it('renders the TicketBAI caption and toggle regardless of customer', () => {
       render(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
     });
 
@@ -234,8 +234,8 @@ describe('FiscalDefaultsSection', () => {
     it('renders both blocks simultaneously when customer is true', () => {
       render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
 
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
       expect(screen.getByRole('switch', { name: 'label:EM_Aeatsii_Defaultsiikey' })).toBeInTheDocument();
       expect(screen.getByRole('switch', { name: 'label:EM_Tbai_Issimplifiedinv' })).toBeInTheDocument();
     });
@@ -245,8 +245,8 @@ describe('FiscalDefaultsSection', () => {
   // its label right next to it (switch first), as in EntityForm's own `toggle` field.
   describe('layout — both blocks in one row, label beside each switch', () => {
     const SWITCHES = [
-      { testId: 'FiscalToggle__aeatsii-default', label: 'label:EM_Aeatsii_Defaultsiikey', key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey' },
-      { testId: 'FiscalToggle__tbai-simplified', label: 'label:EM_Tbai_Issimplifiedinv', key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv' },
+      { testId: 'FiscalToggle__aeatsii-default', caption: 'fiscalDefaultsSiiBlock', label: 'label:EM_Aeatsii_Defaultsiikey', key: 'aeatsiiDefaultsiikey', column: 'EM_Aeatsii_Defaultsiikey' },
+      { testId: 'FiscalToggle__tbai-simplified', caption: 'fiscalDefaultsTbaiBlock', label: 'label:EM_Tbai_Issimplifiedinv', key: 'tbaiIssimplifiedinv', column: 'EM_Tbai_Issimplifiedinv' },
     ];
 
     it('places the SII and TicketBAI blocks as cells of the same 2-column grid', () => {
@@ -262,13 +262,34 @@ describe('FiscalDefaultsSection', () => {
     it.each(SWITCHES)('renders the $key label right after its switch, bound to it', ({ testId, label }) => {
       render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
       const sw = screen.getByTestId(testId);
-      const lbl = sw.nextElementSibling;
-      expect(lbl.tagName).toBe('LABEL');
-      expect(lbl).toHaveTextContent(label);
       expect(sw.id).toBeTruthy();
+      // The label lives in the wrapper that follows the switch (label + caption).
+      const wrapper = sw.nextElementSibling;
+      const lbl = wrapper.querySelector(`label[for="${sw.id}"]`);
+      expect(lbl).not.toBeNull();
+      expect(lbl).toHaveTextContent(label);
       expect(lbl.htmlFor).toBe(sw.id);
-      // Same row: the switch and its label share one flex container.
+      // Switch first, label after it in document order.
+      expect(sw.compareDocumentPosition(lbl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Same row: the switch and its label wrapper share one flex container.
       expect(sw.parentElement.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex', 'items-center']));
+    });
+
+    it.each(SWITCHES)('puts the $key caption under its label, in the same wrapper', ({ testId, caption }) => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      const sw = screen.getByTestId(testId);
+      const cap = screen.getByTestId(`${testId}-caption`);
+      expect(cap).toHaveTextContent(caption);
+      const lbl = sw.nextElementSibling.querySelector('label');
+      expect(cap.parentElement).toBe(lbl.parentElement);
+      expect(lbl.nextElementSibling).toBe(cap);
+    });
+
+    it('renders no uppercase heading in either block', () => {
+      render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
+      for (const id of ['FiscalDefaultsSection__sii-block', 'FiscalDefaultsSection__tbai-block']) {
+        expect(screen.getByTestId(id).querySelector('.uppercase')).toBeNull();
+      }
     });
 
     it.each(SWITCHES)('clicking the $key label toggles the switch', async ({ key, column, label }) => {
@@ -318,8 +339,8 @@ describe('FiscalDefaultsSection', () => {
     it('does not crash when data is undefined', () => {
       expect(() => render(<FiscalDefaultsSection data={undefined} onChange={vi.fn()} />)).not.toThrow();
       expect(screen.getByText('fiscalDefaults')).toBeInTheDocument();
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
     });
 
     it('does not crash when onChange is not provided (toggles are inert, no throw on click)', () => {
@@ -333,11 +354,11 @@ describe('FiscalDefaultsSection', () => {
 
     it('re-renders correctly when customer flips from true to false (SII block unmounts cleanly)', () => {
       const { rerender } = render(<FiscalDefaultsSection data={{ customer: true }} onChange={vi.fn()} />);
-      expect(screen.getByText('fiscalDefaultsSiiBlock')).toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__aeatsii-default-caption')).toHaveTextContent('fiscalDefaultsSiiBlock');
 
       rerender(<FiscalDefaultsSection data={{ customer: false }} onChange={vi.fn()} />);
-      expect(screen.queryByText('fiscalDefaultsSiiBlock')).not.toBeInTheDocument();
-      expect(screen.getByText('fiscalDefaultsTbaiBlock')).toBeInTheDocument();
+      expect(screen.queryByTestId('FiscalToggle__aeatsii-default-caption')).not.toBeInTheDocument();
+      expect(screen.getByTestId('FiscalToggle__tbai-simplified-caption')).toHaveTextContent('fiscalDefaultsTbaiBlock');
     });
 
     it('toggling tbaiIssimplifiedinv off sends false to onChange (not just the "turn on" path)', () => {

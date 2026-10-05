@@ -5,6 +5,7 @@
 import {
   render, screen, fireEvent, waitFor, within,
 } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import BillingPreferencesForm from '../BillingPreferencesForm';
 import { EntityForm } from '@/components/contract-ui';
 
@@ -188,6 +189,39 @@ describe('BillingPreferencesForm', () => {
       expect(onChange).toHaveBeenCalledTimes(1);
       expect(onChange).toHaveBeenCalledWith(terms, 'PT-2');
       expect(onChange).not.toHaveBeenCalledWith(account, null);
+    });
+
+    // ETP-5519 design: Bloquear is `[switch] <label for>` — the label sits to the RIGHT of the
+    // switch and is clickable; there is no label line above the switch any more.
+    it.each(SIDES)('$side: clicking the Bloquear label toggles the switch', async ({ side, blockKey, blockColumn }) => {
+      const user = userEvent.setup();
+      const onChange = renderBoth(vi.fn(), { [blockKey]: false });
+      const lbl = document.querySelector(`label[for="contacts-${side}-blocking"]`);
+      expect(lbl).not.toBeNull();
+      await user.click(lbl);
+      expect(onChange).toHaveBeenCalledWith(blockKey, true, blockColumn);
+    });
+
+    it.each(SIDES)('$side: the Bloquear label is bound to the switch and comes after it', ({ side, label }) => {
+      renderBoth();
+      const sw = screen.getByTestId(`BlockingToggle__7f0756-${side}`);
+      const lbl = document.querySelector(`label[for="contacts-${side}-blocking"]`);
+      expect(sw.id).toBe(`contacts-${side}-blocking`);
+      expect(lbl).toHaveTextContent(label);
+      expect(sw.compareDocumentPosition(lbl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it.each(SIDES)('$side: no label element renders above the switch', ({ side, label }) => {
+      renderBoth();
+      const sw = screen.getByTestId(`BlockingToggle__7f0756-${side}`);
+      const form = sw.closest('[data-testid="entity-form"]');
+      const labelLike = Array.from(form.querySelectorAll('label, p'))
+        .filter((el) => el.textContent.trim() === label);
+      // Exactly one label text for the toggle, and it is not before the switch.
+      expect(labelLike).toHaveLength(1);
+      for (const el of labelLike) {
+        expect(sw.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING).toBeFalsy();
+      }
     });
 
     it('shows only the customer grid when vendor is off', () => {

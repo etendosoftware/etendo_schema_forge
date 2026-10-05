@@ -43,18 +43,27 @@ const aeatsiiKeyListField = [
 // field renderer (switch first, label next to it, `gap-2`). Used instead of
 // EntityForm's SquareCheckbox for `aeatsiiDefaultsiikey` / `tbaiIssimplifiedinv`
 // per the UX ask (ETP-4784); label moved beside the switch in ETP-5519.
-function FiscalToggle({ id, label, value, onCheckedChange, 'data-testid': testId }) {
+// `caption` is the muted secondary line under the label (label + caption, as in
+// the shared ToggleRow) — here the fiscal system name, "SII" / "TicketBAI".
+function FiscalToggle({ id, label, caption, value, onCheckedChange, 'data-testid': testId }) {
   return (
-    <div className="flex items-center gap-2 h-10">
+    <div className="flex items-center gap-2 min-h-10">
       <PillToggle
         id={id}
         checked={value}
         onCheckedChange={onCheckedChange}
         aria-label={label}
         data-testid={testId} />
-      <label htmlFor={id} className="text-sm font-medium text-[hsl(var(--foreground))] cursor-pointer">
-        {label}
-      </label>
+      <div className="min-w-0">
+        <label htmlFor={id} className="block text-sm font-medium text-[hsl(var(--foreground))] cursor-pointer">
+          {label}
+        </label>
+        {caption && (
+          <p className="text-xs text-text-secondary" data-testid={testId ? `${testId}-caption` : undefined}>
+            {caption}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -72,6 +81,7 @@ function FiscalToggle({ id, label, value, onCheckedChange, 'data-testid': testId
 //   - "TicketBAI" block (`tbaiIssimplifiedinv`): always shown, unconditional.
 // The two blocks sit side by side in a 2-column grid so both switches share one
 // row (ETP-5519); "Clave tipo factura" opens under the SII switch when it is on.
+// The system name ("SII" / "TicketBAI") is each switch's caption, not a heading.
 export default function FiscalDefaultsSection(props) {
   const ui = useUI();
   const t = useLabel();
@@ -86,12 +96,10 @@ export default function FiscalDefaultsSection(props) {
       <div className="flex-1 grid grid-cols-2 gap-5 items-start">
         {data?.customer && (
           <div className="flex flex-col gap-3 min-w-0" data-testid="FiscalDefaultsSection__sii-block">
-            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
-              {ui('fiscalDefaultsSiiBlock')}
-            </div>
             <FiscalToggle
               id="fiscal-aeatsii-default"
               label={t('EM_Aeatsii_Defaultsiikey')}
+              caption={ui('fiscalDefaultsSiiBlock')}
               value={data?.aeatsiiDefaultsiikey}
               onCheckedChange={(next) => onChange?.('aeatsiiDefaultsiikey', next, 'EM_Aeatsii_Defaultsiikey')}
               data-testid="FiscalToggle__aeatsii-default" />
@@ -103,12 +111,10 @@ export default function FiscalDefaultsSection(props) {
           </div>
         )}
         <div className="flex flex-col gap-3 min-w-0" data-testid="FiscalDefaultsSection__tbai-block">
-          <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">
-            {ui('fiscalDefaultsTbaiBlock')}
-          </div>
           <FiscalToggle
             id="fiscal-tbai-simplified"
             label={t('EM_Tbai_Issimplifiedinv')}
+            caption={ui('fiscalDefaultsTbaiBlock')}
             value={data?.tbaiIssimplifiedinv}
             onCheckedChange={(next) => onChange?.('tbaiIssimplifiedinv', next, 'EM_Tbai_Issimplifiedinv')}
             data-testid="FiscalToggle__tbai-simplified" />

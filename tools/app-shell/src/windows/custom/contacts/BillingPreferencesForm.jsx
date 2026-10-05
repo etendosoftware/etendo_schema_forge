@@ -32,19 +32,25 @@ function resolveId(value) {
 }
 
 // ─── Blocking toggle (canonical PillToggle switch — ON = true = blocked) ─────
-// Same switch as the Assets "Depreciar" toggle. Label sits above the toggle so it
-// lines up with the selector labels of the grid cell it shares a row with.
+// Same switch as the Assets "Depreciar" toggle, laid out as `[switch] Bloquear` (ETP-5519
+// design): the product's form-switch pattern (EntityForm's `toggle` renderer — switch first,
+// clickable label to its right). `pt-7` skips the label line of the neighbouring selector
+// cells (their input starts 28px below the cell top) and the `h-9` row (= FIELD_HEIGHT)
+// centres the switch on that input line, level with the Condiciones de pago selector.
 
-function BlockingToggle({ label, value, onCheckedChange, 'data-testid': testId }) {
+function BlockingToggle({ id, label, value, onCheckedChange, 'data-testid': testId }) {
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
-      <div className="flex items-center gap-3 h-10">
+    <div className="pt-7">
+      <div className="flex items-center gap-2 h-9">
         <PillToggle
+          id={id}
           checked={value}
           onCheckedChange={onCheckedChange}
           aria-label={label}
           data-testid={testId ?? 'PillToggle__7f0756'} />
+        <label htmlFor={id} className="text-sm font-medium text-[hsl(var(--foreground))] cursor-pointer">
+          {label}
+        </label>
       </div>
     </div>
   );
@@ -353,6 +359,7 @@ export default function BillingPreferencesForm(props) {
                   selectorContext={customerSelectorContext}
                   trailing={(
                     <BlockingToggle
+                      id="contacts-customer-blocking"
                       label={ui('customerBlockField')}
                       value={data?.customerBlocking}
                       onCheckedChange={(next) => onChange?.('customerBlocking', next, 'Customer_Blocking')}
@@ -379,6 +386,7 @@ export default function BillingPreferencesForm(props) {
                   selectorContext={vendorSelectorContext}
                   trailing={(
                     <BlockingToggle
+                      id="contacts-vendor-blocking"
                       label={ui('vendorBlockField')}
                       value={data?.vendorBlocking}
                       onCheckedChange={(next) => onChange?.('vendorBlocking', next, 'Vendor_Blocking')}
