@@ -18,6 +18,7 @@ import { DataProvider } from '@etendosoftware/app-shell-core/data';
 import { createQueryCache } from '@etendosoftware/app-shell-core/data';
 import { toast } from 'sonner';
 import { useEntity } from '../useEntity';
+import { useApiFetch } from '@/auth/useApiFetch.js';
 import { buildCustomAddModalOnSaved } from '../../components/contract-ui/detailViewHelpers.jsx';
 
 vi.mock('sonner', () => ({
@@ -648,5 +649,60 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     });
     expect(counts.process).toBe(1);
     await waitFor(() => expect(counts.children).toBe(2));
+  });
+
+  // The version a line edit replays is the one the client last READ (recordVersions, injected
+  // by apiFetch on every PATCH). Tests 23/24 pin the extra children request; this one pins its
+  // consequence: the re-read line version reaches the next inline PATCH, so the server's
+  // optimistic-lock check passes instead of answering 409 stale_record on an untouched row.
+  it('25. after a document action, the next line PATCH carries the re-read line version (no 409)', async () => {
+    const PARENT = 'h-5602';
+    const LINE = 'line-5602';
+    const server = { lineUpdated: '2026-10-05T10:00:00.000Z' };
+    const patches = [];
+    const { fetchMock } = makeFetch({
+      handler: ({ method, path, opts: req }) => {
+        if (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)) {
+          // Reactivate: C_INVOICE_POST bumps UPDATED on every line server-side.
+          server.lineUpdated = '2026-10-05T10:05:00.000Z';
+          return { ok: true, status: 200, _label: 'process', json: async () => ({}) };
+        }
+        if (method === 'GET' && path === '/lines') {
+          return { ...jsonOk([{ id: LINE, parentId: PARENT, qty: 1, updated: server.lineUpdated }]), _label: 'children' };
+        }
+        if (method === 'PATCH' && path === `/lines/${LINE}`) {
+          const body = JSON.parse(req.body);
+          patches.push(body);
+          if (body.updated !== server.lineUpdated) {
+            return { ok: false, status: 409, _label: 'patch', json: async () => ({ status: 409, error: 'stale_record' }) };
+          }
+          return { ...recordOk({ id: LINE, qty: body.qty, updated: '2026-10-05T10:06:00.000Z' }), _label: 'patch' };
+        }
+        return null;
+      },
+    });
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => ({
+      entity: useEntity('header', 'lines', opts({ skipListFetch: true })),
+      apiFetch: useApiFetch(API),
+    }), { wrapper });
+    await act(async () => { await a.result.current.entity.fetchById(PARENT); });
+    await waitFor(() => expect(a.result.current.entity.children[0]?.updated).toBe('2026-10-05T10:00:00.000Z'));
+
+    await act(async () => {
+      await a.result.current.entity.handleProcess({ columnName: 'DOC_ACTION', label: 'Reactivate' });
+    });
+    // Let the post-action refresh (forced record re-read and whatever it triggers) settle. No
+    // assertion on the rendered lines here: the PATCH below is the observable that matters.
+    await act(async () => { await new Promise((resolve) => { setTimeout(resolve, 50); }); });
+
+    let res;
+    await act(async () => {
+      res = await a.result.current.apiFetch(`/lines/${LINE}`, { method: 'PATCH', body: JSON.stringify({ qty: 2 }) });
+    });
+    expect(patches).toHaveLength(1);
+    expect(patches[0].updated).toBe('2026-10-05T10:05:00.000Z');
+    expect(res.status).toBe(200);
   });
 });
