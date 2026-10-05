@@ -56,8 +56,8 @@ import {
  *
  * Why 1366: with the rail expanded (240px) the header gets `viewport - 240`. The search is
  * centered in the bar (see HEADER_GRID), so each side column gets `(header - search 392 - 2 gaps
- * 32) / 2`, and the actions get that minus their own 24px right inset: ~327px at 1366, enough for
- * Tutorials/Copilot + 5 quick actions (~304px), but only ~284px at 1280. So 1280-class screens go
+ * 40) / 2`, and the actions get that minus their own 24px right inset: ~323px at 1366, enough for
+ * Tutorials/Copilot + 5 quick actions (~304px), but only ~280px at 1280. So 1280-class screens go
  * compact and the common 1366 laptop keeps every action inline.
  */
 export const TOPBAR_COMPACT_BELOW_PX = 1366;
@@ -92,9 +92,20 @@ function useIsCompactTopBar() {
  * placed on an explicit column so the search stays in the middle when there is no left block.
  * The header itself has no horizontal padding (the 24px right inset lives on the actions group,
  * inside its own track), so the tracks span the whole visible bar and the search is centered on
- * the header's border box, not on a padding-shifted content box.
+ * the header's border box, not on a padding-shifted content box. The column gap is 20px (`gap-5`,
+ * ETP-5504 QA): the left column, and so the title/breadcrumb block, ends exactly 20px before the
+ * search's left edge.
  */
 const HEADER_GRID = 'grid grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]';
+
+/**
+ * ETP-5504 QA (OBS-1) — shrink priority of the breadcrumb levels. Ancestor levels keep their own
+ * width up to this cap (beyond it they elide; the whole trail is in the tooltip) and only shrink
+ * once the current page has given way down to its minimum; the current page absorbs the shortage
+ * first (a far higher flex-shrink weight). Cap value pending UX confirmation.
+ */
+const BREADCRUMB_ANCESTOR_CLASS = 'max-w-[160px]';
+const BREADCRUMB_CURRENT_CLASS = 'min-w-[4rem] shrink-[1000] truncate';
 
 function BreadcrumbLevel({ item, onNavigate, className }) {
   const navigable = Boolean(item.href || item.onClick);
@@ -166,7 +177,12 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
         >
           {head.map((item, index) => (
             <span key={`${item.label}-${index}`} className="flex min-w-0 shrink items-center">
-              <BreadcrumbLevel item={item} onNavigate={handleNavigate} data-testid="BreadcrumbLevel__topbar" />
+              <BreadcrumbLevel
+                item={item}
+                onNavigate={handleNavigate}
+                className={BREADCRUMB_ANCESTOR_CLASS}
+                data-testid="BreadcrumbLevel__topbar"
+              />
               {separator}
             </span>
           ))}
@@ -204,7 +220,7 @@ function TopBarBreadcrumb({ breadcrumb, ui }) {
             </span>
           )}
           <span
-            className="min-w-0 truncate"
+            className={BREADCRUMB_CURRENT_CLASS}
             aria-current="page"
             data-testid="topbar-breadcrumb-current"
           >
@@ -491,7 +507,7 @@ export default function TopBar({
         <DemoTrialIndicator ui={ui} data-testid="DemoTrialIndicator__133e64" />
         <header
           className={cn(
-            'relative h-[62px] shrink-0 items-center gap-4 px-0 bg-page-bg',
+            'relative h-[62px] shrink-0 items-center gap-5 px-0 bg-page-bg',
             HEADER_GRID,
             className
           )}

@@ -217,7 +217,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **Three blocks, one three-column grid** (ETP-5509): `grid-template-columns:
   minmax(0,1fr) auto minmax(max-content,1fr)` — title block (column 1) → search slot (column 2)
   → quick actions (column 3). Each block is placed on an explicit column, so the search stays in
-  the middle column even when a page has no title and no back button.
+  the middle column even when a page has no title and no back button. The column gap is **20px**
+  (`gap-5`, ETP-5504 QA): the left column ends exactly 20px before the search's left edge, and
+  symmetrically the right column starts 20px after its right edge.
   - **Search** (`topbar-search-slot` > `global-search-trigger`): fixed `w-[392px]`, **exactly
     centered in the visible bar** (the header's border box) whatever the width of the title block
     or of the actions — the two side tracks are equal `1fr` tracks and the header has no
@@ -229,9 +231,10 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     shift left instead of being overlapped (cannot happen at ≥1280px thanks to the compact
     breakpoint below).
   - **Title / breadcrumb** (`topbar-title-block`): no fixed width cap — it is content-sized and
-    can use the whole left column (half of the space beside the search). Title and breadcrumb
-    elide with an ellipsis at the column edge and show their full text in a tooltip; the count
-    badge, `titleExtra` and the title `⋯` never shrink.
+    can use the whole left column (half of the space beside the search), so its right edge stops
+    at most 20px before the search. Title and breadcrumb elide with an ellipsis at the column edge
+    and show their full text in a tooltip; the count badge, `titleExtra` and the title `⋯` never
+    shrink.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
@@ -240,9 +243,21 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   hidden intermediate levels (`topbar-breadcrumb-overflow-item`) — never the current page. Levels
   with `href`/`onClick` navigate through the guarded navigate (unsaved-changes prompt applies);
   levels without one (menu folders) render as plain text / disabled items.
+  - **Shrink priority** (ETP-5504 QA, OBS-1) of a structured breadcrumb (array, or any breadcrumb
+    with a navigable level / with `⋯`): when the trail does not fit, the **current page level
+    gives way first** (it elides down to a 4rem minimum) and the ancestor levels keep their own
+    width, each capped at **160px** (`max-w-[160px]`, pending UX confirmation) beyond which it
+    elides; only once the current page is at its minimum do the ancestors shrink. So
+    `Configuración / Tarifa / Tarifa de venta princ…` instead of
+    `Configurac… / Tar… / Tarifa de venta princ…`. The full trail is always in the tooltip. A
+    plain ≤3-level string breadcrumb with no navigable level stays one line that elides at the end.
   - Producers: `DetailView` publishes an array via `getBreadcrumbItems` (menu path + record
     title, with the window level linking back to `/<window>`). Every other producer still
     publishes a string and gets the same overflow behavior with non-navigable levels.
+  - The report viewer (`ReportViewerPage` → `ReportViewer`) publishes an array too:
+    `<category> / Informes / <report>`, where **Informes links back to the report catalog of the
+    same category** (`/report-viewer?category=<category>`, or `/report-viewer` without one). The
+    category level (e.g. Finanzas) is a menu folder with no route and stays plain text.
   - `useSetPageMeta` depends on `breadcrumbKey(meta.breadcrumb)` (content-based), because an
     array breadcrumb is a new reference on every render.
 - **Quick actions** (`topbar-quick-actions`). Tutorials (`WalkthroughLauncher`) and Copilot are
@@ -253,8 +268,8 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
   `topbar-quick-actions-overflow-menu`), which renders only when it has something to hold. This
   is a different control from the title `⋯` (`topbar-more-actions`: Favorites / Page help).
   - Why 1366: with the rail expanded (240px) each side column gets
-    `(header - 392 search - 32 gaps) / 2`, and the actions get that minus their 24px right
-    inset: ~327px at 1366, enough for every action inline (~304px), but only ~284px at 1280.
+    `(header - 392 search - 40 gaps) / 2`, and the actions get that minus their 24px right
+    inset: ~323px at 1366, enough for every action inline (~304px), but only ~280px at 1280.
     Pending UX confirmation.
 - **Automated evidence:** `tools/app-shell/src/components/layout/TopBar/__tests__/TopBar.vitest.jsx`
   — grid placement of the three blocks, title and breadcrumb tooltips (opened via focus), search not absolute, back button
@@ -268,7 +283,12 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
      the back button): the search stays at the exact horizontal center of the visible top bar.
   3. Open a record whose menu path is deeper than two folders: the breadcrumb shows first level /
      `⋯` / record, and `⋯` lists the hidden levels.
-  4. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
+  4. Open Tarifa de venta principal (Configuración / Tarifa) or a contact with a long name at
+     1280px: the ancestor levels stay readable and only the current page elides; the gap between
+     the breadcrumb and the search is 20px.
+  5. Open a report from Finanzas / Informes: clicking Informes in the breadcrumb returns to the
+     catalog; Finanzas is plain text.
+  6. Widen past 1366px and confirm any page quick actions come back inline and the right `⋯`
      disappears.
 
 #### 3.3 What a First Steps row can do (ETP-5364)

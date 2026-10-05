@@ -1649,7 +1649,17 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
   const categoryLabel = categoryFilter && CATEGORY_LABELS[categoryFilter]
     ? tMenu(CATEGORY_LABELS[categoryFilter].en)
     : null;
-  const breadcrumb = [categoryLabel, tMenu('Reports'), title].filter(Boolean).join(' / ');
+  // ETP-5504 (OBS-2): the "Reports" level links back to the catalog of the same category, like
+  // the window level of a record's breadcrumb. The category is a menu folder with no route of its
+  // own, so it stays plain text.
+  const catalogHref = categoryFilter
+    ? `/report-viewer?category=${encodeURIComponent(categoryFilter)}`
+    : '/report-viewer';
+  const breadcrumb = [
+    categoryLabel && { label: categoryLabel },
+    { label: tMenu('Reports'), href: catalogHref },
+    { label: title },
+  ].filter(Boolean);
   const favKey = categoryFilter
     ? `report-viewer?category=${categoryFilter}&report=${report.id}`
     : `report-viewer?report=${report.id}`;
