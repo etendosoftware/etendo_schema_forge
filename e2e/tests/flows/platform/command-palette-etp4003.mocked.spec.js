@@ -179,13 +179,31 @@ test.describe('CommandPalette window search and picker (1280x720)', () => {
   });
 
   test('focus leaving a picker checkbox for an element outside the palette closes the palette', async ({ page }) => {
-    // The Esc exception (focusout from a picker that removed itself) must not widen to the
-    // user leaving: focus moving from a mounted checkbox to the sidebar closes everything.
+    // The Esc exception (focusout from a picker that removed itself) must not widen to focus
+    // leaving: moving it from a mounted checkbox to the sidebar closes everything. Radix keeps
+    // Tab inside the picker, so this path is programmatic or assistive technology only.
     await openPalette(page, '/product');
     await page.getByTestId('vector-search-target-picker-trigger').click();
     await expect(page.getByTestId('vector-search-target-option').first()).toBeFocused();
 
     await page.getByTestId('sidebar-expand').focus();
+
+    await expect(page.getByTestId('vector-search-target-picker')).toBeHidden();
+    await expect(page.getByTestId('vector-search-scope-panel')).toBeHidden();
+  });
+  test('a click on a non-focusable area outside the palette closes it while a picker checkbox has focus', async ({ page }) => {
+    // Review B1: the outside click dismisses the picker and drops focus on <body>, the same
+    // place Esc leaves it. Unlike Esc, it is the user leaving and must close the palette.
+    await openPalette(page, '/product');
+    await page.getByTestId('vector-search-target-picker-trigger').click();
+    await expect(page.getByTestId('vector-search-target-option').first()).toBeFocused();
+
+    const scope = await page.getByTestId('vector-search-scope-panel').boundingBox();
+    const picker = await page.getByTestId('vector-search-target-picker').boundingBox();
+    const viewport = page.viewportSize();
+    // A spot right of both layers, near the bottom of the page — not a focusable control.
+    const x = Math.min(viewport.width - 5, Math.max(scope.x + scope.width, picker.x + picker.width) + 20);
+    await page.mouse.click(x, viewport.height - 10);
 
     await expect(page.getByTestId('vector-search-target-picker')).toBeHidden();
     await expect(page.getByTestId('vector-search-scope-panel')).toBeHidden();

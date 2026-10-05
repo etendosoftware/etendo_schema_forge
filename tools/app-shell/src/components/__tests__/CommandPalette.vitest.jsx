@@ -547,8 +547,9 @@ describe('CommandPalette', () => {
   });
 
   // Review W2 (ETP-5602): the focusout exception for the picker covers only the picker
-  // closing itself. Focus moving from a picker checkbox to something outside the palette
-  // is the user leaving, and must still close the palette.
+  // closing itself. Radix keeps Tab inside the picker, so focus reaches an element outside
+  // the palette only programmatically or through assistive technology; when it does, it is
+  // still leaving and must close the palette.
   it('closes the palette when focus leaves a picker checkbox for an element outside it', async () => {
     render(
       <>
@@ -567,6 +568,32 @@ describe('CommandPalette', () => {
     // checkbox would already be gone when the deferred focusout check runs — jsdom-only
     // timing the browser does not have (verified in Chrome).
     screen.getByTestId('outside-palette').focus();
+
+    await waitFor(() => expect(screen.queryByTestId('cmd-dialog')).not.toBeInTheDocument());
+  });
+
+  // Review B1 (ETP-5602): a click on a non-focusable spot outside the palette dismisses the
+  // picker and leaves focus on <body> — exactly where Esc leaves it. The pointer is what
+  // tells them apart: after an outside pointerdown the palette must close, as it does
+  // without the picker.
+  it('closes the palette when a pointerdown outside it dismisses the picker and focus drops to body', async () => {
+    render(
+      <>
+        <div data-testid="outside-area">outside</div>
+        <CommandPalette />
+      </>,
+    );
+    openPalette();
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
+    const option = (await screen.findAllByTestId('vector-search-target-option'))[0];
+    const checkbox = option.querySelector('input') ?? option;
+    act(() => checkbox.focus());
+    expect(checkbox).toHaveFocus();
+
+    fireEvent.pointerDown(screen.getByTestId('outside-area'));
+    // A non-focusable target: the browser blurs the checkbox and focus lands on <body>.
+    checkbox.blur();
+    expect(document.activeElement).toBe(document.body);
 
     await waitFor(() => expect(screen.queryByTestId('cmd-dialog')).not.toBeInTheDocument());
   });

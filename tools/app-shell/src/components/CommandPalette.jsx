@@ -81,6 +81,8 @@ export function CommandPalette() {
   const openRef = useRef(false);
   const keyboardIndexRef = useRef(-1);
   const dropdownInteractionRef = useRef(false);
+  // Last pointerdown landed outside the palette and the picker (cleared on keydown / once read).
+  const outsidePointerRef = useRef(false);
   const targetPickerRef = useRef(null);
   const vectorSearchContracts = useVectorSearchContracts(open);
   const [selectedVectorTargetKeys, setSelectedVectorTargetKeys] = useState(null);
@@ -198,13 +200,20 @@ export function CommandPalette() {
   useEffect(() => {
     const preserveDropdownClick = (event) => {
       const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-      if (dropdown?.contains(event.target) || targetPickerRef.current?.contains(event.target)) {
+      const insideLayer = dropdown?.contains(event.target) || targetPickerRef.current?.contains(event.target);
+      if (insideLayer) {
         dropdownInteractionRef.current = true;
       }
+      const input = document.querySelector('[data-testid="global-search-input"]');
+      const dialog = document.querySelector('[data-testid="cmd-dialog"]');
+      outsidePointerRef.current = !insideLayer && !input?.contains(event.target) && !dialog?.contains(event.target);
     };
+    const clearOutsidePointer = () => { outsidePointerRef.current = false; };
     const closeOnFocusOut = (event) => {
       const fromPicker = event.target?.closest?.('[data-testid="vector-search-target-picker"]');
       window.setTimeout(() => {
+        const pointerLeft = outsidePointerRef.current;
+        outsidePointerRef.current = false;
         if (!openRef.current) return;
         const active = document.activeElement;
         const input = document.querySelector('[data-testid="global-search-input"]');
@@ -213,8 +222,10 @@ export function CommandPalette() {
         // The picker closing itself (Escape) removes the focused checkbox: focus drops to
         // <body> until Radix returns it to the trigger, so that focusout is not the user leaving.
         // Decided by where focus went, not by whether the checkbox is already unmounted: focus
-        // on an element outside the palette is the user leaving, and must still close it.
-        const focusNowhere = !active || active === document.body;
+        // on an element outside the palette is leaving, and must still close it. A click on a
+        // non-focusable spot outside also leaves focus on <body>, so a preceding outside
+        // pointerdown tells that apart from Esc.
+        const focusNowhere = (!active || active === document.body) && !pointerLeft;
         if (fromPicker && (focusNowhere || dialog?.contains(active) || targetPickerRef.current?.contains(active))) return;
         if (dropdownInteractionRef.current) {
           dropdownInteractionRef.current = false;
@@ -225,9 +236,11 @@ export function CommandPalette() {
     };
     document.addEventListener('focusout', closeOnFocusOut);
     document.addEventListener('pointerdown', preserveDropdownClick, true);
+    document.addEventListener('keydown', clearOutsidePointer, true);
     return () => {
       document.removeEventListener('focusout', closeOnFocusOut);
       document.removeEventListener('pointerdown', preserveDropdownClick, true);
+      document.removeEventListener('keydown', clearOutsidePointer, true);
     };
   }, []);
 
