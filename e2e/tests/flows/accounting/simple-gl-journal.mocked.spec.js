@@ -1,3 +1,6 @@
+// @covers artifacts/simple-g-l-journal/decisions.json
+// @covers artifacts/simple-g-l-journal/custom/SimpleGLJournalBottomPanel.jsx
+// @covers tools/app-shell/src/components/contract-ui/InlineLinesPanel.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 
@@ -71,7 +74,7 @@ const UNBALANCED_LINES = [
  * Install detail + children + save mocks for the journal record.
  * `lines` controls the balance scenario. Must run AFTER login().
  */
-async function installJournalMock(page, lines) {
+async function installJournalMock(page, lines, header = HEADER) {
   let saveRequested = false;
 
   await page.route(`**/sws/neo/${SPEC}/${ENTITY}/**`, async (route) => {
@@ -84,7 +87,7 @@ async function installJournalMock(page, lines) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [HEADER] } }),
+        body: JSON.stringify({ response: { data: [header] } }),
       });
       return;
     }
@@ -94,7 +97,7 @@ async function installJournalMock(page, lines) {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ response: { data: [HEADER] } }),
+        body: JSON.stringify({ response: { data: [header] } }),
       });
       return;
     }
@@ -185,4 +188,62 @@ test.describe('Simple G/L Journal — balance footer', () => {
   // add-row has no description input to pre-fill. The HandleDefaults prefill
   // behavior the test exercised no longer applies to this window; the feature
   // itself is gone, not just the testid.
+});
+
+// ETP-5611 — manual journal fixes visible in the detail view.
+async function openJournalWith(page, lines, header) {
+  await login(page);
+  await installJournalMock(page, lines, header);
+  await page.goto(`/${SPEC}/${RECORD_ID}`);
+  await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+}
+
+const DRAFT = { ...HEADER, documentStatus: 'DR' };
+const COMPLETED = { ...HEADER, documentStatus: 'CO', processed: 'Y', posted: 'N' };
+
+test.describe('Simple G/L Journal — detail view (ETP-5611)', () => {
+  test('saved draft with no lines shows the empty state with the add button', async ({ page }) => {
+    await openJournalWith(page, [], DRAFT);
+    await expect(page.getByTestId('lines-empty-state')).toBeVisible();
+    await expect(page.getByTestId('action-add-lines-empty-state')).toBeVisible();
+  });
+
+  test('new journal shows the empty state message without the add button', async ({ page }) => {
+    await login(page);
+    await installJournalMock(page, []);
+    await page.goto(`/${SPEC}/new`);
+    await expect(page.getByTestId('lines-empty-state')).toBeVisible();
+    await expect(page.getByTestId('action-add-lines-empty-state')).toHaveCount(0);
+  });
+
+  test('no Print button in the detail view', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, DRAFT);
+    await expect(page.getByTestId('balance-footer-row')).toBeVisible();
+    await expect(page.getByTestId('action-document-print')).toHaveCount(0);
+  });
+
+  test('draft: neither Post nor Reactivate is offered', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, DRAFT);
+    await expect(page.getByTestId('balance-footer-row')).toBeVisible();
+    // Post was the only kebab item a draft used to offer; with it gated on CO (and Reactivate
+    // too), a draft has no visible menu action left, so the kebab itself is not rendered.
+    await expect(page.getByTestId('action-more')).toHaveCount(0);
+    await expect(page.getByTestId('menu-action-post')).toHaveCount(0);
+  });
+
+  test('completed, not posted: Post and Reactivate are offered, Unpost is not', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, COMPLETED);
+    await page.getByTestId('action-more').click();
+    await expect(page.getByTestId('menu-action-post')).toBeVisible();
+    await expect(page.getByTestId('menu-action-reactivate')).toBeVisible();
+    await expect(page.getByTestId('menu-action-unpost')).toHaveCount(0);
+  });
+
+  test('hovering a line keeps the Credit cell on screen', async ({ page }) => {
+    await openJournalWith(page, BALANCED_LINES, DRAFT);
+    const row = page.getByTestId('line-row-line-2');
+    await row.hover();
+    await expect(row.getByTestId('line-actions')).toBeVisible();
+    await expect(row.locator('[data-cell-key="foreignCurrencyCredit"]')).toBeVisible();
+  });
 });
