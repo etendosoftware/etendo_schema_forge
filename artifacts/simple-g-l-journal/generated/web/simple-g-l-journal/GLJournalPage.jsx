@@ -8,6 +8,7 @@ import GLJournalForm from './GLJournalForm';
 import GLJournalLineTable from './GLJournalLineTable';
 import GLJournalLineForm from './GLJournalLineForm';
 import { AttachmentsTab } from '@/components/attachments';
+import SimpleGLJournalBottomPanel from '../../../custom/SimpleGLJournalBottomPanel';
 import catalogs from './mockCatalogs';
 
 
@@ -282,10 +283,13 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
         recordId={recordId}
         breadcrumb={breadcrumb}
       api={api}
+        hidePrint
         dimensionsPanelFieldKeys={["businessPartner","product","project","costCenter"]}
         customTabs={[{ key: 'attachments', labelKey: 'attachments', Component: AttachmentsTab, placement: 'tab', props: { tableName: "GL_Journal", config: {} } }]}
+        bottomSection={SimpleGLJournalBottomPanel}
         menuActions={({ data, status }) => [
-          { key: 'post', label: 'Post', visible: !(data?.posted === 'Y' || data?.posted === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
+          { key: 'reactivate', label: 'Reactivate', visible: status === 'CO' && !(data?.posted === 'Y' || data?.posted === true), labelKey: 'reactivate', successKey: 'reactivated', documentAction: 'RE',  },
+          { key: 'post', label: 'Post', visible: status === 'CO' && !(data?.posted === 'Y' || data?.posted === true), labelKey: 'post', successKey: 'documentPosted', neoAction: 'post',  },
           { key: 'unpost', label: 'Unpost', destructive: true, visible: (data?.posted === 'Y' || data?.posted === true), labelKey: 'unpost', successKey: 'documentUnposted', neoAction: 'unpost',  }
         ]}
         draftMode={draftMode}
@@ -305,6 +309,7 @@ export default function GLJournalPage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
+      hidePrint
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
     />
