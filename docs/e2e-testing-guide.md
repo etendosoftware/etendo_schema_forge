@@ -1246,7 +1246,8 @@ The glob-crossing bug described above is not a permanent Playwright limitation �
 list toolbar's **geometry** — jsdom has no layout, so the unit suite
 (`ListView.toolbarLayout.vitest.jsx`) can only pin where each control lives in the DOM. At
 1280×720 with the navigation rail expanded it checks, for purchase-invoice, sales-invoice,
-contacts, product, warehouse, payment-in and payment-out: the second row
+contacts, product, warehouse, payment-in, payment-out and chart-of-accounts (ETP-5593 — its tree
+controls share the main row): the second row
 (`list-toolbar-tabs-row`) exists exactly when the window has a tab group and sits below the main
 row; the main row does not overflow, none of its buttons is clipped and its two clusters do not
 overlap; the toolbar paints its bottom border and ends above the grid. It also re-measures

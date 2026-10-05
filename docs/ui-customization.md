@@ -268,7 +268,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
-- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`)
+- `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`)
 
 **`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
 
@@ -661,6 +661,21 @@ It is deliberately not bumped by `onDataMutated` reloads (save, delete, toggle),
 quiet, nor by the host's `refreshTrigger` **input** prop on `ListView` (a host bumps that to make
 `ListView` itself reload — same idea, opposite direction). A slot that spreads its remaining props
 onto a DOM element must destructure `userRefreshTrigger` out of the spread, like `selectedRows`.
+
+`ListView` also forwards **`onRecordCountChange(count)`** (ETP-5593, opt-in). The record-count badge
+next to the window title normally shows `hook.items.length`, which is the size of `ListView`'s own
+page. A slot that renders something else can report the number the badge should show instead. The
+chart-of-accounts tree reports its number of **root** accounts. Call it with a number, from an
+effect; a non-number puts the badge back on the page size. `window.hideRecordCount` still wins.
+Do not call `useSetPageMeta` from the slot for this: `setMeta` replaces the whole meta, so two
+writers would overwrite each other. Destructure it out of any DOM spread, like `userRefreshTrigger`.
+
+**The toolbar Share button copies the page URL (ETP-5593).** The link button in `ListView`'s idle
+bar (`list-share-link`, hidden by `hideLink`) had no handler on any list; it now calls
+`useCopyPageLink()` (`hooks/useCopyLinkAction.js`), which copies `window.location.href` with the
+`linkCopied` / `copyFailed` toasts. Anything a window keeps in the query string travels with the
+link. For example, chart-of-accounts keeps `q` and `accountType` there, so a shared link reproduces
+the filtered tree. Put filter state in the URL when you want Share to reproduce it.
 
 **Standardized delete-failure UX (applies to header, row, and bulk delete —
 no configuration needed):**
@@ -1547,6 +1562,21 @@ Clicking either the chevron or the hover action toggles the same expand state �
 **ETP-5133 cleanup — the hand-written `InvoiceLinesTable.jsx`/`SalesInvoiceLinesTable.jsx`/`InvoiceLineTableCustom.jsx` were deleted.** These were the "hand-written `columns` array" example referenced above until this ticket. `docs/feedback.md` (ETP-4543/ETP-4529 entries) already documented them as unreachable from the running app — neither `sales-invoice` nor `purchase-invoice`'s `decisions.json` ever set `window.customLinesComponent`, so `HeaderPage.jsx` always rendered the pipeline-generated `LinesTable.jsx` instead. A live-browser check during ETP-5133 found a fix (`noTruncate` on the `product` column) had been mistakenly applied to this dead file instead of the generated one, which is what prompted finally removing it rather than continuing to carry it as documented dead weight. The generated `LinesTable.jsx` is now the only "hand-written-shape `columns` array" example left for this column type.
 
 **`AmortizationLinesTable.jsx` — hand-patched, not an `InlineLinesPanel` consumer (follow-up pass, same ticket).** This component is a wholly custom `<table>` (its own fetch/CRUD, multi-select, and inline add-row draft-line flow — none of which `InlineLinesPanel` has an equivalent for), so wrapping it in `InlineLinesPanel` was investigated and rejected as disproportionate rework relative to this ticket's actual gap (see `docs/feedback.md` for the full comparison). Instead, its own hover strip was hand-patched to match the *visible* mechanism above: the permanent "Accounting dimensions" grid column was removed, and a third hover-action button (`Layers` icon, static `editDimensionsTooltip` — the same i18n key, no separate one introduced) was added ahead of its existing Pencil/Trash, gated on `dimensionFields.length > 0` and `!isReadOnly`, toggling the same `expandedId` state its pre-existing chevron already drove. Two independent implementations of the same UX on purpose — not a shared code path — because this component was never built on top of `InlineLinesPanel` to begin with.
+
+**`RowExpandToggle` — the shared expand chevron (ETP-5593).** The circular outline chevron that
+opens a row's sub-row is now one component, `components/contract-ui/RowExpandToggle.jsx`, used by
+`InlineLinesPanel` (`dimensions-panel-toggle`), `AmortizationLinesTable`, financial-account's
+`MovementsTable` / `StatementsTable` / `ReconciliationListTable` and the chart-of-accounts tree.
+Before, each of them had its own copy of the same markup. Props:
+
+- `expanded`, `onToggle`;
+- `label` (aria-label; defaults to `expand` / `collapse`);
+- `orientation`: `vertical` is the default, a down chevron that turns 180°; `horizontal` is a right chevron that turns down, for tree folders;
+- `stopPropagation`, opt-in: set it when the row's own click opens the record;
+- `iconTestId`.
+
+Any other prop goes to the `<button>`. Use it for any new expandable row instead of copying the
+classes.
 
 ---
 
