@@ -11,6 +11,7 @@ import { useMenuLabel, useLabel, useUI, useLocaleSwitch } from '@/i18n';
 import { ChevronDown, Plus, Link2, Printer, LayoutGrid, RefreshCw, Copy, Download, Trash2, Loader2 } from 'lucide-react';
 import { useRegisterWindowContext } from '@/components/CurrentWindowContext';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useCopyPageLink } from '@/hooks/useCopyLinkAction.js';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import ReportDrawer from './ReportDrawer.jsx';
 import { ListExportButton } from './ListExportButton.jsx';
@@ -902,13 +903,20 @@ export function ListView({
   const fullBreadcrumb = breadcrumb
     ? breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')
     : label;
+  // ETP-5593 — a custom headerTable that renders something other than ListView's own
+  // page (e.g. the chart-of-accounts tree, which self-fetches every account and counts
+  // its ROOT folders) reports its own count through `onRecordCountChange`. Opt-in: until
+  // the table reports one (a number), the badge keeps counting `hook.items`.
+  const [tableRecordCount, setTableRecordCount] = useState(null);
+  const recordCount = typeof tableRecordCount === 'number' ? tableRecordCount : hook.items.length;
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hideRecordCount ? undefined : hook.items.length,
+    recordCount: hideRecordCount ? undefined : recordCount,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
-  }, [favActive, hook.items.length, hideRecordCount]);
+  }, [favActive, recordCount, hideRecordCount]);
+  const copyPageLink = useCopyPageLink();
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
   // ETP-5387 — bumped only by the toolbar Refresh button and forwarded to the headerTable as
@@ -1134,6 +1142,7 @@ export function ListView({
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
     userRefreshTrigger: userRefreshCounter,
+    onRecordCountChange: setTableRecordCount,
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
@@ -1333,6 +1342,11 @@ export function ListView({
                 <div className="flex items-center gap-2">
                   {!(listViewOptions?.hideLink ?? hideLink) && (
                     <button
+                      type="button"
+                      onClick={copyPageLink}
+                      title={ui('copyLink')}
+                      aria-label={ui('copyLink')}
+                      data-testid="list-share-link"
                       className="h-9 w-9 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
                       <Link2 className="h-4 w-4" data-testid="Link2__620cbc" />
                     </button>

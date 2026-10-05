@@ -8,7 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { ChevronDown, Layers, Pencil, Search, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Search, Trash2 } from 'lucide-react';
 import { QUICK_ACTIONS_PILL_CLASS } from './quickActionsStyle.js';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,7 @@ import { parseLocaleNumber } from '@/lib/parseLocaleNumber.js';
 // grid column (DimSummary, no longer used here) to a hover action + the existing
 // expand chevron — DimensionGrid (the expanded content) is still reused as-is.
 import { DimensionGrid } from './DimensionsPanel.jsx';
+import { RowExpandToggle } from './RowExpandToggle.jsx';
 
 // Figma tokens — extracted from /home/agustin/Desktop/newlines.css.
 const TOKENS = {
@@ -1541,17 +1542,11 @@ const InlineLinesPanel = forwardRef(function InlineLinesPanel({
                 AmortizationLinesTable's chevron button (rotates 180deg when expanded). */}
             {hasDimensionsPanel && (
               <div className="flex items-center justify-center px-2" style={{ width: CHEVRON_COLUMN_WIDTH, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => setExpandedRowId(isRowExpanded ? null : row.id)}
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
-                  style={{ transform: isRowExpanded ? 'rotate(180deg)' : undefined }}
-                  aria-label={ui(isRowExpanded ? 'collapse' : 'expand')}
-                  aria-expanded={isRowExpanded}
-                  data-testid="dimensions-panel-toggle"
-                >
-                  <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3b7ec2" />
-                </button>
+                <RowExpandToggle
+                  expanded={isRowExpanded}
+                  onToggle={() => setExpandedRowId(isRowExpanded ? null : row.id)}
+                  iconTestId="ChevronDown__3b7ec2"
+                  data-testid="dimensions-panel-toggle" />
               </div>
             )}
             {/* Selection checkbox — ETP-5029: the cell swallows the click so ticking
