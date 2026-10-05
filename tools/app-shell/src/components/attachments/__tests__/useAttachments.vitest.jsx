@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/attachments/useAttachments.js
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -112,6 +113,24 @@ describe('useAttachments', () => {
     // The fallback list call refreshed items.
     await waitFor(() => expect(result.current.items).toHaveLength(1));
     expect(toast.success).toHaveBeenCalled();
+  });
+
+  // ETP-5309: an unsaved record's id is the literal "new"; POSTing against it made the
+  // backend answer a raw 500. The opts.recordId override (saveBeforeAttach) still uploads.
+  it('upload(file) sends nothing while the record is "new", but honours opts.recordId', async () => {
+    globalThis.fetch.mockResolvedValue(jsonResponse({ id: 'fresh', name: 'f.pdf' }));
+    const { result } = renderHook(() => useAttachments({ ...baseOpts, recordId: 'new' }));
+
+    const file = new File(['x'], 'x.pdf', { type: 'application/pdf' });
+    await act(async () => {
+      await result.current.upload(file);
+    });
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.upload(file, { recordId: 'REC-SAVED' });
+    });
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('http://api.test/sws/neo/attachments/C_Order/REC-SAVED');
   });
 
   it('upload(file) prepends the created record to items when response contains an id', async () => {

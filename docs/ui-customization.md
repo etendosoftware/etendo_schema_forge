@@ -1741,6 +1741,15 @@ Customer/Vendor Accounting, etc.).
    (`secondaryTabs.<key>`, `customPanelTabs[]`, `extraTabs[]`, `attachments`) now sorts against
    every other entry, not just within its own group — see `docs/decisions-reference.md`'s
    `secondaryTabs` section for the full reference and the `customTabsAfterBottom` incompatibility.
+   **Gating a custom tab until the record is saved (ETP-5309).** A `placement: 'tab'` custom
+   component that cannot work on an unsaved record declares it through two statics:
+   `Component.requiresSavedRecord` (`true`, or a predicate over the tab's `props`) and
+   `Component.savedRecordHintKey` (i18n key). While `isNew`, DetailView renders that tab button
+   disabled with the hint as tooltip, in both tab strips (`getCustomTabSaveFirstHint` in
+   `detailViewHelpers.jsx`). Without `savedRecordHintKey` the tab is still disabled, only with no
+   tooltip — always declare both. The component should still guard its own panel, since
+   `location.state.openSecondaryTab` can open it. `AttachmentsTab` is the reference: it requires a
+   saved record unless its `config.saveBeforeAttach` is set.
 2. **Runtime prop, hand-written `windows/custom/{window}/index.jsx`** (documented below) — a
    `Panel`-backed tab with freeform fetch-and-render content that doesn't map to any generated
    entity at all, passed to the generated `<Page>` component from a hand-written wrapper. Requires

@@ -21819,6 +21819,7 @@
     "attachmentsDeleteAllError": "Error al eliminar todos los adjuntos",
     "attachmentsConfirmDelete": "¿Eliminar este adjunto?",
     "attachmentsEditDescription": "Editar descripción",
+    "attachmentsSaveFirstHint": "Guarda el documento antes de adjuntar archivos",
     "attachmentsDescription": "Descripción",
     "attachmentsNoFiles": "Aún no hay adjuntos",
     "attachmentsUploading": "Subiendo…",

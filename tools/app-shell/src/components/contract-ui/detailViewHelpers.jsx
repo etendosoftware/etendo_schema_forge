@@ -940,6 +940,24 @@ export function customTabKey(ct) {
   return `custom:${ct.key}`;
 }
 
+/**
+ * ETP-5309 — a 'tab'-placement custom component may declare that it cannot work until the
+ * record is persisted, through two statics on the component: `requiresSavedRecord` (true,
+ * or a predicate over the tab's `props`) and `savedRecordHintKey` (the i18n key of the
+ * hint). Returns the translated hint while `isNew` and the requirement holds — DetailView
+ * renders that tab button disabled with it as tooltip — else null. A component that sets
+ * `requiresSavedRecord` but no `savedRecordHintKey` gets `''`: the tab is still disabled,
+ * just without a tooltip. Structural only: the component describes itself, no tab key or
+ * window is named here.
+ */
+export function getCustomTabSaveFirstHint(ct, isNew, ui) {
+  const requires = ct?.Component?.requiresSavedRecord;
+  if (!isNew || !requires) return null;
+  if (typeof requires === 'function' && !requires(ct.props || {})) return null;
+  const hintKey = ct.Component.savedRecordHintKey;
+  return hintKey ? ui(hintKey) : '';
+}
+
 const SECONDARY_DEFAULT_WEIGHT = 99;
 const CUSTOM_DEFAULT_WEIGHT = 999;
 const LINES_DEFAULT_WEIGHT = -1;
@@ -1029,7 +1047,10 @@ export function buildInitialTabs(p) {
       if (p.customTabVisibility[ct.key] === false) return;
       const resolvedLabel = ct.labelKey ? p.ui(ct.labelKey) : ct.label;
       entries.push({
-        tab: { key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null },
+        tab: {
+          key: customTabKey(ct), label: resolvedLabel, count: p.customTabCounts[ct.key] ?? null,
+          saveFirstHint: getCustomTabSaveFirstHint(ct, p.isNew, p.ui),
+        },
         weight: ct.tabOrder ?? CUSTOM_DEFAULT_WEIGHT,
         insertionIndex: 10000 + i,
       });

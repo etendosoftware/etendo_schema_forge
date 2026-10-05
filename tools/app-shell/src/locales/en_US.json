@@ -21583,6 +21583,7 @@
     "attachmentsDeleteAllError": "Failed to delete all attachments",
     "attachmentsConfirmDelete": "Delete this attachment?",
     "attachmentsEditDescription": "Edit description",
+    "attachmentsSaveFirstHint": "Save the document before attaching files",
     "attachmentsDescription": "Description",
     "attachmentsNoFiles": "No attachments yet",
     "attachmentsUploading": "Uploading…",
