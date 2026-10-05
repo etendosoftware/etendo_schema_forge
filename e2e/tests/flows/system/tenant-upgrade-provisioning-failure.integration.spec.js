@@ -44,9 +44,14 @@ test.describe('Paid pooled tenant provisioning failure — real backend', () => 
     expect(password, 'A local test owner password is required').toBeTruthy();
     await login(page, { user: email, password });
 
+    // With no READY fixture tenant the endpoint provisions one synchronously before answering:
+    // 35-50 s on a local backend, well past the 15 s request default that used to abort it. The
+    // aborted request still claimed the tenant it built, so the next run had to build another one
+    // and timed out the same way.
     const setup = await authenticatedJson(page, FIXTURE_PATH, {
       method: 'POST',
       data: { clientName: `E2E Pool Failure ${Date.now()}` },
+      timeout: 180_000,
     });
     expect(setup.ok(), `Fixture setup failed (${setup.status()}): ${await setup.text()}`)
       .toBe(true);
