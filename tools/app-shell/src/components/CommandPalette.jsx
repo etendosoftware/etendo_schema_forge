@@ -202,9 +202,13 @@ export function CommandPalette() {
         dropdownInteractionRef.current = true;
       }
     };
-    const closeOnFocusOut = () => {
+    const closeOnFocusOut = (event) => {
+      const fromPicker = event.target?.closest?.('[data-testid="vector-search-target-picker"]');
       window.setTimeout(() => {
         if (!openRef.current) return;
+        // The picker closing itself (Escape) removes the focused checkbox: focus drops to
+        // <body> until Radix returns it to the trigger, so that focusout is not the user leaving.
+        if (fromPicker && !event.target.isConnected) return;
         if (dropdownInteractionRef.current) {
           dropdownInteractionRef.current = false;
           return;

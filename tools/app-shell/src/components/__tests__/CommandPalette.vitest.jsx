@@ -351,7 +351,8 @@ describe('CommandPalette', () => {
     it('reports no results and lists no window when nothing matches', async () => {
       renderWithQuery('zzzqqq');
       await waitForVectorSearchIdle();
-      expect(screen.getByTestId('cmd-empty')).toHaveTextContent('noResultsFound');
+      // The debounced search may not have started yet when the idle check passes.
+      await waitFor(() => expect(screen.getByTestId('cmd-empty')).toHaveTextContent('noResultsFound'));
       expect(renderedWindowNames()).toEqual([]);
     });
 
@@ -498,6 +499,24 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(option, { key: 'Escape' });
 
     await waitFor(() => expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument());
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+  });
+
+  it('keeps the palette open when the picker closes on Escape with focus inside it', async () => {
+    render(<CommandPalette />);
+    openPalette();
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
+    const option = (await screen.findAllByTestId('vector-search-target-option'))[0];
+    const checkbox = option.querySelector('input') ?? option;
+    checkbox.focus();
+
+    // Keyboard path: the browser fires focusout from the focused checkbox while the
+    // picker unmounts, and focus lands on <body> before Radix restores it.
+    fireEvent.focusOut(checkbox, { relatedTarget: null });
+    fireEvent.keyDown(checkbox, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
