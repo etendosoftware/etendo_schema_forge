@@ -405,6 +405,39 @@ When the invoice cannot be resolved — no application at all (an abandoned shel
 a failed lookup — the launcher renders the original confirm dialog. Confirming is never blocked, and
 the editor never opens on a record it could not save correctly.
 
+## MCP surface equals the window's — ETP-5558
+
+An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-out/header`;
+REST and the SPA are unchanged):
+
+- **Invokable buttons — exactly three, all with `parameters:{}`:** *Confirmar*
+  (`aPRMProcessPayment`; `view:"actions"` lists only the value `P`, another `docAction`/`action`
+  answers 422 with `allowedValues:["P"]` — cosmetic honesty, since `ReactivatePaymentHandler`
+  always sends `P` whatever arrives), *Reactivar* (`etprReactivatePayment`; the handler injects
+  `action:"RE"` itself) and *Eliminar* (`eTPRRemovePayment`) with the UI's own gate: it works at
+  any status except void (`RPVOID`) and except while the payment is `pisLocked` (its bank transfer
+  is live), where an agent gets **422** and nothing changes. On a processed payment it reactivates
+  it first and then removes it, and it gives back **no** credit the payment consumed — exactly as
+  the trash icon does. To delete a **draft** and get its consumed credit back, use the invoice's
+  `deletePayment` instead.
+- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`,
+  `aPRMAddScheduledpayments`, `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`,
+  `aeatsiiSend`, `etblkpBulkposting`, `posted`, and the PIS actions `retryPisPayment` /
+  `pisPaymentStatus` the same handler serves on the record. The PIS (PSD2) actions stay hidden
+  because fiscal and bank integrations are limited for agents (a declared narrowing, not a parity
+  gap; a bank-initiated payment also needs a person to authorize it at the bank, SCA).
+- **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
+  `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
+  editable field, and the generic delete of a draft fails on its payment details. A payment is
+  created, edited (draft) and deleted (draft, with credit given back) from the invoice: `neo_action(spec:'purchase-invoice',
+  entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
+  — see `purchase-invoice.md` → "MCP payment actions".
+- **No writes on the lines** (`lines`, the allocation to invoice installments) nor on
+  `bankPayments` (PIS, excluded from MCP): the hand-built header + lines route is the one ETP-5558
+  BUG-1 corrupted data through (a line attached to an unrelated processed collection), and it also
+  stored `receipt: true` and no document type (BUG-2/BUG-3, REST-only follow-up in
+  `com.etendoerp.go/docs/neo-headless.md` §4.12.9).
+
 ## Confirming a payment on a posted foreign-currency invoice, and Reactivar on a reconciled payment — ETP-5547
 
 Payments out share this fix with payments in, and the same code runs on both sides. The full
