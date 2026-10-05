@@ -33,7 +33,6 @@ import {
 } from '@/components/ui/popover.jsx';
 import {
   Search,
-  Mic,
   Sparkles,
   MoreVertical,
   MoreHorizontal,
@@ -681,14 +680,6 @@ export default function TopBar({
               className="min-w-0 flex-1 bg-transparent text-left text-sm text-foreground outline-none placeholder:text-search-placeholder"
               data-testid="global-search-input"
             />
-            <Tooltip delayDuration={0} data-testid="Tooltip__133e64">
-              <TooltipTrigger asChild data-testid="TooltipTrigger__133e64">
-                <span role="button" tabIndex={-1} aria-label={ui('searchWithVoice')} className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-search-placeholder">
-                  <Mic className="h-4 w-4" data-testid="Mic__133e64" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" data-testid="TooltipContent__133e64">{ui('searchWithVoice')}</TooltipContent>
-            </Tooltip>
           </div>
         </div>
 

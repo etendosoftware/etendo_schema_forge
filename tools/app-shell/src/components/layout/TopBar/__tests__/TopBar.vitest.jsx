@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/layout/TopBar/TopBar.jsx
 /**
  * TopBar — the app shell header. Covers the title truncation fix (ETP-4764 follow-up): a long
  * record name (e.g. a bank account's full name + IBAN) used to overflow the header and run
@@ -142,6 +143,14 @@ describe('TopBar title', () => {
     });
     document.removeEventListener('schema-forge:vector-search-scope', recordScopeEvent);
     window.history.pushState({}, '', '/');
+  });
+
+  // ETP-5602: the mic rendered as a role="button" with no handler — a control that does nothing.
+  // It stays hidden until voice search exists.
+  it('does not render a voice-search control in the global search box', () => {
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('Mic__133e64')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'searchWithVoice' })).not.toBeInTheDocument();
   });
 
   it('clears the scope pill when Backspace is pressed at the start of a non-empty query', async () => {
