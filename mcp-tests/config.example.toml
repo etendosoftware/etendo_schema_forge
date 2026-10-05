@@ -76,7 +76,7 @@ auth = "oauth"
 url  = "https://go.experimental.etendo.cloud/mcp"
 auth = "oauth"
 # Optional. Defaults to the scopes the authorization server advertises.
-scopes = "neo:read neo:write"
+scopes = "etendo:read etendo:write"
 # Optional. The loopback redirect port, which is registered with the server and
 # must therefore be stable. Change it only if 8765 is taken.
 redirect_port = 8765

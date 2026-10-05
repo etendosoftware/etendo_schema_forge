@@ -366,7 +366,7 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
 - **User goal / entry point:** Approve or deny an OAuth2 client connection at `/authorize`.
 - **Main path behavior:**
   - With `client_id`, `redirect_uri`, `code_challenge`, and `response_type=code`, the page renders a consent screen.
-  - Missing `scope` defaults to `neo:read neo:write`.
+  - Missing `scope` defaults to `etendo:read etendo:write`.
   - The consent screen includes an **Access duration** selector (`oauthTokenValidity`) that lets the user choose the issued access token's validity period. Presets: **1 day** (default), **1 week**, **1 month**, and **No expiration** (labels `oauthValidity1Day` / `oauthValidity1Week` / `oauthValidity1Month` / `oauthValidityNever`). A live expiry preview shows the resulting expiration timestamp, or "No expiration" when that option is selected.
   - Approve posts to `/oauth2/authorize` with the bearer token, the PKCE parameters, and `validity_seconds` (the selected duration in seconds; `0` for "No expiration"), then redirects to the returned `redirect_url`.
   - **Backend contract:** the server normalizes `validity_seconds` before issuing the token — absent/non-numeric falls back to the 1-day default, values are clamped to a MIN of 300s (5 min) and a MAX of 2,592,000s (30 days), and `0` is preserved as a never-expiring token. The granted validity is persisted and reused on `refresh_token` grants, so a never-expiring token stays never-expiring. Full backend rules: `com.etendoerp.go/docs/package-architecture.md` → "Authorize-grant token validity policy".

@@ -56,7 +56,7 @@ The user-facing `contacts` spec is backed by `C_BPartner`. Its target is `busine
 
 1. Run `update.database` after versioning the source data, then `export.database`; a clean diff confirms ownership and dataset export are stable.
 2. Query `GET /sws/neo/vectorsearch` with a valid session and the declared target. A `422 VECTOR_COLLECTION_NOT_FOUND` means the target's source, provider, or collection is not active yet.
-3. Through MCP, call `etendo_vector_search` with `query` and a `targets` array. It is read-only and requires `neo:read`; the authenticated NEO adapter authorizes each target against its physical source entity and an active Schema Forge window grant before DB Extended searches it.
+3. Through MCP, call `etendo_vector_search` with `query` and a `targets` array. It is read-only and requires `etendo:read`; the authenticated NEO adapter authorizes each target against its physical source entity and an active Schema Forge window grant before DB Extended searches it.
 4. In the command palette, enter at least three characters. On an opted-in window, verify that its localized removable scope pill appears and that the request includes only that target; remove it and verify the request includes every opted-in target. During the request, the localized semantic-loading placeholder is visible. Matching windows render first, above the semantic results, so Enter opens the first matching window and that entry does not move when the debounced record results arrive; with no matching window, Enter opens the first record result. Semantic results show the contract label and score, and open the matching spec in edit mode. "No results" appears only when neither a window nor a record matches.
 
 ## Edge cases

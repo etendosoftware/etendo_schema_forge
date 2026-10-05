@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/OAuth2ClientDialog.jsx
 // Vitest render tests for OAuth2ClientDialog.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -126,7 +127,7 @@ describe('OAuth2ClientDialog', () => {
   });
 
   it('populates form fields in edit mode', () => {
-    const client = { id: '1', name: 'My Client', adUserId: 'u1', adRoleId: 'r1', scopes: ['neo:read'], isActive: false };
+    const client = { id: '1', name: 'My Client', adUserId: 'u1', adRoleId: 'r1', scopes: ['etendo:read'], isActive: false };
     render(<OAuth2ClientDialog {...defaultProps} client={client} />);
     expect(screen.getByDisplayValue('My Client')).toBeTruthy();
     expect(screen.getByDisplayValue('u1')).toBeTruthy();
@@ -153,6 +154,27 @@ describe('OAuth2ClientDialog', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Name is required');
     });
+  });
+
+  it('offers the etendo:* scopes, not the legacy neo:* names', () => {
+    render(<OAuth2ClientDialog {...defaultProps} />);
+    const text = document.body.textContent;
+    for (const scope of ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*']) {
+      expect(text).toContain(scope);
+    }
+    expect(text).not.toContain('neo:');
+  });
+
+  it('maps a client stored with legacy neo:* scopes onto etendo:* and saves the new names', async () => {
+    updateClient.mockResolvedValue({});
+    const client = { id: '1', name: 'Legacy', scopes: ['neo:read', 'neo:report'], isActive: true };
+    render(<OAuth2ClientDialog {...defaultProps} client={client} />);
+    const checked = screen.getAllByRole('checkbox').filter((box) => box.checked).map((box) => box.parentElement.textContent);
+    expect(checked).toEqual(expect.arrayContaining(['etendo:read', 'etendo:report']));
+
+    fireEvent.submit(screen.getByTestId('dialog-content').querySelector('form'));
+    await waitFor(() => expect(updateClient).toHaveBeenCalled());
+    expect(updateClient.mock.calls.at(-1)[2].scopes).toEqual(['etendo:read', 'etendo:report']);
   });
 
   it('calls updateClient on submit in edit mode', async () => {

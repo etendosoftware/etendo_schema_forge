@@ -67,7 +67,7 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 | 2 | **Spec / entity** (kebab-name, e.g. `sales-order`) + header vs lines | Locates the `ETGO_SF_SPEC`/`ETGO_SF_ENTITY` and any `Java_Qualifier` NeoHandler | "Include the spec/entity name as it appears in `etendo_discover`." |
 | 3 | **Verbatim JSON-RPC request** (params payload) | The single highest-value field — makes repro deterministic | "Paste the exact JSON-RPC request body sent." |
 | 4 | **Verbatim response / error** (JSON-RPC error code + message, or wrong payload) | Distinguishes a 4xx validation reject from a 500 code bug | "Paste the exact response/error returned, not a paraphrase." |
-| 5 | **Auth context** — OAuth2 client + scope (`neo:read/write/process/report/*`), AD role, user/org/client | A large fraction of 'failures' are RBAC/scope, not code bugs | "Include the OAuth2 scope and the AD role/user used." |
+| 5 | **Auth context** — OAuth2 client + scope (`etendo:read/write/process/report/*`; legacy `neo:*` still accepted), AD role, user/org/client | A large fraction of 'failures' are RBAC/scope, not code bugs | "Include the OAuth2 scope and the AD role/user used." |
 | 6 | **Context params** — `recordContext` / `parentContext` passed to selectors/defaults; session vars (`@#...@`) | Selector/defaults bugs are usually missing-context bugs | "Include any recordContext/parentContext sent." |
 | 7 | **Contract/spec version** + whether it was pushed (`export.database` run) | Rules out 'stale config' before reading code | "State the contract version and whether the spec is deployed." |
 | 8 | **Environment** — instance URL, com.etendoerp.go branch/commit | Reproduce against the right build | "Identify the instance and the module commit/branch." |

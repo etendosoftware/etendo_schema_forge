@@ -128,7 +128,7 @@ Request (verbatim JSON-RPC):
   { ... }
 Response/error (verbatim):
   { "error": { "code": ..., "message": "..." } }
-Auth: scope=<neo:write> role=<...> user=<...> client/org=<...>
+Auth: scope=<etendo:write> role=<...> user=<...> client/org=<...>
 Context params: recordContext/parentContext=<...>; session vars=<...>
 Contract version: <x.y.z>  Deployed: yes/no
 Environment: <instance URL>  module commit: <sha/branch>

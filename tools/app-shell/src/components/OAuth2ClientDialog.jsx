@@ -15,8 +15,15 @@ import { createClient, updateClient } from '@/lib/oauth2Api.js';
 import { toast } from 'sonner';
 import { Copy, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 
-const ALL_SCOPES = ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'];
-const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== 'neo:*');
+const WILDCARD_SCOPE = 'etendo:*';
+const ALL_SCOPES = ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', WILDCARD_SCOPE];
+const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== WILDCARD_SCOPE);
+
+// Clients created before the rename are stored with `neo:*` scopes; the server still accepts
+// them, but the dialog only offers the `etendo:*` names, so show (and re-save) them as such.
+function toCurrentScopes(scopes = []) {
+  return [...new Set(scopes.map((scope) => scope.replace(/^neo:/, 'etendo:')))];
+}
 
 /**
  * Dialog for creating or editing an OAuth2 client.
@@ -44,7 +51,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
         setName(client.name || '');
         setAdUserId(client.adUserId || '');
         setAdRoleId(client.adRoleId || '');
-        setScopes(client.scopes || []);
+        setScopes(toCurrentScopes(client.scopes));
         setIsActive(client.isActive !== false);
       } else {
         setName('');
@@ -57,10 +64,10 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
     }
   }, [open, client]);
 
-  const hasWildcard = scopes.includes('neo:*');
+  const hasWildcard = scopes.includes(WILDCARD_SCOPE);
 
   const toggleScope = (scope) => {
-    if (scope === 'neo:*') {
+    if (scope === WILDCARD_SCOPE) {
       // Toggle wildcard: if already set, clear all; otherwise set wildcard + all granular
       if (hasWildcard) {
         setScopes([]);
@@ -192,7 +199,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
               <Label data-testid="Label__4aea7f">Scopes</Label>
               <div className="grid grid-cols-2 gap-2">
                 {ALL_SCOPES.map((scope) => {
-                  const isGranular = scope !== 'neo:*';
+                  const isGranular = scope !== WILDCARD_SCOPE;
                   const checked = scopes.includes(scope) || (isGranular && hasWildcard);
                   const disabled = isGranular && hasWildcard;
 
@@ -212,7 +219,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
                         onChange={() => toggleScope(scope)}
                         className="rounded border-input"
                       />
-                      <span className={`font-mono ${scope === 'neo:*' ? 'font-semibold' : ''}`}>
+                      <span className={`font-mono ${scope === WILDCARD_SCOPE ? 'font-semibold' : ''}`}>
                         {scope}
                       </span>
                     </label>
