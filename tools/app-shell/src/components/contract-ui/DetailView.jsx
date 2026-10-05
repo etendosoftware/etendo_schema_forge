@@ -3221,8 +3221,7 @@ export function DetailView({
                     if (!parentId) return;
                     // ETP-5378 — a line write can change the header column the grid shows.
                     hook.invalidateEntityCache?.();
-                    hook.fetchChildren?.(parentId, { force: true });
-                    hook.fetchById?.(parentId, { force: true });
+                    hook.fetchById?.(parentId, { force: true }); // forced: re-reads the lines too
                   },
                   onRefreshChildren: () => hook.fetchChildren?.(data?.id || recordId, { force: true }),
                 };
@@ -3853,7 +3852,7 @@ export function DetailView({
                               catalogs={catalogs}
                               entity={detailEntity}
                               onCountChange={(n) => setCustomLinesCount(n)}
-                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchChildren?.(data?.id || recordId, { force: true }); hook.fetchById?.(data?.id || recordId, { force: true }); }}
+                              onRefresh={() => { hook.invalidateEntityCache?.(); hook.fetchById?.(data?.id || recordId, { force: true }); }}
                               isNew={isNew}
                               onSave={async () => {
                                 const saved = await hook.handleSave(data);

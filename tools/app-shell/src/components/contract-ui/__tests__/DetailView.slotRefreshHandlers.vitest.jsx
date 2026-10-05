@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * Behavioral tests for the ETP-4563 cache-refresh fix on DetailView's slot and
  * lifecycle refresh callbacks. The fix threads `{ force: true }` through every
@@ -178,7 +179,9 @@ describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
     </div>
   );
 
-  it('onRefresh force-refetches both children and header for the current record', async () => {
+  // ETP-5602: a forced fetchById re-reads the lines itself (useEntity.cache test 23), so
+  // onRefresh issues exactly one lines GET — a separate fetchChildren would be a second one.
+  it('onRefresh force-refetches the header, which re-reads the lines once', async () => {
     const user = userEvent.setup();
     renderDetailView({ headerExtra: captureSlot() });
 
@@ -186,8 +189,8 @@ describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
     mockHook.fetchChildren.mockClear();
     await user.click(screen.getByTestId('slot-refresh'));
 
-    expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
   });
 
   it('onRefresh(parentId) honors an explicit id argument', async () => {
@@ -198,8 +201,8 @@ describe('DetailView — headerExtra slotProps refresh (ETP-4563)', () => {
     mockHook.fetchChildren.mockClear();
     await user.click(screen.getByTestId('slot-refresh-explicit'));
 
-    expect(mockHook.fetchChildren).toHaveBeenCalledWith('999', { force: true });
     expect(mockHook.fetchById).toHaveBeenCalledWith('999', { force: true });
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
   });
 
   it('onRefreshChildren force-refetches only the children', async () => {
@@ -306,7 +309,7 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
   });
 
-  it('force-refreshes children and header from a custom lines tab', async () => {
+  it('force-refreshes the header (and so the lines) from a custom lines tab', async () => {
     const user = userEvent.setup();
     const CustomLines = ({ onRefresh, onSave }) => (
       <div>
@@ -316,11 +319,12 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
     );
     renderDetailView({ DetailTable: null, CustomLines, customLinesLabel: 'Custom Lines' });
 
+    mockHook.fetchChildren.mockClear();
     await user.click(await screen.findByTestId('custom-lines-refresh'));
     await user.click(screen.getByTestId('custom-lines-save'));
 
-    expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
     expect(mockHook.handleSave).toHaveBeenCalledWith(mockHook.editing);
   });
 
@@ -538,7 +542,7 @@ describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () =
     clearRefreshSpies();
     await user.click(screen.getByTestId('slot-refresh'));
 
-    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
   });
 
   it('a header-slot refresh for an explicit record id still drops the grid page', async () => {
@@ -551,7 +555,7 @@ describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () =
     clearRefreshSpies();
     await user.click(screen.getByTestId('slot-refresh-explicit'));
 
-    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
     expect(mockHook.fetchById).toHaveBeenCalledWith('999', { force: true });
   });
 
@@ -623,7 +627,7 @@ describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () =
     clearRefreshSpies();
     await user.click(await screen.findByTestId('custom-lines-refresh'));
 
-    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
   });
 
   it('a secondary custom modal writing the parent must not leave a stale row in the grid', async () => {
