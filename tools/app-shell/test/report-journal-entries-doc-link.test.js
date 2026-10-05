@@ -95,11 +95,17 @@ describe('report-journal-entries — doc_window CASE branches (ETP-5013)', () =>
     // `financial-account` window's own primaryEntity is the ACCOUNT — hence
     // the separate `doc_record_id` (account to open) and `doc_query`
     // (`txn=<id>`, so the window deep-links to the right movement) columns.
+    // ETP-5273: M_MOVEMENT -> goods-movements and M_INTERNAL_CONSUMPTION ->
+    // internal-consumption. Both post fact_acct rows whose `record_id` IS the
+    // target window's primary entity PK (M_Movement_ID / M_Internal_Consumption_ID),
+    // so they reuse the generic navigate-invoice mechanism untouched, like M_INVENTORY.
     const tables = [...DOC_WINDOW_CASE.matchAll(/UPPER\(adt\.tablename\)\s*=\s*'([A-Z_]+)'/gi)].map((m) => m[1]);
     assert.deepEqual(tables, [
       'C_INVOICE',
       'M_INOUT',
       'M_INVENTORY',
+      'M_MOVEMENT',
+      'M_INTERNAL_CONSUMPTION',
       'M_MATCHINV',
       'A_AMORTIZATION',
       'FIN_FINACC_TRANSACTION',

@@ -90,6 +90,7 @@ vi.mock('../../shared/pdfUtils.js', () => ({
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import ReturnMaterialReceiptPreview from '../ReturnMaterialReceiptPreview.jsx';
+import { SALES_RELATED_DOCS } from '@/components/related-documents/salesRelatedDocs.js';
 
 const defaultReceipt = {
   id: 'rmr-1',
@@ -186,6 +187,13 @@ describe('ReturnMaterialReceiptPreview', () => {
     expect(screen.getByTestId('tab-general')).toBeInTheDocument();
     expect(screen.queryByTestId('tab-messages')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tab-history')).not.toBeInTheDocument();
+  });
+
+  it('passes the shared return-material-receipt related-documents definition, not specs (ETP-5527)', () => {
+    renderPreview();
+    const args = mockBuildReturnPreviewContent.mock.calls.at(-1)[0];
+    expect(args.relatedDefinition).toBe(SALES_RELATED_DOCS['return-material-receipt']);
+    expect(args.specs).toBeUndefined();
   });
 
   it('title contains windowLabel and receipt documentNo', () => {

@@ -120,8 +120,10 @@ export default function RowQuickActions({
   // View-only window (decisions.json → window.readOnly, threaded via ListView →
   // DataTable). When true the write actions (Edit, Clone, Delete) are suppressed so
   // a GO tenant cannot mutate the record from the list; row click still opens the
-  // read-only detail for viewing. Non-mutating affordances (Email/Send, kebab
-  // menu actions) stay gated by their own config. Defaults to false → unchanged.
+  // read-only detail for viewing. Email/Send and kebab menu actions stay gated by
+  // their own config; under the runtime Solo-Lectura tier ListView disables the
+  // Email gate upstream (ETP-5205), because sending writes (mail + PDF
+  // attachment). Defaults to false → unchanged.
   readOnly = false,
 }) {
   const ui = useUI();

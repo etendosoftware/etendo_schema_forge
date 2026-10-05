@@ -35,7 +35,7 @@ export default function EntityField({
   const wrapRef = useRef(null);
 
   const endpoint = useMemo(
-    () => deriveEntityEndpoint({ entitySpec: field?.entitySpec, apiBaseUrl, contactsBase }),
+    () => deriveEntityEndpoint({ entitySpec: field?.entitySpec, selector: field?.selector, apiBaseUrl, contactsBase }),
     [field, contactsBase, apiBaseUrl],
   );
 
@@ -46,7 +46,7 @@ export default function EntityField({
     endpoint,
     token,
     query,
-    filter: field?.filter,
+    params: field?.selectorParams,
     limit: SEARCH_LIMIT,
   });
 

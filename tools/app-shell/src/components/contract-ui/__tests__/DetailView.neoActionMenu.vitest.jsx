@@ -189,7 +189,31 @@ describe('DetailView — neoAction menu branch (ETP-4298)', () => {
     await user.click(screen.getByTestId('menu-action-post'));
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(translated));
-    expect(translateBackendError).toHaveBeenCalledWith(raw, expect.any(Function));
+    expect(translateBackendError).toHaveBeenCalledWith(raw, expect.any(Function), {
+      messageKeys: undefined,
+      messageParams: undefined,
+    });
+  });
+
+  it('forwards messageKeys and messageParams of a failed post to translateBackendError (ETP-5175)', async () => {
+    const user = userEvent.setup();
+    const failure = {
+      success: false,
+      message: 'Account could not be found. (Contact: Acme Corp)',
+      messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
+      messageParams: { bpName: 'Acme Corp' },
+    };
+    neoExecuteMock.mockResolvedValue(failure);
+    renderDetailView({ menuActions: [{ key: 'post', label: 'Post', neoAction: 'post' }] });
+
+    await user.click(screen.getByTestId('action-more'));
+    await user.click(screen.getByTestId('menu-action-post'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(translateBackendError).toHaveBeenCalledWith(failure.message, expect.any(Function), {
+      messageKeys: failure.messageKeys,
+      messageParams: failure.messageParams,
+    });
   });
 
   it('calls neoAction.execute(id, "post") and refreshes via fetchById on success', async () => {

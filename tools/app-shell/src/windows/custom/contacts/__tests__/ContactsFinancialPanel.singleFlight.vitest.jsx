@@ -28,6 +28,11 @@ vi.mock('lucide-react', () => ({
   Plus: () => <span data-testid="icon-plus" />,
 }));
 
+// Only the QA F-1 cases below reach `useEntity`, whose save path reports through toasts.
+vi.mock('sonner', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+}));
+
 vi.mock('../BillingPreferencesForm', () => ({ default: () => <div data-testid="billing-form" /> }));
 vi.mock('../FiscalDefaultsSection', () => ({ default: () => <div data-testid="fiscal-defaults-section" /> }));
 
@@ -39,6 +44,7 @@ import {
 // routes through the canonical `formatCurrency()`. Hardcoding "8.000,00" would bake this suite to
 // one instance's separator configuration.
 import { formatCurrency } from '@/lib/formatCurrency.js';
+import { useEntity } from '@/hooks/useEntity';
 import ContactsFinancialPanel from '../ContactsFinancialPanel.jsx';
 
 /** What the box SHOWS for a committed amount, once it is not being edited. */
@@ -260,5 +266,197 @@ describe('ContactsFinancialPanel — single-flight credit-limit save (ETP-5255)'
 
     await waitFor(() => expect(creditLimitInput()).toHaveValue(idleDisplay(INITIAL_CREDIT_LIMIT)));
     expect(writeCalls(globalThis.fetch)).toHaveLength(1);
+  });
+});
+
+// ETP-5255 (QA F-1) — an autosaved credit limit must reach the header as SAVED, not as an edit.
+//
+// After each successful autosave the panel used to call `onChange(fieldKey, value)`, which
+// DetailView routes to `useEntity.handleChange`. That writes `editing` only, so the header saw
+// `editing.creditLimit !== selected.creditLimit`: "Guardar" stayed enabled after the panel had
+// already stored the value, and its PATCH re-sent `creditLimit`. Clicked while the NEXT autosave
+// was still in flight, that re-send carried the superseded value; the core's per-record write
+// chain queued it behind the autosave, sent it with the refreshed `updated`, and the server
+// accepted it — silently reverting the user's last click.
+
+/** Types a credit limit and leaves the box — the same `persist` path each +/- click arms. */
+function commitCreditLimit(value) {
+  fireEvent.change(creditLimitInput(), { target: { value: String(value) } });
+  fireEvent.blur(creditLimitInput());
+}
+
+describe('ContactsFinancialPanel — reports an autosave as persisted (ETP-5255, QA F-1)', () => {
+  it('calls onPersisted with the value the server stored, and not onChange', async () => {
+    // The server normalises what it is sent: the header must adopt what is STORED.
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([{ id: BP_ID, creditLimit: 6999 }])));
+    const onChange = vi.fn();
+    const onPersisted = vi.fn();
+
+    render(<ContactsFinancialPanel {...defaultProps} onChange={onChange} onPersisted={onPersisted} />);
+    commitCreditLimit(7000);
+
+    await waitFor(() => expect(onPersisted).toHaveBeenCalledTimes(1));
+    expect(onPersisted).toHaveBeenCalledWith({ creditLimit: 6999 });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('falls back to onChange when the host provides no onPersisted', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([{ id: BP_ID, creditLimit: 7000 }])));
+    const onChange = vi.fn();
+
+    render(<ContactsFinancialPanel {...defaultProps} onChange={onChange} />);
+    commitCreditLimit(7000);
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+    expect(onChange).toHaveBeenCalledWith('creditLimit', 7000);
+  });
+
+  it('reports nothing when the server refuses the write', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve(neoResponse([], { ok: false, status: 409 })));
+    const onChange = vi.fn();
+    const onPersisted = vi.fn();
+
+    render(<ContactsFinancialPanel {...defaultProps} onChange={onChange} onPersisted={onPersisted} />);
+    commitCreditLimit(7000);
+
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
+    await flushMicrotasks();
+    expect(onPersisted).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The observable property, with the REAL `useEntity` and the REAL `apiFetch` wired exactly the way
+ * DetailView wires a primary-tab panel: `data`/`editing` = `hook.editing`, `onChange` =
+ * `hook.handleChange`, `onPersisted` = `hook.applyPersistedFields`.
+ */
+describe('ContactsFinancialPanel + useEntity — an autosave leaves the header clean (QA F-1)', () => {
+  const RECORD = {
+    id: BP_ID,
+    name: 'Acme',
+    creditLimit: 0,
+    creditUsed: 0,
+    active: true,
+    etgoWeb: 'https://old.example',
+    updated: READ_TOKEN,
+  };
+
+  /**
+   * Reads answer at once with the current record; writes are merged into it but stay open until
+   * the test releases them. Holding a write open is what makes the F-1 race deterministic.
+   */
+  function installRecordServer() {
+    const pending = [];
+    let current = { ...RECORD };
+    let version = 1;
+    globalThis.fetch = vi.fn((url, opts) => {
+      const method = String(opts?.method || 'GET').toUpperCase();
+      if (method !== 'PATCH' && method !== 'PUT') return Promise.resolve(neoResponse([current]));
+      return new Promise((resolve) => {
+        pending.push(() => {
+          version += 1;
+          current = { ...current, ...JSON.parse(opts.body), updated: `v${version}` };
+          resolve(neoResponse([current]));
+        });
+      });
+    });
+    return {
+      async settleNext() {
+        const release = pending.shift();
+        if (!release) throw new Error('settleNext(): no write is open');
+        await act(async () => {
+          release();
+          await Promise.resolve();
+        });
+      },
+      get openCount() { return pending.length; },
+    };
+  }
+
+  /** Stands in for DetailView's primary-tab mount; `hookRef` exposes the live hook. */
+  function Host({ hookRef }) {
+    const hook = useEntity('businessPartner', null, {
+      token: 'test-token',
+      apiBaseUrl: defaultProps.apiBaseUrl,
+      skipListFetch: true,
+    });
+    hookRef.current = hook;
+    if (!hook.editing) return null;
+    return (
+      <ContactsFinancialPanel
+        data={hook.editing}
+        token="test-token"
+        apiBaseUrl={defaultProps.apiBaseUrl}
+        catalogs={{}}
+        api={{}}
+        editing={hook.editing}
+        onChange={hook.handleChange}
+        onLocalChange={hook.handleChange}
+        onPersisted={hook.applyPersistedFields}
+      />
+    );
+  }
+
+  function mountHost() {
+    const hookRef = { current: null };
+    render(<Host hookRef={hookRef} />);
+    act(() => { hookRef.current.handleSelect(RECORD); });
+    return hookRef;
+  }
+
+  it('keeps "Save" disabled after each autosave', async () => {
+    const server = installRecordServer();
+    const hookRef = mountHost();
+
+    commitCreditLimit(1);
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
+    await server.settleNext();
+    await waitFor(() => expect(hookRef.current.editing.creditLimit).toBe(1));
+    expect(hookRef.current.isDirtyHeader).toBe(false);
+    expect(hookRef.current.dirtyHeaderFieldKeys).not.toContain('creditLimit');
+
+    commitCreditLimit(2);
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(2));
+    await server.settleNext();
+    await waitFor(() => expect(hookRef.current.editing.creditLimit).toBe(2));
+    expect(hookRef.current.isDirtyHeader).toBe(false);
+  });
+
+  // The exact QA timeline: another field is legitimately dirty, the user clicks "Guardar" while
+  // the second autosave is in flight. Before the fix the header PATCH carried `creditLimit: 1`,
+  // was queued behind the autosave of 2, and reverted it.
+  it('does not re-send the credit limit when "Save" races an in-flight autosave', async () => {
+    const server = installRecordServer();
+    const hookRef = mountHost();
+
+    act(() => { hookRef.current.handleChange('etgoWeb', 'https://new.example'); });
+
+    commitCreditLimit(1);
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(1));
+    await server.settleNext();
+    await waitFor(() => expect(hookRef.current.editing.creditLimit).toBe(1));
+
+    commitCreditLimit(2);
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(2));
+    expect(server.openCount).toBe(1); // the autosave of 2 is still in flight
+
+    let savePromise;
+    act(() => { savePromise = hookRef.current.handleSave({ silent: true }); });
+    await flushMicrotasks();
+
+    await server.settleNext(); // autosave of 2 returns; the queued header save now leaves
+    await waitFor(() => expect(writeCalls(globalThis.fetch)).toHaveLength(3));
+    await server.settleNext();
+    await act(async () => { await savePromise; });
+
+    const calls = writeCalls(globalThis.fetch);
+    expect(bodyOf(calls[1]).creditLimit).toBe(2);
+    const headerSave = bodyOf(calls[2]);
+    expect(headerSave.etgoWeb).toBe('https://new.example');
+    expect(headerSave).not.toHaveProperty('creditLimit');
+
+    await waitFor(() => expect(hookRef.current.editing.creditLimit).toBe(2));
+    expect(hookRef.current.isDirtyHeader).toBe(false);
   });
 });

@@ -88,7 +88,10 @@ Two consequences follow, and neither is hypothetical:
    purchase starts with a blank name so the current environment is not mistaken for the target.
    A demo-origin purchase can select an exact source environment; the request carries its
    `demoClientId`, not a name-based lookup. The backend validates that this ID is a demo owned by
-   the account. Productive-origin requests discard any demo selection.
+   the account. Productive-origin requests discard any demo selection. A demo originates at most
+   one productive environment: once it has, `/environments` reports it with
+   `associatedWithProductive: true`, the picker hides it, and a purchase made from it is a clean
+   productive environment with no source or data transfer (ETP-5548).
 9. **The browser creates a durable billing purchase** through the account-scoped
    `POST /sws/go/billing/purchases` endpoint. The request describes the action, target name,
    locale and, only for a demo-origin purchase, the selected `demoClientId` and products/contacts
@@ -121,6 +124,24 @@ Two consequences follow, and neither is hypothetical:
     The backend uses a fenced provisioning claim and reruns the idempotent reconciliation chain,
     so a retry continues the paid request instead of creating another purchase. Legacy paid
     records without a recorded selection fail closed and need support-assisted resolution.
+    When the checkout status reports `provisioning_failed` or `stalled`, `/upgrade` shows a
+    payment-confirmed recovery panel instead of the new-purchase form. Its retry reads the
+    account-scoped purchase and calls the existing onboarding endpoint with the same purchase ID
+    as `paymentToken`. The retry button is shown only when the status says `retryAllowed`.
+    The panel never shows the backend's raw failure text: it localizes the status endpoint's
+    `failureCode` (`CLIENT_NAME_IN_USE` → the account already has a productive environment with
+    that name) and falls back to a generic message for any other code. A non-retryable code
+    (`retryAllowed: false`) replaces the retry button with a contact-support message, because
+    retrying would fail the same way. The same name is also refused **before payment**: the form
+    checks the account's productive environments itself (`upgradeTenantNameTaken`), and the
+    purchase request answers 409 `CLIENT_NAME_IN_USE`, shown on the name field
+    (`upgradeTenantNameInUse`) without opening Stripe. Company names are otherwise not unique
+    (ETP-5548): the demo's name, or another account's, can be reused, and the purchase still
+    creates a new productive environment — it never converts the demo.
+    A return reporting `provisioning` follows the existing purchase until it completes or fails;
+    a return reporting `provisioned` waits for the purchased client to appear in the environment
+    selector. A bounded poll ends in a status check action, without starting another onboarding
+    request while the existing claim remains active.
 14. **The page waits for the canonical environment selector to catch up.** Provisioning returns
     the new Etendo `clientId`; the page refreshes the account environment list and matches that
     exact ID. It does not treat a matching name as proof that the new environment is present. If
@@ -136,6 +157,16 @@ Two consequences follow, and neither is hypothetical:
 The company switcher badges each environment *Demo* or *Productivo* from the per-environment
 `plan` field that `GET /sws/go/environments` returns, and it sorts productive environments first.
 This closed the open item that Part 4 recorded as `plan-badge-in-env-picker`.
+
+Layout (ETP-5548). The trigger names the current **client** (the environment), falling back to the
+session organization only when environments cannot be listed — the organization name is not the
+environment name, and a productive environment whose organization still carried its demo's name
+read as the demo. The name gets the full width; plan and commercial state go on a second line.
+In the menu (320px, capped to the viewport) each row shows the full name, wrapped to at most two
+lines, with plan, commercial state and relationship below it. The current company is not a
+disabled item — Radix dims those to half opacity, which made the one row that answers "where am
+I?" the least visible. It is highlighted, carries `aria-current` and a check with the
+`currentCompany` label, and selecting it only closes the menu.
 
 That badge is also where ETP-4966 surfaced. It was reported as "I paid with Stripe and it still says
 Demo", and the badge was telling the truth: the backend really had recorded the environment as free,
@@ -345,10 +376,10 @@ The paid flow has separate contracts for the commercial purchase and environment
 | Endpoint | Purpose |
 |---|---|
 | `GET /sws/go/billing/offers` | Returns the current productive offer's `amountMinor`, `currency`, and recurring `interval`. The backend retrieves these from the configured Stripe Price. |
-| `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. |
+| `POST /sws/go/billing/purchases` | Creates a durable account-scoped purchase and hosted Stripe Checkout session. A demo-origin request can include its selected `demoClientId`. A company name the account already uses for a productive environment is refused with 409 `CLIENT_NAME_IN_USE` before Stripe is contacted; any other match (another account, the account's demo) is allowed. A name shaped like a provisioning name (`PEND-` + 32 hex) is reserved (400). |
 | `GET /sws/go/billing/overview` | Returns the account's purchase states. The UI shows only `PAID`, `PROVISIONING`, and `PROVISIONED`; unpaid `CREATING` and `CREATED` attempts are not environments and are hidden from the recovery list. |
 | `GET /sws/go/billing/purchases/{purchaseId}` | Reads one account-scoped purchase, including its fixed demo source and created `clientId` when available. |
-| `GET /sws/go/checkout/sessions/{requestId}` | Returns whether the backend has confirmed payment for this account's checkout request. Unknown or foreign IDs are indistinguishable from pending. |
+| `GET /sws/go/checkout/sessions/{requestId}` | Returns the derived payment and provisioning state, including `retryAllowed` and `updatedAt`; a failed attempt adds a stable `failureCode` and a fixed `failureReason`, never the raw cause. Unknown or foreign IDs are indistinguishable from pending. |
 | `POST /sws/go/onboarding` | Starts the existing NDJSON provisioning stream using the paid checkout request ID as `paymentToken`. |
 
 The payment decision remains server-authoritative. Stripe's signed webhook records payment
@@ -426,13 +457,15 @@ tenant, reads back as free without any migration.
 **Only a request that actually had to clear the paywall counts as paid.** A first tenant, or
 a resume, stays free even if the payload happened to carry a token.
 
-**The write is best-effort in one direction, and that matters.** It happens inside the
-onboarding transaction, so a successful write commits with the tenant. But the marking step
-swallows its own failures rather than rolling back a whole tenant over a piece of commercial
-metadata — which means **a paid tenant can commit unmarked and read back as free**. The trade
-is deliberate. Its consequence is not a technicality: the plan marker is *not a guaranteed
-record of payment*, and reconciling a tenant that paid but reads as free is a billing concern,
-not something this write can promise.
+**The write is mandatory and it is the last one before the commit (ETP-5548).** The plan
+marker, the productive lifecycle and the removal of the demo `ETSG_ForceTestMode` override are
+written right before the onboarding commit; if any of them fails the onboarding is rolled back,
+so a paid tenant never commits unmarked. They go last because the classic path commits
+internally while it builds the client and organization: written earlier, a later failure left a
+paid, incomplete environment that read back as productive. A failed classic attempt can still
+leave its client and organization behind, but without productive metadata; `/environments` hides
+that client while the purchase is unfinished and the retry reuses it. See
+`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` §3 for the full contract.
 
 ## 3.5 What the environments endpoint now returns
 

@@ -99,13 +99,15 @@ vi.mock('../preview-cards/EmailsCard.jsx', () => ({
 }));
 
 vi.mock('../preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: () => <div data-testid="rel-docs-card" />,
+  default: ({ definition }) => <div data-testid="rel-docs-card" data-definition-spec={definition?.spec} />,
 }));
 
+// ETP-5527 — the previews only read the shared definition from the barrel.
 vi.mock('@/components/related-documents', () => ({
-  fetchByCriteria: vi.fn(),
-  fetchChild: vi.fn(),
-  fetchById: vi.fn(),
+  SALES_RELATED_DOCS: {
+    'sales-order': { spec: 'sales-order' },
+    'sales-quotation': { spec: 'sales-quotation' },
+  },
 }));
 
 vi.mock('@/lib/statusBadge.js', () => ({
@@ -222,6 +224,18 @@ describe('OrderPreview', () => {
     useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob: new Blob(), loading: false, error: null });
     renderOrderPreview({ specName: 'sales-order' });
     expect(screen.getByTestId('download-btn')).not.toBeDisabled();
+  });
+
+  // ETP-5527 — sales orders render the shared sales-order definition (same as the form);
+  // purchase orders keep rendering no related-documents card at all.
+  it.each([
+    ['sales-order', 'sales-order'],
+    ['purchase-order', undefined],
+  ])('related-documents card for %s', (specName, expectedDefinitionSpec) => {
+    renderOrderPreview({ specName });
+    const card = screen.queryByTestId('rel-docs-card');
+    if (expectedDefinitionSpec) expect(card).toHaveAttribute('data-definition-spec', expectedDefinitionSpec);
+    else expect(card).not.toBeInTheDocument();
   });
 
   it('uses Purchase Order window label when specName is purchase-order', () => {
@@ -541,5 +555,62 @@ describe('OrderPreview — email history wiring (ETP-5069)', () => {
     fireEvent.click(screen.getByTestId('send-modal-close'));
 
     expect(lastEmailsCardProps().refreshSignal).toBe(before);
+  });
+});
+
+// ── ETP-5205 (QA pasada 1): Solo-Lectura tier ─────────────────────────────────
+// Send is a write (mail + PDF cached as the main attachment), so it is hidden and the preview
+// never writes the attachment. Download PDF stays (D1: it only exposes readable data).
+describe('OrderPreview — Solo-Lectura tier (ETP-5205)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: 'blob:test', pdfBlob: new Blob(['%PDF']), loading: false, error: null });
+  });
+
+  function lastAttachmentConfig() {
+    return vi.mocked(GenericPreviewModal).mock.calls.at(-1)[0].attachmentConfig;
+  }
+
+  it('hides Send, keeps Download and marks the attachment read-only on a completed order', () => {
+    renderOrderPreview({ readOnly: true });
+
+    expect(screen.queryByTestId('email-btn')).not.toBeInTheDocument();
+    expect(screen.getByTestId('download-btn')).toBeEnabled();
+    expect(vi.mocked(EmailsCard).mock.calls.at(-1)[0].onSend).toBeUndefined();
+    expect(lastAttachmentConfig().readOnly).toBe(true);
+    // storeCondition stays true: it also gates the READ of the cached PDF.
+    expect(lastAttachmentConfig().storeCondition).toBe(true);
+  });
+
+  it('keeps Send and a writable attachment under full access (control)', () => {
+    renderOrderPreview();
+
+    expect(screen.getByTestId('email-btn')).toBeInTheDocument();
+    expect(lastAttachmentConfig().readOnly).toBeFalsy();
+  });
+});
+
+describe('OrderPreview — delivery row label (ETP-5549)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+    usePurchaseOrderPdf.mockReturnValue({ pdfUrl: null, pdfBlob: null, loading: false, error: null });
+  });
+
+  const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
+
+  it('sales order leaves deliveryLabel undefined so SummaryCard shows the default Delivered label', () => {
+    renderOrderPreview({ specName: 'sales-order' });
+    expect(lastSummaryProps().deliveryLabel).toBeUndefined();
+    expect(lastSummaryProps().deliveryPercent).toBe(75);
+  });
+
+  it('purchase order passes the previewCardReceivedPercent label', () => {
+    renderOrderPreview({
+      specName: 'purchase-order',
+      order: { ...defaultOrder, deliveryStatusPurchase: 30 },
+    });
+    expect(lastSummaryProps().deliveryLabel).toBe('previewCardReceivedPercent');
+    expect(lastSummaryProps().deliveryPercent).toBe(30);
   });
 });

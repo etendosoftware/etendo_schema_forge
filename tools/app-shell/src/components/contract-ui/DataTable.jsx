@@ -835,9 +835,26 @@ function TableSkeleton({ columns }) {
 
 /**
  * Empty state shown when the table has no data (or all rows are filtered out).
+ *
+ * `override` (DataTable's `emptyState` prop, ETP-5591) replaces the built-in copy for a
+ * caller whose empty case means something else — e.g. a hand-built toolbar with its own
+ * filters, where "create a new record" is wrong. `{ title, description?, action?, testId? }`;
+ * `action` is any node (typically a "clear filters" button).
  */
-function EmptyState({ hasFilter, totalCount }) {
+function EmptyState({ hasFilter, totalCount, override }) {
   const ui = useUI();
+  if (override) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center py-12 text-muted-foreground"
+        data-testid={override.testId}>
+        <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
+        <p className="text-sm font-medium">{override.title}</p>
+        {override.description && <p className="text-xs mt-1">{override.description}</p>}
+        {override.action && <div className="mt-4">{override.action}</div>}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
       <Inbox className="h-10 w-10 mb-3 opacity-40" data-testid="Inbox__eb5261" />
@@ -2435,11 +2452,17 @@ function renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, lo
  * between the two branches — pure JSX extraction, renders the exact same
  * DOM as before in both call sites.
  */
-function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass) {
+function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass, wrapHeader = false) {
+  // `wrapHeader` (see `headerWrap` in renderColumnHeaderCell): the label wraps onto
+  // up to 2 lines, capped at ~80px so the wrap holds even when `table-layout: fixed`
+  // stretches the column on wide screens. Otherwise: single-line truncate.
+  const labelClass = wrapHeader
+    ? 'min-w-0 max-w-[80px] whitespace-normal break-words text-left'
+    : 'min-w-0 truncate';
   return (
     <>
       <span className="inline-flex max-w-full min-w-0 items-center gap-1 align-middle">
-        <span className="min-w-0 truncate" title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
+        <span className={labelClass} title={typeof colLabel === 'string' ? colLabel : undefined}>{colLabel}</span>
         {col.computed?.mode === 'stored' && (
           <span className="shrink-0">
             <ComputedFreshnessHint computed={col.computed} data-testid="ComputedFreshnessHint__eb5261" />
@@ -2451,6 +2474,36 @@ function renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortAr
       )}
     </>
   );
+}
+
+// Single source of truth for "this column is left-aligned even though it may be
+// numeric" — shared by the header cell and the body cell so they cannot drift.
+function isLeftAlignedColumn(col) {
+  return col.type === 'percent';
+}
+
+// Pure class/flag computation for a header cell, extracted from
+// renderColumnHeaderCell to keep its cognitive complexity low.
+function getHeaderCellStyling(col, isNumeric) {
+  // `percent` is in NUMERIC_FIELD_TYPES (filters/sorting/totals depend on it) but
+  // is LEFT-aligned per design (circle + label at the cell's left edge). Left-aligned
+  // columns take the NON-numeric sort-arrow placement (right of the label).
+  const isLeftAligned = isLeftAlignedColumn(col);
+  const leftOverride = isLeftAligned ? '!text-left' : '';
+  const leftOverrideSuffix = leftOverride ? ` ${leftOverride}` : '';
+  const sortArrowClass = isNumeric && !isLeftAligned
+    ? 'left-0 -translate-x-full pr-0.5'
+    : 'right-0 translate-x-full pl-0.5';
+  // Column option `headerWrap` (boolean, optional): let the header label wrap onto
+  // 2 lines instead of truncating. Defaults to true for `percent` columns (compact
+  // ProgressCircle cell, narrow column) and false otherwise; set `headerWrap: false`
+  // to opt a percent column out, or `true` to opt any other type in.
+  // Wrapping and left alignment are separate decisions that merely share the
+  // `percent` default today, so this deliberately does not use isLeftAlignedColumn.
+  const wrapHeader = col.headerWrap ?? col.type === 'percent';
+  const wrapClass = wrapHeader ? 'whitespace-normal' : '';
+  const wrapClassSuffix = wrapClass ? ` ${wrapClass}` : '';
+  return { wrapHeader, leftOverride, leftOverrideSuffix, sortArrowClass, wrapClass, wrapClassSuffix };
 }
 
 /**
@@ -2520,9 +2573,12 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
   if (Array.isArray(col.parts) && col.parts.length > 0) {
     return renderMultiFieldHeaderCell(col, { sortColumn, sortDirection, onSort, locale, t, headStyle, hideHeader });
   }
-  const sortArrowClass = isNumeric
-    ? 'left-0 -translate-x-full pr-0.5'
-    : 'right-0 translate-x-full pl-0.5';
+  // Alignment / wrap / sort-arrow class computation lives in getHeaderCellStyling.
+  // The `isNumeric` header/button lines below are matched by a source-regex alignment
+  // test, so do not reshape them: left-aligned columns override them with
+  // `!text-left` (important wins over `text-right`).
+  const { wrapHeader, leftOverride, leftOverrideSuffix, sortArrowClass, wrapClass, wrapClassSuffix } =
+    getHeaderCellStyling(col, isNumeric);
   return (
     <TableHead
       key={col.key}
@@ -2530,11 +2586,13 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
       className={[
         'align-middle',
         isNumeric ? 'text-right' : '',
+        leftOverride,
         // Opt-in fixed-width / per-column header styling. Needed by list windows
         // whose design pins column widths (e.g. financial-account's Figma layout,
         // where the "Cuenta" header must align with the row avatar). Absent =
         // unchanged auto layout, so every existing window is unaffected.
         col.headClass || '',
+        wrapClass,
       ].filter(Boolean).join(' ')}
       style={headStyle}
     >
@@ -2551,14 +2609,14 @@ function renderColumnHeaderCell(col, colIdx, { sortColumn, sortDirection, onSort
           // (below) shows the "…". Do NOT swap this to `block`/`w-full` — that
           // would ALSO stretch the (common, non-overflowing) short-label case to
           // the cell's full width, dragging the arrow away from the label.
-          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${isNumeric ? 'text-right' : 'text-left'}`}
+          className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal cursor-pointer select-none transition-colors bg-transparent border-0 p-0 ${isNumeric ? 'text-right' : 'text-left'}${leftOverrideSuffix}${wrapClassSuffix}`}
           onClick={() => onSort(col.key)}
         >
-          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass, wrapHeader)}
         </button>
       ) : (
-        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${isNumeric ? ' text-right' : ''}`}>
-          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass)}
+        <span className={`relative inline-block max-w-full text-xs leading-4 font-semibold text-text-primary tracking-normal${isNumeric ? ' text-right' : ''}${leftOverrideSuffix}${wrapClassSuffix}`}>
+          {renderHeaderLabelContent(colLabel, col, isSorted, sortDirection, sortArrowClass, wrapHeader)}
         </span>
       )}
     </TableHead>
@@ -2665,7 +2723,9 @@ function TableDataRow({
             data-value={row[col.key] ?? ''}
             className={[
               'text-sm',
-              NUMERIC_FIELD_TYPES.has(col.type) ? 'text-right tabular-nums' : '',
+              NUMERIC_FIELD_TYPES.has(col.type) && !isLeftAlignedColumn(col) ? 'text-right tabular-nums' : '',
+              // Left-aligned columns (`percent`) stay left, matching the header.
+              isLeftAlignedColumn(col) ? 'text-left' : '',
               // Opt-in per-column cell styling, the body-side counterpart of
               // `col.headClass` (see renderColumnHeaderCell). Lets a window pin a
               // column's width so header and cells stay aligned. Absent = unchanged.
@@ -2857,6 +2917,7 @@ function TableDataRow({
  */
 function renderTableRows({
   hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+  emptyState,
   ...rowProps
 }) {
   if (hideDataRows) return null;
@@ -2867,6 +2928,7 @@ function renderTableRows({
           <EmptyState
             hasFilter={hasActiveFilter}
             totalCount={data.length}
+            override={emptyState}
             data-testid="EmptyState__eb5261" />
         </TableCell>
       </TableRow>
@@ -2940,6 +3002,9 @@ function renderFooterRow({
  *  - onDeleteRow: (row) => void — when provided, renders a per-row delete button (trash icon)
  *      that appears on row hover and on keyboard focus. Invoked with the row object; click
  *      propagation is stopped so it does not trigger row selection or navigation.
+ *  - emptyState: { title, description?, action?, testId? } | undefined — replaces the
+ *      built-in "no records / no matches" copy when the table renders no rows (ETP-5591).
+ *      Opt-in; omitted ⇒ the default empty state, unchanged.
  *  - balanceFooter: object | null — presence (not shape) suppresses this table's own generic
  *      per-amount-column footer-totals row, regardless of showFooterTotals. Set when a caller
  *      renders a specialized, grid-aligned totals row elsewhere (e.g. InlineLinesPanel's
@@ -3041,6 +3106,7 @@ export function DataTable({
   deselectRowIds = [],
   hideHeader = false,
   hideDataRows = false,
+  emptyState,
 }) {
   const t = useLabel(labelOverrides);
   const tMenu = useMenuLabel();
@@ -3493,6 +3559,7 @@ export function DataTable({
           <TableBody data-testid="TableBody__eb5261">
             {renderTableRows({
               hideDataRows, filteredData, addRow, colSpan, hasActiveFilter, data, selectedRows,
+              emptyState,
               selectable, isRowSelectable, toggleRow, visibleColumns,
               renderCellValue, onRowClick, onNavigate, selectedRowBg, selectedId, selectedRowId,
               rowHoverStyle,

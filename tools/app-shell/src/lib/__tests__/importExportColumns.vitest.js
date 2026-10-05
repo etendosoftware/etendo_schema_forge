@@ -193,6 +193,15 @@ const ACCEPTED_BY_TARGET = {
     6: ['Otro documento probatorio', 'Otro documento'],
     7: ['No Censado'],
   },
+  // ETP-5544 — Cliente / Proveedor (C_BPartner.IsCustomer / IsVendor), both on the same table.
+  customer: {
+    Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
+    N: ['No', 'False', '0'],
+  },
+  vendor: {
+    Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
+    N: ['No', 'False', '0'],
+  },
   productType: {
     I: ['Articulo', 'Item', 'Producto', 'Bien'],
     S: ['Servicio', 'Service'],

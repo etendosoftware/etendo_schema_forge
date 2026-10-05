@@ -414,7 +414,7 @@ The backend rejects with HTTP 400 on extension, magic bytes or size, so a spoofe
 buys nothing. To change what the whole app accepts, edit `NeoAttachmentPolicy.java` — not a
 per-window `decisions.json`, which can only narrow.
 
-**Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
+**Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The full list is fetched lazily on activation (no list request until the user opens the tab, ETP-4564). The tab label still shows the **real number of attachments as soon as the record opens**: while the tab is inactive the frontend calls the lightweight `GET /sws/neo/attachments/{tableName}/{recordId}/count` endpoint, and switches to the list length once the list has been read (ETP-5526). If the count cannot be fetched, the label shows **no number** (never a placeholder `0`) until the tab is opened, with no error toast. That covers a `404`/`405`, a network error, and a backend that predates the endpoint: such a backend does not answer `404` but ignores the unknown `/count` segment and returns the full list (`200 { items }`, so one full list read per record open there), which the SPA rejects as an invalid count. Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
 ### Custom Panel Tabs (`window.customPanelTabs`)
 
@@ -616,7 +616,7 @@ Each entry in `actions` accepts:
 | Mutually exclusive | ✅ | ❌ |
 | Combinable | ❌ | ✅ |
 
-The two can coexist in the same window — subsets render first (segmented control), quick filters render after (toggle pills).
+The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen the order is the reverse (ETP-5509): the quick filters (toggle pills) sit on the first toolbar row, and the subsets (segmented control) sit on a second row below it — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
 
 ### Custom Components (`window.customComponents`)
 
@@ -1262,7 +1262,7 @@ Two field-level props control how the grid column renders raw values as labeled 
 
 | Property | Type | Default | Purpose |
 |----------|------|---------|---------|
-| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
+| `columnType` | string | Inferred | Forces the grid column renderer. `"status"` renders the cell as a status badge. `"signedDelta"` renders a signed numeric delta (see below). `"percent"` renders a progress circle (see "Percent column rendering" below). When absent, the renderer is inferred from the field name/type via `mapFieldType` in `generate-frontend.js`. |
 | `enumValues` | array | `null` | Maps raw cell values to display labels. Each entry: `{ "value": "<raw>", "name": "<i18nKeyOrLabel>" }`. The generator emits these as `enumLabels: { '<raw>': '<name>' }` on the table column descriptor. |
 
 **How `enumValues` is resolved at runtime:**
@@ -1270,6 +1270,7 @@ Two field-level props control how the grid column renders raw values as labeled 
 1. `statusLabel()` in `tools/app-shell/src/lib/statusBadge.js` looks up `name` in `dictionary.genericLabels[name]`, then via the active `translate` function, and falls back to rendering `name` literally.
 2. `DistinctEnumPicker` (in `AdvancedFilterBuilder.jsx`) reads `enumLabels` to populate the advanced/conditional filter value dropdown — so the filter shows translated labels instead of raw values.
 3. `ListFilterBar.jsx` uses the same `enumLabels` to drive the status quick-filter pills above the list.
+4. When the field is also the window's `window.titleField`, `getRecordTitle` (`tools/app-shell/src/components/contract-ui/detailViewHelpers.jsx`) matches the record's value against the field's form `options` and renders `ui(<name>)`, so the detail title and the last breadcrumb segment read the same translated label as the grid and the form (ETP-5285). Without `titleField` the title falls back to the raw `_identifier`, untranslated.
 
 **Option order in the two status dropdowns (ETP-4913):** both the `ListFilterBar` pill and `DistinctEnumPicker` merge two sources that arrive at different times — the uncached backend `_distinct` fetch (fired when the popover opens) and the codes present in the currently loaded grid rows. Neither source is wrong on its own, but merging them unsorted meant the list painted in grid order and then reshuffled once the fetch resolved, giving a different order on every open. Both now sort with `compareStatusCodes` / `STATUS_ORDER` from `lib/statusBadge.js`, the single fixed business-flow catalog (Temporary → Draft → In process → Awaiting → Completed → Re-opened → Closed → Voided → Unknown).
 
@@ -1341,6 +1342,59 @@ introducing a different number format for one column.
   "grow": true,
   "columnWidth": 192,
   "readOnlyLogic": null
+}
+```
+
+#### Percent column rendering (`columnType: "percent"`)
+
+Renders a 0-100 status value (delivery / invoicing progress) in DataTable list grids as a
+compact **progress circle** (ETP-5545) instead of a linear bar: a 24px SVG ring with the
+percentage label beside it (not inside). Implementation: `ProgressCircle`
+(`tools/app-shell/src/components/contract-ui/ProgressCircle.jsx`), used by
+`renderPercentCell` in `DataTable.cellRenderers.jsx`.
+
+| Value | Arc |
+|-------|-----|
+| `0` | grey track only (no arc) |
+| `1`-`99` | foreground (black) arc |
+| `>= 100` | green arc |
+
+The percentage **label** is always the theme foreground colour (black), in every state
+(0%, 1-99% and 100% or more); only the arc changes colour.
+
+The ring itself is the shared, label-less `ProgressRing`
+(`tools/app-shell/src/components/contract-ui/ProgressRing.jsx`; props `size` and `variant`:
+`'default'` uses the grid theme classes, `'current'` uses `currentColor` for use inside
+pills). `ProgressCircle` (grid and preview `PercentBar`) composes it with its label, and the
+detail-header progress badges (`ProgressFieldBadge` → `DocumentStatusPill`, via its optional
+`icon` prop) reuse it at 16px with the `current` variant.
+
+- The value is assumed to be a 0-100 status. Above 100 the arc is clamped to a full ring,
+  but the label still shows the real value.
+- The cell is left-aligned.
+- The header is left-aligned and wraps onto 2 lines (max label width about 80px); the sort
+  arrow sits to the right of the label, as for any left-aligned column.
+- **`headerWrap`** is a generic DataTable column-descriptor option (boolean). It defaults to
+  `true` for `percent` columns and `false` for every other type. Set `headerWrap: false` on a
+  column descriptor to keep the truncated single-line header, or `true` to wrap the header of
+  any other column type.
+- **Width:** in list mode the percent column basis is 104px (`PERCENT_LIST_BASIS_PX` in
+  `tools/app-shell/src/lib/linesColumnWidth.js`, used by `columnMinWidthPx`). The lines panel
+  and add-row (`columnFlex`) intentionally keep 152px, so the two constants diverge on
+  purpose. An explicit `col.minWidth` still wins.
+- **Preview panel:** the document preview's `PercentBar` (`SummaryCard.jsx`, used by the order, invoice, goods shipment/receipt and return previews) renders this same `ProgressCircle`, so list and preview are consistent; unlike the old linear bar, its label shows the real value above 100%.
+- **Not covered:** the `InlineLinesPanel` percent read cell, `listModalCells`, `KPIHeader`
+  and the fm303 percent inputs are different renderers and still show plain text.
+
+Example — `return-material-receipt` `invoiceStatus` field:
+
+```json
+"invoiceStatus": {
+  "visibility": "readOnly",
+  "grid": true,
+  "gridOrder": 7,
+  "form": false,
+  "columnType": "percent"
 }
 ```
 

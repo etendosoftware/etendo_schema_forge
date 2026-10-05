@@ -82,28 +82,47 @@ describe('InfoRow', () => {
 // ── PercentBar ────────────────────────────────────────────────────────────────
 
 describe('PercentBar', () => {
-  it('renders 0% with slate track color', () => {
+  it('renders 0% with the circle track and no arc', () => {
     render(<PercentBar value={0} />);
+    expect(screen.getByTestId('ProgressCircle__a696d7')).toBeInTheDocument();
+    expect(screen.queryByTestId('ProgressCircle__a696d7-arc')).toBeNull();
     expect(screen.getByText('0%')).toBeInTheDocument();
   });
 
-  it('renders a mid-value (50%) with semantic warning color classes', () => {
-    render(<PercentBar value={50} />);
-    expect(screen.getByText('50%')).toBeInTheDocument();
+  it('renders a mid-value (50%) with a foreground arc and foreground label', () => {
+    const { container } = render(<PercentBar value={50} />);
     const text = screen.getByText('50%');
-    expect(text.className).toContain('status-warning');
+    expect(text.className).toContain('text-foreground');
+    const arc = screen.getByTestId('ProgressCircle__a696d7-arc');
+    expect(arc.getAttribute('class')).toContain('stroke-foreground');
+    expect(container.innerHTML).not.toContain('status-warning');
   });
 
-  it('renders 100% with semantic success color classes', () => {
-    render(<PercentBar value={100} />);
-    expect(screen.getByText('100%')).toBeInTheDocument();
+  it('renders 100% with a green arc and foreground label', () => {
+    const { container } = render(<PercentBar value={100} />);
     const text = screen.getByText('100%');
-    expect(text.className).toContain('status-success');
+    expect(text.className).toContain('text-foreground');
+    expect(text.className).not.toContain('status-success');
+    const arc = screen.getByTestId('ProgressCircle__a696d7-arc');
+    expect(arc.getAttribute('class')).toContain('stroke-[hsl(var(--status-done-badge))]');
+    expect(container.innerHTML).not.toContain('status-success');
   });
 
-  it('clamps values above 100 to 100', () => {
+  it('shows the real value above 100 while the arc is fully drawn', () => {
     render(<PercentBar value={150} />);
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('150%')).toBeInTheDocument();
+    const arc = screen.getByTestId('ProgressCircle__a696d7-arc');
+    expect(arc.getAttribute('class')).toContain('stroke-[hsl(var(--status-done-badge))]');
+    expect(Number(arc.getAttribute('stroke-dashoffset'))).toBe(0);
+  });
+
+  it('renders the circle, not a linear bar', () => {
+    const { container } = render(<PercentBar value={50} />);
+    expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    const html = container.innerHTML;
+    expect(html).not.toContain('bg-status-warning');
+    expect(html).not.toContain('bg-status-success');
+    expect(html).not.toContain('w-16 h-1.5');
   });
 
   it('treats NaN input as 0', () => {
@@ -277,5 +296,43 @@ describe('SummaryCard', () => {
       // CardHeader badge = currencyCode when showOrgTotal
       expect(screen.getByText('USD')).toBeInTheDocument();
     });
+  });
+});
+
+// ── SummaryCard delivery row label (ETP-5549) ─────────────────────────────────
+
+describe('SummaryCard — delivery row label (ETP-5549)', () => {
+  const base = {
+    currencyCode: 'EUR',
+    grandTotal: 100,
+    contact: 'Acme Corp',
+    date: '2024-05-01',
+    statusCode: 'CO',
+    statusLabel: 'Completed',
+  };
+
+  it('uses the default previewCardDeliveryPercent label when deliveryLabel is omitted', () => {
+    render(<SummaryCard {...base} deliveryPercent={60} />);
+    expect(screen.getByText('previewCardDeliveryPercent')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
+  });
+
+  it('uses the custom deliveryLabel instead of the default when provided', () => {
+    render(<SummaryCard {...base} deliveryPercent={40} deliveryLabel="previewCardReceivedPercent" />);
+    expect(screen.getByText('previewCardReceivedPercent')).toBeInTheDocument();
+    expect(screen.queryByText('previewCardDeliveryPercent')).not.toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
+  });
+
+  it('shows the row for deliveryPercent 0', () => {
+    render(<SummaryCard {...base} deliveryPercent={0} />);
+    expect(screen.getByText('previewCardDeliveryPercent')).toBeInTheDocument();
+    expect(screen.getByText('0%')).toBeInTheDocument();
+  });
+
+  it.each([undefined, null])('hides the row when deliveryPercent is %s', (value) => {
+    render(<SummaryCard {...base} deliveryPercent={value} deliveryLabel="previewCardReceivedPercent" />);
+    expect(screen.queryByText('previewCardDeliveryPercent')).not.toBeInTheDocument();
+    expect(screen.queryByText('previewCardReceivedPercent')).not.toBeInTheDocument();
   });
 });

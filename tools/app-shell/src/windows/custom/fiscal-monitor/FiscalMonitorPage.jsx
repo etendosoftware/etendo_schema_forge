@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { getSalesRelatedDocs } from '@/components/related-documents/salesRelatedDocs.js';
 import { useFiscalMonitor } from './useFiscalMonitor.js';
 import InvoicePreviewModal from '../shared/InvoicePreviewModal.jsx';
 import ContactDetailModal from './ContactDetailModal.jsx';
@@ -101,7 +102,7 @@ function useDebugState(orgId, apiBaseUrl) {
   const {
     loading, error, profile: realProfile, kpis: realKpis, siiParentId,
     tbaiValidationResults: realTbaiValidationResults, refetch,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
   } = useFiscalMonitor(orgId, apiBaseUrl);
 
   // Debug panel gates: mock rows/KPIs and the profile override are only ever
@@ -129,7 +130,7 @@ function useDebugState(orgId, apiBaseUrl) {
   return {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -160,7 +161,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
   const {
     loading, error, profile, kpis, siiParentId,
     tbaiValidationResults,
-    earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
+    earliestSiiCutoverDate, earliestTbaiCutoverDate, earliestVerifactuCutoverDate,
     refetch,
     siiMockRows, tbaiMockRows, vfMockRows,
     debugMode, debugProfile, setDebugProfile,
@@ -342,6 +343,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
                   onInvoiceOpen={handleInvoiceOpen}
                   onBpClick={(bpId, invoiceId, invoiceSpec) => setBpPopup({ bpId, invoiceId, invoiceSpec })}
                   kpis={kpis}
+                  earliestCutoverDate={earliestSiiCutoverDate}
                   data-testid="SiiMonitorSection__884f90" />
               )}
               {systemTab === 'tbai' && (
@@ -377,6 +379,7 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
             onInvoiceOpen={handleInvoiceOpen}
             onBpClick={(bpId, invoiceId, invoiceSpec) => setBpPopup({ bpId, invoiceId, invoiceSpec })}
             kpis={kpis}
+            earliestCutoverDate={earliestSiiCutoverDate}
             data-testid="SiiMonitorSection__884f90" />
         )}
 
@@ -421,6 +424,9 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
           token={token}
           apiBaseUrl={`${neoBase(apiBaseUrl)}/${previewSpec}`}
           specName={previewSpec}
+          // ETP-5527 — sales invoices list the same related documents as their form;
+          // null for purchase invoices, which keep the preview's legacy specs.
+          relatedDocs={getSalesRelatedDocs(previewSpec)}
           onClose={() => setPreviewInvoice(null)}
           onEdit={(id) => {
             const targetId = id ?? previewInvoice?.id;

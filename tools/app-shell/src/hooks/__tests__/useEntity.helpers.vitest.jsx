@@ -35,6 +35,8 @@ import {
   reportInvalidFormatField,
   getNumericFieldViolation,
   buildSavePayload,
+  isUserAuthoredKey,
+  saveWithReadOnlyFieldRetry,
 } from '../useEntity';
 import { numericFieldToastId, resetSaveBlockToastTracking } from '@/lib/numericValidation.js';
 
@@ -411,13 +413,14 @@ describe('useEntity helpers', () => {
       expect(shouldSkipPayloadField('language', '181', bRef, { current: new Set() }, new Set(['language']), false, {})).toBe(false);
     });
 
-    it('skips contacts billing fields on create', () => {
-      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, true, {})).toBe(true);
-      expect(shouldSkipPayloadField('paymentMethod', 'someVal', defaultRefs, userRefs, reqKeys, true, {})).toBe(true);
+    it('skips fields the ETP-5537 generic isFieldExcluded predicate flags on create', () => {
+      const isFieldExcluded = (key) => key === 'priceList' || key === 'paymentMethod';
+      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, isFieldExcluded, {})).toBe(true);
+      expect(shouldSkipPayloadField('paymentMethod', 'someVal', defaultRefs, userRefs, reqKeys, isFieldExcluded, {})).toBe(true);
     });
 
-    it('does not skip billing fields when not contacts create', () => {
-      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, false, {})).toBe(false);
+    it('does not skip a field isFieldExcluded does not flag', () => {
+      expect(shouldSkipPayloadField('priceList', 'someVal', defaultRefs, userRefs, reqKeys, () => false, {})).toBe(false);
     });
 
     it('skips SmartClient temporary import references', () => {
@@ -849,16 +852,16 @@ describe('useEntity helpers', () => {
       expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, false, {})).toBe(false);
     });
 
-    it('skips contacts account field on create', () => {
-      expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips account field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('account', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
-    it('skips contacts customerBlocking field on create', () => {
-      expect(shouldSkipPayloadField('customerBlocking', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips customerBlocking field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('customerBlocking', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
-    it('skips contacts purchasePricelist field on create', () => {
-      expect(shouldSkipPayloadField('purchasePricelist', 'val', emptyRefs, emptyRefs, emptyReq, true, {})).toBe(true);
+    it('skips purchasePricelist field when isFieldExcluded flags it on create', () => {
+      expect(shouldSkipPayloadField('purchasePricelist', 'val', emptyRefs, emptyRefs, emptyReq, () => true, {})).toBe(true);
     });
 
     it('does not skip SmartClient ref when no identifier companion', () => {
@@ -1511,13 +1514,20 @@ describe('useEntity helpers', () => {
   });
 
   // -------------------------------------------------------------------
-  // buildSavePayload — contacts Business Partner create detection
+  // buildSavePayload — ETP-5537 generic create-field exclusion
   // -------------------------------------------------------------------
-  describe('buildSavePayload — contacts businessPartner create', () => {
+  // Replaces the old Contacts-only entity==='businessPartner' && apiBaseUrl-ends-in-'/contacts'
+  // detection: a field is now excluded from the CREATE payload whenever it is not registered by
+  // any currently-mounted form for this record (formFieldsRef) or is registered but evaluates
+  // read-only there — for ANY window, not just Contacts. See buildCreateFieldExclusion's doc
+  // comment in useEntity.js.
+  describe('buildSavePayload — generic create-field exclusion (ETP-5537)', () => {
     const emptyRef = () => ({ current: new Set() });
-    const formFieldsRef = () => ({ current: new Map([['__default__', [{ key: 'name', required: true }]]]) });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
 
-    it('drops the billing preference fields when creating from the contacts window', () => {
+    it('drops a field that is not registered by any currently-mounted form', () => {
+      // Mirrors Contacts: priceList/paymentTerms belong to a panel (BillingPreferencesForm)
+      // that is not mounted before the record exists, so they never get registered.
       const payload = buildSavePayload({
         isNew: true,
         selected: null,
@@ -1526,12 +1536,12 @@ describe('useEntity helpers', () => {
         apiBaseUrl: '/sws/neo/contacts',
         backendDefaultKeysRef: emptyRef(),
         userChangedKeysRef: emptyRef(),
-        formFieldsRef: formFieldsRef(),
+        formFieldsRef: formFieldsRefWith([{ key: 'name', required: true }]),
       });
       expect(payload).toEqual({ name: 'Acme' });
     });
 
-    it('keeps the billing fields when apiBaseUrl is missing (not the contacts window)', () => {
+    it('keeps a field that IS registered and not read-only, regardless of window', () => {
       const payload = buildSavePayload({
         isNew: true,
         selected: null,
@@ -1540,9 +1550,490 @@ describe('useEntity helpers', () => {
         apiBaseUrl: null,
         backendDefaultKeysRef: emptyRef(),
         userChangedKeysRef: emptyRef(),
-        formFieldsRef: formFieldsRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'priceList' },
+        ]),
       });
       expect(payload).toEqual({ name: 'Acme', priceList: 'pl-1' });
+    });
+
+    it('drops a field that IS registered but evaluates read-only (static readOnly)', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('drops a field that evaluates read-only via readOnlyLogic', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme' });
+    });
+
+    it('still sends an excluded/read-only field when the app explicitly marks it user-changed', () => {
+      // The escape hatch: a custom panel can deliberately call onChange to force a value
+      // through (e.g. Assets' currency echo-on-create), which marks userChangedKeysRef.
+      const userChangedKeysRef = { current: new Set(['currency']) };
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef,
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme', currency: 'EUR' });
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // buildSavePayload — ETP-5537 read-only exclusion on the PATCH path
+  // -------------------------------------------------------------------
+  // ETP-5347 made NeoServlet reject a write carrying a contract-readOnly field with a 422
+  // `read_only_field` instead of dropping it silently. The PATCH payload is a raw
+  // editing-vs-selected diff, and refreshHeaderTotals refreshes the two sides asymmetrically
+  // (setSelected replaces wholesale, setEditing merges onto prev), so a read-only key the user
+  // never touched can end up in that diff — which is what stopped the Purchase Order confirm
+  // modal from ever opening (maybeSaveBeforeConfirm PATCHes first and aborts on failure).
+  //
+  // Deliberately NARROWER than the create path: rule 2 only. See buildPatchPayload's comment.
+  describe('buildSavePayload — read-only exclusion on PATCH (ETP-5537)', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    const patch = ({ editing, selected, formFieldsRef, userChangedKeysRef }) => buildSavePayload({
+      isNew: false,
+      selected,
+      editing,
+      entity: 'purchaseOrder',
+      apiBaseUrl: '/sws/neo/purchase-order',
+      backendDefaultKeysRef: emptyRef(),
+      userChangedKeysRef: userChangedKeysRef ?? emptyRef(),
+      formFieldsRef: formFieldsRef ?? formFieldsRefWith([]),
+    });
+
+    it('drops a registered read-only field that diverged (the Purchase Order totals case)', () => {
+      // summedLineAmount / grandTotalAmount are visibility:readOnly + form:true in
+      // artifacts/purchase-order/contract.json — registered by the mounted header form.
+      const payload = patch({
+        editing: { id: '1', description: 'edited', summedLineAmount: 120, grandTotalAmount: 145 },
+        selected: { id: '1', description: 'old', summedLineAmount: 100, grandTotalAmount: 121 },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'summedLineAmount', readOnly: true },
+          { key: 'grandTotalAmount', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('drops a field that evaluates read-only via readOnlyLogic', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', documentNo: 'PO-2' },
+        selected: { id: '1', description: 'old', documentNo: 'PO-1' },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'documentNo', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('keeps a registered writable field that diverged', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', orderReference: 'REF-9' },
+        selected: { id: '1', description: 'old', orderReference: 'REF-1' },
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }, { key: 'orderReference' }]),
+      });
+      expect(payload).toEqual({ description: 'edited', orderReference: 'REF-9' });
+    });
+
+    // The safety property that makes rule 1 create-only: an unregistered key must still be
+    // sent on PATCH. Applying rule 1 here would empty the payload whenever no header form is
+    // mounted, turning a loud 422 into silent, total data loss.
+    it('KEEPS a key no mounted form registered (rule 1 is create-only)', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', someUnregisteredField: 'v2' },
+        selected: { id: '1', description: 'old', someUnregisteredField: 'v1' },
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }]),
+      });
+      expect(payload).toEqual({ description: 'edited', someUnregisteredField: 'v2' });
+    });
+
+    it('sends the full diff when the form registry is empty (no form mounted)', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', orderReference: 'REF-9' },
+        selected: { id: '1', description: 'old', orderReference: 'REF-1' },
+        formFieldsRef: formFieldsRefWith([]),
+      });
+      expect(payload).toEqual({ description: 'edited', orderReference: 'REF-9' });
+    });
+
+    it('still sends a read-only field the app explicitly marked user-changed (escape hatch)', () => {
+      const payload = patch({
+        editing: { id: '1', grandTotalAmount: 145 },
+        selected: { id: '1', grandTotalAmount: 121 },
+        userChangedKeysRef: { current: new Set(['grandTotalAmount']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+      });
+      expect(payload).toEqual({ grandTotalAmount: 145 });
+    });
+
+    it('does not send a read-only field that did NOT diverge', () => {
+      const payload = patch({
+        editing: { id: '1', description: 'edited', grandTotalAmount: 121 },
+        selected: { id: '1', description: 'old', grandTotalAmount: 121 },
+        formFieldsRef: formFieldsRefWith([
+          { key: 'description' },
+          { key: 'grandTotalAmount', readOnly: true },
+        ]),
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+  });
+
+  // buildPatchPayload keeps working with its original 2-arg signature: the registry args are
+  // optional so a caller without a form registry filters nothing (old behavior), which is the
+  // safe direction to fail in.
+  describe('buildPatchPayload — read-only filtering (ETP-5537)', () => {
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    it('filters nothing when called with the legacy 2-arg signature', () => {
+      const payload = buildPatchPayload(
+        { id: '1', grandTotalAmount: 145 },
+        { id: '1', grandTotalAmount: 121 },
+      );
+      expect(payload).toEqual({ grandTotalAmount: 145 });
+    });
+
+    it('filters a read-only key when given the registry', () => {
+      const payload = buildPatchPayload(
+        { id: '1', grandTotalAmount: 145 },
+        { id: '1', grandTotalAmount: 121 },
+        formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+        { current: new Set() },
+      );
+      expect(payload).toEqual({});
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ETP-5537 — a callout-applied value is not user-authored
+  // -------------------------------------------------------------------
+  // handleChange is the single entry point for BOTH a user keystroke and a callout response
+  // applying a server-computed value, so userChangedKeysRef alone cannot tell them apart. The
+  // payload escape hatch must only exempt values the USER authored.
+  //
+  // Confirmed on a live backend: on purchase-order, selecting the vendor fires a callout whose
+  // response carries `priceIncludesTax` (contract read-only, form: false). Marked user-changed,
+  // it escaped the create exclusion, rode into the create POST, and — the backend never echoing
+  // a read-only field back — left editing/selected permanently disagreeing, so every later PATCH
+  // re-sent it and ETP-5347 answered 422 read_only_field.
+  //
+  // These two tests are a matched pair and must stay that way: the first pins that a callout
+  // value is dropped, the second that a custom panel's deliberate onChange is still honoured.
+  describe('callout-applied values are not user-authored (ETP-5537)', () => {
+    const emptyRef = () => ({ current: new Set() });
+    const formFieldsRefWith = (fields) => ({ current: new Map([['__default__', fields]]) });
+
+    it('drops a read-only, unregistered field a CALLOUT applied, even though it is "changed"', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { businessPartner: 'bp-1', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        // Exactly the observed state: the callout marked it changed...
+        userChangedKeysRef: { current: new Set(['businessPartner', 'priceIncludesTax']) },
+        // ...but it was the server's value, not the user's.
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'businessPartner' }]),
+      });
+      expect(payload).toEqual({ businessPartner: 'bp-1' });
+    });
+
+    it('still sends a value a custom panel forced through via onChange (Assets currency echo)', () => {
+      // AssetsConfigPanel calls onChange deliberately — a real app-authored edit, never flagged
+      // as callout-origin, so the escape hatch must still exempt it.
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { name: 'Acme', currency: 'EUR' },
+        entity: 'assets',
+        apiBaseUrl: '/sws/neo/assets',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['currency']) },
+        calloutAppliedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([
+          { key: 'name', required: true },
+          { key: 'currency', readOnlyLogic: () => true },
+        ]),
+      });
+      expect(payload).toEqual({ name: 'Acme', currency: 'EUR' });
+    });
+
+    it('drops a callout-applied read-only field from a PATCH too', () => {
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', grandTotalAmount: 121 },
+        editing: { id: '1', grandTotalAmount: 145 },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['grandTotalAmount']) },
+        calloutAppliedKeysRef: { current: new Set(['grandTotalAmount']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'grandTotalAmount', readOnly: true }]),
+      });
+      expect(payload).toEqual({});
+    });
+
+    it('a later genuine user edit reclaims a key the callout had written', () => {
+      // isUserAuthoredKey is the predicate handleChange maintains; this pins the reclaim rule
+      // that handleChange implements by deleting from calloutAppliedKeysRef on a non-callout write.
+      const userChangedKeysRef = { current: new Set(['description']) };
+      const calloutAppliedKeysRef = { current: new Set(['description']) };
+      expect(isUserAuthoredKey('description', userChangedKeysRef, calloutAppliedKeysRef)).toBe(false);
+      calloutAppliedKeysRef.current.delete('description');
+      expect(isUserAuthoredKey('description', userChangedKeysRef, calloutAppliedKeysRef)).toBe(true);
+    });
+
+    // The case that actually broke the Purchase Order confirm, and that formFieldsRef alone
+    // cannot catch: `priceIncludesTax` is declared readOnly in the generated OrderForm but sits
+    // in `section: 'other'`, so no mounted EntityForm registers it and the registry reads it as
+    // "unknown" instead of "read-only". contractFields is the window's full declared list and
+    // answers for it regardless of what is on screen. Without contractFields this test sends the
+    // field and reproduces the 422.
+    it('drops a contract-declared read-only field that no mounted form registered (PATCH)', () => {
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', description: 'old' },
+        editing: { id: '1', description: 'edited', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['description', 'priceIncludesTax']) },
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        // Only `description` is on screen — the 'other' section is not mounted.
+        formFieldsRef: formFieldsRefWith([{ key: 'description' }]),
+        contractFields: [
+          { key: 'description' },
+          { key: 'priceIncludesTax', readOnly: true, section: 'other' },
+        ],
+      });
+      expect(payload).toEqual({ description: 'edited' });
+    });
+
+    it('drops the same contract-declared read-only field on CREATE', () => {
+      const payload = buildSavePayload({
+        isNew: true,
+        selected: null,
+        editing: { businessPartner: 'bp-1', priceIncludesTax: 'N' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: { current: new Set(['businessPartner', 'priceIncludesTax']) },
+        calloutAppliedKeysRef: { current: new Set(['priceIncludesTax']) },
+        formFieldsRef: formFieldsRefWith([{ key: 'businessPartner' }]),
+        contractFields: [
+          { key: 'businessPartner' },
+          { key: 'priceIncludesTax', readOnly: true, section: 'other' },
+        ],
+      });
+      expect(payload).toEqual({ businessPartner: 'bp-1' });
+    });
+
+    it('keeps a contract-declared WRITABLE field that no mounted form registered (PATCH)', () => {
+      // The counter-case: contractFields must not become a second way to drop writable data.
+      const payload = buildSavePayload({
+        isNew: false,
+        selected: { id: '1', orderReference: 'REF-1' },
+        editing: { id: '1', orderReference: 'REF-9' },
+        entity: 'purchaseOrder',
+        apiBaseUrl: '/sws/neo/purchase-order',
+        backendDefaultKeysRef: emptyRef(),
+        userChangedKeysRef: emptyRef(),
+        calloutAppliedKeysRef: emptyRef(),
+        formFieldsRef: formFieldsRefWith([]),
+        contractFields: [{ key: 'orderReference' }],
+      });
+      expect(payload).toEqual({ orderReference: 'REF-9' });
+    });
+
+    it('treats a key nobody changed as not user-authored, and tolerates missing refs', () => {
+      expect(isUserAuthoredKey('x', { current: new Set() }, { current: new Set() })).toBe(false);
+      expect(isUserAuthoredKey('x', undefined, undefined)).toBe(false);
+      expect(isUserAuthoredKey('x', { current: new Set(['x']) }, undefined)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ETP-5537 — $_identifier companions never travel in a PATCH
+  // -------------------------------------------------------------------
+  // An FK's `$_identifier` is the backend's display label, not a writable column. The create
+  // path has always dropped it (shouldSkipPayloadField, whose comment says "on create/update");
+  // the PATCH diff did not, so every PATCH touching an FK shipped the label too. Harmless while
+  // the backend discarded unknown fields — a hard 422 since ETP-5347 started rejecting them.
+  //
+  // Observed on a live backend, and it fires during vendor setup, before any order exists:
+  //   PATCH /sws/neo/contacts/businessPartner/<id>
+  //   -> 422 read_only_field, field = purchasePricelist$_identifier
+  describe('buildPatchPayload — $_identifier companions (ETP-5537)', () => {
+    it('sends the FK but never its $_identifier companion', () => {
+      const payload = buildPatchPayload(
+        {
+          id: '1',
+          purchasePricelist: 'pl-9',
+          purchasePricelist$_identifier: 'Tarifa de compra principal',
+        },
+        { id: '1', purchasePricelist: 'pl-1', purchasePricelist$_identifier: 'Otra tarifa' },
+      );
+      expect(payload).toEqual({ purchasePricelist: 'pl-9' });
+    });
+
+    it('drops a companion whose own FK did not change', () => {
+      // The real body carried four labels for three changed ids, plus a null one.
+      const payload = buildPatchPayload(
+        {
+          id: '1',
+          pOPaymentMethod: 'pm-2',
+          pOPaymentMethod$_identifier: 'Efectivo',
+          pOFinancialAccount$_identifier: null,
+        },
+        { id: '1', pOPaymentMethod: 'pm-1', pOPaymentMethod$_identifier: 'Transferencia' },
+      );
+      expect(payload).toEqual({ pOPaymentMethod: 'pm-2' });
+    });
+
+    it('never emits a companion even when it is the only difference', () => {
+      const payload = buildPatchPayload(
+        { id: '1', businessPartner: 'bp-1', businessPartner$_identifier: 'Relabelled' },
+        { id: '1', businessPartner: 'bp-1', businessPartner$_identifier: 'Old label' },
+      );
+      expect(payload).toEqual({});
+    });
+  });
+
+  // -------------------------------------------------------------------
+  // ETP-5537 — network-level retry when the backend names a read-only field
+  // -------------------------------------------------------------------
+  // Safety net for a read-only field that escapes buildSavePayload's frontend-metadata-driven
+  // filters entirely (observed for real: priceIncludesTax is readOnly in contract.json but the
+  // currently-imported HeaderForm.jsx never declares it, so buildRegisteredFieldReadOnly reads
+  // it as "unknown" rather than "read-only" and it still reaches the wire). The backend's 422
+  // read_only_field response names the exact offending key with total certainty, so dropping
+  // exactly that key and retrying is safe — it can never guess, only react to what the backend
+  // just said.
+  describe('saveWithReadOnlyFieldRetry (ETP-5537)', () => {
+    const okRes = (data) => ({ ok: true, status: 200, json: async () => data });
+    const readOnlyFieldRes = (field) => ({
+      ok: false,
+      status: 422,
+      clone() { return this; },
+      json: async () => ({ status: 422, error: 'read_only_field', field }),
+    });
+    const otherErrorRes = (status, body) => ({
+      ok: false,
+      status,
+      clone() { return this; },
+      json: async () => body,
+    });
+
+    it('drops the field the backend names and succeeds on retry', async () => {
+      const calls = [];
+      const apiFetch = vi.fn(async (url, opts) => {
+        calls.push(JSON.parse(opts.body));
+        return calls.length === 1
+          ? readOnlyFieldRes('priceIncludesTax')
+          : okRes({ response: { data: [{ id: '1' }] } });
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/sws/neo/purchase-order/header/1', 'PATCH',
+        { priceIncludesTax: 'N', description: 'edited' },
+      );
+      expect(res.ok).toBe(true);
+      expect(calls).toEqual([
+        { priceIncludesTax: 'N', description: 'edited' },
+        { description: 'edited' },
+      ]);
+    });
+
+    it('drops multiple named fields across successive retries', async () => {
+      const calls = [];
+      const apiFetch = vi.fn(async (url, opts) => {
+        calls.push(JSON.parse(opts.body));
+        if (calls.length === 1) return readOnlyFieldRes('a');
+        if (calls.length === 2) return readOnlyFieldRes('b');
+        return okRes({ response: { data: [{ id: '1' }] } });
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/url', 'PATCH', { a: 1, b: 2, c: 3 },
+      );
+      expect(res.ok).toBe(true);
+      expect(calls).toEqual([{ a: 1, b: 2, c: 3 }, { b: 2, c: 3 }, { c: 3 }]);
+    });
+
+    it('gives up after maxAttempts and returns the last failing response, without looping forever', async () => {
+      // A pathological backend that always names a NEW field: with 5 keys and a cap of 5
+      // attempts, retries exhaust before the payload could ever become clean.
+      const apiFetch = vi.fn(async (url, opts) => {
+        const body = JSON.parse(opts.body);
+        const [firstKey] = Object.keys(body);
+        return readOnlyFieldRes(firstKey);
+      });
+      const res = await saveWithReadOnlyFieldRetry(
+        apiFetch, '/url', 'PATCH', { a: 1, b: 2, c: 3, d: 4, e: 5 }, { maxAttempts: 5 },
+      );
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(5);
+    });
+
+    it('does not retry a read_only_field error naming a key that is not in the payload', async () => {
+      const apiFetch = vi.fn(async () => readOnlyFieldRes('someUnrelatedField'));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { a: 1 });
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not retry a non-read_only_field error (e.g. stale_record conflict)', async () => {
+      const apiFetch = vi.fn(async () => otherErrorRes(409, { error: 'stale_record' }));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'PATCH', { a: 1 });
+      expect(res.ok).toBe(false);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('succeeds on the first attempt with no retry when the write is accepted', async () => {
+      const apiFetch = vi.fn(async () => okRes({ response: { data: [{ id: '1' }] } }));
+      const res = await saveWithReadOnlyFieldRetry(apiFetch, '/url', 'POST', { a: 1 });
+      expect(res.ok).toBe(true);
+      expect(apiFetch).toHaveBeenCalledTimes(1);
     });
   });
 

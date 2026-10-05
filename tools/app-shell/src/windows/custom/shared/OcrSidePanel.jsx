@@ -43,6 +43,26 @@ function FileTab(props) {
 }
 
 /**
+ * Drag-and-drop handlers for DocumentView. `enabled: false` (ETP-5205, Solo-Lectura tier)
+ * returns no handlers at all, so a drag neither highlights the panel nor reaches `onFile`.
+ * Kept outside the component so its branches do not count against DocumentView's complexity.
+ */
+function buildDropHandlers({ enabled, onFile, setIsDragOver }) {
+  if (!enabled) return {};
+  return {
+    onDrop: (event) => {
+      event.preventDefault();
+      setIsDragOver(false);
+      onFile(event.dataTransfer.files?.[0]);
+    },
+    onDragOver: (event) => { event.preventDefault(); setIsDragOver(true); },
+    onDragLeave: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
+    },
+  };
+}
+
+/**
  * Edit-mode view: renders the record's marked "main" Attachment and lets the
  * user fill it (ETP-4855).
  *
@@ -54,7 +74,7 @@ function FileTab(props) {
  * Invoices captured by hand have nothing marked yet, so the panel stays empty
  * until the user attaches a file here or from the preview.
  */
-function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
+function DocumentView({ recordId, token, apiBaseUrl, docTypeId, readOnly = false }) {
   const ui = useUI();
   const tableName = getOcrDocType(docTypeId)?.tableName;
   const [pickError, setPickError] = useState(null);
@@ -71,7 +91,9 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     apiBaseUrl,
   });
 
-  const canAttach = !!(recordId && tableName && docTypeId);
+  // ETP-5205 — under the Solo-Lectura tier the stored document stays visible but
+  // nothing can be attached (no drop zone, no picker).
+  const canAttach = !!(recordId && tableName && docTypeId) && !readOnly;
 
   const handleFile = (picked) => {
     if (!picked || isBusy || !canAttach) return;
@@ -83,17 +105,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     storeFile(picked);
   };
 
-  const dropHandlers = {
-    onDrop: (event) => {
-      event.preventDefault();
-      setIsDragOver(false);
-      handleFile(event.dataTransfer.files?.[0]);
-    },
-    onDragOver: (event) => { event.preventDefault(); setIsDragOver(true); },
-    onDragLeave: (event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setIsDragOver(false);
-    },
-  };
+  const dropHandlers = buildDropHandlers({ enabled: !readOnly, onFile: handleFile, setIsDragOver });
 
   const hiddenInput = (
     <input
@@ -117,6 +129,15 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
         <Loader2 className="h-5 w-5 animate-spin" data-testid="Loader2__c851a1" />
+      </div>
+    );
+  }
+
+  if (!storedFile && readOnly) {
+    return (
+      <div data-testid="ocr-side-panel-readonly-empty" className="flex min-h-[360px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-control text-muted-foreground">
+        <FileText className="h-8 w-8 opacity-40" data-testid="FileText__c851a1" />
+        <span className="text-xs">{ui('ocrSidePanelNoAttachments')}</span>
       </div>
     );
   }
@@ -185,7 +206,7 @@ function DocumentView({ recordId, token, apiBaseUrl, docTypeId }) {
           </Suspense>
         )}
       </div>
-      {hiddenInput}
+      {!readOnly && hiddenInput}
     </div>
   );
 }
@@ -201,11 +222,23 @@ export default function OcrSidePanel(props) {
   const location = useLocation();
   const ocrDocType = matchOcrDocType(location.pathname);
 
+  // ETP-5289 — reserve the scrollbar's gutter. The PDF preview fits its page to this box's
+  // width, so a scrollbar that came and went resized the page, the resized page toggled the
+  // scrollbar again, and react-pdf redrew the canvas every ~250 ms: the "flicker" on Extract.
   return (
     <div className="flex h-full flex-col">
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         <FileTab {...props} docTypeId={ocrDocType?.id} data-testid="FileTab__c851a1" />
       </div>
     </div>
   );
+}
+
+/**
+ * ETP-5205 — the same panel for the Solo-Lectura tier: shows the stored document,
+ * offers no way to attach one. A static component (not an inline wrapper) so the
+ * DetailView side panel keeps a stable identity across renders.
+ */
+export function ReadOnlyOcrSidePanel(props) {
+  return <OcrSidePanel {...props} readOnly data-testid="OcrSidePanel__c851a1" />;
 }

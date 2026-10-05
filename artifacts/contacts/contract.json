@@ -1,8 +1,8 @@
 {
   "version": "0.1.0",
   "generatedAt": "2026-09-20T18:16:41.258Z",
-  "updatedAt": "2026-09-20T23:00:15.408Z",
-  "checksum": "e2ce710fa2d4d214",
+  "updatedAt": "2026-10-02T11:19:26.533Z",
+  "checksum": "b50ab64e2e2cbdcd",
   "frontendContract": {
     "window": {
       "id": "123",
@@ -127,7 +127,6 @@
         "hideCounter": true,
         "hideLink": true
       },
-      "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
       "subsetFilters": [
         {
           "label": "all"
@@ -197,6 +196,36 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "labelKey": "importHeaderVendor",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {
@@ -5432,7 +5461,6 @@
         "hideCounter": true,
         "hideLink": true
       },
-      "listBaseFilter": "criteria=%7B%22operator%22%3A%22or%22%2C%22criteria%22%3A%5B%7B%22fieldName%22%3A%22customer%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%2C%7B%22fieldName%22%3A%22vendor%22%2C%22operator%22%3A%22equals%22%2C%22value%22%3Atrue%7D%5D%7D",
       "subsetFilters": [
         {
           "label": "all"
@@ -5501,6 +5529,36 @@
             "exampleKey": "importExampleContactType",
             "labelKey": "importHeaderType",
             "column": "EM_Etgo_Isperson",
+            "type": "boolean"
+          },
+          {
+            "target": "customer",
+            "aliases": [
+              "cliente",
+              "es cliente",
+              "customer"
+            ],
+            "label": "Customer",
+            "required": false,
+            "example": "Sí",
+            "exampleKey": "importExampleContactCustomer",
+            "labelKey": "importHeaderCustomer",
+            "column": "IsCustomer",
+            "type": "boolean"
+          },
+          {
+            "target": "vendor",
+            "aliases": [
+              "proveedor",
+              "es proveedor",
+              "vendor",
+              "supplier"
+            ],
+            "label": "Vendor",
+            "required": false,
+            "example": "No",
+            "labelKey": "importHeaderVendor",
+            "column": "IsVendor",
             "type": "boolean"
           },
           {

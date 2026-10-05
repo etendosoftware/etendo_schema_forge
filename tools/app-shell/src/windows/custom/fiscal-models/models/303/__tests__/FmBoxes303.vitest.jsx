@@ -1772,6 +1772,19 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     expect(onBoxChange).toHaveBeenCalledWith(89, '50.5');
   });
 
+  // ETP-5456 — the AEAT "Diseño de registro" declares every percent box Lon=5 (3 integer
+  // digits + 2 decimals). `clampPercentValue`'s [0,100] range cap already guarantees this: the
+  // largest value it can ever emit is "100.00" (3 int digits + 2 decimals), so a wildly
+  // out-of-range input never overflows the box's own max length either.
+  it('never exceeds 3 integer digits + 2 decimals (Lon=5) even for a huge overflow input', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
+    const input = openFirstEditor(container);
+    fireEvent.change(input, { target: { value: '999999.999' } });
+    fireEvent.blur(input);
+    expect(onBoxChange).toHaveBeenCalledWith(89, '100');
+  });
+
   it('preserves an empty value as-is ("clear the field"), does not coerce it to a number', () => {
     const onBoxChange = vi.fn();
     const { container } = render(<FmBoxes303 {...PERCENT_PROPS} boxes={{ 89: 50 }} onBoxChange={onBoxChange} />);
@@ -1790,7 +1803,37 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     expect(onBoxChange).toHaveBeenCalledWith(89, '100');
   });
 
-  it('an amount-type cell (box 76) is NOT clamped/rounded — raw string forwarded verbatim', () => {
+  // ETP-5456 (superseded) — this case used to assert an amount-type cell (box 76) forwards ANY
+  // raw string verbatim on commit, with no clamping mechanism of its own (unlike percent's
+  // commit-time `clampPercentValue`). That is no longer true: amount cells now hard-stop typing
+  // past 2 decimal digits at KEYSTROKE time (`exceedsTypedDecimalDigits`, wired into
+  // `renderCellInput`'s `onChange` — see FmBoxes303.hardStop.vitest.jsx for the dedicated
+  // coverage). A single one-shot paste of an already-over-limit string like "999.999999" now
+  // fails that hard-stop entirely — `pendingValues` never gains a key for the box, so
+  // `commitCellEdit`'s own `hasOwnProperty` guard (see "does NOT call onBoxChange on blur when
+  // the box has a saved value and nothing was typed" above) means `onBoxChange` is never called
+  // at all, mirroring the untouched-box no-op case, not a "forwarded verbatim" case.
+  it('an amount-type cell (box 76) is NOT clamped/ROUNDED on commit the way percent is — but IS hard-stopped at 2 decimals during typing (ETP-5456)', () => {
+    const onBoxChange = vi.fn();
+    const { container } = render(
+      <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
+    );
+    const editBtns = container.querySelectorAll('.fm-aeat-cell__edit-btn');
+    fireEvent.click(editBtns[0]);
+    const input = container.querySelector('.fm-aeat-cell__input');
+    // Typed digit-by-digit (not pasted as one already-over-limit string) — the 3rd decimal digit
+    // is refused at the keystroke, so the input settles at exactly 2 decimals.
+    fireEvent.change(input, { target: { value: '999.9' } });
+    fireEvent.change(input, { target: { value: '999.99' } });
+    fireEvent.change(input, { target: { value: '999.999' } }); // refused — no state change
+    expect(input.value).toBe('999.99');
+    fireEvent.blur(input);
+    // Committed EXACTLY as typed — no separate commit-time rounding pass runs for amount cells
+    // (unlike percent's `clampPercentValue`), because the hard-stop already guaranteed 2 decimals.
+    expect(onBoxChange).toHaveBeenCalledWith(76, '999.99');
+  });
+
+  it('a one-shot paste of an already-over-2-decimal string onto an amount cell is refused outright — onBoxChange never fires (ETP-5456)', () => {
     const onBoxChange = vi.fn();
     const { container } = render(
       <FmBoxes303 year={2026} period="T2" boxes={{ 76: 100 }} sectionIds={['resultado_final']} onBoxChange={onBoxChange} />
@@ -1800,7 +1843,7 @@ describe('FmBoxes303 — percent cell input attributes (colType="percent")', () 
     const input = container.querySelector('.fm-aeat-cell__input');
     fireEvent.change(input, { target: { value: '999.999999' } });
     fireEvent.blur(input);
-    expect(onBoxChange).toHaveBeenCalledWith(76, '999.999999');
+    expect(onBoxChange).not.toHaveBeenCalled();
   });
 });
 

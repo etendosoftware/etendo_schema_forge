@@ -14,6 +14,12 @@
 
 ## Corrected misinterpretations
 
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
+
+- **2026-09-29 — Plan and lifecycle preferences have different tenant scopes.** `TenantPlanService.resolvePlan` reads `ETGO_TenantPlan` by `VisibleAtClient`, normally a System-owned row; `TenantEnvironmentLifecycleService` reads lifecycle type/date by the row's own client. An own-client-only audit omitted GOClient's two visible plan rows (`productive`/`free`). Audit both scopes, normalize compatible duplicates with direct paid provisioning evidence, and exclude foreign-owned/cross-visible metadata. The 45 prior demo trial repairs were independently rechecked and had zero visible productive plans.
+
+- **2026-09-29 — Missing demo banner does not prove an unpaid provisioning failure.** `TenantEnvironmentLifecycleService.resolve` returns no lifecycle snapshot when an otherwise free legacy tenant has neither trial/legacy transition start nor global activation. Preserve real trial starts; initialize legacy transition only with an explicit approved UTC instant. `AD_Client.created` is unsafe as a trial start for pool clients because pool creation predates user assignment. The canonical R41 fix uses a per-connection PostgreSQL setting supplied through `PGOPTIONS`, rather than broadening the application's global rollout property.
+
 - **2026-06-11 — `AccountingPackageCloner` is NOT the chart-of-accounts generator.** Wrong assumption (from the design spec): "R1/R2 reuse the cloner via webhook as single source of truth." Verified by reading `com.etendoerp.go/.../onboarding/AccountingPackageCloner.java`: it clones **tax categories, taxes, tax zones, tax accounts, and accounting combinations** — NOT the ~1790 `c_elementvalue` chart rows that gap A1 needs. **Apply:** for the corrective A1 data-fix, clone the chart from the GOOrg source client in SQL; do not route A1 to this cloner. The cloner belongs to the *preventive* front (onboarding accounting step) only.
 - **2026-06-11 — The cloner is only partially idempotent.** `ensureOrganizationAcctSchema` checks existence and returns early, but `cloneTaxCategories` / `cloneBusinessPartnerTaxCategories` / `cloneTaxes` / `cloneTaxZones` / `cloneTaxAccounts` iterate the source and `DalUtil.copy`+save unconditionally → **running twice duplicates** all of them. It assumes a fresh, empty org. **Apply:** if ever reused for remediation, it must be refactored to check existence per entity first.
 - **2026-09-22 (ETP-5444) — `OnboardingState` does not exist in the live onboarding path.** It is only referenced in `docs/etendo-ad/onboarding-and-datafixes-map.md` §2, describing the inert `OnboardingStep` abstraction's accumulated context class. The LIVE service chain (`EtendoGoJwtServlet.ensureOnboardingDataset`) has no equivalent state object — each `Onboarding*Service` is stateless and takes `clientId`/`orgId`/`adminUserId`/`adminRoleId` as plain method arguments. **Apply:** when writing a new preventive step, look up the org/warehouse/etc. directly via OBDal (e.g. `WarehouseLookupHelper.findFirstActiveWarehouse`) rather than hunting for a shared state object that doesn't exist on the live path.
@@ -535,6 +541,19 @@
 - **2026-08-03 — Precedent confirmed: seeding SII localization master data at onboarding is an established pattern.** `referencedata/sampledata/GOClient/AEATSII_DESCRIPTION.xml` already ships (2 records, Compras/Ventas), scoped to GOClient (`802509E12436405C86BA1FD5B1DF508C`) + GOOrg operative org (`61849243BE89460EB70866880A545D50`), createdby `47EAF009B7BB42BBB663C7BA1792D958`. **Apply:** the preventive twin `AEATSII_CAUSE_EXEMPTION.xml` mirrors that file's exact shape/scoping (operative org, not `'*'`).
 - **2026-08-03 — Both fronts delivered (no CUT bump needed — see below).** Preventive: `modules/com.etendoerp.go/referencedata/sampledata/GOClient/AEATSII_CAUSE_EXEMPTION.xml` (6 records, UUIDs from `make uuid`). Corrective: `cli/src/data-fixes/sql/20260803T120000Z__R17-sii-cause-exemption.sql`. `@check` fires only when the tenant is SII-configured (proxy: `EXISTS aeatsii_description` for the client) AND has 0 `aeatsii_cause_exemption` rows — so non-Spain tenants without SII setup never receive Spanish exemption causes. `@apply` inserts E1-E6, each guarded by `NOT EXISTS (ad_client_id, key)` (the natural key), org from `:org_id`, PK from `get_uuid()`. Applied live to GOClient via `--fix`: APPLIED 6 rows; re-check dry-run → SKIPPED_NOT_NEEDED (idempotent). NOTE: no `OnboardingBaselineService.ONBOARDING_PROVISIONED_THROUGH` bump was performed here — the corrective ships alone-safe (new tenants get the catalog from the sampledata, then the runner's `@check` yields SKIPPED for them). If a formal CUT bump is later wanted, set it to `20260803T120000Z` (R17's timestamp) once the sampledata is confirmed live in the onboarding path.
 - **2026-08-03 — DECISION (supersedes the earlier E1-default): ALL six exemption causes are seeded non-default (`isdefault='N'`).** Corrected in all three places consistently: the sampledata XML (`AEATSII_CAUSE_EXEMPTION.xml` — E1 flipped Y→N), the data-fix SQL (`20260803T120000Z__R17-sii-cause-exemption.sql` — E1 insert value + `@description` Background note), and the dev DB (`UPDATE aeatsii_cause_exemption SET isdefault='N' WHERE ad_client_id='802509E12436405C86BA1FD5B1DF508C' AND isdefault='Y'` → 1 row; verified all 6 keys now `N`). **Rationale:** the legally correct SII exemption cause is operation-specific and must be a conscious user choice; Go ships NO cause-exemption maintenance window, so a baked-in default could not be corrected by the user and would risk silently submitting the wrong `CausaExencion` to AEAT. With no default, the invoice shows a "should indicate an exemption cause" warning that guides the user to pick the right one. **Apply:** for SII/AEAT master catalogs where the value is legally per-operation AND there is no user-facing maintenance window, seed the catalog but pick NO default — force the conscious choice.
+---
+
+## ETP-5481 — AEATSII_CAUSE_EXEMPTION reseeded as SYSTEM rows, not per-tenant (2026-09-25, gap O1)
+
+- **2026-09-25 — Gap confirmed still open beyond GOClient.** R17 (ETP-4751, above) only seeds a tenant's private copy when `EXISTS aeatsii_description` for that client. Live-checked (2026-09-24): exactly one `ad_client_id`, GOClient (`802509E12436405C86BA1FD5B1DF508C`), had any rows. A second tenant (`C0F2E4D77D2F402F93C22471DBE30C6D`) later received its own private copy (presumably via R17's own sweep matching its SII config), but no `ad_client_id='0'` row has ever existed.
+- **2026-09-25 — DECISION REVERSED mid-flight: abandoned the per-tenant pattern R17 established, in favor of SIX SHARED SYSTEM ROWS (`ad_client_id='0'`).** An earlier draft of this exact ticket (same corrective filename, `20260924T120000Z__R40-aeatsii-cause-exemption-catalog.sql`, never applied to any tenant) mirrored R17: add the table to `OnboardingDatasetDefinition.INCLUDED_TABLES` (preventive) + a per-`:client_id` `@apply` (corrective). Reverted (`6bf198df`, "Revert per-tenant onboarding seed, use system rows instead") because:
+  1. `AEATSII_CAUSE_EXEMPTION` does NOT forbid `ad_client_id='0'` at the DB level — only `NOT NULL` is enforced; System (`'0'`) is an ordinary, valid client (confirmed `ad_client`/`ad_org` both have real `'0'`/`'*'` rows).
+  2. The selector goes through Etendo's standard DAL selector mechanism (`SelectorQueryExecutor` → `OBDal.createQuery`), which already applies the framework's client-visibility filter — `ad_client_id='0'` rows are automatically visible to every tenant. No selector code change needed.
+  3. Etendo GO ships NO maintenance window for this catalog — the six causes never diverge per client, so sharing them avoids thousands of byte-for-byte identical per-tenant copies as the fleet grows.
+  **Apply generally:** before defaulting to R17's per-tenant seeding pattern for a genuinely universal, non-customizable AD reference catalog, check first whether `ad_client_id='0'` is a legal value for the table — if so, and there's no maintenance UI implying per-tenant divergence, prefer ONE set of System rows over N identical private copies. R17 itself is NOT retired/edited — it caused no harm and a tenant with its own R17-seeded rows simply carries a harmless redundant copy alongside the shared System rows.
+- **2026-09-25 — CONFIRMED: this local dev DB's `update.database`/`smartbuild` did NOT load the new module sourcedata file.** After adding `modules/com.etendoerp.go/src-db/database/sourcedata/AEATSII_CAUSE_EXEMPTION.xml` (6 rows, `ad_client_id='0'`) and confirming `com.etendoerp.go` is `isindevelopment='Y'`, ran (Tomcat stopped first, per policy): `./gradlew update.database` (twice, once with `-Pforce=true`) and `./gradlew smartbuild` — none populated `ad_client_id='0'` rows in `aeatsii_cause_exemption` (verified via direct query each time). `smartbuild`'s DB step (`update.database.if.no.local`) is itself conditional on a `local` property and, on this checkout, its tail output shows only web-asset/deploy steps — the DB portion visibly did not run. Root cause NOT fully isolated (leading hypothesis: this dev DB's module-data checksums/install state predate the file and a plain incremental `update.database` does not force-reapply "shipped module data" for a table owned by a DIFFERENT module (`org.openbravo.module.sii`) even when the shipping module itself is `isindevelopment='Y'`). **Apply:** do not assume a brand-new `src-db/database/sourcedata/<TABLE>.xml` file is live on an already-provisioned local dev DB just because `update.database`/`smartbuild` ran clean (`BUILD SUCCESSFUL` is not evidence of data application) — always verify with a direct query of the target table before reporting the preventive front as confirmed. Verify against a real CI/staging build or a fresh `install.source` for a trustworthy read on this specific mechanism.
+- **2026-09-25 — Data-fix run directly as the practical verification + as the actual seeding mechanism on this DB.** `node cli/src/data-fixes/run.js --fix R40-aeatsii-cause-exemption-catalog --client 0` → `APPLIED (6 rows)`; confirmed via query: exactly 6 rows at `ad_client_id='0'`, keys E1-E6, `isdefault='N'`, `taxtype='IVA'`; GOClient's and the second tenant's private 6-row copies untouched (still 6 each, no duplication). Re-run → `SKIPPED_NOT_NEEDED — kept prior success state` (idempotent, no-downgrade guard held). This is exactly the "safety net" role the fix's own header describes for instances where the module sourcedata load hasn't (yet) reached the DB.
+- **2026-09-25 — `R40`'s `@check`/`@apply` deliberately still bind `:client_id`, run explicitly as `--client 0`, per the established "System pseudo-tenant" convention** (see `sql/README.md`, worked example `20260904T130000Z__R34-tax-sif-config-clear-system.sql`) — this satisfies the framework's literal "every statement scoped to `:client_id`" rule even though the fix is meant to run exactly once, never swept. `AD_ORG_ID` is written as the literal `'0'`, never `:org_id` — there is no tenant operative org to bind to when the anchor client itself is System.
 ---
 
 ## ETP-4737 — "Factura Rectificativa" doc type + sequence unification (H1, 2026-07-30)
@@ -2388,6 +2407,8 @@ as the immutability trigger for a data-fix `.sql` file.
 
 ### Corrected misinterpretations
 
+- **2026-09-29 — Historical paid lifecycle self-associations are not foreign links.** Production Galder, Santiagou and Fitz Roy retain both associated-client preferences pointing to their own client. Preserve these values; exclude only an association to a different productive client when repairing directly linked paid checkout metadata. A blanket nonempty association guard incorrectly skipped their conflicting visible plan rows and fiscal test overrides.
+
 - **2026-09-01 — "Onboarding seeds sample contacts (Laura Morat / Juan Perez)" is FALSE.**
   `C_BPARTNER` is **not** in `OnboardingDatasetDefinition.INCLUDED_TABLES`, so the onboarding
   dataset import creates **zero** sample business partners. Those rows exist only in a developer's
@@ -3358,3 +3379,54 @@ restart — but it argues for running this fix close to a restart.
   universe → 48 `WOULD_APPLY`, 8 `SKIPPED_NOT_NEEDED`, which matches the 48 clients the
   discriminator query returns. Guard verified read-only (no write transaction) by simulating the
   post-step-1 state in a CTE.
+
+- **2026-09-25 — REFUTED (ETP-5481): `AD_MODULE.STATUS='P'` does NOT gate whether `update.database`
+  reloads a module's `src-db/database/sourcedata/*.xml`.** Following up on the 2026-09-25 entry above
+  (root cause "NOT fully isolated"), tested the user-proposed hypothesis directly on the local dev DB
+  (`etendo_go_2`, Tomcat confirmed stopped first): `UPDATE ad_module SET status='P' WHERE
+  ad_module_id='94E1B433CF55451EABB764750AC5902A'` (com.etendoerp.go, already `isindevelopment='Y'`),
+  then `./gradlew update.database` → `BUILD SUCCESSFUL`. Verified by comparing PKs, not just row
+  counts: `AEATSII_CAUSE_EXEMPTION.xml`'s six rows carry hardcoded IDs (`F67899BE2D5A41FAA1...` for
+  E1, etc.) that do NOT collide with the six rows already present at `ad_client_id='0'` (inserted
+  earlier the same day by the `R40` data-fix, with different generated UUIDs, e.g.
+  `F8A55896498B4206...` for E1) — and the table has NO unique constraint on `(ad_client_id, key)`,
+  only a PK on the id column, so a genuine reload would have produced 12 rows (6 old + 6 new,
+  duplicated by key) rather than silently deduplicating. After the run, `ad_client_id='0'` still had
+  exactly 6 rows, still the R40 data-fix's original IDs — the sourcedata file was NOT loaded. Reverted
+  `STATUS` back to `'A'` afterward (confirmed unchanged: `isindevelopment='Y'` untouched throughout).
+  **Root cause, from reading `src-db/database/build.xml`:** `STATUS='P'`/`'A'`/`'I'` is module
+  *install-lifecycle* bookkeeping — `database.postupdate.POSTGRE` stamps brand-new modules
+  `STATUS IS NULL OR 'I'` to `'P'`, and a separate `setApplied` target later flips `STATUS='P'` back to
+  `'A'` — it is unrelated to sourcedata reload. The actual `update.database` target's
+  `alterdatabasedataall` Ant task (line ~82) runs over **every** module's `sourcedata` directory
+  unconditionally (`dataFilter="*/src-db/database/sourcedata"`, no per-module STATUS filter in the
+  call), gated instead by the `onlyIfModified="${onlyIfModified}"` and `force="${force}"` Ant
+  properties (supplied by the Etendo Gradle plugin, not resolvable in this checkout — defaults live in
+  the external plugin jar). **Apply:** don't reach for `AD_MODULE.STATUS` to force a local sourcedata
+  reload — it does nothing for this path. To force it, use `-Pforce=true` (already tried per the prior
+  entry, also inconclusive on this DB) or `-PonlyIfModified=false` on `update.database`, or fall back
+  to the data-fix as the reliable seeding path (as R40 already does) and treat the sourcedata XML as
+  effective on a fresh `install.source`/CI build, not as something verifiable by flag-flipping an
+  already-provisioned local dev DB.
+
+- **2026-10-01 — Fiscal period control facts behind R44 (ETP-5575).**
+  (1) `'N'` in `C_PeriodControl.PeriodStatus` reliably means "never opened": `C_PERIOD_PROCESS`
+  (AD Process 167, the only open/close action) only ever writes `'O'`, `'C'` or `'P'`. A fix that
+  flips only `'N'` therefore never undoes a user decision.
+  (2) Two readers disagree on what "open" means. The posting gate (`AcctServer_data.xsql`
+  `periodOpen`) and completion (`C_CHK_OPEN_PERIOD`) need ANY `'O'` row for the doc base type; the
+  costing closed-check (`CostingUtils_data.xsql`) reads ANY non-`'O'` row of the period as closed and
+  ignores the doc base type. A period is open for both only when EVERY row is `'O'`.
+  (3) Every onboarded tenant carries TWO control rows per (period, doc base type, org): the dataset
+  copy (`C_PERIODCONTROL.xml`) and the copy `AD_ORG_READY` inserts with no existence check, created
+  after `wirePeriodControl`. So any opener must flip every `'N'` copy, not "one row per key"; this is
+  also why the Calendar window shows "Mixto" on months the chain opened (dedup is ETP-5577).
+  (4) `ETGO_EnvironmentType` is stored in two shapes: runtime (`AD_Client_ID=<tenant>`) and legacy
+  (`AD_Client_ID='0'` + `VisibleAt_Client_ID=<tenant>`, 2 demos on the local DB). An effective DEMO
+  also has no active `ETGO_TenantPlan='productive'` row.
+  (5) A pooled tenant (ETP-5389) has no `ETGO_EnvironmentType` until it is claimed
+  (`markDemoReady` runs at claim time), so a DEMO-gated data-fix cannot see unclaimed pool tenants;
+  only the post-commit claim step covers them.
+  **Apply:** R44 dry-run on the local DB (2026-10-01): 14 `WOULD_APPLY` / 105 `SKIPPED_NOT_NEEDED`;
+  applied to Calendar1 (`A5C303F8CF314BBF85CDC90757C8DBD7`) → `APPLIED (430 rows)`, Jan–Oct all `'O'`,
+  Nov/Dec `'N'` → re-run `SKIPPED_NOT_NEEDED — kept prior success state`.

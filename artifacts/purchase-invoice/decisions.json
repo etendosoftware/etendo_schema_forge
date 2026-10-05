@@ -37,6 +37,7 @@
       }
     ],
     "customComponents": {
+      "topbarExtra": "PurchaseInvoiceReceiptBadge",
       "headerTable": "InvoiceHeaderTable",
       "bottomSection": "PurchaseInvoiceBottomPanel"
     },

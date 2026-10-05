@@ -23,7 +23,7 @@ vi.mock('@/i18n', () => ({
 }));
 
 import {
-  NameCell, TypeCell, CurrencyCell, BalanceCell,
+  NameCell, TypeCell, CurrencyCell, BalanceCell, CountryCell,
 } from '../accountColumns.jsx';
 
 const ACCOUNT = {
@@ -78,8 +78,15 @@ describe('NameCell', () => {
     const badge = screen.getByTestId('account-row-connection-badge-acc-1');
     const nameAndBadge = name.parentElement;
 
-    expect(name).toHaveClass('truncate', 'min-w-0', 'flex-1');
+    // ETP-5242 — the name keeps its natural width (capped at the row) instead of flexing: in a
+    // narrow column the badge wraps below it rather than squeezing the name to zero width.
+    expect(name).toHaveClass('truncate', 'shrink-0', 'max-w-full');
+    expect(name).not.toHaveClass('flex-1');
     expect(nameAndBadge).toHaveClass('w-fit', 'max-w-full', 'min-w-0');
+    // ETP-5242 — Cuenta now shares the leftover width, so in a narrow column the badge must
+    // wrap below the name instead of squeezing the name to zero width.
+    expect(nameAndBadge).toHaveClass('flex-wrap');
+    expect(nameAndBadge).toContainElement(badge);
     expect(nameAndBadge).not.toHaveClass('w-full', 'flex-1');
     expect(nameAndBadge?.parentElement).toHaveClass('min-w-0', 'flex-1');
     expect(avatar).toHaveClass('shrink-0');
@@ -168,6 +175,41 @@ describe('NameCell', () => {
     // The button still renders (it is SyncStatusInline's default state) but has nothing
     // to call — clicking it must not throw.
     expect(() => fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'))).not.toThrow();
+  });
+});
+
+// ETP-5457 — NameCell forwards the window's "read-only" access tier to SyncStatusInline, which
+// then drops the inline "Conectar banco" CTA (a write). The rest of the cell is unaffected.
+describe('NameCell — read-only access tier (ETP-5457)', () => {
+  const OFFLINE = { ...ACCOUNT, bankConnected: false };
+
+  it('renders no connect affordance under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={vi.fn()} windowReadOnly />);
+
+    expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('renders the connect affordance under full access (ETP-5457 twin)', () => {
+    const onConnect = vi.fn();
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={onConnect} windowReadOnly={false} />);
+
+    fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
+
+    expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+  });
+
+  it('keeps the name and the offline badge under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
+  });
+
+  it('keeps the name and the offline badge under full access (ETP-5457 twin)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly={false} />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
   });
 });
 
@@ -309,5 +351,45 @@ describe('BalanceCell', () => {
     const { container } = render(<BalanceCell account={{ ...ACCOUNT, currentBalance: 0 }} />);
 
     expect(container.firstChild.className).not.toMatch(/destructive/);
+  });
+});
+
+// ETP-5242 — País was narrowed to 128px, so the country name renders through TruncatedText.
+describe('CountryCell', () => {
+  it('renders the country name through TruncatedText with its row-scoped test id', () => {
+    render(<CountryCell account={ACCOUNT} />);
+
+    const cell = screen.getByTestId('account-row-country-acc-1');
+    expect(cell).toHaveTextContent('Spain');
+    expect(cell).toHaveClass('truncate');
+  });
+
+  it('falls back to the ISO code, then to an em dash', () => {
+    const { unmount } = render(<CountryCell account={{ ...ACCOUNT, countryName: '' }} />);
+    expect(screen.getByTestId('account-row-country-acc-1')).toHaveTextContent('ES');
+    unmount();
+
+    render(<CountryCell account={{ ...ACCOUNT, countryName: '', countryIso: '' }} />);
+    expect(screen.getByTestId('account-row-country-acc-1')).toHaveTextContent('—');
+  });
+
+  it('shows the full country name in a tooltip only when it is clipped', () => {
+    const longCountry = 'Saint Vincent and the Grenadines';
+    const { unmount } = render(<CountryCell account={{ ...ACCOUNT, countryName: longCountry }} />);
+    const clipped = screen.getByTestId('account-row-country-acc-1');
+    setMetrics(clipped, 260, 100);
+
+    fireEvent.focus(clipped);
+
+    expect(screen.getByTestId('account-row-country-acc-1-tooltip')).toHaveTextContent(longCountry);
+    unmount();
+
+    render(<CountryCell account={ACCOUNT} />);
+    const fitting = screen.getByTestId('account-row-country-acc-1');
+    setMetrics(fitting, 40, 100);
+
+    fireEvent.focus(fitting);
+
+    expect(screen.queryByTestId('account-row-country-acc-1-tooltip')).not.toBeInTheDocument();
   });
 });

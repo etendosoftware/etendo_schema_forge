@@ -52,6 +52,11 @@ case "$SUITE" in
   all|mocked|integration) ;;
   *) echo "❌ E2E_SUITE must be 'all', 'mocked', or 'integration' (got '$SUITE')." >&2; exit 1 ;;
 esac
+if [ "$SUITE" != "mocked" ] && [ -n "${E2E_USER:-}" ] && [ -z "${E2E_PASSWORD:-}" ]; then
+  echo "❌ E2E_USER requires an explicit E2E_PASSWORD for integration tests." >&2
+  echo "   Set both for one existing account, or unset E2E_USER to let onboarding-setup create credentials." >&2
+  exit 1
+fi
 
 PREVIEW_PID=""
 JSREPORT_STARTED_BY_US=0
@@ -211,7 +216,15 @@ if [ "$SUITE" != "mocked" ]; then
     integration_test_args+=(--no-deps --last-failed)
     selection_note=" — last failed"
   elif [ -n "$FILES" ]; then
-    integration_test_args+=(--no-deps)
+    # This paid-provisioning spec needs a real account. When the caller did not
+    # supply an explicit credential pair, run onboarding-setup even in targeted
+    # mode so an old .auth-credentials.json cannot silently win and fail at login.
+    if [[ "$FILES" == *tenant-upgrade-provisioning-failure.integration.spec.js* ]] \
+        && { [ -z "${E2E_USER:-}" ] || [ -z "${E2E_PASSWORD:-}" ]; }; then
+      echo "==> Paid provisioning fixture: refreshing onboarding credentials for targeted run"
+    else
+      integration_test_args+=(--no-deps)
+    fi
     IFS=',' read -r -a selected_files <<< "$FILES"
     for selected_file in "${selected_files[@]}"; do
       [ -n "$selected_file" ] && integration_test_args+=("$selected_file")
@@ -230,6 +243,7 @@ if [ "$SUITE" != "mocked" ]; then
   ( cd "$REPO_DIR/e2e" && CI=true E2E_USE_MOCK=0 E2E_PASSWORD="$PASSWORD" BASE_URL="$BASE_URL" \
       E2E_EMAIL_SINK="${E2E_EMAIL_SINK:-1}" \
       E2E_ONBOARDING_INTEGRATION=1 E2E_SALES_INTEGRATION=1 E2E_FINANCE_INTEGRATION=1 \
+      E2E_PROVISIONING_FAILURE=1 \
       "${integration_test_args[@]}" )
 else
   echo "==> Playwright E2E — integration specs... SKIPPED (E2E_SUITE=mocked)"

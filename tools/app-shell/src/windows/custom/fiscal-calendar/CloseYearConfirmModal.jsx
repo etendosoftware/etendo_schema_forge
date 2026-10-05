@@ -63,9 +63,12 @@ export default function CloseYearConfirmModal({ direction, isOpen, currentRecord
     setSubmitError(false);
     try {
       const action = ACTION_BY_DIRECTION[direction];
+      // ETP-5424 — closing a year posts the regularization entries synchronously and can
+      // outlive the default timeout; a cut-off write here invites a second close.
       const res = await apiFetch(`/year/${currentRecord.id}/action/${action}`, {
         method: 'POST',
         body: JSON.stringify({}),
+        timeout: 0,
       });
       if (!res.ok) throw new Error(`Request failed: ${res.status}`);
       onSaved?.();

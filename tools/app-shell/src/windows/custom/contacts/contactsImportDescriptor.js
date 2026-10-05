@@ -144,6 +144,59 @@ const IS_PERSON_VALUES = {
 
 const DEFAULT_IS_PERSON = 'N';
 
+// C_BPartner.IsCustomer / IsVendor are AD Yes/No columns (AD_Reference 20) as well. Their
+// stored values are 'Y'/'N' — the same representation `etgoIsperson` already travels in, and
+// the one `BillingPreferencesForm` sends for `vendor`; NEO coerces it to the DAL boolean
+// (`NeoTypeCoercionHelper` -> `NeoBooleanFormat.toLenientBoolean`). 'Sí' leads the Y list on
+// purpose: `codeLabels` exports the FIRST synonym, so an exported file reads "Sí"/"No" and
+// re-imports by construction.
+const YES_NO_VALUES = {
+  Y: ['Sí', 'Si', 'S', 'Yes', 'True', '1', 'X'],
+  N: ['No', 'False', '0'],
+};
+
+const CUSTOMER_CELL = { target: 'customer', fieldLabelKey: 'importHeaderCustomer', fieldLabelFallback: 'Customer' };
+const VENDOR_CELL = { target: 'vendor', fieldLabelKey: 'importHeaderVendor', fieldLabelFallback: 'Vendor' };
+
+function isBlankCell(raw) {
+  return String(raw ?? '').trim() === '';
+}
+
+/**
+ * ETP-5544 — the Customer / Vendor roles of an imported contact.
+ *
+ * Before this the template had no column for either, so every imported row silently landed on
+ * the DB defaults (IsCustomer='Y', IsVendor='N'): a supplier list imported via CSV became a
+ * list of customers. The defaulting rule is deliberate and reads the two cells TOGETHER:
+ *
+ *  - Both blank or absent (incl. a template downloaded before these columns existed) ->
+ *    customer 'Y', vendor 'N'. The row says nothing about its role, so it keeps exactly what
+ *    the import produced before.
+ *  - At least one filled -> a blank one means 'N'. A row with only "Proveedor = Sí" is a
+ *    vendor-only contact; defaulting the blank customer cell to 'Y' would make it both, which
+ *    is the very bug this ticket fixes.
+ *  - Both explicitly 'N' -> allowed. A business partner can be neither (e.g. only an employee
+ *    or a plain contact), and the form allows the same.
+ *
+ * An unrecognized cell fails its row naming the accepted values, like every other coded cell.
+ *
+ * @returns {{customer: 'Y'|'N', vendor: 'Y'|'N'}}
+ * @throws {Error} when either cell holds a value outside {@link YES_NO_VALUES}.
+ */
+function resolveCustomerVendor(row, translate) {
+  const roleStated = !isBlankCell(row.customer) || !isBlankCell(row.vendor);
+  const resolve = (raw, cell, defaultCode) => resolveCodedCellOrThrow(raw, YES_NO_VALUES, {
+    defaultCode,
+    fieldLabelKey: cell.fieldLabelKey,
+    fieldLabelFallback: cell.fieldLabelFallback,
+    translate,
+  });
+  return {
+    customer: resolve(row.customer, CUSTOMER_CELL, roleStated ? 'N' : 'Y'),
+    vendor: resolve(row.vendor, VENDOR_CELL, 'N'),
+  };
+}
+
 const SEARCH_KEY_MAX_LENGTH = 40;
 const SEARCH_KEY_HASH_LENGTH = 7;
 
@@ -226,11 +279,14 @@ async function resolveCategoryId(row, config) {
   const createFn = config.createCategoryFn || (async ({ searchKey, name }) => {
     const base = detectEtendoBase();
     const url = `${base}/sws/neo/business-partner-category/businessPartnerCategory`;
+    // ETP-5424 — part of an import run: a category create cut off by the default timeout
+    // could still commit, and the retry would then create a duplicate.
     const res = await apiFetch(url, {
       method: 'POST',
       baseUrl: '',
       token: config.token,
       body: JSON.stringify({ searchKey, name }),
+      timeout: 0,
     });
     if (!res.ok) {
       const errJson = await res.json().catch(() => null);
@@ -385,6 +441,9 @@ registerImportRowValidator('contacts', (row, { translate } = {}) => [
   codedCellError(row.etgoIsperson, IS_PERSON_VALUES, {
     target: 'etgoIsperson', fieldLabelKey: 'importFieldContactType', fieldLabelFallback: 'Contact Type', translate,
   }),
+  // ETP-5544 — a typo in Cliente/Proveedor is flagged while reviewing, not at confirm time.
+  codedCellError(row.customer, YES_NO_VALUES, { ...CUSTOMER_CELL, translate }),
+  codedCellError(row.vendor, YES_NO_VALUES, { ...VENDOR_CELL, translate }),
   ...contactIdentityErrors(row, translate),
 ].filter(Boolean));
 
@@ -437,6 +496,17 @@ registerExportHints('contacts', {
       false: IS_PERSON_VALUES.N[0], N: IS_PERSON_VALUES.N[0],
     },
     oBTIKTaxIDKey: codeLabels(TAX_ID_KEY_VALUES),
+    // ETP-5544 — IsCustomer / IsVendor are Yes/No columns too: same two spellings as above.
+    // The list row already carries both under their own names (ContactsTable reads them), so
+    // no `sourceKeys` entry is needed.
+    customer: {
+      true: YES_NO_VALUES.Y[0], Y: YES_NO_VALUES.Y[0],
+      false: YES_NO_VALUES.N[0], N: YES_NO_VALUES.N[0],
+    },
+    vendor: {
+      true: YES_NO_VALUES.Y[0], Y: YES_NO_VALUES.Y[0],
+      false: YES_NO_VALUES.N[0], N: YES_NO_VALUES.N[0],
+    },
   },
 });
 
@@ -476,6 +546,7 @@ registerImportDescriptor('contacts', async (row, config) => {
       defaultCode: DEFAULT_TAX_ID_KEY, fieldLabelKey: 'importFieldTaxIdType', fieldLabelFallback: 'Tax ID Type', translate: config.translate,
     }),
     etgoIsperson: identity.isPerson,
+    ...resolveCustomerVendor(row, config.translate),
     searchKey: deriveSearchKey(identity.name),
   };
 

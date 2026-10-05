@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { buildJsreportHelpersString } from '../../../../../templates/reports/helpers/report-html-helpers.js';
 import { getCurrencyFormatConfig } from '@/lib/currencyFormatConfig.js';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { NetworkError } from '@etendosoftware/app-shell-core/auth';
 
 // ---------------------------------------------------------------------------
 // jsreport recipe ↔ format mapping
@@ -143,7 +144,9 @@ async function fetchAllRecords(apiFetch, entity, sortColumn, sortDirection) {
 
   while (hasMore) {
     const path = `/${entity}?_sortBy=${sortColumn} ${sortDirection}&_startRow=${start}&_endRow=${start + BATCH - 1}`;
-    const res = await apiFetch(path);
+    // ETP-5424 — a report export: opts out of apiFetch's default timeout like every other
+    // export, so a slow page on a loaded backend fails the report only on a real error.
+    const res = await apiFetch(path, { timeout: 0 });
     if (!res.ok) throw new Error(`API error ${res.status}`);
     const data = await res.json();
     const rows = data?.response?.data ?? (Array.isArray(data) ? data : []);
@@ -206,12 +209,20 @@ async function renderViaJsreport(recipe, title, columns, rows, filters, labels) 
     // Uses Chrome by default (same as chrome-pdf) — no htmlEngine override needed
   }
 
-  // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
-  const res = await fetch('/jsreport/api/report', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let res;
+  try {
+    // raw-fetch-ok: local jsreport container proxy, unauthenticated by design (no Etendo bearer token)
+    res = await fetch('/jsreport/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    // ETP-5424 — a raw fetch gets none of apiFetch's translation, so a dropped connection
+    // would reach the error area as the browser's English 'Failed to fetch'. Same localized
+    // NetworkError apiFetch throws, so the drawer's `err.message` needs no special case.
+    throw err instanceof TypeError ? new NetworkError({ reason: 'offline', cause: err }) : err;
+  }
 
   if (!res.ok) {
     const text = await res.text();

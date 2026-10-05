@@ -155,9 +155,80 @@ export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
 }
 
+/**
+ * ETP-5550 — answers `GET /sws/go/session` with the backend's "no session" 401, for mocked
+ * specs that start signed out on `/onboarding` without going through `login()`.
+ *
+ * Left unmocked, that GET goes through the preview proxy to whatever backend is (or is not)
+ * behind it. A live Tomcat answers 401 and the login view renders, so the spec passes locally.
+ * With no backend (the mocked stage in CI), the proxy answers 500. Since ETP-5550 the
+ * onboarding reads that as "backend not answering during a deploy" and keeps retrying on its
+ * loading view instead of showing the login, so every spec that waits for the login view
+ * times out.
+ *
+ * Call it FIRST in the spec's mock installer: Playwright tries the latest-registered route
+ * first, so a spec's own `**\/sws/go/session` routes registered afterwards still win, and
+ * falling back to this one keeps the restore signed out.
+ */
+export async function declareNoSession(page) {
+  await page.route('**/sws/go/session', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Invalid or expired token', status: 401 } }),
+    });
+  });
+}
+
+/**
+ * ETP-5551 — opt-in race guard for specs that override `GET /sws/go/onboarding/first-steps`
+ * AFTER `login()` (enable with `login(page, { awaitFirstStepsRead: true })`).
+ *
+ * `waitForURL('**\/dashboard')` resolves on the load event, but `FirstStepsProvider` only reads
+ * this endpoint once the session restore has authenticated the shell. On a slow machine that
+ * read lands after `login()` returns, so a spec's own override (e.g. an UNSEEN state) answers
+ * it and the dashboard gate POSTs a stray `seen: true`. Waiting for the read guarantees it was
+ * served by `login()`'s "already seen" stub.
+ *
+ * A response is enough (the serving route is already chosen); `requestfailed` also counts so a
+ * spec that aborts the endpoint does not hang. Fails loudly on timeout: if the read is never
+ * issued the guard cannot hold, and the spec must say so rather than silently pass or stall.
+ * Must be armed BEFORE the navigation so a fast read cannot slip past it.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<void>} rejects if no first-steps read settles within `timeout`
+ */
+function armFirstStepsReadGuard(page, { timeout = 10_000 } = {}) {
+  const isFirstStepsRead = (request) => request.method() === 'GET'
+    && request.url().includes('/sws/go/onboarding/first-steps');
+  const answered = page.waitForResponse((response) => isFirstStepsRead(response.request()), { timeout });
+  const failed = page.waitForEvent('requestfailed', { predicate: isFirstStepsRead, timeout });
+  // The losing waiter still rejects later (timeout or page close); never let that go unhandled.
+  answered.catch(() => {});
+  failed.catch(() => {});
+  const guard = Promise.any([answered, failed]).then(() => {}, (error) => {
+    throw new Error(
+      `login({ awaitFirstStepsRead: true }): the dashboard never issued GET /sws/go/onboarding/first-steps `
+      + `within ${timeout}ms, so the first-steps race guard cannot hold `
+      + '(FirstStepsProvider unmounted, gated, or the route renamed?).',
+      { cause: error },
+    );
+  });
+  // Handled here in case login() throws before awaiting it; awaiting `guard` still rejects.
+  guard.catch(() => {});
+  return guard;
+}
+
 export async function login(page, {
   user = DEFAULT_USER,
   password = DEFAULT_LOGIN_PASS,
+  // ETP-5205 — mock mode only: per-window access tier overrides, e.g.
+  // `{ '143': 'read-only' }`. Every window not listed stays "full".
+  windowAccessOverrides = {},
+  // ETP-5551 — mock mode only: wait for the dashboard's first-steps read before returning,
+  // failing if it never happens. Only for specs that override that route after login().
+  awaitFirstStepsRead = false,
 } = {}) {
   captureApiCredentials(page);
   if (IS_MOCK_MODE) {
@@ -165,7 +236,7 @@ export async function login(page, {
     // this mocked session from GET /sws/go/session below, exactly like production.
     // Seeding a token briefly starts a stale bearer refresh before that restore
     // wins, which looks like a post-login permissions change to the shell.
-    await page.addInitScript(() => {
+    await page.addInitScript((overrides) => {
       // Stub the SFWindowAccessMap endpoint itself. It's reached via NEO
       // Headless's own `/sws/neo/windowaccessmap` bridge (ETP-4513 — moved off
       // the Webhooks module's `/webhooks/SFWindowAccessMap`, which required a
@@ -181,7 +252,9 @@ export async function login(page, {
       const realFetch = window.fetch.bind(window);
       // Stable identities are intentional: permissions do not change during a mocked
       // test, and a new Proxy per refresh looks like a real role update to AuthContext.
-      const windowAccess = new Proxy({}, { get: () => "full" });
+      const windowAccess = new Proxy({}, {
+        get: (_target, key) => (typeof key === 'string' && overrides[key]) || "full",
+      });
       const capabilities = new Proxy({}, { get: () => true });
       window.fetch = (input, init) => {
         const url = typeof input === 'string' ? input : input?.url;
@@ -228,7 +301,7 @@ export async function login(page, {
         }
         return realFetch(input, init);
       };
-    });
+    }, windowAccessOverrides);
 
     // Intercept /sws/* to prevent the real Etendo backend receiving our fake
     // token (which would return 401 and trigger logout()).
@@ -341,8 +414,10 @@ export async function login(page, {
       }
     });
 
+    const firstStepsRead = awaitFirstStepsRead ? armFirstStepsReadGuard(page) : null;
     await page.goto('/dashboard');
     await page.waitForURL('**/dashboard', { timeout: 10_000 });
+    if (firstStepsRead) await firstStepsRead;
     return;
   }
 
@@ -370,7 +445,20 @@ export async function login(page, {
 
   await page.locator('#login-email').fill(user);
   await page.locator('#login-password').fill(password);
+  const sessionResponsePromise = page.waitForResponse(
+    response => response.request().method() === 'POST'
+      && new URL(response.url()).pathname.endsWith('/sws/go/session'),
+    { timeout: 30_000 },
+  );
   await page.getByTestId('action-login-submit').click();
+  const sessionResponse = await sessionResponsePromise;
+  if (sessionResponse.status() === 401) {
+    throw new Error('E2E login rejected by POST /sws/go/session (HTTP 401). '
+      + 'Check the selected E2E_USER/E2E_PASSWORD pair or refresh onboarding credentials.');
+  }
+  if (!sessionResponse.ok()) {
+    throw new Error(`E2E login failed at POST /sws/go/session (HTTP ${sessionResponse.status()}).`);
+  }
 
   await expectAnyEnvironmentOrDashboard(page);
 

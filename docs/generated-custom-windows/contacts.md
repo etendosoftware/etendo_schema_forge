@@ -36,7 +36,7 @@ The Contacts window should let users maintain a shared business-partner master r
 
 ## Reactive behavior and dependencies
 
-- The list is constrained to records marked as customer or vendor. Subset filters offer **All**, **Personas**, and **Empresas** (i18n keys `all`, `persons`, `companies`). Each filter applies client-side via a `rowFilter` predicate on `etgoIsperson`; the server constraint (customer/vendor) remains active for all subsets. This overrides the generated `BusinessPartnerPage.jsx` default filters (Todos/Clientes/Proveedores) through JSX prop last-wins precedence — `BusinessPartnerPage` spreads `{...props}` after its own `subsetFilters`, so the value from `ContactsWindow` wins.
+- **(ETP-5490)** The list is **not** constrained by `customer`/`vendor` — it shows every `C_BPartner` record of the tenant, regardless of those flags. Before ETP-5490, `decisions.json → window.listBaseFilter` applied a permanent, ineludible `customer=true OR vendor=true` floor to every list/search query (`useEntity.js` → `applyFilterParams`), which made a business partner disappear from the window entirely — with no error and no way back through this UI — the moment both flags were cleared, even though the record still existed intact in `C_BPartner`. That `listBaseFilter` key has been removed with no replacement (a filter on `employee` was considered and rejected: `employee` is classified `form: false` in `decisions.json`, i.e. invisible to the user in this window, so filtering on it would reproduce the same class of bug against a different flag). Subset filters offer **All**, **Personas**, and **Empresas** (i18n keys `all`, `persons`, `companies`). Each filter applies client-side via a `rowFilter` predicate on `etgoIsperson`; there is no longer any server-side customer/vendor constraint underneath any subset. This overrides the generated `BusinessPartnerPage.jsx` default filters (Todos/Clientes/Proveedores) through JSX prop last-wins precedence — `BusinessPartnerPage` spreads `{...props}` after its own `subsetFilters`, so the value from `ContactsWindow` wins.
 - The custom list enriches each row with customer/vendor type badges and a derived location column by loading `locationAddress` records separately and showing the first address found for the business partner.
 - The list supports hover actions (`hoverRowActions={true}`): hovering a row reveals a circular pencil icon (edit) and a circular trash icon (delete) at the right end of the row. When a row is in edit mode the pencil becomes a ✓ (confirm save) and the trash becomes an ✗ (cancel edit). Clicking the row while it is in edit mode does not navigate to the detail view.
 - Inline editing is conditional on contact type (`etgoIsperson`): for **Persona** records only `etgoFirstname`, `etgoLastname`, `etgoWeb`, `etgoEmail`, and `etgoPhone` become inputs — `name` (Razón Social) remains read-only because `ContactNameSyncHandler` rebuilds it server-side from first + last. For **Empresa** records only `name`, `etgoWeb`, `etgoEmail`, and `etgoPhone` become inputs — `etgoFirstname` and `etgoLastname` remain read-only. The PATCH payload therefore contains different fields per type.
@@ -76,7 +76,7 @@ The Contacts window should let users maintain a shared business-partner master r
 
 - The surface clearly mixes customer and vendor semantics, but current evidence does not prove the full business rule for when a contact should be customer-only, vendor-only, both, or neither. The document should therefore treat those role semantics as supported flags, not as a fully explained business classification model.
 - The Company/Person toggle is persisted via `EM_Etgo_IsPerson` on `C_BPartner`. The persistence model is resolved: opening a record initializes the toggle from DB, and changing the toggle writes `etgoIsperson` into the editing state so it is persisted with the single explicit Save (same PATCH as the name fields) — for new records the create POST carries the toggle choice. There is no separate toggle PATCH.
-- New master records default `customer` to true in the contract, while the list only shows customer or vendor records. Current evidence does not prove whether a user is expected to create non-customer/non-vendor contacts here or what should happen if both flags are cleared.
+- **Resolved (ETP-5490).** New master records default `customer` to true in the contract, but the list is no longer restricted to customer/vendor records — it shows every `C_BPartner` of the tenant. A user can clear both `customer` and `vendor` on a record and it remains visible and reachable in the list and search; nothing in this window prevents or blocks a non-customer/non-vendor contact from existing or being found. The "all" subset filter is now literally all business partners; "customers" and "vendors" remain independent subfilters (`decisions.json → window.subsetFilters`) that are unaffected by the removal of `listBaseFilter`, since each already carries its own filter criterion.
 - The contract exposes additional related entities such as `customer`, `vendorCreditor`, and `employee`, but the current UI evidence shows only the General tab, Financial tab, and the five child work areas (Person, Bank Account, Location, Customer Accounting, Vendor Accounting). It is ambiguous which deeper role-specific records are intentionally hidden, auto-managed, or still missing from the UI.
 - `employeeAccounting` (table `C_BP_Employee_Acct`, `tabId: 214`) exists in the contract but is explicitly **out of scope** for ETP-4402 and remains unwired — no `secondaryTabs` entry, no field classification beyond the pre-existing default. It should be treated as a separate follow-up, not a gap in this change.
 - Neither `customerAccounting` nor `vendorAccounting` restricts visibility by the corresponding `customer`/`vendor` role flag. The generator does now support conditionally hiding a whole secondary tab — `window.secondaryTabs.<key>.visibleWhenCapability` (ETP-5116, see below) — but that mechanism gates on a role capability, not on the business partner's own `customer`/`vendor` data flags, so both tabs still render unconditionally with respect to those flags. Gating a tab on the record's own data (as opposed to the current role) remains unimplemented.
@@ -1271,6 +1271,32 @@ bypasses `useEntity` mutations altogether via its raw fetch, so the generic `han
 alone does not reach it — `buildCustomAddModalOnSaved`'s own extra `invalidateEntityCache()` call
 is what closes the gap for this window's Location tab.
 
+## ETP-5571 — Renaming a contact no longer leaves document Contacto selectors stale
+
+**Symptom.** After editing a contact's Razón Social here and saving, the Contacto selector of a
+Sales/Purchase document that had already been opened in the session kept listing the old name
+until a full reload (F5).
+
+**Root cause.** Selector option pages are cached in the shared cache under `entity: 'selector'`
+for `catalogStaleTime` (5 min — ETP-4564's table above), and re-opening a selector reads through
+`fetchQuery`, which serves a fresh entry. `useContactsCacheInvalidation` only marks the Contacts
+window's own keys (`businessPartner`, `bp-stats`, `bp-trend`) stale, so nothing touched the
+selector entries the document windows had cached.
+
+**Fix.** Central, not per-window: `WRITE_INVALIDATES_ENTITIES` in
+`tools/app-shell/src/lib/crossSpecCacheInvalidation.js` maps `contacts → selector`, and the local
+`useApiFetch` applies it after every successful non-GET whose URL has the `contacts` path segment
+(see `docs/request-policy.md` → *Writes to Contactos invalidate every cached selector page*). It
+covers every Contacts write that goes through the hook — header save (`useEntity`), inline table
+edit/delete, bulk delete, the financial panel, billing preferences, the Location modal, and the
+"+ Crear contacto" dialog opened from a document — and every document window with a Contacto
+field, since they all render it through `CreatableSearchSelect`. All selector pages are marked
+stale, not only Contacto ones; the cost is one extra GET when each is next opened.
+
+**Not covered:** the CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, which has no access to the cache, so names changed by an import still
+wait out the 5-minute `catalogStaleTime`.
+
 ## Solo Lectura (read-only window-access tier) gating — ETP-5205
 
 Etendo GO's per-role window-access tier (`useWindowAccess('123')` → `'none' | 'read-only' |
@@ -1283,3 +1309,67 @@ rendered unconditionally in the shared `ListView.jsx`, regardless of `windowRead
 shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
 future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
 ETP-5205 commit history for the fix and its test).
+
+## ETP-5544 — Import: Customer / Vendor columns
+
+**The bug.** The import template had no column for the business partner's role, and the
+descriptor never wrote `customer` / `vendor`. Every imported row therefore landed on the AD
+defaults (`IsCustomer='Y'`, `IsVendor='N'`), so a supplier list imported via CSV silently became a
+list of customers.
+
+**Two new template columns**, declared in `decisions.json → window.import.fields` right after the
+contact type:
+
+| Target | Column | Header (es / en) | Aliases | Example |
+| --- | --- | --- | --- | --- |
+| `customer` | `IsCustomer` | Cliente / Customer (`importHeaderCustomer`) | `cliente`, `es cliente`, `customer` | Sí (`importExampleContactCustomer`) |
+| `vendor` | `IsVendor` | Proveedor / Vendor (`importHeaderVendor`) | `proveedor`, `es proveedor`, `vendor`, `supplier` | No (static `example` — identical in both languages, so no `exampleKey`) |
+
+`mapColumns` matches a header by exact equality after accent/case/whitespace normalization, so
+`tipo cliente` (an alias of `etgoIsperson`) and `cliente` cannot steal each other; no other field
+of this window declares `cliente`, `proveedor`, `customer`, `vendor` or `supplier`.
+
+**Accepted values** (`YES_NO_VALUES` in `contactsImportDescriptor.js`, matched accent- and
+case-insensitively through `lib/codedValue.js`): `Sí`/`Si`/`S`/`Yes`/`Y`/`True`/`1`/`X` for yes,
+`No`/`N`/`False`/`0` for no. Anything else is flagged on that cell **during review**
+(`registerImportRowValidator('contacts', …)`), with the same "accepted values" message as the
+other coded columns, and the send path refuses it with the same wording.
+
+**Defaulting rule — the two cells are read together:**
+
+- Both blank or absent (including a template downloaded before these columns existed) →
+  customer `Y`, vendor `N`: exactly what the import produced before.
+- At least one filled → a blank one means `N`. A row with only *Proveedor = Sí* is a vendor-only
+  contact; defaulting the blank *Cliente* to `Y` would make it both, which is the bug itself.
+- Both explicitly `No` → allowed; a business partner can be neither.
+
+The values travel as `'Y'`/`'N'`, the same representation `etgoIsperson` uses and the one
+`BillingPreferencesForm` sends for `vendor`; NEO coerces it to the DAL boolean
+(`NeoTypeCoercionHelper` → `NeoBooleanFormat.toLenientBoolean`). No backend change: both
+properties were already editable on the `businessPartner` entity, and `c_bpartner_trg` creates the
+customer and vendor accounting rows on INSERT regardless of the flags.
+
+**Export round trip.** `registerExportHints` maps both columns from `true`/`false` and `Y`/`N` to
+`Sí`/`No` (the first synonym of each side of `YES_NO_VALUES`), so an exported file re-imports by
+construction. The list row already carries `customer` / `vendor` under those names (the list's
+type badge reads them), so no `sourceKeys` override is needed.
+
+**Existing contacts are not updated.** `dedupe.scope: "database"` on `taxID` marks a row whose
+NIF already exists as **Saltada**; the import only ever creates. Changing the role of an existing
+contact through a re-import is therefore not possible — use the Billing preferences of the
+contact instead.
+## List toolbar: tab group on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
+and the main actions (sort, refresh, import, export, "New …") on the first, and the **Todos / Personas / Empresas** subset tabs on a second row
+below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
+group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
+with the filters and the actions. The tabs are on the second row at every width, and they behave
+as before: choosing another entry filters the grid and highlights the selection.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/contacts` and confirm "Filtros" sits on the
+first row with sort, refresh, import, export and "New contact" on the right, untruncated; the
+three tabs sit on the second row; switching tab still filters the grid.

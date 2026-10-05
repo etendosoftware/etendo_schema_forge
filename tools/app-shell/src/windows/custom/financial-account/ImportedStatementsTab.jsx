@@ -23,13 +23,8 @@ import { StatementConfirmDialog } from './StatementConfirmDialog';
 import { applyAdvancedFilter } from './statementAdvancedFilter';
 import { getDateBounds } from '@/lib/dateRangeBounds';
 import { parseCalendarDate } from '@/lib/dateOnly';
+import { useFinancialAccountCacheInvalidation } from './financialAccountCacheInvalidation';
 
-/**
- * The list's default order: newest statement first.
- *
- * Shared by the pre-sort and by `useClientSort`'s indicator seed, which must agree or the header
- * arrow would describe an order the rows are not in.
- */
 /**
  * The date an imported statement is filtered by, as a comparable {@link Date}, or `null` when the
  * value is missing or unparseable.
@@ -55,7 +50,24 @@ function statementFilterDate(raw) {
   return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
 }
 
-const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'documentNo', direction: 'desc' });
+/**
+ * The list's default order: most recent transaction date first (ETP-5447).
+ *
+ * Only the PRIMARY key is named here, because this seeds `useClientSort`'s header indicator —
+ * shared with the pre-sort below, which must agree or the arrow would describe an order the rows
+ * are not in. The pre-sort adds the `created` tiebreak underneath; see `defaultSortedStatements`.
+ */
+const STATEMENTS_DEFAULT_SORT = Object.freeze({ key: 'transactionDate', direction: 'desc' });
+
+/**
+ * Accessors for the two default-order keys. Explicit rather than taken from
+ * `buildStatementSortAccessors`, so the default order does not depend on `transactionDate`
+ * remaining a contract grid column, and because `created` is never a column at all.
+ */
+const DEFAULT_ORDER_ACCESSORS = Object.freeze({
+  created: (s) => s.created,
+  transactionDate: (s) => s.transactionDate,
+});
 import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
 
 /**
@@ -69,9 +81,15 @@ import { BulkDeleteSelectionBar } from '@/components/financial-accounts';
  * the parent's Export button can decide what to export: the filtered statement
  * headers (no selection) or the lines of the selected statement(s).
  *
- * @param {{ account: object }} props
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier (ETP-5205). Under it the tab
+ * is browse-only: the import / manual-create / bank-sync actions, the per-row edit / delete / kebab,
+ * the selection checkboxes and the bulk-delete bar are hidden, the three dialogs stay shut, and the
+ * mutating handlers return early. Filters, search, sort, refresh, row expansion, the lines sub-view
+ * and the parent's CSV export (which, with no selection, exports the filtered headers) keep working.
+ *
+ * @param {{ account: object, windowReadOnly?: boolean }} props
  */
-export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account }, ref) {
+export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({ account, windowReadOnly = false }, ref) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
   // The `name` sort accessor formats a periodFrom–periodTo range for statements with no name,
@@ -88,6 +106,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   const { processStatement, reactivateStatement, deleteStatement, busy } = useStatementActions();
   const { sync } = useBankConnectionActions();
   const [syncing, setSyncing] = useState(false);
+  const { invalidateAccountList } = useFinancialAccountCacheInvalidation();
 
   const [selectedStatementId, setSelectedStatementId] = useState(null);
   const [search, setSearch] = useState('');
@@ -154,11 +173,15 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // refresh button looked broken (it reloaded exactly the half that was already correct). This
   // token is bumped alongside every reload; `refreshStatements` is what all mutation paths and
   // the refresh button call, so the two halves can no longer drift apart.
+  // ETP-5522 — it is also the choke point that marks the Cuentas list stale: creating, importing,
+  // syncing, processing, reactivating or deleting a statement changes the account's pending count
+  // (EM_ETGO_Pending_Count), and the list would otherwise serve its cached rows on the way back.
   const [linesRefreshToken, setLinesRefreshToken] = useState(0);
   const refreshStatements = useCallback(() => {
+    invalidateAccountList();
     reload();
     setLinesRefreshToken((t) => t + 1);
-  }, [reload]);
+  }, [reload, invalidateAccountList]);
 
   // ETP-5111 — the bulk trash is no longer pre-disabled here. ETP-4921 blocked it up front for a
   // processed statement or a bank-connected (PSD2) account ("don't let them touch the trash
@@ -182,7 +205,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // "Sync now"). The bridge mirrors Classic's "Get Bank Statement": it returns a status
   // (Success/WARNING/ERROR) plus the localized process message rather than throwing.
   const handleSyncStatements = async () => {
-    if (!accountId || syncing) return;
+    if (windowReadOnly || !accountId || syncing) return;
     setSyncing(true);
     try {
       const res = await sync(accountId);
@@ -233,7 +256,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
 
   const runConfirm = async () => {
     const { variant, statement } = confirm;
-    if (!statement) return;
+    if (windowReadOnly || !statement) return;
     const cfg = CONFIRM_ACTIONS[variant] ?? CONFIRM_ACTIONS.process;
     try {
       await cfg.run(statement.id);
@@ -280,24 +303,35 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
   // list arrives whole from a handler that accepts no sort parameter — see lib/clientSort.js.
   const sortAccessors = useMemo(() => buildStatementSortAccessors(bcpLocale), [bcpLocale]);
   const sortColumns = useMemo(() => buildStatementSortColumns(ui), [ui]);
-  // Newest first by default. The handler returns the statements in no particular order, so a
-  // freshly created one — manual or imported — landed wherever it happened to fall and the user
-  // had to hunt for the row they had just made. DocumentNo is the only strictly increasing key
-  // the list has (the transaction date is the bank's, not the creation order), so the newest
-  // statement is always the highest one.
+  // Default order (ETP-5447): transaction date DESC, then creation DESC, then id DESC — the same
+  // total order `BankStatementsHandler.STATEMENTS_SQL` returns. It keeps Classic's shape for this
+  // tab: its AD tab sorts by `-transactionDate`, and `DefaultJsonDataService` always appends `id`
+  // (flipped to `-id` when every column is descending), i.e. `transactionDate DESC, id DESC`. That
+  // is deterministic but arbitrary — a UUID says nothing about arrival order — so `created`
+  // replaces it as the tiebreak, and the id stays only as the last resort. The previous default,
+  // `documentNo DESC`, ignored the transaction date the user actually reads the list by.
+  //
+  // Two passes of a STABLE sort make a composite order: sorting by `created` first and then by
+  // `transactionDate` leaves rows that tie on the transaction date in creation order. Rows that
+  // tie on both keep the backend's order, which already carries the final `id DESC`.
   //
   // Pre-sorted HERE rather than through `initialSort`, which only seeds the header indicator and
   // deliberately does not reorder — see `useClientSort`'s doc. Both are needed: this call puts
   // the rows in order, `initialSort` makes the arrow agree with what is on screen.
-  const defaultSortedStatements = useMemo(
-    () => sortRows(filteredStatements, {
-      key: 'documentNo',
+  const defaultSortedStatements = useMemo(() => {
+    const byCreated = sortRows(filteredStatements, {
+      key: 'created',
       direction: 'desc',
-      accessors: sortAccessors,
+      accessors: DEFAULT_ORDER_ACCESSORS,
       locale: bcpLocale,
-    }),
-    [filteredStatements, sortAccessors, bcpLocale],
-  );
+    });
+    return sortRows(byCreated, {
+      key: STATEMENTS_DEFAULT_SORT.key,
+      direction: STATEMENTS_DEFAULT_SORT.direction,
+      accessors: DEFAULT_ORDER_ACCESSORS,
+      locale: bcpLocale,
+    });
+  }, [filteredStatements, bcpLocale]);
   const {
     sorted: sortedStatements, sortKey, sortDirection, toggleSort, selectSort, clearSort,
     isDefaultSort,
@@ -332,13 +366,16 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* ETP-4972 — BulkDeleteSelectionBar now portals to a floating,
           viewport-fixed pill via SelectionToolbar; it no longer occupies a
-          slot in this flow. */}
-      <BulkDeleteSelectionBar
-        count={selectedIds.size}
-        deleting={bulkDeleting}
-        onCancel={clearSelection}
-        onDelete={() => requestBatchDelete(Array.from(selectedIds))}
-        data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+          slot in this flow. ETP-5457 — not rendered at all under the read-only
+          tier (its only action is a delete). */}
+      {!windowReadOnly && (
+        <BulkDeleteSelectionBar
+          count={selectedIds.size}
+          deleting={bulkDeleting}
+          onCancel={clearSelection}
+          onDelete={() => requestBatchDelete(Array.from(selectedIds))}
+          data-testid="StatementsBulkDeleteSelectionBar__6f147a" />
+      )}
       <StatementsToolbar
         search={search}
         onSearchChange={setSearch}
@@ -355,6 +392,7 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         onSyncClick={handleSyncStatements}
         syncing={syncing}
         onRefresh={refreshStatements}
+        windowReadOnly={windowReadOnly}
         sortControl={(
           <ListSortPopover
             columns={sortColumns}
@@ -384,18 +422,21 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
           onSelectionChange={handleSelectionChange}
           linesRefreshToken={linesRefreshToken}
           bankConnected={bankConnectionSynced}
+          windowReadOnly={windowReadOnly}
           data-testid="StatementsTable__6f147a" />
       </div>
-      {batchDeleteDialog}
+      {/* ETP-5457 — every dialog below leads to a write, so under the read-only tier they are
+          kept shut regardless of their own open state (same pattern as the host's modals). */}
+      {windowReadOnly ? null : batchDeleteDialog}
       <ImportStatementModal
-        open={importOpen}
+        open={importOpen && !windowReadOnly}
         accountId={accountId}
         accountCurrency={currency}
         onClose={() => setImportOpen(false)}
         onSuccess={refreshStatements}
         data-testid="ImportStatementModal__6f147a" />
       <ManualStatementModal
-        open={manualOpen || !!editingStatement}
+        open={(manualOpen || !!editingStatement) && !windowReadOnly}
         accountId={accountId}
         accountCurrency={currency}
         statement={editingStatement}
@@ -403,7 +444,8 @@ export const ImportedStatementsTab = forwardRef(function ImportedStatementsTab({
         onSuccess={refreshStatements}
         data-testid="ManualStatementModal__6f147a" />
       <StatementConfirmDialog
-        variant={confirm.variant}
+        // The dialog derives `open` from variant + statement; a null variant keeps it shut.
+        variant={windowReadOnly ? null : confirm.variant}
         statement={confirm.statement}
         busy={busy}
         onConfirm={runConfirm}

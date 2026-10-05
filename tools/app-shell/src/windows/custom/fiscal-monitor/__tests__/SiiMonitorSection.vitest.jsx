@@ -37,9 +37,12 @@ vi.mock('../useFiscalMonitor.js', () => ({
   SII_RECIBIDAS_ENTITY: 'receivedInvoices',
   SII_EMITIDAS_ANT_ENTITY: 'issuedInvoices(previousPeriod)',
   SII_RECIBIDAS_ANT_ENTITY: 'receivedInvoices(previousPeriod)',
+  buildCutoverCriteria,
+  SII_DATE_FIELD,
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { buildCutoverCriteria, SII_DATE_FIELD } from './testHelpers/siiCutoverStub.js';
 import SiiMonitorSection from '../SiiMonitorSection.jsx';
 
 const baseProps = {
@@ -93,9 +96,12 @@ describe('SiiMonitorSection', () => {
     expect(onTabChange).toHaveBeenCalled();
   });
 
-  it('shows period toggle pills in standard mode', () => {
+  // ETP-5432: the "Periodo anterior" selector UI is intentionally hidden — see
+  // SiiMonitorSection.jsx comments (AEATSII_PRESII_INVOICE doesn't implement a
+  // real rolling previous-period window).
+  it('does not render a period toggle in standard mode (removed, ETP-5432)', () => {
     render(<SiiMonitorSection {...baseProps} mockRows={[]} />);
-    expect(screen.getByTestId('fm-period-toggle')).toBeInTheDocument();
+    expect(screen.queryByTestId('fm-period-toggle')).not.toBeInTheDocument();
   });
 
   it('shows compact filter pills when compact=true', () => {

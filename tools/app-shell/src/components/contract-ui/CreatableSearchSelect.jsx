@@ -112,7 +112,8 @@ import { useApiFetch } from '@/auth/useApiFetch.js';
  * CreatableSearchSelect's own cognitive complexity down — pure, no side effects). */
 function computeSelectDisplayState({
   parentKey, parentValue, value, emptyOptionLabel, required, editingIntent, open,
-  createLabel, loading, filteredOptions, query, resolvedLabel, ui, placeholderOverride,
+  createLabel, onCreateRequest, loading, filteredOptions, query, resolvedLabel, ui,
+  placeholderOverride,
 }) {
   const hasSelection = value != null && value !== '';
   const isDisabled = !!(parentKey && !parentValue && !value);
@@ -124,8 +125,12 @@ function computeSelectDisplayState({
   // Coerced to a real boolean (not left as the short-circuited `createLabel`/query string) —
   // it now also drives aria-expanded on the input, which must render "true"/"false", not
   // arbitrary text (ETP-4600 Gap A regression caught live: aria-expanded="+ Add address").
+  // Mirrors CreateAction's render condition: a function createLabel renders nothing while the
+  // query is empty, so it must not open an otherwise-empty panel (ETP-5479: 2px bordered sliver).
+  const showCreateAction = !!(createLabel && onCreateRequest
+    && (typeof createLabel !== 'function' || query.trim()));
   const showDropdown = !!(open && !isDisabled
-    && (showEmptyOption || createLabel || loading || filteredOptions.length > 0 || query.trim()));
+    && (showEmptyOption || showCreateAction || loading || filteredOptions.length > 0 || query.trim()));
   return { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown };
 }
 
@@ -616,7 +621,8 @@ export function CreatableSearchSelect({
   const { hasSelection, isDisabled, showEmptyOption, showChip, placeholder, showDropdown } =
     computeSelectDisplayState({
       parentKey, parentValue, value, emptyOptionLabel, placeholderOverride, required: field.required,
-      editingIntent, open, createLabel, loading, filteredOptions, query, resolvedLabel, ui,
+      editingIntent, open, createLabel, onCreateRequest, loading, filteredOptions, query,
+      resolvedLabel, ui,
     });
 
   const handleSelect = (opt) => {
@@ -851,7 +857,8 @@ export function CreatableSearchSelect({
     stateClasses = ' bg-[hsl(var(--field-hover))] text-text-disabled cursor-not-allowed';
     borderColorClass = 'border-[hsl(var(--field-disabled-border))]';
   } else {
-    stateClasses = ' bg-card hover:bg-[hsl(var(--muted))]';
+    // --field-hover (not --muted): the one hover fill every field shares (ETP-5479).
+    stateClasses = ' bg-card hover:bg-[hsl(var(--field-hover))]';
   }
 
   return (
@@ -862,7 +869,7 @@ export function CreatableSearchSelect({
     */
     <div
       ref={rootRef}
-      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border ${borderColorClass} shadow-[0px_1px_2px_hsl(var(--foreground) / 0.05)] pl-2 pr-2 gap-1 focus-within:ring-2 focus-within:ring-primary${stateClasses}`}
+      className={`group relative flex ${FIELD_HEIGHT} w-full min-w-0 items-center rounded-lg border ${borderColorClass} shadow-[0px_1px_2px_hsl(var(--foreground)_/_0.05)] pl-2 pr-2 gap-1 ring-2 ring-transparent focus-within:ring-primary${stateClasses}`}
       onClick={showChip && !isDisabled ? handleChipClick : undefined}
     >
       {showChip ? (

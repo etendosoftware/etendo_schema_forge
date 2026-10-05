@@ -14,9 +14,11 @@ vi.mock('react', async () => {
 // these two before ever touching buildBlobFn/jsreport.
 const mockFetchMainAttachment = vi.fn();
 const mockFetchAttachmentBlob = vi.fn();
+const mockFetchBrandingUpdated = vi.fn();
 vi.mock('@/components/copilot/ocr/listAttachments', () => ({
   fetchMainAttachment: (...args) => mockFetchMainAttachment(...args),
   fetchAttachmentBlob: (...args) => mockFetchAttachmentBlob(...args),
+  fetchBrandingUpdated: (...args) => mockFetchBrandingUpdated(...args),
 }));
 
 import { renderHook, waitFor } from '@testing-library/react';
@@ -182,6 +184,8 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
     builtBlob = new Blob(['%PDF-built'], { type: 'application/pdf' });
     cachedBlob = new Blob(['%PDF-cached'], { type: 'application/pdf' });
     buildBlobFn = vi.fn(() => Promise.resolve(builtBlob));
+    // ETP-5541 — branding unknown by default (fail-open): never invalidates.
+    mockFetchBrandingUpdated.mockResolvedValue(null);
   });
 
   it('cache hit: fetches the marked attachment blob and never calls buildBlobFn', async () => {
@@ -283,8 +287,31 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // ETP-5541 — the session is asked for brandingUpdated; null (unknown) is fail-open.
+    expect(mockFetchBrandingUpdated).toHaveBeenCalledWith({ token: 'tok', apiBaseUrl: '/api/sales-order' });
     expect(buildBlobFn).not.toHaveBeenCalled();
     expect(result.current.pdfBlob).toBe(cachedBlob);
+  });
+
+  // ETP-5541 — a new logo moves no record's `updated`; the session's brandingUpdated does.
+  it('stale cache: attachment older than the company branding is ignored and rebuilt', async () => {
+    mockFetchMainAttachment.mockResolvedValue({ id: 'att-1', uploadedAt: '2026-08-24T11:00:00Z' });
+    mockFetchAttachmentBlob.mockResolvedValue(cachedBlob);
+    mockFetchBrandingUpdated.mockResolvedValue('2026-08-24T11:00:01Z');
+
+    const { result } = renderHook(() =>
+      usePdfGenerator('rec-1', '/api/sales-order', 'tok', buildBlobFn, {
+        tableName: 'C_Order',
+        storeCondition: true,
+        recordUpdated: '2026-08-24T12:15:30+02:00',
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(mockFetchAttachmentBlob).not.toHaveBeenCalled();
+    expect(buildBlobFn).toHaveBeenCalledWith('rec-1', '/api', 'tok');
+    expect(result.current.pdfBlob).toBe(builtBlob);
   });
 
   // A window that does not pass recordUpdated (or a backend without the `updated`
@@ -303,6 +330,8 @@ describe('usePdfGenerator — cache-gating (ETP-4315 follow-up)', () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // ETP-5541 — an opted-out window can never be invalidated, so no /session round trip.
+    expect(mockFetchBrandingUpdated).not.toHaveBeenCalled();
     expect(buildBlobFn).not.toHaveBeenCalled();
     expect(result.current.pdfBlob).toBe(cachedBlob);
   });

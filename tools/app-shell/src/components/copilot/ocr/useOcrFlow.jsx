@@ -182,6 +182,11 @@ export function useOcrFlow({
       return undefined;
     }
 
+    // ETP-5289 — a cancelled popup is the user's own choice, not a failure: no toast. Reported
+    // as `{ ok: 0, failed: [cancelled_by_user] }` it took the single-record error path of the
+    // bulk toast and read "La acción falló".
+    const markCancelled = () => setResult({ committed: false, cancelled: true });
+
     const handler = async (event) => {
       const payload = event.detail || {};
       setLoading(true);
@@ -189,8 +194,7 @@ export function useOcrFlow({
       try {
         const reviewed = await askUserToReview(payload);
         if (!reviewed) {
-          showResult({ ok: 0, failed: [{ reason: 'cancelled_by_user' }] });
-          setResult({ committed: false, cancelled: true });
+          markCancelled();
           return;
         }
         const extractedLines = hasLinesToReview(docType, payload)
@@ -200,8 +204,7 @@ export function useOcrFlow({
         if (extractedLines.length > 0) {
           reviewedLines = await askUserToReviewLines(extractedLines);
           if (!reviewedLines) {
-            showResult({ ok: 0, failed: [{ reason: 'cancelled_by_user' }] });
-            setResult({ committed: false, cancelled: true });
+            markCancelled();
             return;
           }
         }
@@ -213,8 +216,7 @@ export function useOcrFlow({
           reviewedLines,
         });
         if (!built || built.cancelled) {
-          showResult({ ok: 0, failed: [{ reason: 'cancelled_by_user' }] });
-          setResult({ committed: false, cancelled: true });
+          markCancelled();
           return;
         }
         const ops = built.ops || [];
@@ -230,9 +232,16 @@ export function useOcrFlow({
           const recordOps = response.operations || [];
           const headerOp = recordOps.find(o => o.id === 'inv');
           const lineCount = recordOps.filter(o => /^ln\d+$/.test(o.id || '')).length;
+          // ETP-5289 — count the lines only. The invoice header is the document itself, not one
+          // of the records the user asked to process, so "1 + lines" overstated the result.
           showResult({
-            ok: 1 + lineCount,
-            failed: unmatched.map(name => ({ reason: `product_not_found: ${name}` })),
+            ok: lineCount,
+            // ETP-5289 — an unmatched line is one the user skipped in "Match products" (the
+            // popup's "leave blank to skip the line"), so it is omitted, not failed. A line that
+            // genuinely fails cannot reach this branch: the batch is atomic, so any failure
+            // aborts the whole invoice and takes the not-committed path below.
+            omitted: unmatched.map(name => ({ reason: `product_not_found: ${name}` })),
+            failed: [],
           });
           setResult({
             committed: true,

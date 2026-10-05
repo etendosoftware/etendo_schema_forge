@@ -7,7 +7,7 @@ import RejectQuotationModal from './RejectQuotationModal';
 import { useQuotationPdf } from '@/windows/custom/shared/useQuotationPdf.js';
 import { useMenuLabel } from '@/i18n';
 
-export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave, onRefresh }) {
+export default function QuotationTopbarActions({ data, recordId, token, apiBaseUrl, onSave, onRefresh, windowReadOnly = false }) {
   const tMenu = useMenuLabel();
   const [showSend, setShowSend] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -30,29 +30,32 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
   // which we route to the right modal based on the current quotation status.
   useEffect(() => {
     function handler() {
+      // ETP-5205 — defensive: every modal here writes; its triggers are already hidden
+      // under the Solo-Lectura tier, so a stray event must not open one either.
+      if (windowReadOnly) return;
       if (status === 'DR') setShowSendToEval(true);
       else if (status === 'CO' || status === 'UE') setShowConfirm(true);
     }
     window.addEventListener('sales-quotation:open-confirm-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-confirm-modal', handler);
-  }, [status]);
+  }, [status, windowReadOnly]);
 
   // The wrapper's customMenuActions dispatches this event when the user clicks
   // the kebab "Reject" item (only visible while status === 'UE').
   useEffect(() => {
-    function handler() { setShowReject(true); }
+    function handler() { if (!windowReadOnly) setShowReject(true); }
     window.addEventListener('sales-quotation:open-reject-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-reject-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   // ETP-5260 — the Send button now lives in the topbarSecondary slot
   // (QuotationSecondaryActions), while this modal (with its pdf/documentType
   // context) stays here in topbarRight; the button dispatches this event to open it.
   useEffect(() => {
-    function handler() { setShowSend(true); }
+    function handler() { if (!windowReadOnly) setShowSend(true); }
     window.addEventListener('sales-quotation:open-send-modal', handler);
     return () => window.removeEventListener('sales-quotation:open-send-modal', handler);
-  }, []);
+  }, [windowReadOnly]);
 
   if (!status) return null;
 
@@ -67,6 +70,7 @@ export default function QuotationTopbarActions({ data, recordId, token, apiBaseU
           data={data}
           token={token}
           apiBaseUrl={apiBaseUrl}
+          onRefresh={onRefresh}
           onClose={() => setShowSendToEval(false)}
         />,
         document.body,

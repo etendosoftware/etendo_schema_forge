@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { useUI } from '@/i18n';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { MaskedAmountInput } from '@/components/forms/fields.jsx';
+import { formatCurrency, formatPlainDecimal } from '@/lib/formatCurrency.js';
 
 // A draft is valid when it parses to a finite magnitude in (0, maxQty]. Sign is
 // intentionally ignored — matches the existing Math.abs behavior for negativeQuantity mode.
@@ -212,8 +214,10 @@ export default function ImportLinesModal({
       for (const line of lines) {
         const qty = lineQuantities[line.id] ?? (line._maxQty || 0);
         const lineBody = await buildLineBody({ line, qty, invoiceId, lineNo, sharedContext, base, headers });
+        // ETP-5424 — a line create in an import loop: a cut-off write that still commits
+        // would be re-imported on retry, so it opts out of the default timeout.
         const res = await apiFetch(`/${linesEndpoint}`, {
-          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore',
+          method: 'POST', headers, body: JSON.stringify(lineBody), on401: 'ignore', timeout: 0,
         });
         if (!res.ok) errors++;
         else importedDocIds.add(doc.id);
@@ -243,7 +247,6 @@ export default function ImportLinesModal({
     const [year, month, day] = String(d).slice(0, 10).split('-').map(Number);
     return new Date(year, month - 1, day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   };
-  const fmtNum = (v) => v != null ? Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: true }) : '-';
 
   return createPortal(
     <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/30">
@@ -320,7 +323,7 @@ export default function ImportLinesModal({
                       </div>
                     </div>
                     <span style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', fontVariantNumeric: 'tabular-nums', flexShrink: 0, marginLeft: 8 }}>
-                      {display.secondary || (docTotal != null ? fmtNum(docTotal) : '')}
+                      {display.secondary || (docTotal != null ? formatCurrency(undefined, docTotal) : '')}
                     </span>
                   </div>
                   {isExpanded && (
@@ -379,7 +382,7 @@ export default function ImportLinesModal({
                                   </span>
                                   {showAvailableQtyColumn && (
                                     <span style={{ width: 90, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {fmtNum(maxQty)}
+                                      {formatPlainDecimal(maxQty)}
                                     </span>
                                   )}
                                   <span style={{ width: showAvailableQtyColumn ? 90 : 70, flexShrink: 0, textAlign: 'right' }}>
@@ -399,19 +402,18 @@ export default function ImportLinesModal({
                                         backgroundColor = 'hsl(var(--card))';
                                       }
                                       return (
-                                        <input
-                                          type="number"
-                                          min={negativeQuantity ? -maxQty : 1}
-                                          max={negativeQuantity ? -1 : maxQty}
-                                          value={draft ?? displayQty}
+                                        <span
                                           onClick={e => e.stopPropagation()}
-                                          onChange={e => {
-                                            const raw = e.target.value;
-                                            setQtyDrafts(prev => ({ ...prev, [line.id]: raw }));
-                                          }}
-                                          onBlur={() => {
-                                            const raw = qtyDrafts[line.id];
-                                            if (raw !== undefined) {
+                                          style={{
+                                            display: 'inline-block', width: 60, borderRadius: 4,
+                                            border: borderColor, background: backgroundColor,
+                                          }}>
+                                          <MaskedAmountInput
+                                            bare
+                                            grouping={false}
+                                            value={displayQty}
+                                            onChange={raw => setQtyDrafts(prev => ({ ...prev, [line.id]: raw }))}
+                                            onCommit={(_parsed, raw) => {
                                               const check = classifyQtyDraft(raw, maxQty);
                                               if (check.valid) {
                                                 setLineQuantities(prev => ({ ...prev, [line.id]: Math.abs(Number(raw)) }));
@@ -421,26 +423,21 @@ export default function ImportLinesModal({
                                                 toast.error(ui('qtyMustBePositive'));
                                               }
                                               setQtyDrafts(prev => { const n = { ...prev }; delete n[line.id]; return n; });
-                                            }
-                                          }}
-                                          className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                          style={{
-                                            width: 60, fontSize: 12, padding: '3px 4px', borderRadius: 4, textAlign: 'center', fontVariantNumeric: 'tabular-nums', outline: 'none',
-                                            border: borderColor,
-                                            background: backgroundColor,
-                                          }}
-                                        />
+                                            }}
+                                            className="w-full bg-transparent border-0 outline-none text-xs px-1 py-0.5"
+                                            data-testid="ImportLinesModal__qtyInput" />
+                                        </span>
                                       );
                                     })()}
                                   </span>
                                   {showPriceColumns && (
                                     <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {unitPrice ? fmtNum(unitPrice) : '-'}
+                                      {unitPrice ? formatCurrency(undefined, unitPrice) : '-'}
                                     </span>
                                   )}
                                   {showPriceColumns && (
                                     <span style={{ width: 80, fontSize: 12, color: 'hsl(var(--muted-foreground))', fontVariantNumeric: 'tabular-nums', textAlign: 'right', flexShrink: 0 }}>
-                                      {lineTotal ? fmtNum(lineTotal) : '-'}
+                                      {lineTotal ? formatCurrency(undefined, lineTotal) : '-'}
                                     </span>
                                   )}
                                 </div>

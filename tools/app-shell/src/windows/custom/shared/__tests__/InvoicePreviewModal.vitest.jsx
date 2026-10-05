@@ -90,9 +90,12 @@ vi.mock('@/components/contract-ui/SendDocumentModal.jsx', () => ({
 }));
 
 const capturedRelatedSpecs = { current: null };
+const capturedRelatedProps = { current: null };
 vi.mock('@/windows/custom/shared/preview-cards/RelatedDocumentsCard.jsx', () => ({
-  default: ({ documentId, specs }) => {
+  default: (props) => {
+    const { documentId, specs } = props;
     capturedRelatedSpecs.current = specs;
+    capturedRelatedProps.current = props;
     return <div data-testid="related-docs-card" data-doc-id={documentId} />;
   },
 }));
@@ -435,6 +438,18 @@ describe('InvoicePreviewModal', () => {
         'goods-shipment', 'goodsShipment', 'salesOrder', 'so-42', 'tok', '/api/sales-invoice',
       );
       expect(result).toEqual(shipmentRows);
+    });
+
+    // ETP-5527 — sales callers pass the shared definition; it replaces the legacy specs
+    // above (which stay the path for purchase invoices, i.e. every test above).
+    it('renders the relatedDocs definition instead of the legacy specs when one is passed', () => {
+      const definition = { spec: 'sales-invoice', entity: 'header', sources: [] };
+      renderPreview({ invoice: { ...invoiceWithOrder, updated: 'u-1' }, relatedDocs: definition });
+      expect(capturedRelatedProps.current.definition).toBe(definition);
+      expect(capturedRelatedProps.current.specs).toBeUndefined();
+      expect(capturedRelatedProps.current.docsRefreshSignal).toBe('u-1');
+      expect(fetchById).not.toHaveBeenCalled();
+      expect(fetchByCriteria).not.toHaveBeenCalled();
     });
   });
 });

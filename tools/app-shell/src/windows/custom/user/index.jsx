@@ -7,7 +7,7 @@ import UserPage from '@generated/user/generated/web/user/UserPage';
 import UserRolesTab from './UserRolesTab';
 import { AttachmentsTab } from '@/components/attachments';
 import { RoleSelectionProvider } from './roleSelectionContext.js';
-import { fetchUserRoleAssignments, saveUserRoleAssignments } from '@/lib/userRoleAssignmentsApi.js';
+import { fetchUserRoleAssignments, saveUserRoleAssignments, ROLE_WRITE_CONFLICT_CODE } from '@/lib/userRoleAssignmentsApi.js';
 import { resendInvitation } from '@/lib/resendInvitationApi.js';
 import { promoteUserToAdmin, demoteUserFromAdmin } from '@/lib/promoteUserRoleApi.js';
 import { fetchRolesOverview } from '@/lib/rolesApi.js';
@@ -246,13 +246,13 @@ function useAdminRoleId() {
  * promoted/demoted, this is a no-op here: that user's own mount/tab-focus effect, in
  * their own browser tab, picks up the fresh role next time they interact (Task 3).
  */
-function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments) {
+function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments, rolesSaving) {
   const ui = useUI();
   const [working, setWorking] = useState(false);
   const { token, refreshToken } = useAuth();
   const currentViewerUserId = decodeJwtUser(token);
 
-  return useCallback(({ data, onRefresh }) => {
+  const extraActions = useCallback(({ data, onRefresh, isSaving: recordSaving }) => {
     const id = data?.id;
     if (!id || id === 'new' || data?.isOwner) return [];
     if (!adminRoleId) return [];
@@ -318,18 +318,23 @@ function useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssig
       if (isSelf) return [];
       return [{
         key: 'demote-from-admin',
-        disabled: working,
+        disabled: working || rolesSaving || !!recordSaving,
         onClick: handleDemote,
         label: <span data-testid="DemoteFromAdminButton">{ui('demoteFromAdminAction')}</span>,
       }];
     }
     return [{
       key: 'promote-to-admin',
-      disabled: working,
+      disabled: working || rolesSaving || !!recordSaving,
       onClick: handlePromote,
       label: <span data-testid="PromoteToAdminButton">{ui('promoteToAdminAction')}</span>,
     }];
-  }, [adminRoleId, viewerRole, working, ui, currentViewerUserId, refreshToken, refreshRoleAssignments]);
+  }, [adminRoleId, viewerRole, working, rolesSaving, ui, currentViewerUserId, refreshToken, refreshRoleAssignments]);
+
+  // ETP-5278 — `working` is also returned so the window can keep Save busy while a
+  // promote/demote is in flight (the reverse of `rolesSaving` above): the two writes target the
+  // same user and must never overlap from this UI.
+  return { extraActions, working };
 }
 
 /**
@@ -440,7 +445,16 @@ export default function UserWindow(props) {
       });
   }, []);
 
-  const adminPromotionExtraActions = useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments);
+  // ETP-5278 — true while `handleRoleAssignmentSave` is writing the role assignment. Feeds
+  // `saveBusy` (Save stays disabled + spinner) and disables promote/demote, so neither can fire a
+  // second write for the same user while this one is still running — the overlap behind QA's
+  // CP-6 HTTP 500 and CP-7. The ref is the synchronous double-submit guard (state updates are
+  // not visible to a second call in the same tick).
+  const [savingRoles, setSavingRoles] = useState(false);
+  const roleSaveInFlightRef = useRef(false);
+
+  const { extraActions: adminPromotionExtraActions, working: adminActionWorking } =
+    useAdminPromotionExtraActions(adminRoleId, viewerRole, refreshRoleAssignments, savingRoles);
   // ETP-5019 — `extraActions` accepts either a plain array or a function taking
   // `{ data, children, onRefresh }` (see `detailViewHelpers.jsx`'s
   // `renderExtraActionButtons`); merges both action-producing hooks' results into
@@ -483,9 +497,19 @@ export default function UserWindow(props) {
     return () => { cancelled = true; };
   }, [recordId, token, apiBaseUrl]);
 
+  // ETP-5278 — resolves the save-lifecycle outcome contract (`saveActions.jsx`,
+  // `runAfterSaveHookWithFinalToast`): `undefined` = nothing to do / success, so the Save
+  // button shows its single "Registro guardado" toast only now, after the role write finished;
+  // `{ ok: false }` = this hook already reported the failure itself, so no success toast at all.
   const handleRoleAssignmentSave = useCallback(async (saved) => {
-    if (!saved?.id) return;
-    if (sameIdSet(selectedRoleIds, appliedRoleIdsRef.current)) return;
+    if (!saved?.id) return undefined;
+    if (sameIdSet(selectedRoleIds, appliedRoleIdsRef.current)) return undefined;
+    // A second call while one is still writing would race it for the same user (CP-6). Save is
+    // already disabled via `saveBusy`; this closes the same-tick gap. Nothing to report: the
+    // in-flight call owns the outcome toast.
+    if (roleSaveInFlightRef.current) return { ok: false };
+    roleSaveInFlightRef.current = true;
+    setSavingRoles(true);
     try {
       const result = await saveUserRoleAssignments(saved.id, selectedRoleIds);
       const confirmedIds = result.templateRoleIds ?? selectedRoleIds;
@@ -494,18 +518,25 @@ export default function UserWindow(props) {
       // re-renders and `hasUnsavedRoleChange` — and therefore `additionalDirtyState` —
       // recomputes to `false` post-save. A ref-only update never re-renders.
       setSelectedRoleIds(confirmedIds);
+      return undefined;
     } catch (err) {
-      // The generic AD_User field save has ALREADY succeeded and shown its own "Saved
-      // successfully" toast by the time this runs — `handleRoleAssignmentSave` fires as
-      // `onAfterExistingSave`, strictly AFTER that save (see this file's own doc comment,
-      // step 2). A bare "Couldn't save roles" error here reads as a direct contradiction
-      // of the success toast the admin just saw. Fix: the message explicitly says the
-      // user record itself DID save and only the role assignment failed, and the toast is
-      // given a longer duration so it doesn't get lost/dismissed behind the success toast
-      // that already fired first.
+      // The generic AD_User field save HAS already persisted by the time this runs (it fires
+      // as `onAfterExistingSave`, strictly after it) — only the role assignment failed, and
+      // the message says exactly that. Since ETP-5278 no success toast precedes it (the Save
+      // button defers "Registro guardado" until this hook resolves), so this is the ONLY toast
+      // for the click; `RECORD_SAVE_TOAST_ID` (+ `action: undefined`, see
+      // `showSaveSuccessToast`) makes it replace any earlier save toast instead of stacking.
       // ETP-5206 — never surface raw/English backend text to the user.
-      const detail = ui('roleAssignmentSaveFailed');
-      toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), { duration: 8000 });
+      const detail = err?.code === ROLE_WRITE_CONFLICT_CODE
+        ? ui('roleAssignmentConcurrentModification')
+        : ui('roleAssignmentSaveFailed');
+      toast.error(ui('roleAssignmentSaveFailedAfterUserSaved', { detail }), {
+        id: RECORD_SAVE_TOAST_ID, action: undefined, duration: 8000,
+      });
+      return { ok: false };
+    } finally {
+      roleSaveInFlightRef.current = false;
+      setSavingRoles(false);
     }
   }, [selectedRoleIds, ui]);
 
@@ -642,6 +673,7 @@ export default function UserWindow(props) {
         onAfterCreate={handleAfterCreate}
         onAfterExistingSave={handleRoleAssignmentSave}
         additionalDirtyState={hasUnsavedRoleChange}
+        saveBusy={savingRoles || adminActionWorking}
         customTabs={customTabs}
         data-testid="UserPage__853799" />
     </RoleSelectionProvider>

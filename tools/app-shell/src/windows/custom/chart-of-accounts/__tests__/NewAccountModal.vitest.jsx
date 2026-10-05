@@ -405,6 +405,78 @@ describe('NewAccountModal', () => {
     expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
   });
 
+  // ── ETP-5399 QA finding #1: the chosen Account Type must be what gets saved ──
+
+  it('submits the Account Type the user picked, not the derived default', async () => {
+    globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
+    render(<NewAccountModal {...baseProps({ currentRecord: { id: 'acc-4000', searchKey: '4000', summaryLevel: 'Y' } })} />);
+
+    fireEvent.change(screen.getByTestId('new-account-modal-name'), { target: { value: 'Capital social 2' } });
+    fireEvent.change(screen.getByTestId('account-code-suffix-input'), { target: { value: '0001' } });
+    fireEvent.change(screen.getByTestId('new-account-modal-account-type'), { target: { value: 'L' } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('new-account-modal-save'));
+    });
+
+    const [, init] = globalThis.fetch.mock.calls.at(-1);
+    expect(JSON.parse(init.body)).toEqual({ searchKey: '40000001', name: 'Capital social 2', accountType: 'L' });
+  });
+
+  it('keeps a user-picked Account Type when the parent is changed afterwards', async () => {
+    const user = userEvent.setup();
+    const switchAccounts = [
+      { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases', accountType: 'L' },
+      { id: 'acc-60000001', searchKey: '60000001', name: 'Payroll Expense', summaryLevel: 'N', parentCode4: '6000', parentCode4Name: 'Payroll', accountType: 'R' },
+    ];
+    const currentRecord = { id: 'acc-50000001', searchKey: '50000001', summaryLevel: 'N' };
+    render(<NewAccountModal {...baseProps({ allAccounts: switchAccounts, currentRecord })} />);
+
+    // The user picks Asset first...
+    fireEvent.change(screen.getByTestId('new-account-modal-account-type'), { target: { value: 'A' } });
+    // ...then switches the parent to one whose derived default would be 'R'.
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await user.click(await screen.findByText('Payroll'));
+
+    expect(screen.getByTestId('account-code-prefix')).toHaveTextContent('6000');
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('A');
+  });
+
+  it('forgets a previous session\'s manual Account Type on the next open', async () => {
+    const user = userEvent.setup();
+    const switchAccounts = [
+      { id: 'acc-50000001', searchKey: '50000001', name: 'Purchases US', summaryLevel: 'N', parentCode4: '5000', parentCode4Name: 'Purchases', accountType: 'L' },
+      { id: 'acc-60000001', searchKey: '60000001', name: 'Payroll Expense', summaryLevel: 'N', parentCode4: '6000', parentCode4Name: 'Payroll', accountType: 'R' },
+    ];
+    const currentRecord = { id: 'acc-50000001', searchKey: '50000001', summaryLevel: 'N' };
+    const props = baseProps({ allAccounts: switchAccounts, currentRecord });
+    const { rerender } = render(<NewAccountModal {...props} />);
+    fireEvent.change(screen.getByTestId('new-account-modal-account-type'), { target: { value: 'A' } });
+
+    rerender(<NewAccountModal {...props} isOpen={false} />);
+    rerender(<NewAccountModal {...props} isOpen />);
+
+    // Fresh session: the type is derived again, and a parent change re-derives it.
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('L');
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await user.click(await screen.findByText('Payroll'));
+    expect(screen.getByTestId('new-account-modal-account-type')).toHaveValue('R');
+  });
+
+  it('opens the parent selector in modal mode so its list can scroll inside the dialog', async () => {
+    const user = userEvent.setup();
+    render(<NewAccountModal {...baseProps()} />);
+    await user.click(within(screen.getByTestId('new-account-modal-parent')).getByRole('button'));
+    await screen.findByText('Purchases');
+    // Radix Popover in modal mode blocks pointer events outside its content.
+    expect(document.body.style.pointerEvents).toBe('none');
+  });
+
+  it('uses the wider dialog so long parent names are not cut off', () => {
+    render(<NewAccountModal {...baseProps()} />);
+    expect(screen.getByTestId('new-account-modal').className).toContain('max-w-xl');
+  });
+
   // ── ElementLevel-based structural resolution (ETP-5399) ────────────────────
   //
   // `resolveInsertionCandidates` / `deriveDefaultParentId` / `deriveDefaultAccountType`

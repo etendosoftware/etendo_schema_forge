@@ -353,7 +353,11 @@ export function applyCalloutFieldUpdates(updates, ctx) {
       continue;
     }
     appliedFields.set(key, entry.value);
-    hook.handleChange(key, entry.value);
+    // ETP-5537 — `origin: 'callout'`: this value is the SERVER telling us what the field is
+    // worth, not the user editing it. It still counts as changed (so a late /defaults response
+    // cannot clobber it), but it must not inherit the payload escape hatch that exempts a
+    // user-authored value from the read-only exclusion — see isUserAuthoredKey in useEntity.js.
+    hook.handleChange(key, entry.value, { origin: 'callout' });
     handleEntryIdentifierChange(entry, hook, key, api, catalogs);
     // ETP-4772 follow-up: only a write that actually LEFT A VALUE may advance the
     // generation. A callout answering empty for a still-empty field is a no-op with
@@ -756,10 +760,16 @@ export function getWindowTitle(breadcrumb, tMenu, windowName) {
       : tMenu(windowName) || windowName || '';
 }
 
-export function getRecordTitle(isNew, ui, data, titleField) {
-  return isNew
-      ? ui('newRecord')
-      : `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+// ETP-5285: a title field declared with `enumValues` carries i18n keys in its
+// form `options`, so the title reads the same translated label as the grid and
+// the form instead of the stored value.
+export function getRecordTitle(isNew, ui, data, titleField, formFields) {
+  if (isNew) return ui('newRecord');
+  const raw = `${resolveIdentifier(data, titleField) || data._identifier || data.id || ''}`;
+  const option = formFields
+      ?.find(f => f.key === titleField)
+      ?.options?.find(o => String(o.value) === raw);
+  return option?.label ? ui(option.label) : raw;
 }
 
 export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
@@ -767,6 +777,23 @@ export function getFullBreadcrumb(breadcrumb, tMenu, title, windowTitle) {
   return breadcrumb
       ? `${breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')}${titleSuffix}`
       : windowTitle;
+}
+
+/**
+ * ETP-5504 — structured form of `getFullBreadcrumb` for the TopBar: same translated levels, but as
+ * `{ label, href? }` items so the TopBar can collapse the middle ones behind "⋯" and keep the
+ * window level navigable (back to its list). Menu folders have no route of their own, so they
+ * carry no href. The record title (current page) is always the last item.
+ */
+export function getBreadcrumbItems(breadcrumb, tMenu, title, windowTitle, windowName) {
+  if (!breadcrumb) return windowTitle;
+  const segments = breadcrumb.split(' / ').map((s) => tMenu(s.trim()));
+  const items = segments.map((label, index) => (
+    index === segments.length - 1 && windowName
+      ? { label, href: `/${windowName}` }
+      : { label }
+  ));
+  return title ? [...items, { label: title }] : items;
 }
 
 export function getOnAddToFavorites(favKey, toggleFavorite, entityLabel, breadcrumb, windowName) {
@@ -1013,10 +1040,36 @@ export function buildInitialTabs(p) {
   return entries.map(e => e.tab);
 }
 
+/**
+ * Reloads a record after something outside the default CRUD path mutated it (a side-effecting
+ * extra action, a custom process-confirm modal that calls its own backend action, ...).
+ *
+ * ETP-5290 — `{ force: true }` is REQUIRED: without it `fetchById` serves the pre-mutation
+ * record from the in-memory cache for up to `staleTime` (or indefinitely if nothing else reads
+ * the id), so the toast fires but the status chip / buttons never update until a full reload.
+ * `invalidateEntityCache()` drops the entity's cached lists and records (ETP-5278) and
+ * `refresh()` force-reloads the mounted LIST so the grid row matches — the same
+ * `invalidateEntityCache(); fetchById(...); refresh();` sequence as useEntity's
+ * `handleProcessSuccess`.
+ *
+ * ETP-5547 — the process-confirm modal's `onRefresh` (DetailView → renderProcessConfirmModal)
+ * called `fetchById` without `force`, so payment-in/out "Confirmar" after "Reactivar"
+ * (registerPayment → 201) never issued a GET and the window stayed on "Borrador".
+ */
+export function refreshRecordAfterMutation(hook, id) {
+  hook.invalidateEntityCache?.();
+  hook.fetchById?.(id, { force: true });
+  hook.refresh?.();
+}
+
 export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
   return (typeof extraActions === 'function' ? extraActions({
     data,
     children: hook.children,
+    // ETP-5278 — lets an action that writes the same record stay disabled while the record's
+    // own save (PATCH) is in flight, e.g. the Users window's promote/demote, which would
+    // otherwise be clickable in the gap before that window's follow-up role write starts.
+    isSaving: !!hook.isSaving,
     // ETP-4999 — matches `topbarExtra`'s own `onRefresh` exactly (DetailView.jsx),
     // so an `extraActions` entry can refresh the record after a side-effecting
     // action (e.g. resend-invitation, admin promote/demote) the same way a
@@ -1041,11 +1094,7 @@ export function renderExtraActionButtons(extraActions, data, hook, saveBtnCls) {
     // `invalidateEntityCache(); fetchById(...); refresh();` pattern in
     // useEntity.js) so the grid row reflects the change too, not just the open
     // detail form.
-    onRefresh: () => {
-      hook.invalidateEntityCache?.();
-      hook.fetchById?.(data?.id, { force: true });
-      hook.refresh?.();
-    },
+    onRefresh: () => refreshRecordAfterMutation(hook, data?.id),
   }) : extraActions).map((action, i) => (
       action.visible !== false && (
           <Button

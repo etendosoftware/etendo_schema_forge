@@ -95,6 +95,10 @@ const BACKEND_ERROR_MAP = {
   'The IBAN is too short.': 'backendError.ibanTooShort',
   'The IBAN is not valid: the check digits do not match.': 'backendError.ibanChecksumInvalid',
   'Invalid country': 'backendError.invalidCountry',
+  // ETP-5473 (FinancialAccountHandler). Country is mandatory for every financial-account type on
+  // create; the IBAN is never used to derive it. (Clearing it on update of a Bank account that
+  // keeps an IBAN reuses 'A bank account with an IBAN must have a country.' above.)
+  'Country is required': 'backendError.countryRequired',
   'Using IBAN for generating the Displayed Account requires to introduce the IBAN': 'backendError.ibanRequired',
   'Using the Generic Account No. for generating the Displayed Account requires to introduce a Generic Account Number': 'backendError.genericAccountRequired',
   'IBAN code entered is not correct. Please review the IBAN code and the country defined for the bank': 'backendError.ibanInvalid',
@@ -153,6 +157,12 @@ const BACKEND_ERROR_MAP = {
   // was reactivated in another tab between opening the suggestions and applying them.
   'The bank statement is in draft; process it before reconciling its lines':
     'backendError.statementDraftNotReconcilable',
+  // ETP-5472 — ReconciliationHandler.MSG_LINE_ALREADY_RECONCILED (com.etendoerp.go), now emitted
+  // via ReconciliationLineTargetSupport / ReconciliationDifferenceSupport.alreadyReconciled: the
+  // bare form, no id appended. Its `: <statementLineId>` sibling is a parameterized matcher further down
+  // (matchStatementLineAlreadyReconciled) and resolves to this same key. The Java text is a de
+  // facto wire contract — rewording it there silently drops this translation.
+  'Statement line is already reconciled': 'backendError.statementLineAlreadyReconciled',
   // Funds-transfer leg delete guard (FinancialAccountTransactionsHandler.handleDelete, ETP-5085).
   // The two legs of a transfer reference each other through RESTRICT self-FKs, so removing either
   // one is rejected with a 409 instead of the JDBC constraint violation that used to surface as an
@@ -174,6 +184,9 @@ const BACKEND_ERROR_MAP = {
   // The two statement refusals, in the order a user meets them.
   'Statements from a bank-connected account cannot be deleted.': 'backendError.statementBankConnectedNotDeletable',
   'The statement has matched lines; unreconcile them before deleting': 'backendError.statementHasMatchedLines',
+  // ETP-5471: create/import on a bank-connected account (BankStatementsHandler + the generic
+  // financial-account statement entities).
+  'This account is synchronized with the bank; statements cannot be created or imported manually.': 'backendError.statementBankConnectedNotCreatable',
   // Price list (PriceListHeaderHandler) validation messages
   'A tariff marked as default cannot be deactivated.': 'backendError.priceListCannotDeactivateDefault',
   'There is already an asset category with this name.': 'backendError.assetGroupNameDuplicate',
@@ -386,6 +399,87 @@ export function extractBackendMessageKeys(payload) {
   return clean.length > 0 ? clean : undefined;
 }
 
+/**
+ * Reads the `messageParams` object out of a parsed NEO error body, whatever envelope it arrived in
+ * (ETP-5175) — the values the `messageKeys` interpolate, so a parameterized message can be
+ * rendered in the SPA's own locale. The ONE place that knows the wire field name, next to
+ * `extractBackendMessageKeys`. Returns `undefined` when the field is absent, not an object, or
+ * empty — exactly what a frontend deployed ahead of the backend sees.
+ *
+ * @param {object|null|undefined} payload parsed JSON error body
+ * @returns {object|undefined} the message params, or undefined when the body carries none
+ */
+export function extractBackendMessageParams(payload) {
+  const params = payload?.messageParams ?? payload?.response?.messageParams ?? payload?.error?.messageParams;
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return undefined;
+  return Object.keys(params).length > 0 ? params : undefined;
+}
+
+// ETP-5175 — the Invalid-Account posting failure, rendered from its identity instead of its prose.
+// DocumentPostingService (com.etendoerp.go) sends `messageKeys` ["InvalidAccount",
+// "ETGO_InvalidAccountBpAndGroup" | "ETGO_InvalidAccountBpOnly", optional
+// "ETGO_InvalidAccountMissingBpGroupAccounts" / "ETGO_InvalidAccountMissingProductAccounts"] plus
+// `messageParams` { bpName, bpGroup?, missingBpGroupAccounts?, missingProductAccounts? }, the
+// accounts as stable codes. The Spanish text of those AD_MESSAGEs has no versioned home (the
+// module is not a translation module, so AD_MESSAGE_TRL is never exported and drifts per
+// environment — production says "Grupo de Terceros"), so the SPA owns the wording here and says
+// "Categoría de contacto", the term the rest of the app uses.
+//
+// Deliberately NOT in BACKEND_ERROR_KEY_MAP: that route maps a key to a param-less sentence and
+// the first recognised key wins, so an `InvalidAccount` entry there would swap the rich backend
+// prose for a bare "account not found". This composer runs before it and only when params are
+// present; any gap (no BP name, an account code this build has no label for, a missing locale
+// entry) returns null and the backend's own sentence is shown, as before.
+const INVALID_ACCOUNT_KEY = 'InvalidAccount';
+const INVALID_ACCOUNT_BP_AND_GROUP_KEY = 'ETGO_InvalidAccountBpAndGroup';
+const INVALID_ACCOUNT_BP_ONLY_KEY = 'ETGO_InvalidAccountBpOnly';
+
+// Resolves `key` through `t`; null when the locale has no entry (t echoes the key back).
+function resolveLocaleKey(t, key, params) {
+  const translated = t(key, params);
+  return translated && translated !== key ? translated : null;
+}
+
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+// One "review the following accounts of …" sentence. `undefined` when there is nothing to report
+// (the addendum simply did not fire), `null` when it cannot be rendered — an account code with no
+// `backendError.account.<code>` entry makes the whole composed message fall back to the prose.
+function renderMissingAccounts(t, key, codes) {
+  if (!Array.isArray(codes) || codes.length === 0) return undefined;
+  const labels = codes.map((code) => (typeof code === 'string' ? resolveLocaleKey(t, `backendError.account.${code}`) : null));
+  if (labels.includes(null)) return null;
+  return resolveLocaleKey(t, key, { accounts: labels.join(', ') });
+}
+
+function renderInvalidAccountEntity(t, messageKeys, params) {
+  const bp = nonEmptyString(params.bpName);
+  if (!bp) return null;
+  const group = nonEmptyString(params.bpGroup);
+  if (messageKeys.includes(INVALID_ACCOUNT_BP_AND_GROUP_KEY) && group) {
+    return resolveLocaleKey(t, 'backendError.invalidAccount.bpAndGroup', { bp, group });
+  }
+  if (messageKeys.includes(INVALID_ACCOUNT_BP_ONLY_KEY)) {
+    return resolveLocaleKey(t, 'backendError.invalidAccount.bpOnly', { bp });
+  }
+  return null;
+}
+
+function translateInvalidAccount(messageKeys, messageParams, t) {
+  if (!Array.isArray(messageKeys) || !messageKeys.includes(INVALID_ACCOUNT_KEY)) return null;
+  if (!messageParams || typeof messageParams !== 'object') return null;
+  const base = resolveLocaleKey(t, 'backendError.invalidAccount.base');
+  const entity = renderInvalidAccountEntity(t, messageKeys, messageParams);
+  const groupAccounts = renderMissingAccounts(t, 'backendError.invalidAccount.missingBpGroupAccounts',
+    messageParams.missingBpGroupAccounts);
+  const productAccounts = renderMissingAccounts(t, 'backendError.invalidAccount.missingProductAccounts',
+    messageParams.missingProductAccounts);
+  if (!base || !entity || groupAccounts === null || productAccounts === null) return null;
+  return [base, entity, groupAccounts, productAccounts].filter(Boolean).join(' ');
+}
+
 // Resolves the FIRST key we recognise, so a message that mixes a structural token with a real
 // failure (`@Inline@` + `@lockedProduct@`) lands on the failure. Returns null when no key is
 // known, or when the mapped locale entry is missing — an untranslated result is indistinguishable
@@ -407,11 +501,13 @@ function translateByMessageKey(messageKeys, t) {
 //
 // These two skeletons come from core Etendo's `@InvalidAccount@` AD_MESSAGE
 // ("Account could not be found.") enriched server-side (ETP-4706,
-// `DocumentPostingService#enrichWithFailingEntity`) with the transaction's Business
+// `DocumentPostingService#failureOf`) with the transaction's Business
 // Partner / BP Group via the `ETGO_InvalidAccountBpAndGroup` / `ETGO_InvalidAccountBpOnly`
-// AD_MESSAGE catalog entries — en_US only (no es_ES AD_MESSAGE_TRL exists for a
+// AD_MESSAGE catalog entries (no versioned es_ES AD_MESSAGE_TRL exists for a
 // non-translation-pack module like com.etendoerp.go). Matched here and re-rendered with
-// the frontend's own i18n so the enrichment suffix is translated too.
+// the frontend's own i18n so the enrichment suffix is translated too. Fallback path only:
+// a backend that sends `messageParams` is rendered by translateInvalidAccount instead
+// (ETP-5175), which also covers the missing-accounts addenda this matcher cannot.
 //
 // Deliberately plain string parsing (startsWith/endsWith/lastIndexOf/slice) instead of
 // regex: a Business Partner name is user-editable data, so two back-to-back lazy
@@ -423,19 +519,26 @@ function translateByMessageKey(messageKeys, t) {
 // ", BP Group: " occurrence, so a BP name that itself contains that literal substring
 // (e.g. `"Odd, BP Group: Fake, Corp"`) still splits at the correct (final) delimiter
 // instead of the first one found by a non-greedy regex scan.
-const ACCOUNT_NOT_FOUND_PREFIX = 'Account could not be found. (Business Partner: ';
-const BP_GROUP_DELIM = ', BP Group: ';
+//
+// ETP-5175 renamed the English catalog text to Etendo GO's terminology ("Contact" / "Contact
+// Category"). The two repos deploy separately, so both wordings are accepted until every backend
+// runs the new text; the first shape whose prefix matches is the one used.
+const ACCOUNT_NOT_FOUND_SHAPES = [
+  { prefix: 'Account could not be found. (Contact: ', groupDelim: ', Contact Category: ' },
+  { prefix: 'Account could not be found. (Business Partner: ', groupDelim: ', BP Group: ' },
+];
 
 function matchAccountNotFound(msg) {
-  if (!msg.startsWith(ACCOUNT_NOT_FOUND_PREFIX) || !msg.endsWith(')')) return null;
-  const inner = msg.slice(ACCOUNT_NOT_FOUND_PREFIX.length, -1);
+  const shape = ACCOUNT_NOT_FOUND_SHAPES.find((candidate) => msg.startsWith(candidate.prefix));
+  if (!shape || !msg.endsWith(')')) return null;
+  const inner = msg.slice(shape.prefix.length, -1);
   if (!inner) return null;
-  const delimIdx = inner.lastIndexOf(BP_GROUP_DELIM);
+  const delimIdx = inner.lastIndexOf(shape.groupDelim);
   if (delimIdx === -1) {
     return { bp: inner, group: null };
   }
   const bp = inner.slice(0, delimIdx);
-  const group = inner.slice(delimIdx + BP_GROUP_DELIM.length);
+  const group = inner.slice(delimIdx + shape.groupDelim.length);
   if (!bp || !group) return null;
   return { bp, group };
 }
@@ -689,6 +792,46 @@ function matchForeignDraftReconciliation(msg) {
   return documentNo ? { documentNo } : null;
 }
 
+// ETP-5472 — wire contract with com.etendoerp.go ReconciliationLineTargetSupport (its MSG prefix /
+// suffix constants): reconcileGroup answers 409 when the statement line is held by an unconfirmed
+// draft reconciliation (e.g. left by Classic "Match Statement"), instead of discarding that draft.
+// It shares the "Reconciliation " prefix with matchForeignDraftReconciliation but not the suffix;
+// both matchers require the full suffix, so neither can match the other's text.
+const DRAFT_HOLDS_LINE_PREFIX = 'Reconciliation ';
+const DRAFT_HOLDS_LINE_SUFFIX =
+  ' is an unconfirmed draft that already holds this line.'
+  + ' Review it before reconciling the line again.';
+
+function matchDraftHoldsLine(msg) {
+  if (!msg.startsWith(DRAFT_HOLDS_LINE_PREFIX) || !msg.endsWith(DRAFT_HOLDS_LINE_SUFFIX)) {
+    return null;
+  }
+  const documentNo = msg.slice(DRAFT_HOLDS_LINE_PREFIX.length, -DRAFT_HOLDS_LINE_SUFFIX.length);
+  return documentNo ? { documentNo } : null;
+}
+
+// ETP-5472 — com.etendoerp.go refuses a reconcileGroup whose line or movement is already
+// reconciled, appending the internal id: "Statement line is already reconciled: " +
+// statementLineId (ReconciliationFlowSupport.prepareGroup) and "Operation is already
+// reconciled: " + operationId (ReconciliationFlowSupport.validateOperation). The id is DROPPED,
+// never interpolated: it is a 32-char UUID that means nothing to the user. Matching on the literal
+// Java text makes these prefixes a de facto wire contract — keep them in sync with the Java side.
+const STATEMENT_LINE_ALREADY_RECONCILED_PREFIX = 'Statement line is already reconciled: ';
+
+function matchStatementLineAlreadyReconciled(msg) {
+  if (!msg.startsWith(STATEMENT_LINE_ALREADY_RECONCILED_PREFIX)) return null;
+  const id = msg.slice(STATEMENT_LINE_ALREADY_RECONCILED_PREFIX.length);
+  return id ? {} : null;
+}
+
+const OPERATION_ALREADY_RECONCILED_PREFIX = 'Operation is already reconciled: ';
+
+function matchOperationAlreadyReconciled(msg) {
+  if (!msg.startsWith(OPERATION_ALREADY_RECONCILED_PREFIX)) return null;
+  const id = msg.slice(OPERATION_ALREADY_RECONCILED_PREFIX.length);
+  return id ? {} : null;
+}
+
 const SYNC_FETCH_FAILED_PREFIX = 'The bank reported an error while synchronizing: ';
 const SYNC_FETCH_FAILED_SUFFIX = '.';
 
@@ -887,11 +1030,14 @@ const PARAMETERIZED_MATCHERS = [
   [matchTransactionsObtained, 'backendError.transactionsObtainedForAccount'],
   [matchNoNewTransactionsFound, 'backendError.noNewTransactionsForAccount'],
   [matchSyncFetchFailed, 'backendError.syncFetchFailed'],
+  [matchDraftHoldsLine, 'backendError.draftHoldsLine'],
   [matchForeignDraftReconciliation, 'backendError.foreignDraftReconciliation'],
   [matchFieldTooLong, 'backendError.fieldTooLong'],
   [matchConnectionWentInactive, 'backendError.psd2ConnectionWentInactive'],
   [matchConsentExpired, 'backendError.psd2ConsentExpired'],
   [matchImportDateBeyondMaxInterval, 'backendError.psd2ImportDateBeyondMaxInterval'],
+  [matchStatementLineAlreadyReconciled, 'backendError.statementLineAlreadyReconciled'],
+  [matchOperationAlreadyReconciled, 'backendError.operationAlreadyReconciled'],
 ];
 
 function resolveParameterizedMatch(msg) {
@@ -999,14 +1145,21 @@ function translateSingleMessage(trimmed, t) {
  *
  * @param {string} msg the backend message (already-translated prose, as it crossed the wire)
  * @param {function} t the `ui` function from `useUI()`
- * @param {{messageKeys?: string[]}} [options] ETP-5316 — the AD_MESSAGE search keys behind `msg`,
- *   when the backend sent them (see `extractBackendMessageKeys`). Tried FIRST, because a key is a
- *   stable identity while the prose it produced may embed per-document values. Omitting them is
- *   the pre-ETP-5316 behavior and stays fully supported.
+ * @param {{messageKeys?: string[], messageParams?: object}} [options] ETP-5316 — the AD_MESSAGE
+ *   search keys behind `msg`, when the backend sent them (see `extractBackendMessageKeys`). Tried
+ *   FIRST, because a key is a stable identity while the prose it produced may embed per-document
+ *   values. ETP-5175 — `messageParams` (see `extractBackendMessageParams`) are the values those
+ *   keys interpolate; with them a parameterized message (the Invalid-Account posting failure) is
+ *   rendered entirely in the SPA's locale. Omitting either is the earlier behavior and stays fully
+ *   supported.
  * @returns {string} the translated message, or `msg` untouched when nothing matched
  */
 export function translateBackendError(msg, t, options = {}) {
   if (typeof t !== 'function') return msg;
+
+  // ETP-5175: before the key route, and only with params — see translateInvalidAccount.
+  const invalidAccount = translateInvalidAccount(options.messageKeys, options.messageParams, t);
+  if (invalidAccount !== null) return invalidAccount;
 
   // Key route first: it is the only one that can resolve a message whose text is unmatchable by
   // construction. Runs even when `msg` is empty — the keys alone carry enough to say what failed.

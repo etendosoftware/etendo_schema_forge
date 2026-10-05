@@ -122,6 +122,90 @@ describe('useAccountMutations', () => {
     expect(JSON.parse(init.body)).toEqual({ name: 'BBVA', currency: '102', country: '106' });
   });
 
+  // ETP-5521: the provider logo picked in the offline bank picker must reach the backend so the
+  // provider catalog stores it (the account row later shows the bank logo).
+  it('createAccount passes providerCode, providerName and providerLogoUrl through (ETP-5521)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.createAccount({
+        name: 'Santander',
+        currencyId: '102',
+        providerCode: 'santander_es',
+        providerName: 'Banco Santander',
+        providerLogoUrl: 'https://d1uuj3mi6rzwpm.cloudfront.net/logos/providers/es/santander_es.svg',
+      });
+    });
+
+    const [, init] = findFetchCall(ENTITY_URL);
+    expect(JSON.parse(init.body)).toEqual({
+      name: 'Santander',
+      currency: '102',
+      providerCode: 'santander_es',
+      providerName: 'Banco Santander',
+      providerLogoUrl: 'https://d1uuj3mi6rzwpm.cloudfront.net/logos/providers/es/santander_es.svg',
+    });
+  });
+
+  it('createAccount omits providerLogoUrl when it is blank (ETP-5521)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.createAccount({
+        name: 'Santander',
+        currencyId: '102',
+        providerCode: 'santander_es',
+        providerName: 'Banco Santander',
+        providerLogoUrl: '   ',
+      });
+    });
+
+    const [, init] = findFetchCall(ENTITY_URL);
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ providerCode: 'santander_es', providerName: 'Banco Santander' });
+    expect(body).not.toHaveProperty('providerLogoUrl');
+  });
+
+  it('createAccount omits providerLogoUrl when it is absent or null (ETP-5521)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.createAccount({
+        name: 'Santander',
+        currencyId: '102',
+        providerCode: 'santander_es',
+        providerLogoUrl: null,
+      });
+    });
+
+    const [, init] = findFetchCall(ENTITY_URL);
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ providerCode: 'santander_es' });
+    expect(body).not.toHaveProperty('providerLogoUrl');
+  });
+
+  it('createAccount omits a non-string providerLogoUrl (ETP-5521 QA)', async () => {
+    globalThis.fetch.mockResolvedValue(okResponse([{ id: 'acc-new' }]));
+
+    const { result } = renderHook(() => useAccountMutations(), { wrapper });
+    await act(async () => {
+      await result.current.createAccount({
+        name: 'Santander',
+        currencyId: '102',
+        providerCode: 'santander_es',
+        providerLogoUrl: { href: 'https://d1uuj3mi6rzwpm.cloudfront.net/x.svg' },
+      });
+    });
+
+    const [, init] = findFetchCall(ENTITY_URL);
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({ providerCode: 'santander_es' });
+    expect(body).not.toHaveProperty('providerLogoUrl');
+  });
+
   it('createAccount returns the first record of the W envelope', async () => {
     globalThis.fetch.mockResolvedValue(
       okResponse([{ id: 'acc-1', name: 'First' }, { id: 'acc-2', name: 'Second' }]),

@@ -7,7 +7,7 @@ import { useReturnToVendorPdf } from './useReturnToVendorPdf.js';
 import { downloadBlobAsFile } from '../shared/pdfUtils.js';
 import { buildReturnPreviewContent } from '../shared/preview-cards/buildReturnPreviewContent.jsx';
 
-export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit }) {
+export default function ReturnToVendorShipmentPreview({ shipment, token, apiBaseUrl, windowName, onClose, onEdit, readOnly = false }) {
   const ui = useUI();
   const tMenu = useMenuLabel();
   const { locale } = useLocaleSwitch();
@@ -38,7 +38,8 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // ETP-5124 — Send is only available once the shipment is Confirmed (CO), matching
   // the grid row quick-action's `emailAction.visibleWhen` gate in index.jsx and the
   // pattern used by every other document preview (e.g. ReturnMaterialReceiptPreview).
-  const isSendable = shipment.documentStatus === 'CO';
+  // ETP-5205 — Solo-Lectura tier: Send is a write (mail + PDF attachment), Download stays.
+  const isSendable = shipment.documentStatus === 'CO' && !readOnly;
 
   const partnerName = shipment['businessPartner$_identifier'] || '—';
   const movementDate = shipment.movementDate ? formatCalendarDate(shipment.movementDate, locale) : '—';
@@ -56,7 +57,7 @@ export default function ReturnToVendorShipmentPreview({ shipment, token, apiBase
   // generated-PDF windows.
   const attachmentConfig = !isDraft
     ? {
-        storeCondition: true, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: shipment?.updated ?? null,
+        storeCondition: true, readOnly, sourceBlob: pdfBlob, autoFetch: true, recordUpdated: shipment?.updated ?? null,
         documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl,
       }
     : { storeCondition: false, documentId: shipment.id, tableName: 'M_InOut', useMainAttachment: true, token, apiBaseUrl };
