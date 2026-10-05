@@ -903,19 +903,13 @@ export function ListView({
   const fullBreadcrumb = breadcrumb
     ? breadcrumb.split(' / ').map(s => tMenu(s.trim())).join(' / ')
     : label;
-  // ETP-5593 — a custom headerTable that renders something other than ListView's own
-  // page (e.g. the chart-of-accounts tree, which self-fetches every account and counts
-  // its ROOT folders) reports its own count through `onRecordCountChange`. Opt-in: until
-  // the table reports one (a number), the badge keeps counting `hook.items`.
-  const [tableRecordCount, setTableRecordCount] = useState(null);
-  const recordCount = typeof tableRecordCount === 'number' ? tableRecordCount : hook.items.length;
   useSetPageMeta({
     title: label,
     breadcrumb: fullBreadcrumb,
-    recordCount: hideRecordCount ? undefined : recordCount,
+    recordCount: hideRecordCount ? undefined : hook.items.length,
     onAddToFavorites: favKey ? () => toggleFavorite(favKey, entityLabel || entity) : undefined,
     isFavorite: favActive,
-  }, [favActive, recordCount, hideRecordCount]);
+  }, [favActive, hook.items.length, hideRecordCount]);
   const copyPageLink = useCopyPageLink();
   const [selectedRows, setSelectedRows] = useState([]);
   const [clearSelectionCounter, setClearSelectionCounter] = useState(0);
@@ -1142,7 +1136,6 @@ export function ListView({
     hoverRowActions,
     clearSelectionTrigger: clearSelectionCounter,
     userRefreshTrigger: userRefreshCounter,
-    onRecordCountChange: setTableRecordCount,
     // ETP-5593 — the same view-only flag that gates the toolbar's New/Print/bulk delete,
     // so a custom table with its own inline edits (the chart-of-accounts status switch)
     // can disable them. DataTable ignores it.

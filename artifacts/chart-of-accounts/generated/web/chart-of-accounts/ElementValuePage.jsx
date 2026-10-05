@@ -130,6 +130,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       breadcrumb={breadcrumb}
       api={api}
       hideListFilters
+      hideRecordCount
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
       onNew={() => setShowNewModal(true)}

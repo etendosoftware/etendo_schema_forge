@@ -21,7 +21,7 @@ Maintain the account master used by finance users, browsing it as the same neste
 - Implementation type: generated window route loaded from the app-shell window registry.
 - Window shape: single-entity window for `elementValue`, with the runtime custom grouped tree table at `artifacts/chart-of-accounts/custom/AccountTreeView.jsx` replacing the generated list table.
 - Record detail titles use the account code (`searchKey`) rather than the internal record id.
-- The window title's count badge shows the number of **root** accounts (e.g. 4: A, P, PYG, O), not leaves (ETP-5593). `hook.items.length` would only reflect one paginated batch of leaves, so the tree reports its own count through ListView's opt-in `onRecordCountChange` table prop, computed from the **unfiltered** tree (a filter does not change it). `window.hideRecordCount` is now `false`.
+- The window title carries no record-count badge (`window.hideRecordCount: true` in `decisions.json`). No count is meaningful here: `hook.items.length` only reflects one paginated batch of leaves, not the materialized tree, and the product decision (ETP-5593) is to show no number at all.
 - The tree renders the FULL Etendo Classic account hierarchy as nested, expandable folders — matching Classic's "Combinación de cuentas" grouped view exactly. For example, account `20000000` nests 6 levels deep: `A` (Heading: ACTIVO) → `A.A` (Heading) → `A.A.I` (Heading) → `200` (Account) → `2000` (Breakdown) → `20000000` (Subaccount). Every folder is collapsed by default; expand/collapse state is persisted to `localStorage` (`sf.chartOfAccounts.expandedFolderIds`) so navigating away to another window and back restores exactly what the user left open.
 - **One toolbar row (ETP-5593).** The tree renders no toolbar of its own. ListView's toolbar row holds, left to right: **Expandir todo / Contraer todo** · **Buscar** · **Tipo de cuenta**, then Compartir · Ordenar · Actualizar · Imprimir · **Nueva subcuenta**. The left group is `AccountTreeView.ToolbarQuickFilter` = `artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx` (ETP-5188 static-slot convention); the right group is ListView's own. Because the bar lives outside the `ScrollPane`, it stays visible while the tree scrolls — the old sticky controls wrapper is gone.
   - **Expandir todo / Contraer todo** is one dynamic button: "Expandir todo" (`ArrowDown`) while no shown folder is open; "Contraer todo" (`ArrowUp`) as soon as one is, whether it was opened by this button or by a row's chevron. Persisted ids of folders that no longer exist are ignored.
@@ -89,7 +89,7 @@ Maintain the account master used by finance users, browsing it as the same neste
 20. Confirm the Active toggle is disabled (not just visually locked) for a protected `0000`-suffixed placeholder leaf.
 21. Open "New Sub-account" for a parent prefix that already has children (e.g. `2000`) and confirm the suffix field's placeholder shows the next available 4-digit suffix under that prefix (highest existing + 1), not the generic `0000`. Pick a prefix with no children yet and confirm it falls back to `0000`.
 22. Try to create a subaccount whose full 8-digit code already exists and confirm the toast reads "Account `<code>` already exists" (localized), not the generic "Could not create sub-account" message.
-23. Open `/chart-of-accounts` and confirm the count badge next to the title shows the number of root accounts (see step 34). Before ETP-5593 the window hid the badge (`hideRecordCount: true`).
+23. Open `/chart-of-accounts` and confirm no record-count badge appears next to the title (`hideRecordCount: true`).
 24. Locate Account-level (`C`) heading `430A`, whose real children `4300A`, `4304A`, and `4309A` are Breakdown-level (`D`) nodes. Select `430A` and press "Nueva subcuenta": confirm the parent selector is left unselected because several real children fan out, then choose `4300A` and confirm the selector retains that structural identity while the code field locks the numeric prefix to `4300`. Enter suffix `1000` and confirm submission sends the valid final code `43001000`. Repeat with the tree's text/type filter active to confirm filtering does not change the resolved candidates.
 25. On desktop with a long account tree, scroll through the tree and confirm the single toolbar row (Expandir todo · Buscar · Tipo de cuenta … Nueva subcuenta) stays visible above it and no nested scrollbar appears.
 26. Repeat on a narrow viewport: the toolbar wraps, and every control stays readable and usable.
@@ -100,7 +100,7 @@ Maintain the account master used by finance users, browsing it as the same neste
 31. Open the parent selector on a tenant with many accounts and scroll the list with the mouse wheel/trackpad inside the modal; hover a long name and confirm the tooltip shows it in full.
 32. In the tree, confirm Element Level and Account Type values are left-aligned under their headers on folder rows (Epígrafe/Cuenta/Desglose) as well as Subcuenta rows.
 33. Press the toolbar Actualizar button: confirm the loading skeleton appears and the full chart reloads (an account created in another tab appears).
-34. (ETP-5593) Confirm there is exactly one toolbar row. Confirm the title badge shows the number of root accounts (e.g. 4), not the number of leaves, and does not change when a filter is applied.
+34. (ETP-5593) Confirm there is exactly one toolbar row and no count badge next to the title.
 35. Press "Expandir todo": every folder opens and the button turns into "Contraer todo". Press it again: everything collapses. Open a single folder with its chevron and confirm the button already reads "Contraer todo".
 36. Type a code in Buscar and pick a Tipo de cuenta. Confirm the URL carries `q=` and `accountType=`. Press Compartir, open the copied link in a new tab, and confirm the same filtered view appears. Confirm you can collapse folders while filtering, and that clearing the filter brings back the folders you had open before.
 37. Ordenar → Nombre, then Código descendente: siblings reorder at every level and folders keep their children. Confirm Nivel, Tipo and Estado are not offered.
@@ -127,7 +127,6 @@ Maintain the account master used by finance users, browsing it as the same neste
 - **ETP-5593 (unified toolbar):** `AccountTreeView.vitest.jsx` now mounts the tree the way ListView does, in a `TreeHarness` with a `MemoryRouter`, the `ToolbarQuickFilter` slot and the create modal. Its `ETP-5593 unified toolbar` block covers:
   - the static `ToolbarQuickFilter` slot, and the tree rendering no toolbar of its own (`account-tree` keeps its own test id over ListView's generic one);
   - the dynamic expand label, including stale persisted ids;
-  - the root count reported through `onRecordCountChange` while a filter is active;
   - sorting by name and by code descending at every level, and code order kept for an unsupported sort column;
   - filter × expansion: collapsing while filtered, "Contraer todo" while filtered, no persistence of the seeded set, restore on clear, and a remount without a filter showing the persisted expansion;
   - the search debounce: the box updates at once and the URL after the pause; a pending write keeps an account type picked during the pause (the QA stale-params bug); leaving the box flushes the write; unmounting drops it;
@@ -140,12 +139,11 @@ Maintain the account master used by finance users, browsing it as the same neste
   Generic coverage:
   - `RowExpandToggle.vitest.jsx`;
   - `useCopyLinkAction.vitest.jsx` (`useCopyPageLink`);
-  - `ListView.headerContentMeta.vitest.jsx` (table-reported count, non-number fallback, `hideRecordCount` still wins);
   - `ListView.toolbarLayout.vitest.jsx` (Share copies `window.location.href`);
   - `ListView.vitest.jsx` (`windowReadOnly` forwarded to the table; New hidden under the runtime read-only tier).
 
   E2E (mocked):
-  - `e2e/tests/flows/accounting/chart-of-accounts-tree.mocked.spec.js` covers the toolbar contents, the root count badge (`topbar-record-count`), expand/collapse all, search and type into the URL, a search typed just before picking a type keeping both, a shared link reproducing the view, and New opening the modal;
+  - `e2e/tests/flows/accounting/chart-of-accounts-tree.mocked.spec.js` covers the toolbar contents, no count badge (`topbar-record-count` absent), expand/collapse all, search and type into the URL, a search typed just before picking a type keeping both, a shared link reproducing the view, and New opening the modal;
   - `list-toolbar-1280.mocked.spec.js` now includes chart-of-accounts and checks that the main row fits at 1280×720.
 
 ## Theme roles

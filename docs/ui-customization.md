@@ -676,14 +676,6 @@ quiet, nor by the host's `refreshTrigger` **input** prop on `ListView` (a host b
 `ListView` itself reload — same idea, opposite direction). A slot that spreads its remaining props
 onto a DOM element must destructure `userRefreshTrigger` out of the spread, like `selectedRows`.
 
-`ListView` also forwards **`onRecordCountChange(count)`** (ETP-5593, opt-in). The record-count badge
-next to the window title normally shows `hook.items.length`, which is the size of `ListView`'s own
-page. A slot that renders something else can report the number the badge should show instead. The
-chart-of-accounts tree reports its number of **root** accounts. Call it with a number, from an
-effect; a non-number puts the badge back on the page size. `window.hideRecordCount` still wins.
-Do not call `useSetPageMeta` from the slot for this: `setMeta` replaces the whole meta, so two
-writers would overwrite each other. Destructure it out of any DOM spread, like `userRefreshTrigger`.
-
 `ListView` also forwards **`windowReadOnly`** (ETP-5593). It is the same view-only flag that hides
 New in the toolbar and Print / bulk delete in the selection bar: the runtime read-only access tier,
 or `window.readOnly`. A

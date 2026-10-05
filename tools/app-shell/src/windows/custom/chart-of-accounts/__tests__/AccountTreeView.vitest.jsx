@@ -1100,7 +1100,7 @@ describe('AccountTreeView', () => {
     });
   });
 
-  // ── ETP-5593: unified toolbar, sort, root count, filter × expansion ─────────
+  // ── ETP-5593: unified toolbar, sort, filter × expansion ─────────
 
   describe('ETP-5593 unified toolbar', () => {
     // Two roots (4000 → 2 leaves, 5000 → 1 leaf) from DATA, plus a nested hierarchy.
@@ -1132,16 +1132,6 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('coa-toggle-expand-all')).toHaveTextContent('expandAll');
     });
 
-    it('reports the number of ROOT folders through onRecordCountChange, unaffected by filters', () => {
-      const onRecordCountChange = vi.fn();
-      renderTree(
-        <AccountTreeView {...defaultProps} onRecordCountChange={onRecordCountChange} />,
-        { entry: '/chart-of-accounts?accountType=E' },
-      );
-      // Only 5000 survives the filter, but the badge counts both roots.
-      expect(screen.queryByTestId('account-tree-row-group-4000')).not.toBeInTheDocument();
-      expect(onRecordCountChange).toHaveBeenLastCalledWith(2);
-    });
 
     it('sorts siblings at every level by name when ListView sorts by name', () => {
       renderTree(<AccountTreeView {...defaultProps} sortColumn="name" sortDirection="asc" />);

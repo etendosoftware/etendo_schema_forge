@@ -461,8 +461,6 @@ const selectSavedGeneration = (s) => s.savedGeneration;
  *   sortColumn / sortDirection — ListView's sort (toolbar Sort popover). Only `searchKey`
  *                         and `name` reorder the tree (siblings at every level); anything
  *                         else keeps the default code order.
- *   onRecordCountChange — ListView's opt-in count hook: the tree reports its number of
- *                         ROOT folders (unfiltered), which the breadcrumb badge shows.
  *   userRefreshTrigger  — bumped by ListView's Refresh button (ETP-5387).
  *
  * Self-fetch: when `apiBaseUrl` is provided, the component fetches its own complete
@@ -490,7 +488,6 @@ export default function AccountTreeView({
   sortColumn,
   sortDirection,
   onColumnsReady,
-  onRecordCountChange,
   // View-only window (runtime read-only tier or decisions `window.readOnly`): the status
   // switch is shown but cannot be flipped.
   windowReadOnly = false,
@@ -657,11 +654,6 @@ export default function AccountTreeView({
     if (sortColumn === 'searchKey' && sortDirection !== 'desc') return tree; // already code ASC
     return sortTree(tree, sortColumn, sortDirection);
   }, [tree, sortColumn, sortDirection]);
-
-  // The breadcrumb badge counts ROOT accounts, from the unfiltered tree (ETP-5593).
-  useEffect(() => {
-    onRecordCountChange?.(tree.length);
-  }, [onRecordCountChange, tree.length]);
 
   const { accountType, query } = useChartOfAccountsFilters();
   const filters = useMemo(() => ({ text: query.trim(), accountType }), [query, accountType]);

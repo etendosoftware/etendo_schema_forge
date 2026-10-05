@@ -1,8 +1,8 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-10-05T13:04:35.357Z",
-  "checksum": "a6cadaa50840ec5e",
+  "updatedAt": "2026-10-05T15:30:44.430Z",
+  "checksum": "5938a4d5525b9158",
   "frontendContract": {
     "window": {
       "id": "118",
@@ -10,6 +10,7 @@
       "primaryEntity": "elementValue",
       "category": "finance",
       "hideListFilters": true,
+      "hideRecordCount": true,
       "customComponents": {
         "headerTable": "AccountTreeView",
         "newRecordComponent": "NewSubAccountCreateModal"
@@ -216,6 +217,7 @@
       "primaryEntity": "elementValue",
       "category": "finance",
       "hideListFilters": true,
+      "hideRecordCount": true,
       "customComponents": {
         "headerTable": "AccountTreeView",
         "newRecordComponent": "NewSubAccountCreateModal"

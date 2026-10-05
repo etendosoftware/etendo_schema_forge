@@ -62,13 +62,14 @@ test.describe('Chart of Accounts — tree toolbar', () => {
     await expect(page.getByTestId('account-tree')).toBeVisible();
   });
 
-  test('shows every control in the list toolbar row and counts root accounts', async ({ page }) => {
+  test('shows every control in the list toolbar row and no record-count badge', async ({ page }) => {
     const mainRow = page.getByTestId('list-toolbar-main-row');
     for (const id of ['coa-toggle-expand-all', 'coa-search-input', 'coa-filter-account-type', 'list-share-link', 'action-new']) {
       await expect(mainRow.getByTestId(id)).toBeVisible();
     }
-    // Three roots (A, P, 6), not four leaves.
-    await expect(page.getByTestId('topbar-record-count')).toHaveText('3');
+    // The window hides the count badge (`hideRecordCount`): neither leaves nor roots
+    // are a meaningful count here.
+    await expect(page.getByTestId('topbar-record-count')).toHaveCount(0);
   });
 
   test('the expand button opens every folder, then collapses them', async ({ page }) => {

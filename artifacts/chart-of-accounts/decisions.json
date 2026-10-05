@@ -5,7 +5,7 @@
     "name": "Chart of Accounts",
     "hideCreate": false,
     "hideListFilters": true,
-    "hideRecordCount": false,
+    "hideRecordCount": true,
     "titleField": "searchKey",
     "customComponents": {
       "headerTable": "AccountTreeView",
