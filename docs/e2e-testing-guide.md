@@ -1020,6 +1020,7 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `list-toolbar` | — | ListView idle toolbar container; carries the toolbar/body separator (absent under `hideListBar`) |
 | `list-toolbar-main-row` | — | ListView toolbar first row: filters on the left, main actions on the right |
 | `list-toolbar-tabs-row` | — | ListView toolbar second row: subset filter buttons and the list/gallery `view-toggle`. Rendered only when the window has one of them |
+| `list-share-link` | — | ListView toolbar Share button: copies the current page URL, query string included (absent under `hideLink`) |
 | `selection-count` | — | ListView selection bar (count of selected rows) |
 | `list-progress-bar` | — | ListView loading progress indicator |
 | `global-search-trigger` | — | CommandPalette trigger button |
@@ -1031,6 +1032,7 @@ Shared UI components (`EntityForm`, `DetailView`, `ListView`, `DataTable`) emit 
 | `topbar-more-actions` | — | TopBar kebab / 3-dot menu |
 | `topbar-title-block` | — | TopBar title + breadcrumb block (left grid column, elides) |
 | `topbar-breadcrumb` | — | TopBar breadcrumb line |
+| `topbar-record-count` | — | Record-count badge next to the list title (absent under `hideRecordCount`) |
 | `topbar-breadcrumb-current` | — | Current page level when the breadcrumb is collapsed/structured |
 | `topbar-breadcrumb-overflow` | — | Breadcrumb `⋯` trigger (>3 levels) |
 | `topbar-breadcrumb-overflow-menu` | — | Breadcrumb `⋯` dropdown |

@@ -261,6 +261,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 | `sidePanel` | `sidePanel={X}` | Right-side panel alongside the detail form | `recordId`, `data`, `token`, `apiBaseUrl` |
 | `sidePanelStyle` | `sidePanelStyle={…}` | CSS style for the side panel container | — (style object, not a component) |
 | `headerTable` | replaces `{Entity}Table` import | List table in the master list view | Standard table props |
+| `newRecordComponent` | `onNew={() => setShowNewModal(true)}` on `ListView`, plus `{showNewModal && <X … />}` after it | Replaces the list toolbar's New button flow (a modal instead of the generic create form). Needs `hideCreate: false`; ListView still hides New for a read-only window | `token`, `apiBaseUrl`, `windowName`, `onClose` — nothing else, so any page state it needs (a selected row, loaded data) must come from a shared store or the URL |
 
 **Real examples:**
 - `topbarSecondary`: see §3b — 9 windows, all wrapping the shared `DocumentSecondaryActions`
@@ -268,6 +269,7 @@ Injects custom components into specific structural slots of `DetailView`. Each k
 - `subHeader`: `product` (`ProductCostBanner`, ETP-5245 — the "this stocked product has no cost" warning, see `docs/generated-custom-windows/product.md`)
 - `bottomSection`: `payment-in` (`PaymentBottomPanel`), `sales-invoice` (`InvoiceBottomPanel`)
 - `sidePanel`: `payment-in` (`PaymentActivityPanel`)
+- `newRecordComponent`: `payment-in` (`NewPaymentModal`), `chart-of-accounts` (`NewSubAccountCreateModal`, ETP-5593 — reads the tree's selected row from `chartOfAccountsTreeStore.js`, see `docs/generated-custom-windows/chart-of-accounts.md`)
 - `headerTable`: `sales-invoice` (`InvoiceHeaderTable`), `user` (`UserHeaderTable`, ETP-4906 — swaps in a role-chips cell + toolbar role filter, see `docs/generated-custom-windows/user.md`); `chart-of-accounts` (`AccountTreeView`, a self-fetching tree whose controls are its `ToolbarQuickFilter` static slot, ETP-5593, see `docs/generated-custom-windows/chart-of-accounts.md`)
 
 **`subHeader` is the slot for a page-wide notice** (ETP-5245). Use it when the message belongs to the whole record rather than to one field: a blocking warning, a state explanation, a "this record is locked because…" strip. The generator emits it as `DetailView`'s `headerContent` prop, so it renders above the form, above the primary-tab content, and at full content width — the same place the built-in credit-limit / BP-on-hold banner (`BlockingBpBanner.jsx`) occupies. The component receives only `data` (the current record), so any other state it needs must be derived from the record or fetched by the component itself. Return `null` to render nothing — the slot has no visibility gate of its own. Pair it with the shared `InfoBanner` primitive (`@/components/InfoBanner`) rather than a bespoke box, and pick the tone deliberately: `info` (blue) for a notice, `warning` (amber) when the condition also blocks an action, `danger` for an error. If the notice must also **prevent saving**, keep the banner and the save gate reading one shared predicate (product puts it in `lib/productCostRequirement.js`, consumed by both `ProductCostBanner.jsx` and `useEntity.js`) so the two can never disagree.
@@ -671,7 +673,8 @@ Do not call `useSetPageMeta` from the slot for this: `setMeta` replaces the whol
 writers would overwrite each other. Destructure it out of any DOM spread, like `userRefreshTrigger`.
 
 `ListView` also forwards **`windowReadOnly`** (ETP-5593). It is the same view-only flag that hides
-New, Print and bulk delete in the toolbar: the runtime read-only access tier, or `window.readOnly`. A
+New in the toolbar and Print / bulk delete in the selection bar: the runtime read-only access tier,
+or `window.readOnly`. A
 custom table with its own inline edits must disable them when it is `true`. The chart-of-accounts
 status switch does this. `DataTable` ignores the flag.
 
@@ -2578,6 +2581,21 @@ instances mount under the same Router).
 at the bottom of `UserHeaderTable.jsx` — moves the "Todos los roles" quick filter from its own
 wrapper div into the toolbar row. See `docs/generated-custom-windows/user.md` → "Users list role
 filter" for the full worked example.
+
+**Second example — several controls and shared state:**
+`artifacts/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx`, attached as
+`AccountTreeView.ToolbarQuickFilter` (ETP-5593). It puts three controls in the row (expand/collapse
+all, a search box, an account-type `DistinctValuesFilter`) and replaces the tree's own toolbar.
+Filter values live in the URL (`q`, `accountType`, `chartOfAccountsFilters.js`), so the toolbar
+Share button reproduces them. State that is not a filter (the expanded folders) is in a
+window-local `useSyncExternalStore` store (`chartOfAccountsTreeStore.js`) that the slot and the
+table both subscribe to, because they are siblings with no common parent of their own.
+
+**Writing URL params from a timer or debounce:** do not use react-router's functional
+`setSearchParams((prev) => …)` updater there. `prev` holds the params of the render that created the
+callback, not the live URL, so a delayed write rewrites the URL as it was then and drops any param
+set in between. Build the next params from a ref updated on every render instead (see
+`useChartOfAccountsFilters` in `chartOfAccountsFilters.js`).
 
 ### `col.toQueryParams(row)` — per-column raw query-param hook
 

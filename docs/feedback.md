@@ -2966,3 +2966,30 @@ attempts are capped. Regression tests: `PersonalRoleOwnerIntegrationTest` (real 
 **Lesson:** a display name is not an identity. When a row must be found again later by "who it belongs to",
 store that link when the row is created. "Nobody else is assigned to it" is not proof it is yours: deletion leaves
 the same state behind.
+
+---
+
+## [2026-10-05] ETP-5593 — A debounced URL write dropped a filter picked during the pause
+
+**Component:** `artifacts/chart-of-accounts/custom/chartOfAccountsFilters.js`
+(`useChartOfAccountsFilters`), written by the search box of `ChartOfAccountsToolbarSlot.jsx`.
+
+**Symptom:** in Plan de cuentas, typing in Buscar and picking a Tipo de cuenta within the 250 ms
+search debounce left the URL, and the tree, with the search but without the account type. The
+mocked E2E for the same flow was flaky.
+
+**Root cause:** the hook wrote with react-router's functional updater,
+`setSearchParams((prev) => …)`. That `prev` is the params of the render that created the
+callback, not the live URL. The debounce timer held a callback from before the type was picked,
+so its write rebuilt the URL from the old params and removed `accountType`.
+
+**Fix:** writes start from `latestParamsRef.current`, a ref updated with the params on every
+render. The search box also flushes a pending write on blur, so pressing Share right after typing
+copies a URL that already has `q`. Regression tests: `AccountTreeView.vitest.jsx` ("a pending
+search write keeps an account type picked during the pause", "leaving the search box writes the
+pending search immediately") and `chart-of-accounts-tree.mocked.spec.js` ("a search typed just
+before picking a type keeps both filters").
+
+**Lesson:** a URL write that runs later (a timer, a debounce, an awaited request) must not trust
+the router's functional `prev`. Read the latest params from a ref. The rule is also recorded in
+`docs/ui-customization.md` → `Table.ToolbarQuickFilter`.
