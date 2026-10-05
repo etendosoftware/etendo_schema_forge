@@ -76,12 +76,28 @@ describe('buildFollowUpActionUrl', () => {
   for (const [name, apiBaseUrl] of [
     ['the spec-scoped base', '/sws/neo/sales-invoice'],
     ['a base with a trailing slash', '/sws/neo/sales-invoice/'],
+    ['a base with several trailing slashes', '/sws/neo/sales-invoice///'],
     ['another window base (spec segment replaced)', '/sws/neo/purchase-invoice'],
   ]) {
     it(`builds the POST action URL from ${name}`, () => {
       assert.equal(
         buildFollowUpActionUrl({ apiBaseUrl, spec: 'sales-invoice', recordId: 'inv-1', action: 'createShipment' }),
         '/sws/neo/sales-invoice/header/inv-1/action/createShipment',
+      );
+    });
+  }
+
+  // Degenerate bases: the NEO prefix collapses exactly as the former regex pair did.
+  for (const [name, apiBaseUrl, expectedPrefix] of [
+    ['an undefined base', undefined, ''],
+    ['an empty base', '', ''],
+    ['a base that is only slashes', '///', ''],
+    ['a base with no slash at all (kept as is)', 'neo', 'neo'],
+  ]) {
+    it(`builds the POST action URL from ${name}`, () => {
+      assert.equal(
+        buildFollowUpActionUrl({ apiBaseUrl, spec: 'sales-invoice', recordId: 'inv-1', action: 'createShipment' }),
+        `${expectedPrefix}/sales-invoice/header/inv-1/action/createShipment`,
       );
     });
   }

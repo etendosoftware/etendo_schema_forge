@@ -55,6 +55,20 @@ export function hasPendingFollowUp(record, options) {
     : readFollowUpEntries(record).length > 0;
 }
 
+// Plain string scans instead of regexes: an end-anchored "one or more slashes" pattern
+// backtracks super-linearly on long slash runs (Sonar S5852).
+function stripTrailingSlashes(value) {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end -= 1;
+  return value.slice(0, end);
+}
+
+// Drops the last `/segment`; a value without any '/' is returned unchanged.
+function dropLastPathSegment(value) {
+  const slash = value.lastIndexOf('/');
+  return slash === -1 ? value : value.slice(0, slash);
+}
+
 /**
  * `POST {neoBase}/{spec}/{entity}/{id}/action/{action}`. `apiBaseUrl` is the spec-scoped
  * NEO base the window receives (`.../sws/neo/<spec>`); the spec segment is replaced with
@@ -62,7 +76,7 @@ export function hasPendingFollowUp(record, options) {
  * same construction InvoiceTopbarExtra used for `createShipment`.
  */
 export function buildFollowUpActionUrl({ apiBaseUrl, spec, entity = 'header', recordId, action }) {
-  const neoBase = String(apiBaseUrl || '').replace(/\/+$/, '').replace(/\/[^/]+$/, '');
+  const neoBase = dropLastPathSegment(stripTrailingSlashes(String(apiBaseUrl || '')));
   return `${neoBase}/${spec}/${entity}/${encodeURIComponent(recordId)}/action/${encodeURIComponent(action)}`;
 }
 
