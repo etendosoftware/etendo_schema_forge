@@ -1160,3 +1160,69 @@ describe('InvoicePreview — Solo-Lectura tier (ETP-5205)', () => {
     expect(lastAttachmentConfig().readOnly).toBe(false);
   });
 });
+
+describe('InvoicePreview — delivery row (ETP-5549)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDocumentCurrency.mockReturnValue({
+      orgCurrencyCode: null,
+      exchangeRate: null,
+      isSameCurrency: true,
+      loading: false,
+      convertAmount: (amount) => amount,
+    });
+  });
+
+  const lastSummaryProps = () => SummaryCard.mock.calls.at(-1)[0];
+
+  function renderWithDelivery(specName, eTGODeliveryStatus) {
+    const inv = { ...defaultInvoice, eTGODeliveryStatus };
+    useInvoicePreview.mockReturnValue(baseInvoicePreviewHook({
+      displayInvoice: inv,
+      isSalesInvoice: specName === 'sales-invoice',
+    }));
+    return renderInvoicePreview({ specName, invoice: inv });
+  }
+
+  it('sales invoice with 100 passes deliveryPercent 100 and the default label', () => {
+    renderWithDelivery('sales-invoice', 100);
+    expect(lastSummaryProps().deliveryPercent).toBe(100);
+    expect(lastSummaryProps().deliveryLabel).toBeUndefined();
+  });
+
+  it('purchase invoice with 40 passes deliveryPercent 40 and the Received label', () => {
+    renderWithDelivery('purchase-invoice', 40);
+    expect(lastSummaryProps().deliveryPercent).toBe(40);
+    expect(lastSummaryProps().deliveryLabel).toBe('previewCardReceivedPercent');
+  });
+
+  it('coerces a numeric string to a number', () => {
+    renderWithDelivery('purchase-invoice', '40');
+    expect(lastSummaryProps().deliveryPercent).toBe(40);
+  });
+
+  it('keeps the row for 0 (zero is a real value, not absent)', () => {
+    renderWithDelivery('sales-invoice', 0);
+    expect(lastSummaryProps().deliveryPercent).toBe(0);
+  });
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['empty string', ''],
+    ['non-numeric string', 'abc'],
+  ])('passes no deliveryPercent when eTGODeliveryStatus is %s', (_label, value) => {
+    renderWithDelivery('sales-invoice', value);
+    expect(lastSummaryProps().deliveryPercent).toBeUndefined();
+  });
+
+  it('still forwards status and fiscal rows alongside the delivery props', () => {
+    getInvoiceFiscalTargetsMock.mockReturnValue({ showSii: false, showTbai: true, showVerifactu: false });
+    renderWithDelivery('purchase-invoice', 40);
+    const props = lastSummaryProps();
+    expect(props.statusCode).toBe('CO');
+    expect(props.statusLabel).toBe('Completed');
+    const rows = (props.children || []).filter(Boolean);
+    expect(rows.some((el) => el?.props?.label === 'invoicePreview.fiscalStatus.tbaiPurchase')).toBe(true);
+  });
+});

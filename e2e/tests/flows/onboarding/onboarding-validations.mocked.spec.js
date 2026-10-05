@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 /**
  * Onboarding — Two continuous E2E flows (mocked, no backend).
@@ -18,6 +19,7 @@ import { test, expect } from '@playwright/test';
 // ── Mock installer ───────────────────────────────────────────────────────────
 
 async function installMocks(page, { registerBehavior = 'success', loginBehavior = 'success' } = {}) {
+  await declareNoSession(page);
   await page.route('**/sws/go/me', route =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );

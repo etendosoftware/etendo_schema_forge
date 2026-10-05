@@ -7,6 +7,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { neoBase } from '@/components/related-documents/helpers.js';
+import { getSalesRelatedDocs } from '@/components/related-documents/salesRelatedDocs.js';
 import { useFiscalMonitor } from './useFiscalMonitor.js';
 import InvoicePreviewModal from '../shared/InvoicePreviewModal.jsx';
 import ContactDetailModal from './ContactDetailModal.jsx';
@@ -423,6 +424,9 @@ export default function FiscalMonitorPage({ token, apiBaseUrl }) {
           token={token}
           apiBaseUrl={`${neoBase(apiBaseUrl)}/${previewSpec}`}
           specName={previewSpec}
+          // ETP-5527 — sales invoices list the same related documents as their form;
+          // null for purchase invoices, which keep the preview's legacy specs.
+          relatedDocs={getSalesRelatedDocs(previewSpec)}
           onClose={() => setPreviewInvoice(null)}
           onEdit={(id) => {
             const targetId = id ?? previewInvoice?.id;

@@ -208,3 +208,142 @@ describe('AccountRowMenu', () => {
     });
   });
 });
+
+// ETP-5457 — the write items moved into `AccountRowMenuWriteItems`; these two click paths had
+// no test at all, so the extraction could have dropped their handlers unnoticed. Full access.
+describe('AccountRowMenu — write item click wiring under full access (ETP-5457)', () => {
+  it('calls onEdit with the account when "Editar" is clicked (ETP-5457)', async () => {
+    const onEdit = vi.fn();
+    render(<AccountRowMenu account={baseAccount} onEdit={onEdit} windowReadOnly={false} />);
+    openMenu();
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-edit-acc-1'));
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith(baseAccount);
+  });
+
+  it('dispatches reconnect with the account when "Reconectar" is clicked (ETP-5457)', async () => {
+    const onBankConnectionAction = vi.fn();
+    const softDisconnected = { ...baseAccount, bankConnected: false, bankReconnectable: true };
+    render(
+      <AccountRowMenu
+        account={softDisconnected}
+        onBankConnectionAction={onBankConnectionAction}
+        windowReadOnly={false}
+      />,
+    );
+    openMenu();
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-reconnect-acc-1'));
+
+    expect(onBankConnectionAction).toHaveBeenCalledTimes(1);
+    expect(onBankConnectionAction).toHaveBeenCalledWith('reconnect', softDisconnected);
+  });
+});
+
+// ETP-5457 — the window's "read-only" access tier. "Abrir cuenta" is pure navigation and is the
+// ONLY item kept; every other item writes. Each account shape below reaches a different subset of
+// the write items under full access, so together they cover all eleven, and each read-only case
+// is paired with its full-access twin on the same shape.
+describe('AccountRowMenu — read-only access tier (ETP-5457)', () => {
+  const WRITE_ITEMS = [
+    'edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'reconnect',
+    'connect', 'delete-connection', 'archive', 'unarchive', 'delete',
+  ];
+
+  const SHAPES = [
+    {
+      label: 'bank-connected',
+      account: { ...baseAccount, bankConnected: true },
+      fullItems: ['edit', 'new-movement', 'transfer', 'sync', 'disconnect', 'delete-connection', 'archive', 'delete'],
+    },
+    {
+      label: 'soft-disconnected',
+      account: { ...baseAccount, bankConnected: false, bankReconnectable: true },
+      fullItems: ['edit', 'new-movement', 'transfer', 'reconnect', 'delete-connection', 'archive', 'delete'],
+    },
+    {
+      label: 'offline Spanish',
+      account: { ...baseAccount, bankConnected: false },
+      fullItems: ['edit', 'new-movement', 'transfer', 'connect', 'archive', 'delete'],
+    },
+    {
+      label: 'archived',
+      account: { ...baseAccount, active: false },
+      fullItems: ['edit', 'new-movement', 'transfer', 'connect', 'unarchive', 'delete'],
+    },
+    {
+      label: 'cash',
+      account: { id: 'acc-1', name: 'Caja', type: 'C' },
+      fullItems: ['edit', 'new-movement', 'transfer', 'archive', 'delete'],
+    },
+  ];
+
+  describe.each(SHAPES)('$label account', ({ account, fullItems }) => {
+    it('offers only "Abrir cuenta" under the read-only tier (ETP-5457)', async () => {
+      render(<AccountRowMenu account={account} windowReadOnly />);
+      openMenu();
+
+      expect(await screen.findByTestId('account-row-menu-open-acc-1')).toBeInTheDocument();
+      for (const item of WRITE_ITEMS) {
+        expect(screen.queryByTestId(`account-row-menu-${item}-acc-1`), item).not.toBeInTheDocument();
+      }
+      expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    });
+
+    it('offers "Abrir cuenta" plus its write items under full access (ETP-5457 twin)', async () => {
+      render(<AccountRowMenu account={account} windowReadOnly={false} />);
+      openMenu();
+
+      expect(await screen.findByTestId('account-row-menu-open-acc-1')).toBeInTheDocument();
+      for (const item of fullItems) {
+        expect(screen.getByTestId(`account-row-menu-${item}-acc-1`), item).toBeInTheDocument();
+      }
+      expect(screen.getAllByRole('menuitem')).toHaveLength(1 + fullItems.length);
+    });
+  });
+
+  it('defaults windowReadOnly to false, keeping the write items for other callers (ETP-5457)', async () => {
+    render(<AccountRowMenu account={baseAccount} />);
+    openMenu();
+
+    expect(await screen.findByTestId('account-row-menu-edit-acc-1')).toBeInTheDocument();
+  });
+
+  it('still routes "Abrir cuenta" to onOpen under the read-only tier (ETP-5457)', async () => {
+    const onOpen = vi.fn();
+    render(<AccountRowMenu account={baseAccount} onOpen={onOpen} windowReadOnly />);
+    openMenu();
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-open-acc-1'));
+
+    expect(onOpen).toHaveBeenCalledWith(baseAccount);
+  });
+
+  it('routes "Abrir cuenta" to onOpen under full access too (ETP-5457 twin)', async () => {
+    const onOpen = vi.fn();
+    render(<AccountRowMenu account={baseAccount} onOpen={onOpen} windowReadOnly={false} />);
+    openMenu();
+
+    fireEvent.click(await screen.findByTestId('account-row-menu-open-acc-1'));
+
+    expect(onOpen).toHaveBeenCalledWith(baseAccount);
+  });
+
+  it('never invokes a write callback under the read-only tier (ETP-5457)', async () => {
+    const writes = {
+      onEdit: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn(),
+      onBankConnectionAction: vi.fn(), onTransfer: vi.fn(), onNewMovement: vi.fn(),
+    };
+    render(<AccountRowMenu account={{ ...baseAccount, bankConnected: true }} {...writes} windowReadOnly />);
+    openMenu();
+
+    // The single item on offer is navigation; clicking it reaches none of the writes.
+    fireEvent.click(await screen.findByTestId('account-row-menu-open-acc-1'));
+
+    for (const [name, fn] of Object.entries(writes)) {
+      expect(fn, name).not.toHaveBeenCalled();
+    }
+  });
+});

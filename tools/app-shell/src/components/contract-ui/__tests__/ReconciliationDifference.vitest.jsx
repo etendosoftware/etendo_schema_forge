@@ -306,6 +306,50 @@ describe('DifferenceBanner — actions', () => {
   });
 });
 
+// ETP-5457 — the window's "read-only" access tier. The banner still tells the user the line has a
+// postable remainder, and "Dejar pendiente" (pure UI, no data) stays; the post action — the one
+// control leading to a write — is not rendered at all.
+describe('DifferenceBanner — window read-only access tier (ETP-5457)', () => {
+  it('keeps the banner and "Dejar pendiente" but hides the post action under read-only (ETP-5457)', () => {
+    render(<DifferenceBanner {...bannerProps({ windowReadOnly: true })} />);
+    expect(screen.getByTestId('recon-difference-banner')).toBeInTheDocument();
+    expect(screen.getByTestId('recon-difference-dismiss')).toBeInTheDocument();
+    expect(screen.queryByTestId('recon-difference-open')).toBeNull();
+  });
+
+  it('still states the remainder under read-only (ETP-5457)', () => {
+    render(<DifferenceBanner {...bannerProps({ windowReadOnly: true })} />);
+    const banner = screen.getByTestId('recon-difference-banner');
+    expect(banner.textContent).toContain(REMAINDER_TEXT);
+    // The post label is never even asked for.
+    expect(uiCalls.map((c) => c.key)).not.toContain('financeReconcileDiffAction');
+  });
+
+  it('"Dejar pendiente" still calls onDismiss under read-only, never onPost (ETP-5457)', async () => {
+    const user = userEvent.setup();
+    const props = bannerProps({ windowReadOnly: true });
+    render(<DifferenceBanner {...props} />);
+    await user.click(screen.getByTestId('recon-difference-dismiss'));
+    expect(props.onDismiss).toHaveBeenCalledTimes(1);
+    expect(props.onPost).not.toHaveBeenCalled();
+  });
+
+  it('renders the post action when windowReadOnly is false (ETP-5457)', () => {
+    render(<DifferenceBanner {...bannerProps({ windowReadOnly: false })} />);
+    expect(screen.getByTestId('recon-difference-open')).toBeEnabled();
+  });
+
+  it('defaults to writable when windowReadOnly is omitted (ETP-5457)', () => {
+    render(<DifferenceBanner {...bannerProps()} />);
+    expect(screen.getByTestId('recon-difference-open')).toBeInTheDocument();
+  });
+
+  it('still renders nothing under read-only when info.visible is false (ETP-5457)', () => {
+    render(<DifferenceBanner {...bannerProps({ info: INFO_HIDDEN, windowReadOnly: true })} />);
+    expect(screen.queryByTestId('recon-difference-banner')).toBeNull();
+  });
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // DifferenceModal
 // ═══════════════════════════════════════════════════════════════════════════

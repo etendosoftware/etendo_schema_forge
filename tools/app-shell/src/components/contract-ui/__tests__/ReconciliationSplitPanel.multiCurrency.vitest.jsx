@@ -589,6 +589,28 @@ describe('ReconciliationSplitPanel — multi-currency (ETP-4502 iteration 2)', (
       expect(payload.paymentMethodId).toBeUndefined();
       await waitFor(() => expect(props.onReconcileSuccess).toHaveBeenCalled());
     });
+
+    // ETP-5457 — the window's "read-only" access tier. Conciliar is disabled under it, so the only
+    // way to reach an open method modal is to open it while writable and re-render under the tier.
+    it('forces the payment method modal shut once the tier turns read-only, without reconciling (ETP-5457)', async () => {
+      setLines([LINE_POS]);
+      setCandidates([CAND_INVOICE_COVERING]);
+      const { rerender, props } = renderPanel({
+        currency: 'EUR', paymentMethods: [PM_RECEIPT_DEFAULT, PM_RECEIPT_OTHER],
+      });
+      selectLine('LP');
+      switchToSalesInvoices();
+      fireEvent.click(screen.getByTestId('recon-cand-check-CI'));
+      fireEvent.click(screen.getByTestId('recon-action-reconcile'));
+      expect(screen.getByTestId('recon-payment-method-dialog')).toBeInTheDocument();
+
+      rerender(<ReconciliationSplitPanel {...props} windowReadOnly />);
+      await waitFor(() =>
+        expect(screen.queryByTestId('recon-payment-method-dialog')).not.toBeInTheDocument());
+      // The invoice selection survives (browsing stays), but Conciliar is now disabled.
+      expect(screen.getByTestId('recon-action-reconcile')).toBeDisabled();
+      expect(reconcileState.reconcile).not.toHaveBeenCalled();
+    });
   });
 
   // ── ETP-5450: dual-currency display of RECONCILED documents ─────────────────
