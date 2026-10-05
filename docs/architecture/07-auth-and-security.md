@@ -95,7 +95,7 @@ Not all persisted client state lives in `localStorage`. UI preferences that shou
 | `sessionStorage` | `dashboard_date_range` — the Dashboard period filter (`lastYear` default; valid values `lastYear`, `last90d`, `last30d`, `mtd`, `ytd`) | Until the browser tab/session closes | Yes — cleared by `clearStoredDateRange()` |
 
 `src/components/dashboard/DashboardDateRangeContext.jsx` owns this value:
-- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Último año".
+- `readStoredRange()` falls back to the `lastYear` default when nothing valid is stored, so a new session always opens the Dashboard at "Últimos 12 meses".
 - `clearStoredDateRange()` removes the `sessionStorage` key **and** the legacy `localStorage` key (the value lived in `localStorage` before the session-scoping migration), so no orphaned range survives a logout on an already-upgraded browser.
 
 ### Logout Choke Point (`useLogout`)
