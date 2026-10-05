@@ -32,8 +32,13 @@ import {
  *
  * All state lives here and is deliberately minimal — every derived figure comes from
  * `cashCloseMath.js`, so the arithmetic is unit-tested without React.
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier (ETP-5205): the close inputs
+ * and both actions (Confirmar cierre / Guardar borrador) are disabled, the confirmation dialog stays
+ * shut, and every handler that writes returns early. Ticking movements and the list filters stay
+ * usable — they are local state that only feeds the (disabled) save.
  */
-export function CashCloseTab({ account, onCloseSuccess }) {
+export function CashCloseTab({ account, onCloseSuccess, windowReadOnly = false }) {
   const ui = useUI();
   const accountId = account?.id;
 
@@ -100,6 +105,7 @@ export function CashCloseTab({ account, onCloseSuccess }) {
     translateBackendError(err?.message, ui) || ui('financeAccountCashCloseError');
 
   const handleSaveDraft = async () => {
+    if (windowReadOnly) return;
     try {
       await saveDraft(buildPayload());
       toast.success(ui('financeAccountCashCloseDraftSaved'));
@@ -112,6 +118,7 @@ export function CashCloseTab({ account, onCloseSuccess }) {
   // A balanced close has nothing to warn about, so it confirms straight away; an unbalanced one
   // always goes through the dialog, which names the amount and the concept it will be posted to.
   const handleConfirmClick = () => {
+    if (windowReadOnly) return;
     if (summary.balanced) {
       runConfirm();
       return;
@@ -120,6 +127,7 @@ export function CashCloseTab({ account, onCloseSuccess }) {
   };
 
   const runConfirm = async () => {
+    if (windowReadOnly) return;
     try {
       await confirmClose(buildPayload());
       toast.success(ui('financeAccountCashCloseConfirmed'));
@@ -173,10 +181,11 @@ export function CashCloseTab({ account, onCloseSuccess }) {
           busy={busy}
           onConfirm={handleConfirmClick}
           onSaveDraft={handleSaveDraft}
+          windowReadOnly={windowReadOnly}
           data-testid="CashCloseSidePanel__ccfd67" />
       </div>
       <CashCloseConfirmDialog
-        open={confirmOpen}
+        open={confirmOpen && !windowReadOnly}
         onOpenChange={setConfirmOpen}
         difference={summary.difference}
         currency={currency}
