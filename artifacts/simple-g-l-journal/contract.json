@@ -1,8 +1,8 @@
 {
-  "version": "0.28.0",
+  "version": "0.29.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-10-05T15:51:18.452Z",
-  "checksum": "1fa49746952e8c21",
+  "updatedAt": "2026-10-05T16:30:23.563Z",
+  "checksum": "379fe58ee0c0c881",
   "frontendContract": {
     "window": {
       "id": "B917E8A7B0864ACEA9D941E3B7494E53",
@@ -144,6 +144,36 @@
             "readOnlyLogic": {
               "js": "record['processed'] === true",
               "evaluable": true
+            }
+          },
+          {
+            "name": "documentDate",
+            "apiKey": "documentDate",
+            "column": "DateDoc",
+            "label": "Document Date",
+            "type": "date",
+            "tsType": "string",
+            "visibility": "editable",
+            "required": true,
+            "grid": false,
+            "form": false,
+            "sourceRequired": true,
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateDoc@)) FROM DUAL"
+            },
+            "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateDoc@)) FROM DUAL",
+            "validation": {
+              "required": true,
+              "maxLength": 10
+            },
+            "callout": {
+              "className": "org.openbravo.erpCommon.ad_callouts.SL_Journal_Period"
+            },
+            "readOnlyLogic": {
+              "raw": "@Processed@='Y'",
+              "evaluable": true,
+              "js": "(record['processed'] === true || record['processed'] === 'Y')"
             }
           },
           {
@@ -575,6 +605,13 @@
             "derivation": {
               "type": "fromConfig",
               "source": "context.description0"
+            }
+          },
+          {
+            "name": "documentDate",
+            "derivation": {
+              "type": "lookup",
+              "source": "SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateDoc@)) FROM DUAL"
             }
           },
           {
@@ -1069,7 +1106,7 @@
             "apiKey": "documentDate",
             "column": "DateDoc",
             "type": "date",
-            "visibility": "system",
+            "visibility": "editable",
             "required": true
           },
           {
@@ -2048,6 +2085,14 @@
         "description": "Default value for 'description' in gLJournal should be a string"
       },
       {
+        "id": "t-default-value-type-gLJournal-documentDate",
+        "category": "default-value-type",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "Default value for 'documentDate' in gLJournal should be a string"
+      },
+      {
         "id": "t-default-value-type-gLJournal-documentStatus",
         "category": "default-value-type",
         "entity": "gLJournal",
@@ -2312,6 +2357,14 @@
         "description": "Field 'description' should be present in gLJournal"
       },
       {
+        "id": "t-field-presence-gLJournal-documentDate",
+        "category": "field-presence",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "Field 'documentDate' should be present in gLJournal"
+      },
+      {
         "id": "t-field-presence-gLJournal-documentStatus",
         "category": "field-presence",
         "entity": "gLJournal",
@@ -2480,6 +2533,14 @@
         "description": "Field 'description' should have type 'string' in gLJournal"
       },
       {
+        "id": "t-field-type-gLJournal-documentDate",
+        "category": "field-type",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "Field 'documentDate' should have type 'string' in gLJournal"
+      },
+      {
         "id": "t-field-type-gLJournal-documentStatus",
         "category": "field-type",
         "entity": "gLJournal",
@@ -2640,6 +2701,14 @@
         "description": "Read-only logic for 'description' in gLJournal should have evaluable flag"
       },
       {
+        "id": "t-readonlylogic-evaluable-gLJournal-documentDate",
+        "category": "readonlylogic-evaluable",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "Read-only logic for 'documentDate' in gLJournal should have evaluable flag"
+      },
+      {
         "id": "t-readonlylogic-evaluable-gLJournal-multigeneralLedger",
         "category": "readonlylogic-evaluable",
         "entity": "gLJournal",
@@ -2774,6 +2843,14 @@
         "field": "description",
         "runner": "node",
         "description": "Read-only logic for 'description' in gLJournal should be valid JS"
+      },
+      {
+        "id": "t-readonlylogic-valid-gLJournal-documentDate",
+        "category": "readonlylogic-valid",
+        "entity": "gLJournal",
+        "field": "documentDate",
+        "runner": "node",
+        "description": "Read-only logic for 'documentDate' in gLJournal should be valid JS"
       },
       {
         "id": "t-readonlylogic-valid-gLJournal-multigeneralLedger",
@@ -3965,14 +4042,6 @@
         "description": "System field 'documentAction' should exist in backend but not frontend for gLJournal"
       },
       {
-        "id": "t-system-field-gLJournal-documentDate",
-        "category": "system-field",
-        "entity": "gLJournal",
-        "field": "documentDate",
-        "runner": "node",
-        "description": "System field 'documentDate' should exist in backend but not frontend for gLJournal"
-      },
-      {
         "id": "t-system-field-gLJournal-documentNo",
         "category": "system-field",
         "entity": "gLJournal",
@@ -4420,25 +4489,25 @@
       }
     ],
     "summary": {
-      "total": 321,
+      "total": 325,
       "byCategory": {
         "action-endpoint": 4,
         "crud-flags": 2,
-        "default-value-type": 9,
+        "default-value-type": 10,
         "displaylogic-evaluable": 11,
         "displaylogic-valid": 11,
-        "field-presence": 21,
-        "field-type": 21,
-        "readonlylogic-evaluable": 17,
-        "readonlylogic-valid": 17,
+        "field-presence": 22,
+        "field-type": 22,
+        "readonlylogic-evaluable": 18,
+        "readonlylogic-valid": 18,
         "rule-declared": 123,
         "searchable-filters": 6,
         "selector-endpoint": 12,
-        "system-field": 65,
+        "system-field": 64,
         "visibility": 2
       },
       "byRunner": {
-        "node": 321,
+        "node": 325,
         "junit": 0
       }
     }

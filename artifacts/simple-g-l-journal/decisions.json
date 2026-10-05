@@ -134,9 +134,11 @@
           "reason": "Hidden from the form but still defaulted under the hood (DocBaseType='GLJ') — needed for posting/sequencing later."
         },
         "documentDate": {
-          "visibility": "system",
+          "visibility": "editable",
+          "form": false,
           "grid": false,
-          "defaultExpr": "@#Date@"
+          "defaultExpr": "@#Date@",
+          "reason": "ETP-5611 — hidden (form/grid false) but WRITABLE: GlJournalHeaderHandler mirrors accountingDate into it on every CRUD write, and NEO's PATCH filter (filterWriteRequest) strips any non-writable field after the pre-hook, so as `system` the mirrored value was silently dropped on edits. Any client value is overwritten by the mirror."
         },
         "accountingDate": {
           "visibility": "editable",

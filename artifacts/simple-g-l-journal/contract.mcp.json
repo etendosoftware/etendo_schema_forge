@@ -1,8 +1,8 @@
 {
-  "version": "0.27.0",
+  "version": "0.29.0",
   "generatedAt": "2026-06-16T16:34:09.049Z",
-  "updatedAt": "2026-10-05T15:50:44.920Z",
-  "contractChecksum": "1fa49746952e8c21",
+  "updatedAt": "2026-10-05T16:30:23.563Z",
+  "contractChecksum": "379fe58ee0c0c881",
   "apiPrediction": {
     "specName": "simple-g-l-journal",
     "baseUrl": "/sws/neo/simple-g-l-journal",
@@ -333,6 +333,11 @@
             "required": true,
             "defaultValue": "@DESCRIPTION0@"
           },
+          "documentDate": {
+            "required": true,
+            "readOnlyLogic": "@Processed@='Y'",
+            "defaultValue": "@SQL=SELECT COALESCE((SELECT ENDDATE FROM C_PERIOD WHERE C_PERIOD_ID = @C_PERIOD_ID@ and periodtype = 'A'),to_date(@HeaderDateDoc@)) FROM DUAL"
+          },
           "accountingDate": {
             "required": true,
             "readOnlyLogic": "@Posted@='Y'",
@@ -429,6 +434,7 @@
     "minimumCreate": {
       "headerFields": [
         "description",
+        "documentDate",
         "accountingDate",
         "period",
         "opening",
@@ -474,6 +480,7 @@
         "description": "Create a draft header with the minimum required editable fields.",
         "fields": [
           "description",
+          "documentDate",
           "accountingDate",
           "period",
           "opening",
@@ -499,5 +506,5 @@
     "knownLimitations": [],
     "dangerousOperations": []
   },
-  "checksum": "0e880250d9c5ade7"
+  "checksum": "dce5560a90bdca43"
 }
