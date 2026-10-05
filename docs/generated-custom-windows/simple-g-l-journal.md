@@ -8,8 +8,9 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 
 ## What this window should allow
 
-- Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency, Opening, and Multi-Ledger. (Document Date is hidden — see below.)
-- **Single date:** the form exposes only **Accounting Date**. Document Date is hidden (`system`); the backend derives `DateDoc` from the accounting date via its AD default (`to_date(@HeaderDateAcct@)`), so the user never maintains two dates.
+- Create and review journal headers with a focused 6-field form, in order: Accounting Date, Period, Description, Currency (read-only), Opening, and Multi-Ledger. (Document Date is hidden — see below.)
+- **Single date:** the form exposes only **Accounting Date** ("Fecha"). Document Date is hidden (`system`); `GlJournalHeaderHandler` mirrors `accountingDate` into `documentDate` on every CRUD write (ETP-5611), so both DB columns always carry the date the user chose.
+- **Reactivate** a completed, not-yet-posted journal back to Draft (ETP-5611).
 - Add one or more journal lines under a header, each with an account, a debit amount, and a credit amount. **Lines no longer carry their own Description field** (ETP-5210, revised scope — see "Line description column removed" below); the journal's header `Description` remains the single place to annotate the entry.
 - Optionally flag a line as **Open Items** to reveal the **Asset** dimension in the add-row form. **Business Partner**, **Product**, **Project**, and **Cost Center** are reached separately, per saved line, via the grid's "Añadir dimensiones" hover action, gated by the client's accounting-dimension configuration (ETP-4529 — see "Accounting dimension visibility per section" below).
 - See a live **balance footer** below the lines: total debit and total credit (see ETP-4917 note below — the difference amount and the balanced ✓/✗ badge were trimmed from the display).
@@ -20,7 +21,7 @@ This is **slice 1 of workstream C (Manual Journals Simplified)** under ETP-4244.
 
 - **Route:** `/simple-g-l-journal`, `/simple-g-l-journal/:recordId`.
 - **Visibility:** visible from the **Finance** menu as **Manual Journals** (es: **Asientos Manuales**), wired via `menus["Manual Journals"]` in both locales.
-- **Implementation type:** fully generated window (no custom components). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST and routes document-completion (CO) through `FIN_AddPaymentFromJournal`.
+- **Implementation type:** generated window with one custom component, `custom/SimpleGLJournalBottomPanel.jsx` (registers the lines empty state — ETP-5611). CRUD runs through NEO Headless generic CRUD. A `GlJournalHeaderHandler` (`@Named("glJournalHeaderHandler")`) injects `C_AcctSchema_ID` from the session on POST, forces the schema currency (DEFAULTS + POST), mirrors the date into `documentDate`, and routes Complete (CO) and Reactivate (RE) through `FIN_AddPaymentFromJournal` — see "ETP-5611" below.
 - **Window shape:** master-detail. The header entity is `gLJournal` (table `GL_Journal`) and the line entity is `gLJournalLine` (table `GL_JournalLine`). The two Classic auxiliary tabs — `Fact_Acct` (posting result) and `C_Conversion_Rate_Document` (document rates) — are **dropped** (`exclude: true`) for V1.
 - **Lines tab layout:** `decisions.json` does not declare `window.linesLayout`, but `DetailView.jsx` defaults the prop to `'inlineEditable'` when a window omits it, so at runtime this window renders lines through `InlineLinesPanel` — inline cell editing on the grid — not a classic `DataTable` + side-panel `DetailForm` (`shouldShowDetailFormSidebar` never mounts a side panel once `linesLayout === 'inlineEditable'`). The lines table shows the four core columns (ETP-5210 dropped Description — see "Line description column removed" below); existing rows are edited inline via the pencil hover action, per-line dimensions are edited via the row's "Add dimensions" hover action, and the Open Items / Asset fields are set at line-creation time through the add-row form.
 - An **Attachments** tab is available in the detail tab strip.
@@ -34,12 +35,12 @@ The header form shows **6 always-visible editable fields**, in this order: Accou
 | `accountingDate` | DateAcct | editable | `seq: 10`. The only date shown. Defaults to today. Grid column + searchable (ETP-4917). Displays as **Fecha**/**Date** in this window via a `labels` override on the field — see the ETP-4917 note below for why the shared `accountingDate` locale key was left untouched. `dot: false` (ETP-5210) — the grid's past-date red-dot ("overdue") indicator is suppressed: an accounting date is historical by nature, not a due date, so the overdue signal does not apply here. |
 | `period` | C_Period_ID | editable | `seq: 20`. Accounting period. Grid column + searchable (ETP-4917). |
 | `description` | Description | editable | `seq: 30` — placed after the dates. Required. Grid column + searchable (pre-existing). |
-| `documentDate` | DateDoc | system | **Hidden.** Unified into Accounting Date — not on the form and not sent; the backend resolves `DateDoc` from its AD default (`to_date(@HeaderDateAcct@)`). |
+| `documentDate` | DateDoc | system | **Hidden.** Unified into Accounting Date. Before ETP-5611 it was only defaulted (`@#Date@`) on create and never updated, so re-dating a draft moved `DateAcct` alone; `GlJournalHeaderHandler` now copies `accountingDate` into it on every CRUD POST/PUT/PATCH, overwriting whatever the client sent. |
 
-**ETP-4531 note (redefined 2026-07-17 — unified accounting date):** `GL_Journal.DateDoc` and `GL_Journal.DateAcct` both carry `AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_Journal_Period`, whose `execute()` unconditionally copies `DateDoc → DateAcct` when `DateDoc` is the field that changed. Today this is **dormant, not absent**: it never fires because `documentDate` stays hidden (`visibility: system`), so no interactive edit can trigger it, and the create-time cascade is a no-op since both dates already default to `@#Date@`. This window's "single date" design (`documentDate` hidden, `accountingDate` the one visible field) already matches the redefined ETP-4531 goal — a single visible date, with both DB columns kept in sync — so no guard is needed here. If `documentDate` were ever exposed as an editable field alongside `accountingDate`, the two should be explicitly **mirrored** (matching the `AbstractInvoiceHeaderHandler#mirrorAccountingDate` pattern used for the invoice windows), not guarded apart — unification, not independence, is the current intent.
-| `currency` | C_Currency_ID | editable | Journal currency. Grid column + searchable (ETP-4917). |
-| `opening` | IsOpening | editable | Marks an opening-balance journal. |
-| `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. |
+**ETP-4531 note (redefined 2026-07-17 — unified accounting date; the "no guard needed" conclusion below was wrong and is superseded by the ETP-5611 handler mirror):** `GL_Journal.DateDoc` and `GL_Journal.DateAcct` both carry `AD_Column.AD_Callout_ID = org.openbravo.erpCommon.ad_callouts.SL_Journal_Period`, whose `execute()` unconditionally copies `DateDoc → DateAcct` when `DateDoc` is the field that changed. Today this is **dormant, not absent**: it never fires because `documentDate` stays hidden (`visibility: system`), so no interactive edit can trigger it, and the create-time cascade is a no-op since both dates already default to `@#Date@`. This window's "single date" design (`documentDate` hidden, `accountingDate` the one visible field) already matches the redefined ETP-4531 goal — a single visible date, with both DB columns kept in sync — so no guard is needed here. If `documentDate` were ever exposed as an editable field alongside `accountingDate`, the two should be explicitly **mirrored** (matching the `AbstractInvoiceHeaderHandler#mirrorAccountingDate` pattern used for the invoice windows), not guarded apart — unification, not independence, is the current intent.
+| `currency` | C_Currency_ID | readOnly | **ETP-5611:** always the accounting schema currency, not editable. `section: "principal"` pinned so it stays on the main form. The value comes from `GlJournalHeaderHandler` (DEFAULTS + POST, `Multi_Gl = 'N'`), not from the `@C_Currency_ID@` default, which resolves to the org currency first. Multi-currency manual journals are therefore not possible from Etendo GO. Grid column + searchable (ETP-4917). |
+| `opening` | IsOpening | editable | Marks an opening-balance journal. `section: "other"` pinned (ETP-5611). |
+| `multigeneralLedger` | Multi_Gl | editable | Multi-ledger flag. `section: "other"` pinned (ETP-5611). |
 | `documentNo` | DocumentNo | system | Auto-sequenced by NEO on POST; not shown on the form. |
 | `documentType` | C_DocType_ID | system | Hidden but still defaulted under the hood (`DocBaseType='GLJ'`) — needed for posting/sequencing later. **Not discarded.** |
 | `posted` | Posted | readOnly | Accounting-status pill (`statusPills`): **Sin contabilizar** / **Contabilizado**. `form: false` (not on the form), but shown as a badge, plus a grid column + searchable (grid/searchable added ETP-4917). Not a document lifecycle status — see `documentStatus` below for the second, independent chip. |
@@ -51,16 +52,16 @@ The header form shows **6 always-visible editable fields**, in this order: Accou
 
 ## Line entry
 
-**Lines grid columns (exactly four):** `lineNo` (LineNo, read-only), `accountingCombination` (Account), `foreignCurrencyDebit` (Debit), `foreignCurrencyCredit` (Credit). No dimension columns appear in the grid. `description` was a fifth grid column through ETP-5210's first pass but is now fully discarded — see "Line description column removed" below.
+**Lines grid columns (exactly three):** `accountingCombination` (Account), `foreignCurrencyDebit` (Debit), `foreignCurrencyCredit` (Credit). No dimension columns appear in the grid. `lineNo` was dropped from the grid in ETP-5611; `description` was dropped in ETP-5210 — see "Line description column removed" below.
 
 The add-row form exposes the **Open Items** checkbox, which gates the `asset` field. `businessPartner`, `product`, `project`, and `costCenter` are reached instead through the grid's "Añadir dimensiones" hover action (an expand-row panel, not the add-row form) and are gated by the client's accounting-dimension configuration — see "Accounting dimension visibility per section — ETP-4529" below for the full per-field breakdown, including `businessPartner`'s additional Open-Items OR condition.
 
 | Field (curated) | Column | Grid? | Visibility | Notes |
 |---|---|---|---|---|
-| `lineNo` | Line | grid | readOnly | Auto-sequenced line number, displayed read-only (label **LineNo**). |
-| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup, `columnWidth: 280`). |
+| `lineNo` | Line | — | system | **ETP-5611:** no longer a grid column. Still assigned server-side by the AD default (`MAX(Line)+10`) and used as the list order (see "ETP-5611" below). |
+| `accountingCombination` | C_ValidCombination_ID | grid | editable | Accounting-combination selector (label **Account**, lookup, `columnWidth: 220` — narrowed from 280 in ETP-5611). Now the first grid column. |
 | `foreignCurrencyDebit` | AmtSourceDr | grid | editable, amount, required | **Debit** — feeds the balance footer Σ debit. |
-| `foreignCurrencyCredit` | AmtSourceCr | grid | editable, amount, required | **Credit** — feeds the balance footer Σ credit. |
+| `foreignCurrencyCredit` | AmtSourceCr | grid | editable, amount, required | **Credit** — feeds the balance footer Σ credit. `noTrailing: true` (ETP-5611) so the hover actions take their own slot instead of covering it. |
 | `openItems` | Open_Items | form-only | editable | **Open Items** checkbox in the add-row form; toggling it reveals the `asset` field below. `businessPartner`/`product`/`project`/`costCenter` are reached via the grid's hover action instead — see below. |
 | `businessPartner` | C_Bpartner_ID | expand-row | editable | Per-line accounting dimension. No `displayLogic` override — raw AD `@Open_Items@='Y' \| @ACCT_DIMENSION_DISPLAY@` passes through (visible on an Open-Items line **or** when config-enabled; ETP-4529). Reached via the grid's "Añadir/Editar dimensiones" hover action → expand-row panel (`dimensionsPanel: true`), not the add-row form. |
 | `product`, `project`, `costCenter` | M_Product_ID, C_Project_ID, C_Costcenter_ID | expand-row | editable | Per-line accounting dimensions. No `displayLogic` override — raw AD `@ACCT_DIMENSION_DISPLAY@` passes through (config-gated only; ETP-4529). Same expand-row hover-action rendering surface as `businessPartner`. |
@@ -95,7 +96,8 @@ This ticket shipped in two steps as its scope was revised mid-flight:
    `ismandatory = false`, and its only behavior — the `fromConfig`/`@DESCRIPTION1@` pre-fill from
    the header description — has no other consumer, so dropping it has no side effects.
 
-With `description` gone, `accountingCombination`'s `columnWidth: 280` (kept, untouched by this
+(ETP-5611 later narrowed `columnWidth` to 220 and removed `lineNo`; Account is still the only
+growing column.) With `description` gone, `accountingCombination`'s `columnWidth: 280` (kept, untouched by this
 second step) is now the *only* column with a `minWidth` set on this grid — per
 `linesColumnWidth.js`'s `columnFlex()`, a column with `minWidth` always gets `flex: 1 1 <minWidth>px`
 (grow enabled) regardless of any explicit `grow` flag. None of the other three lines columns
@@ -128,15 +130,16 @@ This window declares `window.balanceFooter = { "debitField": "foreignCurrencyDeb
 
 ## Manual verification
 
-1. Open `/simple-g-l-journal` and create a new header. Confirm the form shows the six base fields, in order — Accounting Date (labeled **Fecha**/**Date**), Period, Description, Currency, Opening, Multi-Ledger — that no Document Date appears, and that no Document No, Document Type, or the four non-reversed dimension fields (Asset, Campaign, User1, User2) appear. Save the header and confirm it persists (no "Completá todos los campos requeridos" toast).
+1. Open `/simple-g-l-journal` and create a new header. Confirm the form shows the six base fields, in order — Accounting Date (labeled **Fecha**/**Date**), Period, Description, Currency (read-only, the schema currency), Opening, Multi-Ledger — that no Document Date appears, and that no Document No, Document Type, or the four non-reversed dimension fields (Asset, Campaign, User1, User2) appear. Save the header and confirm it persists (no "Completá todos los campos requeridos" toast).
 2. (Config-dependent, ETP-4529) With the client's accounting-dimension display config enabled, confirm Business Partner, Product, Project, and Cost Center also render on the main form; with it disabled, confirm they do not.
-3. Open the saved record and add a line: pick an account and enter a debit of 100 (leave credit empty), then submit the row. Confirm the line saves (no false "required fields" toast — Open Items unchecked and the empty credit must not block it). Confirm the lines grid shows exactly four columns — LineNo, Account, Debit, Credit — with **no Description column** (ETP-5210, revised scope), and that **Account** visibly fills the space Description used to occupy (it is the sole growing column via its `columnWidth: 280`). Confirm the totals row directly below the line (`data-testid="balance-footer-row"`) shows 100.00 under the **Débito** column (`"balance-footer-debit"`), a blank cell under **Crédito**, and that both cells are pixel-aligned under their grid columns — and that the Save button is disabled.
+3. Open the saved record and add a line: pick an account and enter a debit of 100 (leave credit empty), then submit the row. Confirm the line saves (no false "required fields" toast — Open Items unchecked and the empty credit must not block it). Confirm the lines grid shows exactly three columns — Account, Debit, Credit — with **no LineNo** (ETP-5611) and **no Description column** (ETP-5210), and that **Account** is the sole growing column (`columnWidth: 220`). Confirm the totals row directly below the line (`data-testid="balance-footer-row"`) shows 100.00 under the **Débito** column (`"balance-footer-debit"`), a blank cell under **Crédito**, and that both cells are pixel-aligned under their grid columns — and that the Save button is disabled.
 4. Add a second line with a credit of 100 (debit 0). Confirm the totals row now shows 100.00 under both **Débito** and **Crédito**, still column-aligned, and that Save becomes enabled.
 5. Save successfully, then edit a line to make the totals differ (e.g. credit 60). Confirm the totals row updates to the new, unequal sums and Save is blocked again, with the tooltip "El debe y el haber deben ser iguales antes de guardar" / "Debit and credit must be equal before saving".
 6. Rebalance the entry and save. Open the Complete action: confirm it is blocked while the total is zero and available once it is greater than zero. Confirm both status chips update independently — the document lifecycle chip (Borrador → Completado on Complete) and the accounting `posted` pill (Sin contabilizar → Contabilizado via the Post menu action, and back via Unpost).
 7. On a saved line, use the row's "Añadir dimensiones"/"Editar dimensiones" hover action and confirm it opens an expand-row panel (not a side panel) showing Business Partner, Product, Project, and Cost Center per their config-gating. Separately, on the add-row form, tick **Open Items** and confirm the **Asset** field appears; untick it and confirm it hides again.
 8. Confirm the window appears in the Finance menu as **Manual Journals** (es: **Asientos Manuales**).
-9. Confirm the list/grid view is filterable by Fecha, Periodo, Descripción, Moneda, and both status chips (`posted`, `documentStatus`), and that the Fecha column shows no red "overdue" dot even for past dates (`dot: false`, ETP-5210).
+9. ETP-5611 checks — see the "ETP-5611" section below for the full list (empty state, reactivate, Post gating, no Print, line order, zero-clearing, hover actions).
+10. Confirm the list/grid view is filterable by Fecha, Periodo, Descripción, Moneda, and both status chips (`posted`, `documentStatus`), and that the Fecha column shows no red "overdue" dot even for past dates (`dot: false`, ETP-5210).
 
 ## Accounting dimension visibility per section — ETP-4529
 
@@ -297,3 +300,42 @@ and `com.etendoerp.go`'s `DocumentPostingService`:
   bullet, as authoritative. The genuinely-still-open gaps from that section — multi-currency
   document rates, the `Fact_Acct` posting-result view, and line-level payment integration — remain
   accurate and unaffected by this correction.
+
+## Manual journal fixes — ETP-5611
+
+Ten fixes reported on Etendo GO PRO. Window config lives in `decisions.json`; the behaviour that
+config cannot express lives in `GlJournalHeaderHandler` (com.etendoerp.go), one shared NEO change
+and one shared input change.
+
+| # | Problem | Fix |
+|---|---|---|
+| 1 | Journals could not be reactivated | `menuActions.reactivate` (`documentAction: "RE"`, `visibleWhenStatus: "CO"`, `visibleWhenFieldFalse: "posted"`). Backend: `GlJournalHeaderHandler` handles `RE` like `CO` — see below. |
+| 2 | Editing Fecha only updated `DateAcct` | Handler mirrors `accountingDate → documentDate` on every CRUD write. Data-fix **R47** (`cli/src/data-fixes/sql/20261005T160407Z__R47-gl-journal-draft-datedoc-sync.sql`) aligns existing **drafts** (`DateDoc := DateAcct`); completed/posted journals are never touched. |
+| 3 | "N° de Línea" column | `lines.lineNo` → `system`; Account narrowed to 220 px. |
+| 4 | Lines reordered after entering one | Not account order: NEO returned child lists in `id` (random UUID) order. NEO now applies the AD tab's `HQL_OrderBy_Clause` (`lineNo` here) when a child-tab list has no explicit sort — generic, see `neo-headless.md`. |
+| 5 | No empty state | `customComponents.bottomSection: "SimpleGLJournalBottomPanel"` registers the shared `LinesEmptyState`. "+ Añadir líneas" appears only once the header is saved (keyed on `data.id`); before that, only the message. |
+| 6 | Currency editable | `header.currency` → `readOnly`; handler forces the schema currency on DEFAULTS and POST. |
+| 7 | Print button | `window.hidePrint: true` (detail and list). |
+| 8 | Post offered in any status | `menuActions.post` gains `visibleWhenStatus: "CO"` (AND `posted = false`). |
+| 9 | 0,00 not cleared on focus | `MaskedAmountInput` `clearZeroOnFocus`, enabled for every line grid (`DataTable` add-row + `InlineLinesPanel` inline edit). Leaving the cell blank without typing keeps the 0 and commits nothing. |
+| 10 | Hover actions covered Crédito | `lines.foreignCurrencyCredit.noTrailing: true`. |
+
+**Reactivate / Complete dispatch.** `FIN_AddPaymentFromJournal` reads the action from the HTTP
+parameter `inpdocaction` (falling back to CO), never from the body, so without help a `RE` request
+silently completed the journal again. The handler sets `inpdocaction` on the request wrapper
+(`RequestContext.setRequestParameter`) for **both** CO and RE: the parameter lives for the whole
+HTTP request, so inside one `/batch` an earlier RE would otherwise turn a later CO into a
+reactivate. With no HTTP request bound the handler answers 500 instead of running the process.
+`gl_journal_post` rejects RE on a posted journal (`@GLJournalDocumentPosted@` — unpost first).
+When Open Items lines have related payments, RE succeeds with Classic's warning and the payments
+are not deleted (Classic behaviour, kept on purpose).
+
+**MCP contract.** `window.actions.documentAction` overrides the generic `documentStatus in [DR, IP]`
+precondition in `contract.mcp.json` with per-action ones (CO needs DR; RE needs CO and
+`posted = N`, using a descriptive `appliesTo` key). Nothing enforces it server-side; it documents
+the contract for agents. See `docs/decisions-reference.md`.
+
+**Layout notes.** Making `currency` read-only made the generator re-balance header sections, so
+`section` is pinned on `currency` (principal), `opening` and `multigeneralLedger` (other), and
+`summaryFields: []` keeps the read-only currency out of the summary strip.
+
