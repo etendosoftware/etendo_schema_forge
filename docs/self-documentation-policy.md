@@ -43,6 +43,7 @@ When a trigger fires, check and update **all** of the following that reference t
 | `docs/conventions.md` | If CLI behavior or edge cases changed |
 | `docs/plans/process-and-report-pipeline.md` | If process pipeline changed |
 | `docs/index.md` | If new docs were added |
+| `docs/testing/test-reuse-policy.md` | If test-authoring rules, the `@covers` format, `make find-tests` or the `test-hygiene` CI checks changed |
 | `docs/pipeline-validator-reference.md` | Adding a new validator rule (F11+): update the rules table in the same PR |
 
 ## Rules for volatile data

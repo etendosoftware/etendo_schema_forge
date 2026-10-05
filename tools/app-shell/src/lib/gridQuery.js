@@ -603,9 +603,13 @@ function buildRowCriteria(col, row) {
 
   }
 
-  // Multi-value via a checkbox picker: OR-compose the same operator across items.
+  // Multi-value via a checkbox picker: compose the same operator across items.
+  // Positive ops OR-compose ("Es A o B"); negative ops AND-compose ("No es A
+  // ni B") — OR-ing `notEqual A`, `notEqual B` is always true and excluded
+  // nothing (ETP-5009). Mirrors core app-shell-core/src/lib/gridQuery.js;
+  // keep both copies behaviourally identical.
   if (Array.isArray(val)) {
-    return buildOrCriteria(val, fieldName, op);
+    return buildMultiValueCriteria(val, fieldName, op);
   }
 
   if (val === null || val === undefined || val === '') return null;
@@ -655,7 +659,25 @@ function generateInSetCriteria(val, fieldName) {
   return buildOrCriteria(items, fieldName, 'iEquals');
 }
 
+// Operators whose multi-value form means "none of the values", so the
+// per-value clauses must be AND-composed instead of OR-composed.
+const NEGATIVE_MULTI_VALUE_OPS = new Set([
+  'notEqual', 'iNotEqual', 'notContains', 'iNotContains', 'notStartsWith', 'iNotStartsWith',
+]);
+
+function buildMultiValueCriteria(val, fieldName, op) {
+  const junction = NEGATIVE_MULTI_VALUE_OPS.has(op) ? 'and' : 'or';
+  return buildJunctionCriteria(val, fieldName, op, junction);
+}
+
 function buildOrCriteria(val, fieldName, op) {
+  return buildJunctionCriteria(val, fieldName, op, 'or');
+}
+
+// The multi-clause form is always wrapped in its own AdvancedCriteria — even
+// for 'and' — because buildAdvancedFilterCriteria spreads row items into an
+// outer OR when rowOperator === 'or'; flat AND clauses would be OR-ed there.
+function buildJunctionCriteria(val, fieldName, op, junction) {
   let result;
   const items = filterAndMapToString(val);
   if (items.length === 0) {
@@ -665,7 +687,7 @@ function buildOrCriteria(val, fieldName, op) {
     result = [{ fieldName, operator: op, value: items[0] }];
   } else {
     const clauses = items.map((v) => ({ fieldName, operator: op, value: v }));
-    result = [{ _constructor: 'AdvancedCriteria', operator: 'or', criteria: clauses }];
+    result = [{ _constructor: 'AdvancedCriteria', operator: junction, criteria: clauses }];
   }
   return result;
 }

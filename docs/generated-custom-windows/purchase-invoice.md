@@ -35,6 +35,8 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
   **ETP-5229 (item #1):** the modal now forwards the invoice/order's own organization as the `sifContextOrgId` query param on save, so the tax-level SIF override is written under the SAME legal entity the badge-read path resolves it from — fixing a bug where the save succeeded but the warning badge stayed stuck when the user's session org differed from the document's own org. Shared fix across all four windows (`useTaxSifLineRowActions.jsx` / `TaxSifModal.jsx` / `helpers.js`'s `patchById`) — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Line-tax SIF quick-fix modal now saves under the invoice's own org, not the session org (ETP-5229, item #1)". **ETP-5229 (item #1, follow-up correction):** a SECOND, independent root cause was found for the same never-clearing badge on compound taxes — the tax selector permanently excludes a compound tax's rate-component children (`AD_Ref_Table` reference 158's `Parent_Tax_ID IS NULL` filter), so the completeness check always fell back to the summary tax's own (always-blank) columns. Fixed via an additive `includeTaxChildren` selector param — full writeup in `docs/generated-custom-windows/sales-invoice.md` §"Compound-tax children invisible to the tax selector — second, independent root cause (ETP-5229)".
 - **SIF error banner removed from the header (ETP-5057):** the invoice header no longer renders a red `SifErrorBanner` card for SII submission errors — the `headerExtra.customForm: "SifErrorBanner"` wiring was removed from `decisions.json` and the (now-orphaned) `SifErrorBanner.jsx` component (both the shared implementation and the per-window re-export) was deleted. SII incident detail — rejection reasons, error codes, structured AEAT responses — now lives exclusively in the Fiscal Monitor (`/fiscal-monitor`; see `docs/generated-custom-windows/fiscal-monitor.md`, section "SII section (`SiiMonitorSection`)"). VeriFactu does not apply to purchase invoices (see "Verifactu does not apply to purchase invoices" below), so this window's banner only ever showed the SII half. The invoice itself still shows its existing minimal sending-status indicator unchanged by this removal: the SII `FiscalStatusBadge` status pill column in `PurchaseInvoiceHeaderTable` (list) and the status badge in the SIF tab panel (detail) — no new indicator was added.
 
+- **Header progress badge (ETP-5549):** `PurchaseInvoiceReceiptBadge` shows the read-only `eTGODeliveryStatus` percentage as "Recibido N%" (`poAllReceived`). Shared `ProgressFieldBadge` (`tools/app-shell/src/windows/custom/shared/`) rendered in the detail topbar via `decisions.json → window.customComponents.topbarExtra`, shown only when the document is completed (CO), including 0% (neutral tone); the badge shows a 16px `ProgressRing` left of the text (track only at 0%, partial arc at 1-99%, green at 100%) and the tone is neutral for 0-99% and success at 100%; hidden in any other status or when the field is missing.
+
 ## Reactive behavior and dependencies
 
 - Header defaults are visible in the contract for invoice date and accounting date (`@#Date@`), document status (`DR`), currency, and zeroed payable amounts such as total paid and outstanding amount. Currency is editable on the header via the `CurrencyRatePicker` component (see "Currency and exchange rate — ETP-4029" below), not a read-only defaulted value.
@@ -52,12 +54,13 @@ Global semantic search opts this window in through `go.purchase-invoice`. It ind
 - Line pricing follows `INVOICE_LINE_CONFIG` (see `docs/line-pricing-model.md`). The editable fields are `listPrice` (PriceList column) and `etgoDiscount` (`EM_Etgo_Discount`, a Number column added by `com.etendoerp.go`). `unitPrice` (PriceActual) is hidden; it is computed at POST/PATCH as `listPrice × (1 − etgoDiscount/100)`. The product selector provides the correct price-list price via `NeoSelectorService.enrichProductSelectorWithPrices`, which populates both the display-side fields and `_aux._PSTD/_PLIST` so `SL_Invoice_Product` returns the price-list price. Guard 1 in `DetailView.jsx` maps `standardPrice → listPrice` universally when `listPrice` is null or zero. Changing the product resets `etgoDiscount` to 0. `grossAmount` is computed client-side as `invoicedQuantity × listPrice × (1 − etgoDiscount/100) × taxFactor`. The `decisions.json` declares `lineEntityConfig: "invoice"`, which drives all of these behaviors via the generator and `DetailView.jsx`.
 - The preview modal and the detail topbar both treat the invoice as a payable document. They read payment-plan and payment/payment-history data to show paid versus outstanding state, and they expose payment actions only when the invoice is completed and still has an outstanding balance.
 - The detail topbar shows a payment-status pill only for completed invoices. The pill label and amount react to whether the invoice is fully paid or still pending, and clicking it opens the shared invoice payment modal.
-- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (Facturas Rectificativas de Compra with a negative total only, ETP-4738 — no supplier credit accrual in it1; see "Saldo a favor restricted to Facturas Rectificativas — ETP-4738" below) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option; the former *Dar vuelto* / refund option was removed for both directions in ETP-4504). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field. The history popup's body (loading skeleton / empty state / populated list) carries a fixed `BODY_MIN_HEIGHT` (200px) floor so the panel no longer visibly resizes when it switches between those three states (ETP-5253).
+- Two-step Pagos flow (ETP-4331/ETP-4342): the payment pill opens the history popup **"Pagos de la factura"** (`InvoicePaymentHistoryModal.jsx`, the unified component shared between sales and purchase invoice, `dir='out'`) — title + document-number badge header, a stats row (Proveedor · Importe total · Saldo pendiente), a table of registered payments (or an empty state), and a footer with the registered-count label and a **"+ Añadir pago"** pill button shown only while the invoice is `CO` with outstanding > 0. `InvoicePaymentModal.jsx` was removed — `InvoicePaymentHistoryModal.jsx` is now the single canonical component for both directions. It opens the **"Nuevo pago"** modal (`NewPaymentEntryModal.jsx`, step 2): *Importe*, *Fecha*, *Método de pago*, and *Cuenta* — all four marked required (red `*`) and gating **Guardar**/**Confirmar** until filled, where "Importe" is satisfied by the total applied (cash + used credit/abono), not the cash field alone, so a credit line covering 100% of the invoice (leaving cash at 0) still allows confirming — plus the conditional credit/abono section (Facturas Rectificativas de Compra with a negative total only, ETP-4738 — no supplier credit accrual in it1; see "Saldo a favor restricted to Facturas Rectificativas — ETP-4738" below) and the real-time balance summary with *Igualar*. Unlike collections, an **excess blocks Confirmar** with an inline "Exceso: …" error (payments never generate credit, so there is no leave-credit option, and *Dar vuelto* / refund is offered for collections only). ETP-4504 also adds two conditional conversion fields (**Tasa de conversión** + **Importe en moneda de la cuenta**) shown only when the invoice currency differs from the selected account currency — see "Multi-currency support in the Cobros/Pagos modal — ETP-4504" below. **Guardar** → Borrador (draft), **Confirmar** → Depositado. On save/confirm the modal returns to the history popup, which refreshes both its own "Saldo pendiente" (refetches the payment plan, not just the payment list) and the invoking list's "Pendiente de pago" badge (`onDataMutated` callback into the list's data hook). Backend uses the same shared actions as sales (`invoicePaymentMethods`, `invoiceCreditSources`, extended `registerPayment` with `process`/`creditSources`, `confirmPayment`) via `RegisterPaymentOutHandler` → `PaymentRegistrationService` (isReceipt=false). The *Fecha* field is required (ETP-4005): clearing it disables **Confirmar**, and saving with an empty date surfaces the `paymentDateRequired` error and a red border on the field. The history popup's body (loading skeleton / empty state / populated list) carries a fixed `BODY_MIN_HEIGHT` (200px) floor so the panel no longer visibly resizes when it switches between those three states (ETP-5253).
 - Drafts reserve what they are going to pay (ETP-4895): a draft payment does not lower the invoice's outstanding, so both the history popup's **"+ Añadir pago"** button and the preview modal's **Registrar pago** action offer only what the drafts left free — `outstanding − Σ|amount|` over the non-processed payments. When the drafts already reserve the whole outstanding the button stays visible but **disabled**, with the `cpAddPaymentBlockedByDraft` tooltip ("Ya hay un borrador que cubre el total pendiente…"); it re-enables as soon as the draft is deleted or confirmed. When a draft covers only part of the invoice (e.g. 10 on a 26,62 invoice) a new payment is still allowed and **"Nuevo pago"** opens defaulted to the remainder, not to the full outstanding. Editing an existing draft excludes that draft from the reservation, so it can still be raised up to the full outstanding. Implemented in `InvoicePaymentHistoryModal.jsx` (`freeToAllocate`) and `useInvoicePreview.js` (`freeToAllocate` / `addPaymentBlockedByDraft`, consumed by `InvoicePreview.jsx` and `preview-cards/PaymentsCard.jsx`).
 - Rectificative invoices (RECTIFICATIVA subtype — see "Factura Rectificativa — ETP-4737" below — with a negative total, ETP-4738; the retired "AP CreditMemo" / "AP Credit Memo" types are deactivated, covered under ETP-4737): the detail topbar badge mirrors the grid's "Pendiente de pago" cell — green **"Aplicada"** once the rectificativa is fully consumed, else a purple clickable **"Saldo a favor · remaining"** badge that opens the same history popup as the grid (previously a static non-clickable "Crédito aplicado · total" pill). Inside the popup, the pending widget relabels to **"Saldo a favor"** with the remaining balance, each row shows how much of the rectificativa that payment consumed (`− appliedToInvoice` from the `invoicePayments` action, negative when consuming it), and the **"+ Añadir pago"** button is hidden.
 - Payment method / account defaults (ETP-4331) — mirrors Etendo Classic's `AddPaymentDefaultValuesHandler` priority instead of an arbitrary first-in-list pick: **Método de pago** defaults to the invoice's own configured method (falling back to the business partner's method if the invoice has none); **Cuenta** is filtered to only the accounts that support the selected method (and match the invoice currency), defaulting in priority order to (1) the business partner's preferred account for this direction (`pOFinancialAccount` for payments) when it supports the method, (2) the account flagged `default` on `FIN_Financial_Account_PaymentMethod` for that method, (3) the first account that supports the method. Changing **Método de pago** re-filters and, if needed, re-selects **Cuenta** using the same priority; clearing **Método de pago** never silently refills **Cuenta** (a prior bug where clearing the method after clearing the account caused the account to reappear on its own is fixed). Backend surfaces this via `paymentMethodIds`/`defaultForMethodIds` per account and `defaultMethodId`/`bpPreferredAccountId` on the `invoiceAccounts` response (`PaymentRegistrationService.java`).
 - Topbar clone button: icon-only (no text label), styled as Secondary Outline (`#D1D4DB` border, `#FFFFFF` background, `#64748B` icon color, `0px 1px 2px 0px #1212170D` shadow). Hover shifts background to `#F1F5F9`. Implemented via the shared `DocumentSecondaryActions.jsx`'s `CloneButton` (see below), the same one `SalesInvoiceSecondaryActions.jsx` uses.
 - **Button order (ETP-5260):** Copy link → Clone render to the LEFT of Save/Confirm via `PurchaseInvoiceSecondaryActions.jsx` (wired as the `topbarRight`-slot replacement from `index.jsx`, a thin adapter around the shared `DocumentSecondaryActions`, since this window is on the prop-hardcoded "Camino B" path — see the ETP-5260 plan doc); `PurchaseInvoiceTopbar.jsx` keeps only the payment-status pill (a primary/status indicator), to the RIGHT of Save/Confirm. Clone reuses the `cloneInvoiceError`/`invoiceProcessing` i18n keys the inline call used before ETP-5260. No generic `showSend` — instead, `SendToSifButton` (send invoice to SII/TBAI) renders as a `children` extension of `DocumentSecondaryActions`, after Clone, matching the DF's "Enviar" position in the secondary group while staying a window-specific fiscal concern (its own `status === 'CO'` + pending SII/TBAI-target gating, unrelated to `DocumentSecondaryActions.showSend`). See `docs/ui-customization.md` §3b for the general slot-classification rule.
+- **Clone result verification (ETP-5547):** clone results are verified per row by the shared `CloneOrderModal` — a clone that cannot be found is shown as a failed row instead of a link. See `docs/ui-customization.md` §3b, "Clone result verification".
 - When the fiscal profile enables a manual fiscal target for purchase invoices, completed purchase invoices expose `Enviar a SIF` in both the detail topbar and the preview modal. The matrix is spec-specific: `sii` and `sii-navarra` show SII; `tbai` shows TicketBAI **only when the active TBAI config's territory is Bizkaia** (see "TBAI territory gating for purchase invoices (Batuz) — ETP-5087" below), and shows nothing for purchases on any other territory; `sii+tbai` shows SII always, plus TicketBAI too when the territory is Bizkaia; `verifactu` shows no manual send button because Verifactu is sent automatically on completion.
 - The detail bottom panel also includes the same SIF status block used by sales invoices, rendered below Related Documents and Notes. It shows SII/TBAI tabs depending on the org fiscal profile (and, for TBAI, the territory — see below), exposes the current send status badges, and allows inline editing of the SII metadata fields that remain editable for the current document state.
 - **Verifactu does not apply to purchase invoices.** The SIF bottom-panel block for purchases shows only SII and TBAI tabs according to the fiscal matrix; the `verifactu` profile shows no bottom-panel block for purchases because Verifactu is a sales-only fiscal system in Etendo.
@@ -453,6 +456,10 @@ Purchase invoices carry the same currency/exchange-rate editing model already sh
 - `PurchaseInvoiceHeaderHandler` now implements `afterCallout()` (previously absent), calling `blockCalloutCurrencyUpdate` (strips any callout-pushed `currency` value so currency only ever changes by direct user selection) and `checkExchangeRateWarning` (appends a `WARNING` message when the user changes currency to one with no `C_Conversion_Rate` on the invoice date) — both implemented once on the shared `AbstractInvoiceHeaderHandler` base and called explicitly from the subclass, mirroring the order-side handlers from ETP-4027.
   - **ETP-4838:** `checkExchangeRateWarning` resolves rate availability through `NeoExchangeRateService.hasRate(...)`, the same lookup behind `GET /sws/neo/validate-exchange-rate` — client-or-system scoped, with the inverse-direction fallback. It previously ran a private query filtered by the current client alone, which stopped seeing the System-level rates once ETP-4474 centralised them there and warned in false on every manual currency change. Full write-up: `sales-order.md` § "`NeoExchangeRateService.hasRate` — the single source of truth".
 - `PurchaseInvoiceHeaderHandler.afterHandle()` calls `AbstractInvoiceHeaderHandler.autoCreateOrUpdateConversionRateDocument(context)` unconditionally as its first line, on every successful header POST/PATCH/PUT — before its existing method-gated logic (e.g. `persistOriginInvoice`, which is POST/PUT-only). It upserts the `C_Conversion_Rate_Document` row for the invoice whenever the invoice currency differs from the org currency and an `eTGOCurrencyRate` override is set, recomputing `foreign_amount = grandTotalAmount × (1 / eTGOCurrencyRate)` each time. This keeps the exchange-rate record in sync as the invoice's total changes while lines are added or edited. `InvoiceLineHandler.afterHandle()` calls the same upsert (via its `String`-based overload, resolving the parent invoice ID from the line save) on every line POST/PATCH/PUT, so the rate document also stays current as lines are added one at a time rather than only on header save.
+  - **ETP-5547 — the sync is no longer unconditional.** Three guards, because the upsert used to break other requests:
+    - **Which requests** (`AbstractInvoiceHeaderHandler.shouldSyncConversionRateDocument`): every CRUD POST/PATCH/PUT. On the ACTION endpoint, only the "Complete" document action (it recalculates the total-discount line right before completing) and actions run on a still-draft invoice (`createLinesFrom*`, `copyFrom`, `calculatePromotions`, `explode`… change the grand total). Custom actions on a processed invoice never re-sync: `registerPayment`/`registerPaymentOut`, `cloneRecord`, `aeatsiiSend`, `tbaiXmlgenerator`, `createShipment`, `post`/`unpost` and `currencyOptions` leave both the rate and the total untouched.
+    - **Posted invoices are skipped.** Core's `c_conversion_rate_document_trg` rejects any write to the rate row of an invoice with `Posted = 'Y'` (`@20501@`), because the rate a document was booked with is immutable. The upsert used to run anyway, on the SOURCE invoice of a `registerPayment` or `cloneRecord` POST. The catch only logged a WARN, but PostgreSQL had already aborted the transaction. The request answered 2xx and then rolled back at commit, so a confirmed payment went back to draft and a clone returned the id of a record that was never saved.
+    - **Containment.** Every write in `ConversionRateDocumentSync` (upsert, delete, and the order→invoice insert) runs under a JDBC savepoint and rolls back to it on failure. A future rejection is contained instead of aborting the request. The UPDATE is also skipped when the row already holds the same currency, rate and foreign amount.
 
 ### Rate inheritance when an invoice is created from an order
 
@@ -1042,9 +1049,9 @@ in `PaymentCreditSourcesService`, in the `com.etendoerp.go` repo). No frontend c
 
 Payments **never generate credit** — any payment excess blocks **Confirmar** with the inline
 "Exceso: …" error and must be resolved with **Ajustar importe** (*Igualar*). This is unchanged in
-substance from the two-step flow's original payment behavior; ETP-4504 only removed the (never
-offered for payments) **"Dar vuelto"** / refund path from the shared code. Leave-credit
-(**Generar crédito a favor**) is a collection-only resolution and is never shown here.
+substance from the two-step flow's original payment behavior. **Dejar a crédito** and **Dar
+vuelto** (refund) are collection-only resolutions (`canRefund = canLeaveCredit`, false for
+`dir='out'`) and are never shown here.
 
 ### F4 — Saldo a favor restricted to Facturas Rectificativas with a negative total — ETP-4738
 
@@ -1112,16 +1119,16 @@ non-2-decimal currencies (e.g. JPY, 0 decimals) the displayed amount can differ 
 actually posted — a display-only discrepancy; the backend books authoritatively from the
 submitted `conversionRate`.
 
-> **Product decision pending functional confirmation.** Removing the "Dar vuelto" / refund excess
-> option (ETP-4504) drops a previously available resolution and should be confirmed by the
-> functional team as intended, not a regression. See the same note in `sales-invoice.md`.
+> **Refund restored for collections.** ETP-4504 removed the "Dar vuelto" / refund excess option and
+> restored it in the same ticket (`ff9df4aaa`); it applies to collections in the organization
+> currency only (see `sales-invoice.md`). Payments never offered it, so nothing changes here.
 
 ### Evidence
 
 - `tools/app-shell/src/windows/custom/shared/NewPaymentEntryModal.jsx` — conversion fields,
   `isForeign` gating, foreign-rate guard, `conversionRate` on submit.
 - `tools/app-shell/src/windows/custom/shared/useConversionRate.js` — exchange-rate prefill hook.
-- `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating; refund removed.
+- `tools/app-shell/src/windows/custom/shared/usePaymentBalance.js` — excess gating (payments: no leave-credit, no refund).
 - i18n keys `cpConversionRate` / `cpAmountInAccount` / `cpConversionRateRequired` /
   `cpConversionRateInvalid` present in `en_US.json`, `es_ES.json`, and `es_AR.json`.
 
@@ -1575,9 +1582,14 @@ Three constraints worth knowing:
   `PaymentDraftEditService.reapplyLinkedInstallmentPSD`, a Core call with no write-off input, so
   offering the toggle there would promise something the backend cannot honour.
 - **Capped by the account's write-off limit.** `FIN_Financial_Account.Writeofflimit` disables the
-  toggle with an explanatory caption when the difference exceeds it; the backend re-checks. An unset
-  or zero limit means *no limit* — a deliberate divergence from Classic, documented in
+  toggle with an explanatory caption naming the limit when the difference exceeds it. An unset or
+  zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
+- **Enforced server-side too (ETP-5558).** `PaymentWriteoffLimitGuard` refuses an over-limit
+  `writeoffDifference:true` on `registerPayment` with a 400, so MCP and direct REST calls cannot
+  bypass the cap. The rule, its edge cases, the known PIS-replay gap and the fixed blocked caption
+  are identical for both invoice windows and documented once in `sales-invoice.md` → *Enforced
+  server-side too (ETP-5558)*.
 
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
@@ -1671,6 +1683,53 @@ on one of the two paths. What remains is the typing, which is what
   it is exercised indirectly through whatever OCR/create-contact E2E coverage exists.
 - `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
   `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
+
+## OCR reader — lookups without `_neoWhere` (production WAF)
+
+Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
+UoM and tax category — used to send its filter as an HQL `_neoWhere` fragment in the query
+string (`taxID = '…' and active = true`, `lower(name) like '%…%'`). The production edge WAF
+blocks that shape as SQL injection and answers **403**; locally there is no WAF, so it worked.
+In production the vendor was never auto-matched, the vendor picker listed nothing, and the
+address lookup failed silently, so the batch posted the header without `partnerAddress` and
+died on the `C_Invoice.C_BPartner_Location_ID` NOT NULL constraint.
+
+All of them now go through `src/components/copilot/ocr/ocrQuery.js`, which builds one of the
+two shapes the rest of the app already sends in production:
+
+| Lookup | Endpoint | Filter |
+|---|---|---|
+| Vendor (auto-match, fuzzy, picker) | `purchase-invoice/header/selectors/C_BPartner_ID` | `q=<name>` + `isSOTrx=N&isVendor=Y` |
+| Vendor address (`partnerAddress`) | `purchase-invoice/header/selectors/C_BPartner_Location_ID` | `C_BPartner_ID=<id>` + `isSOTrx=N&isVendor=Y` |
+| Product (unmatched-lines popup) | `purchase-invoice/intrastat/selectors/M_Product_ID` | `q=<text>` |
+| Tax (lines review) | `purchase-invoice/tax/selectors/C_Tax_ID` | `q=<text>` |
+| UoM / tax category (product create) | `product/product/selectors/…` | `q=<text>` |
+
+Two selectors are deliberately **not** the line's own:
+
+- The line's `M_Product_ID` is `ProductSimple`, built over `PricingProductPrice`: it hides every
+  product without a price (a product just created from the popup included) and repeats the rest
+  once per price list version. The intrastat tab's `M_Product_ID` is the plain product search
+  (reference `800060`, no validation rule).
+- The line's `C_Tax_ID` carries `C_Tax_IsSOTrx_Date`, which reads `@DateInvoiced@`. NEO
+  substitutes an unresolved variable with `NULL` (`SelectorValidationResolver`), so the search
+  would list nothing. The invoice tax tab's `C_Tax_ID` is a TableDir with no rule.
+
+`buildSearchUrl` still accepts a CRUD list URL and sends `criteria=` (the grid's filter
+parameter) for an `entitySpec` field, but no OCR field uses one today.
+
+The vendor is matched **by name only** — the tax id lookup was dropped. The selector's `q` is a
+contains-search, so `findBp` keeps only rows whose label equals the extracted name
+(case-insensitive) and resolves when exactly one does; otherwise the fuzzy fallback accepts a
+single contains-match, and anything else is left to the picker. A vendor whose name on the
+invoice differs from the stored one therefore needs one click in the picker.
+
+**Rule:** no OCR lookup may put an HQL predicate in a URL. Use `buildSearchUrl` from
+`ocrQuery.js`.
+
+Tests: `src/components/copilot/ocr/__tests__/ocrQuery.vitest.js`,
+`ingest/__tests__/purchaseInvoiceDescriptor.vitest.jsx` (`findBp`, `checkBpHasLocation`),
+`kinds/__tests__/entityLookup.vitest.jsx`.
 
 ## OCR side panel — attach from the panel, removed placeholders — ETP-4855 Error 3
 
@@ -2023,6 +2082,87 @@ does not trigger any of this):
   (upload, delete, description, mark-main) answers 403 "Access denied to spec for current
   role" — see `com.etendoerp.go` `NeoAttachmentAuthorizer` / `DefaultDocumentSendEmailContract`.
 - Preview (drop-zone mode) and the OCR side panel (`ReadOnlyOcrSidePanel`) keep showing the supplier's document but offer no upload, drop or delete. Preview also hides **Añadir pago**.
+
+## Payment ids scoped to the invoice and the tenant — ETP-5558
+
+The invoice payment actions run in admin mode and used to resolve the ids they receive with a bare
+`OBDal.get`, which applies no client/organization filter. Now (backend only, `PaymentOwnership` /
+`TenantOwnership` in `com.etendoerp.go`):
+
+- `confirmPayment`, `deletePayment` and `registerPayment` with `paymentId` (edit a draft) act only on
+  a payment of **this** purchase invoice — one with a schedule detail against one of its installments — that the
+  caller's tenant can read. Anything else answers the same **404 "Payment not found"** as an unknown
+  id, and nothing is changed.
+- `invoiceCreditSources` honours `editPaymentId` only for a draft of this invoice; any other id is
+  ignored (the list comes back as for a new payment).
+- `creditSources[]`: accumulated credit (`paymentId`) and credit notes (`psdId`) must belong to the
+  invoice's own business partner and the caller's tenant, else the registration is refused.
+- The invoice in the URL, the installment (`scheduleId`, which must be one of this invoice's) and
+  the financial account are tenant-checked too; `invoicePayments` answers 404 for another tenant's
+  invoice.
+
+The SPA is unaffected: the history popup and the *Nuevo pago* modal only ever send the current
+invoice's id and payment/credit ids taken from that invoice's own listings.
+
+
+## MCP payment actions (agents) — ETP-5558
+
+An agent pays a purchase invoice through the same invoice-header actions the *Pagos de la factura*
+popup and the *Nuevo pago* modal call — never by writing a payment by hand. They are published to
+MCP as declared actions next to the AD buttons (`neo_schema(spec:'purchase-invoice',
+entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id and
+the same contracts as `sales-invoice` (see that guide's "MCP payment actions" section):
+`invoiceAccounts`, `invoicePaymentMethods`, `invoiceCreditSources`, `invoicePayments`,
+`currencyOptions` (`GET`), `registerPayment` (`process` `draft`\|`confirm`), `confirmPayment` and
+`deletePayment`.
+
+The agent-only behaviour is the same as for collections (MCP only; the SPA's REST calls are
+unchanged): optional `scheduleId` (422 with `installments` when several are pending), a 422 with
+`validMethods` for a method the account does not accept, the enriched
+answers (`paymentMethod`, `creditUsed`, `creditGenerated`, `creditAvailable`, `writeoffAmount`,
+`invoice{…}`; `deletePayment` → 200 `{deleted, invoice}`), and `enriched:false` / the 500 *"…it is
+safe to retry"* when the outcome could not be read. `conversionRate` (cross-currency) and the
+account's `writeoffLimit` are enforced on both channels.
+
+**An overpayment is not possible, in the UI or through MCP: lower the amount.** The modal never
+lets a payment exceed the outstanding (no *Dejar a crédito*, no *Dar vuelto* for `dir='out'`, see
+F3 above), and through MCP funds above the installment's outstanding answer 422 with
+`outstandingAmount` and `excess` — even with `overpaymentAction`, which only applies to
+collections in the organization currency.
+
+**Hidden from MCP, on purpose:** bank-initiated payments — fiscal and bank integrations stay
+limited for agents even though the UI offers them (a declared narrowing) — the five
+PIS actions (`pisSupplierAccounts`, `pisTemplates`, `pisPaymentStatus`, `cancelPisPayment`,
+`retryPisPayment`), the `pis` key of `registerPayment` (422) and the `psd2GenerateBankPayment`
+button (405): the transfer also needs a person to authorize it at the bank (SCA), so an agent pays
+by manual transfer through `registerPayment`. Also hidden, because the UI does not offer them: Classic's `aPRMAddpayment` button (405,
+redirected to `registerPayment`) and every write on `paymentDetails` and `paymentPlan` (readable;
+create / update / delete answer 405 with `registerPayment` as the hint). Nor can an agent create
+or edit a payment header in `payment-out`; it can delete one there with the window's *Eliminar*
+(`eTPRRemovePayment`, any status but `RPVOID` / `pisLocked`, reactivating a processed payment first
+and giving back no consumed credit — see `payment-out.md`). The `deletePayment` above deletes a
+draft and does give its credit back.
+
+Full contract, refusal shapes and the declared REST ↔ MCP divergences:
+`com.etendoerp.go/docs/neo-headless.md` §4.12.1.3, §4.12.6 and §4.12.9.
+
+- Preview panel progress row (ETP-5549): the `InvoicePreview` General tab shows a "Received: [PercentBar] N%" row under Status (label key `previewCardReceivedPercent`), fed by the invoice's `eTGODeliveryStatus` (`em_etgo_delivery_status`, the same field as the grid column and header badge). It renders whenever the value is non-null, regardless of document status. `PercentBar` renders the shared `ProgressCircle` (circle first, label beside it; grey track at 0%, black arc at 1-99%, green at 100% or more, label always black; above 100% the arc is clamped but the label shows the real value), so the preview matches the grid column (ETP-5545).
+
+## List toolbar: tab group on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
+and the main actions (sort, refresh, "New …") on the first, and the **Todos / Facturas / Facturas rectificativas** subset tabs on a second row
+below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
+group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
+with the filters and the actions. The tabs are on the second row at every width, and they behave
+as before: choosing another entry filters the grid and highlights the selection.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/purchase-invoice` and confirm the status and date
+filters and "Filtros" sit on the first row with sort, refresh and "New invoice" on the right,
+untruncated; the three tabs sit on the second row; switching tab still filters the grid.
 
 ## File sidebar actions and lightbox — ETP-5518
 

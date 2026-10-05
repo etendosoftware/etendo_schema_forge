@@ -11,6 +11,10 @@ name: Ratchet Guards
 # The method-budget ratchet (NeoDefaultsService.java) is NOT enforced here: that file
 # lives in com.etendoerp.go and only changes via that repo's PRs, so it must be wired
 # into the etendo-go CI to catch growth. This workflow stays focused on schema_forge.
+#
+# - test-hygiene: the reuse-first test protocol (docs/testing/test-reuse-policy.md) on the
+#   test files a PR adds or modifies — missing/broken `@covers`, ticket-named new files,
+#   assertion-less new Vitest blocks. Logic lives in scripts/check-test-hygiene.js.
 
 on:
   pull_request:
@@ -39,3 +43,27 @@ jobs:
 
       - name: Window-specific leak ratchet (fail only if it grew)
         run: npx sf-window-leak-budget --list
+
+  test-hygiene:
+    name: test-hygiene (reuse-first protocol)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SF_ROOT: ${{ github.workspace }}
+      # ROLLOUT (ETP-5511, see docs/testing/test-reuse-policy.md § CI enforcement): annotate-only from 2026-09-26.
+      # On 2026-10-10 flip this single switch to `block` so findings fail the job.
+      TEST_HYGIENE_MODE: annotate
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check changed test files
+        run: >-
+          node scripts/check-test-hygiene.js
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"

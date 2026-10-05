@@ -105,6 +105,9 @@ Response shape (envelope `response.data`):
       "currencyId": "102",
       "currencyIso": "EUR",
       "iban": "ES12...",
+      "countryId": "106",
+      "countryIso": "ES",
+      "countryName": "España",
       "isDefault": true,
       "active": true,
       "pendingCount": 4
@@ -125,6 +128,7 @@ Response shape (envelope `response.data`):
 ```
 
 - `accounts` is filtered by `AD_Client_ID = current client` and the accessible organization tree from `OrganizationStructureProvider`. It returns **both active and archived** accounts; each row carries an `active` boolean (`IsActive`). The UI shows active accounts in the type views (Todas / Banco / Caja / Tarjeta) and archived ones only under the dedicated **Inactivas** filter.
+- `countryName` is localized to the request language (ETP-5579): `ACCOUNTS_SQL` LEFT JOINs `c_country_trl` on the GO language (`Accept-Language` → `OBContext` language, applied by `NeoAuthenticator`) and returns `COALESCE(ctryt.name, ctry.name)`, so the same account reads "España" in es_ES and "Spain" in en_US. A country with no translation row falls back to the base `c_country.name`; an account with no country emits `""` for all three `country*` keys (the UI shows "—"). Before ETP-5579 `countryName` was always the base English name. `loadAccounts()` is the single loader behind both this R spec and the W spec `financial-account` (`FinancialAccountHandler.enrichRecord`), so the País list column (`CountryCell`, advanced-filter `countryLabel`) and the Edit Account modal's Country label get the same localized value.
 - `pendingCount` counts active `FIN_Bank_Statement_Line` rows linked to the account (through `FIN_BankStatement`) whose `fin_finacc_transaction_id IS NULL`.
 - `summary.*` is computed over **active accounts only** — archived accounts never skew `totalBalance`, `byCurrency` or `accountsWithPending`. (`summary.totalBalance` is the raw sum of `CurrentBalance`; currency normalisation against the GL schema arrives with later stories.)
 - `summary.pending.suggestionsReady` and `summary.pending.byRule` always return `0` in T1 because the `ETBR_Match_Suggestion` table lands with T5.
@@ -213,6 +217,15 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
    an account with open reconciliations confirm the 409 error message.
 10. Click a row and confirm the navigation to `/financial-account/{id}`.
 11. Click the pending pill of a row with `pendingCount > 0` and confirm the toast points to T6.
+
+## Read-only access tier (ETP-5457)
+
+A role whose tier on Financial Account is `read-only` gets this list browse-only: no
+"+ Nueva cuenta", no row edit / sync icons, a kebab reduced to "Abrir cuenta", no inline
+"Conectar banco", no selection checkboxes and no account dialogs. "Reglas de matcheo" is shown
+whenever the role can see the Match Rule window at all (`read-only` or `full`). UI only — the
+backend remains the boundary. Full per-control table: `financial-account.md` → "Read-only access
+tier (ETP-5205 / ETP-5457)".
 
 ## Tests
 

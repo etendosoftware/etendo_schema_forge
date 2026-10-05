@@ -16,8 +16,9 @@ endif
 # --- Testing ---
 
 .PHONY: test
-test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
+test: ## Run all unit tests (CLI data-fixes + repo scripts + app-shell + artifacts + vitest)
 	node --test 'cli/test/*.test.js'
+	node --test 'scripts/__tests__/*.test.js'
 	node --test 'tools/app-shell/src/**/__tests__/*.test.js'
 	node --test 'tools/app-shell/test/*.test.js'
 	node --test 'artifacts/**/__tests__/*.test.js'
@@ -26,7 +27,7 @@ test: ## Run all unit tests (CLI data-fixes + app-shell + artifacts + vitest)
 .PHONY: test-all-coverage
 test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	@mkdir -p coverage
-	@echo "=== Node tests (4 groups in parallel) ==="
+	@echo "=== Node tests (5 groups in parallel) ==="
 	@node --test --experimental-test-coverage \
 		--test-reporter=spec --test-reporter-destination=stdout \
 		--test-reporter=lcov --test-reporter-destination=coverage/cli-lcov.info \
@@ -43,14 +44,20 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 		--test-reporter=spec --test-reporter-destination=stdout \
 		--test-reporter=lcov --test-reporter-destination=coverage/artifacts-lcov.info \
 		$(shell find artifacts -path '*/__tests__/*.test.js') > coverage/artifacts.log 2>&1 & pid4=$$!; \
+	node --test --experimental-test-coverage \
+		--test-reporter=spec --test-reporter-destination=stdout \
+		--test-reporter=lcov --test-reporter-destination=coverage/scripts-lcov.info \
+		$(shell find scripts/__tests__ -name '*.test.js') > coverage/scripts.log 2>&1 & pid5=$$!; \
 	wait $$pid1; e1=$$?; \
 	wait $$pid2; e2=$$?; \
 	wait $$pid3; e3=$$?; \
 	wait $$pid4; e4=$$?; \
+	wait $$pid5; e5=$$?; \
 	[ $$e1 -eq 0 ] || { echo "CLI tests FAILED:"; tail -30 coverage/cli.log; exit 1; }; \
 	[ $$e2 -eq 0 ] || { echo "App-shell Node tests FAILED:"; tail -30 coverage/appshell.log; exit 1; }; \
 	[ $$e3 -eq 0 ] || { echo "App-shell extra tests FAILED:"; tail -30 coverage/appshell-test.log; exit 1; }; \
 	[ $$e4 -eq 0 ] || { echo "Artifact tests FAILED:"; tail -30 coverage/artifacts.log; exit 1; }; \
+	[ $$e5 -eq 0 ] || { echo "Script tests FAILED:"; tail -30 coverage/scripts.log; exit 1; }; \
 	echo "=== Node tests: all passed ==="
 	@echo "=== Vitest (React components) ==="
 	cd tools/app-shell && npx vitest run --coverage --coverage.reporter=lcov && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
@@ -58,7 +65,7 @@ test-all-coverage: ## Run ALL unit tests (Node + Vitest) with coverage reports
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
 	@echo ""
 	@echo "Coverage reports saved in coverage/"
-	@echo "  Individual: cli-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
+	@echo "  Individual: cli-lcov.info, scripts-lcov.info, appshell-lcov.info, appshell-test-lcov.info, artifacts-lcov.info, vitest-lcov.info"
 	@echo "  Merged:     merged-lcov.info (used by SonarQube)"
 
 .PHONY: test-ci
@@ -68,6 +75,10 @@ test-ci: ## Run all unit tests and write JUnit XML reports (CI mode)
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/cli.xml \
 	  'cli/test/*.test.js'
+	node --test \
+	  --test-reporter=spec --test-reporter-destination=stdout \
+	  --test-reporter=junit --test-reporter-destination=test-results/scripts.xml \
+	  'scripts/__tests__/*.test.js'
 	node --test \
 	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
@@ -91,6 +102,11 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	  'cli/test/*.test.js'
 	node --test --experimental-test-coverage \
 	  --test-reporter=spec --test-reporter-destination=stdout \
+	  --test-reporter=junit --test-reporter-destination=test-results/scripts.xml \
+	  --test-reporter=lcov --test-reporter-destination=coverage/scripts-lcov.info \
+	  'scripts/__tests__/*.test.js'
+	node --test --experimental-test-coverage \
+	  --test-reporter=spec --test-reporter-destination=stdout \
 	  --test-reporter=junit --test-reporter-destination=test-results/appshell-node.xml \
 	  --test-reporter=lcov --test-reporter-destination=coverage/appshell-lcov.info \
 	  'tools/app-shell/src/**/__tests__/*.test.js' \
@@ -106,6 +122,10 @@ test-ci-coverage: ## Run all unit tests with JUnit XML reports + LCOV coverage (
 	  && sed 's|^SF:src/|SF:tools/app-shell/src/|' coverage/vitest/lcov.info > ../../coverage/vitest-lcov.info
 	@echo "=== Merging LCOV reports ==="
 	node scripts/merge-lcov.js 'coverage/*-lcov.info' coverage/merged-lcov.info
+
+.PHONY: find-tests
+find-tests: ## Find existing tests for a file or Java class before writing one (FILE=<path|JavaClass|FQN> [JSON=1])
+	@node scripts/find-tests.js "$(FILE)" $(if $(JSON),--json)
 
 .PHONY: validate-pipeline
 validate-pipeline: ## Validate pipeline completeness across all artifacts
@@ -614,17 +634,20 @@ TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host
 
 # --- MCP usage telemetry export ---
 #
-# HOST is an SSH alias (etendo-go-experimental, etendo-go-production). The script
+# PROFILE names a remote-connection profile (~/.config/schema-forge/remote/<name>.env)
+# whose SSH_HOST + GRADLE_PROPERTIES say which host to SSH into and where its
+# gradle.properties lives; HOST=<ssh-alias> still works (default path). The script
 # reads that host's own gradle.properties, so no credentials are passed here.
 # Dumps land in the gitignored mcp-usage/ folder. Run `make mcp-usage-help` for every option.
 
 HOST ?=
+MCP_TARGET = $(or $(PROFILE),$(HOST))
 
 .PHONY: mcp-usage
-mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
-	if [ -z "$(HOST)" ]; then echo "HOST is required, e.g. make mcp-usage HOST=etendo-go-experimental"; exit 1; fi; \
-	scripts/mcp-usage-dump.sh $(HOST) \
+	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-usage PROFILE=production"; exit 1; fi; \
+	scripts/mcp-usage-dump.sh $(MCP_TARGET) \
 		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
 		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
 		$(if $(filter 1,$(COUNT)),--count) \
@@ -636,6 +659,19 @@ mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [
 .PHONY: mcp-usage-help
 mcp-usage-help: ## Show usage and examples for `make mcp-usage`
 	@scripts/mcp-usage-dump.sh --help
+
+.PHONY: mcp-metrics
+mcp-metrics: ## MCP usage/feedback + Copilot conversations/messages counts (PROFILE=<name>|HOST=<ssh-alias> [DAILY=1] [DAYS=30] [SINCE=] [UNTIL=] [CLIENT=] [CSV=1])
+	@if [ "$(HELP)" = "1" ]; then scripts/mcp-metrics.sh --help; exit 0; fi; \
+	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-metrics PROFILE=production DAYS=30 DAILY=1"; exit 1; fi; \
+	scripts/mcp-metrics.sh $(MCP_TARGET) \
+		$(if $(filter 1,$(DAILY)),--daily) \
+		$(if $(filter 1,$(CSV)),--csv) \
+		$(if $(DAYS),--last-days $(DAYS)) \
+		$(if $(SINCE),--since $(SINCE)) \
+		$(if $(UNTIL),--until $(UNTIL)) \
+		$(if $(CLIENT),--client '$(CLIENT)') \
+		$(ARGS)
 
 .PHONY: db-tunnel
 db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)

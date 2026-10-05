@@ -55,6 +55,7 @@ values, pick the higher one for unfamiliar work and the lower one for work with 
 | `suppress-existing-behavior` | 1 | Conditionally hide/disable an existing flow (a popup, an indicator, an action) for some cases |
 | `wire-native-process-button` | 1 | Surface an existing AD process / posting / Complete button on a new variant. The **process logic is reuse** — score only the wiring, not the logic. |
 | `multi-variant-window-framework` | 5 | **First** time hosting N variants/doc-types under one **existing** window (variant selector + conditional wiring). The novelty is the framework; later variants get the second-mover discount. |
+| `unify-duplicate-component` | 8 | Consolidate N **independent, already-diverged** reimplementations of the same UI pattern (found via code inspection, not a shared import) into one shared piece, migrating every call site while preserving each one's domain deltas. Heavier than `refactor-extract` (2, extracting one clean helper out of code you're already touching) because the inputs are N *pre-existing, drifted* copies — reconciling their differing data shapes (e.g. one flow has no "already delivered" reference column, another does) is design work, not extraction. Lighter than `new-ad-table`/`document-auto-generation`-class backend builds. First occurrence of this shape gets `new-pattern-no-precedent` on top; do not also apply `second-mover-reuse` to the unification itself (only to a *later* consumer's migration). |
 
 ### Generation & backend (Etendo Go)
 
