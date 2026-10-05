@@ -390,6 +390,32 @@ describe('CommandPalette', () => {
       await waitFor(() => expect(renderedWindowNames()).toEqual(['general-ledger-configuration']));
     });
 
+    // Review S1 (ETP-5602): the tiering must beat menu order, not just coincide with it.
+    // "-" appears in route names only (sales-order, general-ledger-configuration,
+    // goods-shipment), plus one translated label added here ("Almacén - central"). The
+    // translated match lives in the LAST group, the route-name-only matches in earlier ones,
+    // and Logistics splits across tiers 2 and 3, so it renders twice (one `${tier}:${group}` key each).
+    it('ranks a translated-label match in a later group above route-name-only matches in earlier groups', async () => {
+      MENU_TRANSLATIONS.Warehouse = 'Almacén - central';
+      // Keyed by group name alone, the two Logistics groups collide: React only warns, and
+      // reconciliation can then reuse the wrong group's items on the next keystroke.
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        renderWithQuery('-');
+        await waitFor(() => expect(renderedWindowNames())
+          .toEqual(['warehouse', 'sales-order', 'general-ledger-configuration', 'goods-shipment']));
+        expect(screen.getAllByTestId('cmd-group-translated:Logistics')).toHaveLength(2);
+        fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+        expect(mockNavigate).toHaveBeenCalledWith('/warehouse');
+        const duplicateKeyWarnings = consoleError.mock.calls
+          .filter((args) => args.some((arg) => String(arg).includes('same key')));
+        expect(duplicateKeyWarnings).toEqual([]);
+      } finally {
+        consoleError.mockRestore();
+        delete MENU_TRANSLATIONS.Warehouse;
+      }
+    });
+
     it('opens the first matching window on Enter', async () => {
       renderWithQuery('Configura');
       await waitFor(() => expect(renderedWindowNames()[0]).toBe('user'));
