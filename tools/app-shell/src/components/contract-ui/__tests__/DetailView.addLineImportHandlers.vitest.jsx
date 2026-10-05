@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * Covers the real (non-extracted) handleAddLineClick / handleImportClick
  * useCallback bodies inside DetailView, plus the openAddLine / openImportModal
@@ -8,6 +9,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
 
 const mockNavigate = vi.fn();
@@ -200,10 +202,11 @@ const MockTable = ({ data }) => (
 
 // Lightweight stub that exposes onAddLine / onSave directly (instead of the
 // real LinesEmptyState.jsx, which does not forward those two props).
+let lastImportResult;
 const StubEmptyState = ({ onAddLine, onSave }) => (
   <div data-testid="stub-empty-state">
     <button type="button" data-testid="stub-add-line" onClick={onAddLine}>Add</button>
-    <button type="button" data-testid="stub-import" onClick={() => onSave('order')}>Import</button>
+    <button type="button" data-testid="stub-import" onClick={async () => { lastImportResult = await onSave('order'); }}>Import</button>
   </div>
 );
 
@@ -240,6 +243,7 @@ describe('DetailView handleAddLineClick / handleImportClick (real callbacks)', (
   beforeEach(() => {
     vi.clearAllMocks();
     mockLocationState = {};
+    lastImportResult = 'unset';
     mockHook.children = [];
     mockHook.handleSave = vi.fn().mockResolvedValue({});
   });
@@ -310,7 +314,31 @@ describe('DetailView handleAddLineClick / handleImportClick (real callbacks)', (
       renderDetailView({ recordId: 'new' });
       await screen.findByTestId('stub-import');
       await user.click(screen.getByTestId('stub-import'));
-      await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(lastImportResult).toBe(false));
+      expect(mockNavigate).not.toHaveBeenCalled();
+      // A failed save already reported itself; no second toast.
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    // ETP-4683 / ETP-5602: a save that SUCCEEDED but yields no derivable id must be reported,
+    // not swallowed — the user would otherwise stay on /window/new with no feedback.
+    it('handleAddLineClick reports an unnavigable save when the saved record has no id', async () => {
+      mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'SO-NEW' });
+      const user = userEvent.setup();
+      renderDetailView({ recordId: 'new' });
+      await user.click(await screen.findByTestId('stub-add-line'));
+      await waitFor(() => expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord'));
+      expect(mockHook.primeSaved).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('handleImportClick reports an unnavigable save and still returns false when the saved record has no id', async () => {
+      mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'SO-NEW' });
+      const user = userEvent.setup();
+      renderDetailView({ recordId: 'new' });
+      await user.click(await screen.findByTestId('stub-import'));
+      await waitFor(() => expect(lastImportResult).toBe(false));
+      expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
       expect(mockNavigate).not.toHaveBeenCalled();
     });
   });

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
 /**
  * ETP-4404 — custom tab (placement 'tab') save-header-first wiring.
  *
@@ -18,6 +19,7 @@
  */
 import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
 
 const mockNavigate = vi.fn();
@@ -250,6 +252,41 @@ describe('renderCustomTabPanels — save-header-first props', () => {
 
     expect(saved).toBeNull();
     expect(mockHook.primeSaved).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    // A failed save already reported itself; no second toast.
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // ETP-4683 / ETP-5602: a save that SUCCEEDED but yields no derivable id must be reported,
+  // not swallowed — the user would otherwise stay on /window/new with no feedback.
+  it('onSaveHeader reports an unnavigable save and still returns null when the saved record has no id', async () => {
+    setNewRecordHook();
+    mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'NC-NEW' });
+    await act(async () => {
+      renderView({ recordId: 'new' });
+    });
+
+    let saved;
+    await act(async () => {
+      saved = await stubProps.onSaveHeader();
+    });
+
+    expect(saved).toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('onGoToSavedRecord reports an unnavigable save when the saved record has no id', async () => {
+    setNewRecordHook();
+    await act(async () => {
+      renderView({ recordId: 'new' });
+    });
+
+    await act(async () => {
+      stubProps.onGoToSavedRecord({ documentNo: 'NC-NEW' }, { reopenAdd: true });
+    });
+
+    expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 

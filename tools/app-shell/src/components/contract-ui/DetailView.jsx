@@ -2048,7 +2048,7 @@ export function DetailView({
   const handleAddLineClick = useCallback(async () => {
     if (isNew) {
       const saved = await hook.handleSave();
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2070,7 +2070,7 @@ export function DetailView({
         setEditingChild(null);
       },
     });
-  }, [isNew, hook, navigate, windowName, addingLine]);
+  }, [isNew, hook, navigate, windowName, addingLine, ui]);
 
   // Save header first (if new → navigate with flag; if existing → save in place), then open import modal.
   // modalType ('order' | 'invoice') is forwarded in navigation state so the destination component
@@ -2079,7 +2079,7 @@ export function DetailView({
     if (isNew) {
       // Concurrent clicks share one create — see handleAddLineClick.
       const saved = await hook.handleSave();
-      if (!saved?.id) return false;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return false; }
       hook.primeSaved?.(saved);
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
@@ -2089,7 +2089,7 @@ export function DetailView({
     }
     await hook.handleSave();
     return true;
-  }, [isNew, hook, navigate, windowName]);
+  }, [isNew, hook, navigate, windowName, ui]);
 
   // ETP-5147: shared runSecondaryAddLineFlow saves-and-navigates for a brand-new
   // requireSavedRecord tab, otherwise gates on a dirty header before onOpen.
@@ -2774,7 +2774,7 @@ export function DetailView({
     // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
     const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
       const saved = await hook.handleSave();
-      if (!saved?.id) return null;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return null; }
       hook.primeSaved?.(saved);
       if (navigateAfter) {
         navigate(`/${windowName}/${saved.id}`, {
@@ -2785,7 +2785,7 @@ export function DetailView({
       return saved;
     };
     const goToSavedRecord = (saved, { reopenAdd = false, draft = null, error = null } = {}) => {
-      if (!saved?.id) return;
+      if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return; }
       navigate(`/${windowName}/${saved.id}`, {
         replace: true,
         state: {
