@@ -1,577 +1,112 @@
 # Feature Flags
 
-**Status:** Active
-**Applies to:** `tools/app-shell/src/lib/flags/`
+**Status:** Active. Application API: OpenFeature. Remote control plane: ConfigCat.
 
-## The stack
+Components use `useFeatureFlag(key, fallback)` from `lib/flags`; SDK imports stay
+in bootstrap/provider adapters. Flag keys and shipped safe boolean defaults are
+centralized in `lib/flags/flag-keys.js`. Flags are visual gating only, never an
+authorization boundary; backend access checks are independent.
 
-| Layer | What it is | Why |
-|-------|-----------|-----|
-| **Application API** | [OpenFeature](https://openfeature.dev) — `@openfeature/web-sdk` | Vendor-neutral. Changing the control plane never touches component code. |
-| **Control plane (hosted)** | ConfigCat, via the official `@openfeature/config-cat-web-provider` — **pilot** (ETP-4691) | Remote toggling without a redeploy, polled so a change reaches a running tab. |
-| **Control plane (local)** | OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS` or the declared defaults | Keeps dev, CI and e2e deterministic and independent of any shared remote project. |
-| **Control plane (evaluated)** | Mixpanel Feature Flags, per team plan §5.6 | Still the longer-term option; not wired. See the swap notes below. |
+## Provider precedence and configuration
 
-Components only ever see the OpenFeature API through the `useFeatureFlag` hook.
-Adopting Mixpanel later changes **one function** — see [Swapping the control plane](#swapping-the-control-plane).
+1. A nonempty boolean map in `VITE_FEATURE_FLAGS` selects deterministic
+   `TypedInMemoryProvider` values, merged over shipped defaults. It completely
+   bypasses Datadog, keeping development and E2E independent of remote settings.
+2. `VITE_CONFIGCAT_SDK_KEY` enables the official
+   `@openfeature/config-cat-web-provider` with ConfigCat auto-polling. A missing
+   key skips remote evaluation.
+3. Otherwise the in-memory safe defaults apply.
 
-### Packages
+| Variable | Meaning |
+|---|---|
+| `VITE_FEATURE_FLAGS` | JSON boolean map, for example `{"proof-of-concept-menu":true}` |
+| `VITE_CONFIGCAT_SDK_KEY` | ConfigCat browser SDK key for the selected environment |
+| `VITE_CONFIGCAT_POLL_SECONDS` | Positive ConfigCat refresh interval, default 60 seconds |
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `@openfeature/web-sdk` | `^1.9.0` | Synchronous, client-side flag evaluation |
-| `@openfeature/core` | `^1.11.0` | Peer dependency of the web SDK. It is imported at runtime and is **not** bundled, so it must stay an explicit dependency. |
+Datadog remains the RUM and observability destination; it does not evaluate
+feature flags. Mixpanel is an optional analytics destination.
 
-## Three rules
+The ConfigCat provider fetches assignments at initialization and polls for
+changes at `VITE_CONFIGCAT_POLL_SECONDS`. OpenFeature context changes update the
+ConfigCat evaluation user through the provider. Closing the provider releases
+the ConfigCat client. This keeps dashboard changes live in an existing tab
+without a reload.
 
-### 1. The safe default lives in code
+Network configuration fetches have a four-second timeout. The bootstrap bounds
+provider readiness to five seconds, never rejects to application startup and
+never blocks rendering. Synchronous hook reads use shipped defaults before
+readiness and when evaluation fails. Provider/context/configuration events cause
+subscribers to reread; the readiness notification also rereads on the next
+microtask to account for OpenFeature provider installation ordering.
 
-Every flag declares its default in `lib/flags/flag-keys.js`, and that default must
-describe **today's shipped behaviour**. Those defaults seed the provider, so a
-flag missing from the environment resolves to its declared default rather than
-to nothing. If provider registration fails outright, OpenFeature's built-in
-no-op provider returns the default the caller passed. Either way a broken
-control plane degrades to the current product instead of exposing unfinished
-work.
+## Identity and privacy
 
-### 2. Flags never block rendering
+`buildEvaluationContext` takes the authenticated platform `accountId` as
+`targetingKey`; an ERP username is a temporary fallback. `account_id` is the
+AD_Client tenant ID, a different identity. The current account email remains an
+explicit targeting attribute where supplied by the session, not an analytics
+profile. Datadog RUM auto-enrichment is disabled for flag context so it cannot
+silently merge old analytics identity into flag evaluations.
 
-`initFeatureFlags()` is fire-and-forget and never rejects. Flag reads are
-synchronous, so a component renders immediately and re-renders if and when the
-value changes. Provider startup is bounded by a timeout — inert for the
-in-memory provider, but it is what keeps this rule true when a network-backed
-provider is swapped in.
+`refreshAccountIdentity` resolves `/sws/neo/session` with authenticated request
+headers, caches platform account fields, updates OpenFeature and assigns the
+opaque account ID to observability user identity and client ID to analytics
+account identity. Logout clears cached/in-memory identity and evaluation context.
+A generation and identity snapshot guard ignores a session response that completes
+after logout or a direct account/tenant switch.
 
-Because startup is fire-and-forget, components routinely mount *before* a
-provider is registered, which makes the re-render the load-bearing half of this
-rule. `@openfeature/web-sdk` emits `PROVIDER_READY` one microtask before the new
-provider is installed for evaluation, so a subscriber that re-reads the value
-synchronously inside the handler sees the old one, concludes nothing changed and
-never re-renders — and no later event corrects it. `useFeatureFlag` therefore
-notifies both synchronously and on the next microtask, which is correct
-whichever side of that boundary the installation lands on. Keep that when
-touching the hook: without it a component that mounts first is pinned to its
-declared default for the whole session, and the failure is invisible because a
-flag reading `false` is indistinguishable from one that is genuinely off.
+Do not target rules on secrets or rely on browser flags for entitlement. The
+browser client token and evaluated assignments are visible to the browser.
+Account and tenant attributes must match backend targeting conventions.
 
-### 3. Frontend flags are visual gating only — never authorization
+## Exposure events and rollout
 
-A flag decides what the UI **shows**. It is not a security boundary: anyone can
-change a flag in their own browser. Every gated capability must be enforced
-independently by the backend.
+The existing OpenFeature exposure hook emits the catalog-backed
+`feature_flag_evaluated` event through the common analytics fan-out. Provider
+name is the stable `ConfigCatWebProvider` label from the official SDK. There is
+one provider registration and one common hook per startup.
 
-The `/upgrade` route is the worked example — it is registered
-**unconditionally**, and only the menu entry pointing at it is flag-gated.
-Hiding the route would imply the flag was protecting something, which it is not.
+When the ConfigCat provider is active, Datadog RUM still receives the evaluated
+flag context independently through its RUM integration. Evaluated flag values
+enrich RUM view and error events automatically, and the RUM adapter also
+attaches them to vital, action, long-task and resource events.
+The RUM SDK adds view and error contexts implicitly; the adapter passes the four
+supported additional event types explicitly. This native RUM enrichment remains
+separate from the catalog-backed `feature_flag_evaluated` business event, so it
+does not create duplicate manual exposure events. The OpenFeature hook sends
+only real provider evaluations to `datadogRum.addFeatureFlagEvaluation`; the
+startup no-op provider is excluded from RUM context while remaining visible in
+the business exposure audit.
 
-`/acct-process-monitor` (ETP-5269, the accounting process monitor) is the second
-instance of the `/upgrade` shape, and the one that made the rule concrete: the
-page can schedule a real accounting run, so it is the first flag-gated surface
-where treating the flag as a boundary would have had teeth. It is still
-registered unconditionally, and what actually refuses a non-admin — on the read
-*and* on the trigger — is `NeoAccessHelper.isAdminOrClientAdmin` inside
-`SFAcctProcessMonitor`. Its E2E spec pins the behaviour with an explicit test
-named *flag off: the route still works*, so a later attempt to "harden" this by
-wrapping the route in the flag fails the build rather than quietly hiding where
-the real gate lives. See
-[generated-custom-windows/acct-process-monitor.md](generated-custom-windows/acct-process-monitor.md).
+Define flags in ConfigCat with the exact kebab-case code key and boolean
+variants. Use a separate SDK key per deployment target and safe remote
+fallbacks. Enable flags independently of Datadog RUM.
+See [observability operations](ops/app-shell-observability.md#datadog-migration-etp-5605)
+for CI credentials, releases, source maps and optional Mixpanel.
 
-It also introduced **item-level** menu gating. `SideMenu` previously flag-gated
-whole groups only (`Proof of Concept`); it now also carries a small
-`flagGatedItems` map keyed by the `menu.json` item name, so a single entry can
-be hidden without inventing a group for it. An item absent from that map is
-never flag-gated. **The filter is applied to the Favorites group too** — and it
-must stay that way: Favorites are rebuilt from the user's own saved list rather
-than from `menuGroups`, so the earlier early-return for that group let a
-favourited flag-gated item stay visible with the flag off. That was the one hole
-through which a gated entry could still be reached.
+Validation covers deterministic local precedence, missing configuration,
+readiness failure, context changes, polling, logout and stale identity
+responses. Live dashboard toggling and assignment intake require a real
+ConfigCat SDK key and are separate from mocked/unit verification.
 
-`/portal/:token` (ETP-5267, the Business Partner self-service portal) is the
-same pattern taken to its conclusion. It too is registered unconditionally, but
-its flag — `bp-portal-link` — is declared and evaluated **only** in
-`com.etendoerp.go`: no key for it exists in `flag-keys.js`, nothing in the
-browser reads it, and **none must be added**. The flag gates whether the
-sales-invoice email *carries a portal link*, which is decided entirely
-server-side while the email is built; giving the browser a key would create a
-second evaluator with nothing to evaluate, and a flag whose two ends read from
-different control planes has no single truth (ETP-4966). What protects the
-portal's data is the opaque token in the URL, validated on every request.
+Official provider reference: [ConfigCat OpenFeature Web Provider](https://github.com/open-feature/js-sdk-contrib/tree/main/libs/providers/config-cat-web-provider).
 
-That flag is also this codebase's first **per-account targeted** one: it is
-`false` for everyone until a ConfigCat targeting rule names the sending
-account's `ETGO_ACCOUNT` email, which the backend publishes as both the
-OpenFeature targeting key and the `Email` attribute. Enablement therefore
-happens in the ConfigCat dashboard and is live within one poll interval, with no
-restart. Per-account targeting is a ConfigCat capability only — there is
-deliberately no local-properties equivalent, because with an SDK key set it
-would be inert, and a knob that silently does nothing is the ETP-4966 shape
-again. It does not reopen the `targeting-key-divergence` item below — that
-divergence needs two evaluators, and this flag has only one. See
-`docs/plans/2026-09-10-bp-self-service-portal.md` §2.5 and
-`com.etendoerp.go/docs/feature-flags-and-tenant-upgrade.md` → *Per-account
-targeting*.
-
-## Adding a flag
-
-1. Declare the key and its safe default in `lib/flags/flag-keys.js`:
-
-   ```js
-   export const MY_FEATURE = 'my-feature';
-
-   export const FLAG_DEFAULTS = Object.freeze({
-     [PROOF_OF_CONCEPT_MENU]: false,
-     [MY_FEATURE]: false,
-   });
-   ```
-
-2. Read it in a component:
-
-   ```jsx
-   import { useFeatureFlag, MY_FEATURE } from '@/lib/flags/index.js';
-
-   const showMyFeature = useFeatureFlag(MY_FEATURE);
-   ```
-
-3. Make sure the backend enforces whatever the flag reveals.
-4. If the flag is to be toggled remotely, create the setting in the control plane
-   with the key **exactly** as declared in step 1 — not the feature id from
-   `flags-registry.json`, which is a different name. A mismatch is not an error:
-   the provider reports `FLAG_NOT_FOUND`, the caller gets its declared default,
-   and the flag reads as permanently off with nothing in the UI to say why.
-
-Flag keys are kebab-case, which is also the Mixpanel convention — so keys carry
-over unchanged when the control plane moves.
+On a direct authenticated username/tenant switch, `useAccountIdentity` clears the
+old account cache, OpenFeature context and observability SDK profiles first,
+without logging out or changing the live cookie/bearer session. New identity
+resolution starts after reset completes; a failed resolution stays anonymous
+instead of retaining the previous account. Ordinary rerenders for the same
+username/client do not reset identity. Business events wait for the provider
+identity reset barrier before dispatching.
 
 ## Architecture: flag code layout
 
-Where flagged code lives is a rule, not a preference.
-
-**1. Each flag owns its files.** All logic a flag gates lives in modules and
-directories belonging to that flag. The retired `tenant-upgrade` flag is the worked example: it
-owned `lib/upgrade/` and `pages/UpgradePage.jsx`, which is why retiring it in ETP-4966 was
-unwrapping two toggle points rather than an archaeology exercise across shared files.
-
-**2. Shared files hold toggle points only.** A shared file may contain the
-minimum needed to reach the flag's own code — a route registration, a menu
-entry — ideally a single greppable line naming the flag constant. Never business
-logic. If a shared file starts branching on a flag beyond "show this / route
-there", the logic belongs in the flag's own module.
-
-**3. Framework files belong to no flag.** `lib/flags/` is shared infrastructure
-serving every flag, and is excluded from per-flag attribution.
-
-**Why.** Two things depend on this layout:
-
-- *Per-flag debt scorecard.* Coverage and issues are measured over a flag's
-  owned paths, which only works if those paths contain the flag's code and
-  nothing else. Touch points in shared files are counted separately, as
-  removal-cost debt.
-- *Cheap removal at TTL.* Retiring a flag should be exactly: delete the owned
-  directories, then remove the touch points a grep for the flag constant finds.
-  Anything smeared across shared files turns that into an archaeology exercise.
-
-### Where the per-flag paths live
-
-**`flags-registry.json` in the repo root is canonical** for which paths belong to
-which flag. It is read by the `sf-flag-debt` CLI, so the scorer and the rule
-cannot disagree — a flag's owned paths are `flags.paths`, and the shared
-infrastructure excluded from every flag is `conventions.frameworkPaths`. See
-[flag-debt.md](flag-debt.md).
-
-This document owns the *rule and the reasoning*; the registry owns the *facts*.
-When a flag gains a file or a touch point moves, update the registry — not a
-list here. Restating paths in prose would create a second copy that drifts
-silently, and a scorecard measuring stale paths produces numbers that look
-plausible and are wrong.
-
-*Illustrative snapshot, not a source — read the registry for current values.* The
-`paid-second-tenant` feature owns `tools/app-shell/src/lib/upgrade/` and
-`tools/app-shell/src/pages/UpgradePage.jsx`, with `tools/app-shell/src/lib/flags/`
-excluded as framework. It no longer carries a flag — see *Retiring a flag* in
-`docs/technical-debt-playbook.md`, and the worked example in
-`com.etendoerp.go` → `docs/feature-flags-and-tenant-upgrade.md`.
-
-Its two frontend touch points, `runtime-routes.jsx` and `UserAvatarButton.jsx`,
-carry no business logic: the route only registers a lazily-loaded page, and the
-menu entry only decides whether to render a link. `UserAvatarButton.jsx` needs an
-import, a hook call and a small JSX block rather than a literal single line —
-that is the floor for rendering a menu item, and it stays greppable through the
-`symbols` the registry lists for the flag.
-
-## Configuration
-
-| Variable | Effect |
-|----------|--------|
-| `VITE_FEATURE_FLAGS` | JSON map of flag key to boolean. Unset, empty or malformed values fall back to the declared defaults. |
-| `VITE_CONFIGCAT_SDK_KEY` | ConfigCat SDK key. When set (and no `VITE_FEATURE_FLAGS`), flags come from ConfigCat. |
-| `VITE_CONFIGCAT_POLL_SECONDS` | Auto-poll interval in seconds. Defaults to 60; a non-positive or non-numeric value warns and falls back. |
-
-```bash
-# Turn a flag on locally, without any remote control plane
-VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
-```
-
-The `webmcp-agent-chat` flag is off by default. When enabled, the existing
-Copilot popup uses the AI SDK client and sends the conversation to the
-server-side AI BFF. The BFF keeps the OpenCode Go credential private, forwards
-the current browser session token to the Etendo MCP endpoint, and exposes the
-MCP tools to the model. Browser-native `document.modelContext` WebMCP
-registration is intentionally deferred until browser support is mature.
-
-The `page-help-suggestions` flag is independently off by default. It controls
-the floating suggestion button, its proactive DOM analysis, and the callout
-that appears before opening the Copilot. It can be enabled alongside
-`webmcp-agent-chat` when this experimental assistance is ready for testing.
-
-The popup also provides client-side tools for `navigate_to`, `open_form`,
-`get_current_context`, and `open_copilot`; navigation is restricted to internal
-application paths. `inspect_page_dom` returns a compact accessibility-oriented
-inventory of visible interactive elements with temporary IDs. The companion
-`interact_with_page` tool accepts only those IDs and the actions `click`, `fill`,
-`type`, or `press`; it does not execute JavaScript or accept arbitrary CSS
-selectors, and password fields are excluded. These DOM tools are intended for
-agent-guided UI workflows and do not replace Etendo authorization checks.
-The Copilot also exposes a floating page-help button and performs throttled
-DOM-based assistance after non-dashboard navigation or meaningful UI clicks.
-For this proactive path, the frontend sends the compact DOM inventory directly
-as text to the BFF and instructs the model to return only an observation; it does
-not spend an extra model step calling `inspect_page_dom`.
-The result is shown first in a floating callout without opening the conversation;
-clicking the callout opens the existing Copilot and continues with that help
-context. It does not send emails, save records, or perform other consequential
-actions without a user request.
-Assistant and user messages in the popup render the supported Markdown subset
-(headings, lists, emphasis, inline code, and HTTPS links); unsafe link protocols
-remain plain text. The flag is a presentation/integration toggle only, never an
-authorization boundary.
-
-```bash
-VITE_FEATURE_FLAGS='{"webmcp-agent-chat":true,"page-help-suggestions":true}' make dev
-```
-
-`VITE_FEATURE_FLAGS` holds every flag in one variable, so adding a flag needs no
-new environment plumbing and there is no kebab-case-to-SCREAMING_SNAKE naming
-convention to keep in sync. Non-boolean values are ignored.
-
-### Where the SDK key lives
-
-Keep it out of version control, but do **not** treat it as a secret. Vite bakes
-`VITE_CONFIGCAT_SDK_KEY` into the JS bundle, so anyone can read it — and read the
-whole environment's config off ConfigCat's CDN with it. Storing it as a GitHub
-*secret* would mask it in build logs while it stays published in the bundle,
-which buys nothing and makes rotation harder to audit. What actually protects a
-targeting list is ConfigCat's hashed comparator (`SENSITIVE_IS_ONE_OF`), not the
-key. Corollary: never put anything confidential in flag keys or values of an
-environment whose key ships to a browser.
-
-| Where | How it gets there |
-|-------|-------------------|
-| Local dev (frontend) | `tools/app-shell/.env.development.local`, gitignored. **Development mode only** — `vite build` runs in production mode and never reads this file. |
-| Deployed frontend | GitHub Actions **variable**, injected into the build step of `.github/workflows/deploy-staging.yml`. Resolved **per target** in *Resolve deployment target*: `VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL` reaches experimental and `VITE_CONFIGCAT_SDK_KEY_PRODUCTION` reaches production; staging remains empty until enabled. |
-| Backend | **`etendo.go.configcat.sdkKey`, env `ETGO_CONFIGCAT_SDK_KEY`** — since ETP-5267. `GoFeatureFlags.createProvider()` returns `ConfigCatProvider` when that key resolves and `PropertiesFeatureProvider` when it does not, so backend flags are hosted (flippable without a restart) only where the key is set, and a plain per-environment boolean (`etendo.go.flags.<key>`) everywhere else. The fallback is deliberate: dev, CI and e2e stay deterministic. Per-account targeting exists on the ConfigCat arm only. **An absent, blank or wrong key resolves every flag to its `false` code default — never to "on".** |
-
-> **This row used to claim the backend resolved ConfigCat via `ETGO_CONFIGCAT_SDK_KEY`, and that was
-> never true.** The secret is provisioned in the experimental task definition, which made the claim
-> look confirmed, but nothing consumes it server-side. ETP-4966 is the cost of that: `tenant-upgrade`
-> was on in ConfigCat and unset in the backend's properties, so the browser offered a Stripe checkout
-> the backend then ignored, and paying accounts received Demo environments. **The two ends do not share
-> a control plane.** Until they do, a flag that gates anything a user can pay for must be evaluated by
-> the backend alone, with the browser asking it.
-
-One SDK key addresses exactly one ConfigCat environment. Rotating the key means updating every
-frontend row above — none of which observe each other.
-
-### Provider precedence
-
-`createFlagProvider()` picks exactly one provider, highest priority first:
-
-| # | Condition | Provider |
-|---|-----------|----------|
-| 1 | `VITE_FEATURE_FLAGS` names at least one boolean flag | `TypedInMemoryProvider` with those overrides |
-| 2 | `VITE_CONFIGCAT_SDK_KEY` is set | `ConfigCatWebProvider` (auto-poll) |
-| 3 | neither | `TypedInMemoryProvider` with the declared defaults |
-
-**A local override deliberately beats the remote control plane.** Dev and e2e
-runs must not depend on the current state of a shared ConfigCat project, and a
-developer debugging a flag should not have their machine changed by someone
-toggling a dashboard. The order also makes the escape hatch obvious: set
-`VITE_FEATURE_FLAGS` and the remote plane is out of the picture entirely.
-
-The ConfigCat SDK is imported lazily, so its ~83 KB lands in its own chunk and
-only on builds that configure a key — a build without one is byte-identical in
-the main bundle.
-
-## Evaluation context
-
-Set at startup, re-applied on sign-in by `trackSessionStarted` in
-`lib/observability/health-events.js`, and re-applied again once the account
-identity resolves — `useAccountIdentity()` in `layout/AppLayout.jsx` calls
-`refreshAccountIdentity`, which reads `GET /sws/neo/session` and caches the result
-(ETP-4693).
-
-Who is signed in (username, client, client name) comes from the in-memory session
-identity in `lib/sessionIdentity.js`, fed by `trackSessionStarted` on sign-in and by
-`useAccountIdentity()` from `useAuth()` on every mount of the authenticated shell,
-so it survives a reload. It used to be read from the legacy `sf_auth_user` /
-`sf_auth_client_id` / `sf_auth_client_name` keys, which nothing writes since the
-cookie session (ADR-0001), so under that session targeting silently fell back to
-anonymous (ETP-5455). The account values are still cached in `localStorage`:
-
-| Context key | Source | Purpose |
-|-------------|--------|---------|
-| `targetingKey` | `sf_account_id`, falling back to the session username | OpenFeature's standard identity key. The account is preferred because it is what the backend targets on; the ERP username only stands in until the session answers. |
-| `accountId` | `sf_account_id` (`ETGO_ACCOUNT`) | Account-level targeting, opaque — no PII reaches the vendor |
-| `email` | `sf_account_email` | The attribute ConfigCat's `User.Email` rules and segments read. The provider maps OpenFeature's `email` onto `User.Email`; anything else would arrive as a custom attribute. |
-| `account_id` | the session client (tenant) | Tenant-level targeting; matches the Mixpanel group the analytics layer already sets. **A different identity from `accountId`** — this one is the `AD_Client`. |
-
-Both account values arrive once the account resolves — for any signed-in session,
-cookie or bearer (until ETP-5455 `useAccountIdentity` only ran when
-`sf_platform_token` was present, so under the cookie session it never did) — so a
-rule keyed on the account or the email evaluates **once the session has answered**,
-not at first paint. Startup falls back to the ERP username, which
-the backend never sees.
-
-## Swapping the control plane
-
-`createFlagProvider()` in `lib/flags/bootstrap.js` is the **only** function that
-knows which control plane backs the flags. Adding or replacing one means
-changing that function and nothing else — `initFeatureFlags`, the
-`useFeatureFlag` hook, the exposure hook and every call site stay as they are.
-
-### Worked example: ConfigCat (ETP-4691)
-
-The pilot is what the swap point looks like in practice — the entire integration
-is one branch inside `createFlagProvider()`:
-
-| Package | Version | Note |
-|---------|---------|------|
-| `@openfeature/config-cat-web-provider` | `^0.2.0` | Published under the **`@openfeature`** scope, not `@configcat` |
-| `@configcat/sdk` | `^1.1.0` | Its peer dependency — **not** the older `configcat-js` package |
-
-`ConfigCatWebProvider.create(sdkKey, { pollIntervalSeconds })` returns a
-ready-to-register provider. Two behaviours matter downstream:
-
-- It emits `PROVIDER_READY` from its **own** emitter once the client has flag
-  data, and `PROVIDER_CONFIGURATION_CHANGED` on every poll that changes config.
-  The hook already subscribes to both, so a dashboard toggle reaches a mounted
-  component without a reload.
-- `initialize()` **throws** when the client reaches ready state with no flag
-  data, because ConfigCat can be "ready" while still unable to evaluate. That
-  surfaces as a rejected registration, which `initFeatureFlags` catches and
-  degrades to the declared defaults — the safe-default rule holds.
-
-#### Email targeting works only after the session answers
-
-The `tenant-upgrade` setting carries a targeting rule on a segment matching
-`User.Email`. Since ETP-4693 the frontend does send an email (see [Evaluation
-context](#evaluation-context)), so such a rule can match — but only from the
-moment `GET /sws/neo/session` has returned an `accountEmail` for that session.
-Before that, and for any session without a token or without a resolvable
-`ETGO_ACCOUNT`, the attribute is absent and the SDK says so:
-
-```
-ConfigCat - WARN - [3003] Cannot evaluate condition (User.Email IS ONE OF [...])
-for setting 'tenant-upgrade' (the User.Email attribute is missing).
-```
-
-When the attribute is missing, only the setting's fallback ("To all users") value
-has any effect. Two consequences when testing a toggle:
-
-- Flipping the **fallback** always shows up. Flipping a **targeting rule** shows up
-  only for sessions whose email resolved, so "nothing happened" is ambiguous —
-  check for the warning above before concluding the rule is wrong.
-- The email must be the account email (`ETGO_ACCOUNT`), which is what the backend
-  targets on too. It is **not** the ERP admin username in `sf_auth_user`.
-
-To move to Mixpanel instead:
-
-1. `npm install @mixpanel/openfeature-web-provider` (peer-depends on
-   `@openfeature/web-sdk` and `mixpanel-browser`, both already present).
-2. Return `MixpanelProvider.create(token, config)` from `createFlagProvider()`.
-   `create()` builds its **own named** Mixpanel instance, so it does not
-   interfere with the analytics instance in
-   `lib/observability/providers/mixpanel.js`. Configure that instance inert for
-   analytics — no autotracking, no page views, no session recording, its own
-   `persistence_name` — so it carries flag traffic only.
-3. **Add `distinct_id: username` to `buildEvaluationContext`.** Mixpanel's flags
-   API buckets on the `distinct_id` it finds in the flag context, *not* on
-   OpenFeature's `targetingKey`. Without it every user is bucketed as a separate
-   anonymous visitor.
-4. Consider `flags.persistence: { variantLookupPolicy:
-   'persistenceUntilNetworkSuccess' }` so cached variants serve instantly while
-   a refresh runs in the background.
-5. Remove the exposure hook (below) — Mixpanel reports exposures natively, and
-   keeping both would double-count.
-
-## Flag exposure events
-
-`lib/flags/flag-exposure.js` registers an OpenFeature evaluation hook that
-reports each exposure through the existing observability layer, so a variant can
-be correlated with the funnel that follows it. While the control plane is local
-this is the only source of exposure data.
-
-Event `feature_flag_evaluated` (Mixpanel channel, declared in
-`lib/observability/events.js`):
-
-| Property | Meaning |
-|----------|---------|
-| `flagKey` | The flag key, e.g. `tenant-upgrade` |
-| `enabled` | The resolved boolean value |
-| `variant` | The variant name, e.g. `on` / `off` |
-| `provider` | Registered provider: `in-memory` or `configcat` |
-| `username` | The targeting key |
-
-`provider` is a label `createFlagProvider` pins itself (`CONFIGCAT_PROVIDER_NAME`
-in `lib/flags/bootstrap.js`), not whatever the underlying SDK reports. ConfigCat's
-own provider derives its default name from the JS class name
-(`ConfigCatWebProvider.name`), which a production minifier is free to rename per
-build — observed in the wild as both `_ConfigCatWebProvider` and `ut` across
-different deploys, fragmenting any report grouped by provider. Pinning it keeps
-the value stable regardless of how a given build was minified.
-
-Two behaviours are deliberate:
-
-- **Deduplicated per flag/value/provider** — one event per combination per
-  session, not one per render. `useFeatureFlag` re-evaluates on every render, so
-  without this the event would be uncountable. But the provider is part of the
-  key on purpose: `initFeatureFlags` registers this hook *before* the real
-  provider is ready (`createFlagProvider` awaits a dynamic import and, for
-  ConfigCat, a network round-trip), so the very first evaluation on every page
-  load — for effectively every session, since React's initial render is
-  synchronous and always wins that race — goes through OpenFeature's built-in
-  no-op default. Deduplicating on `flagKey:value` alone let that transient
-  no-op result permanently claim the session's report for a value, silently
-  swallowing every later evaluation once the real provider took over, even when
-  it resolved the exact same boolean. A flag that flips reports each distinct
-  value once *per provider that produced it*, not just the first to answer.
-- **Never disturbs evaluation** — the hook runs inside flag resolution. It never
-  awaits and never throws; a reporting failure cannot change what a flag
-  resolves to.
-
-The value is reported as `enabled` rather than `value` because the observability
-payload sanitizer treats `value` as a numeric property and silently drops
-booleans passed under that name. The targeting key travels as `username`, a
-property the payload policy already sanctions, rather than widening that policy
-with a second identity-bearing key.
-
-## The paid productive-environment flow (no flag)
-
-The paid path where a user keeps their free environment and creates a productive one, or converts
-the one they are already in. **Not gated** — the `tenant-upgrade` flag retired in ETP-4966.
-
-| Piece | Location |
-|-------|----------|
-| Entry point (unconditional) | User menu item in `components/UserAvatarButton.jsx` |
-| Route | `/upgrade` in `runtime-routes.jsx` |
-| Page | `pages/UpgradePage.jsx` |
-| Checkout + onboarding API calls | `lib/upgrade/api.js` |
-
-**Flow.** The page shows a Free vs Productive comparison and a choice between converting the current
-environment (`convert-demo`, preselected) and creating a new one (`create-productive`). It then asks
-the backend for a Stripe hosted-checkout session and redirects to it — **the browser never handles
-card details.** `lib/upgrade/mockPayment.js` is gone; so is the locally simulated decline.
-
-On return, the page polls `GET /sws/go/checkout/sessions/{requestId}` until the webhook has recorded
-the payment, then calls `POST /sws/go/onboarding` with that `requestId` as `paymentToken` and renders
-the NDJSON progress stream. That confirmed payment is also what marks the resulting environment
-productive.
-
-### Backend contract (confirmed with the Etendo Go side)
-
-| Rule | Consequence for the frontend |
-|------|------------------------------|
-| The only accepted token is a `requestId` from `POST /sws/go/checkout/sessions` that the Stripe webhook recorded as paid, **for this account and this environment name**. A token merely *shaped* like the retired `mock-paid-<hex>` is declined | The browser cannot mint a token. It must obtain one from the backend and wait for the webhook, which is what stops a successful return URL from being treated as payment. |
-| Refusal is **HTTP 402** with a plain JSON body, *not* the NDJSON stream — the gate runs before the stream opens | `lib/upgrade/api.js` checks the status before touching `response.body`, so a 402 never reaches the stream reader. |
-| Missing token and declined token both return `error: "payment_required"` and differ only in `message` | The UI does not branch on the code. A decline is caught client-side before any request; a 402 is reported as a generic payment-required error. |
-| An account's **first environment is never charged** | The page loads the account's environments and, when there are none, shows "your first tenant is free" and a link to onboarding instead of the checkout. |
-| Re-submitting a `clientName` the account already owns **resumes** that tenant and is not charged | The page rejects a name that matches an existing tenant, so a "success" never silently hands back an existing tenant. |
-| There is no flag left to evaluate; the backend is **authoritative** on both the paywall and the plan | Nothing in the browser can enable, disable or shortcut the paid path. |
-| Converting the current environment is charged like a purchase, not treated as a free resume | The page sends `upgradeAction=convert-demo`, which the backend uses to skip the free resume path. |
-| Backend targeting key is the **account email**, now returned as `accountEmail` at the top level of `GET /sws/go/environments` | Not consumed yet — see below. |
-| `GET /sws/go/environments` items carry `plan: "free" \| "productive"`; treat a missing field as `"free"` | Consumed by the company selector, which badges each environment and sorts productive first. The badge is withheld entirely when the current environment cannot be resolved, so a missing lookup is never rendered as `Demo`. |
-
-**Closed (ETP-4693): both ends target the same identity.** The backend buckets on
-the account, and the frontend now reads that same account from
-`GET /sws/neo/session` — a JWT-authenticated endpoint the app-shell already calls
-every session — rather than from `sf_auth_user`, the environment's ERP admin
-username that the backend never sees. `refreshAccountIdentity` caches `accountId`
-and `accountEmail` and re-targets the evaluation context; see [Evaluation
-context](#evaluation-context) for what each key carries and when it arrives.
-
-`/sws/neo/session` was chosen over `GET /sws/go/environments` (which also returns
-`accountEmail`) for three reasons: the core helper `fetchEnvironments` returns
-`data.environments || []` and drops the top-level field; the context must be set
-app-wide at startup rather than only for users who reach `/upgrade`; and the
-environments call needs `sf_platform_token`, which is not part of
-`ENVIRONMENT_SESSION_KEYS` and is absent in some sessions. Bucketing only when a
-token happens to be present would make targeting inconsistent, which is worse
-than uniformly wrong because it is invisible in aggregate.
-
-One rule survives for anyone touching this: resolve the email against the
-`ETGO_ACCOUNT` record, never by string manipulation of the environment username.
-Onboarding composes that username from the account email, and `+` is legal in an
-address — splitting on it would mangle plus-addressed users and surface as a rare
-unexplained mismatch instead of an obvious failure.
-
-The app-shell company selector now badges each environment as `Demo` or
-`Productive` and sorts productive environments first. The backend applies the
-same ordering to the post-login environment list, so an account with both plans
-enters its productive tenant by default. The shared core onboarding chooser may
-still need the same badge when its package is upgraded independently.
-
-`lib/upgrade/api.js` deliberately does not reuse `runOnboardingStream` from
-`@etendosoftware/etendo-go-core`: that helper serialises a fixed allowlist of
-fields (so it would silently drop `paymentToken`) and starts reading the
-response body without checking the status (so a 402 would surface as a generic
-"no result" failure instead of a payment error).
-
-## Demo data transfer (`demo-data-transfer`, backend-only)
-
-The ETP-5364 demo-to-productive data transfer is gated OFF by a flag evaluated **only** in
-`com.etendoerp.go` (`DemoDataTransferFlag`, see that repo's
-`docs/feature-flags-and-tenant-upgrade.md`). Like `bp-portal-link`, it has **no key in
-`flag-keys.js`, and none must be added** — a browser key would be a second evaluator on a different
-control plane and targeting key (ETP-4966).
-
-The browser follows the backend instead: `useDemoDataTransfer` reports `available: true` only when
-`GET /sws/go/demo-data-transfer` answers 2xx. With the flag off that endpoint is a 404, so
-`available` stays false and `demoDataTransferStep.js` never splices the row into the First Steps
-catalogue — same rows and same `x/TOTAL` as before ETP-5364. Any other failure before a first
-successful read is treated the same way: an unknown answer hides the row.
-
-`UpgradePage` sends the selected products and contacts in the billing purchase request (and the
-legacy checkout-session request). A purchase with a recorded selection returns it as
-`dataTransfer: { products, contacts }`; resume uses that server-owned selection rather than the
-current state of the checkboxes. The purchase projection also reports `dataTransferEnabled`.
-When it is true and the purchase has no saved selection, the page shows a warning and continues
-provisioning without a transfer request; it cannot reconstruct the choice from browser state.
-The durable transfer then remains `NOT_REQUESTED` and requires operator recovery if the buyer
-expected data to move. With the flag off, resume may
-use an explicitly saved browser choice or one made in the current checkout form. It never defaults
-a missing choice to both options. The checkout selection is ignored by the durable job and the
-selection on `POST /sws/go/onboarding` continues to drive ETP-5421's synchronous
-`OnboardingDataTransferService`. With the flag on, Go records the immutable checkout selection
-before contacting the payment provider, skips the synchronous copy, and starts the durable job
-only after onboarding commits. The product copy reuses system UOMs, copies client UOM EDI codes,
-and resolves the target tax category; a missing category fails the job with a named reason so it
-can be repaired and retried. The job also rejects a source and destination with the same tenant
-ID. Owned paths, specs and remaining work are in
-[`flags-registry.json`](../flags-registry.json) under `demo-data-transfer`.
-
-## Proof of Concept menu (`proof-of-concept-menu`)
-
-This is a frontend-only, temporary reveal for the internal **Proof of Concept**
-section in the side menu. It defaults to `false`, so an unavailable provider or
-an environment with no configuration keeps the section hidden. The flag only
-changes menu visibility: the windows behind it continue to rely on their normal
-AD role filtering.
-
-Use a local override while developing or testing it:
-
-```bash
-VITE_FEATURE_FLAGS='{"proof-of-concept-menu":true}' make dev
-```
-
-The current removal target and the unit/E2E specs are recorded in
-[`flags-registry.json`](../flags-registry.json); the shared `SideMenu` is a
-toggle point, not code owned by this flag.
+Each flag owns its implementation files. Shared files contain greppable toggle
+points only, never flag-specific business logic. Framework files (`lib/flags/`
+and backend `featureflags/`) belong to no individual flag. Keep safe defaults
+centralized and visual gates independent of authorization. Register owned paths
+and debt at the start of a flag's life, following [flag debt](flag-debt.md) and
+[the technical debt playbook](technical-debt-playbook.md).
+
+The former `tenant-upgrade` flag is retired; permanent payment/entitlement rules
+are documented in [paid tenant infrastructure](paid-tenant-infrastructure.md).

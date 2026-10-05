@@ -31,6 +31,32 @@ import { buildObservabilityEvent, OBSERVABILITY_EVENTS } from '../observability/
 
 /** Flag/value combinations already reported this session (page lifetime). */
 const reported = new Set();
+let rumClientPromise;
+
+/** Datadog RUM feature flag keys accept identifier characters only. */
+export function sanitizeRumFeatureFlagKey(flagKey) {
+  const sanitized = String(flagKey ?? '')
+    .replace(/[^A-Za-z0-9_]/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 100);
+  return sanitized || 'flag';
+}
+
+/**
+ * Sends a real OpenFeature evaluation to Datadog RUM when the browser provider
+ * is available. The SDK buffers this call before RUM initialization, so the
+ * hook can remain registered before the async provider bootstrap completes.
+ */
+export function addDatadogRumFeatureFlagEvaluation(flagKey, value) {
+  if (!rumClientPromise) {
+    rumClientPromise = import('@datadog/browser-rum')
+      .then(({ datadogRum }) => datadogRum)
+      .catch(() => undefined);
+  }
+  return rumClientPromise
+    .then(rum => rum?.addFeatureFlagEvaluation(flagKey, value))
+    .catch(() => {});
+}
 
 /** Exposed for tests and for callers that deliberately reset session state. */
 export function resetExposureCache() {
@@ -52,7 +78,10 @@ export function buildExposureProperties(hookContext, evaluationDetails) {
   };
 }
 
-export function createFlagExposureHook({ trackImpl = track } = {}) {
+export function createFlagExposureHook({
+  trackImpl = track,
+  rumEvaluationImpl = addDatadogRumFeatureFlagEvaluation,
+} = {}) {
   return {
     after(hookContext, evaluationDetails) {
       try {
@@ -71,6 +100,11 @@ export function createFlagExposureHook({ trackImpl = track } = {}) {
         // Fire-and-forget: an unresolved or rejected track must not surface
         // inside flag resolution.
         Promise.resolve(trackImpl(event.name, event.properties)).catch(() => {});
+        // The startup no-op provider is useful for business exposure telemetry,
+        // but it is not a real assignment and must not enter RUM flag context.
+        if (!/^no[- ]?op provider$/i.test(String(provider || ''))) {
+          Promise.resolve(rumEvaluationImpl(sanitizeRumFeatureFlagKey(flagKey), value)).catch(() => {});
+        }
       } catch {
         // Reporting is best-effort; evaluation continues regardless.
       }

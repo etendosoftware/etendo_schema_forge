@@ -2,15 +2,15 @@ import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { FLAG_DEFAULTS } from './flag-keys.js';
 import { createFlagExposureHook } from './flag-exposure.js';
 
-import { authHeaders } from '@etendosoftware/app-shell-core/auth/api';
+import { reset, identify, group } from '../observability.js';
+import { authHeaders, apiFetch } from '@etendosoftware/app-shell-core/auth/api';
 import { clearSessionIdentity, getSessionIdentity } from '../sessionIdentity.js';
 /**
  * Feature-flag bootstrap.
  *
- * Application API: OpenFeature. Control plane: currently local — flags are
- * served by OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS`.
- * Mixpanel Feature Flags is the planned control plane (team plan §5.6); see
- * `createFlagProvider` below, which is the only place that has to change.
+ * Application API: OpenFeature. Remote control plane: ConfigCat. Local overrides
+ * use OpenFeature's `TypedInMemoryProvider`, seeded from `VITE_FEATURE_FLAGS`.
+ * `createFlagProvider` below is the only provider selection point.
  *
  * Three rules hold no matter which provider is registered:
  *
@@ -48,14 +48,19 @@ const ACCOUNT_EMAIL_KEY = 'sf_account_email';
  * in" would answer with a person who signed out. Wired into `clearSessionScopedState`, which
  * runs on every session change including the automatic 401 logout.
  */
+let identityGeneration = 0;
+
 export function clearAccountIdentity(storage = globalThis.localStorage) {
+  identityGeneration += 1;
   clearSessionIdentity();
+  const cleared = Promise.allSettled([reset(), OpenFeature.setContext({})]);
   try {
     storage?.removeItem(ACCOUNT_ID_KEY);
     storage?.removeItem(ACCOUNT_EMAIL_KEY);
   } catch {
     // Storage may be unavailable; there is nothing to fall back to and nothing to report.
   }
+  return cleared;
 }
 
 /**
@@ -86,7 +91,7 @@ export function readSessionContext(storage = globalThis.localStorage) {
  * `accountId` is the ETGO_ACCOUNT the backend also targets on, so it takes the
  * targeting key when present; `username` (the environment's ERP admin name)
  * only stands in until the session exposes an account. `email` is the
- * attribute ConfigCat's `User.Email` rules read.
+ * explicit account attribute remote targeting rules can read.
  *
  * `account_id` is the AD_Client — a different identity that predates this and
  * is what the observability layer groups by. Do not conflate it with
@@ -147,71 +152,40 @@ export function buildInMemoryConfiguration(overrides = {}) {
   );
 }
 
-/** Poll interval used when `VITE_CONFIGCAT_POLL_SECONDS` is unset or unusable. */
-const DEFAULT_POLL_SECONDS = 60;
-
-/** Reads the poll interval, falling back rather than passing NaN to the SDK. */
+/** Poll interval for ConfigCat changes without a reload. */
 export function resolvePollSeconds(raw, logger = console) {
-  if (raw == null || raw === '') return DEFAULT_POLL_SECONDS;
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    logger.warn('[flags] VITE_CONFIGCAT_POLL_SECONDS is not a positive number — using the default');
-    return DEFAULT_POLL_SECONDS;
-  }
-  return seconds;
+  const seconds = raw == null || raw === '' ? 60 : Number(raw);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  logger.warn('[flags] VITE_CONFIGCAT_POLL_SECONDS must be positive; using 60');
+  return 60;
 }
 
-/**
- * THE SWAP POINT — the only function that knows which control plane backs the
- * flags. `initFeatureFlags`, the `useFeatureFlag` hook, the exposure hook and
- * every call site are unaware of which provider wins.
- *
- * Precedence, highest first:
- *
- * 1. **`VITE_FEATURE_FLAGS`** — a local override beats the remote control plane
- *    on purpose, so dev and e2e stay deterministic and no test depends on the
- *    state of a shared ConfigCat project.
- * 2. **ConfigCat**, when `VITE_CONFIGCAT_SDK_KEY` is set. Auto-polling, so a
- *    toggle in the dashboard reaches a running tab without a reload.
- * 3. **In-memory defaults** — the declared safe defaults, unchanged.
- *
- * The ConfigCat SDK is imported lazily so its bundle cost lands only on builds
- * that actually configure it.
- */
-/**
- * Analytics label for the ConfigCat branch — see the comment above `metadata`
- * below for why this cannot just be the provider's own default name.
- */
-export const CONFIGCAT_PROVIDER_NAME = 'configcat';
+export const CONFIGCAT_PROVIDER_NAME = 'ConfigCatWebProvider';
 
-export async function createFlagProvider({ env = import.meta.env, logger = console } = {}) {
+export async function createFlagProvider({ env = import.meta.env, logger = console,
+  loader = () => import('@openfeature/config-cat-web-provider'),
+} = {}) {
   const overrides = parseFlagConfig(env.VITE_FEATURE_FLAGS, logger);
   if (Object.keys(overrides).length > 0) {
-    logger.warn('[flags] VITE_FEATURE_FLAGS is set — using local overrides, not the remote control plane');
     return new TypedInMemoryProvider(buildInMemoryConfiguration(overrides));
   }
-
-  const sdkKey = env.VITE_CONFIGCAT_SDK_KEY;
-  if (sdkKey) {
-    const { ConfigCatWebProvider } = await import('@openfeature/config-cat-web-provider');
-    const provider = ConfigCatWebProvider.create(sdkKey, {
+  if (env.VITE_CONFIGCAT_SDK_KEY) {
+    const { ConfigCatWebProvider } = await loader();
+    return ConfigCatWebProvider.create(env.VITE_CONFIGCAT_SDK_KEY, {
       pollIntervalSeconds: resolvePollSeconds(env.VITE_CONFIGCAT_POLL_SECONDS, logger),
+      maxInitWaitTimeSeconds: 4,
     });
-    // `ConfigCatWebProvider` builds its own `metadata.name` from
-    // `ConfigCatWebProvider.name` — the JS class name, which a production
-    // minifier is free to rename per build. Seen in the wild as both
-    // "_ConfigCatWebProvider" and "ut" across different deploys, which
-    // fragments analytics that group exposure events by provider. Pin a
-    // build-independent label instead of trusting the class name.
-    provider.metadata = { ...provider.metadata, name: CONFIGCAT_PROVIDER_NAME };
-    return provider;
   }
-
   return new TypedInMemoryProvider(buildInMemoryConfiguration());
 }
 
-function withTimeout(promise, ms) {
-  return Promise.race([promise, new Promise(resolve => setTimeout(resolve, ms))]);
+async function withTimeout(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Feature flag readiness timed out')), ms);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 
 /**
@@ -282,8 +256,15 @@ export async function setFeatureFlagContext(
  * previous context in place rather than dropping the user out of their bucket.
  */
 export async function refreshAccountIdentity(
-  { token, apiBase = '', fetchImpl = globalThis.fetch, logger = console, storage = globalThis.localStorage } = {}
+  { token, apiBase = '', fetchImpl = apiFetch, logger = console, storage = globalThis.localStorage } = {}
 ) {
+  const generation = identityGeneration;
+  const snapshot = getSessionIdentity();
+  const stillCurrent = () => {
+    const current = getSessionIdentity();
+    return generation === identityGeneration && snapshot.username === current.username &&
+      snapshot.clientId === current.clientId;
+  };
   if (typeof fetchImpl !== 'function') return undefined;
   try {
     const res = await fetchImpl(`${apiBase}/sws/neo/session`, {
@@ -291,6 +272,7 @@ export async function refreshAccountIdentity(
     });
     if (!res?.ok) return undefined;
     const session = await res.json();
+    if (!stillCurrent()) return undefined;
     const accountId = session?.accountId || undefined;
     const accountEmail = session?.accountEmail || undefined;
     if (!accountId && !accountEmail) return undefined;
@@ -313,6 +295,9 @@ export async function refreshAccountIdentity(
       logger,
       storage
     );
+    if (!stillCurrent()) return undefined;
+    if (accountId) await identify(accountId);
+    if (clientId) await group('account_id', clientId);
     return { accountId, accountEmail };
   } catch (error) {
     logger.warn('[flags] Could not resolve the account identity for targeting', error);
