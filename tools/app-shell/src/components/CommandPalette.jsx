@@ -13,6 +13,7 @@ import {
   resolveWindowSearchSuggestions,
 } from '@/lib/vectorSearchConfig.js';
 import { rankVectorMatches } from '@/lib/vectorSearchRanking.js';
+import { filterMenuGroups, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import {
   GlobalSearchDialog as CommandDialog,
   GlobalSearchEmpty as CommandEmpty,
@@ -49,15 +50,10 @@ const ICON_MAP = {
 };
 
 function HighlightedQuery({ text, query }) {
-  const value = String(text ?? '');
-  const normalizedQuery = query.trim();
-  if (!normalizedQuery) return [value];
-  const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const parts = value.split(new RegExp(`(${escapedQuery})`, 'ig'));
-  return parts.map((part, index) => (
-    part.toLowerCase() === normalizedQuery.toLowerCase()
-      ? <mark key={`${part}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{part}</mark>
-      : part
+  return splitSearchHighlight(text, query).map((segment, index) => (
+    segment.match
+      ? <mark key={`${segment.text}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{segment.text}</mark>
+      : segment.text
   ));
 }
 
@@ -350,6 +346,25 @@ export function CommandPalette() {
     false,
   );
 
+  const featureFlagValues = {
+    [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
+    [PUBLIC_API_KEYS]: publicApiKeysEnabled,
+    [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
+  };
+  const visibleMenuGroups = menuConfig.menu
+    .filter((group) => !group.hidden)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((i) => !i.hidden
+        && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
+        && (!i.capability || capabilities?.[i.capability] === true)),
+    }))
+    .filter((group) => group.items.length > 0);
+  // With a query only the matching windows are listed; they render above the record
+  // results so the first one is what Enter opens, and it does not move when the
+  // (debounced, remote) record results arrive.
+  const matchingMenuGroups = filterMenuGroups(visibleMenuGroups, query, tMenu);
+
   const renderVectorMatch = (match) => {
     const fields = Object.entries(match.fields || {})
       .filter(([fieldName, value]) => value && fieldName.toLowerCase() !== 'issotrx')
@@ -393,6 +408,7 @@ export function CommandPalette() {
             <span className="truncate">{vectorSearchScopeLabel}</span>
             <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
+          <div className="relative">
           <button
             type="button"
             onClick={() => setIsTargetPickerOpen((isOpen) => !isOpen)}
@@ -403,9 +419,8 @@ export function CommandPalette() {
           >
             {ui('filterWindows')}
           </button>
-          </div>
           {isTargetPickerOpen && (
-          <div ref={targetPickerRef} className="absolute left-[300px] top-12 z-20 w-72 rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
+          <div ref={targetPickerRef} className="absolute right-0 top-full z-20 mt-2 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
               const label = tMenu(target.label) || target.label;
@@ -424,6 +439,8 @@ export function CommandPalette() {
             })}
           </div>
           )}
+          </div>
+          </div>
         </div>
       )}
       {isVectorSearchLoading && (
@@ -436,7 +453,7 @@ export function CommandPalette() {
         </div>
       )}
       <CommandList data-testid="CommandList__73263e">
-        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && (
+        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && matchingMenuGroups.length === 0 && (
           <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
         )}
         {query.trim().length === 0 && (
@@ -502,26 +519,14 @@ export function CommandPalette() {
             })}
           </CommandGroup>
         )}
-        {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {menuConfig.menu.filter(g => !g.hidden).map((group) => {
+        {matchingMenuGroups.map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
-          const featureFlagValues = {
-            [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
-            [PUBLIC_API_KEYS]: publicApiKeysEnabled,
-            [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
-          };
-          const visibleItems = group.items.filter(i => !i.hidden
-            && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
-            && (!i.capability || capabilities?.[i.capability] === true));
-          if (visibleItems.length === 0) return null;
           return (
             <CommandGroup
               key={group.group}
               heading={tMenu(group.group)}
               data-testid="CommandGroup__73263e">
-              {visibleItems.map((item) => {
+              {group.items.map((item) => {
                 const translatedLabel = tMenu(item.label);
                 return (
                   <CommandItem
@@ -540,6 +545,9 @@ export function CommandPalette() {
             </CommandGroup>
           );
         })}
+        {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
       </CommandList>
       <div className="flex h-10 shrink-0 items-center justify-between border-t border-[hsl(var(--border-control))] bg-muted/30 px-3 text-sm text-muted-foreground" data-testid="command-search-help">
         <div className="flex items-center gap-2">

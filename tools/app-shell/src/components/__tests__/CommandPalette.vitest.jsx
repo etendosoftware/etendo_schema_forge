@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/CommandPalette.jsx
+// @covers tools/app-shell/src/lib/globalSearchMenu.js
 // Mocks BEFORE any import
 
 vi.mock('@/i18n', () => ({
@@ -5,8 +7,9 @@ vi.mock('@/i18n', () => ({
   useMenuLabel: () => (key) => `translated:${key}`,
 }));
 
+const mockNavigate = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
   useLocation: () => ({ pathname: '/sales-invoice' }),
 }));
 
@@ -40,6 +43,24 @@ vi.mock('../../menu.json', () => ({
         ],
       },
       {
+        group: 'Configuración',
+        icon: 'Settings',
+        hidden: false,
+        items: [
+          { name: 'user', label: 'Users', hidden: false },
+          { name: 'role', label: 'Roles', hidden: false },
+        ],
+      },
+      {
+        group: 'Logistics',
+        icon: 'Truck',
+        hidden: false,
+        items: [
+          { name: 'goods-shipment', label: 'Albarán', hidden: false },
+          { name: 'warehouse', label: 'Warehouse', hidden: false },
+        ],
+      },
+      {
         group: 'Hidden Group',
         icon: 'Package',
         hidden: true,
@@ -65,7 +86,7 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
     </div>
   ),
   GlobalSearchDialog: ({ open, children }) =>
-    open ? <div data-testid="cmd-dialog">{children}</div> : null,
+    open ? <div data-testid="cmd-dialog"><div data-testid="CommandDropdown__8e5d1a">{children}</div></div> : null,
   GlobalSearchInput: (props) => <input data-testid="cmd-input" {...props} />,
   GlobalSearchList: ({ children }) => <div data-testid="cmd-list">{children}</div>,
   GlobalSearchEmpty: ({ children }) => <div data-testid="cmd-empty">{children}</div>,
@@ -73,13 +94,13 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
     <div data-testid={`cmd-group-${heading}`}>{children}</div>
   ),
   GlobalSearchItem: ({ value, children, onSelect, ...props }) => (
-    <div {...props} data-testid={props['data-search-kind'] === 'recent' ? props['data-testid'] : `cmd-item-${value}`} onClick={onSelect}>
+    <div {...props} data-global-search-item="true" data-testid={props['data-search-kind'] === 'recent' ? props['data-testid'] : `cmd-item-${value}`} onClick={onSelect}>
       {children}
     </div>
   ),
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
 import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
@@ -92,6 +113,32 @@ function SetSearchQuery({ value }) {
   const { setQuery } = useGlobalSearch();
   useEffect(() => setQuery(value), [setQuery, value]);
   return null;
+}
+
+// Mirrors the top-bar input: forwards its keys to the shared global-search handler.
+function SearchInputBridge() {
+  const { handleKeyDown } = useGlobalSearch();
+  return <input data-testid="bridge-input" onKeyDown={handleKeyDown} />;
+}
+
+function renderWithQuery(value) {
+  render(
+    <GlobalSearchProvider>
+      <SetSearchQuery value={value} />
+      <SearchInputBridge />
+      <CommandPalette />
+    </GlobalSearchProvider>,
+  );
+  openPalette();
+}
+
+function renderedWindowNames() {
+  return Array.from(document.querySelectorAll('[data-testid^="cmd-group-translated:"] [data-testid^="cmd-item-"]'))
+    .map((el) => el.dataset.testid.split(' ').at(-1));
+}
+
+async function waitForVectorSearchIdle() {
+  await waitFor(() => expect(screen.queryByTestId('vector-search-loading')).not.toBeInTheDocument());
 }
 
 describe('CommandPalette', () => {
@@ -248,6 +295,69 @@ describe('CommandPalette', () => {
     fireEvent.keyDown(document, { key: 'Enter' });
 
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+  });
+
+  describe('window matches (ETP-5602)', () => {
+    it('lists only the windows of a section whose name matches the query', async () => {
+      renderWithQuery('Configura');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role']));
+      expect(screen.getByTestId('cmd-group-translated:Configuración')).toBeInTheDocument();
+      expect(screen.queryByTestId('cmd-group-translated:Sales')).not.toBeInTheDocument();
+    });
+
+    it('matches section and window names ignoring accents and case', async () => {
+      renderWithQuery('CONFIGURACION');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role']));
+
+      cleanup();
+      renderWithQuery('albaran');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['goods-shipment']));
+    });
+
+    it('matches the original (untranslated) label and the window name', async () => {
+      renderWithQuery('warehouse');
+      await waitFor(() => expect(renderedWindowNames()).toEqual(['warehouse']));
+    });
+
+    it('does not report no results when only windows match', async () => {
+      renderWithQuery('Configura');
+      await waitForVectorSearchIdle();
+      expect(screen.queryByTestId('cmd-empty')).not.toBeInTheDocument();
+    });
+
+    it('reports no results and lists no window when nothing matches', async () => {
+      renderWithQuery('zzzqqq');
+      await waitForVectorSearchIdle();
+      expect(screen.getByTestId('cmd-empty')).toHaveTextContent('noResultsFound');
+      expect(renderedWindowNames()).toEqual([]);
+    });
+
+    it('keeps every visible window when the query is empty', () => {
+      renderWithQuery('');
+      expect(renderedWindowNames()).toEqual(['sales-order', 'user', 'role', 'goods-shipment', 'warehouse']);
+    });
+
+    it('opens the first matching window on Enter', async () => {
+      renderWithQuery('Configura');
+      await waitFor(() => expect(renderedWindowNames()[0]).toBe('user'));
+      fireEvent.keyDown(screen.getByTestId('bridge-input'), { key: 'Enter' });
+      expect(mockNavigate).toHaveBeenCalledWith('/user');
+    });
+  });
+
+  it('anchors the window filter picker to its trigger instead of a fixed panel offset', async () => {
+    render(<CommandPalette />);
+    openPalette();
+    await waitFor(() => expect(screen.getByTestId('vector-search-target-picker-trigger')).toBeInTheDocument());
+    const trigger = screen.getByTestId('vector-search-target-picker-trigger');
+    fireEvent.click(trigger);
+    const picker = screen.getByTestId('vector-search-target-picker');
+    expect(picker.className).not.toMatch(/left-\[/);
+    expect(picker.parentElement).toContainElement(trigger);
+    expect(picker.parentElement.className).toMatch(/\brelative\b/);
+
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument();
   });
 
   it('returns the keep-open decision to the top-bar keyboard bridge', () => {
