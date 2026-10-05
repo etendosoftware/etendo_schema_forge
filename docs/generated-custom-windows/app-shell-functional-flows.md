@@ -727,6 +727,15 @@ The Dashboard period filter (the range selector: "Últimos 12 meses", "Últimos 
 
 Full auth/session design and the "route every logout through `useLogout()`" convention: [`../architecture/07-auth-and-security.md`](../architecture/07-auth-and-security.md#logout-choke-point-uselogout).
 
+## Dashboard financial widgets — single-bucket chart and zero-profit headline — ETP-5493
+
+**"Evolución financiera" — single-bucket period.** When the selected period yields a single bucket (e.g. "Mes en curso" on the 1st of the month, or "Año en curso" in January), the line view draws that point centered with a dot marker instead of an invisible zero-length line, and the bar width is capped so a lone bar does not stretch across the whole chart.
+
+**"Resumen financiero" — zero net profit.** When net profit is 0 the headline is neutral and shows a Minus icon:
+- With no income and no expenses it reads "Sin ingresos ni gastos {period}".
+- With equal non-zero income and expenses it reads "Tus ingresos y gastos se igualaron {period}".
+- Any other case keeps the existing positive or negative headline unchanged.
+
 ## Secondary tab strip — full-bleed divider — ETP-4605
 
 **Applies to every window with secondary tabs.** The strip that holds the child-entity /

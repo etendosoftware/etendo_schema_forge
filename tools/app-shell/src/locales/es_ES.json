@@ -19742,6 +19742,8 @@
     "newInvoice": "Nueva factura",
     "financialSummaryPositive": "Tus ingresos superaron a los gastos {period}",
     "financialSummaryNegative": "Tus gastos superaron a los ingresos {period}",
+    "financialSummaryNoActivity": "Sin ingresos ni gastos {period}",
+    "financialSummaryBreakEven": "Tus ingresos y gastos se igualaron {period}",
     "financialSummaryIncome": "Ingresos",
     "financialSummaryExpenses": "Gastos",
     "financialSummaryProfit": "Beneficio",

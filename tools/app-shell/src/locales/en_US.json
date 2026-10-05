@@ -19506,6 +19506,8 @@
     "newInvoice": "New invoice",
     "financialSummaryPositive": "Your revenues beat your expenses {period}",
     "financialSummaryNegative": "Your expenses beat your revenues {period}",
+    "financialSummaryNoActivity": "No income or expenses {period}",
+    "financialSummaryBreakEven": "Your income and expenses broke even {period}",
     "financialSummaryIncome": "Income",
     "financialSummaryExpenses": "Expenses",
     "financialSummaryProfit": "Profit",
