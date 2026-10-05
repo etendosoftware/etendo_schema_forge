@@ -1585,20 +1585,11 @@ Three constraints worth knowing:
   toggle with an explanatory caption naming the limit when the difference exceeds it. An unset or
   zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
-- **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
-  `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
-  any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
-  the consumed credit or a PIS transfer exists) now refuses it with a 400 and the
-  `ETGO_WriteoffLimitExceeded` AD_Message (English only — the module ships no message
-  translations). Same rule as `writeoffMath.js → writeoffState`: difference = round2(pending
-  installment) − round2(cash + selected credit sources), exactly as `usePaymentBalance` rounds,
-  compared with the limit with no currency conversion; equal-to-limit allowed, null/0 = unlimited,
-  not applied when editing a draft (that path never writes off). The SPA never sends an over-limit
-  write-off, so its behaviour is unchanged. Known gap: a PIS transfer is checked before the bank is
-  instructed, but its deferred replay re-runs the guard afterwards, so a limit lowered in between
-  refuses the replay with the money already moved.
-  The same ETP-5558 change fixed the blocked caption, which always read "0,00 €":
-  `writeoffState` now returns the effective `limit` (`null` when there is none).
+- **Enforced server-side too (ETP-5558).** `PaymentWriteoffLimitGuard` refuses an over-limit
+  `writeoffDifference:true` on `registerPayment` with a 400, so MCP and direct REST calls cannot
+  bypass the cap. The rule, its edge cases, the known PIS-replay gap and the fixed blocked caption
+  are identical for both invoice windows and documented once in `sales-invoice.md` → *Enforced
+  server-side too (ETP-5558)*.
 
 The flag travels as `writeoffDifference` in the existing `registerPayment` action body. Note this is
 **not** the `writeoffs: {psdId: bool}` shape used by the New Movement / `PaymentForm` flow: that is a
