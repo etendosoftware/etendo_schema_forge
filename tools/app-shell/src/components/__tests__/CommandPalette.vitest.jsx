@@ -100,9 +100,10 @@ vi.mock('@/components/global-search/GlobalSearchPrimitives.jsx', () => ({
   ),
 }));
 
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import { useEffect } from 'react';
 import { CommandPalette } from '../CommandPalette.jsx';
+import { splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import { GlobalSearchProvider, useGlobalSearch } from '@/components/global-search/GlobalSearchContext.jsx';
 
 function openPalette() {
@@ -297,7 +298,7 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
-  describe('window matches (ETP-5602)', () => {
+  describe('filters the menu windows by the query', () => {
     it('lists only the windows of a section whose name matches the query', async () => {
       renderWithQuery('Configura');
       await waitFor(() => expect(renderedWindowNames()).toEqual(['user', 'role']));
@@ -332,6 +333,17 @@ describe('CommandPalette', () => {
       expect(renderedWindowNames()).toEqual([]);
     });
 
+    it('highlights a match whole ignoring accents, case and whitespace runs', () => {
+      expect(splitSearchHighlight('Albarán de venta', 'albaran')).toEqual([
+        { text: 'Albarán', match: true },
+        { text: ' de venta', match: false },
+      ]);
+      expect(splitSearchHighlight('Albarán  de venta', '  ALBARAN de ')).toEqual([
+        { text: 'Albarán  de', match: true },
+        { text: ' venta', match: false },
+      ]);
+    });
+
     it('keeps every visible window when the query is empty', () => {
       renderWithQuery('');
       expect(renderedWindowNames()).toEqual(['sales-order', 'user', 'role', 'goods-shipment', 'warehouse']);
@@ -345,19 +357,37 @@ describe('CommandPalette', () => {
     });
   });
 
-  it('anchors the window filter picker to its trigger instead of a fixed panel offset', async () => {
+  // The palette's cmdk-root is overflow-hidden and only as wide/tall as the search box and its
+  // results, so any picker rendered inside it can be clipped. It must be portaled out of it.
+  it('renders the window filter picker outside the palette so the palette cannot clip it', async () => {
     render(<CommandPalette />);
     openPalette();
-    await waitFor(() => expect(screen.getByTestId('vector-search-target-picker-trigger')).toBeInTheDocument());
-    const trigger = screen.getByTestId('vector-search-target-picker-trigger');
-    fireEvent.click(trigger);
-    const picker = screen.getByTestId('vector-search-target-picker');
-    expect(picker.className).not.toMatch(/left-\[/);
-    expect(picker.parentElement).toContainElement(trigger);
-    expect(picker.parentElement.className).toMatch(/\brelative\b/);
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
 
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument();
+    const picker = await screen.findByTestId('vector-search-target-picker');
+    expect(screen.getByTestId('cmd-dialog')).not.toContainElement(picker);
+    expect(document.body).toContainElement(picker);
+    expect(screen.getAllByTestId('vector-search-target-option').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the palette open while using the picker and dismisses only the picker when focus leaves it', async () => {
+    render(<><input data-testid="global-search-input" /><CommandPalette /></>);
+    openPalette();
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
+    const option = (await screen.findAllByTestId('vector-search-target-option'))[0];
+
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('vector-search-target-picker')).toBeInTheDocument();
+
+    // Radix dismisses on pointer-down or focus outside; jsdom only drives the focus path.
+    // The search input belongs to the palette, so the palette itself stays open.
+    act(() => screen.getByTestId('global-search-input').focus());
+    await waitFor(() => expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument());
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
   it('returns the keep-open decision to the top-bar keyboard bridge', () => {

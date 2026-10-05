@@ -21,6 +21,7 @@ import {
   GlobalSearchItem as CommandItem,
   GlobalSearchList as CommandList,
 } from '@/components/global-search/GlobalSearchPrimitives.jsx';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import menuConfig from '../menu.json';
 
 import {
@@ -81,7 +82,6 @@ export function CommandPalette() {
   const keyboardIndexRef = useRef(-1);
   const dropdownInteractionRef = useRef(false);
   const targetPickerRef = useRef(null);
-  const targetPickerTriggerRef = useRef(null);
   const vectorSearchContracts = useVectorSearchContracts(open);
   const [selectedVectorTargetKeys, setSelectedVectorTargetKeys] = useState(null);
   const [isTargetPickerOpen, setIsTargetPickerOpen] = useState(false);
@@ -194,24 +194,11 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    if (!isTargetPickerOpen) return undefined;
-    const closePickerOutside = (event) => {
-      if (targetPickerRef.current?.contains(event.target)) return;
-      if (targetPickerTriggerRef.current?.contains(event.target)) return;
-      setIsTargetPickerOpen(false);
-    };
-    document.addEventListener('pointerdown', closePickerOutside, true);
-    document.addEventListener('focusin', closePickerOutside, true);
-    return () => {
-      document.removeEventListener('pointerdown', closePickerOutside, true);
-      document.removeEventListener('focusin', closePickerOutside, true);
-    };
-  }, [isTargetPickerOpen]);
-
-  useEffect(() => {
     const preserveDropdownClick = (event) => {
       const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-      if (dropdown?.contains(event.target)) dropdownInteractionRef.current = true;
+      if (dropdown?.contains(event.target) || targetPickerRef.current?.contains(event.target)) {
+        dropdownInteractionRef.current = true;
+      }
     };
     const closeOnFocusOut = () => {
       window.setTimeout(() => {
@@ -223,7 +210,7 @@ export function CommandPalette() {
         const active = document.activeElement;
         const input = document.querySelector('[data-testid="global-search-input"]');
         const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-        if (!input?.contains(active) && !dropdown?.contains(active)) setOpen(false);
+        if (!input?.contains(active) && !dropdown?.contains(active) && !targetPickerRef.current?.contains(active)) setOpen(false);
       }, 0);
     };
     document.addEventListener('focusout', closeOnFocusOut);
@@ -408,19 +395,26 @@ export function CommandPalette() {
             <span className="truncate">{vectorSearchScopeLabel}</span>
             <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
-          <div className="relative">
+          {/* Portaled (Radix) so the cmdk-root's overflow-hidden — the dialog is only as wide and
+              as tall as the search box and its results — can never clip it; Radix flips/shifts it
+              to stay inside the viewport. z-60: a dropdown above the z-50 palette. */}
+          <Popover open={isTargetPickerOpen} onOpenChange={setIsTargetPickerOpen}>
+          <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => setIsTargetPickerOpen((isOpen) => !isOpen)}
-            ref={targetPickerTriggerRef}
             className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-expanded={isTargetPickerOpen}
             data-testid="vector-search-target-picker-trigger"
           >
             {ui('filterWindows')}
           </button>
-          {isTargetPickerOpen && (
-          <div ref={targetPickerRef} className="absolute right-0 top-full z-20 mt-2 max-h-72 w-72 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
+          </PopoverTrigger>
+          <PopoverContent
+            ref={targetPickerRef}
+            align="start"
+            collisionPadding={16}
+            className="z-[60] max-h-[min(18rem,var(--radix-popover-content-available-height))] w-72 overflow-y-auto rounded-2xl p-2 shadow-lg"
+            data-testid="vector-search-target-picker"
+          >
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
               const label = tMenu(target.label) || target.label;
@@ -437,9 +431,8 @@ export function CommandPalette() {
                 </label>
               );
             })}
-          </div>
-          )}
-          </div>
+          </PopoverContent>
+          </Popover>
           </div>
         </div>
       )}

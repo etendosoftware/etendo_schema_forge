@@ -33,23 +33,25 @@ export function filterMenuGroups(groups, query, translate) {
 }
 
 function foldChar(char) {
-  return char.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (/\s/.test(char)) return ' ';
+  return char.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 /**
- * Splits `text` into `{ text, match }` segments around every case- and
- * accent-insensitive occurrence of `query`, keeping the original characters so
- * "Albarán" is highlighted whole when the user typed "albaran".
+ * Splits `text` into `{ text, match }` segments around every occurrence of `query`,
+ * folded exactly as `filterMenuGroups` matches (case, accents, whitespace runs), while
+ * keeping the original characters — so "Albarán" is highlighted whole for "albaran".
  */
 export function splitSearchHighlight(text, query) {
   const value = String(text ?? '');
-  const needle = Array.from(String(query ?? '').trim()).map(foldChar).join('');
+  const needle = normalizeLabel(query);
   if (!needle) return [{ text: value, match: false }];
 
   let folded = '';
   const origin = [];
   for (let index = 0; index < value.length; index += 1) {
     for (const char of foldChar(value[index])) {
+      if (char === ' ' && folded.endsWith(' ')) continue;
       folded += char;
       origin.push(index);
     }
