@@ -1,170 +1,277 @@
 // @vitest-environment jsdom
+// ETP-5591 — Not Posted Documents rebuilt on the shared list building blocks: quick filters in the
+// URL (auto-applied), DataTable with status badges and hover actions, floating selection toolbar.
 import { render, screen, waitFor, fireEvent, act, within } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import NotPostedDocumentsPage from '../NotPostedDocumentsPage.jsx';
-import { useUI } from '@/i18n';
 
-vi.mock('@/i18n', () => ({ useUI: vi.fn(() => (key) => key) }));
+// Identity translator; `{count}`-style params are echoed so a test can see which count was asked.
+// Hoisted and STABLE: the page memoizes on `ui`, so a new function per render would refetch forever.
+const { uiState } = vi.hoisted(() => {
+  const identity = (key, params) => (params && 'count' in params ? `${key}(${params.count})` : key);
+  return { uiState: { impl: identity, identity, ui: (key, params) => uiState.impl(key, params) } };
+});
+vi.mock('@/i18n', () => ({
+  useUI: () => uiState.ui,
+  useLabel: () => (key) => key,
+  useMenuLabel: () => (key) => key,
+  useLocale: () => ({}),
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: vi.fn() }),
+}));
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
 
 const BASE_URL = '/swebsf/not-posted-documents';
 const TOKEN = 'test-token';
 
 const ROWS = [
   {
-    documentId: 'doc-1',
-    documentType: 'Sales Invoice',
-    description: 'INV-001',
-    accountingDate: '2024-03-15T00:00:00',
-    organization: 'Main Org',
-    tableId: 'tbl-1',
+    documentId: 'doc-1', documentType: 'Sales Invoice', documentTypeCode: 'SI', accountingStatus: 'E',
+    description: 'INV-001', accountingDate: '2024-03-15', organization: 'Main Org', tableId: '318',
   },
   {
-    documentId: 'doc-2',
-    documentType: 'Purchase Invoice',
-    description: 'INV-002',
-    accountingDate: '2024-04-20',
-    organization: 'Branch',
-    tableId: 'tbl-2',
+    documentId: 'doc-2', documentType: 'Matched Invoice', documentTypeCode: 'MI', accountingStatus: 'C',
+    description: 'MI-002', accountingDate: '2024-04-20', organization: 'Branch', tableId: '472',
+  },
+  {
+    documentId: 'doc-3', documentType: 'Transaction', documentTypeCode: 'T', accountingStatus: 'p',
+    description: 'TRX-003', accountingDate: '2024-05-01', organization: 'Main Org',
+    tableId: '4D8C3B3C31D1410DA046140C9F024D17', financialAccountId: 'acc-9',
+  },
+  {
+    documentId: 'doc-5', documentType: 'Goods Receipt', documentTypeCode: 'GR', accountingStatus: 'NC',
+    description: 'GR-005', accountingDate: '2024-06-02', organization: 'Main Org', tableId: '319',
+  },
+  {
+    documentId: 'doc-4', documentType: 'Some Future Type', documentTypeCode: null, accountingStatus: null,
+    description: 'FUT-004', accountingDate: '2024-06-01', organization: 'Main Org', tableId: null,
   },
 ];
 
-function mkFetch(rows = []) {
+const DOC_TYPES = [
+  { value: 'SI', label: 'Factura (Cliente)' },
+  { value: 'GS', label: 'Albarán (Cliente)' },
+  { value: 'MI', label: 'Facturas cuadradas' },
+  { value: 'T', label: 'Transacción' },
+];
+
+const json = (body, init = {}) => Promise.resolve({ ok: true, status: 200, json: async () => body, ...init });
+
+/** Routes every request; `overrides` maps a URL fragment to a response factory. */
+function mkFetch(rows = ROWS, overrides = {}) {
   return vi.fn((url) => {
-    if (url.includes('_mode=filter-options')) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          documentTypes: [{ value: 'SI', label: 'Sales Invoice' }],
-          accountingStatuses: [],
-        }),
-      });
-    }
-    return Promise.resolve({
-      ok: true,
-      json: async () => ({ rows, total: rows.length }),
-    });
+    const u = String(url);
+    const hit = Object.keys(overrides).find((frag) => u.includes(frag));
+    if (hit) return overrides[hit](u);
+    if (u.includes('_mode=filter-options')) return json({ documentTypes: DOC_TYPES, accountingStatuses: [] });
+    if (u.includes('/action/bulk-post')) return json({ ok: 1, total: 1, results: [], success: true });
+    if (u.includes('/action/post')) return json({ success: true });
+    return json({ rows, total: rows.length });
   });
 }
 
+/** The row-list GETs (not the filter options), as URLSearchParams. */
+function rowRequests() {
+  return globalThis.fetch.mock.calls
+    .map(([url]) => String(url))
+    .filter((u) => u.includes('/header?') && !u.includes('_mode=filter-options'))
+    .map((u) => new URLSearchParams(u.split('?')[1]));
+}
+
+let location;
+function LocationProbe() {
+  location = useLocation();
+  return null;
+}
+
+function renderPage(url = '/not-posted-documents') {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <Routes>
+        <Route
+          path="/not-posted-documents"
+          element={(
+            <>
+              <NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />
+              <LocationProbe />
+            </>
+          )} />
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+const rowOf = (id) => screen.getByTestId(`row-${id}`);
+const selectRow = (id) => fireEvent.click(within(rowOf(id)).getByRole('checkbox'));
+
 beforeEach(() => {
   vi.clearAllMocks();
+  uiState.impl = uiState.identity;
+  globalThis.fetch = mkFetch();
 });
 
-describe('NotPostedDocumentsPage', () => {
-  it('renders filter controls', async () => {
-    globalThis.fetch = mkFetch();
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => expect(screen.getByTestId('npd-filter-document-type')).toBeInTheDocument());
-    expect(screen.getByTestId('npd-filter-apply')).toBeInTheDocument();
+describe('NotPostedDocumentsPage — toolbar', () => {
+  it('renders the quick filters and the right-side actions, with no "Buscar" and no reset by default', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    expect(screen.getByTestId('npd-filter-document-type')).toHaveTextContent('allDocuments');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('allStatuses');
+    expect(screen.getByTestId('npd-filter-date-range')).toHaveTextContent('dateRangeLast12Months');
+    expect(screen.getByTestId('npd-share')).toBeInTheDocument();
+    expect(screen.getByTestId('finance-refresh-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('npd-filter-apply')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('npd-reset-filters')).not.toBeInTheDocument();
   });
 
-  // Regression: MultiSelect used to drop unknown props, so data-testid never
-  // reached the DOM and the accounting-status filter was unqueryable in tests
-  // (and by any consumer relying on it).
-  it('renders the accounting status MultiSelect with its data-testid and supports toggling an option', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            documentTypes: [],
-            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
-          }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+  it('loads the last 12 months by default, with no status or document filter', async () => {
+    renderPage();
+    await waitFor(() => expect(rowRequests().length).toBe(1));
+    const [query] = rowRequests();
+    expect(query.get('dateFrom')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(query.get('dateTo')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(query.has('accountingStatus')).toBe(false);
+    expect(query.has('document')).toBe(false);
+  });
+
+  it('lists document types alphabetically under the "Tipo de documento" heading', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    expect(await screen.findByText('documentType', { selector: 'div' })).toBeInTheDocument();
+    const options = screen.getAllByRole('button')
+      .map((b) => b.textContent)
+      .filter((t) => ['Albarán (Cliente)', 'Factura (Cliente)', 'docTypeMatchedInvoices', 'Transacción'].includes(t));
+    // "Relación albarán-factura" (MI) sorts by its OWN translated name, not core's.
+    expect(options).toEqual(['Albarán (Cliente)', 'docTypeMatchedInvoices', 'Factura (Cliente)', 'Transacción']);
+  });
+
+  it('refetches as soon as a document type is picked, and puts it in the URL', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+
+    await waitFor(() => expect(rowRequests().length).toBe(2));
+    expect(rowRequests()[1].get('document')).toBe('GS');
+    expect(location.search).toBe('?document=GS');
+    expect(screen.getByTestId('npd-reset-filters')).toBeInTheDocument();
+  });
+
+  it('multi-selects statuses as badges, sends E and C for "Error", and counts them on the trigger', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'postedStatusPeriodClosed' }));
+    await waitFor(() => expect(location.search).toBe('?status=p'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'notPostedStatusError' }));
+
+    await waitFor(() => expect(location.search).toBe('?status=p%2CE'));
+    expect(rowRequests().at(-1).get('accountingStatus')).toBe('p,E,C');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('statusesCount(2)');
+    // No search box in the status list.
+    expect(screen.queryByPlaceholderText('searchValues')).not.toBeInTheDocument();
+  });
+
+  it('"Todos los errores" ticks every error status, reads as such on the trigger, and unticks them all', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'allErrors' }));
+
+    await waitFor(() => expect(location.search).toBe('?status=p%2Ci%2CNC%2CE'));
+    expect(rowRequests().at(-1).get('accountingStatus')).toBe('p,i,NC,E,C');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('allErrors');
+    expect(screen.getByRole('checkbox', { name: 'allErrors' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('checkbox', { name: 'notPostedStatusUnposted' })).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'allErrors' }));
+    await waitFor(() => expect(location.search).toBe(''));
+  });
+
+  it('unticking one error status drops "Todos los errores" and counts the rest', async () => {
+    renderPage('/not-posted-documents?status=p,i,NC,E');
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-filter-accounting-status'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'postedStatusCostNotCalculated' }));
+
+    await waitFor(() => expect(location.search).toBe('?status=p%2Ci%2CE'));
+    expect(screen.getByRole('checkbox', { name: 'allErrors' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('statusesCount(3)');
+  });
+
+  it('restores filters from the URL on load (Share / browser Back)', async () => {
+    renderPage('/not-posted-documents?document=SI&status=N&date=all');
+    await waitFor(() => expect(rowRequests().length).toBe(1));
+    const [query] = rowRequests();
+    expect(query.get('document')).toBe('SI');
+    expect(query.get('accountingStatus')).toBe('N');
+    expect(query.has('dateFrom')).toBe(false);
+    expect(screen.getByTestId('npd-filter-accounting-status')).toHaveTextContent('notPostedStatusUnposted');
+  });
+
+  it('"Limpiar filtros" returns to the defaults, including the 12-month window', async () => {
+    renderPage('/not-posted-documents?document=SI&status=N&date=all');
+    fireEvent.click(await screen.findByTestId('npd-reset-filters'));
+    await waitFor(() => expect(location.search).toBe(''));
+    expect(rowRequests().at(-1).has('dateFrom')).toBe(true);
+    expect(screen.queryByTestId('npd-reset-filters')).not.toBeInTheDocument();
+  });
+
+  it('Share copies the current page URL', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-share')); });
+    expect(writeText).toHaveBeenCalledWith(window.location.href);
+    expect(toast.success).toHaveBeenCalledWith('linkCopied');
+  });
+
+  it('Share reports a clipboard failure', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true,
     });
-
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-
-    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
-    expect(multiSelect).toBeInTheDocument();
-
-    const trigger = within(multiSelect).getByRole('button');
-    fireEvent.click(trigger);
-    const optionCheckbox = within(multiSelect).getByRole('checkbox');
-    fireEvent.click(optionCheckbox);
-
-    expect(trigger).toHaveTextContent('Unposted');
-
-    // Toggling the same option again must deselect it (Set delete branch)
-    fireEvent.click(optionCheckbox);
-    expect(trigger).toHaveTextContent('—');
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-share')); });
+    expect(toast.error).toHaveBeenCalledWith('copyFailed');
   });
 
-  it('closes the accounting status dropdown when clicking outside of it', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            documentTypes: [],
-            accountingStatuses: [{ value: 'N', label: 'Unposted' }],
-          }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
-    });
+  it('Refresh refetches with the same filters', async () => {
+    renderPage('/not-posted-documents?document=SI');
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('finance-refresh-button'));
+    await waitFor(() => expect(rowRequests().length).toBe(2));
+    expect(rowRequests()[1].toString()).toBe(rowRequests()[0].toString());
+  });
+});
 
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-
-    const multiSelect = await waitFor(() => screen.getByTestId('npd-filter-accounting-status'));
-    fireEvent.click(within(multiSelect).getByRole('button'));
-    expect(within(multiSelect).getByRole('checkbox')).toBeInTheDocument();
-
-    fireEvent.mouseDown(document.body);
-
-    expect(within(multiSelect).queryByRole('checkbox')).not.toBeInTheDocument();
+describe('NotPostedDocumentsPage — rows', () => {
+  it('shows the translated type, with our own rename for MI, and the raw label when there is no code', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    expect(rowOf('doc-1')).toHaveTextContent('Factura (Cliente)');
+    expect(rowOf('doc-2')).toHaveTextContent('docTypeMatchedInvoices');
+    expect(rowOf('doc-3')).toHaveTextContent('Transacción');
+    expect(rowOf('doc-4')).toHaveTextContent('Some Future Type');
   });
 
-  it('shows an ellipsis and disables the row post button while a post is in flight', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    let resolvePost;
-    globalThis.fetch.mockImplementationOnce(
-      () => new Promise((resolve) => { resolvePost = resolve; }),
-    );
-
-    const postButton = screen.getByTestId('npd-post-row-doc-1');
-    fireEvent.click(postButton);
-
-    await waitFor(() => expect(postButton).toHaveTextContent('…'));
-    expect(postButton).toBeDisabled();
-
-    await act(async () => {
-      resolvePost({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) });
-    });
+  it('renders one status badge per row; E and C both read "Error", an unknown status shows none', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    expect(screen.getByTestId('npd-status-doc-1')).toHaveTextContent('notPostedStatusError');
+    expect(screen.getByTestId('npd-status-doc-2')).toHaveTextContent('notPostedStatusError');
+    expect(screen.getByTestId('npd-status-doc-3')).toHaveTextContent('postedStatusPeriodClosed');
+    expect(screen.getByTestId('npd-status-doc-5')).toHaveTextContent('postedStatusCostNotCalculated');
+    expect(screen.queryByTestId('npd-status-doc-4')).not.toBeInTheDocument();
   });
 
-  it('shows empty state when no rows returned', async () => {
-    globalThis.fetch = mkFetch([]);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-empty-state'));
-  });
-
-  it('renders rows returned by the API', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-doc-1'));
-    expect(screen.getByTestId('npd-row-doc-2')).toBeInTheDocument();
-  });
-
-  it('formats accountingDate to YYYY-MM-DD', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-doc-1'));
-    expect(screen.getByText('2024-03-15')).toBeInTheDocument();
-  });
-
-  it('sends Authorization Bearer header', async () => {
-    globalThis.fetch = mkFetch([]);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+  it('sends the bearer token and the UI locale', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -173,543 +280,341 @@ describe('NotPostedDocumentsPage', () => {
     );
   });
 
-  it('selecting a row reveals the bulk post button', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    expect(screen.getByTestId('npd-post-selected')).toBeInTheDocument();
+  it('shows the "nothing to post" empty state, with no reset action, when the defaults return nothing', async () => {
+    globalThis.fetch = mkFetch([]);
+    renderPage();
+    const empty = await screen.findByTestId('npd-empty-none');
+    expect(empty).toHaveTextContent('notPostedEmptyNoneTitle');
+    expect(screen.queryByTestId('npd-empty-reset-filters')).not.toBeInTheDocument();
   });
 
-  it('toggling a selected row hides the bulk post button again', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    expect(screen.queryByTestId('npd-post-selected')).not.toBeInTheDocument();
+  it('shows the "no matches" empty state with a reset action when filters return nothing', async () => {
+    globalThis.fetch = mkFetch([]);
+    renderPage('/not-posted-documents?status=i');
+    const empty = await screen.findByTestId('npd-empty-filtered');
+    expect(empty).toHaveTextContent('notPostedEmptyFilteredTitle');
+    expect(empty).toHaveTextContent('notPostedEmptyFilteredDescription');
+    fireEvent.click(screen.getByTestId('npd-empty-reset-filters'));
+    await waitFor(() => expect(location.search).toBe(''));
   });
 
-  it('postRow POSTs to the correct action URL', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({ ok: true, json: async () => ({ success: true, message: 'Document posted' }) }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+  // ETP-5485 (BUG-2) — a load failure never renders raw backend text.
+  it('shows the translated load error, never the raw backend or HTTP text', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      'dateFrom=': () => Promise.resolve({
+        ok: false, status: 500, statusText: 'Internal Server Error', json: async () => ({ message: 'Something went wrong' }),
+      }),
     });
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      `${BASE_URL}/header/doc-1/action/post`,
-      expect.objectContaining({ method: 'POST' }),
-    );
-  });
-
-  it('postRow without tableId calls toast.error', async () => {
-    const rowNoTable = { ...ROWS[0], tableId: null, documentId: 'doc-3' };
-    globalThis.fetch = mkFetch([rowNoTable]);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-3'));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-3'));
-    });
-
-    // ETP-5485 review M2 — translated message, no hardcoded English ("unknown tableId for …").
-    expect(toast.error).toHaveBeenCalledWith('postingFailed');
-  });
-
-  // ETP-5485 review M1 — a post rejected with 403 (grant revoked mid-session) must not toast the
-  // raw HTTP status text "Forbidden".
-  it('postRow toasts the translated failure, never the raw status text, when the post answers 403', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ error: 'Access denied' }) }),
-    );
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith('postingFailed');
-    expect(toast.error).not.toHaveBeenCalledWith('Forbidden');
-  });
-
-  // ETP-5485 (BUG-2) — a load failure never renders raw backend text: an untranslatable message
-  // falls back to the translated `documentsLoadError`, and the HTTP status text never shows.
-  it('shows the translated load-error message (never the raw backend text) on load failure', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-        json: async () => ({ message: 'Something went wrong' }),
-      });
-    });
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByText('documentsLoadError'));
+    renderPage();
+    expect(await screen.findByTestId('npd-load-error')).toHaveTextContent('documentsLoadError');
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     expect(screen.queryByText('Internal Server Error')).not.toBeInTheDocument();
   });
 
-  it('shows the translated load-error message when the load request throws', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      }
-      return Promise.reject(new Error('Failed to fetch'));
-    });
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByText('documentsLoadError'));
+  it('shows the translated load error when the request throws', async () => {
+    globalThis.fetch = mkFetch(ROWS, { 'dateFrom=': () => Promise.reject(new Error('Failed to fetch')) });
+    renderPage();
+    expect(await screen.findByTestId('npd-load-error')).toHaveTextContent('documentsLoadError');
     expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
   });
 
-  // ETP-5485 (BUG-2) — the backend answers 403 for a role without the "Not Posted Documents"
-  // process grant. The page must show the same access-denied screen as any other window: no
-  // filters, no "0 registros", no raw "Forbidden".
-  it('renders the access-denied screen (no filters, no raw status text) when the load answers 403', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({}) });
-      }
-      return Promise.resolve({
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden',
-        json: async () => ({ message: 'Access denied' }),
-      });
+  // ETP-5485 (BUG-2) — the backend answers 403 for a role without the process grant.
+  it('renders the access-denied screen when the load answers 403', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      'dateFrom=': () => Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ message: 'Access denied' }) }),
     });
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    const denied = await screen.findByTestId('window-access-denied');
-    expect(denied).toHaveTextContent('windowAccessDenied');
+    renderPage();
+    expect(await screen.findByTestId('window-access-denied')).toHaveTextContent('windowAccessDenied');
+    expect(screen.queryByTestId('npd-toolbar')).not.toBeInTheDocument();
     expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
-    expect(screen.queryByText('Access denied')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('npd-empty-state')).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/./)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('applies filters as query params when filter button clicked', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-filter-apply'));
-
-    fireEvent.change(screen.getByTestId('npd-filter-document-type'), { target: { value: 'SI' } });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-filter-apply'));
+  it('aborts the in-flight rows request when the page unmounts', async () => {
+    let rowsSignal;
+    const base = mkFetch(ROWS, { 'dateFrom=': () => new Promise(() => {}) });
+    globalThis.fetch = vi.fn((url, init) => {
+      if (String(url).includes('dateFrom=')) rowsSignal = init?.signal;
+      return base(url, init);
     });
-
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('document=SI'),
-      expect.anything(),
-    );
-  });
-
-  // ── AbortController cancellation path ────────────────────────────────────
-  // Verifies that the filter-options fetch is aborted on unmount (cleanup fn
-  // from the first useEffect), and that no React state-update-after-unmount
-  // warning is thrown.
-  it('aborts the filter-options fetch on unmount without throwing', async () => {
-    let resolveFilterOptions;
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        // Stall filter-options so it is still pending at unmount time
-        return new Promise((res) => {
-          resolveFilterOptions = () =>
-            res({ ok: true, json: async () => ({}) });
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
-    });
-
-    const { unmount } = render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-
-    // Unmount while filter-options fetch is in flight
+    const { unmount } = renderPage();
+    await waitFor(() => expect(rowsSignal).toBeDefined());
+    expect(rowsSignal.aborted).toBe(false);
     unmount();
-
-    // Now resolve the stalled fetch — should not cause setState after unmount
-    await act(async () => {
-      resolveFilterOptions?.();
-    });
-
-    // No React "Can't perform a state update on an unmounted component" error
-    const calls = consoleSpy.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes('unmounted'))).toBe(false);
-    consoleSpy.mockRestore();
+    expect(rowsSignal.aborted).toBe(true);
   });
 
-  // ── Bulk-post: all success ─────────────────────────────────────────────────
-  it('shows success toast when all selected documents are posted via bulk-post', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
+  it('sorts by the translated type when its column header is clicked', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(within(screen.getAllByTestId('column-header-documentTypeLabel')[0]).getByRole('button'));
+    const order = screen.getAllByTestId(/^row-doc-/).map((r) => r.getAttribute('data-testid'));
+    // docTypeMatchedInvoices < Factura (Cliente) < Goods Receipt (no option, raw label)
+    // < Some Future Type < Transacción
+    expect(order).toEqual(['row-doc-2', 'row-doc-1', 'row-doc-5', 'row-doc-4', 'row-doc-3']);
+  });
+});
 
-    // Select both rows
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-2'));
-
-    // Mock the bulk-post response: ok=total (full success)
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ ok: 2, total: 2, success: true }),
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-selected'));
-    });
-
-    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('postingComplete'));
+describe('NotPostedDocumentsPage — row actions', () => {
+  it('"Open document" goes to the source window record', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-open-row-doc-1'));
+    expect(location.pathname).toBe('/sales-invoice/doc-1');
   });
 
-  // ── Bulk-post: partial success ────────────────────────────────────────────
-  it('shows partial-success toast when only some documents were posted', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-2'));
-
-    // ok < total → partial
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ ok: 1, total: 2, success: false }),
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-selected'));
-    });
-
-    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('postingPartial'));
+  it('"Open document" on a transaction goes to its financial account', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-3'));
+    fireEvent.click(screen.getByTestId('npd-open-row-doc-3'));
+    expect(location.pathname).toBe('/financial-account/acc-9');
   });
 
-  // ── Bulk-post: all failed ─────────────────────────────────────────────────
-  it('shows error toast when no documents were posted successfully (ok=0)', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ ok: 0, total: 1, success: false }),
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-selected'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('postingFailed'));
+  it('offers no "Open document" for a row without a known type', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-4'));
+    expect(screen.queryByTestId('npd-open-row-doc-4')).not.toBeInTheDocument();
   });
 
-  // ── Bulk-post: network error ──────────────────────────────────────────────
-  it('shows error toast when bulk-post fetch throws a network error', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
+  it('posts a row to its action URL, toasts success and reloads', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
 
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() => Promise.reject(new Error('Network failure')));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-selected'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('postingFailed'));
+    const post = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/post'));
+    expect(String(post[0])).toBe(`${BASE_URL}/header/doc-1/action/post`);
+    expect(JSON.parse(post[1].body)).toEqual({ tableId: '318', recordId: 'doc-1' });
+    expect(toast.success).toHaveBeenCalledWith('INV-001 — documentPosted');
+    await waitFor(() => expect(rowRequests().length).toBe(2));
   });
 
-  // ── Select-all → deselect-one → indeterminate ref ────────────────────────
-  it('sets indeterminate on the select-all checkbox when some but not all rows are checked', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    // Click the header checkbox to select all
-    const headerCheckbox = screen.getAllByRole('checkbox')[0];
-    fireEvent.click(headerCheckbox);
-
-    // Deselect one row — this puts us into "some" state
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    // The header checkbox should now have indeterminate set
-    expect(headerCheckbox.indeterminate).toBe(true);
+  it('disables the row post link while its post is in flight', async () => {
+    let resolvePost;
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => new Promise((resolve) => { resolvePost = resolve; }),
+    });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    const link = screen.getByTestId('npd-post-row-doc-1');
+    fireEvent.click(link);
+    await waitFor(() => expect(link).toBeDisabled());
+    await act(async () => { resolvePost({ ok: true, json: async () => ({ success: true }) }); });
+    await waitFor(() => expect(link).not.toBeDisabled());
   });
 
-  // ── Filter apply clears selection ─────────────────────────────────────────
-  it('clears the row selection when filter is applied', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    // Select a row
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-1'));
-    expect(screen.getByTestId('npd-post-selected')).toBeInTheDocument();
-
-    // Apply filter — this should clear the selection
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-filter-apply'));
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('npd-post-selected')).not.toBeInTheDocument();
-    });
+  it('a row without tableId fails client-side without calling the backend', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-4'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-4')); });
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
+    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/post'))).toBe(false);
   });
 
-  // ── Empty state after explicit filter returns nothing ─────────────────────
-  it('shows empty state when filter apply returns an empty array', async () => {
-    // Initial fetch returns rows
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-doc-1'));
-
-    // Apply a filter that returns no rows
-    globalThis.fetch.mockImplementation((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({ ok: true, json: async () => ({}) });
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ rows: [], total: 0 }),
-      });
+  it('a 403 on post shows the translated failure, never the status text', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => Promise.resolve({ ok: false, status: 403, statusText: 'Forbidden', json: async () => ({ message: 'Access denied' }) }),
     });
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-filter-apply'));
-    });
-
-    await waitFor(() => screen.getByTestId('npd-empty-state'));
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
+    expect(toast.error).not.toHaveBeenCalledWith('Forbidden');
   });
 
-  // ── postRow: server returns explicit success:false (error path) ───────────
-  it('shows error toast when postRow receives success:false from the server', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ success: false, message: 'Accounting period closed' }),
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith('Accounting period closed');
-  });
-
-  // ETP-5330 — the backend returns a raw AD_MESSAGE whose @product@ placeholder never
-  // resolves (Etendo Core bug — see backendErrors.test.js "cost not calculated exact
-  // match (ETP-4706)"). postRow must route the message through translateBackendError()
-  // (same as DetailView.jsx) instead of showing the raw, unresolved string verbatim.
-  it('translates a mapped backend error (cost not calculated) instead of showing it verbatim', async () => {
-    // translateBackendError() only accepts a mapped key as "translated" when t(key) differs from
-    // the key itself (see backendErrors.js translateSingleMessage's guard) — with the file's
-    // default identity useUI mock, t(key) === key always, so the translation would be silently
-    // rejected and the raw @product@ string would pass through untouched either way. Override the
-    // translator for this test only (mirrors backendErrors.test.js's own costNotCalculated tests),
-    // then restore the identity default so it doesn't leak into later tests.
-    const TRANSLATED = 'No se pudo calcular el costo de uno o más productos.';
-    useUI.mockImplementation(() => (key) => (key === 'backendError.costNotCalculated' ? TRANSLATED : key));
-
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({
-          success: false,
-          message: 'The cost of the product @product@ has not been calculated.',
-        }),
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(TRANSLATED);
-    expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('@product@'));
-
-    useUI.mockImplementation(() => (key) => key);
-  });
-
-  // ETP-5175 — the single post forwards the Invalid-Account identity, so this page shows the
-  // same localized sentence as the document windows instead of the backend's prose.
+  // ETP-5175 — the Invalid-Account identity renders in the UI locale.
   it('renders an Invalid-Account failure from messageKeys + messageParams', async () => {
-    const dictionary = {
-      'backendError.invalidAccount.base': 'BASE.',
-      'backendError.invalidAccount.bpOnly': '(C: {bp})',
-    };
-    useUI.mockImplementation(() => (key, params = {}) => Object.keys(params)
-      .reduce((text, p) => text.replace(`{${p}}`, params[p]), dictionary[key] ?? key));
-
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: false,
-        statusText: 'Unprocessable Entity',
-        json: async () => ({
-          success: false,
-          message: 'backend prose',
-          messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'],
-          messageParams: { bpName: 'Acme' },
+    const dictionary = { 'backendError.invalidAccount.base': 'BASE.', 'backendError.invalidAccount.bpOnly': '(C: {bp})' };
+    uiState.impl = (key, params = {}) => Object.keys(params)
+      .reduce((text, p) => text.replace(`{${p}}`, params[p]), dictionary[key] ?? key);
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => Promise.resolve({
+        ok: false, status: 422, json: async () => ({
+          success: false, message: 'backend prose',
+          messageKeys: ['InvalidAccount', 'ETGO_InvalidAccountBpOnly'], messageParams: { bpName: 'Acme' },
         }),
       }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
     });
-
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
     expect(toast.error).toHaveBeenCalledWith('BASE. (C: Acme)');
-
-    useUI.mockImplementation(() => (key) => key);
   });
 
-  // ── postRow: ambiguous/unparseable body must not be treated as success ─────
-  it('shows error toast when postRow gets a 200 with an unparseable body (e.g. proxy error page)', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() =>
-      Promise.resolve({
-        ok: true,
-        statusText: 'OK',
-        json: async () => { throw new SyntaxError('Unexpected token <'); },
-      }),
-    );
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+  it('a 200 with an unparseable body is not treated as success', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => Promise.resolve({ ok: true, json: async () => { throw new Error('html'); } }),
     });
-
-    expect(toast.error).toHaveBeenCalled();
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-row-doc-1')); });
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
     expect(toast.success).not.toHaveBeenCalled();
   });
+});
 
-  // ── postRow: network error ────────────────────────────────────────────────
-  it('shows error toast when postRow fetch throws', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-post-row-doc-1'));
-
-    globalThis.fetch.mockImplementationOnce(() => Promise.reject(new Error('timeout')));
-
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
-    });
-
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('postingFailed'));
+describe('NotPostedDocumentsPage — selection and bulk post', () => {
+  it('shows the floating toolbar with the count once rows are selected', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument();
+    selectRow('doc-1');
+    selectRow('doc-2');
+    expect(screen.getByTestId('npd-selection-count')).toHaveTextContent('selected(2)');
   });
 
-  // ── toggleAll: select-all, then deselect-all ──────────────────────────────
-  it('toggleAll deselects all rows when all are already selected', async () => {
-    globalThis.fetch = mkFetch(ROWS);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-1'));
-
-    const headerCheckbox = screen.getAllByRole('checkbox')[0];
-
-    // Select all
-    fireEvent.click(headerCheckbox);
-    expect(screen.getByTestId('npd-post-selected')).toBeInTheDocument();
-
-    // Deselect all
-    fireEvent.click(headerCheckbox);
-    await waitFor(() => {
-      expect(screen.queryByTestId('npd-post-selected')).not.toBeInTheDocument();
+  it('bulk-posts the selected rows and shows the shared outcome toast', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/bulk-post': () => json({
+        ok: 1, total: 2, success: false,
+        results: [
+          { recordId: 'doc-1', tableId: '318', success: true, message: 'ok' },
+          { recordId: 'doc-2', tableId: '472', success: false, message: 'Boom' },
+        ],
+      }),
     });
-  });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    selectRow('doc-2');
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
 
-  it('shows postingFailed toast when all selected rows lack tableId', async () => {
-    const rowNoTableId = { documentId: 'doc-3', documentType: 'SI', description: 'X', accountingDate: '2024-01-01', organization: 'O' };
-    globalThis.fetch = mkFetch([rowNoTableId]);
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-    await waitFor(() => screen.getByTestId('npd-row-checkbox-doc-3'));
-    fireEvent.click(screen.getByTestId('npd-row-checkbox-doc-3'));
-    await act(async () => {
-      fireEvent.click(screen.getByTestId('npd-post-selected'));
-    });
-    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('postingFailed'));
-  });
-
-  // ETP-5075 — the grid badge renders core's raw NoPostedDocumentDS label for a row's
-  // documentType (e.g. "Matched Invoice", singular) with no i18n applied by default. This
-  // window's own name diverged from that label, so it is overridden via a dedicated map —
-  // regression coverage: the override applies ONLY to that one label, every other row keeps
-  // showing the backend's own text untouched.
-  it('overrides the row badge label for Matched Invoice, leaving other rows untouched', async () => {
-    globalThis.fetch = mkFetch([
-      { documentId: 'doc-mi', documentType: 'Matched Invoice', description: 'X', accountingDate: '2024-01-01', organization: 'O', tableId: '472' },
-      { documentId: 'doc-si', documentType: 'Sales Invoice', description: 'Y', accountingDate: '2024-01-02', organization: 'O', tableId: 'tbl-1' },
+    const call = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
+    expect(JSON.parse(call[1].body).rows).toEqual([
+      { tableId: '318', recordId: 'doc-1', label: 'INV-001' },
+      { tableId: '472', recordId: 'doc-2', label: 'MI-002' },
     ]);
-    const { container } = render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
-
-    await waitFor(() => {
-      // Scoped to the badge class, not a page-wide text query: the mocked filter-options
-      // response also renders "Sales Invoice" as a <select> option, so an unscoped
-      // getByText would collide with that second, unrelated occurrence of the same text.
-      const badges = Array.from(container.querySelectorAll('.npd-doc-type-badge')).map(el => el.textContent);
-      // useUI() is mocked to the identity function, so an applied override renders the raw
-      // i18n key — proof the map fired, not a coincidental string match.
-      expect(badges).toContain('docTypeMatchedInvoices');
-      expect(badges).toContain('Sales Invoice');
-    });
+    // 1 ok + 1 failed: the shared toast's mixed-outcome summary.
+    expect(toast.warning).toHaveBeenCalledWith('processExecuted');
+    await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
   });
 
-  // Same override, different keyspace: the FILTER dropdown's options come from the backend's
-  // refListDocumentTypes() response, keyed by the short AD_Ref_List code ("MI"), not the raw
-  // row label — the two maps must not be conflated.
-  it('overrides the filter-dropdown option label for the MI document-type code', async () => {
-    globalThis.fetch = vi.fn((url) => {
-      if (url.includes('_mode=filter-options')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            documentTypes: [
-              { value: 'MI', label: 'Facturas cuadradas' },
-              { value: 'SI', label: 'Sales Invoice' },
-            ],
-            accountingStatuses: [],
-          }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({ rows: [], total: 0 }) });
+  it('a single failed bulk row surfaces its real backend error', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/bulk-post': () => json({
+        ok: 0, total: 1, success: false,
+        results: [{ recordId: 'doc-1', tableId: '318', success: false, message: 'Period closed for this date' }],
+      }),
     });
-    render(<NotPostedDocumentsPage token={TOKEN} apiBaseUrl={BASE_URL} />);
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
+    expect(toast.error).toHaveBeenCalledWith('Period closed for this date');
+  });
 
-    await waitFor(() => {
-      const select = screen.getByTestId('npd-filter-document-type');
-      expect(within(select).getByText('docTypeMatchedInvoices')).toBeInTheDocument();
-      expect(within(select).getByText('Sales Invoice')).toBeInTheDocument();
+  it('counts a selected row without tableId as omitted instead of dropping it', async () => {
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/bulk-post': () => json({ ok: 1, total: 1, success: true, results: [{ recordId: 'doc-1', success: true }] }),
     });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    selectRow('doc-4');
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
+    const call = globalThis.fetch.mock.calls.find(([u]) => String(u).includes('/action/bulk-post'));
+    expect(JSON.parse(call[1].body).rows.map((r) => r.recordId)).toEqual(['doc-1']);
+    // 1 ok + 1 omitted (the row that could not be sent) → mixed-outcome summary with omitted.
+    expect(toast.warning).toHaveBeenCalledWith('processExecutedWithOmitted');
+  });
+
+  it('only rows without tableId: fails without calling the backend', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-4'));
+    selectRow('doc-4');
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
+    expect(toast.error).toHaveBeenCalledWith('postingFailed');
+    expect(globalThis.fetch.mock.calls.some(([u]) => String(u).includes('/action/bulk-post'))).toBe(false);
+  });
+
+  it('a network error on bulk post shows the failure toast', async () => {
+    globalThis.fetch = mkFetch(ROWS, { '/action/bulk-post': () => Promise.reject(new Error('Failed to fetch')) });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    await act(async () => { fireEvent.click(screen.getByTestId('npd-post-selected')); });
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('clears the selection when a filter changes', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    expect(screen.getByTestId('npd-selection-toolbar')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
+  });
+
+  it('the toolbar close button clears the selection', async () => {
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    const bar = screen.getByTestId('npd-selection-toolbar');
+    fireEvent.click(within(bar).getByTitle('close'));
+    await waitFor(() => expect(screen.queryByTestId('npd-selection-toolbar')).not.toBeInTheDocument());
+  });
+});
+
+// ETP-5591 QA (BUG-1) — a post that finishes after the filters changed must reload with the
+// CURRENT filters, not the ones captured when the post started.
+describe('NotPostedDocumentsPage — reload after an in-flight post', () => {
+  it('a single post resolving after a filter change reloads with the new filters', async () => {
+    let resolvePost;
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ success: true }) }); }),
+    });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    fireEvent.click(screen.getByTestId('npd-post-row-doc-1'));
+    await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
+
+    await act(async () => { resolvePost(); });
+
+    await waitFor(() => expect(rowRequests().length).toBeGreaterThanOrEqual(3));
+    expect(rowRequests().at(-1).get('document')).toBe('GS');
+  });
+
+  it('a bulk post resolving after a filter change reloads with the new filters', async () => {
+    let resolvePost;
+    globalThis.fetch = mkFetch(ROWS, {
+      '/action/bulk-post': () => new Promise((r) => { resolvePost = () => r({ ok: true, status: 200, json: async () => ({ ok: 1, total: 1, results: [{ success: true }] }) }); }),
+    });
+    renderPage();
+    await waitFor(() => rowOf('doc-1'));
+    selectRow('doc-1');
+    fireEvent.click(await screen.findByTestId('npd-post-selected'));
+    await waitFor(() => expect(resolvePost).toBeTypeOf('function'));
+    fireEvent.click(screen.getByTestId('npd-filter-document-type'));
+    fireEvent.click(await screen.findByText('Albarán (Cliente)'));
+    await waitFor(() => expect(rowRequests().at(-1).get('document')).toBe('GS'));
+
+    await act(async () => { resolvePost(); });
+
+    await waitFor(() => expect(rowRequests().length).toBeGreaterThanOrEqual(3));
+    expect(rowRequests().at(-1).get('document')).toBe('GS');
+  });
+});
+
+// ETP-5591 QA (BUG-4) — a hand-edited or stale link never leaves junk in the URL or the toolbar.
+describe('NotPostedDocumentsPage — URL clean-up', () => {
+  it('rewrites unknown or malformed values to their canonical form', async () => {
+    renderPage('/not-posted-documents?status=X,,NC,NC&date=bogus');
+    await waitFor(() => expect(location.search).toBe('?status=NC'));
+    expect(rowRequests().at(-1).get('accountingStatus')).toBe('NC');
+  });
+
+  it('drops a document type that is not among the options, once they have loaded', async () => {
+    renderPage('/not-posted-documents?document=ZZZ');
+    await waitFor(() => expect(location.search).toBe(''));
+    expect(screen.getByTestId('npd-filter-document-type')).toHaveTextContent('allDocuments');
+    expect(rowRequests().at(-1).has('document')).toBe(false);
+  });
+
+  it('keeps a known document type', async () => {
+    renderPage('/not-posted-documents?document=SI');
+    await waitFor(() => rowOf('doc-1'));
+    expect(location.search).toBe('?document=SI');
   });
 });

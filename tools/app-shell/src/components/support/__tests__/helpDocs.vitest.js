@@ -4,12 +4,12 @@ describe('helpDocs', () => {
   describe('docUrl', () => {
     it('builds the full doc URL from a location', () => {
       expect(docUrl('facturas/factura-de-venta/')).toBe(
-        'https://etendosoftware.github.io/etendo-go-docs/facturas/factura-de-venta/',
+        'https://help.etendo.ai/facturas/factura-de-venta/',
       );
     });
 
     it('handles an empty location (home page)', () => {
-      expect(docUrl('')).toBe('https://etendosoftware.github.io/etendo-go-docs/');
+      expect(docUrl('')).toBe('https://help.etendo.ai/');
     });
   });
 
@@ -109,8 +109,8 @@ describe('helpDocs', () => {
   // fetchHelpDocs caches its result in a module-level variable, so each test
   // resets the module registry and re-imports it fresh to get isolated state.
   describe('fetchHelpDocs', () => {
-    const SEARCH_INDEX_URL = 'https://etendosoftware.github.io/etendo-go-docs/search/search_index.json';
-    const MKDOCS_YML_URL = 'https://raw.githubusercontent.com/etendosoftware/etendo-go-docs/main/mkdocs.yml';
+    const SEARCH_INDEX_URL = 'https://help.etendo.ai/search/search_index.json';
+    const MKDOCS_YML_URL = 'https://raw.githubusercontent.com/etendosoftware/etendo-docs/main/mkdocs.yml';
 
     beforeEach(() => {
       vi.resetModules();

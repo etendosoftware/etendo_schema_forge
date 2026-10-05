@@ -433,6 +433,10 @@ qualifies. Two label/enrichment gaps had to be closed (ETP-5075):
   `"unknown tableId for Matched Invoice"` before ever reaching the API. Fixed with one map
   entry: `DOCUMENT_TYPE_TO_TABLE_ID.put("Matched Invoice", "472")`.
 
-Three maps, three different keyspaces (`MI` code / raw row label / raw row label again),
-two of them in this repo and one in `com.etendoerp.go` — worth re-reading this section
-before assuming a fourth document type "just works" here without checking all three.
+**ETP-5591 collapsed the three maps.** Rows now carry `documentTypeCode` (`MI`), so the row
+name goes through the same `DOC_TYPE_LABEL_KEYS` as the filter option and
+`ROW_DOC_TYPE_LABEL_KEYS` is gone. The backend translates the label once
+(`DS_LABEL_TO_DOCUMENT_TYPE_CODE`: `"Matched Invoice"` → `MI`) and takes `tableId` from the
+code map the filter already uses, so `DOCUMENT_TYPE_TO_TABLE_ID` is gone too. A new document
+type now needs one label → code entry; see `not-posted-documents.md` ("One label → code map").
+The same page's "Abrir documento" opens these rows at `/matched-purchase-invoices/{id}`.

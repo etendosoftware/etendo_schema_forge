@@ -1,8 +1,8 @@
 // Real Etendo Go documentation, fetched from the published MkDocs Material search
 // index. No mocked/hardcoded articles — always reflects the current published site.
-const DOCS_BASE_URL = 'https://etendosoftware.github.io/etendo-go-docs';
+const DOCS_BASE_URL = 'https://help.etendo.ai';
 const SEARCH_INDEX_URL = `${DOCS_BASE_URL}/search/search_index.json`;
-const MKDOCS_YML_URL = 'https://raw.githubusercontent.com/etendosoftware/etendo-go-docs/main/mkdocs.yml';
+const MKDOCS_YML_URL = 'https://raw.githubusercontent.com/etendosoftware/etendo-docs/main/mkdocs.yml';
 
 let cachedDocs = null;
 let pendingFetch = null;
