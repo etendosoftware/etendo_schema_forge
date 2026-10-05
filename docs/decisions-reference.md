@@ -414,7 +414,7 @@ The backend rejects with HTTP 400 on extension, magic bytes or size, so a spoofe
 buys nothing. To change what the whole app accepts, edit `NeoAttachmentPolicy.java` — not a
 per-window `decisions.json`, which can only narrow.
 
-**Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The tab does a lazy fetch on activation (no request until the user opens it). Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
+**Note:** the frontend resolves the target `tableName` from `frontendContract.entities.header.tableName` automatically — you do **not** configure it in `decisions.json`. The full list is fetched lazily on activation (no list request until the user opens the tab, ETP-4564). The tab label still shows the **real number of attachments as soon as the record opens**: while the tab is inactive the frontend calls the lightweight `GET /sws/neo/attachments/{tableName}/{recordId}/count` endpoint, and switches to the list length once the list has been read (ETP-5526). If the count cannot be fetched, the label shows **no number** (never a placeholder `0`) until the tab is opened, with no error toast. That covers a `404`/`405`, a network error, and a backend that predates the endpoint: such a backend does not answer `404` but ignores the unknown `/count` segment and returns the full list (`200 { items }`, so one full list read per record open there), which the SPA rejects as an invalid count. Backend storage uses the standard Etendo `AttachImplementationManager` and the `C_FILE` table.
 
 ### Custom Panel Tabs (`window.customPanelTabs`)
 
