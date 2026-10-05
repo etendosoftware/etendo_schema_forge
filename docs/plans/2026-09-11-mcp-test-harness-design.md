@@ -169,6 +169,48 @@ A write probe's post-condition, as implemented (D34):
       expect: atLeastOne          # atLeastOne | none
 ```
 
+A probe may also declare a deterministic **`setup:`** and **`teardown:`** (D41): lists of MCP
+tool calls the runner makes itself, outside the agent, each in a session of its own. Setup runs
+before the agent; teardown runs after the agent and the effect check, in a `finally`, whatever
+happened — including a setup that failed halfway.
+
+```yaml
+  - id: collect-full-sales-invoice
+    mode: write
+    prompt: "Cobrame entera la factura con referencia {{marker}}."
+    setup:
+      - tool: neo_create
+        args: { spec: sales-invoice, entity: header, data: { description: "{{marker}}", … } }
+        saveAs: invoice                      # result readable as {{steps.invoice.<path>}}
+      - tool: neo_action
+        args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.id}}", action: documentAction, … }
+    expectEffect: { … }                      # may use {{steps.…}} too
+    teardown:
+      - tool: neo_action                     # list what the agent left behind …
+        args: { …, action: invoicePayments }
+        saveAs: payments
+      - tool: neo_action                     # … and undo each one
+        forEach: "{{steps.payments.items}}"  # once per element, element is {{item.<path>}}
+        args: { …, id: "{{item.paymentId}}" }
+```
+
+- `{{steps.<name>.<path>}}` reads a saved result; `<path>` is dotted and a numeric segment
+  indexes a list. A value that is exactly one reference keeps its type; one embedded in text is
+  spliced as text. The prompt may use it too (it is expanded after setup).
+- An unresolvable reference fails the step **without calling the server** — for a destructive
+  teardown call that is the safe answer.
+- Setup stops at the first failure and the probe is **not measured** (`harnessError.kind:
+  setup`, the agent never runs). Teardown keeps going after a failure.
+- `teardownClean` is `false` as soon as **any** teardown step failed. There is no "expected
+  failure": a step that only makes sense in some states is made conditional by reading the state
+  first and looping over the answer — `neo_list` with `filters: {id: …, posted: "Y"}` saved as
+  `posted`, then `forEach: "{{steps.posted.data}}"` runs the unpost zero or one times. That keeps
+  the runner free of conditionals and every recorded failure meaningful.
+- The calls are recorded in `probes/<id>.json` as `setup[]` and `teardown[]` (tool, resolved
+  args, `ok`, `error`, capped `result`, `ms`) plus `teardownClean` (`null` = no teardown declared,
+  `false` = something may be left on the server), and streamed as `setup_step` / `teardown_step`
+  events. They are never part of `toolCalls[]` or `toolCallCount`: those stay the agent's.
+
 **Probe ids are permanent** (D13). Never renamed, never recycled — same rule as IMP numbers. An id
 is the only thing that lets us say *"this probe passed last week and fails today"*.
 
@@ -704,7 +746,7 @@ opening an IMP against Etendo GO for our own broken config.
 So each probe result carries, *outside* the model-authored verdict:
 
 ```jsonc
-{ "harnessError": null | { "kind": "network|auth|rate_limit|provider|model_refusal|timeout|verification",
+{ "harnessError": null | { "kind": "network|auth|rate_limit|provider|model_refusal|timeout|verification|setup",
                            "detail": "...",
                            "traceback": "..." } }   // on `provider`, kept: the only reason a
                                                     // nested failure is diagnosable at all
@@ -713,8 +755,9 @@ So each probe result carries, *outside* the model-authored verdict:
 When `harnessError` is set, the probe has **no verdict** and is excluded from every metric. A run
 reports `3 OKAY · 1 ERROR · 1 MIXED · 2 not measured`.
 
-**As implemented, the taxonomy is aspirational.** Only three kinds are ever emitted — `auth`,
-`verification` (D37) and `provider` — and `provider` is the catch-all: a network timeout, a
+**As implemented, the taxonomy is aspirational.** Only four kinds are ever emitted — `auth`,
+`verification` (D37), `setup` (D41: the probe's own fixture could not be built, so the agent never
+ran) and `provider` — and `provider` is the catch-all: a network timeout, a
 rate-limit and a genuine 400 all land in it. The finer kinds (`network`, `rate_limit`,
 `model_refusal`, `timeout`) are declared but nothing classifies into them. The axis itself works,
 which is what D12 was for; the classification does not, and a report that counted `rate_limit`
@@ -995,6 +1038,8 @@ in a changelog.
 | D2 | **`REPEAT` defaults to `1`.** | 2026-09-11 | Non-determinism is real but not paid for on every run. §7. **Not implemented:** there is no way to raise it, so the default is currently the only value and variance is unmeasured. |
 | D3 | **No enforced data-hygiene policy.** Writes are a per-probe decision by the suite author; the runner offers `{{marker}}` instead of a rule. | 2026-09-11 | §8 — the token is `{{marker}}` (`<runId>-<probeId>`) rather than the `{{runId}}` this row originally named; D34 needed per-probe uniqueness. Accepted consequence: the tenant accumulates records and nothing prevents it — the marker makes the sweep cheap, it does not perform it. |
 | D4 | **Probes are hand-written, grown incrementally.** The first one is deliberately simple in *what it asks for* (a sales order for the default customer, no lines) so that the first failure is unambiguous while the harness itself is still unproven. | 2026-09-11 | Simple in scope — **not** simple in phrasing; see D21. |
+| D42 | **An empty model turn is asked again, not read as the end of the probe.** A turn with no text and no tool call is retried from the same state, the empty message dropped, at most `MAX_EMPTY_COMPLETIONS` (3) times, then the probe is a provider failure (`harnessError.kind: provider`, `EmptyCompletion`). The count is recorded as `emptyCompletions`. | 2026-10-01 | Run `20261001T1912-local-45e9`: three probes ended with 0 tool calls and a verdict saying *"no tools were provided"* while 28 tools were bound — the Gemini route of the gateway answered the first turn with an empty `stop` 4 times out of 5 in a direct reproduction. LangGraph reads that as *the agent is done*, so a provider fault was being reported as a product result. Not a change to the instrument: an empty turn carries no decision, so asking again is the call that never answered, not a second chance at one. A resumed stream gets only the remaining step budget. |
+| D41 | **Deterministic `setup:` / `teardown:` per probe** — runner-made MCP calls around the agent, with `saveAs` / `{{steps.<name>.<path>}}` to pass ids forward and `forEach` for the one loop teardown needs. Teardown always runs (`finally`); a failed setup makes the probe not measured. | 2026-10-01 | **Relaxes D3 for the suites that opt in, does not reverse it**: the runner still imposes no hygiene policy, it only lets an author make a probe self-contained (its own fresh record, created before the agent) and reversible (undone after it). Forced by treasury (ETP-5558): a collection probe needs a completed, unpaid invoice, and either reusing the tenant's few pending ones made the suite non-replicable, or asking the agent to create one put the fixture inside the measurement. Deliberately not a mini-language: no conditionals, no retries, one loop. Fixture calls stay out of `toolCalls[]`, so a fixture never inflates the agent's metrics (§6.6). |
 | D40 | **`plannedApproach` is RECALL, not the plan, and must never be read as ground truth.** Kept anyway. | 2026-09-14 | It is asked *after* the task has ended, so the agent already knows how things turned out and will reconstruct something more coherent than what it actually had — a polished story, not a record. Accepted deliberately, for one reason: **the objective tool-call sequence is recorded alongside it** (§6.1), so the contrast between the claimed plan and the executed one is informative *even when the claim is polished* — a plan that matches the transcript and a plan that visibly does not are both findings. `howKnown` exists to make the contrast sharper by forcing a named source ("I guessed" is explicitly a valid and valuable answer; "from the tools" is of no use). The honest alternative — asking for the plan *before* the task — was rejected as a bigger change to the instrument than the signal justifies: it would put a planning step into the loop the naive agent (D20) is supposed to run without. The UI says so next to the value, not only in the schema. |
 | D39 | **`other` must stay easy to choose, and "unclassified" is never `other`.** | 2026-09-14 | Two halves of one principle, both about not manufacturing data. **(a)** A closed enum makes an agent cram a bad fit into a real category, which corrupts the corpus *silently* — nothing marks a miscategorised suggestion. So both the schema description and the prompt tell the agent to pick `other` freely, and state that a suggestion in the wrong category is worse than one in `other`. What accumulates under `other` is how the next missing category gets discovered; that is the field's job, not a failure state. **(b)** A legacy or unrecognised `kind` is stored as **null**, never as `other`: *"did not classify"* and *"chose other"* are different facts, and merging them destroys precisely the signal in (a) — an `other` pile polluted by unclassified entries can no longer tell you what category is missing. Both surfaces implement this (`ui/runs.py` `normalize_suggestions`, `McpFeedbackVerdict#toSuggestion`), and an unknown `kind` is recorded as null rather than rejected, so a client that invents a category still gets its suggestion stored — it simply does not get to invent a column. |
 | D38 | **The agent never labels anything a defect.** `SuggestionKind` contains only constructive categories; no `bug`, no `error`, no severity. | 2026-09-14 | An agent cannot distinguish *"the product is broken"* from *"I failed to find it"* — and the naive agent (D20) is, by construction, the party least able to tell those apart. Letting it label its own ignorance as a product error would fill the corpus with confident false claims that are individually plausible and collectively worthless, and they would be indistinguishable from real ones. So the verdict asks only what should **exist** (`shortcut`, `missingCapability`, `clearerDocs`, `betterMetadata`, `other`), the system prompt says in as many words *"do not judge whether anything is broken"*, and defect-vs-gap stays a human judgement under the UI test (D22) — the only criterion with an objective answer. This **settles the open question** about classifying feedback into ERROR / improvement / suggestion: there is no ERROR category and there will not be one. If a `bug` value ever looks necessary, it is this design that needs revisiting, not that list. Corollary: it is `mcp-tests/findings/` (D35) and the IMP registry, not a verdict field, that carry a defect claim. |

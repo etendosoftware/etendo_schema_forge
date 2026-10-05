@@ -2,6 +2,7 @@ import { resolveIdentifier } from '@/lib/resolveIdentifier.js';
 import { useUI } from '@/i18n';
 import { BoxIcon } from './ProductListCells';
 import { useNeoImage } from '@/hooks/useNeoImage';
+import GalleryGrid from '@/components/ui/gallery-grid';
 
 /* eslint-disable react/prop-types */
 
@@ -53,7 +54,7 @@ export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) 
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pt-2">
+    <GalleryGrid className="pt-2" data-testid="gallery-grid">
       {data.map((row) => (
         <ProductCard
           key={row.id}
@@ -63,6 +64,6 @@ export default function ProductGallery({ data, onNavigate, token, apiBaseUrl }) 
           apiBaseUrl={apiBaseUrl}
           data-testid="ProductCard__a29533" />
       ))}
-    </div>
+    </GalleryGrid>
   );
 }
