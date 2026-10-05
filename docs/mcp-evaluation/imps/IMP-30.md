@@ -1,4 +1,4 @@
-# IMP-30 — `neo_create` bypasses the read-only rejection path entirely
+# IMP-30 — `etendo_create` bypasses the read-only rejection path entirely
 
 | | |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## 1. Symptom — the probe that found it
 
-`neo_create` on `sales-order/header` **accepted and persisted** two curated read-only fields on a
+`etendo_create` on `sales-order/header` **accepted and persisted** two curated read-only fields on a
 brand-new, zero-line order. IMP-28 clause 2 was supposed to reject exactly this.
 
 Request (`etendo-go-local`, 2026-08-13):
@@ -114,13 +114,13 @@ other. A green unit test on a method with no caller is not evidence of delivery.
 - `filterGetResponse` / `renameToApiKeys` — the GET path is not implicated.
 - `filterWriteRequest` (PUT/PATCH) — different method, different semantics (strict writable-only).
 - `NeoCrudHandler.executePostCreate` — already calls `filterCreateRequest` correctly.
-- **The tempting cheap fix to avoid:** making `neo_schema view:"create"` merely *omit* these fields
+- **The tempting cheap fix to avoid:** making `etendo_schema view:"create"` merely *omit* these fields
   so a well-behaved agent stops sending them. That improves the hint and changes nothing about what
   the server accepts. The defect is that the write is accepted, not that it was suggested.
 
 ## 7. Done when
 
-- [ ] `neo_create` on `sales-order/header` with `documentStatus` or `grandTotalAmount` in the body
+- [ ] `etendo_create` on `sales-order/header` with `documentStatus` or `grandTotalAmount` in the body
       returns a 422 naming the rejected field, and creates no record.
 - [ ] The same body through the REST create path behaves identically.
 - [ ] A router-level test covers it (not only a `NeoFieldFilter` unit test).

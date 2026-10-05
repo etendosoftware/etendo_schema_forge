@@ -69,7 +69,7 @@ Among the 58: `warehouse/storageBin`, `simple-g-l-journal/gLJournalLine`,
 
 `warehouse/storageBin` is worth naming twice: creating a storage bin was the step that blocked
 the stock task in the 2026-08-19 benchmark run, and was attributed at the time to a missing
-`parentId` on `neo_defaults`. That attribution may have been incomplete.
+`parentId` on `etendo_defaults`. That attribution may have been incomplete.
 
 ## 4. Why this is a convention collision, not a curation mistake
 

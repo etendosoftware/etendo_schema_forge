@@ -1,4 +1,4 @@
-# IMP-16 — One date format across `neo_defaults` and the write verbs
+# IMP-16 — One date format across `etendo_defaults` and the write verbs
 
 | | |
 |---|---|
@@ -13,7 +13,7 @@ change**. Nothing here has been compiled or deployed.
 
 ## 1. What the registry row says, and why it understates the item
 
-> `invoiceDate` emitted `DD-MM-YYYY`, `accountingDate` ISO, same payload; `neo_create` misparses the
+> `invoiceDate` emitted `DD-MM-YYYY`, `accountingDate` ISO, same payload; `etendo_create` misparses the
 > former silently
 
 Both halves are true, but each is narrower than reality:
@@ -32,7 +32,7 @@ stores a wrong value.
 ### 2.1 The chain
 
 ```
-neo_create (MCP)                      POST /crud (REST)
+etendo_create (MCP)                      POST /crud (REST)
   McpToolRouter:460                     NeoCrudHandler:521
     NeoDefaultsService.injectMandatoryDefaults(...)     ← resolves @#Date@ → "06-08-2026"
   McpToolRouter:481                     NeoCrudHandler:535
@@ -164,7 +164,7 @@ field or the window.
 
 ### 3.3 The evidence, re-read with that rule
 
-`neo_defaults` on three windows, same instance, same request (2026-08-06):
+`etendo_defaults` on three windows, same instance, same request (2026-08-06):
 
 | Window / field | Value | Written by a callout? |
 |---|---|---|
@@ -281,7 +281,7 @@ Two things follow:
 
 ### 3.7 The React form already expects ISO — so canonicalizing is not a breaking change
 
-`neo_defaults` is not an MCP-only surface: the React form bootstraps from
+`etendo_defaults` is not an MCP-only surface: the React form bootstraps from
 `GET /sws/neo/{spec}/{entity}/defaults`. Changing its date format therefore has to be checked against
 the frontend contract, and that contract is **already ISO in both directions**:
 
@@ -320,7 +320,7 @@ Recorded per the `imps/` convention — a wrong first guess belongs in the file,
 | An `AD_Preference` overrides the default | No preference rows exist for these columns — `getPreference` returns `""` |
 | A callout writes `inpdateinvoiced` back | No callout in either tree writes it. `SE_Invoice_AccountingDate` writes `inpdateacct`, `SifInvoiceOperationDateCallout` adds `inpemEtsgDateOperation`, `SE_Invoice_TaxDate` writes `inptaxdate` |
 | `formState` aliases `defaults`, so the request builder mutates the response | `NeoDefaultsCascadeHelper:115` is `new JSONObject(defaults.toString())` — a copy |
-| `McpSelectorContextHelper.CLASSIC_DATE_FORMATTER` (`dd-MM-yyyy`) is the source | That formatter is on the `neo_selectors` **input** side only |
+| `McpSelectorContextHelper.CLASSIC_DATE_FORMATTER` (`dd-MM-yyyy`) is the source | That formatter is on the `etendo_selectors` **input** side only |
 | **Two conflicting `#Date` session values**: `NeoDefaultsService` sets ISO, `NeoCalloutService.buildSessionAttributes` copies the UI-format one from `buildCalloutVars`, and whichever vars instance reaches `Utility.getDefault` decides | The leading hypothesis for most of the investigation, and **wrong in its mechanism**: `@#Date@` never reads *any* session value (§3.1). Both `#Date` values are irrelevant to default resolution. The conclusion it pointed at — "the format depends on which path ran" — survives; the reason does not |
 
 ## 5. Design options
@@ -352,7 +352,7 @@ without waiting for core, and W-b removes the trap for everyone else.
 
 | Option | Cost | Note |
 |---|---|---|
-| **R-a** — normalize dates to ISO at the `neo_defaults` response boundary, keyed on `Property.isDate()` / reference `"15"` | small, `⚙️` on the response | One place, covers `updates`, `combos`, `@#Date@` and `@SQL=` alike, and needs no change to the resolution chain. Also the only option that catches the Postgres-timestamp shape |
+| **R-a** — normalize dates to ISO at the `etendo_defaults` response boundary, keyed on `Property.isDate()` / reference `"15"` | small, `⚙️` on the response | One place, covers `updates`, `combos`, `@#Date@` and `@SQL=` alike, and needs no change to the resolution chain. Also the only option that catches the Postgres-timestamp shape |
 | **R-b** — normalize inside `mergeCalloutUpdates` / `mergeCalloutCombos` | small | Closes §3.5's combos gap where it happens, but leaves the non-callout `dd-MM-yyyy` majority (§3.3) untouched. Not sufficient alone |
 | **R-c** — make `@#Date@` resolve to ISO by not routing through `DateTimeData.today` | medium, `⚙️` | Fixes the *cause*. But `getContext`'s `#Date` special case is core behaviour that the whole classic UI depends on; overriding it inside NEO means diverging from `Utility.getDefault`, which is precisely what `NeoDefaultsService`'s header comment says it exists not to do |
 | **R-d** — declare `dd-MM-yyyy` canonical and normalize the ISO fields *down* | small | Internally consistent and rejected: ISO 8601 is what an MCP client expects, what the `docs` corpus already uses throughout (B9), and what `JsonToDataConverter` parses natively |
@@ -364,7 +364,7 @@ R-a is in place; R-c is the theoretically right fix and the wrong risk for this 
 
 Postel's law, stated explicitly in the contract: **ISO 8601 out, always; ISO or the Etendo UI format
 in, with anything unparseable rejected as a structured validation error naming the field.** R-a +
-W-c gets there. The `neo_defaults` and `neo_schema` descriptions should say so — an agent currently
+W-c gets there. The `etendo_defaults` and `etendo_schema` descriptions should say so — an agent currently
 has no way to know which format a given field will hand it.
 
 ## 6. What landed
@@ -379,7 +379,7 @@ builds and deploys; §7 is the verification that must run afterwards.
 | `schemaforge/util/NeoTypeCoercionHelper.java` | date branch in `coerceField` (REST write path) |
 | `mcp/McpToolRouterSupport.java` | date branch in `coercePrimitiveFieldValue` (MCP write path) |
 | `schemaforge/CalloutRequestBuilder.java` | `getCalloutDatePattern()` now delegates to `NeoDateFormat.getUiDatePattern()`; the duplicated property lookup and its cache removed |
-| `mcp/ToolRegistry.java` | `neo_create` / `neo_update` state the required input format; `neo_defaults` states that its date values come back ISO and can be passed straight back |
+| `mcp/ToolRegistry.java` | `etendo_create` / `etendo_update` state the required input format; `etendo_defaults` states that its date values come back ISO and can be passed straight back |
 | `docs/neo-headless.md` §4.3.1 | the date contract, the three producers of non-ISO values, and the three application points |
 | `src-test/…/util/NeoDateFormatTest.java` | **new.** Includes `"06-08-2026"` and `"24-06-2026"` as named regressions — the two values found in real rows (§3.6) — plus the zone-offset boundary and one case per date-ish domain type |
 | `src-test/…/util/NeoTypeCoercionHelperTest.java`, `src-test/…/mcp/McpToolRouterSupportTest.java` | the same seven date cases on both coercers, deliberately duplicated so the two implementations cannot drift silently. Three of them assert a **non**-change: a Time property, an AbsoluteDateTime property, and a non-zero offset must all come out byte-identical |
@@ -468,9 +468,9 @@ the Etendo classpath.
 
 | # | Check | Accepts |
 |---|---|---|
-| 1 | `neo_defaults` on ~8 windows, before/after `diff` | **only** date-typed fields changing `dd-MM-yyyy` → ISO. Any other diff — a missing key, a changed FK, a changed `$_identifier` — aborts and reverts |
+| 1 | `etendo_defaults` on ~8 windows, before/after `diff` | **only** date-typed fields changing `dd-MM-yyyy` → ISO. Any other diff — a missing key, a changed FK, a changed `$_identifier` — aborts and reverts |
 | 2 | Create a document through the React form end to end | saves, and the date fields display the right day (today they are day/month-swapped for days 1–12 and blank for 13+) |
-| 3 | `neo_create` on `sales-order/header` sending no date | stored `datepromised` is the real date, not a first-century one |
+| 3 | `etendo_create` on `sales-order/header` sending no date | stored `datepromised` is the real date, not a first-century one |
 | 4 | Server log during 1–3 | `canonicalizeDateDefaults` INFO lines name only date fields; **zero** `Unrecognized date format` WARNs |
 
 Only after 1–4 does a `/mcp-comparison` run get to touch the registry row.
@@ -500,7 +500,7 @@ must run after the build before any of this is credited.
 ## 9. The write half, closed — 2026-08-10
 
 The 2026-08-10 run credited the read/emit half and reported the write half as *"worse than the item
-specified"*: `neo_update orderDate:"09-08-2026"` returned `status: 0` and stored `0015-02-16` (C11).
+specified"*: `etendo_update orderDate:"09-08-2026"` returned `status: 0` and stored `0015-02-16` (C11).
 It registered that as a new P1, IMP-24, on the reading that the emit-side mechanism had shipped and
 the write side needed a different fix.
 
@@ -509,10 +509,10 @@ mechanism had shipped too. It was unreachable.**
 
 | Persist path | Coercion pass | Before 2026-08-10 |
 |---|---|---|
-| `POST /crud` (React form; every `neo_batch` op, via `BatchService` → `NeoCrudHandler#handleDefault`) | `coerceTypes` at `NeoCrudHandler:521` | ✅ |
+| `POST /crud` (React form; every `etendo_batch` op, via `BatchService` → `NeoCrudHandler#handleDefault`) | `coerceTypes` at `NeoCrudHandler:521` | ✅ |
 | `PUT`/`PATCH /crud` | `NeoTypeCoercionHelper.wrapForSmartclient` → `coerceTypes` | ✅ (via the wrapper, not the handler) |
-| `neo_create` | `coerceFieldTypes` at `McpToolRouter:499` | ✅ |
-| **`neo_update`** | — | ❌ **none** |
+| `etendo_create` | `coerceFieldTypes` at `McpToolRouter:499` | ✅ |
+| **`etendo_update`** | — | ❌ **none** |
 
 `handleUpdate` mapped fields, resolved FK names, wrapped and called `jsonService.update`. Its own
 comment said so in as many words — *"handleUpdate has no other coercion pass"* — written about the FK
@@ -530,7 +530,7 @@ Two things made this invisible for a full wave:
    **missing call site**, a class of bug no test of the callee can reach.
 
    **Correction, 2026-08-10 —** an earlier version of this point said those tests *"passed the entire
-   time `neo_update` was writing year 0015"*. They did not pass. They never ran. See §9.2: the date
+   time `etendo_update` was writing year 0015"*. They did not pass. They never ran. See §9.2: the date
    assertions have never executed under Gradle even once, so the sentence claimed evidence that does
    not exist. The argument it was making survives the correction — a passing test of the callee could
    not have caught a missing caller either — but it was being made with a fact that was wrong.
@@ -540,7 +540,7 @@ Two things made this invisible for a full wave:
 | File | Change |
 |---|---|
 | `mcp/McpToolRouter.java` | `handleUpdate` now calls `coerceFieldTypes(filteredBody, dalEntity)`, before the `NeoHandler` pre-hook — the same position `handleCreate` uses, so a hook that mirrors a date field (e.g. `mirrorAccountingDate`) copies an already-canonical value |
-| `mcp/McpToolRouterSupport.java` | the `wrapForSmartclient` Javadoc states that this wrapper does **not** coerce, that its REST twin does, and that the fix for a future gap is the missing call site — not adding a second pass here, which would give `neo_create` two and hide the next one |
+| `mcp/McpToolRouterSupport.java` | the `wrapForSmartclient` Javadoc states that this wrapper does **not** coerce, that its REST twin does, and that the fix for a future gap is the missing call site — not adding a second pass here, which would give `etendo_create` two and hide the next one |
 | `src-test/…/mcp/McpWriteVerbCoercionCallSiteTest.java` | **new.** Source-reading guard: any `McpToolRouter` method reaching `jsonService.add`/`update` must also call `coerceFieldTypes`. Fails on the pre-fix source (`violations: [handleUpdate]`), clean on the fixed one — both verified by running the extractor on a JDK against the real file, before and after. Asserts ≥ 2 persisting methods so a refactor cannot make it pass vacuously |
 | `docs/neo-headless.md` §4.3.1 | the per-path invocation table above, the pre-hook ordering rule, and the hook-must-emit-ISO corollary |
 
@@ -555,8 +555,8 @@ the 2026-08-10 run measured is closed by a call site, not by a parser change.
 
 | # | Check | Accepts |
 |---|---|---|
-| 5 | `neo_update` on a `sales-order` header with `orderDate: "09-08-2026"` | stored `2026-08-09` — **and** `accountingDate` unchanged unless a hook mirrored it, in which case also `2026-08-09`. This is C11 re-run; it is the one probe that decides IMP-24's status |
-| 6 | `neo_update` with `orderDate: "06/08/2026"` | the value is refused or errors loudly; nothing is stored in the first century. Confirms the `WARN`-and-pass-through boundary is where §6.1 says it is |
+| 5 | `etendo_update` on a `sales-order` header with `orderDate: "09-08-2026"` | stored `2026-08-09` — **and** `accountingDate` unchanged unless a hook mirrored it, in which case also `2026-08-09`. This is C11 re-run; it is the one probe that decides IMP-24's status |
+| 6 | `etendo_update` with `orderDate: "06/08/2026"` | the value is refused or errors loudly; nothing is stored in the first century. Confirms the `WARN`-and-pass-through boundary is where §6.1 says it is |
 | 7 | Server log during 5–6 | `[MCP] Normalized date 'orderDate': '09-08-2026' -> '2026-08-09'` on 5; a single `Unrecognized date format` `WARN` on 6 |
 
 ### 9.1 Verified — 2026-08-10, after the user's compile + redeploy
@@ -564,13 +564,13 @@ the 2026-08-10 run measured is closed by a call site, not by a parser change.
 Probed on `etendo-go-local` against a record this investigation created and then deleted (a
 `sales-order` header tagged `MCP-BENCHMARK 2026-08-10 date-fix`, `1000028` /
 `E4018D6F88964E9993F43CC4C635B76E`). No pre-existing record was written to. Deleted afterwards via
-`neo_delete`; the marker sweep across `c_order` and `c_orderline` returns 0 rows, and the id is gone.
+`etendo_delete`; the marker sweep across `c_order` and `c_orderline` returns 0 rows, and the id is gone.
 
 | # | Result | Measured |
 |---|---|---|
-| 3 | ✅ | `neo_create` with **no** dates sent → `orderDate` and `accountingDate` both `2026-08-10`; in the database `dateordered`, `dateacct` and `datepromised` are all real 2026 dates, none first-century |
-| 5 | ✅ | `neo_update {"orderDate": "09-08-2026"}` → response `2026-08-09`, **and** `accountingDate` mirrored as `2026-08-09`. Database agrees: `dateordered = dateacct = 2026-08-09`. This is C11 re-run: it previously returned `status: 0` with `0015-02-16` on both fields. **The corruption vector is closed** |
-| 6 | ✅ (on the safety question) | `neo_update {"orderDate": "06/08/2026"}` → refused, nothing stored. The value never reaches the first century |
+| 3 | ✅ | `etendo_create` with **no** dates sent → `orderDate` and `accountingDate` both `2026-08-10`; in the database `dateordered`, `dateacct` and `datepromised` are all real 2026 dates, none first-century |
+| 5 | ✅ | `etendo_update {"orderDate": "09-08-2026"}` → response `2026-08-09`, **and** `accountingDate` mirrored as `2026-08-09`. Database agrees: `dateordered = dateacct = 2026-08-09`. This is C11 re-run: it previously returned `status: 0` with `0015-02-16` on both fields. **The corruption vector is closed** |
+| 6 | ✅ (on the safety question) | `etendo_update {"orderDate": "06/08/2026"}` → refused, nothing stored. The value never reaches the first century |
 | 7 | ✅ | Exactly the two expected lines, and nothing else: one `INFO … Normalized date 'orderDate': '09-08-2026' -> '2026-08-09'` on 5, one `WARN … Unrecognized date format for 'orderDate': '06/08/2026' passed through unchanged` on 6 |
 
 Check 5 also settles the ordering argument in §9's *What changed* table by observation rather than by
@@ -590,11 +590,11 @@ Coercing *before* the hook is what makes that true — the reverse order would h
 2. **`scheduledDeliveryDate` is written but not projected.** The create log shows
    `Normalized date 'scheduledDeliveryDate': '10-08-2026' -> '2026-08-10'`, and `datepromised` in the
    database is `2026-08-10` — so the field exists in the `sales-order` spec and the write path handles
-   it correctly. But it is absent from both `neo_list` and `neo_get` responses. That is a read-side
+   it correctly. But it is absent from both `etendo_list` and `etendo_get` responses. That is a read-side
    projection question, not a date question; it is *not* the silent-unknown-field drop of IMP-18 and
    should not be filed under it without checking the spec's field list first.
 
-Checks 1, 2 and 4 of §7 (the `neo_defaults` diff over ~8 windows, the React-form round trip, and their
+Checks 1, 2 and 4 of §7 (the `etendo_defaults` diff over ~8 windows, the React-form round trip, and their
 log) remain unrun. They cover the **read/emit** half, which the 2026-08-10 run had already credited
 behaviourally; the write half is what this section closes.
 

@@ -99,7 +99,7 @@ survived. With it, a report that declares neither fails the build.
 This is not hypothetical. **During the 2026-09-16 review, `InventoryStockReportHandler`'s inline
 window check was replaced by the call to the new method before its override existed.** It
 inherited the `true` default and the report was readable by any role — stock quantities and
-valuations for both warehouses — for a full deploy. It was caught only because `neo_discover`
+valuations for both warehouses — for a full deploy. It was caught only because `etendo_discover`
 was inspected for an unrelated reason.
 
 That is the exact failure the guardrail catches, and the reason it must land before the empty
@@ -178,7 +178,7 @@ guardrail achieves the same outcome earlier and more visibly.
 ## 6. Out of scope, and a correction worth recording
 
 **Button actions are NOT affected, and are already correct.** An earlier reading of this code
-concluded that `neo_action` performed no process-access check. That was wrong: it inspected
+concluded that `etendo_action` performed no process-access check. That was wrong: it inspected
 `handleAction` and an unrelated `executeAction` in the legacy invoice handlers. The real
 execution path, `NeoButtonActionHelper.executeButtonActionCore`, checks
 `hasObuiappProcessAccess` or `hasProcessAccess` before executing, resolves the shared `Posted`
@@ -186,7 +186,7 @@ fallback the same way at execution as at listing, and answers `400 No process li
 for the ~8 button columns that have no process at all. Measured: 85 classic, 154 OBUIAPP, 31
 column rows with no declared process of which the `Posted` convention covers most.
 
-A related idea was also dropped: mapping `neo_action` to `POST` so the read/write window
+A related idea was also dropped: mapping `etendo_action` to `POST` so the read/write window
 tiering would apply. `AD_Window_Access` and `AD_Process_Access` are independent grants, and
 read-only window access combined with an explicit process grant is a legitimate configuration —
 somebody who may not edit an order but may run Complete. Gating the action on window write
@@ -222,7 +222,7 @@ variant, which is a different OBUIAPP process (`EB4C…`).
 
 ### Evidence for the fail-open, from the same run
 
-`neo_discover` under `Sales` lists all three reports with `callable: true`, including the two
+`etendo_discover` under `Sales` lists all three reports with `callable: true`, including the two
 that answer `403`. The catalogue is built through the same permissive `R`-spec path, so it
 advertises reports the role cannot run — and, for a spec whose very existence is sensitive,
 names it. This is the defect this document proposes to close, observed from the discovery side

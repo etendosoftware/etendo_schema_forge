@@ -303,9 +303,9 @@ REST and the SPA are unchanged):
   because fiscal and bank integrations are limited for agents (a declared narrowing, not a parity
   gap; a bank-initiated collection also needs a person to authorize it at the bank, SCA).
 - **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
-  `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
+  `etendo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
   editable field, and the generic delete of a draft fails on its payment details. A collection is
-  created, edited (draft) and deleted (draft, with credit given back) from the invoice: `neo_action(spec:'sales-invoice',
+  created, edited (draft) and deleted (draft, with credit given back) from the invoice: `etendo_action(spec:'sales-invoice',
   entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
   — see `sales-invoice.md` → "MCP payment actions".
 - **No writes on the lines** (`finPaymentScheduleDetail`, the allocation to invoice installments):

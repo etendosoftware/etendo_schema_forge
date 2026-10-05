@@ -193,12 +193,12 @@ Changes landed in `feature/ETP-4173`. Covers AD_Message error token resolution a
 
 ### Line `asset` no longer inherits the header id (bug fix)
 
-- Root cause: `A_Amortizationline` has two `isparent='Y'` columns in AD — `A_Amortization_ID` (the real header FK) and `A_Asset_ID`. The NEO defaults link-to-parent logic injected the `parentId` (header id) into **every** parent-link column, so `neo_defaults` for `lines` returned the header id as the `asset` value.
+- Root cause: `A_Amortizationline` has two `isparent='Y'` columns in AD — `A_Amortization_ID` (the real header FK) and `A_Asset_ID`. The NEO defaults link-to-parent logic injected the `parentId` (header id) into **every** parent-link column, so `etendo_defaults` for `lines` returned the header id as the `asset` value.
 - Fix (generic, in `NeoDefaultsService`): the `parentId` is now applied only to the parent-link column whose referenced entity matches the parent tab's table (`A_Amortization`). `A_Asset_ID` references `A_Asset`, so it no longer receives the header id and falls through to normal resolution (→ `null` when the header has no asset). Benefits any child entity with multiple `isparent` FKs.
 
 ### Header defaults — `name` and `accountingDate`
 
-- `accountingDate`: `decisions.json` header field now has `defaultExpr: "@#Date@"` → `neo_defaults` returns the current system date. Editable; an explicit value on create still wins.
+- `accountingDate`: `decisions.json` header field now has `defaultExpr: "@#Date@"` → `etendo_defaults` returns the current system date. Editable; an explicit value on create still wins.
 - `name`: computed dynamically by a new `AmortizationHeaderHandler` (`@Named("amortizationHeaderHandler")`, wired via `entities.header.javaQualifier` in `decisions.json`). On the `DEFAULTS` endpoint it reads the `assetId` query param, loads the asset, and returns `"Amortización - {asset name} - {amortizationStartDate}"`. Falls back to `"Amortización"` when no `assetId` is present, the asset is not found, or any lookup error occurs — never blocks the defaults call. It only fills `name` when not already set, so an explicit value on create wins.
 
 ### Deferred to a follow-up

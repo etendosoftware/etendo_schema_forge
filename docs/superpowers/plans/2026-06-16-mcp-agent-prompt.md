@@ -1,8 +1,8 @@
-# Configurable Agent Prompt for `neo_discover` / `neo_schema` — Implementation Plan
+# Configurable Agent Prompt for `etendo_discover` / `etendo_schema` — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a configurable `agentPrompt` text at spec and field level that flows from `decisions.json` → DB → MCP responses (`neo_discover` for specs, `neo_schema` for fields).
+**Goal:** Add a configurable `agentPrompt` text at spec and field level that flows from `decisions.json` → DB → MCP responses (`etendo_discover` for specs, `etendo_schema` for fields).
 
 **Architecture:** Two new nullable DB columns (`ETGO_SF_SPEC.AGENT_PROMPT` CLOB, `ETGO_SF_FIELD.AGENT_PROMPT` VARCHAR 2000). The Java MCP layer reads them via the generated DAL getters and adds an `agentPrompt` key to its JSON when non-empty. The Schema Forge CLI writes them via the existing direct-SQL path (`neo-writer.js`), sourcing values from `decisions.json` exactly like the existing `defaultExpr` flow. Webhooks (`SFUpsertSpec`/`SFUpsertField`) gain a matching optional param for runtime parity.
 
@@ -199,7 +199,7 @@ Expected: FAIL.
 ```bash
 cd etendo_core/modules/com.etendoerp.go
 git add src/com/etendoerp/go/mcp/McpToolRouterSupport.java src-test/src/com/etendoerp/go/mcp/McpToolRouterSupportTest.java
-git commit -m "Feature ETP-4252: Return agentPrompt in neo_discover spec object"
+git commit -m "Feature ETP-4252: Return agentPrompt in etendo_discover spec object"
 ```
 
 ### Task B2: Field summary returns per-field `agentPrompt`
@@ -249,7 +249,7 @@ git commit -m "Feature ETP-4252: Return agentPrompt in neo_discover spec object"
 
 ```bash
 git add src/com/etendoerp/go/mcp/McpToolRouterSupport.java src-test/src/com/etendoerp/go/mcp/McpToolRouterSupportTest.java
-git commit -m "Feature ETP-4252: Return per-field agentPrompt in neo_schema"
+git commit -m "Feature ETP-4252: Return per-field agentPrompt in etendo_schema"
 ```
 
 ### Task B3: `SFUpsertSpec` accepts optional `AgentPrompt`
@@ -459,11 +459,11 @@ git commit -m "Feature ETP-4252: Surface agentPrompt in agentProfile/contract.mc
 ### Task D1: Document the feature
 
 **Files:**
-- Modify: `etendo_core/modules/com.etendoerp.go/docs/neo-headless.md` — document `agentPrompt` in the `neo_discover` and `neo_schema` response shapes.
+- Modify: `etendo_core/modules/com.etendoerp.go/docs/neo-headless.md` — document `agentPrompt` in the `etendo_discover` and `etendo_schema` response shapes.
 - Modify: `docs/decisions-reference.md` — document `window.agentPrompt` and per-field `agentPrompt`.
 - Modify: `docs/ui-customization.md` — add `agentPrompt` to the `decisions.json → window.*` extension-point list.
 
-- [ ] **Step 1:** Add a subsection "Agent prompt (`agentPrompt`)" to `neo-headless.md` showing a sample `neo_discover` spec object and `neo_schema` field object with the key, and noting it is omitted when empty.
+- [ ] **Step 1:** Add a subsection "Agent prompt (`agentPrompt`)" to `neo-headless.md` showing a sample `etendo_discover` spec object and `etendo_schema` field object with the key, and noting it is omitted when empty.
 - [ ] **Step 2:** In `decisions-reference.md`, document the key at both levels with a short example and that it flows to `ETGO_SF_SPEC.AGENT_PROMPT` / `ETGO_SF_FIELD.AGENT_PROMPT`.
 - [ ] **Step 3:** Add a one-line entry to the `ui-customization.md` extension-point list.
 - [ ] **Step 4: Commit** (each repo separately for its own docs)

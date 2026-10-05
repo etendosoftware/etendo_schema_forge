@@ -1,4 +1,4 @@
-# IMP-23 — `neo_batch` was not atomic (options A + B implemented)
+# IMP-23 — `etendo_batch` was not atomic (options A + B implemented)
 
 | | |
 |---|---|
@@ -55,7 +55,7 @@ So the defect is invisible to exactly the probes an agent is most likely to trip
 
 ### 1.2 The blast radius is wider than MCP
 
-`neo_batch` and the REST endpoint `POST /sws/neo/batch` share `executeBatch` verbatim. The REST one
+`etendo_batch` and the REST endpoint `POST /sws/neo/batch` share `executeBatch` verbatim. The REST one
 is what the React invoice-scan ingest uses, and `BatchService`'s own javadoc names its purpose as
 *"ingest a multi-record document atomically"*. **That path is non-atomic for the same reason and has
 been since it shipped** (`c56628f0`, ETP-3590). This file records that; whether the UI path is
@@ -97,7 +97,7 @@ discipline.
 
 ## 4. The three ways out
 
-The registry row's own wording — *"Make `neo_batch` atomic, **or** stop documenting it as atomic"* —
+The registry row's own wording — *"Make `etendo_batch` atomic, **or** stop documenting it as atomic"* —
 admits either direction. They are not mutually exclusive and they are not the same size.
 
 ### Option A — report the truth (small, no regression surface)
@@ -152,7 +152,7 @@ The reason it gave was scope-of-review: don't make a P1 ergonomics fix wait on a
 reason is *satisfied*, not pending — A shipped as its own commit, reviewable on its own. What is left
 is a sequencing question, and sequencing does not need a second row.
 
-It also would have cost MARI for nothing. This item's own title is *"Make `neo_batch` atomic, **or**
+It also would have cost MARI for nothing. This item's own title is *"Make `etendo_batch` atomic, **or**
 stop documenting it as atomic"* — B is the first clause. Doing it here takes this row from ⚠️ (0.5)
 to ✅ (1.0): **+2.5 earned points, known scope and quota untouched.** Registering it separately adds
 5 points of P1 scope against a known scope that already equals the quota exactly (97, registry §2.2),
@@ -193,7 +193,7 @@ day** under this item, per §5.1 (§11).
 
 - [x] `failureBody` receives `opResults` and returns `persisted:[{id, ok, recordId}]`
 - [x] `atomic:false` and a `hint` on **every** failure body, including the ones where nothing survived
-- [x] the `neo_batch` tool description stops promising all-or-nothing and points at `persisted`
+- [x] the `etendo_batch` tool description stops promising all-or-nothing and points at `persisted`
 - [x] `docs/neo-headless.md` §4.12.4 shows the real failure shape, with a new §4.12.4.1 on why
 - [x] the tests that asserted the atomicity stop asserting it and guard the new contract instead
 - [x] deployed and probed live: C10 re-run returns the surviving order id in `persisted` (§9)
@@ -272,9 +272,9 @@ against `c_order.description varchar(255)` — the C10 vector verbatim, chosen b
            "detail": "…description: Value too long. Length 281, maximum allowed 255 …"}}
 ```
 
-`neo_get` on that id returned order `1000029`, `documentStatus: "DR"`, description
+`etendo_get` on that id returned order `1000029`, `documentStatus: "DR"`, description
 `"IMP23-PROBE op1 survivor"` — **the orphan the old response would have hidden.** It was then deleted
-with `neo_delete` using the id the failure body itself supplied, and a sweep by date returned 0 rows.
+with `etendo_delete` using the id the failure body itself supplied, and a sweep by date returned 0 rows.
 
 **That round trip is the whole point of the fix, executed:** find the survivor from the response,
 verify it, delete it. Doing this on 2026-08-05 would have needed a DB query nobody had a reason to
@@ -291,7 +291,7 @@ response says so explicitly instead of staying silent.
 
 ### 9.3 The tool description was stale in the client, and that limits option C
 
-The `neo_batch` schema this session received still carried the **old** text — *"Run a sequence of
+The `etendo_batch` schema this session received still carried the **old** text — *"Run a sequence of
 cross-spec create operations atomically … any failure rolls back everything (no partial writes)"* —
 while the server was already returning the new body. The MCP client caches the tool list from session
 start, so the descriptions do not refresh on redeploy.
@@ -325,7 +325,7 @@ registry row moved ⏳ open → ⚠️ partial with the **score staying 0 / 5**:
 reach 5 / 5 without option B.
 
 What the live run settles and what it does not: the recovery loop works end to end — the failure body
-named the survivor, `neo_get` confirmed it, `neo_delete` removed it using that id, and both hint
+named the survivor, `etendo_get` confirmed it, `etendo_delete` removed it using that id, and both hint
 branches (survivors / none) were exercised (§9.1–§9.2). What it does not settle is atomicity, which
 was never A's claim. `./gradlew test` is still owed (§8).
 
@@ -486,11 +486,11 @@ That mattered, because *"nothing was persisted"* is the exact claim that was **f
 javadoc asserted all-or-nothing, and `verify(obDal, never()).commitAndClose()` passed while orphans
 accumulated. A self-report of atomicity is worth nothing here on its own.
 
-So the DB was queried directly: `neo_list` filtered on op `h0`'s marker description → **0 rows**; and a
+So the DB was queried directly: `etendo_list` filtered on op `h0`'s marker description → **0 rows**; and a
 sweep for any header dated on or after 2026-08-11 → **0 rows**.
 
 **With a positive control**, because a `0` can just as easily mean a filter that never matches: an
-unfiltered `neo_list` ordered by date returned **7 headers, newest 2026-06-24**, none carrying an
+unfiltered `etendo_list` ordered by date returned **7 headers, newest 2026-06-24**, none carrying an
 `IMP23B-PROBE` marker. The query sees data, and the data does not contain op `h0`. Worth noting the
 same listing shows the orphans of the earlier runs (`1000017`, `1000024`, `1000027`, `1000029`) are all
 gone — the top document number is `1000015`, so option A's recovery loop cleaned up after itself.
@@ -512,7 +512,7 @@ only one possible — no unit test in the module could have produced it (§11.4)
   but the endpoint is not atomic anyway"*. Both live probes (§9.2, §12.1) produced the empty array, so
   its **wording** has been seen in both eras — but only the new hint text is now correct, and §9.2's
   reading is retired.
-* **Tool descriptions in open sessions**, again. The `neo_batch` schema this session holds is still the
+* **Tool descriptions in open sessions**, again. The `etendo_batch` schema this session holds is still the
   **pre-A original** — *"atomically … any failure rolls back everything (no partial writes)"*, with no
   `atomic`/`persisted` in its returns clause. §9.3 found this after A and it repeated verbatim after B:
   the MCP client caches the tool list at session start, so **a connected agent reads a description two
@@ -525,7 +525,7 @@ only one possible — no unit test in the module could have produced it (§11.4)
 
 ## 2026-08-13 — re-probed by a `/mcp-comparison` run (job B); score awarded, 0 → 5/5
 
-Re-probed live on `etendo-go-local`, build `8f0d1cce`: a `neo_batch` whose second op is invalid rolls
+Re-probed live on `etendo-go-local`, build `8f0d1cce`: a `etendo_batch` whose second op is invalid rolls
 the first one back and reports the failing index. The 08-12 verification had been accepted but left
 unscored; registry §3 now reads ✅ with 5/5.
 

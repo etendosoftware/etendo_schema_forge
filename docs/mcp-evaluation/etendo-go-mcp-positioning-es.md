@@ -61,11 +61,11 @@ procesable, no con prosa:
 { "status": 422, "error": "validation_error",
   "detail": "Missing required fields that could not be auto-resolved",
   "missingFields": [{ "name": "product", "type": "foreignKey", "hasSelector": true }],
-  "hint": "Provide these fields, or use neo_selectors to find valid values",
+  "hint": "Provide these fields, or use etendo_selectors to find valid values",
   "seeAlso": "docs(topic:\"creating records\")" }
 ```
 
-*(medido — textual, de un `neo_create` real)*
+*(medido — textual, de un `etendo_create` real)*
 
 Todo lo que el agente necesita para reintentar es legible por máquina: qué campo, de qué tipo, qué
 herramienta lo resuelve y dónde está la documentación. Un nombre de entidad equivocado vuelve con la

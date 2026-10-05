@@ -1,4 +1,4 @@
-# IMP-18 — Report unknown names in a `fields` projection (`neo_list` / `neo_get`)
+# IMP-18 — Report unknown names in a `fields` projection (`etendo_list` / `etendo_get`)
 
 | | |
 |---|---|
@@ -17,7 +17,7 @@ wrong" from "this record has no value there", and the failure mode is not a lost
 wrong conclusion about the data.
 
 This was never a missing feature so much as a consistency defect. IMP-12 shipped `unknownFields` on
-`neo_schema`'s own `fields` argument (see [IMP-12 §9.4](IMP-12.md), and §13.2 where the live probe
+`etendo_schema`'s own `fields` argument (see [IMP-12 §9.4](IMP-12.md), and §13.2 where the live probe
 confirmed it echoes a typo). Same argument name, same tool family, two behaviours. The fix was
 sitting one tool over.
 
@@ -26,7 +26,7 @@ frozen task 3 failed, so closing it alone moves M2 from 80 % to 100 %.
 
 ## 2. Where it lives — one choke point
 
-`neo_list` and `neo_get` both delegate to a single method, and both already hold everything the fix
+`etendo_list` and `etendo_get` both delegate to a single method, and both already hold everything the fix
 needs:
 
 | | |
@@ -80,7 +80,7 @@ the FK *and* its label.
 | `McpFieldProjection.java` | `baseNames()` (normalisation, §4) and `reportUnknownFields()` (sorted, attached to `response`) |
 | `McpQuerySupport.java` | `applyProjection` takes the `NeoFieldFilter`; `emittableBaseNames()` resolves the spec-then-DAL fallback |
 | `McpToolRouter.java` | both call sites pass their existing `fieldFilter` |
-| `ToolRegistry.java` | `fields` descriptions on `neo_list` / `neo_get` now name `unknownFields`, mirroring `neo_schema`'s wording |
+| `ToolRegistry.java` | `fields` descriptions on `etendo_list` / `etendo_get` now name `unknownFields`, mirroring `etendo_schema`'s wording |
 | `docs/neo-headless.md` | new §4.12.5 |
 | `McpFieldProjectionTest.java`, `NeoFieldFilterTest.java` | 10 new tests, incl. the empty-result-set case and the §4 companion regression |
 
@@ -109,7 +109,7 @@ had two behaviours, and a differently-named report would have left it that way.
 - [x] Unit tests green (50/50 across both test classes, run standalone against the deployed jars)
 - [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green
-- [ ] Corpus row for `neo_list`/`neo_get` in `etendo-go-docs` mentions `unknownFields` (separate
+- [ ] Corpus row for `etendo_list`/`etendo_get` in `etendo-go-docs` mentions `unknownFields` (separate
       repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
   - **Written and submitted 2026-08-13** — `etendo-go-docs` `25d787a`, PR
     [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) → `main`, open. See §8. Left
@@ -122,11 +122,11 @@ Six read-only probes; no writes, so no record was touched.
 
 | # | Probe | Result |
 |---|---|---|
-| 1 | **C15** — `neo_list product/product fields:["salePrice","purchasePrice","stock"]` | `unknownFields:["purchasePrice","salePrice","stock"]`, `data:[{id}]` |
+| 1 | **C15** — `etendo_list product/product fields:["salePrice","purchasePrice","stock"]` | `unknownFields:["purchasePrice","salePrice","stock"]`, `data:[{id}]` |
 | 2 | Empty result set — `fields:["salePrice","name"]` + a filter matching nothing | `data:[]` **and** `unknownFields:["salePrice"]`; `name` correctly not reported |
 | 3 | Alias — `sales-invoice/header fields:["dateAcct","accountingDate"]` | `unknownFields:["dateAcct"]`, `accountingDate:"2026-04-16"` returned |
 | 4 | Companion — `fields:["businessPartner$_identifier"]` | FK **and** label returned (`businessPartner` + `businessPartner$_identifier`) |
-| 5 | `neo_get` — `fields:["documentNo","grandTotalAmount","totalGross"]` | `unknownFields:["totalGross"]` — same contract as `neo_list` |
+| 5 | `etendo_get` — `fields:["documentNo","grandTotalAmount","totalGross"]` | `unknownFields:["totalGross"]` — same contract as `etendo_list` |
 | 6 | Clean `fields:["name"]` and `view:"summary"` | no key added; default response untouched |
 
 **Probe 3 is the one that discriminates the design, and it is why §3.2 is not a stylistic
@@ -148,7 +148,7 @@ Two pages in `etendo-go-docs` carry the addition, both **extended rather than cr
 
 | Page | Addition |
 |---|---|
-| `agentic/mcp/index.md` | the `neo_list`/`neo_get` row of the response-shaping table, and a new Error-handling row |
+| `agentic/mcp/index.md` | the `etendo_list`/`etendo_get` row of the response-shaping table, and a new Error-handling row |
 | `agentic/agent-manual.md` | a new Error-handling row, phrased as a normative agent action |
 
 Both pages needed it independently, which is a property of the corpus rather than duplication:
@@ -159,7 +159,7 @@ Only `agentic/` is indexed — `docs/` is the human MkDocs site and was correctl
 The draft first said the key was `response.unknownFields`. A live call says otherwise:
 
 ```
-neo_list sales-order/header fields:["documentNo","salePrice","notAField"] limit:1
+etendo_list sales-order/header fields:["documentNo","salePrice","notAField"] limit:1
   → { startRow: 0, endRow: 0, totalRows: 2,
       data: [ { id: …, documentNo: "1000011" } ],
       unknownFields: [ "notAField", "salePrice" ] }
@@ -193,9 +193,9 @@ found sharpens a registered item instead of closing it.
 
 What was measured on `etendo-go-local`, build `8f0d1cce`:
 
-- **`neo_schema` does report unknown names.** A projection with two bogus keys came back with
+- **`etendo_schema` does report unknown names.** A projection with two bogus keys came back with
   `"unknownFields": ["price","notAField"]`.
-- **`neo_create` / `neo_update` drop the very same `price` key in silence**, and return 200.
+- **`etendo_create` / `etendo_update` drop the very same `price` key in silence**, and return 200.
 
 So the warning mechanism exists, is correct, and is **simply not wired into the write verbs**. That is
 a much smaller fix than the original registration implied — it is a call-site question, not a design

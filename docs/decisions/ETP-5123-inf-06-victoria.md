@@ -25,7 +25,7 @@ and applies the authoritative tab subtype to both document-type fields when the 
 The MCP create path now invokes that same resolver before persistence, preserving an explicitly
 submitted value when the tab has no authoritative subtype constraint.
 
-The `neo_batch` create path reaches the common CRUD default/callout pipeline and is covered by the
+The `etendo_batch` create path reaches the common CRUD default/callout pipeline and is covered by the
 same resolver contract. The focused regression suite covers the resolver mapping matrix,
 MCP create integration point, and batch pipeline call site.
 

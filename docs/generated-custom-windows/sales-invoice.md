@@ -1611,7 +1611,7 @@ Verifactu have no equivalent stored column and keep their own unconditional clie
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move this invoice through its
-workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`, `actionValues` (the
+workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`, `actionValues` (the
 active AD list of the `C_Invoice.DocAction` reference — note `CO` is labelled **Complete** here,
 not Book) and `actionParameter: "docAction"`; its `agentPrompt` — defined in `decisions.json` ->
 `entities.header.fields.documentAction.agentPrompt` — states which transitions are legal and
@@ -1619,7 +1619,7 @@ their preconditions.
 
 Completing a draft invoice over MCP:
 
-    neo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
+    etendo_action { spec: "sales-invoice", entity: "header", id: "<invoiceId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 Flow encoded in the prompt: `DR -> CO` completes (assigns the final document number, computes
@@ -1703,7 +1703,7 @@ Both `sifSending.js` and `SiiSendHandler.java` are shared between sales-invoice 
 purchase-invoice — see `purchase-invoice.md` for this window's mirror of the same fix.
 
 This runs `SalesInvoiceHeaderHandler` exactly as the UI does — including the `ProcessInvoiceHook`
-routing on completion — because `neo_action` executes the entity's `NeoHandler` hooks
+routing on completion — because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change this window's workflow rules, update the `agentPrompt` in the same
 change: it is the only thing telling the agent what is legal.
 
@@ -1816,7 +1816,7 @@ Three constraints worth knowing:
   zero limit means *no limit* — a deliberate divergence from Classic, documented in
   `financial-account.md`.
 - **Enforced server-side too (ETP-5558).** Until ETP-5558 the limit lived only in the SPA, so an MCP
-  `neo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
+  `etendo_action registerPayment` or a direct REST call with `writeoffDifference:true` could write off
   any amount. `PaymentWriteoffLimitGuard` (called from `doRegisterPaymentAdvanced` before the draft,
   the consumed credit or a PIS transfer exists) now refuses it with a 400 and the
   `ETGO_WriteoffLimitExceeded` AD_Message (English only — the module ships no message
@@ -2088,8 +2088,8 @@ invoice's id and payment/credit ids taken from that invoice's own listings.
 
 An agent collects an invoice through the same invoice-header actions the *Cobros de la factura*
 popup and the *Nuevo cobro* modal call — never by writing a collection by hand. They are published
-to MCP as declared actions next to the AD buttons (`neo_schema(spec:'sales-invoice',
-entity:'header', view:'actions')`, also named in `neo_discover`), with `id` = the invoice id:
+to MCP as declared actions next to the AD buttons (`etendo_schema(spec:'sales-invoice',
+entity:'header', view:'actions')`, also named in `etendo_discover`), with `id` = the invoice id:
 
 | Action | What it does |
 |---|---|

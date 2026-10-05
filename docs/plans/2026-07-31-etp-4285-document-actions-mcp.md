@@ -4,7 +4,7 @@
 
 **Goal:** Make document workflow actions (`documentAction` = CO/CL/VO/RE…) discoverable, semantically described, and behaviourally correct when fired by an AI agent through MCP, so an agent can complete a draft sales order (DR → CO) exactly as the UI does.
 
-**Architecture:** Three layers, in dependency order. (1) **Correctness** — `neo_action` gains `NeoHandler` pre/post hook parity with the REST action path, so a document completion fired over MCP runs the same handler logic as the UI. (2) **Discoverability, generic** — `neo_schema`'s button fields gain `actionValues` (read from the button's AD list reference) plus `actionParameter` (the key the chosen value travels under), and `neo_action`'s tool description states the calling contract. This is derived from AD, so every window gets it with zero per-window code. (3) **Semantics, per window** — the *judgement* (which value to use when, preconditions, what the action does to the document) lives in `decisions.json` as `fields.documentAction.agentPrompt`, which the existing pipeline already carries to `ETGO_SF_FIELD.AGENT_PROMPT` and `neo_schema` already returns.
+**Architecture:** Three layers, in dependency order. (1) **Correctness** — `etendo_action` gains `NeoHandler` pre/post hook parity with the REST action path, so a document completion fired over MCP runs the same handler logic as the UI. (2) **Discoverability, generic** — `etendo_schema`'s button fields gain `actionValues` (read from the button's AD list reference) plus `actionParameter` (the key the chosen value travels under), and `etendo_action`'s tool description states the calling contract. This is derived from AD, so every window gets it with zero per-window code. (3) **Semantics, per window** — the *judgement* (which value to use when, preconditions, what the action does to the document) lives in `decisions.json` as `fields.documentAction.agentPrompt`, which the existing pipeline already carries to `ETGO_SF_FIELD.AGENT_PROMPT` and `etendo_schema` already returns.
 
 **Tech Stack:** Java 11 / CDI / Openbravo DAL (`com.etendoerp.go`), JUnit 4 + JUnit 5 + Mockito (`src-test/`), Node.js pipeline (`schema_forge_core` CLI, consumed as published package by `etendo_schema_forge`), `decisions.json` config.
 
@@ -23,7 +23,7 @@
   - `git -C modules/com.etendoerp.go stash push src/com/etendoerp/go/mcp/McpToolRouter.java` (fix removed, `buildActionHookContext` left in place so the suite still compiles) → **4 failed / 63**, and precisely the four new ones: `actionRunsEntityHandlerHooks` and `actionBuildsActionHookContextWithActionName` with `WantedButNotInvoked` (the hooks were never called), `actionPreHookShortCircuitsWithoutFiringTheProcess` and `actionPostHookReplacesResult` with `AssertionFailedError` (the process fired anyway / the result was not replaced). The other 59 tests stayed green, so the fix is scoped;
   - `git stash pop` → `BUILD SUCCESSFUL` again.
   - The tests are therefore non-vacuous: each one fails without the fix and passes with it.
-- **Full MCP package GREEN and each new test confirmed executed (2026-07-31).** `./gradlew test --tests "com.etendoerp.go.mcp.*"` → `BUILD SUCCESSFUL`; the XML in `build/test-results/test/` reports **579 tests, 0 failures, 0 errors, 3 skipped**. Per-suite counts confirm the new tests ran rather than being silently filtered out: `route — neo_action` 9 (was 5, +4), `McpHookExecutorTest` 18 (was 17, +1, and `testBuildActionHookContextSetsActionEndpointTypeAndFieldName` is present), `addButtonInfo` 7 (was 4, +3, all three `…ActionValues…` names present in `McpSchemaFieldBuilderTest$AddButtonInfo.xml`).
+- **Full MCP package GREEN and each new test confirmed executed (2026-07-31).** `./gradlew test --tests "com.etendoerp.go.mcp.*"` → `BUILD SUCCESSFUL`; the XML in `build/test-results/test/` reports **579 tests, 0 failures, 0 errors, 3 skipped**. Per-suite counts confirm the new tests ran rather than being silently filtered out: `route — etendo_action` 9 (was 5, +4), `McpHookExecutorTest` 18 (was 17, +1, and `testBuildActionHookContextSetsActionEndpointTypeAndFieldName` is present), `addButtonInfo` 7 (was 4, +3, all three `…ActionValues…` names present in `McpSchemaFieldBuilderTest$AddButtonInfo.xml`).
 - **Caveat for Task 5:** the 3 skipped tests are all in `NeoWidgetMcpIntegrationTest` — skipped, not failed. That is the only MCP-level *integration* harness in the repo and it does not execute in this environment, which is a direct warning for Task 5 Step 5: the planned `NeoActionMcpIntegrationTest` will likely skip here too. If it does, say so explicitly and treat the unit coverage plus the manual MCP transcript as the evidence — never report a skipped integration test as passing.
 - **Gradle filter gotcha that cost one false "red" here:** `--tests "McpToolRouterRouteTest.someMethod"` does **not** match a method inside a JUnit 5 `@Nested` class — Gradle matched nothing, failed `:test` with `No tests found for given includes`, and that empty failure was briefly mistaken for the bug reproducing. Detection tell: `build/test-results/test/` stays empty. Always use the wildcard form `--tests "<Class>*"` (or `<Class>$<Nested>`) for this suite.
 - **Task 1 — DONE** (code + 4 tests; test runs pending, human-side): `McpHookExecutor.buildActionHookContext` (ACTION endpoint type + `fieldName=actionName`, the two values handlers branch on) and `handleAction` wrapped with `resolveEntityHandler` / `runPreHook` / `runPostHook`. The `parameters` object is shared with `executeButtonActionCore` so a handler that normalizes the action value is honoured by the process call — same contract the REST path gives handlers. Post-hook runs only on the success path, mirroring `handleCreate`/`handleUpdate`. Tests: hook wiring, ACTION-context shape (`McpHookExecutorTest`, JUnit 4, with a statically mocked `OBContext`), pre-hook short-circuit (asserts the process is NOT fired), post-hook replacement.
@@ -53,7 +53,7 @@ These were confirmed against the code and the live DB on 2026-07-31. They are th
 | Fact | Evidence |
 |---|---|
 | Document actions **are already invocable** over MCP | `McpToolRouter.handleAction:840` → `NeoButtonActionHelper.executeButtonActionCore:144`; the action value travels as `parameters.docAction` and `NeoProcessService.setDocAction:821` writes it onto the record before calling the process |
-| `neo_action` **skips** the entity's `NeoHandler` hooks | `handleAction` calls the core helper directly; `handleCreate:457`, `handleUpdate:510`, `handleDelete:560` all wrap with `McpHookExecutor`. The REST path *does* hook: `NeoSubEndpointDispatcher.java:99-101` wraps `handleButtonAction` in `handleHookedSubEndpoint(... NeoEndpointType.ACTION ...)` |
+| `etendo_action` **skips** the entity's `NeoHandler` hooks | `handleAction` calls the core helper directly; `handleCreate:457`, `handleUpdate:510`, `handleDelete:560` all wrap with `McpHookExecutor`. The REST path *does* hook: `NeoSubEndpointDispatcher.java:99-101` wraps `handleButtonAction` in `handleHookedSubEndpoint(... NeoEndpointType.ACTION ...)` |
 | Handlers branch on exactly two context values | `AbstractOrderHeaderHandler.isActionDocumentActionComplete:169` requires `context.getEndpointType() == ACTION` and `context.getFieldName() == "documentAction"`, then accepts the value from `fieldValues.documentAction`, root `docAction`, **or** root `documentAction` |
 | The four target windows all have a header handler | `decisions.json` `entities.header.javaQualifier` = `salesOrderHeaderHandler` / `purchaseOrderHeaderHandler` / `salesInvoiceHeaderHandler` / `purchaseInvoiceHeaderHandler` |
 | `documentAction` reaches `ETGO_SF_FIELD` today | sourcedata shows `sales-order.header` `java_qualifier=documentAction`, `isincluded=Y`, `isreadonly=Y`, `AGENT_PROMPT` **empty**. `visibility:"system"` maps to `isIncluded:'Y'` (`push-to-neo.js:60`), which is why `findButtonColumn` resolves it |
@@ -74,13 +74,13 @@ These were confirmed against the code and the live DB on 2026-07-31. They are th
 |---|---|---|
 | `src/com/etendoerp/go/mcp/McpHookExecutor.java` | Builds hook contexts, runs pre/post hooks | Add `buildActionHookContext(...)` (Task 1) |
 | `src/com/etendoerp/go/mcp/McpToolRouter.java` | MCP tool dispatch | Wire pre/post hooks into `handleAction` (Task 1) |
-| `src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java` | Builds `neo_schema` field objects | Add `addActionValues(...)`, call it from `addButtonInfo` (Task 2) |
+| `src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java` | Builds `etendo_schema` field objects | Add `addActionValues(...)`, call it from `addButtonInfo` (Task 2) |
 | `src/com/etendoerp/go/mcp/McpConstants.java` | Shared MCP string constants | Add `PARAM_DOC_ACTION`, `KEY_ACTION_VALUES`, `KEY_ACTION_PARAMETER` (Task 2) |
 | `src/com/etendoerp/go/mcp/ToolRegistry.java` | Tool definitions / descriptions | Rewrite `buildActionTool` description + `parameters` prop text (Task 2) |
 | `src-test/src/com/etendoerp/go/mcp/McpHookExecutorTest.java` | JUnit **4** unit tests | Add ACTION-context tests (Task 1) |
 | `src-test/src/com/etendoerp/go/mcp/McpToolRouterRouteTest.java` | JUnit **5** router tests, `ActionTests` nested class | Add hook-wiring tests (Task 1) |
 | `src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java` | JUnit **5**, `AddButtonInfo` nested class | Add `actionValues` tests (Task 2) |
-| `src-test/src/com/etendoerp/go/mcp/ToolRegistryTest.java` | Tool-definition assertions | Extend if it asserts the `neo_action` description (Task 2, check first) |
+| `src-test/src/com/etendoerp/go/mcp/ToolRegistryTest.java` | Tool-definition assertions | Extend if it asserts the `etendo_action` description (Task 2, check first) |
 
 **`etendo_core/schema_forge`** (branch `feature/ETP-4285`)
 
@@ -95,7 +95,7 @@ These were confirmed against the code and the live DB on 2026-07-31. They are th
 
 ---
 
-## Task 1: Hook parity for `neo_action`
+## Task 1: Hook parity for `etendo_action`
 
 **Goal of this task:** a button action fired through MCP runs the entity's `NeoHandler` pre- and post-hooks, so `documentAction=CO` over MCP triggers the same handler logic (total-discount line, `ProcessInvoiceHook` routing, GL-journal DocAction mapping) as the UI.
 
@@ -171,7 +171,7 @@ Insert into `McpHookExecutor.java` immediately after `buildDefaultsHookContext` 
    * @param specName   the spec that owns the entity
    * @param entityName the entity that owns the button field
    * @param recordId   the record the action targets
-   * @param actionName the button field name as passed to {@code neo_action} (e.g.
+   * @param actionName the button field name as passed to {@code etendo_action} (e.g.
    *                   {@code documentAction})
    * @param params     the MCP {@code parameters} object, used as the request body; must not
    *                   be {@code null} so a handler can read and mutate it
@@ -206,7 +206,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
 
 ```java
     @Test
-    @DisplayName("neo_action runs the entity pre-hook and short-circuits when it returns a result")
+    @DisplayName("etendo_action runs the entity pre-hook and short-circuits when it returns a result")
     void actionPreHookShortCircuitsWithoutFiringTheProcess() throws Exception {
       SFSpec spec = mockSpec();
       SFEntity entity = mockEntity();
@@ -219,7 +219,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
       try (MockedStatic<McpHookExecutor> hookMock = mockStatic(McpHookExecutor.class)) {
         hookMock.when(() -> McpHookExecutor.runPreHook(any(), any())).thenReturn(hookResult);
 
-        JSONObject result = router.route("neo_action", buildActionArgs(), ACTION_SCOPES);
+        JSONObject result = router.route("etendo_action", buildActionArgs(), ACTION_SCOPES);
 
         assertTrue(result.getBoolean("isError"));
         assertTrue(result.getJSONArray("content").getJSONObject(0)
@@ -230,7 +230,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
     }
 
     @Test
-    @DisplayName("neo_action builds an ACTION hook context carrying the action name")
+    @DisplayName("etendo_action builds an ACTION hook context carrying the action name")
     void actionBuildsActionHookContextWithActionName() throws Exception {
       SFSpec spec = mockSpec();
       SFEntity entity = mockEntity();
@@ -245,7 +245,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
           .thenReturn(NeoResponse.ok(responseBody));
 
       try (MockedStatic<McpHookExecutor> hookMock = mockStatic(McpHookExecutor.class)) {
-        router.route("neo_action", buildActionArgs(), ACTION_SCOPES);
+        router.route("etendo_action", buildActionArgs(), ACTION_SCOPES);
 
         hookMock.verify(() -> McpHookExecutor.buildActionHookContext(
             eq(SPEC_NAME), eq(ENTITY_NAME), eq(RECORD_ID), eq(ACTION_NAME),
@@ -254,7 +254,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
     }
 
     @Test
-    @DisplayName("neo_action lets the post-hook replace the default result")
+    @DisplayName("etendo_action lets the post-hook replace the default result")
     void actionPostHookReplacesResult() throws Exception {
       SFSpec spec = mockSpec();
       SFEntity entity = mockEntity();
@@ -275,7 +275,7 @@ Add to the `ActionTests` nested class in `McpToolRouterRouteTest.java`. The clas
         hookMock.when(() -> McpHookExecutor.runPostHook(any(), any(), any()))
             .thenReturn(replaced);
 
-        JSONObject result = router.route("neo_action", buildActionArgs(), ACTION_SCOPES);
+        JSONObject result = router.route("etendo_action", buildActionArgs(), ACTION_SCOPES);
 
         assertTrue(result.getJSONArray("content").getJSONObject(0)
             .getString("text").contains("warning"));
@@ -358,24 +358,24 @@ Expected: all pass. Watch specifically for pre-existing `NeoWidgetMcpIntegration
 - [ ] **Step 9: Hand off for commit (human)**
 
 Files ready: `McpHookExecutor.java`, `McpToolRouter.java`, `McpHookExecutorTest.java`, `McpToolRouterRouteTest.java`.
-Suggested message: `Feature ETP-4285: Run NeoHandler hooks on the MCP neo_action path`
+Suggested message: `Feature ETP-4285: Run NeoHandler hooks on the MCP etendo_action path`
 
 ---
 
 ## Task 2: Expose allowed action values and the calling contract
 
-**Goal of this task:** an agent reading `neo_schema` learns, for every list-backed button, which discrete values it accepts and under which key to send the chosen one — without any per-window code.
+**Goal of this task:** an agent reading `etendo_schema` learns, for every list-backed button, which discrete values it accepts and under which key to send the chosen one — without any per-window code.
 
 **Files:**
 - Modify: `src/com/etendoerp/go/mcp/McpConstants.java`
 - Modify: `src/com/etendoerp/go/mcp/McpSchemaFieldBuilder.java:333-355` (`addButtonInfo`)
 - Modify: `src/com/etendoerp/go/mcp/ToolRegistry.java:582-599` (`buildActionTool`)
 - Test: `src-test/src/com/etendoerp/go/mcp/McpSchemaFieldBuilderTest.java` (`AddButtonInfo` nested class)
-- Check: `src-test/src/com/etendoerp/go/mcp/ToolRegistryTest.java` — grep it for `neo_action` before editing; if it asserts the old description string, update that assertion in the same task.
+- Check: `src-test/src/com/etendoerp/go/mcp/ToolRegistryTest.java` — grep it for `etendo_action` before editing; if it asserts the old description string, update that assertion in the same task.
 
 **Interfaces:**
 - Consumes: `NeoSelectorService.getListLabels(String referenceId)` → `Map<String,String>` (active-only, unordered), `Column.getReferenceSearchKey()`
-- Produces: two new keys on every list-backed button field object in `neo_schema`: `actionValues` (`JSONArray` of `{value,label}`, sorted by `value`) and `actionParameter` (`String`, always `"docAction"`)
+- Produces: two new keys on every list-backed button field object in `etendo_schema`: `actionValues` (`JSONArray` of `{value,label}`, sorted by `value`) and `actionParameter` (`String`, always `"docAction"`)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -486,12 +486,12 @@ Expected: `listBackedButtonEmitsSortedActionValuesAndParameter` fails with `JSON
 In `McpConstants.java`, next to the existing MCP key constants:
 
 ```java
-  /** Key under which a list-backed button's chosen value travels in {@code neo_action}'s
+  /** Key under which a list-backed button's chosen value travels in {@code etendo_action}'s
    *  {@code parameters}. Consumed by {@code NeoProcessService.setDocAction}. */
   static final String PARAM_DOC_ACTION = "docAction";
-  /** {@code neo_schema} key listing the discrete values a button accepts. */
+  /** {@code etendo_schema} key listing the discrete values a button accepts. */
   static final String KEY_ACTION_VALUES = "actionValues";
-  /** {@code neo_schema} key naming the parameter the chosen value goes under. */
+  /** {@code etendo_schema} key naming the parameter the chosen value goes under. */
   static final String KEY_ACTION_PARAMETER = "actionParameter";
 ```
 
@@ -503,7 +503,7 @@ In `McpSchemaFieldBuilder.java`, call it from `addButtonInfo` right after the `i
   private static void addButtonInfo(JSONObject fieldObj, Column col) throws JSONException {
     fieldObj.put("triggerValue", "Y");
     fieldObj.put("action", col.getDBColumnName());
-    fieldObj.put("invokeVia", "neo_action");
+    fieldObj.put("invokeVia", "etendo_action");
     addActionValues(fieldObj, col);
 ```
 
@@ -556,7 +556,7 @@ Check the file's existing imports for `JSONArray`, `Map` and `NeoSelectorService
 
 `./gradlew test --tests "com.etendoerp.go.mcp.McpSchemaFieldBuilderTest"` → PASS.
 
-- [ ] **Step 6: Update the `neo_action` tool description**
+- [ ] **Step 6: Update the `etendo_action` tool description**
 
 In `ToolRegistry.buildActionTool` (line 582), replace the `parameters` prop and the description:
 
@@ -566,9 +566,9 @@ In `ToolRegistry.buildActionTool` (line 582), replace the `parameters` prop and 
             + "named by the field's 'actionParameter' — e.g. {\"docAction\": \"CO\"}"));
 
     return new McpToolDefinition(
-        "neo_action",
+        "etendo_action",
         "Fire a type:button action on a record and return the process result. "
-            + "Call neo_schema first: each button field carries 'action' (the name to pass "
+            + "Call etendo_schema first: each button field carries 'action' (the name to pass "
             + "here), and list-backed buttons also carry 'actionValues' (the values it "
             + "accepts, e.g. CO=Book / VO=Void / RE=Reactivate for documentAction) and "
             + "'actionParameter' (the key to put the chosen value under in 'parameters'). "
@@ -576,7 +576,7 @@ In `ToolRegistry.buildActionTool` (line 582), replace the `parameters` prop and 
             + "id:'<orderId>', action:'documentAction', parameters:{docAction:'CO'}}. "
             + "Which values are legal depends on the record's current state (e.g. "
             + "documentStatus): read the field's 'agentPrompt' for the document's workflow "
-            + "rules, and neo_get the record first if unsure. "
+            + "rules, and etendo_get the record first if unsure. "
             + "Returns {processResult: success|error|warning, processMessage: ...}.",
         buildObjectSchema(props,
             List.of("spec", McpConstants.PARAM_ENTITY, "id", "action")));
@@ -589,20 +589,20 @@ Expected: PASS. If a test asserts the literal old description, update the assert
 
 - [ ] **Step 8: Hand off for commit (human)**
 
-Suggested message: `Feature ETP-4285: Expose button action values and contract in neo_schema`
+Suggested message: `Feature ETP-4285: Expose button action values and contract in etendo_schema`
 
 ---
 
 ## Task 3: Semantic prompts for the four document windows
 
-**Goal of this task:** for `sales-order`, `purchase-order`, `sales-invoice` and `purchase-invoice`, the `documentAction` field returned by `neo_schema` carries a prompt that states what each value does, in which state it is legal, and what the preconditions are.
+**Goal of this task:** for `sales-order`, `purchase-order`, `sales-invoice` and `purchase-invoice`, the `documentAction` field returned by `etendo_schema` carries a prompt that states what each value does, in which state it is legal, and what the preconditions are.
 
 **Files:**
 - Modify: `artifacts/sales-order/decisions.json`, `artifacts/purchase-order/decisions.json`, `artifacts/sales-invoice/decisions.json`, `artifacts/purchase-invoice/decisions.json` — key `entities.header.fields.documentAction.agentPrompt`
 - Regenerated (never hand-edited): each window's `contract.json` and `generated/`
 
 **Interfaces:**
-- Consumes: the field-level `agentPrompt` pipeline — `resolve-curated.js` (field prop allow-list) → `push-to-neo.js:417` → `neo-writer.js:275` → `ETGO_SF_FIELD.AGENT_PROMPT` → `McpSchemaFieldBuilder.addAgentPrompt:327` → `neo_schema` field object
+- Consumes: the field-level `agentPrompt` pipeline — `resolve-curated.js` (field prop allow-list) → `push-to-neo.js:417` → `neo-writer.js:275` → `ETGO_SF_FIELD.AGENT_PROMPT` → `McpSchemaFieldBuilder.addAgentPrompt:327` → `etendo_schema` field object
 - Produces: no new interface. Pure config.
 
 - [ ] **Step 1: Verify the real action values per window before writing any prose**
@@ -633,7 +633,7 @@ In `artifacts/sales-order/decisions.json`, replace the `documentAction` field en
         "documentAction": {
           "visibility": "system",
           "displayLogic": null,
-          "agentPrompt": "Document workflow action for this sales order. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to book the order — this validates the lines, reserves stock and makes the order invoiceable and shippable; from DR use VO to void it. From documentStatus=CO (Booked) use RE to reactivate back to DR, or CL to close the remaining quantities. Preconditions for CO: the order must have at least one line, a business partner with a valid payment terms and price list, and an open period for the accounting date. Never send CO on an order that is already CO — read documentStatus with neo_get first. Booking recalculates the total-discount line automatically; do not create it by hand. The other values in actionValues (AP, PO, PR, RA, RC, RJ, XL) are inherited from the shared AD list and are not part of the sales-order flow."
+          "agentPrompt": "Document workflow action for this sales order. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to book the order — this validates the lines, reserves stock and makes the order invoiceable and shippable; from DR use VO to void it. From documentStatus=CO (Booked) use RE to reactivate back to DR, or CL to close the remaining quantities. Preconditions for CO: the order must have at least one line, a business partner with a valid payment terms and price list, and an open period for the accounting date. Never send CO on an order that is already CO — read documentStatus with etendo_get first. Booking recalculates the total-discount line automatically; do not create it by hand. The other values in actionValues (AP, PO, PR, RA, RC, RJ, XL) are inherited from the shared AD list and are not part of the sales-order flow."
         }
 ```
 
@@ -645,7 +645,7 @@ Same key in `artifacts/purchase-order/decisions.json`:
         "documentAction": {
           "visibility": "system",
           "displayLogic": null,
-          "agentPrompt": "Document workflow action for this purchase order. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to book the order — this makes it receivable and invoiceable; from DR use VO to void it. From documentStatus=CO (Booked) use RE to reactivate back to DR, or CL to close the pending quantities. Preconditions for CO: at least one line, a vendor with valid payment terms and a purchase price list, and an open period for the accounting date. Check documentStatus with neo_get before acting — CO on an already-booked order is an error. Booking recalculates the total-discount line automatically. The remaining values in actionValues (AP, PO, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of the purchase-order flow."
+          "agentPrompt": "Document workflow action for this purchase order. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to book the order — this makes it receivable and invoiceable; from DR use VO to void it. From documentStatus=CO (Booked) use RE to reactivate back to DR, or CL to close the pending quantities. Preconditions for CO: at least one line, a vendor with valid payment terms and a purchase price list, and an open period for the accounting date. Check documentStatus with etendo_get before acting — CO on an already-booked order is an error. Booking recalculates the total-discount line automatically. The remaining values in actionValues (AP, PO, PR, RA, RC, RJ, XL) come from the shared AD list and are not part of the purchase-order flow."
         }
 ```
 
@@ -656,7 +656,7 @@ Same key in `artifacts/sales-invoice/decisions.json` (note this entry currently 
 ```json
         "documentAction": {
           "visibility": "system",
-          "agentPrompt": "Document workflow action for this sales invoice. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to complete the invoice — this assigns the final document number, computes taxes and totals, and creates the payment plan; from DR use VO to void it. From documentStatus=CO (Completed) use RE to reactivate back to DR only while the invoice has no payments and is not posted. Preconditions for CO: at least one line, a customer with valid payment terms, and an open period for the accounting date. Completing does not post to the ledger — 'posted' is a separate accounting step. Read documentStatus and posted with neo_get before acting."
+          "agentPrompt": "Document workflow action for this sales invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to complete the invoice — this assigns the final document number, computes taxes and totals, and creates the payment plan; from DR use VO to void it. From documentStatus=CO (Completed) use RE to reactivate back to DR only while the invoice has no payments and is not posted. Preconditions for CO: at least one line, a customer with valid payment terms, and an open period for the accounting date. Completing does not post to the ledger — 'posted' is a separate accounting step. Read documentStatus and posted with etendo_get before acting."
         }
 ```
 
@@ -669,7 +669,7 @@ Same key in `artifacts/purchase-invoice/decisions.json` (keep its existing `form
           "visibility": "system",
           "form": false,
           "displayLogic": null,
-          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with neo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to complete the invoice — this computes taxes and totals and creates the payment plan; from DR use VO to void it. From documentStatus=CO (Completed) use RE to reactivate back to DR only while the invoice has no payments and is not posted. Preconditions for CO: at least one line, a vendor with valid payment terms, and an open period for the accounting date. Completing does not post to the ledger — 'posted' is a separate accounting step. Read documentStatus and posted with neo_get before acting."
+          "agentPrompt": "Document workflow action for this purchase invoice. Fire it with etendo_action, sending the chosen value as parameters.docAction (e.g. {\"docAction\":\"CO\"}). Legal transitions: from documentStatus=DR (Draft) use CO to complete the invoice — this computes taxes and totals and creates the payment plan; from DR use VO to void it. From documentStatus=CO (Completed) use RE to reactivate back to DR only while the invoice has no payments and is not posted. Preconditions for CO: at least one line, a vendor with valid payment terms, and an open period for the accounting date. Completing does not post to the ledger — 'posted' is a separate accounting step. Read documentStatus and posted with etendo_get before acting."
         }
 ```
 
@@ -756,7 +756,7 @@ In the §3.1 table, change the G6 row's **Estado MCP** cell from `⚠️ funcion
 In §3.2, append to the **G6** paragraph:
 
 ```
-*Update 2026-07-31 (ETP-4285): las acciones de documento quedaron cubiertas sin necesidad de `describeForAgent()`. `neo_schema` emite ahora `actionValues` (lista AD activa del botón) y `actionParameter` (`docAction`), y la semántica por ventana vive en `decisions.json → entities.header.fields.documentAction.agentPrompt`, que ya viajaba a `ETGO_SF_FIELD.AGENT_PROMPT`. Además se corrigió que `neo_action` no ejecutaba los hooks `NeoHandler` (sí lo hace el path REST), con lo cual completar un documento por MCP divergía del comportamiento de la UI. `describeForAgent()` sigue siendo la vía si en el futuro hace falta calcular precondiciones con el estado del registro.*
+*Update 2026-07-31 (ETP-4285): las acciones de documento quedaron cubiertas sin necesidad de `describeForAgent()`. `etendo_schema` emite ahora `actionValues` (lista AD activa del botón) y `actionParameter` (`docAction`), y la semántica por ventana vive en `decisions.json → entities.header.fields.documentAction.agentPrompt`, que ya viajaba a `ETGO_SF_FIELD.AGENT_PROMPT`. Además se corrigió que `etendo_action` no ejecutaba los hooks `NeoHandler` (sí lo hace el path REST), con lo cual completar un documento por MCP divergía del comportamiento de la UI. `describeForAgent()` sigue siendo la vía si en el futuro hace falta calcular precondiciones con el estado del registro.*
 ```
 
 - [ ] **Step 2: Update the ticket knowledge base**
@@ -764,7 +764,7 @@ In §3.2, append to the **G6** paragraph:
 In `docs/agentic-validation/mcp-ticket-knowledge.md`, in the **code-bug (MCP/NEO Java)** list, replace the `ETP-4285 (document actions not semantically exposed)` entry with:
 
 ```
-ETP-4285 (document actions: were invocable via `neo_action` + `parameters.docAction` but undiscoverable — `neo_schema` now emits `actionValues`/`actionParameter`, per-window semantics live in `decisions.json` `fields.documentAction.agentPrompt`; ALSO fixed a real defect found while scoping: `neo_action` was calling `executeButtonActionCore` without the `NeoHandler` pre/post hooks the REST path runs, so MCP completions skipped handler logic such as the pre-CO total-discount line)
+ETP-4285 (document actions: were invocable via `etendo_action` + `parameters.docAction` but undiscoverable — `etendo_schema` now emits `actionValues`/`actionParameter`, per-window semantics live in `decisions.json` `fields.documentAction.agentPrompt`; ALSO fixed a real defect found while scoping: `etendo_action` was calling `executeButtonActionCore` without the `NeoHandler` pre/post hooks the REST path runs, so MCP completions skipped handler logic such as the pre-CO total-discount line)
 ```
 
 - [ ] **Step 3: Document the new field keys in the flags pipeline doc**
@@ -783,18 +783,18 @@ Append this section to `docs/generated-custom-windows/sales-order.md` (and the e
 ## MCP document actions (agents)
 
 The header's `documentAction` button is what an AI agent uses to move the document through
-its workflow over MCP. `neo_schema` returns it with `invokeVia: "neo_action"`,
+its workflow over MCP. `etendo_schema` returns it with `invokeVia: "etendo_action"`,
 `actionValues` (the active AD list for the column) and `actionParameter: "docAction"`;
 its `agentPrompt` — defined in `decisions.json` → `entities.header.fields.documentAction.agentPrompt`
 — states which transitions are legal and their preconditions.
 
 Booking a draft order over MCP:
 
-    neo_action { spec: "sales-order", entity: "header", id: "<orderId>",
+    etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
                  action: "documentAction", parameters: { docAction: "CO" } }
 
 This runs `SalesOrderHeaderHandler` exactly as the UI does (including the pre-CO
-total-discount line), because `neo_action` executes the entity's `NeoHandler` hooks
+total-discount line), because `etendo_action` executes the entity's `NeoHandler` hooks
 (ETP-4285). If you change the workflow rules of this window, update the `agentPrompt`
 in the same change — it is the only thing telling the agent what is legal.
 ```
@@ -820,20 +820,20 @@ Suggested message: `Feature ETP-4285: Document MCP document-action contract and 
 Following `docs/agentic-validation/mcp-client-setup.md`, call:
 
 ```
-neo_schema { spec: "sales-order", entity: "header" }
+etendo_schema { spec: "sales-order", entity: "header" }
 ```
 
 Save the raw `documentAction` field object. It must contain `invokeVia`, `action`, `actionValues` (with `CO`/`Book`), `actionParameter: "docAction"`, and the `agentPrompt` from Task 3. If `agentPrompt` is absent, `export.database` or the push did not land — go back to Task 3 Step 10.
 
 - [ ] **Step 2: Capture the execution half**
 
-Create a draft sales order (`neo_create` on `sales-order.header` + one `lines` row, or reuse an existing DR order found via `neo_list`), then:
+Create a draft sales order (`etendo_create` on `sales-order.header` + one `lines` row, or reuse an existing DR order found via `etendo_list`), then:
 
 ```
-neo_get    { spec: "sales-order", entity: "header", id: "<orderId>" }   → documentStatus must be "DR"
-neo_action { spec: "sales-order", entity: "header", id: "<orderId>",
+etendo_get    { spec: "sales-order", entity: "header", id: "<orderId>" }   → documentStatus must be "DR"
+etendo_action { spec: "sales-order", entity: "header", id: "<orderId>",
              action: "documentAction", parameters: { docAction: "CO" } }
-neo_get    { spec: "sales-order", entity: "header", id: "<orderId>" }   → documentStatus must be "CO"
+etendo_get    { spec: "sales-order", entity: "header", id: "<orderId>" }   → documentStatus must be "CO"
 ```
 
 - [ ] **Step 3: Prove the hook actually ran**
@@ -841,21 +841,21 @@ neo_get    { spec: "sales-order", entity: "header", id: "<orderId>" }   → docu
 This is the part that distinguishes a real pass from the false green. On an order whose business partner has a total-discount percentage configured, after the `CO` above:
 
 ```
-neo_list { spec: "sales-order", entity: "lines", filters: { salesOrder: "<orderId>" } }
+etendo_list { spec: "sales-order", entity: "lines", filters: { salesOrder: "<orderId>" } }
 ```
 
 The total-discount line must be present. Compare against the same flow completed from the UI on a second order — the line sets must match. Record both.
 
 - [ ] **Step 4: Write the evidence document**
 
-Create `docs/agentic-validation/etp-4285-document-action-evidence.md` with: date, instance/branch, the `neo_schema` `documentAction` object verbatim, the three-call DR→CO transcript with real IDs, the line comparison from Step 3, and an explicit statement of anything that could not be verified. Follow the tone of the existing files in that directory — factual, raw tool output, no summarizing away failures.
+Create `docs/agentic-validation/etp-4285-document-action-evidence.md` with: date, instance/branch, the `etendo_schema` `documentAction` object verbatim, the three-call DR→CO transcript with real IDs, the line comparison from Step 3, and an explicit statement of anything that could not be verified. Follow the tone of the existing files in that directory — factual, raw tool output, no summarizing away failures.
 
 - [ ] **Step 5: Specify the automated test (delegate to Tester)**
 
 Dispatch the `test-generator` agent (Tester) with this specification, having it read `NeoWidgetMcpIntegrationTest.java` first for the harness pattern:
 
-- `neo_action` on a header entity whose `Java_Qualifier` resolves to a handler → assert the handler's `handle` ran before `executeButtonActionCore` (spy/order verification) and its `afterHandle` ran after.
-- `neo_action` with `parameters:{docAction:"CO"}` on a DR order → asserts `documentStatus` is `CO` afterwards and the response carries `processResult:"success"`.
+- `etendo_action` on a header entity whose `Java_Qualifier` resolves to a handler → assert the handler's `handle` ran before `executeButtonActionCore` (spy/order verification) and its `afterHandle` ran after.
+- `etendo_action` with `parameters:{docAction:"CO"}` on a DR order → asserts `documentStatus` is `CO` afterwards and the response carries `processResult:"success"`.
 - Pre-hook returning a `NeoResponse` error → asserts the process is not fired and `documentStatus` stays `DR`.
 
 If the OBBaseTest-style integration harness cannot load the Hibernate model in this environment (a known local issue recorded in `docs/plans/2026-07-23-plataforma-backlog-sweep.md`), say so explicitly in the delivery and keep the unit-level coverage from Tasks 1–2 as the automated evidence — do not report an integration test as passing if it never ran.
@@ -870,7 +870,7 @@ Suggested message: `Feature ETP-4285: Add MCP document action evidence and integ
 
 | Ticket requirement | Where it is covered |
 |---|---|
-| DEV spike: are document actions already invocable via existing process tools? | Answered in **Verified starting state** — yes, via `neo_action` + `parameters.docAction`; a dedicated per-record path is *not* needed, but the existing one was missing hook parity (Task 1) |
+| DEV spike: are document actions already invocable via existing process tools? | Answered in **Verified starting state** — yes, via `etendo_action` + `parameters.docAction`; a dedicated per-record path is *not* needed, but the existing one was missing hook parity (Task 1) |
 | Actions discoverable with semantic descriptions (`whenToUse`, `preconditions`) | Task 2 (generic `actionValues`/`actionParameter` + tool description) and Task 3 (`agentPrompt` carrying when-to-use and preconditions) |
 | Leverage `describeForAgent()` "if applicable" | Explicitly evaluated and **not** used — rationale recorded in Task 4 Step 1. The generic+config route covers document actions with no new extension point |
 | Agent completes a draft sales order DR → CO, evidence captured | Task 5 Steps 1–4 |

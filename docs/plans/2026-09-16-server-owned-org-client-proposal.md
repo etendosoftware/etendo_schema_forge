@@ -8,7 +8,7 @@ tenant-isolation fix inside it would hide it.
 
 ## 1. The defect
 
-`neo_create` with `organization` / `client` pointing at **another** org returns `200 OK`.
+`etendo_create` with `organization` / `client` pointing at **another** org returns `200 OK`.
 The record is then invisible to the session that created it (`404` on re-read). A second
 attempt on `contacts`/`businessPartner` failed with a sequence error **specific to the other
 org**, which is what proves the write was routed there rather than merely hidden.
@@ -63,7 +63,7 @@ multi-org case — where choosing a child organization is a legitimate business 
 apply here. The session values are the only correct ones, and no caller-supplied value is
 honoured.
 
-They stay in `neo_get` / `neo_list` / `neo_schema` responses. They are information the caller
+They stay in `etendo_get` / `etendo_list` / `etendo_schema` responses. They are information the caller
 legitimately needs; only the write side changes.
 
 ## 4. Design
@@ -115,11 +115,11 @@ orphan record in a tenant the session cannot see and therefore cannot clean up.
 
 | Probe | Result |
 |---|---|
-| `neo_create` on `cost-center/costCenter` with `organization` = non-existent id | `200`, record created **in the session org**, `serverOwnedFields` reported `sent` vs `session` |
-| `neo_get` on the new record | readable — it had not been routed to another tenant |
-| `neo_update` with `organization` **and** `AD_Client_ID` set to the foreign id | both discarded and reported; the column spelling `AD_Client_ID` resolved to the `client` property, not to `organization` |
-| `neo_update` echoing the session's own organization | silent, as designed — nothing was taken from the caller |
-| `neo_delete`, then `neo_get` | `deleted: true`, then `404`. No probe record left behind. |
+| `etendo_create` on `cost-center/costCenter` with `organization` = non-existent id | `200`, record created **in the session org**, `serverOwnedFields` reported `sent` vs `session` |
+| `etendo_get` on the new record | readable — it had not been routed to another tenant |
+| `etendo_update` with `organization` **and** `AD_Client_ID` set to the foreign id | both discarded and reported; the column spelling `AD_Client_ID` resolved to the `client` property, not to `organization` |
+| `etendo_update` echoing the session's own organization | silent, as designed — nothing was taken from the caller |
+| `etendo_delete`, then `etendo_get` | `deleted: true`, then `404`. No probe record left behind. |
 
-`neo_schema` with `view:"create"` does not list `organization` or `client` among the writable
+`etendo_schema` with `view:"create"` does not list `organization` or `client` among the writable
 fields, so a caller following the schema never sends them in the first place.

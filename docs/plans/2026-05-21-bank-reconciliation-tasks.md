@@ -807,7 +807,7 @@ These 8 tasks **retire that placeholder** and add a new menu entry **"Cuentas"**
 
 ### Issue Description
 
-* An MCP agent **cannot create or list financial accounts** (`FIN_Financial_Account`) today: an agenticity evaluator scored it 0/5. The create capability **already exists** (`FinancialAccountHandler`, ETP-4096, used by the SPA wizard), but the `financial-account` spec is **type R (report/handler-backed)**, and NEO Headless only exposes the generic CRUD tools (`neo_list / neo_create / neo_schema / neo_defaults / neo_selectors`) for **type W** specs. Type R specs only get a `generate_<spec>` tool, which itself fails ("Report spec has no linked AD_Process").
+* An MCP agent **cannot create or list financial accounts** (`FIN_Financial_Account`) today: an agenticity evaluator scored it 0/5. The create capability **already exists** (`FinancialAccountHandler`, ETP-4096, used by the SPA wizard), but the `financial-account` spec is **type R (report/handler-backed)**, and NEO Headless only exposes the generic CRUD tools (`etendo_list / etendo_create / etendo_schema / etendo_defaults / etendo_selectors`) for **type W** specs. Type R specs only get a `generate_<spec>` tool, which itself fails ("Report spec has no linked AD_Process").
 * Convert the `financial-account` spec **in place from R to W** (one spec per table), following the pattern already validated with `match-rule`: **generic CRUD + a `NeoHandler` hook** that validates and derives business fields.
 * Outcome: an agent can **discover, list and create** financial accounts of the three types (Bank `B` / Cash `C` / Card `CA`) through the standard MCP tools, without losing the existing business logic (default matching algorithm, IBAN-derived country, name uniqueness, open-reconciliation guard on archive).
 * The accounts SPA is **rewritten to standard CRUD** (no `?action=`), like `match-rule`, keeping the create wizard, edit and archive flows intact.
@@ -832,7 +832,7 @@ These 8 tasks **retire that placeholder** and add a new menu entry **"Cuentas"**
 
 **SPA (Schema Forge `tools/app-shell`):**
 
-* Rewrite `hooks/useAccountMutations.js` to standard W CRUD: create `POST /sws/neo/financial-account/<entity>`, update `PUT …/{id}`, archive `DELETE …/{id}`; replace `fetchDefaults()` with `neo_selectors` (currencies) + `neo_defaults`.
+* Rewrite `hooks/useAccountMutations.js` to standard W CRUD: create `POST /sws/neo/financial-account/<entity>`, update `PUT …/{id}`, archive `DELETE …/{id}`; replace `fetchDefaults()` with `etendo_selectors` (currencies) + `etendo_defaults`.
 * Update `NewAccountWizard / EditAccountModal / ArchiveAccountDialog / AccountFormStep` to the new field names (`currency`, `iBAN`) and response shape.
 
 **Out of scope:** deferred accounting configuration of the account (`FIN_Financial_Account_Acct`), PSD2 connection, and the reconciliation rules engine (T7). The SPA aggregate list keeps using `financial-accounts-page` (unchanged).
@@ -840,23 +840,23 @@ These 8 tasks **retire that placeholder** and add a new menu entry **"Cuentas"**
 ### Test Cases
 
 **Given** the `financial-account` spec was migrated to W
-**When** an agent calls `neo_discover`
+**When** an agent calls `etendo_discover`
 **Then** it appears as `specType=W` with one entity and GET/POST methods.
 
 **Given** the entity is exposed
-**When** the agent calls `neo_schema`
-**Then** it returns the fields name/currency/type (with values B/C/CA)/iBAN/swiftCode, and `neo_selectors` lists currencies.
+**When** the agent calls `etendo_schema`
+**Then** it returns the fields name/currency/type (with values B/C/CA)/iBAN/swiftCode, and `etendo_selectors` lists currencies.
 
 **Given** the agent wants to create a bank account with an IBAN
-**When** it calls `neo_create` with name + currency + type=B + iBAN
+**When** it calls `etendo_create` with name + currency + type=B + iBAN
 **Then** the account is created (201), with the country auto-derived from the IBAN and the default matching algorithm (the trigger does not reject it).
 
 **Given** the agent creates accounts of type C and CA
-**When** it calls `neo_create` for each type
+**When** it calls `etendo_create` for each type
 **Then** both are created correctly.
 
 **Given** accounts already exist
-**When** the agent calls `neo_list`
+**When** the agent calls `etendo_list`
 **Then** it returns them (included fields only).
 
 **Given** an account with a given name already exists

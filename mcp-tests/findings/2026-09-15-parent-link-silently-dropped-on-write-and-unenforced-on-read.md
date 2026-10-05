@@ -1,4 +1,4 @@
-# The parent link is silently dropped on `neo_create` and never enforced on `neo_list`
+# The parent link is silently dropped on `etendo_create` and never enforced on `etendo_list`
 
 **Date:** 2026-09-15
 **Run:** none — found while verifying the premise of
@@ -16,39 +16,39 @@
 The MCP publishes a parent/child model, advertises where the parent key is required, and then
 enforces it in exactly one place while silently discarding it in another.
 
-### 1. `neo_create` did not declare `parentId`, and ignored it when sent as an argument
+### 1. `etendo_create` did not declare `parentId`, and ignored it when sent as an argument
 
 The published schema carried only `spec`, `entity`, `fields`. The router read the parent key **out
-of `fields`**, which nothing documented. `neo_defaults` — the tool `neo_create`'s own description
+of `fields`**, which nothing documented. `etendo_defaults` — the tool `etendo_create`'s own description
 tells you to call first — declares `parentId` as a top-level argument and argues at length for
 passing it. An agent that follows that shape has its parent link dropped without a word.
 
 Verbatim, against local:
 
 ```
-neo_create(spec:"sales-order", entity:"lines", parentId:"<order id>",
+etendo_create(spec:"sales-order", entity:"lines", parentId:"<order id>",
            fields:{product:"<id>", orderedQuantity:3})
 -> 422 validation_error
    missingFields: [salesOrder (C_Order_ID), orderDate (DateOrdered), tax (C_Tax_ID)]
 ```
 
 ```
-neo_create(spec:"sales-order", entity:"lines",
+etendo_create(spec:"sales-order", entity:"lines",
            fields:{parentId:"<order id>", product:"<id>", orderedQuantity:3})
 -> 201, line created, orderDate resolved by the server as 2026-09-15
 ```
 
 Same intent, same values. The only difference is where `parentId` sat.
 
-### 2. `neo_list` had no `parentId` at all, and returned a global list instead
+### 2. `etendo_list` had no `parentId` at all, and returned a global list instead
 
-`neo_discover` advertises `"parentRequiredFor":["list","get","create","update","delete"]` on **89
+`etendo_discover` advertises `"parentRequiredFor":["list","get","create","update","delete"]` on **89
 child entities**. `McpParentScope` has carried `VERB_LIST` since it was written. Nothing enforced
-it for `list` or `get`, and `neo_list` had no argument that could have satisfied it.
+it for `list` or `get`, and `etendo_list` had no argument that could have satisfied it.
 
 ```
-neo_list(spec:"sales-order", entity:"lines", parentId:"<order id>")   -> 22 rows
-neo_list(spec:"sales-order", entity:"lines", totallyMadeUp:"xxx")     -> 22 rows
+etendo_list(spec:"sales-order", entity:"lines", parentId:"<order id>")   -> 22 rows
+etendo_list(spec:"sales-order", entity:"lines", totallyMadeUp:"xxx")     -> 22 rows
 ```
 
 An unrecognised argument was discarded in silence, so both calls returned **every line in the
@@ -57,7 +57,7 @@ right one. This is worse than a refusal: the caller then acts on rows belonging 
 asked about — which is precisely what happened while cleaning up this investigation, and cost two
 order lines that belonged to other documents.
 
-Meanwhile `neo_defaults` refuses the same shape outright:
+Meanwhile `etendo_defaults` refuses the same shape outright:
 
 > `422 parent_required` — *"'lines' is a child entity of 'sales-order'. In Etendo you browse its
 > records inside one parent record — there is no global list."*
@@ -73,7 +73,7 @@ document type. Confirmed against the database for this tenant:
 |---|---|
 | Standard Order (sales) | 12 |
 | Purchase Order | 10 |
-| **`neo_list(spec:"sales-order", entity:"lines")` returned** | **22** |
+| **`etendo_list(spec:"sales-order", entity:"lines")` returned** | **22** |
 
 A request scoped to *sales* orders answered with purchase-order lines mixed in, unmarked.
 
@@ -94,8 +94,8 @@ mismo pedido"). Neither was told what was being tested. One got the schemas **be
 The before-agent produced, unprompted, exactly the failing sequence:
 
 ```json
-{"tool":"neo_defaults","arguments":{"spec":"sales-order","entity":"lines","parentId":"<ID>"}}
-{"tool":"neo_create", "arguments":{"spec":"sales-order","entity":"lines","fields":{"product":"...","quantity":3}}}
+{"tool":"etendo_defaults","arguments":{"spec":"sales-order","entity":"lines","parentId":"<ID>"}}
+{"tool":"etendo_create", "arguments":{"spec":"sales-order","entity":"lines","fields":{"product":"...","quantity":3}}}
 ```
 
 `parentId` on the tool that declares it; absent from the tool that does not. It also guessed the FK
@@ -107,17 +107,17 @@ The after-agent passed `parentId` to both tools and cited the description as its
 
 ## Not verified
 
-- **Whether `neo_get`, `neo_update` and `neo_delete` share the gap.** They are advertised in the
+- **Whether `etendo_get`, `etendo_update` and `etendo_delete` share the gap.** They are advertised in the
   same `parentRequiredFor` list and were **not** probed. Only `list` and `create` were measured.
 - **Whether other specs mix document types the way `C_OrderLine` does.** One table was checked.
   Any entity whose AD table serves more than one document type is a candidate.
-- **Whether `neo_batch` accepts the parent link consistently.** Not looked at.
+- **Whether `etendo_batch` accepts the parent link consistently.** Not looked at.
 - **How many of the 89 advertised child entities are actually reachable unscoped.** The count comes
-  from `neo_discover`'s own output, not from probing each one.
+  from `etendo_discover`'s own output, not from probing each one.
 - The blind-agent experiment gave the agents **4 of the 18 tools**. Their complaints about missing
-  discovery tools, missing `neo_update` and missing name-based lookup are artefacts of that
+  discovery tools, missing `etendo_update` and missing name-based lookup are artefacts of that
   truncation and are **not** defects. What survives it: `spec` carries an `enum` and `entity` does
-  not, in the same call; and `neo_defaults`'s wording about which resolved values must be re-sent
+  not, in the same call; and `etendo_defaults`'s wording about which resolved values must be re-sent
   in `fields` left both agents genuinely unsure.
 
 ## Relationship to the existing registry

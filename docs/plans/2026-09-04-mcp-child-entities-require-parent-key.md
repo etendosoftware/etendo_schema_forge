@@ -45,14 +45,14 @@ consultables sin padre**, y 75 de ellas además escribibles.
 
 El caso concreto de Valeria: spec `contacts`, entidad `locationAddress` → `AD_Tab` 222
 ("Location/Address", `TABLEVEL = 1`, tabla `C_BPartner_Location`, ventana 123 "Business Partner").
-`neo_list(spec:"contacts", entity:"locationAddress")` sin filtros devuelve las direcciones de
+`etendo_list(spec:"contacts", entity:"locationAddress")` sin filtros devuelve las direcciones de
 todos los terceros del cliente, paginadas de a 100.
 
 ---
 
 ## 2. Evidencia en el código
 
-### 2.1 `neo_list` — no exige padre y no lo menciona
+### 2.1 `etendo_list` — no exige padre y no lo menciona
 
 `ToolRegistry.buildListTool()` (líneas ~434-466):
 
@@ -74,7 +74,7 @@ llama a `DefaultJsonDataService.fetch(params)`. Los únicos recortes que aplica 
 
 **No hay ninguna restricción por registro padre.**
 
-### 2.2 `neo_get` / `neo_update` / `neo_delete` — sólo `id`
+### 2.2 `etendo_get` / `etendo_update` / `etendo_delete` — sólo `id`
 
 - `handleGet` (422): `required = ["spec","entity","id"]`.
 - `handleUpdate` (619): `required = ["spec","entity","id","fields","updated"]`.
@@ -86,7 +86,7 @@ una línea de cualquier documento — sin que el agente haya pasado nunca por la
 Nota adicional: `handleGet` **no** aplica `adTab.getHqlwhereclause()`, mientras que `handleList`
 sí. Es una inconsistencia independiente de este bug, pero la toco en la misma zona (ver §7, D-3).
 
-### 2.3 `neo_create` — `parentId` existe pero es opcional y va escondido
+### 2.3 `etendo_create` — `parentId` existe pero es opcional y va escondido
 
 `handleCreate` (472-...):
 
@@ -101,7 +101,7 @@ if (filteredBody.has(McpConstants.PARAM_PARENT_ID)) {
 
 Puntos a notar:
 
-1. `parentId` **no es un parámetro de primer nivel** de `neo_create`: viaja dentro de `fields`, y
+1. `parentId` **no es un parámetro de primer nivel** de `etendo_create`: viaja dentro de `fields`, y
    sobrevive porque `mapFieldsToDalProperties` hace *pass-through* de claves desconocidas
    (`McpWriteRequestSupport:114` — "Pass through unknown keys (parentId, etc.)").
 2. `resolveParentFK` ya implementa exactamente la lógica correcta: si `TABLEVEL > 0`, busca la
@@ -110,9 +110,9 @@ Puntos a notar:
    obligatoria, falla con un error del DAL; si es nullable o tiene default, se crea un registro
    huérfano o mal enganchado.
 4. La única guía sobre esto es texto libre en `McpSchemaCreateView.CHILD_ENTITY_HINT_SUFFIX`, que
-   sólo aparece si el agente pide `neo_schema` con `view:"create"`.
+   sólo aparece si el agente pide `etendo_schema` con `view:"create"`.
 
-### 2.4 `neo_defaults` — dice "REQUIRED" en la prosa, pero no lo es en el schema
+### 2.4 `etendo_defaults` — dice "REQUIRED" en la prosa, pero no lo es en el schema
 
 `ToolRegistry.buildDefaultsTool()`:
 
@@ -127,12 +127,12 @@ La descripción dice REQUIRED en mayúsculas; el `required` del JSON Schema no l
 propio texto reconoce el modo de fallo: *"they are silently left out of the result rather than
 erroring"*.
 
-### 2.5 `neo_batch` — es el único que modela bien la relación
+### 2.5 `etendo_batch` — es el único que modela bien la relación
 
 `buildBatchTool()` tiene `parentRef` ("Optional id of an earlier op whose recordId becomes this
 op's parent FK") y `$ref:<opId>`. También opcional, pero al menos el concepto está.
 
-### 2.6 `neo_discover` / `neo_schema` — no publican la jerarquía
+### 2.6 `etendo_discover` / `etendo_schema` — no publican la jerarquía
 
 `McpSupportInternals.buildDiscoverEntity()` emite por entidad: `name`, `methods`, `readOnly`,
 `agentPrompt`. **No emite `tabLevel`, ni `parentEntity`, ni el nombre de la FK al padre.**
@@ -140,8 +140,8 @@ op's parent FK") y `$ref:<opId>`. También opcional, pero al menos el concepto e
 `McpToolRouterSupport.resolvePrimaryEntityName()` sí sabe leer `TABLEVEL == 0` para identificar la
 cabecera del spec, pero eso es sólo un dato agregado del spec, no un mapa de la jerarquía.
 
-`neo_schema` calcula `isChildEntity` (`McpToolRouter:951`) **únicamente** para decidir si concatena
-`CHILD_ENTITY_HINT_SUFFIX` en `view:"create"`. En la respuesta normal de `neo_schema` el dato no
+`etendo_schema` calcula `isChildEntity` (`McpToolRouter:951`) **únicamente** para decidir si concatena
+`CHILD_ENTITY_HINT_SUFFIX` en `view:"create"`. En la respuesta normal de `etendo_schema` el dato no
 aparece.
 
 ### 2.7 Bug colateral: filtro no resoluble = filtro silenciosamente ignorado
@@ -157,7 +157,7 @@ if (prop == null) {
 ```
 
 Consecuencia: si el agente **intenta** hacer lo correcto —
-`neo_list(entity:"locationAddress", filters:{"cBpartnerId":"<id>"})` — y falla el nombre de la
+`etendo_list(entity:"locationAddress", filters:{"cBpartnerId":"<id>"})` — y falla el nombre de la
 propiedad, el MCP devuelve **el listado completo sin filtrar**, con status OK y sin ninguna señal
 de que el filtro se descartó. El agente cree que esas son las direcciones de *ese* tercero.
 
@@ -247,7 +247,7 @@ para consumirla — reduce la duplicación actual de tres implementaciones del m
 - Tab con más de una columna `isLinkToParentColumn` activa. `resolveParentFK` hoy toma la primera
   (`break`) — hay que decidir si eso es aceptable o si hay que desambiguar contra `parentTab`.
 
-### 4.2 `neo_list` — `parentId` obligatorio en entidades hijas
+### 4.2 `etendo_list` — `parentId` obligatorio en entidades hijas
 
 Cambio en `handleList`:
 
@@ -260,7 +260,7 @@ si McpParentScope.isChild(adTab):
 ```
 
 Y en `buildListTool`: añadir `parentId` a `properties`. **No** se puede poner en el `required` del
-JSON Schema, porque `neo_list` es una única tool compartida por todos los specs y para las
+JSON Schema, porque `etendo_list` es una única tool compartida por todos los specs y para las
 cabeceras `parentId` no aplica → la validación tiene que ser **en runtime**, en el router.
 
 Forma del error (siguiendo el patrón IMP-5 ya usado en `buildNotFoundError` /
@@ -273,7 +273,7 @@ Forma del error (siguiendo el patrón IMP-5 ya usado en `buildNotFoundError` /
   "detail": "'locationAddress' is a child entity of 'contacts'. In Etendo you browse its records inside one parent record — there is no global list. Pass parentId with the id of the parent 'businessPartner' record.",
   "parentEntity": "businessPartner",
   "parentField": "businessPartner",
-  "hint": "Call neo_list(spec:'contacts', entity:'businessPartner', filters:{...}) to find the parent first, then neo_list(spec:'contacts', entity:'locationAddress', parentId:'<thatId>')."
+  "hint": "Call etendo_list(spec:'contacts', entity:'businessPartner', filters:{...}) to find the parent first, then etendo_list(spec:'contacts', entity:'locationAddress', parentId:'<thatId>')."
 }
 ```
 
@@ -284,7 +284,7 @@ es lo que le permite al agente recuperarse en el primer reintento en lugar de ad
 (`e.<fk>.id in (...)`), con **tope de 20 ids**. Un array de más de 20 se rechaza con error
 explícito, para no reintroducir el listado global por la puerta de atrás.
 
-### 4.3 `neo_get` — estricto: `parentId` obligatorio (DECIDIDO)
+### 4.3 `etendo_get` — estricto: `parentId` obligatorio (DECIDIDO)
 
 Simetría total con el resto del gate: **el hijo siempre lleva la clave del padre**, también para
 leer de a uno.
@@ -297,9 +297,9 @@ leer de a uno.
 Cuesta una llamada más (hay que conocer el padre aunque ya se tenga el id exacto del hijo), y es
 el precio de que el MCP no ofrezca ninguna puerta lateral al listado plano.
 
-### 4.4 `neo_create` — `parentId` como parámetro de primer nivel y obligatorio en hijas
+### 4.4 `etendo_create` — `parentId` como parámetro de primer nivel y obligatorio en hijas
 
-1. Subir `parentId` de dentro de `fields` a **parámetro de primer nivel** de `neo_create`
+1. Subir `parentId` de dentro de `fields` a **parámetro de primer nivel** de `etendo_create`
    (manteniendo compatibilidad: si viene dentro de `fields`, se sigue aceptando y se loguea como
    deprecado).
 2. Si `isChild(adTab)` y no hay `parentId` **ni** viene ya seteada la FK al padre dentro de
@@ -308,35 +308,35 @@ el precio de que el MCP no ofrezca ninguna puerta lateral al listado plano.
 3. Si `fields` trae la FK al padre **y** `parentId` con valores distintos → error de conflicto
    explícito, no "gana el último".
 
-### 4.5 `neo_update` / `neo_delete` — verificación de pertenencia
+### 4.5 `etendo_update` / `etendo_delete` — verificación de pertenencia
 
 - `parentId` opcional; si se pasa, se valida pertenencia (`parent_mismatch` si no coincide).
-- **Bloquear el cambio de la FK al padre vía `neo_update` (DECIDIDO)**: reparentar una línea a
+- **Bloquear el cambio de la FK al padre vía `etendo_update` (DECIDIDO)**: reparentar una línea a
   otra cabecera no es una operación que la UI ofrezca. Si `fields` trae la FK al padre con un valor
   distinto al actual → error explícito.
 
-### 4.6 `neo_defaults` — alinear prosa y comportamiento
+### 4.6 `etendo_defaults` — alinear prosa y comportamiento
 
 Si `isChild(adTab)` y falta `parentId` → error 422 en vez de devolver un resultado silenciosamente
 incompleto. Es la corrección más barata del lote y elimina una fuente conocida de creates mal
 formados aguas abajo.
 
-### 4.7 `neo_batch` — cerrar el hueco
+### 4.7 `etendo_batch` — cerrar el hueco
 
 `BatchService#createRecord` debe aplicar el mismo gate: op sobre entidad hija sin `parentRef` y sin
-FK al padre en `body` → la operación falla (y con ella el batch, que ya es atómico). Si no, `neo_batch`
+FK al padre en `body` → la operación falla (y con ella el batch, que ya es atómico). Si no, `etendo_batch`
 queda como bypass del gate.
 
 ### 4.8 Descubribilidad: publicar la jerarquía
 
 Sin esto, el gate sólo produce fricción; con esto, el agente hace la llamada correcta a la primera.
 
-- **`neo_discover`** — por entidad, añadir:
+- **`etendo_discover`** — por entidad, añadir:
   ```json
   {"name": "locationAddress", "methods": ["GET"], "readOnly": true,
    "isChild": true, "parentEntity": "businessPartner", "parentField": "businessPartner"}
   ```
-- **`neo_schema`** — añadir el mismo bloque al `entitySchema` (no sólo en `view:"create"`), y
+- **`etendo_schema`** — añadir el mismo bloque al `entitySchema` (no sólo en `view:"create"`), y
   listar la FK al padre entre los campos requeridos de `view:"create"` en lugar de describirla en
   prosa al final del hint.
 - **`docs`** (`Context7DocsClient` / recetas `seeAlso`) — añadir una receta
@@ -409,8 +409,8 @@ sólo donde AUTO no acierta (~20 filas), y ahí la forma mínima es de una clave
 ```
 
 #### `field` va en formato propiedad, no `DBColumnName` El resto del MCP habla en propiedades: los
-`filters` de `neo_list` son `{"businessPartner": "..."}`, los `fields` de `neo_create` también, y
-los descriptores de `neo_schema` se nombran igual. Si la configuración usara `C_BPartner_ID` sería
+`filters` de `etendo_list` son `{"businessPartner": "..."}`, los `fields` de `etendo_create` también, y
+los descriptores de `etendo_schema` se nombran igual. Si la configuración usara `C_BPartner_ID` sería
 el único lugar del MCP que habla en nombres físicos, y el mensaje de error tendría que traducir
 entre los dos vocabularios. Con formato propiedad, el error cita **el mismo nombre que el agente
 tiene que escribir**.
@@ -456,7 +456,7 @@ nombre que el agente ya usa en `filters`.
 ```
 
 Los pasos 1 y 6 son los que mantienen la decisión de §6 intacta: el default de una entidad que no
-se puede resolver **no es "publicarla plana"**, es no publicarla, y que `neo_discover` la reporte
+se puede resolver **no es "publicarla plana"**, es no publicarla, y que `etendo_discover` la reporte
 como no configurada — igual que ya se hace con los report specs sin contract
 (`NeoReportCallability.resolveReportContract` → `ifPresent`).
 
@@ -476,7 +476,7 @@ Lo que se pierde frente a tres columnas tipadas:
 **Mitigación, y es un requisito, no un nice-to-have:** `MCP_CONFIG` se valida y **falla visible**.
 JSON malformado, `field` que no resuelve a ninguna propiedad ni columna de la entidad, `field` que
 resuelve pero **no es una FK** (es un primitivo), `entity` que no es una `SFEntity` incluida del
-mismo spec → la entidad **no se publica** y `neo_discover` la reporta con el error concreto.
+mismo spec → la entidad **no se publica** y `etendo_discover` la reporta con el error concreto.
 
 Chequeos concretos del validador, todos baratos y sobre el modelo en memoria:
 
@@ -538,7 +538,7 @@ Los tres puntos importantes de este diseño:
 2. **La escritura no se puede relajar.** Es la mitad del gate que protege la integridad de los
    datos, y no tiene ningún caso de uso "global" que la justifique. El validador lo rechaza.
 3. **Queda firmado.** `reason` obligatoria significa que cada excepción de lectura tiene un motivo
-   escrito y auditable en la configuración, y `neo_discover` puede exponerlo.
+   escrito y auditable en la configuración, y `etendo_discover` puede exponerlo.
 
 Esto reemplaza el `mode: "singletonParent"` que había propuesto antes: era un caso particular de
 lo mismo, expresado peor. Las 9 entidades de `sii-monitor` y `monitor-verifactu` pasan a
@@ -556,10 +556,10 @@ ajeno del que colgar (misma tabla, 1:1), no que el gate se relaje.
 `optionalFor` tiene que llegar al agente, o no sirve de nada: si el `parentId` es opcional para
 `list` y el agente no lo sabe, igual va a pedirlo o va a fallar y reintentar.
 
-- **`neo_discover`** y **`neo_schema`** emiten, por entidad hija:
+- **`etendo_discover`** y **`etendo_schema`** emiten, por entidad hija:
   `{"isChild": true, "parentEntity": "header", "parentField": "salesOrder", "parentRequiredFor": ["list","get","create","update","delete"]}`
-- La descripción de `parentId` en `neo_list` / `neo_get` deja de ser absoluta: "obligatorio para
-  entidades hijas, salvo las que `neo_discover` marque con `parentRequiredFor` sin este verbo".
+- La descripción de `parentId` en `etendo_list` / `etendo_get` deja de ser absoluta: "obligatorio para
+  entidades hijas, salvo las que `etendo_discover` marque con `parentRequiredFor` sin este verbo".
 
 #### 4.10.4 Cuánta configuración manual hace falta
 
@@ -597,10 +597,10 @@ interno, no tickets separados.
 |---|---|---|---|
 | **F0** ✅ | **La base de configuración**: columna `MCP_CONFIG` en las tres tablas SF + `McpEntityConfig` (parseo, caché, registro de secciones, fallo ruidoso) + validador de despliegue. Detalle en `2026-09-07-mcp-entity-configuration-base.md`. Con cero secciones registradas el MCP se comporta byte-por-byte como hoy | Bajo | No |
 | **F1** ✅ | `McpParentScope` + la sección `parent` (§4.10) + tests. `resolveParentFK` refactorizado para consumirlo — **y con eso corregido el defecto de §12.1**. `NeoParentTabFilterResolver` / `NeoDefaultsService` quedan pendientes (§14) | Bajo | No |
-| **F2** | Descubribilidad (§4.8): `isChild` / `parentEntity` / `parentField` / `parentRequiredFor` en `neo_discover` y `neo_schema`. Aditivo | Bajo | No |
-| **F3** | Filtro silencioso (§4.9) + `neo_defaults` estricto (§4.6) | Bajo | Marginal |
-| **F4** | **El gate**: `neo_list` (§4.2) + `neo_create` (§4.4) + `neo_batch` (§4.7) | Medio | **Sí** — ver §6 |
-| **F5** | `neo_get` estricto + pertenencia en `update`/`delete` (§4.3, §4.5) | Medio | **Sí** |
+| **F2** | Descubribilidad (§4.8): `isChild` / `parentEntity` / `parentField` / `parentRequiredFor` en `etendo_discover` y `etendo_schema`. Aditivo | Bajo | No |
+| **F3** | Filtro silencioso (§4.9) + `etendo_defaults` estricto (§4.6) | Bajo | Marginal |
+| **F4** | **El gate**: `etendo_list` (§4.2) + `etendo_create` (§4.4) + `etendo_batch` (§4.7) | Medio | **Sí** — ver §6 |
+| **F5** | `etendo_get` estricto + pertenencia en `update`/`delete` (§4.3, §4.5) | Medio | **Sí** |
 | **F6** | **Datos**: las ~20 filas de `MCP_CONFIG` (3 `sameRecord` + 17 `field`/`optionalFor`) y las altas/bajas de §11. Recetas de `docs` + prompts de entidad | Bajo | No |
 | **F7** | **Precedencia del contexto del padre en callouts** (D-7, §14): orden de `buildRequestParams` + regla `body > padre > default del hijo > sesión` | Bajo | No |
 
@@ -647,11 +647,11 @@ no una excepción al gate.
 
 - **D-1 — Filtro silencioso.** Ya cubierto en §2.7 / §4.9. Es, a mi juicio, el más urgente de todos
   los hallazgos: produce respuestas *falsas*, no sólo demasiado amplias.
-- **D-2 — `neo_defaults`: prosa vs. schema.** §2.4.
+- **D-2 — `etendo_defaults`: prosa vs. schema.** §2.4.
 - **D-3 — `handleGet` no aplica `adTab.getHqlwhereclause()`** mientras `handleList` sí.
   Un registro que la pestaña filtra fuera es igualmente recuperable por id. Independiente de este
   bug, pero está en las mismas ~80 líneas.
-- **D-4 — `neo_update` puede reparentar** un registro hijo cambiando su FK al padre. §4.5.
+- **D-4 — `etendo_update` puede reparentar** un registro hijo cambiando su FK al padre. §4.5.
 - **D-5 — `resolveParentFK` toma la primera columna `isLinkToParentColumn` y hace `break`** sin
   desambiguar contra la pestaña padre real. §4.1.
 - **D-6 — 6 entidades con `AD_TAB_ID` que no resuelve en los XML locales**
@@ -671,9 +671,9 @@ no una excepción al gate.
 
 | # | Tema | Decisión |
 |---|---|---|
-| Q1 | Multi-padre en `neo_list` | `parentId` acepta string o **array de hasta 20 ids** |
-| Q2 | `neo_get` | **Estricto**: `parentId` obligatorio también para leer de a uno |
-| Q3 | Reparenting vía `neo_update` | **Prohibido** |
+| Q1 | Multi-padre en `etendo_list` | `parentId` acepta string o **array de hasta 20 ids** |
+| Q2 | `etendo_get` | **Estricto**: `parentId` obligatorio también para leer de a uno |
+| Q3 | Reparenting vía `etendo_update` | **Prohibido** |
 | Q5 | Rollout | **Corte directo**, sin flag ni opt-out por entidad |
 | Q8 | Ticket | **Un solo ticket**: ETP-5184, todo el alcance junto — la base de configuración entra como fase F0, sin ticket propio |
 | — | Columna de config | `MCP_CONFIG` (text/JSON), definida en las **tres** tablas SF: spec, entity y field |
@@ -752,7 +752,7 @@ modules/com.etendoerp.go/docs/
 ## 10. Cómo reproducir el bug reportado
 
 ```
-neo_list(spec: "contacts", entity: "locationAddress")
+etendo_list(spec: "contacts", entity: "locationAddress")
 ```
 
 Devuelve hasta 100 direcciones de *todos* los terceros del cliente, sin ninguna indicación de que
@@ -762,9 +762,9 @@ posicionarse en un tercero y entrar a la pestaña "Location/Address".
 Otros casos igual de ilustrativos:
 
 ```
-neo_list(spec: "sales-order",  entity: "lines")     → todas las líneas de todos los pedidos
-neo_list(spec: "contacts",     entity: "contact")   → todos los contactos de todos los terceros
-neo_list(spec: "product",      entity: "price")     → todos los precios de todos los productos
+etendo_list(spec: "sales-order",  entity: "lines")     → todas las líneas de todos los pedidos
+etendo_list(spec: "contacts",     entity: "contact")   → todos los contactos de todos los terceros
+etendo_list(spec: "product",      entity: "price")     → todos los precios de todos los productos
 ```
 
 ---
@@ -918,7 +918,7 @@ columna no es la FK al padre-SEQNO:
 | `sii-monitor/receivedInvoices(previousPeriod)` | `aeatsii_config` | `C_BPartner_ID` |
 | `sii-monitor/paymentsSiiData` | `aeatsii_payment_cashvat_v` | `FIN_Payment_ID` |
 
-**Esto ya es un defecto en producción, independiente del gate.** Un `neo_create` sobre
+**Esto ya es un defecto en producción, independiente del gate.** Un `etendo_create` sobre
 `product/stock` pasando `parentId` = id de producto escribe ese id en `M_RefInventory_ID` — la FK
 de "inventario referenciado". No falla: escribe un dato incorrecto. Vale la pena verificarlo en
 runtime y, si se confirma, es el hallazgo más urgente de todo el análisis.
@@ -975,8 +975,8 @@ nuevos. Reverificado sobre `develop` @ `257a8cbc`:
 
 | Punto | Estado |
 |---|---|
-| `neo_list` → `required = ["spec","entity"]` | Sin cambios — el bug sigue |
-| `neo_get` → `required = ["spec","entity","id"]` | Sin cambios — el bug sigue |
+| `etendo_list` → `required = ["spec","entity"]` | Sin cambios — el bug sigue |
+| `etendo_get` → `required = ["spec","entity","id"]` | Sin cambios — el bug sigue |
 | `parentId` sólo en `handleCreate` y `handleDefaults` (opcional) | Sin cambios |
 | Filtro silencioso en `McpQuerySupport` | Sin cambios, y está en **dos** lugares: `appendEqualityCondition` (lín. 109-112) y `appendOperatorConditions` (lín. 127-130) |
 
@@ -999,7 +999,7 @@ Novedades de `develop` a tener en cuenta al implementar:
 
 ### 14.1 Síntoma
 
-Alta de línea de pedido vía `neo_create(spec:"sales-order", entity:"lines")` pasando sólo
+Alta de línea de pedido vía `etendo_create(spec:"sales-order", entity:"lines")` pasando sólo
 `salesOrder`, `product`, `orderedQuantity`, `orderDate`. La línea se crea con:
 
 | Campo | Valor obtenido | Valor correcto (el que da la UI) |
@@ -1101,7 +1101,7 @@ invertir.
 
 | Item | Commit | Resultado |
 |---|---|---|
-| §14.9 — NPE de `neo_batch` | `8e0c5132` | ✅ **confirmado**: `committed:true`, cabecera + línea creadas |
+| §14.9 — NPE de `etendo_batch` | `8e0c5132` | ✅ **confirmado**: `committed:true`, cabecera + línea creadas |
 | §14.8 — precio de línea (MCP) | `69ddc1be` | ✅ **confirmado**: `unitPrice`/`listPrice` = 23 (antes 0), `lineNetAmount` = 46 derivado solo |
 | D-7 / F7 — params del callout | `4389f0f8` | ✅ **confirmado** con diferencial directo sobre `C_GetTax` — ver §14.7.1 |
 
@@ -1172,13 +1172,13 @@ orden actual, reescribirlo para cubrir el nuevo, no borrarlo.
   viajando junto al id. Toca `NeoSelectorService.resolveSelectorAuxForId` y probablemente
   `SelectorAuxResolver` — cambia una firma con más de un llamador, así que necesita medir impacto
   antes de comprometer alcance. **Ticket aparte.**
-- **`neo_batch` rompe con `Cannot invoke "NeoServlet.lookupHandler(String)" because "this.servlet"
+- **`etendo_batch` rompe con `Cannot invoke "NeoServlet.lookupHandler(String)" because "this.servlet"
   is null`** al crear cabecera + línea en un solo lote (rollback completo, nada persistido).
-  **Diagnosticado — es una regresión, ver §14.9.** Relevante para §4.7 (F4 toca `neo_batch`): el
+  **Diagnosticado — es una regresión, ver §14.9.** Relevante para §4.7 (F4 toca `etendo_batch`): el
   gate se estaría montando sobre un camino que hoy no funciona para ninguna entidad con
   `Java_Qualifier`. **Ticket aparte.**
 
-### 14.9 `neo_batch` roto: regresión del 2026-08-20
+### 14.9 `etendo_batch` roto: regresión del 2026-08-20
 
 `McpToolRouter:1205` obtiene el servicio con `BatchService.forBatchOnly()`, que construye
 `new NeoCrudHandler(null)` (`BatchService:199`). Su javadoc declara el contrato del que depende:
@@ -1195,7 +1195,7 @@ if (StringUtils.isNotBlank(javaQualifier)) {
   NeoHandler handler = servlet.lookupHandler(javaQualifier);   // ← sin guarda de null
 ```
 
-Cualquier entidad con `Java_Qualifier` (`sales-order/header` lo tiene) revienta. Por `neo_create`
+Cualquier entidad con `Java_Qualifier` (`sales-order/header` lo tiene) revienta. Por `etendo_create`
 normal funciona porque ahí el `crudHandler` es el del servlet, con la referencia viva.
 
 Cronología, por `git log -S`:
@@ -1209,7 +1209,7 @@ El commit de agosto invalidó el contrato de mayo en silencio. La red de segurid
 prometía ("fallar en construcción, no en runtime") no existe: nada la hace cumplir.
 
 Por qué no se detectó: IMP-23 verificó el batch en vivo el 2026-08-10/11 y el audit del 08-13 le
-puso 5/5 — todo **anterior** al 08-20. Y los audits posteriores registran `neo_batch` como *not
+puso 5/5 — todo **anterior** al 08-20. Y los audits posteriores registran `etendo_batch` como *not
 probed* (`2026-08-19:254`, `2026-08-13-job-a:148`). El agujero de cobertura y la regresión se
 cruzaron.
 
@@ -1218,7 +1218,7 @@ cruzaron.
 `NeoServlet.lookupHandler` (`:230-231`) es una delegación de una línea al **estático**
 `NeoServletSupport.lookupHandler`: el call site nunca necesitó la instancia del servlet. Ahora
 llama al estático directo, con comportamiento idéntico en los dos caminos y sin divergencia entre
-`neo_create` y `neo_batch`. Mismo precedente que `NeoActionSurface:80`.
+`etendo_create` y `etendo_batch`. Mismo precedente que `NeoActionSurface:80`.
 
 **Descartada la guarda de null** (`if (servlet != null)`): saltearía
 `protectedCreateCalloutFields` en el camino batch, así que lote y create protegerían conjuntos de
@@ -1271,10 +1271,10 @@ línea degradada (campos derivados del padre en `null`) a pesar de que la receta
 corregida. La causa: dos textos que un agente lee **antes o en vez de** la receta seguían
 enseñando la forma rota.
 
-1. `McpSchemaCreateView.CHILD_ENTITY_HINT_SUFFIX` — el hint que devuelve `neo_schema
+1. `McpSchemaCreateView.CHILD_ENTITY_HINT_SUFFIX` — el hint que devuelve `etendo_schema
    view:"create"` sobre una entidad hija. Es lo primero que un agente lee al inspeccionar la
    entidad, antes de llegar a ninguna receta de `docs`. Terminaba en "Also send the parent
-   foreign key itself among your neo_create fields (e.g. physInventory on inventoryLine,
+   foreign key itself among your etendo_create fields (e.g. physInventory on inventoryLine,
    salesOrder on sales-order/lines) — it is required even though it is not listed above",
    instrucción directamente contradictoria con `parentId`. Última vez tocado en `a544eb4f`.
 2. `agentic/mcp/index.md:172` — el párrafo de prosa que **introduce** la receta JSON ya
@@ -1286,7 +1286,7 @@ Ambos corregidos el mismo día: (1) en `com.etendoerp.go`, commit `14de404e Feat
 MCP child-entity hint to use parentId`; (2) en `etendo-go-docs`, commit `f54d5af Feature
 ETP-5184: Stop teaching parent FK form on child create` (que de paso corrigió el mismo defecto en
 el ejemplo resuelto de `physical-inventory`/`inventoryLine`, que usaba `physInventory` en vez de
-`parentId` en su propio `neo_create`).
+`parentId` en su propio `etendo_create`).
 
 **Lección:** un texto guía (hint de herramienta o prosa introductoria) puede contradecir la receta
 correcta que lo sigue. Corregir la receta no alcanza si el texto que la rodea sigue enseñando la
@@ -1302,7 +1302,7 @@ en `src/`:
 | fichero | tests | arreglo que protege |
 |---|---|---|
 | `schemaforge/CalloutRequestBuilderPrecedenceTest.java` | 9 | `4389f0f8` — precedencia de params del callout |
-| `schemaforge/NeoCrudHandlerBatchQualifierTest.java` | 8 | `8e0c5132` — NPE de `neo_batch` |
+| `schemaforge/NeoCrudHandlerBatchQualifierTest.java` | 8 | `8e0c5132` — NPE de `etendo_batch` |
 | `mcp/McpLinePriceInjectorTest.java` | 37 | `69ddc1be` — inyector de precio |
 
 Cada arreglo se verificó **revirtiéndolo** en una copia fuera del repo: la precedencia invertida
@@ -1379,7 +1379,7 @@ escrita se lea como "sin configuración". Pero eso implica que **toda** sección
 registrada antes de la primera lectura, no antes de que corra su propia feature.
 
 Un bloque `static` dentro de `McpParentSection` no alcanza: sólo se dispara cuando algo toca esa
-clase, así que un `neo_discover` que llegue primero reportaría una sección `parent` perfectamente
+clase, así que un `etendo_discover` que llegue primero reportaría una sección `parent` perfectamente
 válida como desconocida. `McpConfigSections` centraliza el registro y `McpEntityConfig.resolve()`
 lo invoca antes de parsear. Idempotente, y después de la primera llamada es una lectura volátil.
 
@@ -1422,7 +1422,7 @@ parseó bien.
 
 ### Adelanto parcial de F2
 
-Como `Scope.describe()` ya estaba escrito, `neo_discover` emite el descriptor por entidad hija:
+Como `Scope.describe()` ya estaba escrito, `etendo_discover` emite el descriptor por entidad hija:
 
 ```json
 {"name": "lines", "methods": ["GET","POST"], "readOnly": false,
@@ -1432,7 +1432,7 @@ Como `Scope.describe()` ya estaba escrito, `neo_discover` emite el descriptor po
 
 Es aditivo y es lo que evita que el gate sea pura fricción: un agente que lee `parentField` y
 `parentRequiredFor` acierta la llamada a la primera en vez de fallar y reintentar. Falta de F2 el
-mismo bloque en `neo_schema`.
+mismo bloque en `etendo_schema`.
 
 ### Pendiente de F1
 
@@ -1497,7 +1497,7 @@ rename futuro rompe el build en vez de vaciar la configuración.
 
 ### Restricciones para F4, medidas y no argumentadas
 
-1. **`neo_batch` necesita respuesta propia.** El FK todavía es `$ref:<opId>` durante el
+1. **`etendo_batch` necesita respuesta propia.** El FK todavía es `$ref:<opId>` durante el
    pre-pass y `BatchService` despacha cada op al camino de create compartido sin pasar por
    `handleCreate`. Un gate escrito sólo ahí o se saltea batch entero, o rechaza todos los
    hijos batcheados legítimos. Va donde se resuelve el ref, no en el borde del tool.
@@ -1524,12 +1524,12 @@ rename futuro rompe el build en vez de vaciar la configuración.
    *(ETP-5184-sales-order-issues)*
 
 4. **Conflicto cross-ticket en `docs`, y F4 no puede salir sin resolverlo.** `ddf2994`
-   (ETP-4918, ya commiteado) documenta que en `neo_create` hay que mandar **el FK del
+   (ETP-4918, ya commiteado) documenta que en `etendo_create` hay que mandar **el FK del
    padre**, no `parentId`. Eso es correcto hoy y **queda mal el día que entre F4**. El
    arreglo es quirúrgico, no una revisión de la sección entera: la otra mitad de `ddf2994`
-   —que `neo_defaults` necesita `parentId`— no sólo sigue siendo verdad, ahora está
+   —que `etendo_defaults` necesita `parentId`— no sólo sigue siendo verdad, ahora está
    **obligada por código** (el gate de `handleDefaults`). O sea que hay que cambiar la
-   guidance de `neo_create` y dejar la de `neo_defaults` intacta.
+   guidance de `etendo_create` y dejar la de `etendo_defaults` intacta.
 
    **El orden de merge es docs primero, y esto corrige lo que yo había escrito.** Llegué a
    decir que el PR de docs no debía mergear antes de F4. Es al revés, y el código lo dice:
@@ -1569,17 +1569,17 @@ campos del padre en null" es más débil y menos exacto que "se rechaza" para es
 
 ### Sin verificar: la lista de ejemplos del comentario de `handleDefaults`
 
-El comentario que entró en `1047cc55` dice que `neo_defaults` omite *"la warehouse del padre,
+El comentario que entró en `1047cc55` dice que `etendo_defaults` omite *"la warehouse del padre,
 su price-list version, su next line number"*. Esa lista sale de la redacción de `ddf2994`,
 **no de una medición propia**, y está escrita como si lo fuera.
 
 Lo único medido en la zona es más angosto y puede no tocarla: en `sales-order/lines` el
 `warehouse` **persistido** fue `Almacen GO`, distinto al de la cabecera. Eso es sobre lo que
-el create persiste en un spec; el comentario es sobre lo que `neo_defaults` resuelve, y el
+el create persiste en un spec; el comentario es sobre lo que `etendo_defaults` resuelve, y el
 ejemplo que nombra es el padre de `inventory-line`. Pueden diferir sin contradecirse.
 
 Queda anotado como no verificado en vez de corregido a ciegas. Si alguien mide
-`neo_defaults` sobre `inventory-line` y la warehouse tampoco sale del padre, el comentario
+`etendo_defaults` sobre `inventory-line` y la warehouse tampoco sale del padre, el comentario
 está mal y hay que arreglarlo.
 
 ### Nota de proceso: la autoría de git no distingue sesiones
@@ -1604,7 +1604,7 @@ REST. *(ETP-5184-sales-order-issues, aprendido perdiendo el PR #41)*
 `payment-in/finPaymentScheduleDetail`, `payment-out/lines`,
 `product/transactionAdjustments`, `return-from-customer/relatedServices`. Decisión del
 usuario: dejarlas como están. Consecuencia asumida: **F4 las retiene**, resuelven a
-`UNRESOLVABLE`, y `neo_discover` las lista con `configError` diciendo por qué, en vez de
+`UNRESOLVABLE`, y `etendo_discover` las lista con `configError` diciendo por qué, en vez de
 seguir ofreciendo un `create` que produce huérfanos. La decisión se toma cuando el gate
 las saque a la luz, con el motivo escrito.
 

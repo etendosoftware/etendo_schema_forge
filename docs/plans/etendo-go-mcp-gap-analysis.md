@@ -33,15 +33,15 @@ La base MCP (servlet, OAuth2, Tool Registry dinámico desde `ETGO_SF_*`) ya est�
 
 | Tool | Servicio Etendo GO subyacente | Scope |
 |---|---|---|
-| `neo_discover` | `ToolRegistry` | `neo:read` |
-| `neo_list` | `NeoCrudHandler` / `DataSourceServlet` | `neo:read` |
-| `neo_get` | `NeoCrudHandler` | `neo:read` |
-| `neo_create` | `NeoCrudHandler` | `neo:write` |
-| `neo_update` | `NeoCrudHandler` | `neo:write` |
-| `neo_delete` | `NeoCrudHandler` | `neo:write` |
-| `neo_selectors` | `NeoSelectorService` | `neo:read` |
-| `neo_defaults` | `NeoDefaultsService` + `NeoDefaultsCascadeHelper` | `neo:read` |
-| `neo_schema` | metadata interna | `neo:read` |
+| `etendo_discover` | `ToolRegistry` | `neo:read` |
+| `etendo_list` | `NeoCrudHandler` / `DataSourceServlet` | `neo:read` |
+| `etendo_get` | `NeoCrudHandler` | `neo:read` |
+| `etendo_create` | `NeoCrudHandler` | `neo:write` |
+| `etendo_update` | `NeoCrudHandler` | `neo:write` |
+| `etendo_delete` | `NeoCrudHandler` | `neo:write` |
+| `etendo_selectors` | `NeoSelectorService` | `neo:read` |
+| `etendo_defaults` | `NeoDefaultsService` + `NeoDefaultsCascadeHelper` | `neo:read` |
+| `etendo_schema` | metadata interna | `neo:read` |
 | `<spec_snake>` | `NeoProcessService` (1 por proceso) | `neo:process` |
 | `generate_<spec_snake>` | `NeoReportService` (1 por reporte) | `neo:report` |
 
@@ -102,18 +102,18 @@ Hoy `NeoCalloutService` recalcula campos (precio unitario al cambiar producto, t
 El frontend hoy oculta campos según reglas (ej: "warehouse solo visible si docType=Standard"). El agente no tiene esa info, intenta llenar campos ocultos, y el server los rechaza. **Propuesta:** tool `neo_display_logic(spec, entity, currentRecord)` → devuelve `{visibleFields, requiredFields, readOnlyFields}`.
 
 **G4 — Widgets**
-Existen 9 handlers (`WidgetKpis`, `WidgetActivity`, `WidgetTopClients`, `WidgetRevenueTrend`, `WidgetBestSellers`, `WidgetBestProducts`, `WidgetRecentInvoices`, `WidgetPendingAmounts`, `WidgetPendingTasks`). Son oro para análisis de negocio pero invisibles para el agente. **Propuesta:** tool `neo_widget(name, params)` con `enum` de widgets disponibles, o un tool por widget con descripciones semánticas. *Update 2026-04-29: ETP-3584 extrajo `WidgetQueryHelper` y normalizó empty states / filtros por rango de fechas — la superficie de los 9 widgets ya está estable y consistente para envolverla.* *Update 2026-06-30 (ETP-4284, investigación): los 9 widgets NO son specs `widget-*` separados — son 9 entidades del único spec `dashboard` (type `W`, `DA5HB0ARD00000000000000000000001`), cada una con `JAVA_QUALIFIER` → su `@Named("widget…Handler")`. Esas entidades no tienen `AD_Tab`, por eso el path CRUD genérico lanza "No AD_Tab linked to entity" (es misrouting, no bug de datos). Plan e implementación: `docs/plans/ETP-4284-neo-widget-tool.md`. Decisión tomada: 1 tool `neo_widget(widget, params)` con enum, + excluir `dashboard` del catálogo W de discovery. Complejidad estimada: M.*
+Existen 9 handlers (`WidgetKpis`, `WidgetActivity`, `WidgetTopClients`, `WidgetRevenueTrend`, `WidgetBestSellers`, `WidgetBestProducts`, `WidgetRecentInvoices`, `WidgetPendingAmounts`, `WidgetPendingTasks`). Son oro para análisis de negocio pero invisibles para el agente. **Propuesta:** tool `etendo_widget(name, params)` con `enum` de widgets disponibles, o un tool por widget con descripciones semánticas. *Update 2026-04-29: ETP-3584 extrajo `WidgetQueryHelper` y normalizó empty states / filtros por rango de fechas — la superficie de los 9 widgets ya está estable y consistente para envolverla.* *Update 2026-06-30 (ETP-4284, investigación): los 9 widgets NO son specs `widget-*` separados — son 9 entidades del único spec `dashboard` (type `W`, `DA5HB0ARD00000000000000000000001`), cada una con `JAVA_QUALIFIER` → su `@Named("widget…Handler")`. Esas entidades no tienen `AD_Tab`, por eso el path CRUD genérico lanza "No AD_Tab linked to entity" (es misrouting, no bug de datos). Plan e implementación: `docs/plans/ETP-4284-neo-widget-tool.md`. Decisión tomada: 1 tool `etendo_widget(widget, params)` con enum, + excluir `dashboard` del catálogo W de discovery. Complejidad estimada: M.*
 
 **G6 — Acciones específicas con descripción semántica**
 `CreateDraftInvoiceHandler`, `CreateShipmentHandler`, `RegisterPaymentHandler/Out` están como procesos pero el `description` que ve el agente es lo que esté en `AD_Process.Help` — frecuentemente vacío o técnico. **Propuesta:** bloque `agent` en `decisions.json` (o columna en `ETGO_SF_SPEC`) con `description`, `whenToUse`, `examples`, `preconditions`. *Update 2026-04-29: el catálogo creció con `CreateGoodsReceiptHandler`, `CreatePurchaseInvoiceHandler` y `NeoCloneRecordHandler`. Además, el patrón `NeoHandler` (CDI bean por `Java_Qualifier`) abre una vía limpia para que cada handler aporte su propia metadata semántica vía un método opcional `describeForAgent()`.*
 
-*Update 2026-07-31 (ETP-4285): las **acciones de documento** quedaron cubiertas sin necesidad de `describeForAgent()`. Tres cambios: (1) `neo_schema` emite ahora `actionValues` (la lista AD activa del botón, leída vía `NeoSelectorService.getListLabels`) y `actionParameter` (`docAction`), así que el agente descubre que `CO` reserva/contabiliza y bajo qué clave mandarlo; (2) la semántica por ventana vive en `decisions.json → entities.header.fields.documentAction.agentPrompt`, que ya viajaba a `ETGO_SF_FIELD.AGENT_PROMPT` — poblada en `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`; (3) **defecto corregido**: `neo_action` llamaba a `executeButtonActionCore` sin los hooks `NeoHandler` que el path REST sí ejecuta (`NeoSubEndpointDispatcher.handleHookedSubEndpoint`, `NeoEndpointType.ACTION`), con lo cual completar un documento por MCP se salteaba lógica que la UI corre — la línea de descuento total de `AbstractOrderHeaderHandler`, el ruteo de `ProcessInvoiceHook`, y la intercepción de `GlJournalHeaderHandler` que evita el NPE del dispatch classic sin contexto. `describeForAgent()` sigue siendo la vía si en el futuro hacen falta precondiciones calculadas con el estado del registro.*
+*Update 2026-07-31 (ETP-4285): las **acciones de documento** quedaron cubiertas sin necesidad de `describeForAgent()`. Tres cambios: (1) `etendo_schema` emite ahora `actionValues` (la lista AD activa del botón, leída vía `NeoSelectorService.getListLabels`) y `actionParameter` (`docAction`), así que el agente descubre que `CO` reserva/contabiliza y bajo qué clave mandarlo; (2) la semántica por ventana vive en `decisions.json → entities.header.fields.documentAction.agentPrompt`, que ya viajaba a `ETGO_SF_FIELD.AGENT_PROMPT` — poblada en `sales-order`, `purchase-order`, `sales-invoice`, `purchase-invoice`; (3) **defecto corregido**: `etendo_action` llamaba a `executeButtonActionCore` sin los hooks `NeoHandler` que el path REST sí ejecuta (`NeoSubEndpointDispatcher.handleHookedSubEndpoint`, `NeoEndpointType.ACTION`), con lo cual completar un documento por MCP se salteaba lógica que la UI corre — la línea de descuento total de `AbstractOrderHeaderHandler`, el ruteo de `ProcessInvoiceHook`, y la intercepción de `GlJournalHeaderHandler` que evita el NPE del dispatch classic sin contexto. `describeForAgent()` sigue siendo la vía si en el futuro hacen falta precondiciones calculadas con el estado del registro.*
 
 **G9 — Capa semántica**
 Es el mismo origen que G6 generalizado. Sin esto, las descripciones son genéricas ("List records from a NEO Headless API spec") y el agente no distingue entre listar facturas vs órdenes vs movimientos. **Propuesta:** extender `decisions.json → window.agent` con metadata semántica que `ToolRegistry` lea al construir el `description`.
 
 **G13 — Dry-run**
-Crítico para confianza. Agente quiere validar antes de commit. **Propuesta:** parámetro opcional `dryRun: true` en `neo_create/update/delete` que ejecute validaciones + callouts pero rollback la transacción.
+Crítico para confianza. Agente quiere validar antes de commit. **Propuesta:** parámetro opcional `dryRun: true` en `etendo_create/update/delete` que ejecute validaciones + callouts pero rollback la transacción.
 
 **G17 — Context primer**
 Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `neo_whoami` (cheap, primer call recomendado en system prompt) → `{client, org, role, user, currentDate, currency, language}`. *Update 2026-04-29: ETP-3662 ya entregó `NeoSessionService` en `GET /sws/neo/session` (devuelve `currencyCode`, datos de organización, dirección, logo). Cerrar G17 es solo agregar la entrada al `ToolRegistry` y completar lo que falta del payload (rol, user, fecha, idioma).*
@@ -126,7 +126,7 @@ Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `
 - **G9** Bloque `agent` en `decisions.json` (description, whenToUse, examples, preconditions) propagado a tool descriptions
 - **G17** Tool `neo_whoami` (envoltorio sobre `NeoSessionService` — ya existe el endpoint `/sws/neo/session`)
 - **G13** Flag `dryRun` en writes
-- **G4** Tool `neo_widget` con enum (los 9 widgets ya comparten `WidgetQueryHelper` y empty states normalizados)
+- **G4** Tool `etendo_widget` con enum (los 9 widgets ya comparten `WidgetQueryHelper` y empty states normalizados)
 - **G20** Tool `neo_help` + `docs/agent-guide.md`
 - **(nuevo)** Exponer `NeoFiltersService` (`/sws/neo/filters`) y el flag `?_distinct` (de ETP-3788) como tools `neo_filter_presets` y `neo_distinct_values` — ya existen, solo falta registrarlos
 
@@ -135,8 +135,8 @@ Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `
 ### Sprint 2 — Form fidelity
 - **G1** Tool `neo_callout` (sobre el `NeoCalloutService` ya cacheado y con `afterCallout` hook)
 - **G2** Tool `neo_display_logic`
-- **G3** Anunciar field filtering en `neo_schema` (aprovechar metadata de `NeoFieldFilter` reescrito)
-- **G11** Tool `neo_batch` (batch CRUD en una sola llamada)
+- **G3** Anunciar field filtering en `etendo_schema` (aprovechar metadata de `NeoFieldFilter` reescrito)
+- **G11** Tool `etendo_batch` (batch CRUD en una sola llamada)
 - **G10** Prompts MCP (al menos 3: "crear orden de venta", "registrar pago", "consultar stock")
 
 **Entregable:** un agente puede armar una orden compleja con la misma fidelidad que la UI.
@@ -164,7 +164,7 @@ Sin esto el agente no sabe en qué tenant/rol/fecha está. **Propuesta:** tool `
 3. **¿Dry-run (G13) es flag por tool o un endpoint paralelo `/sws/mcp/dryrun`?** Trade-off entre simplicidad y separación de concerns.
 4. **¿Los widgets (G4) se exponen como N tools o 1 tool con enum?** N tools = mejor descubribilidad; 1 tool = menos polución de catálogo.
 5. **¿Auditoría (G14) en DB o en log estructurado externo?** Compliance vs cost.
-6. **Naming de tools agénticas:** ¿`neo_*` (consistente con lo actual) o introducimos namespace `agent_*` para los nuevos?
+6. **Naming de tools agénticas:** ¿`etendo_*` (consistente con lo actual) o introducimos namespace `agent_*` para los nuevos?
 7. **Roadmap timing:** ¿metemos los 3 sprints en el epic ETP-3504 o abrimos epic nuevo "Etendo GO Agent-Ready"?
 
 ---

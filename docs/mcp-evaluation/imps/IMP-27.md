@@ -4,7 +4,7 @@
 |---|---|
 | **Registry row** | [`mcp-improvements-registry.md`](../mcp-improvements-registry.md) §3 — **P2**, cohort C5, 0 / 3, ♻️ same call. Registered 2026-08-12 on a human-authorised quota re-base (§8) |
 | **Specification** | proposed by the user on 2026-08-12 during the IMP-21 run; evaluated against the code the same session |
-| **Evidence** | not a defect — an extension point. Its need is measured indirectly: IMP-11's 1,422 uncurated fields, the ~60 kB `neo_schema` dumps, and the 15 accidentally-lost fields in IMP-26 §2.2 |
+| **Evidence** | not a defect — an extension point. Its need is measured indirectly: IMP-11's 1,422 uncurated fields, the ~60 kB `etendo_schema` dumps, and the 15 accidentally-lost fields in IMP-26 §2.2 |
 | **Repo** | `schema_forge` (config + pipeline) + `schema_forge_core` (writer + validator) + `com.etendoerp.go` (reader) |
 | **Blocked by** | **IMP-26** — `I` cannot inherit from a source that disagrees with itself (IMP-26 §6) |
 | **Implemented** | not started |
@@ -55,7 +55,7 @@ Two reasons, and the second is the stronger:
 
 - Turning them into gates would put the MCP-only config on a path the React UI also drives
   (`NeoServlet` → `ETGO_SF_*`), which is exactly the risk IMP-21 §3.5 avoided by leaving
-  `neo_action` ungated. A description-only change cannot break anything shipped.
+  `etendo_action` ungated. A description-only change cannot break anything shipped.
 - Anything that reads as security but is not enforced is worse than no feature. `N` on a salary
   column is a *tidier response*, not a protected column. If nobody writes that sentence down, the
   first person to reach for it will use it as an ACL. AD role/window access remains the only access
@@ -67,7 +67,7 @@ Two reasons, and the second is the stronger:
 
 Pure surface reduction, and the only value with a measured beneficiary.
 
-`neo_schema` responses run around 60 kB; IMP-11 counts 1,422 fields in 89 uncurated entities; the ACE
+`etendo_schema` responses run around 60 kB; IMP-11 counts 1,422 fields in 89 uncurated entities; the ACE
 cost of verbose responses is a standing concern the registry raises next to MARI (§2 of the
 registry). `N` is the first tool that lets a human remove a field from an agent's view *without*
 removing it from NEO — today the only way to shrink the surface is `visibility:"discarded"`, which
@@ -132,7 +132,7 @@ already traverse this exact path, and copying one of them is the cheapest way to
    what let `visibility` go stale, so the new column must be written on the same statement as the
    value it overrides, and `populateSpec` must not reset it.
 5. **`McpSchemaFieldBuilder#loadFieldMetadata` + the builder** — the only reader. `N` drops the field
-   from the schema array (and from `neo_list`/`neo_get` projections, or the agent gets values for a
+   from the schema array (and from `etendo_list`/`etendo_get` projections, or the agent gets values for a
    field it was never shown); `R` forces the reported visibility to `readOnly` and clears
    `userRequired`.
 6. **Docs** — `docs/decisions-reference.md` and `neo-headless.md`, and §3's sentence in both.
@@ -169,7 +169,7 @@ already traverse this exact path, and copying one of them is the cheapest way to
      instead of writing a value nothing honours.
 
    **This moves §4.1's and §6's denominator.** The 1,422 fields in 89 uncurated entities (IMP-11) and
-   the ~60 kB `neo_schema` responses were measured on a surface that still included these 1,438 field
+   the ~60 kB `etendo_schema` responses were measured on a surface that still included these 1,438 field
    rows. Whatever a follow-up pass with `N` is worth, it is worth it against the post-ETP-4793
    surface, not the one those figures describe.
 
@@ -186,9 +186,9 @@ already traverse this exact path, and copying one of them is the cheapest way to
 ## 7. Done when
 
 - The column exists with `'I'` as default and every existing row at `'I'`.
-- A deploy with the column in place produces `neo_schema` output **identical** to the pre-change
+- A deploy with the column in place produces `etendo_schema` output **identical** to the pre-change
   output for at least one spec — the zero-delta assertion is the whole safety argument for `I`.
-- `N` on one field of one spec removes it from `neo_schema`, `neo_list` and `neo_get`, and NEO's REST
+- `N` on one field of one spec removes it from `etendo_schema`, `etendo_list` and `etendo_get`, and NEO's REST
   path still serves it — the two surfaces diverging on purpose is the feature.
 - `R` on a `userRequired` field with no default is refused by the validator, with a test.
 - §3's sentence — surface control, not access control — is in `decisions-reference.md` and

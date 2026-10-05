@@ -1,4 +1,4 @@
-# `neo_vector_search` target keys are undiscoverable, and a wrong key reports 403 "Access denied"
+# `etendo_vector_search` target keys are undiscoverable, and a wrong key reports 403 "Access denied"
 
 **Date:** 2026-09-14
 **Run:** `20260914T1723-local-49fa`, probes `create-for-named-customer` and `find-own-order`
@@ -6,7 +6,7 @@
 
 ## What happened
 
-Two probes tried `neo_vector_search` while hunting for a customer and both got:
+Two probes tried `etendo_vector_search` while hunting for a customer and both got:
 
 ```
 {"error":{"message":"Access denied to vector target","status":403}}
@@ -15,9 +15,9 @@ Two probes tried `neo_vector_search` while hunting for a customer and both got:
 Both reported it as a failure in their verdict. Manual follow-up, verbatim:
 
 ```
-neo_vector_search {query:"test", targets:["business-partner"]} -> 403 Access denied to vector target
-neo_vector_search {query:"test", targets:["product"]}          -> 403 Access denied to vector target
-neo_vector_search {query:"test", targets:["sales-order"]}      -> 403 Access denied to vector target
+etendo_vector_search {query:"test", targets:["business-partner"]} -> 403 Access denied to vector target
+etendo_vector_search {query:"test", targets:["product"]}          -> 403 Access denied to vector target
+etendo_vector_search {query:"test", targets:["sales-order"]}      -> 403 Access denied to vector target
 ```
 
 The tool's own description says:
@@ -31,7 +31,7 @@ and its input schema documents `targets` only as *"DB Extended search-target key
 ## The finding
 
 A **DB Extended search-target key is not a spec name**, and nothing in the MCP surface tells an
-agent what the valid keys are: there is no list tool, the schema gives no enum, and `neo_discover`
+agent what the valid keys are: there is no list tool, the schema gives no enum, and `etendo_discover`
 does not enumerate them. So the only available strategy is to guess — which is what both probes did,
 using the spec names they already knew.
 

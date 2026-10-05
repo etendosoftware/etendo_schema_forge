@@ -200,8 +200,8 @@ when it finishes: that is what stops the count growing while the work is in prog
 Three things measured during the ticket that are **not** fixed by migrating customizations.
 Each needs its own decision.
 
-**1. `neo_batch` does not apply the read-only field filter.** Measured live: `neo_create`
-refuses to write `salesOrder` on a line with `422 read_only_field`; `neo_batch` accepts and
+**1. `etendo_batch` does not apply the read-only field filter.** Measured live: `etendo_create`
+refuses to write `salesOrder` on a line with `422 read_only_field`; `etendo_batch` accepts and
 persists it. It is a write permissiveness exposed by enabling the tool in this ticket, so it
 belongs **before the merge**, not in a later migration.
 

@@ -21,7 +21,7 @@ No shared components, generators, or other windows are modified.
 
 - `artifacts/assets/decisions.json` — two changes:
   1. `entities.assets.fields.depreciate.defaultExpr: "Y"` — sets the NEO default
-     so `neo_defaults` returns `depreciate: true` instead of null.
+     so `etendo_defaults` returns `depreciate: true` instead of null.
   2. `entities.assets.fields.calculateType.defaultExpr: "TI"` — sets the NEO
      default to Time-based instead of the wrong Percentage value.
   3. `entities.assets.javaQualifier: "assetsHandler"` — wires the new

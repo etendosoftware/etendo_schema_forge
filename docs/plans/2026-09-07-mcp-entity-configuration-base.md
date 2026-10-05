@@ -226,7 +226,7 @@ Contrato:
 
 | Situación | Resultado |
 |---|---|
-| JSON no parseable | **la entidad no se publica**; `neo_discover` la reporta con el error |
+| JSON no parseable | **la entidad no se publica**; `etendo_discover` la reporta con el error |
 | Sección desconocida | **error**, no se ignora |
 | Clave desconocida dentro de una sección conocida | **error** — es lo que evita que un `"parentField"` en lugar de `"field"` pase por configuración vacía |
 | El validador de la sección falla | **la entidad no se publica**, con el mensaje del validador |
@@ -263,7 +263,7 @@ Los dos canales que sí funcionan, ambos implementados:
 1. **Log de warning en la primera lectura.** `McpEntityConfig.resolve` loguea
    `Unusable MCP_CONFIG: <problemas>` en cuanto detecta uno. Es el primer momento en que la
    respuesta es *conocible*, y el log del servidor es donde alguien mira después de desplegar.
-2. **`neo_discover` por entidad.** La entidad se reporta con `configError: "<problemas>"` en lugar
+2. **`etendo_discover` por entidad.** La entidad se reporta con `configError: "<problemas>"` en lugar
    de servirse con su configuración ignorada. Un agente que consulta el catálogo ve exactamente
    qué está mal y en qué nivel.
 
@@ -286,7 +286,7 @@ con ETP-5184.
 | **B2** | `McpEntityConfig`: parseo, precedencia, registro de secciones, validación ruidosa + tests | Bajo — sin consumidores, sin cambio observable |
 | **B2b** | Las dos cachés de §2.3 + el `EntityPersistenceEventObserver` de invalidación + tests de expiración e invalidación | Bajo |
 | **B3** | Validador de despliegue (§2.6) | Bajo |
-| **B4** | Exponer en `neo_discover` los errores de configuración de una entidad no publicada | Bajo |
+| **B4** | Exponer en `etendo_discover` los errores de configuración de una entidad no publicada | Bajo |
 
 Las cuatro son aditivas y mergeables sin coordinación: **con cero secciones registradas, el
 comportamiento del MCP es byte-por-byte el actual.**
@@ -304,7 +304,7 @@ modules/com.etendoerp.go/src/com/etendoerp/go/mcp/
   McpConfigCache.java           (NUEVO — B2b: las dos caches de §2.3, Guava CacheBuilder)
   McpConfigInvalidationObserver.java  (NUEVO — B2b: EntityPersistenceEventObserver sobre
                                        SFSpec/SFEntity/SFField)
-  McpSupportInternals.java      B4: reportar el error de config en neo_discover
+  McpSupportInternals.java      B4: reportar el error de config en etendo_discover
 
 modules/com.etendoerp.go/src-db/database/
   model/tables/ETGO_SF_SPEC.xml     + MCP_CONFIG (text)   (B1)
@@ -355,7 +355,7 @@ Implementado en `feature/ETP-5184`, dentro del módulo `com.etendoerp.go`.
 | `mcp/McpConfigCache.java` | 205 | Las dos cachés Guava de §2.3, con `expireAfterAccess` + `invalidateConfig` / `invalidateAll` / `logStats` |
 | `mcp/McpEntityConfig.java` | ~390 | El resolver: parseo cacheado, precedencia spec→entity→field, validación ruidosa, reporte de secciones y claves desconocidas |
 | `mcp/McpConfigInvalidationObserver.java` | 131 | `EntityPersistenceEventObserver` sobre las 3 tablas SF; invalida al guardar |
-| `mcp/McpSupportInternals.java` | +6 | `neo_discover` emite `configError` cuando la config de una entidad no es usable |
+| `mcp/McpSupportInternals.java` | +6 | `etendo_discover` emite `configError` cuando la config de una entidad no es usable |
 
 ### Modelo
 

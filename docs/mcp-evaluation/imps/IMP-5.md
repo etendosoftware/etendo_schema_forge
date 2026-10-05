@@ -18,9 +18,9 @@ IMP-17 and are documented there. §1 exists so the clause numbering has a home; 
 
 | # | Clause | Settled by |
 |---|---|---|
-| — | Raw DAL `status:-4` leaking from `neo_batch` | IMP-15, verified live 2026-08-10 (C10) |
+| — | Raw DAL `status:-4` leaking from `etendo_batch` | IMP-15, verified live 2026-08-10 (C10) |
 | i | An FK-resolution batch failure returns a flattened body with **no `committed` key** (C9) | **here, §5** |
-| ii | Unknown named filter arrives as a raw `Error executing neo_list: …` string (C14) | IMP-17, verified live |
+| ii | Unknown named filter arrives as a raw `Error executing etendo_list: …` string (C14) | IMP-17, verified live |
 | iii | Read-verb responses wrapped `{"response":{…}}`, write-verb bare | error half: IMP-17 §8.6 · success half **here, §7** |
 | iv | A report **handler's own** errors are not enveloped | **here, §4** |
 
@@ -125,7 +125,7 @@ guessing on its behalf is over-reach. Recorded so it is a decision rather than a
 A failure *inside* `executeBatch` returns
 `{committed:false, atomic, persisted, hint, failedAt, error:{…}}`. A failure in the MCP FK-by-name
 **pre-pass** returned the resolver's flat error with `failedAt` bolted on and **no `committed`
-key**. The `neo_batch` description instructs the agent to branch on `committed`; an agent doing that
+key**. The `etendo_batch` description instructs the agent to branch on `committed`; an agent doing that
 read `false` from a missing key — the right answer by luck, from `optBoolean`'s default, not from
 the data.
 
@@ -133,7 +133,7 @@ One condition — "the batch did not run" — had two shapes, chosen by which fu
 
 ### 5.2 The description never lied
 
-`ToolRegistry`'s `neo_batch` description already promises the full
+`ToolRegistry`'s `etendo_batch` description already promises the full
 `{committed:false, atomic:true, failedAt, persisted:[], hint, error:{…}}` shape. The implementation
 had an undocumented exception. So no description change was needed: the fix makes an existing promise
 true. That is the cheaper direction whenever it is available.
@@ -185,12 +185,12 @@ response, not just in the unit test. Same defect vector as IMP-19 §6.3, which i
  "failedAt": {"index": 0, "id": "h0"},
  "error": {"status": 422, "error": "not_found",
            "detail": "No match for 'businessPartner'='__NO_EXISTE_ETP4793__': it is neither the id
-                      of an existing record nor a value any selector matched. Use neo_selectors to
+                      of an existing record nor a value any selector matched. Use etendo_selectors to
                       find a valid one.",
            "field": "businessPartner"}}
 ```
 
-Every key the `neo_batch` description promises is present, including `failedAt.id` — the whole point
+Every key the `etendo_batch` description promises is present, including `failedAt.id` — the whole point
 of §5.2. The resolver's own `detail` and `field` survive inside the nested `error`, so nothing the
 old flattened shape carried was lost in exchange for the outcome keys.
 
@@ -219,12 +219,12 @@ it as construction rather than measurement on purpose.
 
 The clause reads *"read-verb responses wrapped `{"response":{…}}`, write-verb bare"*. That was
 measured on the **error** bodies, and on those it is true. On the **success** bodies it is not: the
-four DAL-backed verbs — `neo_list`, `neo_get`, `neo_create`, `neo_update` — all forward
-`DefaultJsonDataService`'s wrapper untouched. The only bare success is `neo_delete`, and only because
+four DAL-backed verbs — `etendo_list`, `etendo_get`, `etendo_create`, `etendo_update` — all forward
+`DefaultJsonDataService`'s wrapper untouched. The only bare success is `etendo_delete`, and only because
 it discards core's response and builds its own `{deleted, id}`.
 
 So the fix is wider than the clause as written. Flattening the reads alone would have made
-`neo_create` and `neo_update` the new outliers — moving the inconsistency rather than removing it,
+`etendo_create` and `etendo_update` the new outliers — moving the inconsistency rather than removing it,
 and leaving a follow-up item that reads as a regression of this one. The scope came from re-reading
 the four call sites, not from the clause text; a clause is a record of what was observed once, and
 what it *implies* about untested neighbours has to be re-checked.
@@ -232,7 +232,7 @@ what it *implies* about untested neighbours has to be re-checked.
 ### 7.2 A second, smaller find: the not-found envelope was the wrapped one
 
 `buildNotFoundError` — IMP-5's own C17 envelope, the one the registry calls "excellent on
-single-record verbs" — was returned inside `{"response":{…}}`. So on a single `neo_get` call an
+single-record verbs" — was returned inside `{"response":{…}}`. So on a single `etendo_get` call an
 unknown filter or a DAL failure came back flat from `buildDalFailureEnvelope` while a missing id came
 back nested. IMP-17 §8.6's "read errors are flat" was measured on the DAL vector and the not-found
 vector was never re-probed, which is how the asymmetry survived *inside* the item that introduced the
@@ -264,19 +264,19 @@ about.
 
 ### 7.5 What is deliberately left wrapped
 
-`neo_widget` still returns `{response:{data,count}}`, and its tool description says so. That wrapper
+`etendo_widget` still returns `{response:{data,count}}`, and its tool description says so. That wrapper
 is not core's DAL envelope — it is the widget handlers' own normalized contract, shared with the React
 dashboard reading the same endpoint. Same boundary as §4.4: translate what the MCP layer produced,
 leave a handler's published contract alone.
 
-No tool description changed. `neo_list`/`neo_get` never promised the wrapper, and the `fields`
+No tool description changed. `etendo_list`/`etendo_get` never promised the wrapper, and the `fields`
 description already told the agent that unknown names *"come back in `unknownFields` alongside
 `data`"* — which the flatten makes literally true instead of approximately. Same shape as §5.2: the
 cheaper direction is the one where the fix makes an existing promise true.
 
 ### 7.6 Live verification (2026-08-12, post-deploy)
 
-All four flattened bodies confirmed, plus the §7.2 not-found. `neo_list` with a projection carrying
+All four flattened bodies confirmed, plus the §7.2 not-found. `etendo_list` with a projection carrying
 one bad name — which exercises the flatten and IMP-18's lift in one call:
 
 ```json
@@ -286,7 +286,7 @@ one bad name — which exercises the flatten and IMP-18's lift in one call:
 ```
 
 Flat, `status:0` gone, the three pagination keys intact, and `unknownFields` **at the top level** —
-§7.3's lift-by-rule working end to end, not just in the unit test. `neo_get` returns `{"data":[{…}]}`
+§7.3's lift-by-rule working end to end, not just in the unit test. `etendo_get` returns `{"data":[{…}]}`
 and the missing-id case returns the §7.2 envelope flat:
 
 ```json
@@ -296,15 +296,15 @@ and the missing-id case returns the §7.2 envelope flat:
 ```
 
 **Write half — human-authorized probe on `sales-invoice`, cleaned up in the same run.** A header
-created from `neo_defaults` (plus the two fields §7.6's `unresolvedFields` names, `businessPartner`
-and `partnerAddress`), updated, then deleted: `neo_create` and `neo_update` both return
-`{"data":[{…}]}` flat, and `neo_delete` returns `{"deleted":true,"id":"…"}`. So the five CRUD verbs
+created from `etendo_defaults` (plus the two fields §7.6's `unresolvedFields` names, `businessPartner`
+and `partnerAddress`), updated, then deleted: `etendo_create` and `etendo_update` both return
+`{"data":[{…}]}` flat, and `etendo_delete` returns `{"deleted":true,"id":"…"}`. So the five CRUD verbs
 now agree on one top-level shape, which is the whole claim of the clause. No pre-existing record was
 touched — the probe wrote and removed its own.
 
 ### 7.7 What the probe made visible, and did not fix
 
-The flattened `neo_create` / `neo_update` bodies are ~70 columns wide: every audit flag, every
+The flattened `etendo_create` / `etendo_update` bodies are ~70 columns wide: every audit flag, every
 `$_identifier`, `_computedColumns`, `recordTime`. That is unchanged by this clause — it was equally
 wide inside the wrapper — but flattening puts it in plain sight, and it is **IMP-20** (write-verb
 projection), already on the board. Recorded here as a confirmation of that item's evidence rather

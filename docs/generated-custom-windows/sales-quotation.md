@@ -276,7 +276,7 @@ so the overriding parameter is guaranteed to take effect.
 the order it creates. The handler then reactivates it in the same request,
 running `C_Order_Post` with `DocAction = 'RE'` through `OrderDocActionSupport`.
 That is the same procedure the UI's DocAction button reaches. So the SPA and
-the MCP (`neo_action Convertquotation`) both end with a Draft order; before
+the MCP (`etendo_action Convertquotation`) both end with a Draft order; before
 ETP-5528 an order created through the MCP stayed Completed. The step is
 best-effort only for **reported** failures. If `C_Order_Post` reports a failure,
 or the role has no access to it, the conversion is kept, the order stays

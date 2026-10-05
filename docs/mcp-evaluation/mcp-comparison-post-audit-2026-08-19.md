@@ -67,7 +67,7 @@ physical-inventory document the run created. No `documentAction`, no posting, no
 * **Advanced IMP-28** — `writableVia` live on all three computed product fields; `readOnly` now agrees
   with `visibility`; frozen task 3 passes. Clause 2 (rejecting the read-only write) remains
   deliberately deferred, so the item stays **⚠️ 2.5/5** rather than closing. Evidence: rows E3, E7.
-* **Added IMP-34** — `view:"create"` omits the parent FK on a child entity while `neo_create`
+* **Added IMP-34** — `view:"create"` omits the parent FK on a child entity while `etendo_create`
   requires it (P1, ♻️). Three confirmed instances. Evidence: rows E5, E8, E9.
 * **Added IMP-35** — a derived field states where it is *written* but not where it is *read*, and its
   refresh is asynchronous, so an agent reads `null` and concludes failure (P2, ♻️). Evidence: row E7.
@@ -101,19 +101,19 @@ All rows on `etendo-go-local` @ `00db2ba4` unless marked Holded.
 
 | # | Call | Verbatim result (excerpt) | Establishes |
 |---|---|---|---|
-| E1 | `neo_discover()` | `count: 56` + `guidance.tool: "docs"` | spec inventory unchanged at 56 |
+| E1 | `etendo_discover()` | `count: 56` + `guidance.tool: "docs"` | spec inventory unchanged at 56 |
 | E2 | `list_taxes()` (Holded) | 8 taxes, flat model | reference server healthy |
-| E3 | `neo_schema product/product fields:[eTGOSalePrice,…]` | `"readOnly": true, "visibility": "readOnly", "writableVia": {"spec":"product","entity":"price","note":"Set on the sale price list…"}` | IMP-28 clause 1 + the pointer |
-| E4 | `neo_schema physical-inventory/inventoryLine view:"create"` | hint ends *"This is a child/line entity: before calling neo_create, call neo_defaults with parentId…"* | the child-entity hint |
+| E3 | `etendo_schema product/product fields:[eTGOSalePrice,…]` | `"readOnly": true, "visibility": "readOnly", "writableVia": {"spec":"product","entity":"price","note":"Set on the sale price list…"}` | IMP-28 clause 1 + the pointer |
+| E4 | `etendo_schema physical-inventory/inventoryLine view:"create"` | hint ends *"This is a child/line entity: before calling etendo_create, call etendo_defaults with parentId…"* | the child-entity hint |
 | E5 | same as E4 | `physInventory` absent from both `required` and `optional` | **IMP-34** |
-| E6 | `neo_defaults …/inventoryLine` (no `parentId`) | `notes: ["storageBin: its default needs @M_WAREHOUSE_ID@ from the parent record, but no parentId was given…"]`, `unresolvedFields: []` | `notes` works · **IMP-36** |
-| E7 | `neo_get product/product` after processing inventory | `eTGOSalePrice:35, eTGOPurchasePrice:20, eTGOStock:null` — stock found via sibling `product/stock` as `quantityOnHand:100` | **IMP-35** |
-| E8 | `neo_create product/price` without `product` | `422 validation_error`, `missingFields:[{name:"product",…}]` | IMP-34, second instance |
-| E9 | `neo_schema sales-invoice/lines fields:["invoice","salesInvoice","header"]` | only `invoice` exists, `readOnly:true`, `visibility:"system"` — the rest in `unknownFields` | IMP-34, third instance |
+| E6 | `etendo_defaults …/inventoryLine` (no `parentId`) | `notes: ["storageBin: its default needs @M_WAREHOUSE_ID@ from the parent record, but no parentId was given…"]`, `unresolvedFields: []` | `notes` works · **IMP-36** |
+| E7 | `etendo_get product/product` after processing inventory | `eTGOSalePrice:35, eTGOPurchasePrice:20, eTGOStock:null` — stock found via sibling `product/stock` as `quantityOnHand:100` | **IMP-35** |
+| E8 | `etendo_create product/price` without `product` | `422 validation_error`, `missingFields:[{name:"product",…}]` | IMP-34, second instance |
+| E9 | `etendo_schema sales-invoice/lines fields:["invoice","salesInvoice","header"]` | only `invoice` exists, `readOnly:true`, `visibility:"system"` — the rest in `unknownFields` | IMP-34, third instance |
 | E10 | `generate_aging_receivable({recOrPay:"RECEIVABLES", showDetails:true})` | `{"data":[],"count":0,"meta":{…activeBuckets:4…}}` — **was 422** | aging fix |
-| E11 | `neo_list sales-invoice/header filters:{status:"bogus"}` | `422`, `available:["completed","pending","partial"]`, `hint`, `seeAlso` | IMP-3 self-correcting error holds |
-| E12 | `neo_get` nonexistent id | `404 not_found`, detail names spec/entity/id, `seeAlso` | IMP-5 holds |
-| E13 | `neo_create product/product` with `searchKey:""`, `name:""` | `422`, both fields in `missingFields` | empty-string guard **holds** |
+| E11 | `etendo_list sales-invoice/header filters:{status:"bogus"}` | `422`, `available:["completed","pending","partial"]`, `hint`, `seeAlso` | IMP-3 self-correcting error holds |
+| E12 | `etendo_get` nonexistent id | `404 not_found`, detail names spec/entity/id, `seeAlso` | IMP-5 holds |
+| E13 | `etendo_create product/product` with `searchKey:""`, `name:""` | `422`, both fields in `missingFields` | empty-string guard **holds** |
 | E14 | `create_contact({name:""})` (Holded) | **`200` + `{"id":"6a85da25…"}`** — a real contact with a blank name | Holded validates presence, not content |
 | E15 | catalog scan (Holded) | no `create_invoice` anywhere; invoices are read-only | **structural gap** |
 | E16 | catalog scan (Holded) | no `get_product` / `list_products`; products are write-only | **structural gap** |
@@ -126,7 +126,7 @@ All rows on `etendo-go-local` @ `00db2ba4` unless marked Holded.
 |---|---|---|---|
 | **M1** — calls-to-outcome vs Holded | 1.0× carried | **0.75× on 2 of 5 tasks** | T1/T3 `n/m` (Holded cannot perform), T4 `n/m` (forbidden) |
 | **M2** — first-call success | 67 % carried | **100 % (4/4)** | every executable task passes, blind |
-| **M3** — payload signal ratio | — | ~11 % on `neo_create` product | 3 fields sent, ~50 returned. Approximate: keys counted by hand |
+| **M3** — payload signal ratio | — | ~11 % on `etendo_create` product | 3 fields sent, ~50 returned. Approximate: keys counted by hand |
 | **M4** — self-correctable errors | — | **100 % (5/5)** | E8, E11, E12, E13 + the T5 halves |
 | **Delivery** | 77.5/126 → 62 | 77.5/126 → 62 | unchanged: IMP-28 stays ⚠️, new items enter at ⏳ = 0 |
 | **Coverage** | 6/6 | 6/6 | reports surface re-probed live (E10) |
@@ -166,7 +166,7 @@ round trips before any call. Full reasoning in `/mcp-ace-comparison`.
 
 ## 7. New backlog items
 
-### IMP-34 · `view:"create"` omits the parent FK that `neo_create` requires — P1, ♻️
+### IMP-34 · `view:"create"` omits the parent FK that `etendo_create` requires — P1, ♻️
 
 **BEFORE** (`physical-inventory/inventoryLine`, E5): `required:[product]`, `optional:[lineNo,
 quantityCount, cost, description, storageBin]`. `physInventory` appears in neither, yet the create
@@ -180,12 +180,12 @@ agent probed three candidate names (`invoice`, `salesInvoice`, `header`) to find
 it explicitly (`"send physInventory with the parent's id"`). The server knows the field; the agent
 should not have to guess it.
 
-**Done when:** on all three entities above, a blind agent can assemble a valid `neo_create` body from
-`view:"create"` + `neo_defaults(parentId)` alone, with no name-guessing round trip. **Moves M1.**
+**Done when:** on all three entities above, a blind agent can assemble a valid `etendo_create` body from
+`view:"create"` + `etendo_defaults(parentId)` alone, with no name-guessing round trip. **Moves M1.**
 
 ### IMP-35 · A derived field says where to write it, never where to read it — P2, ♻️
 
-**BEFORE** (E7): after a processed inventory, `neo_get` on the product returns `eTGOStock: null`
+**BEFORE** (E7): after a processed inventory, `etendo_get` on the product returns `eTGOStock: null`
 while the stock is real — `product/stock` reports `quantityOnHand: 100`. `EM_ETGO_Stock` is
 `refresh_mode='Q'` (asynchronous), unlike the prices (`'S'`, immediate). `writableVia` names where to
 write and says nothing about where the value can be read now.
@@ -233,7 +233,7 @@ supply. **Moves M2.**
 
 - **Fewer calls on a read task with real data.** Two calls against seven this morning, and its tool
   *description* pre-warns about partial payments where Etendo hides the same subtlety inside
-  `neo_schema`'s `namedFilters`. Cheap fix, named below.
+  `etendo_schema`'s `namedFilters`. Cheap fix, named below.
 - **Per-call payload.** Etendo remains materially heavier; a create returns ~50 fields for 3 sent.
 - **Domains we do not expose** — CRM, projects, HR, recurring documents.
 
@@ -251,8 +251,8 @@ description into the tool description, where the agent reads it *before* calling
 
 - **`etendo-go-exp` / `etendo-go-staging`** — not probed. Nothing here describes what is released.
 - **Frozen task 4** (complete a sales order) — forbidden in every mode; permanently `n/m`.
-- **`neo_batch`** — not exercised, so IMP-24's batch clause stays unmeasured.
-- **`neo_action` beyond `processNow`** — the actions worth probing complete or post documents.
+- **`etendo_batch`** — not exercised, so IMP-24's batch clause stays unmeasured.
+- **`etendo_action` beyond `processNow`** — the actions worth probing complete or post documents.
 - **The aging report's new message** — unobservable now that resolution succeeds (§4).
 - **The 35 accumulated unit tests** across the four commits — **never executed**. The user reported
   the Java suite green earlier today, which predates `a6a2045c` and `00db2ba4`.

@@ -16,7 +16,7 @@ function_response.response does not match to a display_name in the function_resp
 ```
 
 The id in the message is "Blanquiceleste S.A.". It reaches the model because every row the MCP
-returns carries Etendo's OBRest reference key. Verbatim, from `neo_list` on `contacts`:
+returns carries Etendo's OBRest reference key. Verbatim, from `etendo_list` on `contacts`:
 
 ```json
 {
@@ -89,7 +89,7 @@ Three parts, agreed with the user on 2026-09-14, all of which must land together
 
 1. Stop emitting `$ref` on the **MCP surface only**.
 2. Declare the construction rule once — a reference is `<entityName>/<id>`, and both halves are on
-   every row — in **both** `neo_schema` and the `docs` tool. A constant belongs in the place the
+   every row — in **both** `etendo_schema` and the `docs` tool. A constant belongs in the place the
    agent learns shapes, not repeated on every row.
 3. A regression test asserting no `$ref` survives anywhere in an MCP tool response, nested rows
    included.

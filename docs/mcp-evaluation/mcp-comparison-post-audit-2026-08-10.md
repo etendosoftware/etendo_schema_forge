@@ -21,7 +21,7 @@ for this run — see §2.
   both sides. ⏳ → ✅.
 * **Resolved IMP-10** — `docs` is first-class and the `etendo_neo_*` drift is gone from the live
   Context7 index. ⚠️ → ✅.
-* **Resolved IMP-25** — boolean type normalization in `neo_defaults` (promoted from the registry's
+* **Resolved IMP-25** — boolean type normalization in `etendo_defaults` (promoted from the registry's
   unnumbered candidates, as that entry instructed). Registered and closed in the same run.
 * **Advanced IMP-12** — `view:"create"` ships and works; it still omits required fields on
   `sales-order`. ⏳ → ⚠️.
@@ -32,14 +32,14 @@ for this run — see §2.
 * **Advanced IMP-14** — the tool-name-drift half is live-confirmed; the `fields`/`view` half is
   committed but unpushed, so nothing changed for a live agent. ⏳ → ⚠️.
 * **Added IMP-22** — display-name resolution fails on **context-dependent** FK selectors (P2, ⚙️).
-* **Added IMP-23** — `neo_batch` is not atomic: it reports `committed:false` after committing
+* **Added IMP-23** — `etendo_batch` is not atomic: it reports `committed:false` after committing
   earlier ops (P1, ♻️).
 * **Added IMP-24** — write verbs silently misparse non-ISO dates into corrupt values under
   `status: 0` (P1, ⚙️).
-* **Added IMP-25** — boolean fields typed as strings in `neo_defaults` (P2, ♻️) — already ✅.
+* **Added IMP-25** — boolean fields typed as strings in `etendo_defaults` (P2, ♻️) — already ✅.
 * **Re-confirmed, no change:** IMP-1, IMP-4, IMP-5, IMP-7, IMP-18, IMP-21.
 
-IMP-5's named gap (`neo_batch` leaking raw DAL `status:-4`) **did** close. It stays ⚠️ because the
+IMP-5's named gap (`etendo_batch` leaking raw DAL `status:-4`) **did** close. It stays ⚠️ because the
 same run found two further non-envelope paths in the same tool — see §5.3. IMP-4's two named gaps
 also closed, and it stays ⚠️ for the reason that became IMP-22. Both evidence cells are rewritten.
 
@@ -117,7 +117,7 @@ Task 3 keeps its 2.0× because it remains unanswerable, not because the cost is 
 One malformed input, `"09-08-2026"` (unambiguously day-month-year to a human, and exactly what a
 Spanish-locale agent produces), sent to both MCPs on the same task.
 
-**Etendo GO** — `neo_update` on `sales-order` header `7DDA5EA66DFB436B9681D2E574700445`:
+**Etendo GO** — `etendo_update` on `sales-order` header `7DDA5EA66DFB436B9681D2E574700445`:
 
 ```json
 { "status": 0, "orderDate": "0015-02-16", "accountingDate": "0015-02-16" }
@@ -172,7 +172,7 @@ returns a `sales-order/header` recipe that *does* include `invoiceAddress`, and 
 *does* include `salesOrder`. Two sources of truth for the same contract, and the machine-readable
 one is the incomplete one.
 
-### 5.2 `neo_batch` is not atomic — IMP-23, reproduced a fourth time with the mechanism isolated
+### 5.2 `etendo_batch` is not atomic — IMP-23, reproduced a fourth time with the mechanism isolated
 
 The first probe was **inconclusive and is reported as such**: a batch failed, nothing persisted, and
 that proves nothing — it is equally consistent with real atomicity and with a validation pre-pass
@@ -188,7 +188,7 @@ that never opened a transaction. The discriminating probe: `information_schema` 
 | FK resolution (unknown display name) | `McpToolRouter#resolveBatchFkNames`, **before** the transaction opens | rolls back cleanly — *looks* atomic |
 | Persist (constraint, trigger, DAL) | inside the op, after `DefaultJsonDataService.add` → `commitAndClose` | **prior ops stay committed** |
 
-So "`neo_batch` is not atomic" is true but under-describes it: the tool is atomic for the failure
+So "`etendo_batch` is not atomic" is true but under-describes it: the tool is atomic for the failure
 class the pre-pass catches and non-atomic for every other, which is precisely why three prior runs
 saw it intermittently.
 
@@ -202,15 +202,15 @@ same tool, so IMP-5 stays ⚠️ with a rewritten evidence cell rather than earn
 * FK-resolution failure → flattened `{status, error:"not_found", detail, field, failedAt}` — **no
   `committed` key at all**, and `error` is a bare string where the other path nests an object. An
   agent branching on `committed` cannot read this response.
-* The unknown-named-filter error (§3) arrives as a raw `Error executing neo_list: …` string.
+* The unknown-named-filter error (§3) arrives as a raw `Error executing etendo_list: …` string.
 * Read-verb errors are wrapped as `{"response":{…}}`; write-verb errors are bare. Same envelope,
   two nestings.
 
-### 5.4 IMP-18 re-confirmed — `neo_list` still drops unknown projection names in silence
+### 5.4 IMP-18 re-confirmed — `etendo_list` still drops unknown projection names in silence
 
 `fields:["salePrice","purchasePrice","stock"]` returns the rows with those keys simply absent. No
 `warnings`, no `unknownFields`, no error. **The fix pattern now exists one tool over:** IMP-12
-shipped `unknownFields` on `neo_schema`'s `fields` argument. Same argument name, same tool family,
+shipped `unknownFields` on `etendo_schema`'s `fields` argument. Same argument name, same tool family,
 two behaviors — this is now a consistency defect, not just a missing feature. It is the sole reason
 frozen task 3 still fails.
 
@@ -224,8 +224,8 @@ actions in the catalog. Partial credit to IMP-11: every action now carries `visi
 
 ### 5.6 IMP-22 — display-name resolution fails on context-dependent selectors
 
-`neo_create` on `sales-order/header` rejected `partnerAddress` with 422 `not_found`, using the exact
-`$_identifier` string the read path returns. It is not a bad input: `neo_selectors` for the same
+`etendo_create` on `sales-order/header` rejected `partnerAddress` with 422 `not_found`, using the exact
+`$_identifier` string the read path returns. It is not a bad input: `etendo_selectors` for the same
 column with `recordContext:{businessPartner:…}` returns `label: "Madrid, Avenida Independiente 23"`
 — byte-identical to what the writer rejected. Root cause: the resolver does not consult
 **context-dependent** selectors, whose candidate set only exists relative to a parent field. This is
@@ -269,10 +269,10 @@ consumed. It was not trimmed to fit: two further candidates were deliberately **
 on merit (§8.3), and folding them in would have overrun it. **The next run cannot register a new IMP
 without re-basing the quota, which requires the user's decision.**
 
-Coverage stays 6/6 and the 2026-08-06 caveat is now closed: **`neo_batch` was re-probed this run**,
+Coverage stays 6/6 and the 2026-08-06 caveat is now closed: **`etendo_batch` was re-probed this run**,
 so IMP-4's and IMP-15's batch clauses no longer rest on 2026-08-05 evidence.
 
-**Spec count corrected:** `neo_discover` returns **54 specs = 46 windows + 8 reports**, all 46
+**Spec count corrected:** `etendo_discover` returns **54 specs = 46 windows + 8 reports**, all 46
 carrying `primaryEntity` (IMP-9 holds). Base §5 says "56 = 48 + 8"; that number is stale and must be
 recounted, never carried forward.
 
@@ -288,12 +288,12 @@ Registered as IMP-22 … IMP-25; specifications go in base §12. In priority ord
    naming the value, the expected format and an example, in the IMP-5 envelope. Holded's HTTP 400 is
    the target shape verbatim. This is the highest-value item in the registry: it is the only open
    defect that **destroys data** rather than costing calls.
-2. **IMP-23 (P1)** — make `neo_batch` atomic or stop documenting it as atomic. The honest short-term
+2. **IMP-23 (P1)** — make `etendo_batch` atomic or stop documenting it as atomic. The honest short-term
    move is the documentation fix (already committed in `etendo-go-docs` `18eb0dd`); the real fix is
    one transaction spanning the ops, which means not routing each through `commitAndClose`.
 3. **IMP-22 (P2)** — feed parent-field context into the write-path FK resolver, so a display name
-   that `neo_selectors` returns is a display name `neo_create` accepts.
-4. **IMP-18 (existing, P2)** — port `unknownFields` from `neo_schema` to `neo_list`. Cheapest item
+   that `etendo_selectors` returns is a display name `etendo_create` accepts.
+4. **IMP-18 (existing, P2)** — port `unknownFields` from `etendo_schema` to `etendo_list`. Cheapest item
    on the board relative to its effect: it is the sole blocker on frozen task 3, so closing it moves
    M2 to 100 %.
 
@@ -337,7 +337,7 @@ Two things keep the verdict from being comfortable, and both are Etendo GO's:
 
 * **IMP-24.** An ERP integration that silently stores year 0015 is disqualifying for unattended
   agentic use, whatever the call-count metrics say. Holded gets this right and we do not.
-* **IMP-23.** `neo_batch` is the tool an agent reaches for precisely when partial failure is
+* **IMP-23.** `etendo_batch` is the tool an agent reaches for precisely when partial failure is
   unacceptable, and it is the one tool whose failure mode is undocumented and inconsistent.
 
 Holded's advantage remains breadth of domain (CRM, projects, HR, remittances) — base §9 territory,
@@ -352,26 +352,26 @@ All against `etendo-go-local`, build `a4963b6b`, 2026-08-10, unless the row says
 
 | # | Call | Result | Backs |
 |---|---|---|---|
-| C1 | `neo_discover()` | 54 specs = 46 windows + 8 reports; 46/46 with `primaryEntity` | §7, IMP-9 |
-| C2 | `neo_schema sales-invoice/header view:"create"` | 2 required / 22 optional | IMP-12 |
-| C3 | `neo_create sales-invoice/header` | ✅ first call → `10000021` | task 1, IMP-12 |
-| C4 | `neo_create sales-order/header` ×3 | 422 `not_found` on `partnerAddress` → 422 `validation_error` on `invoiceAddress` → ✅ | IMP-22, IMP-12 |
-| C5 | `neo_selectors sales-order/header partnerAddress` + `recordContext` | returns the identifier the writer rejected | IMP-22 |
-| C6 | `neo_create sales-order/lines`, **no `uOM` sent** | ✅ `"uOM":"100"` / `"Unit"`; no trigger 20111 | **IMP-15** |
-| C7 | `neo_defaults product/alternateUom` | abstains — `missingFields:[{name:"uOM"}]` | `a4963b6b` guard |
-| C8 | `neo_create` with `currency:"EUR"` / `"102"` | both resolve to `102` | IMP-15, IMP-4 |
-| C9 | `neo_batch`, unknown display name | flattened `not_found`, **no `committed`**; nothing persisted | IMP-5, IMP-23 |
-| C10 | `neo_batch`, 281-char description on `varchar(255)` | `committed:false` **and** order `1000027` persisted | **IMP-23** |
-| C11 | `neo_update sales-order/header orderDate:"09-08-2026"` | `status:0`, stored `0015-02-16`, propagated to `accountingDate` | **IMP-24** |
+| C1 | `etendo_discover()` | 54 specs = 46 windows + 8 reports; 46/46 with `primaryEntity` | §7, IMP-9 |
+| C2 | `etendo_schema sales-invoice/header view:"create"` | 2 required / 22 optional | IMP-12 |
+| C3 | `etendo_create sales-invoice/header` | ✅ first call → `10000021` | task 1, IMP-12 |
+| C4 | `etendo_create sales-order/header` ×3 | 422 `not_found` on `partnerAddress` → 422 `validation_error` on `invoiceAddress` → ✅ | IMP-22, IMP-12 |
+| C5 | `etendo_selectors sales-order/header partnerAddress` + `recordContext` | returns the identifier the writer rejected | IMP-22 |
+| C6 | `etendo_create sales-order/lines`, **no `uOM` sent** | ✅ `"uOM":"100"` / `"Unit"`; no trigger 20111 | **IMP-15** |
+| C7 | `etendo_defaults product/alternateUom` | abstains — `missingFields:[{name:"uOM"}]` | `a4963b6b` guard |
+| C8 | `etendo_create` with `currency:"EUR"` / `"102"` | both resolve to `102` | IMP-15, IMP-4 |
+| C9 | `etendo_batch`, unknown display name | flattened `not_found`, **no `committed`**; nothing persisted | IMP-5, IMP-23 |
+| C10 | `etendo_batch`, 281-char description on `varchar(255)` | `committed:false` **and** order `1000027` persisted | **IMP-23** |
+| C11 | `etendo_update sales-order/header orderDate:"09-08-2026"` | `status:0`, stored `0015-02-16`, propagated to `accountingDate` | **IMP-24** |
 | C12 | Holded `create_sales_order date:"09-08-2026"` | **HTTP 400**, names value + format + example | **IMP-24**, §8.2 |
-| C13 | `neo_list sales-invoice filters:{"status":"pending"}` | ✅ first call | task 2, IMP-3 |
-| C14 | `neo_list … filters:{"status":"nonexistent-status-probe"}` | names `completed, pending, partial`; raw string, not enveloped | task 2, IMP-5 |
-| C15 | `neo_list … fields:["salePrice","purchasePrice","stock"]` | keys silently absent, no `warnings` | **IMP-18**, task 3 |
-| C16 | `neo_schema sales-invoice/header view:"actions"` | 22 actions; raw labels, 8 `required:true`, `businessCritical:false`; `visibility`+`userRequired` present | task 4, IMP-21, IMP-11 |
-| C17 | `neo_get sales-invoice/header id:"000…0"` | clean 404 envelope with `seeAlso` | task 5, IMP-5 |
-| C18 | `docs(topic:"creating records")` | real recipes, source URLs, `neo_*` names only — and **more complete than `view:"create"`** | **IMP-10**, IMP-12 |
-| C19 | `neo_defaults` boolean fields | real JSON `true`/`false`, not `"Y"`/`"N"` | **IMP-25** |
-| C20 | `neo_delete` ×4 + `SELECT` sweep | 0 `%MCP-BENCHMARK%` rows in 4 tables | §2 |
+| C13 | `etendo_list sales-invoice filters:{"status":"pending"}` | ✅ first call | task 2, IMP-3 |
+| C14 | `etendo_list … filters:{"status":"nonexistent-status-probe"}` | names `completed, pending, partial`; raw string, not enveloped | task 2, IMP-5 |
+| C15 | `etendo_list … fields:["salePrice","purchasePrice","stock"]` | keys silently absent, no `warnings` | **IMP-18**, task 3 |
+| C16 | `etendo_schema sales-invoice/header view:"actions"` | 22 actions; raw labels, 8 `required:true`, `businessCritical:false`; `visibility`+`userRequired` present | task 4, IMP-21, IMP-11 |
+| C17 | `etendo_get sales-invoice/header id:"000…0"` | clean 404 envelope with `seeAlso` | task 5, IMP-5 |
+| C18 | `docs(topic:"creating records")` | real recipes, source URLs, `etendo_*` names only — and **more complete than `view:"create"`** | **IMP-10**, IMP-12 |
+| C19 | `etendo_defaults` boolean fields | real JSON `true`/`false`, not `"Y"`/`"N"` | **IMP-25** |
+| C20 | `etendo_delete` ×4 + `SELECT` sweep | 0 `%MCP-BENCHMARK%` rows in 4 tables | §2 |
 
 `posted: "N"` is **not** a boolean defect — it is a list reference with three or more values, and a
 string is the correct representation. It is excluded from IMP-25 on purpose.
@@ -391,11 +391,11 @@ be read standalone. **Every run report must end with this section** — see the 
 
 | # | What it is | Closed |
 |---|---|---|
-| **IMP-2** | Field projection + `view:"summary"` on `neo_list`/`neo_get` | 2026-08-03 |
-| **IMP-3** | Business query semantics on `neo_list` — named filters + range operators | 2026-08-03 |
+| **IMP-2** | Field projection + `view:"summary"` on `etendo_list`/`etendo_get` | 2026-08-03 |
+| **IMP-3** | Business query semantics on `etendo_list` — named filters + range operators | 2026-08-03 |
 | **IMP-6** | Actions-only discovery view (`view:"actions"`) | 2026-08-03 |
-| **IMP-8** | `neo_selectors` argument alias + self-correcting error | 2026-08-03 |
-| **IMP-9** | `primaryEntity` exposed in `neo_discover` | 2026-08-03 |
+| **IMP-8** | `etendo_selectors` argument alias + self-correcting error | 2026-08-03 |
+| **IMP-9** | `primaryEntity` exposed in `etendo_discover` | 2026-08-03 |
 | **IMP-10** | `docs` as a first-class tool + tool-name drift removed from the corpus | **2026-08-10** |
 | **IMP-15** | One FK contract across every write verb — ids, legacy ids and display names all resolve | **2026-08-10** |
 | **IMP-25** | Booleans emitted as real JSON `true`/`false`, not `"Y"`/`"N"` | **2026-08-10** |
@@ -405,7 +405,7 @@ be read standalone. **Every run report must end with this section** — see the 
 | # | Status | What it is |
 |---|---|---|
 | **IMP-24** | ⏳ | Write verbs accept non-ISO dates and silently store garbage (`09-08-2026` → year 0015). **The only open defect that destroys data.** |
-| **IMP-23** | ⏳ | `neo_batch` is not atomic despite documenting that it is — ops before the failure stay committed. |
+| **IMP-23** | ⏳ | `etendo_batch` is not atomic despite documenting that it is — ops before the failure stay committed. |
 | **IMP-16** | ⚠️ | The write half is missing: strict date parsing. Same wound as IMP-24, seen from the emit side. |
 | **IMP-12** | ⚠️ | `view:"create"` omits genuinely required fields on `sales-order` (`invoiceAddress`, `orderDate`, the parent FK `salesOrder`). |
 | **IMP-11** | ⚠️ | 1,422 fields across 89 uncurated MCP-exposed entities still carry neither `visibility` nor `userRequired`; staging unverified. |
@@ -416,12 +416,12 @@ be read standalone. **Every run report must end with this section** — see the 
 
 | # | Status | What it is |
 |---|---|---|
-| **IMP-18** | ⏳ | `neo_list` drops unknown names in a `fields` projection in silence. **Cheapest item on the board** — sole blocker on frozen task 3, so closing it alone takes M2 from 80 % to 100 %, and the fix pattern already exists on `neo_schema`. |
+| **IMP-18** | ⏳ | `etendo_list` drops unknown names in a `fields` projection in silence. **Cheapest item on the board** — sole blocker on frozen task 3, so closing it alone takes M2 from 80 % to 100 %, and the fix pattern already exists on `etendo_schema`. |
 | **IMP-21** | ⏳ | Actions catalog uncurated: raw column labels, 8 buttons flagged `required`, `businessCritical:false` on `documentAction` and `posted`. The reason M4 did not move. |
-| **IMP-22** | ⏳ | The write-path FK resolver ignores **context-dependent** selectors, so it rejects a display name `neo_selectors` itself returns. |
+| **IMP-22** | ⏳ | The write-path FK resolver ignores **context-dependent** selectors, so it rejects a display name `etendo_selectors` itself returns. |
 | **IMP-17** | ⏳ | Callout and routing errors arrive raw, outside the IMP-5 envelope. |
 | **IMP-19** | ⏳ | The report-generator contract is untyped — `parameters` is a free-form object, so the first call always fails. |
-| **IMP-20** | ⏳ | `neo_create`/`neo_update` return ~80 fields with no way to project. |
+| **IMP-20** | ⏳ | `etendo_create`/`etendo_update` return ~80 fields with no way to project. |
 | **IMP-13** | ⏳ | `businessCritical` and `namedFilters` authored on 3 and 2 of 246 entities; validator rule F11 missing. |
 | **IMP-14** | ⚠️ | The remaining half is committed but **unpushed with no PR**, and Context7 serves from `main` — no live agent sees it. |
 | **IMP-4** | ⚠️ | Both original clauses closed; held at half credit for what became IMP-22. |

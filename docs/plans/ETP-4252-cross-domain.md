@@ -2,7 +2,7 @@
 
 **Feature:** Configurable `agentPrompt` text at spec and field level that flows
 from `decisions.json` through the pipeline to the database and is returned in the
-NEO Headless MCP responses (`neo_discover` per spec, `neo_schema` per field).
+NEO Headless MCP responses (`etendo_discover` per spec, `etendo_schema` per field).
 
 This PR is approved as cross-domain because the Schema Forge side spans the
 pipeline generators (`generator-change`), the NEO writer (`cli/src/neo-writer.js`),
@@ -46,7 +46,7 @@ in its own PR.
 - `ETGO_SF_SPEC.AGENT_PROMPT` (CLOB) and `ETGO_SF_FIELD.AGENT_PROMPT` (VARCHAR 2000)
   columns + AD_Column / AD_Element metadata.
 - `McpToolRouterSupport.buildDiscoverSpec` / field summary +
-  `loadPromptByColumnId` → return `agentPrompt` in `neo_discover` / `neo_schema`.
+  `loadPromptByColumnId` → return `agentPrompt` in `etendo_discover` / `etendo_schema`.
 - `SFUpsertSpec` / `SFUpsertField` webhooks accept an optional `AgentPrompt` param.
 
 ## Tests

@@ -364,7 +364,7 @@ Spec name: `not-posted-documents`. Entity: `header`. Java_Qualifier: `not-posted
 `servesActions()` returning `true`** (ETP-4254). The MCP catalog hides a type-`W` spec whose
 entities are all handler-backed *and* declare no `/action` route — that rule exists for the
 dashboard's widgets, and this spec has the same shape. Dropping the declaration removes the spec
-from `neo_discover`, from the CRUD tool enums and from `neo_action`, taking `post` / `bulk-post`
+from `etendo_discover`, from the CRUD tool enums and from `etendo_action`, taking `post` / `bulk-post`
 away from agents. The React page is unaffected either way (`NeoRequestRouter` never consults
 `hasSpecAccess`), so the regression is invisible in the UI. See
 [`../agentic-validation/agentic-write-exposure-criteria.md`](../agentic-validation/agentic-write-exposure-criteria.md) §6

@@ -4,17 +4,17 @@
 |---|---|
 | **Registry row** | [`mcp-improvements-registry.md`](../mcp-improvements-registry.md) §3 — **P2**, cohort C4, 0 / 3, ⚙️ signature change |
 | **Specification** | [post-audit 2026-08-10](../mcp-comparison-post-audit-2026-08-10.md) — registered from **C4, C5** |
-| **Evidence** | C4, C5 (2026-08-10) — `neo_create` on `sales-order/header` rejected `partnerAddress` with 422 `not_found`, using the **byte-identical** `$_identifier` that `neo_selectors` returns for the same column when given a `recordContext` |
+| **Evidence** | C4, C5 (2026-08-10) — `etendo_create` on `sales-order/header` rejected `partnerAddress` with 422 `not_found`, using the **byte-identical** `$_identifier` that `etendo_selectors` returns for the same column when given a `recordContext` |
 | **Repo** | `com.etendoerp.go` |
 | **Blocks** | **IMP-4** (⚠️ 1.5 / 3). IMP-4's two original clauses are closed; its remaining clause *is* this item |
 | **Implemented** | 2026-08-11 (`c3ce6c5e`) — **live verification owed** |
 
 ## 1. The defect, and why it is not a bad input
 
-The read path and the write path disagreed about the same string. `neo_selectors` on
+The read path and the write path disagreed about the same string. `etendo_selectors` on
 `C_BPartner_Location_ID`, given `recordContext:{businessPartner:…}`, returns
 `label:"Madrid, Avenida Independiente 23"`. Sending that exact label back as `partnerAddress` on
-`neo_create` produced a 422 `not_found`.
+`etendo_create` produced a 422 `not_found`.
 
 So an agent doing the correct thing — read the selector, use what it returned — got a rejection for a
 value the server had just handed it. That is worse than an unsupported feature, because the agent has
@@ -129,11 +129,11 @@ outcome by a path that could not generalize.
 Ran against the deployed build, `sales-order` / `header`, exactly the vector that opened the item:
 
 ```
-neo_selectors partnerAddress recordContext:{businessPartner:"6BD084B9C1744044B9691AD373F96A93"}
+etendo_selectors partnerAddress recordContext:{businessPartner:"6BD084B9C1744044B9691AD373F96A93"}
   → { id: "20363AD155354047AD5E52D8A93D9465",
       label: "San Sebastian, C/ EUSTASIO AMILIBIA 10, 7º 4ª" }
 
-neo_create fields:{ businessPartner: "Tercero España",
+etendo_create fields:{ businessPartner: "Tercero España",
                     partnerAddress:  "San Sebastian, C/ EUSTASIO AMILIBIA 10, 7º 4ª", … }
   → 200, C_Order 79441FC15F3742088DC94BE0D435CD92, documentNo 1000030, DR
      partnerAddress = 20363AD155354047AD5E52D8A93D9465
@@ -149,14 +149,14 @@ The remaining §7 box is not ours: the registry is only re-scored by a `/mcp-com
 
 ### 7.2 A different field blocked the same call — `invoiceAddress`
 
-The first `neo_create` attempt, carrying every `userRequired` field, still failed:
+The first `etendo_create` attempt, carrying every `userRequired` field, still failed:
 
 ```
 422 validation_error — "Missing required fields that could not be auto-resolved"
 missingFields: [ { name: "invoiceAddress", column: "BillTo_ID", type: "foreignKey" } ]
 ```
 
-`invoiceAddress` is `required: true` in `neo_schema` but `visibility: "discarded"`, and the same
+`invoiceAddress` is `required: true` in `etendo_schema` but `visibility: "discarded"`, and the same
 response's own hint says *"Fields with visibility=discarded are excluded — do not send them"*. The
 call only succeeded once I sent it anyway. So an agent that follows the documented contract cannot
 create a sales order, and the only way through is to break the rule the tool just stated.
@@ -194,7 +194,7 @@ across all three layers after the user's push and `export.database`:
 |---|---|
 | `etgo_sf_field` | `ISINCLUDED='Y'`, `ISREADONLY='N'`, `VISIBILITY='editable'` — exactly `mapVisibility('editable')` |
 | `ETGO_SF_FIELD.xml` | the *only* rows changed: `N`→`Y` and `discarded`→`editable`, nothing else touched |
-| `neo_schema view:"create"` | `invoiceAddress` now under **`required`**, `hasSelector:true`, `requiredCount: 4` |
+| `etendo_schema view:"create"` | `invoiceAddress` now under **`required`**, `hasSelector:true`, `requiredCount: 4` |
 
 The last row is the one that closes the loop the §7.2 above opened: the create view now *asks* for
 the field whose 422 it previously could not explain, so an agent following the documented contract
@@ -234,7 +234,7 @@ context, so they exercise pass 0, not the retry loop.
 ## 2026-08-13 — verified live by a `/mcp-comparison` run (job B); registry row moved 🔧 → ✅
 
 The live verification this file was pending has happened, on `etendo-go-local`, build `8f0d1cce`:
-`neo_create` on `sales-order/header` accepted the partner's address **by display name on the first
+`etendo_create` on `sales-order/header` accepted the partner's address **by display name on the first
 call**. The 422 `not_found` retry loop the 08-10 run measured is gone. Registry §3 moved the row
 🔧 → ✅ and 0 → 3/3.
 

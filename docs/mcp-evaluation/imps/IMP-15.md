@@ -7,7 +7,7 @@
 | **Evidence** | W3, W8, B11, B15 (2026-08-05 / 2026-08-06) |
 | **Repo** | `com.etendoerp.go` |
 | **Implemented** | 2026-08-07, commits `12dd847f` + `2df04cd1` + `b64af873` + `845e9363` on `feature/ETP-4793` |
-| **Live probe** | 2026-08-07 on `etendo-go-local`, four rounds — §9. **All four clauses pass** as of the `845e9363` deploy; the `uOM` secondary failed rounds 1–3 and was root-caused from the container log (§9.5), then verified green on both `neo_create` and `neo_batch` (§9.6). |
+| **Live probe** | 2026-08-07 on `etendo-go-local`, four rounds — §9. **All four clauses pass** as of the `845e9363` deploy; the `uOM` secondary failed rounds 1–3 and was root-caused from the container log (§9.5), then verified green on both `etendo_create` and `etendo_batch` (§9.6). |
 
 This file records **what shipped**. It changes no status mark and no MARI figure — those move only
 through a `/mcp-comparison` run. `2df04cd1` has **not been compiled or deployed**; the credit for
@@ -15,12 +15,12 @@ this item therefore depends on a run against an `etendo-go-local` rebuilt past t
 
 ## 1. The defect, restated in one line each
 
-| Verb | `currency: "102"` (the id `neo_defaults` returns) | `currency: "EUR"` (a display name) |
+| Verb | `currency: "102"` (the id `etendo_defaults` returns) | `currency: "EUR"` (a display name) |
 |---|---|---|
-| `neo_create` | **422** `not_found`, detail: *"pass the exact record id instead"* | ✅ resolved (IMP-4) |
-| `neo_batch` | ✅ accepted | **raw DAL** `status: -4`, *"New object Currency(null) (key: EUR_Currency) refered to but not present in the import set"* |
+| `etendo_create` | **422** `not_found`, detail: *"pass the exact record id instead"* | ✅ resolved (IMP-4) |
+| `etendo_batch` | ✅ accepted | **raw DAL** `status: -4`, *"New object Currency(null) (key: EUR_Currency) refered to but not present in the import set"* |
 
-The contract contradicted itself in **opposite directions per verb**, and the `neo_create` failure
+The contract contradicted itself in **opposite directions per verb**, and the `etendo_create` failure
 advised exactly what the caller had already done.
 
 ## 2. Fix 1 — `McpFkResolver` is id-first
@@ -59,9 +59,9 @@ The old text advised *"pass the exact record id instead"* — emitted precisely 
 Now:
 
 > `No match for 'currency'='Ünknown': it is neither the id of an existing record nor a value any
-> selector matched. Use neo_selectors to find a valid one.`
+> selector matched. Use etendo_selectors to find a valid one.`
 
-## 4. Fix 2 — `neo_batch` routes through the same resolver
+## 4. Fix 2 — `etendo_batch` routes through the same resolver
 
 `McpToolRouter.handleBatch` runs a new pre-pass, `resolveBatchFkNames(operations)`, **before**
 `BatchService.executeBatch` — i.e. before the transaction opens, so a resolution failure never
@@ -90,7 +90,7 @@ Useful for a REST caller; for an agent it was a raw DAL payload with no code to 
 ```
 
 **The translation lives in the MCP layer, not in `BatchService`** — that class serves both the REST
-`/batch` endpoint and `neo_batch`, and the REST contract (plus any non-MCP caller reading `detail`)
+`/batch` endpoint and `etendo_batch`, and the REST contract (plus any non-MCP caller reading `detail`)
 must stay untouched. `McpToolRouterSupport.toMcpBatchFailure(result)` rewrites the failure **in
 place**:
 
@@ -121,7 +121,7 @@ Two new codes in `McpConstants`: `ERROR_SERVER`, `ERROR_METHOD_NOT_ALLOWED`.
 
 `NeoCrudHandler.executePostCreate` calls `NeoCommercialLinePolicy.injectProductDerivedUomIfMissing`,
 which reads `C_UOM_ID` from the line's product. MCP's `handleCreate` runs its **own** pipeline and
-never called it, so a line body that `neo_schema` reported as complete died inside the DAL with a
+never called it, so a line body that `etendo_schema` reported as complete died inside the DAL with a
 bare `500 "Unit of Measure mismatch (product/transaction)"` — and the value was only recoverable
 from an undocumented key in the product selector's response. `handleCreate` now runs the same
 injection (the method was widened from package-private to `public static`).
@@ -176,7 +176,7 @@ does — but that path was never the one populating `uOM` here.
    `warn`. It was never firing at all, so the JDBC was not what failed — but the `debug` is
    genuinely part of why this stayed hidden.
 2. **The batch pre-pass.** `12dd847f` wired only `handleCreate`, and the assumption was that
-   `neo_batch` therefore never ran the injection. **That assumption was wrong**:
+   `etendo_batch` therefore never ran the injection. **That assumption was wrong**:
    `BatchService#createRecord` dispatches through `NeoCrudHandler#handleDefault`, which reaches
    `executePostCreate` (`NeoCrudHandler.java:385`) and runs the injection natively. The pre-pass
    earns its keep for a different reason than the one it was written for: it puts `uOM` in the body
@@ -215,25 +215,25 @@ than a convenience.
 
 ## 7. Contract documentation
 
-* `ToolRegistry` — `neo_batch`'s `body` description now states the format parity outright ("in the
-  same format `neo_create` accepts: a record id (32-char hex **or a legacy numeric one such as
+* `ToolRegistry` — `etendo_batch`'s `body` description now states the format parity outright ("in the
+  same format `etendo_create` accepts: a record id (32-char hex **or a legacy numeric one such as
   '102'**) or a display name"), and the return-shape sentence documents the new envelope and its
   four codes.
 * `com.etendoerp.go/docs/neo-headless.md` §4.12.3 retitled *"FK resolution on the write verbs
   (IMP-4, extended to every verb by IMP-15)"*, with the id-first rationale and the `$ref:` rule; new
-  §4.12.4 documents the `neo_batch` failure envelope.
+  §4.12.4 documents the `etendo_batch` failure envelope.
 
 ## 8. Test coverage against A.7's "done when"
 
 | A.7 clause | Covered by |
 |---|---|
-| identical `fields` body succeeds on both verbs | both verbs share `McpFkResolver`; `neo_batch` now calls it (`resolveBatchFkNames`) — **verified live**, §10 |
+| identical `fields` body succeeds on both verbs | both verbs share `McpFkResolver`; `etendo_batch` now calls it (`resolveBatchFkNames`) — **verified live**, §10 |
 | regression test: legacy numeric id | `McpFkResolverTest.legacyNumericIdResolves` |
 | regression test: UUID | `McpFkResolverTest.uuidShortCircuits` (asserts *no* DAL and *no* selector interaction) |
 | regression test: display name | `McpFkResolverTest.displayNameResolvesViaSelector` |
 | …on each verb | the resolver is the single shared code path both verbs take; `skippedValueIsUntouched` covers the batch-only `$ref:` rule |
 | no raw `status: -4` on any batch error path | `McpToolRouterSupportTest.rewritesTheFailure` (asserts the serialized error contains no `-4`), `mapsStatusesToCodes`, `extractsDalMessages`, `passesThroughNonFailures` |
-| `uOM` never 500s on `sales-order/lines` | ✅ **verified live in round four** (§9.6) — after failing three times (`12dd847f`, `2df04cd1`, `b64af873`). Fixed in `845e9363`; the line now creates on the first call with `uOM: "100"` derived from the product, on `neo_create` and `neo_batch` alike |
+| `uOM` never 500s on `sales-order/lines` | ✅ **verified live in round four** (§9.6) — after failing three times (`12dd847f`, `2df04cd1`, `b64af873`). Fixed in `845e9363`; the line now creates on the first call with `uOM: "100"` derived from the product, on `etendo_create` and `etendo_batch` alike |
 
 ## 9. Live write probe — 2026-08-07, `etendo-go-local`
 
@@ -244,19 +244,19 @@ tagged `MCP-BENCHMARK 2026-08-07` in `description` and deleted afterwards; dispo
 
 | Clause | Verdict | Evidence |
 |---|---|---|
-| Fix 1 — id-first resolver | ✅ | `currency: "102"` passed on `neo_create`; the record persisted with `currency: "102"`. Pre-IMP-15 this was a 422. |
-| Fix 1b — `not_found` wording | ✅ | The new text ("neither the id of an existing record nor a value any selector matched … Use `neo_selectors`") came back live — which also **proves the deploy contained IMP-15**, making every other verdict here attributable. |
+| Fix 1 — id-first resolver | ✅ | `currency: "102"` passed on `etendo_create`; the record persisted with `currency: "102"`. Pre-IMP-15 this was a 422. |
+| Fix 1b — `not_found` wording | ✅ | The new text ("neither the id of an existing record nor a value any selector matched … Use `etendo_selectors`") came back live — which also **proves the deploy contained IMP-15**, making every other verdict here attributable. |
 | Fix 2 — batch routes through the resolver | ✅ | `currency: "EUR"` (a display name) passed on the batch **header** op; the batch's failure was at index 1, the line. Pre-IMP-15 the header op died with a raw DAL `status: -4`. |
 | Fix 3 — batch failures get the IMP-5 envelope | ✅ | `{"committed":false,"failedAt":{"index":1,"id":"l1"},"error":{"status":500,"error":"server_error","detail":"Operation 'l1' rejected by server: Unit of Measure mismatch (product/transaction)","seeAlso":"docs(topic:\"creating records\")"}}` — no `status: -4` anywhere. |
-| Secondary — `uOM` | ✅ *(round four)* | Message 20111 on both verbs in rounds 1–3; `2df04cd1` and `b64af873` **fixed neither**. Root-caused in round three from the container log and fixed in `845e9363`; verified green on `neo_create` and `neo_batch` in §9.6. |
+| Secondary — `uOM` | ✅ *(round four)* | Message 20111 on both verbs in rounds 1–3; `2df04cd1` and `b64af873` **fixed neither**. Root-caused in round three from the container log and fixed in `845e9363`; verified green on `etendo_create` and `etendo_batch` in §9.6. |
 
 Side confirmations from the same calls, worth carrying into the next run report: **IMP-16** looks
 healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no year-12 corruption) and
-**IMP-12** works (`neo_schema view:"create"` returned 3 required / 8 optional with the full hint).
+**IMP-12** works (`etendo_schema view:"create"` returned 3 required / 8 optional with the full hint).
 
 ### 9.2 Three defects the probe surfaced — candidate IMPs, no status touched
 
-1. **`neo_batch` is not atomic, despite documenting that it is.** `BatchService`'s own javadoc says
+1. **`etendo_batch` is not atomic, despite documenting that it is.** `BatchService`'s own javadoc says
    it "commits everything or rolls back everything", and §8 of the base report lists transactional
    integrity as an Etendo GO *strength* over Holded. It does not hold. Each op reaches
    `DefaultJsonDataService.add`, which ends in `OBDal.getInstance().commitAndClose()`
@@ -267,11 +267,11 @@ healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no ye
    (`MCP-BENCHMARK 2026-08-07 IMP-15 batch`) both survived as orphan headers with **zero lines**,
    both `committed:false`. This is the most serious finding of the probe: an agent told
    `committed:false` will retry, and each retry leaves another orphan draft document.
-2. **`neo_schema view:"create"` omits a genuinely required field.** For `sales-order/header` it
-   listed `businessPartner`, `warehouse` and `partnerAddress`, and `neo_create` then rejected the
+2. **`etendo_schema view:"create"` omits a genuinely required field.** For `sales-order/header` it
+   listed `businessPartner`, `warehouse` and `partnerAddress`, and `etendo_create` then rejected the
    body demanding **`invoiceAddress`** (`BillTo_ID`). A required-field list that is not sufficient
    defeats the whole point of IMP-12 — M2 cannot reach 100 % while it is wrong.
-3. **A raw, envelope-less error survives on `neo_create`.** The line create returned bare
+3. **A raw, envelope-less error survives on `etendo_create`.** The line create returned bare
    `Unit of Measure mismatch (product/transaction)` with no `status`, no `error` code and no
    `seeAlso` — the batch path now wraps its failures (Fix 3) but the direct create path does not.
    IMP-17 territory.
@@ -280,8 +280,8 @@ healthy (`orderDate` and `accountingDate` both came back ISO `2026-08-07`, no ye
 
 | Record | Disposition |
 |---|---|
-| `sales-order/lines` `2CB30C1339ED46F6AA854FFDDBA7EE36` | deleted (`neo_delete` → `deleted: true`) |
-| `sales-order/header` `E37B444431A340048EA009A1DB50EB50` | deleted (`neo_delete` → `deleted: true`) |
+| `sales-order/lines` `2CB30C1339ED46F6AA854FFDDBA7EE36` | deleted (`etendo_delete` → `deleted: true`) |
+| `sales-order/header` `E37B444431A340048EA009A1DB50EB50` | deleted (`etendo_delete` → `deleted: true`) |
 | `sales-order/header` `C507C03963B64955B5AB33FB02E7C006` (`1000020`) | orphan left by the non-atomic batch — deleted afterwards, and *that it existed at all* is finding §9.2.1 |
 | `sales-order/header` `1FE5335E766C49E5903991036B8B9DC1` (`1000017`) | **not deleted** — predates this run (2026-08-05); same orphan pattern, left in place as standing evidence for §9.2.1 |
 
@@ -292,14 +292,14 @@ diagnosis in §6.
 
 | Step | Result |
 |---|---|
-| `neo_create` `sales-order/header` (`1000021`, id `931FB816…`) | ✅ created; `currency: "102"` resolved again |
-| `neo_create` `sales-order/lines`, no `uOM` | ❌ first attempt returned a **clean IMP-5 envelope** — `{status:422, error:"validation_error", missingFields:[{name:"orderDate", column:"DateOrdered"}], hint:…, seeAlso:…}`. Worth noting on its own: the line's `orderDate` is required but is not surfaced by `neo_schema view:"create"` either, the same defect class as §9.2.2. |
+| `etendo_create` `sales-order/header` (`1000021`, id `931FB816…`) | ✅ created; `currency: "102"` resolved again |
+| `etendo_create` `sales-order/lines`, no `uOM` | ❌ first attempt returned a **clean IMP-5 envelope** — `{status:422, error:"validation_error", missingFields:[{name:"orderDate", column:"DateOrdered"}], hint:…, seeAlso:…}`. Worth noting on its own: the line's `orderDate` is required but is not surfaced by `etendo_schema view:"create"` either, the same defect class as §9.2.2. |
 | …retried with `orderDate` | ❌ `Unit of Measure mismatch (product/transaction)`, raw and envelope-less — §9.2.3 again |
 | Deployed bytecode check | `2df04cd1` **was** live (`grep -a` found `injectLineUomIfApplicable` in the deployed `McpToolRouter.class`), which is what ruled out a stale deploy |
 | Product `D627916D…` ("Fernet") | `c_uom_id = 100` — so injecting it would have satisfied the trigger, proving the injection never ran |
 
 Fixed — as it turned out, *not* — in `b64af873`. Data disposition: header
-`931FB816B09347CEA4E447498C5A1AB1` deleted (`neo_delete` → `deleted: true`); no line was ever
+`931FB816B09347CEA4E447498C5A1AB1` deleted (`etendo_delete` → `deleted: true`); no line was ever
 created, so nothing else to clean.
 
 ### 9.5 Third probe round — 2026-08-07, after the `b64af873` deploy
@@ -309,14 +309,14 @@ real diagnosis, because it stopped theorising and read the container log.
 
 | Step | Result |
 |---|---|
-| `neo_create` `sales-order/header` (`1000022`, id `488023AD…`) | ✅ created; `currency: "102"` resolved again |
-| `neo_create` `sales-order/lines`, no `uOM` | ❌ `Unit of Measure mismatch (product/transaction)`, raw and envelope-less |
+| `etendo_create` `sales-order/header` (`1000022`, id `488023AD…`) | ✅ created; `currency: "102"` resolved again |
+| `etendo_create` `sales-order/lines`, no `uOM` | ❌ `Unit of Measure mismatch (product/transaction)`, raw and envelope-less |
 | Control probe: same body with `uOM: "0"` | ❌ but *differently* — a clean `422 not_found` on `uOM` from `McpFkResolver`, which proves FK resolution runs on `uOM` before the injection and that the sentinel path was never the live one |
 | Deployed bytecode check (`javap -c -p`) | `b64af873` **was** live: the disassembly shows the `""` / `"0"` / `"null"` guard byte-for-byte. Bytecode verification ruled out a stale deploy for the second round running — and still explained nothing |
 | **`docker logs etendo-tomcat-1`** | **decisive.** The callout answered `"uOM":{"value":"100","_identifier":"Unit"}`, yet the failing INSERT bound `C_UOM_ID = 'ADF850C3E6E9413B9F9EEA5C87456073'` = **Centimeter**. The body's `uOM` was real, valid and wrong — see §6 |
 
 Fixed in `845e9363`. Data disposition: header `488023AD74834049BA81635364CAEDAC` deleted
-(`neo_delete` → `deleted: true`); no line was created. One leftover remains repo-wide — order
+(`etendo_delete` → `deleted: true`); no line was created. One leftover remains repo-wide — order
 `1000017` (`1FE5335E766C49E5903991036B8B9DC1`, `MCP-BENCHMARK 2026-08-05 batch`), the orphan header
 from the non-atomic batch in §9.2.1; it is kept deliberately as evidence for that defect.
 
@@ -327,13 +327,13 @@ from the non-atomic batch in §9.2.1; it is kept deliberately as evidence for th
 | Step | Result |
 |---|---|
 | Deployed signature check | `javap -p` shows `injectProductDerivedUomIfMissing(JSONObject, boolean)` — the two-argument form, so `845e9363` is live |
-| `neo_create` `sales-order/header` (`1000023`, id `096ECE05…`) | ✅ created; `currency: "102"` resolved |
-| `neo_create` `sales-order/lines`, **no `uOM` sent** | ✅ **first call, no corrections** — response carries `"uOM": "100"`, `"uOM$_identifier": "Unit"`. Message 20111 is gone |
-| `neo_batch` header + line with `$ref:h1`, no `uOM` | ✅ `{"committed":true,"operations":[{"id":"h1","ok":true,…},{"id":"l1","ok":true,…}]}` — the display name `currency:"EUR"` resolved on the header op and the line got the right UOM. **First end-to-end green batch of the whole exercise** |
+| `etendo_create` `sales-order/header` (`1000023`, id `096ECE05…`) | ✅ created; `currency: "102"` resolved |
+| `etendo_create` `sales-order/lines`, **no `uOM` sent** | ✅ **first call, no corrections** — response carries `"uOM": "100"`, `"uOM$_identifier": "Unit"`. Message 20111 is gone |
+| `etendo_batch` header + line with `$ref:h1`, no `uOM` | ✅ `{"committed":true,"operations":[{"id":"h1","ok":true,…},{"id":"l1","ok":true,…}]}` — the display name `currency:"EUR"` resolved on the header op and the line got the right UOM. **First end-to-end green batch of the whole exercise** |
 
 Two incidental observations from the same round, both worth carrying forward:
 
-* **`neo_schema view:"create"` under-reports again**, third occurrence. The header create failed its
+* **`etendo_schema view:"create"` under-reports again**, third occurrence. The header create failed its
   first attempt on `invoiceAddress` *and* `partnerAddress`, neither surfaced by the create view —
   same defect class as §9.2.2, now observed on `sales-order/header` (×2 fields), `sales-order/lines`
   (`orderDate`) and here. The failure itself was a clean IMP-5 envelope naming both fields, so the
@@ -346,7 +346,7 @@ Two incidental observations from the same round, both worth carrying forward:
   import set"*) rather than a validation error naming the unknown op id.
 
 Data disposition: `1000023` + its line, and the batch's `1000024` and the successful batch pair, all
-deleted via `neo_delete` (`deleted: true` on each). One leftover remains repo-wide — order `1000017`
+deleted via `etendo_delete` (`deleted: true` on each). One leftover remains repo-wide — order `1000017`
 (`1FE5335E766C49E5903991036B8B9DC1`, `MCP-BENCHMARK 2026-08-05 batch`), kept deliberately as standing
 evidence for §9.2.1.
 
@@ -366,7 +366,7 @@ evidence for §9.2.1.
    carries a comment saying so, so nobody "simplifies" it away later. The companion case asserts a
    caller-supplied `uOM` survives untouched with `obDal.verifyNoInteractions()`. **Not yet run.**
 4. **Register the §9.2 defects** in the registry as new items, plus the line-level `orderDate`
-   omission found in §9.4 (same class as §9.2.2 — `neo_schema view:"create"` under-reporting
+   omission found in §9.4 (same class as §9.2.2 — `etendo_schema view:"create"` under-reporting
    required fields, now observed on both `header` and `lines`).
 5. **Consider a defect for `tryInjectFirstFromLookup` itself.** Preselecting the alphabetically
    first combo option for a mandatory FK is FIC parity by design, but for `C_UOM_ID` on a
@@ -409,7 +409,7 @@ one folded:
 
 | §9.2 defect | Disposition |
 |---|---|
-| `neo_batch` is not atomic | **IMP-23** (P1). Reproduced a fourth time, and the mechanism finally isolated: FK-resolution failures fail in the pre-pass *before* the transaction opens and so roll back cleanly, while **persist-time** failures leave prior ops committed. That discriminator explains why three earlier runs saw it intermittently — including §9.6's clean `committed:true`, which was never evidence of atomicity |
+| `etendo_batch` is not atomic | **IMP-23** (P1). Reproduced a fourth time, and the mechanism finally isolated: FK-resolution failures fail in the pre-pass *before* the transaction opens and so roll back cleanly, while **persist-time** failures leave prior ops committed. That discriminator explains why three earlier runs saw it intermittently — including §9.6's clean `committed:true`, which was never evidence of atomicity |
 | `view:"create"` omits required fields | Folded into **IMP-12** (its own remit), which advanced ⏳ → ⚠️ rather than resolving. `partnerAddress` is fixed; `invoiceAddress`, the line-level `orderDate` from §9.4, and the parent FK `salesOrder` are not. Sharpened: `docs(topic:"creating records")` returns a recipe that **does** list `invoiceAddress` and `salesOrder`, so the correct contract exists — the machine-readable view is the incomplete one |
 | raw line-create error outside the envelope | Folded into **IMP-5**, together with the `$ref` leak from round four. IMP-5's own named gap (raw DAL `status:-4`) **did** close here, but it stays ⚠️ because the batch envelope now differs *by failure class*: the FK-resolution path returns a flattened shape with **no `committed` key** at all |
 

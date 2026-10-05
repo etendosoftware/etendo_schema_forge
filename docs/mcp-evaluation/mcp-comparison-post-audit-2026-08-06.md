@@ -35,10 +35,10 @@ forward. Records created and their disposition:
 
 **Nothing was left undeleted.** No pre-existing record was modified — every write acted on a record
 this run created. **No completion or posting action was fired** on either side: no `documentAction`,
-no `posted`, no Holded `approve_*` / `send_*` / `ship_*` / `receive_*`. The `neo_action` surface was
+no `posted`, no Holded `approve_*` / `send_*` / `ship_*` / `receive_*`. The `etendo_action` surface was
 scored on read-only inspection of its catalog and contract, as Step 0 requires.
 
-**Not probed:** `neo_batch` (not authorised for this run). IMP-4's and IMP-15's `neo_batch` clauses
+**Not probed:** `etendo_batch` (not authorised for this run). IMP-4's and IMP-15's `etendo_batch` clauses
 therefore still rest on 2026-08-05 evidence and were **not** re-verified — they are carried forward,
 not re-confirmed.
 
@@ -51,27 +51,27 @@ All Etendo rows are `etendo-go-local` @ `c597c7c2`; all Holded rows are the demo
 
 | # | Call | Result |
 |---|---|---|
-| B1 | `neo_widget(kpis)` | ✅ 4 KPI objects, `{key,label,value,format,trend,icon}`. Compact, no projection needed |
-| B2 | `neo_widget(pending-amounts)` | ✅ `{toCollect:{count:2,amount:5267.8}, toPay:{count:1,amount:327.5}}` |
+| B1 | `etendo_widget(kpis)` | ✅ 4 KPI objects, `{key,label,value,format,trend,icon}`. Compact, no projection needed |
+| B2 | `etendo_widget(pending-amounts)` | ✅ `{toCollect:{count:2,amount:5267.8}, toPay:{count:1,amount:327.5}}` |
 | B3 | `generate_tax_report({}, format:"csv")` | ❌ `{"error":{"message":"dateFrom and dateTo are required","status":400}}` — flat envelope, and the tool schema declares `parameters` as an untyped object, so the first call cannot be right |
 | B4 | `generate_tax_report({dateFrom,dateTo}, format:"csv")` | ✅ Rich nested JSON (`purchase`/`sales` × `summaryByCategory`/`summaryByRate`) with a `meta` block echoing every applied default. **`format:"csv"` ignored — JSON returned** |
 | B5 | `generate_inventory_stock_report({}, format:"csv")` | ✅ 8 rows, warehouse × product × `qtyOnHand`/`unitCost`/`totalValuation`. Needs no parameters — undiscoverable from the schema. `format` ignored again |
-| B6 | `neo_schema(sales-invoice, header, view:"required")` | ❌ **Call failed against the client token limit.** 61,963 chars / 157 fields. `view:"required"` is out of the declared enum (`["actions"]`); the response was the full dump. **0 of 157 fields carry `visibility`; 0 carry `userRequired`** — yet the response `hint` reads *"Fields with `userRequired=true`: MUST be provided in neo_create. Fields with `visibility=system` … omit them"*, and the tool description promises `visibility (editable/readOnly/system/discarded)`. The only usable signal is `required`, the raw AD `IsMandatory`: **52 fields**, including `id`, `documentNo` (both `readOnly`), **10 buttons**, 6 computed totals, and ~20 fields from unrelated localisation modules (`aeatsii*`, `etvfac*`, `tbai*`, `etblkp*`). Positives: 103/157 have `description`; labels curated; `businessCritical:true` on `businessPartner`; `hasSelector`/`selectorType` present; `namedFilters` present with prose |
-| B7 | `neo_schema(sales-order, header, view:"actions")` | ✅ 19 actions. `documentAction` carries an outstanding `agentPrompt` (state machine, preconditions, which `actionValues` are out of flow) plus `actionValues` and `actionParameter:"docAction"`. **But** 13 of 19 `label`s are raw column names (`RM_ReceiveMaterials`, `EM_Psd2_Generate Bank Payment`, `RM_PickFromShipment`); 10 buttons carry `required:true`; **`businessCritical:false` on `documentAction` and `posted`** — the two that book accounting entries |
-| B8 | `neo_list(product, product, fields:["name","salePrice","purchasePrice","stock"])` | ⚠️ Returned `id` + `name` only. The three unknown names were **dropped in silence** — no error, no `warnings`. Frozen task 3 is unanswerable on this spec and the agent has no way to learn that |
-| B9 | `docs(topic:"creating records")` | ⚠️ Resolves to real, detailed recipes — but **every snippet uses `etendo_neo_*`** (`etendo_neo_create`, `_list`, `_batch`, `_action`, `_selectors`, `_defaults`); the real names are `neo_*`. Argument lists also omit the shipped `fields` and `view` params. Dates in the corpus are correctly ISO throughout |
-| B10 | `neo_defaults(sales-invoice, header, view:"grouped")` | ✅ `confirm` / `systemManaged` / `metadata` with `$_identifier` sidecars. **But** `metadata.unresolvedFields` is `[]` while required `partnerAddress` is `""`, and `invoiceDate` is `"06-08-2026"` while `accountingDate` is `"2026-08-06"` — two date formats in one payload |
-| B11 | `neo_create(sales-invoice, header)` — **first attempt**, values taken verbatim from B10 | ❌ `{"status":422,"error":"not_found","detail":"No match for 'currency'='102'. Use neo_selectors to search, or pass the exact record id instead.","field":"currency"}`. **`102` came from `neo_defaults` and *is* the exact record id** (`C_Currency_ID`, legacy numeric) — the hint's advice is impossible to follow |
+| B6 | `etendo_schema(sales-invoice, header, view:"required")` | ❌ **Call failed against the client token limit.** 61,963 chars / 157 fields. `view:"required"` is out of the declared enum (`["actions"]`); the response was the full dump. **0 of 157 fields carry `visibility`; 0 carry `userRequired`** — yet the response `hint` reads *"Fields with `userRequired=true`: MUST be provided in etendo_create. Fields with `visibility=system` … omit them"*, and the tool description promises `visibility (editable/readOnly/system/discarded)`. The only usable signal is `required`, the raw AD `IsMandatory`: **52 fields**, including `id`, `documentNo` (both `readOnly`), **10 buttons**, 6 computed totals, and ~20 fields from unrelated localisation modules (`aeatsii*`, `etvfac*`, `tbai*`, `etblkp*`). Positives: 103/157 have `description`; labels curated; `businessCritical:true` on `businessPartner`; `hasSelector`/`selectorType` present; `namedFilters` present with prose |
+| B7 | `etendo_schema(sales-order, header, view:"actions")` | ✅ 19 actions. `documentAction` carries an outstanding `agentPrompt` (state machine, preconditions, which `actionValues` are out of flow) plus `actionValues` and `actionParameter:"docAction"`. **But** 13 of 19 `label`s are raw column names (`RM_ReceiveMaterials`, `EM_Psd2_Generate Bank Payment`, `RM_PickFromShipment`); 10 buttons carry `required:true`; **`businessCritical:false` on `documentAction` and `posted`** — the two that book accounting entries |
+| B8 | `etendo_list(product, product, fields:["name","salePrice","purchasePrice","stock"])` | ⚠️ Returned `id` + `name` only. The three unknown names were **dropped in silence** — no error, no `warnings`. Frozen task 3 is unanswerable on this spec and the agent has no way to learn that |
+| B9 | `docs(topic:"creating records")` | ⚠️ Resolves to real, detailed recipes — but **every snippet uses `etendo_neo_*`** (`etendo_neo_create`, `_list`, `_batch`, `_action`, `_selectors`, `_defaults`); the real names are `etendo_*`. Argument lists also omit the shipped `fields` and `view` params. Dates in the corpus are correctly ISO throughout |
+| B10 | `etendo_defaults(sales-invoice, header, view:"grouped")` | ✅ `confirm` / `systemManaged` / `metadata` with `$_identifier` sidecars. **But** `metadata.unresolvedFields` is `[]` while required `partnerAddress` is `""`, and `invoiceDate` is `"06-08-2026"` while `accountingDate` is `"2026-08-06"` — two date formats in one payload |
+| B11 | `etendo_create(sales-invoice, header)` — **first attempt**, values taken verbatim from B10 | ❌ `{"status":422,"error":"not_found","detail":"No match for 'currency'='102'. Use etendo_selectors to search, or pass the exact record id instead.","field":"currency"}`. **`102` came from `etendo_defaults` and *is* the exact record id** (`C_Currency_ID`, legacy numeric) — the hint's advice is impossible to follow |
 | B12 | retry with `currency:"EUR"` | ❌ `validation_error`, `missingFields:[partnerAddress]` + `hint` + `seeAlso`. Excellent error; contradicts B10's `unresolvedFields:[]` |
 | B13 | retry with `partnerAddress` resolved | ❌ **`La fecha de operación no puede ser posterior a la fecha de la factura.`** — a raw, untranslated Spanish callout string, no JSON envelope, no `status`, no `field`. Root cause: B10's `"06-08-2026"` was silently misparsed |
 | B14 | retry with `invoiceDate:"2026-08-06"` | ✅ Created `F4136A8A…`, `documentNo 10000020`, `documentStatus:"DR"`. Response is ~80 fields incl. `_computedColumns`, `recordTime`. **It echoes `currency:"102"`** |
-| B15 | `neo_update` passing back B14's own `currency:"102"` | ❌ Same `not_found` as B11. **The output of a write verb is not valid input to a write verb** — the round-trip is broken |
-| B16 | retry with `currency:"EUR"` | ✅ Updated. FK-by-name confirmed on `neo_update` (previously credited only on `neo_create`) |
-| B17 | `neo_get(sales-invoice, header, id:"DOES-NOT-EXIST-…")` | ✅ `{"status":404,"error":"not_found","detail":"No sales-invoice/header with id …","seeAlso":"docs(topic:\"reading records\")"}` |
-| B18 | `neo_list(sales-invoice, header, filters:{status:"pending"})` | ✅ 3 rows. IMP-3 works as specified |
-| B19 | `neo_list(…, filters:{status:"totally-not-a-filter"})` | ✅ `Unknown status '…' for entity 'header'. Available: completed, pending, partial` — self-correcting, exactly as IMP-3 specified |
-| B20 | `neo_list(product, header, …)` | ⚠️ `Entity not found: header` — raw string, no envelope, **no list of valid entities** |
-| B21 | `neo_delete(sales-invoice, header, F4136A8A…)` | ✅ `{"deleted":true,"id":"F4136A8A…"}` |
+| B15 | `etendo_update` passing back B14's own `currency:"102"` | ❌ Same `not_found` as B11. **The output of a write verb is not valid input to a write verb** — the round-trip is broken |
+| B16 | retry with `currency:"EUR"` | ✅ Updated. FK-by-name confirmed on `etendo_update` (previously credited only on `etendo_create`) |
+| B17 | `etendo_get(sales-invoice, header, id:"DOES-NOT-EXIST-…")` | ✅ `{"status":404,"error":"not_found","detail":"No sales-invoice/header with id …","seeAlso":"docs(topic:\"reading records\")"}` |
+| B18 | `etendo_list(sales-invoice, header, filters:{status:"pending"})` | ✅ 3 rows. IMP-3 works as specified |
+| B19 | `etendo_list(…, filters:{status:"totally-not-a-filter"})` | ✅ `Unknown status '…' for entity 'header'. Available: completed, pending, partial` — self-correcting, exactly as IMP-3 specified |
+| B20 | `etendo_list(product, header, …)` | ⚠️ `Entity not found: header` — raw string, no envelope, **no list of valid entities** |
+| B21 | `etendo_delete(sales-invoice, header, F4136A8A…)` | ✅ `{"deleted":true,"id":"F4136A8A…"}` |
 | B22 | Holded `create_contact` → `create_sales_order` → `delete_sales_order` → `delete_contact` | ✅ **Both creates succeeded on the first call**, from the tool schema alone. Both deletes returned **empty bodies** — an agent cannot distinguish success from a swallowed error |
 
 ### 3.1 A note on three findings I could not attribute
@@ -86,7 +86,7 @@ unknown names were dropped server-side (→ IMP-18).
 
 ## 4. Delta against the registry
 
-* **Added IMP-16** — one date format across `neo_defaults` and the write verbs (P1, ⚙️) — B10, B13.
+* **Added IMP-16** — one date format across `etendo_defaults` and the write verbs (P1, ⚙️) — B10, B13.
 * **Added IMP-17** — wrap callout + routing errors in the IMP-5 envelope (P2, ♻️) — B13, B20.
 * **Added IMP-18** — report unknown names in a `fields` projection (P2, ⚙️ additive) — B8.
 * **Added IMP-19** — type the report-generator contract (P2, ⚙️) — B3, B4, B5.
@@ -143,7 +143,7 @@ silent acceptance costs correctness — but B8 shows Etendo is not immune to the
 **M2 = 2 of 5** on the frozen suite. Task 1 (create an invoice) fails on the first call — B11. Task 3
 (product with sale price, purchase price, stock) fails — B8, and is in fact unanswerable. Task 2
 (pending invoices) scores **0 despite B18 succeeding**, because the only documented way to learn the
-valid filter names is `neo_schema`, and that call cannot complete (B6) — a chain failure counts as a
+valid filter names is `etendo_schema`, and that call cannot complete (B6) — a chain failure counts as a
 failure. Task 4 (action discovery) and task 5 (nonexistent read + invalid write) both succeed
 first-call.
 
@@ -180,9 +180,9 @@ The run reorders the backlog. IMP-15 was the standing top priority; it is now se
    the response `hint` and the tool description both instruct the agent to filter on two keys that do
    not exist, leaving `required` (52 fields, 10 of them buttons) as the only signal. This is the root
    cause of M2 on the write path.
-2. **IMP-15** — unify the FK contract. B11 and B15 prove `neo_create`'s own output is not valid input
-   to `neo_create` or `neo_update`. Fixing the legacy-numeric-id fallback closes the loop.
-3. **IMP-12** — a create-shaped `neo_schema` projection. B6 is not merely wasteful; the call **fails**.
+2. **IMP-15** — unify the FK contract. B11 and B15 prove `etendo_create`'s own output is not valid input
+   to `etendo_create` or `etendo_update`. Fixing the legacy-numeric-id fallback closes the loop.
+3. **IMP-12** — a create-shaped `etendo_schema` projection. B6 is not merely wasteful; the call **fails**.
    Every downstream task that needs field names inherits that failure (see task 2's M2 score).
 4. **IMP-16** — one date format. Cheap, and it removes an error that currently surfaces as an
    untranslated Spanish string about an unrelated field.

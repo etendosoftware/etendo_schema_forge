@@ -23,7 +23,7 @@ The wave verified. Four items advanced on live evidence and **MARI moved 79 → 
 
 But the headline result of this run is not a status flip — it is a defect. IMP-28 clause 2 (*reject a
 client-sent value on a curated read-only field*) is **implemented, unit-tested, green, and
-unreachable from the verb it was written for**. `neo_create` accepted `grandTotalAmount: 9999` and
+unreachable from the verb it was written for**. `etendo_create` accepted `grandTotalAmount: 9999` and
 `documentStatus: "CO"` on a zero-line draft order and persisted both. Two independent causes were
 root-caused in source and DB and registered as **IMP-30** and **IMP-31**.
 
@@ -34,7 +34,7 @@ a method with no caller is not evidence of delivery** — the two halves of IMP-
 code paths.
 
 The complementary finding is the good one, and it is a *refutation* of the item's own fear: read-only
-**entities** are properly protected. `neo_update` on `product/stock` returns **405** with a message
+**entities** are properly protected. `etendo_update` on `product/stock` returns **405** with a message
 an agent can act on without a retry. The gap is read-only **fields on writable entities**, which have
 no protection at all.
 
@@ -50,7 +50,7 @@ is replaced by the disposition table below.
 
 Rules honoured: every created record carries `MCP-BENCHMARK 2026-08-13` in its description; no
 pre-existing record was mutated; no completion or posting action was fired (`documentAction` /
-`posted` were never sent); `neo_delete` was used **only** on records this run created.
+`posted` were never sent); `etendo_delete` was used **only** on records this run created.
 
 ### 2.2 Records created and their disposition
 
@@ -86,7 +86,7 @@ run's authorization does not carry forward. So **no write was issued to Holded**
 M1 and M2 for Etendo GO are likewise **carried**, not re-measured: job A probed write *behaviour*
 (what the server accepts and rejects), not first-call *cost* on the frozen suite. One incidental
 cost observation is recorded as a shadow figure in registry §2.1 footnote ⁸ and **excluded** from the
-metric: the `sales-order` create cost **6 calls cold**, with the first `neo_create` failing 422
+metric: the `sales-order` create cost **6 calls cold**, with the first `etendo_create` failing 422
 `not_found` on `invoiceAddress`.
 
 ---
@@ -96,10 +96,10 @@ metric: the `sales-order` create cost **6 calls cold**, with the first `neo_crea
 * **Advanced IMP-17** — routing errors verified live inside the IMP-5 envelope, carrying `available`,
   `field`, `hint` and `tool`. Callout half not exercised (§2.2). 0 → 3/3, ✅.
 * **Advanced IMP-18** — read half confirmed, **write half confirmed still open**. 0 → 1.5/3, ⚠️.
-* **Advanced IMP-24** — ambiguity rejection verified on `neo_create` **and** `neo_update`, closing the
-  checkbox that was blocked on the update verb. `neo_batch` clause unprobed. 0 → 2.5/5, ⚠️.
+* **Advanced IMP-24** — ambiguity rejection verified on `etendo_create` **and** `etendo_update`, closing the
+  checkbox that was blocked on the update verb. `etendo_batch` clause unprobed. 0 → 2.5/5, ⚠️.
 * **Advanced IMP-28** — entity half verified, field half failed. ⏳ open → ⚠️ partial, 0 → 2.5/5.
-* **Added IMP-30** — `neo_create` bypasses the read-only rejection path entirely (P1, ♻️).
+* **Added IMP-30** — `etendo_create` bypasses the read-only rejection path entirely (P1, ♻️).
 * **Added IMP-31** — the `Java_Qualifier` read-only exemption is all-or-nothing per entity (P1, ⚙️).
 * **Added IMP-32** — `_identifier` renders dates day-first while the API demands ISO on input (P2, ♻️).
 * **Added IMP-33** — write-verb routing errors send the agent to the *reading* docs topic (P3, ♻️).
@@ -121,8 +121,8 @@ are listed here so §3 stays the complete delta for the day; neither moved MARI.
 
 ### 3.1 A correction made during this run
 
-Mid-run I told the user *"IMP-18 ya no reproduce"* on the strength of a `neo_list` probe. That was
-wrong: the registered gap is in the **write** verbs, and `neo_list` is the half that already works.
+Mid-run I told the user *"IMP-18 ya no reproduce"* on the strength of a `etendo_list` probe. That was
+wrong: the registered gap is in the **write** verbs, and `etendo_list` is the half that already works.
 The write verbs were then probed and the gap **does** reproduce (§5, A5–A6). The claim is recorded
 here rather than silently replaced, per the skill's rule on superseded diagnoses.
 
@@ -144,12 +144,12 @@ precedent set 2026-08-10.
 
 | Surface | 08-13 (A) | Note |
 |---|---|---|
-| Read verbs | ✅ | `neo_list`, `neo_get`, `neo_schema`, `neo_discover` all exercised |
-| Write — Etendo | ⚠️ | `neo_create` / `neo_update` / `neo_delete` probed live; **`neo_batch` not re-probed** |
+| Read verbs | ✅ | `etendo_list`, `etendo_get`, `etendo_schema`, `etendo_discover` all exercised |
+| Write — Etendo | ⚠️ | `etendo_create` / `etendo_update` / `etendo_delete` probed live; **`etendo_batch` not re-probed** |
 | Write — Holded | ⚠️ | Not probed — outside this run's authorization (§2.3) |
-| `neo_update` | ✅ | Probed on a writable entity *and* on a read-only one (405) |
-| `neo_action` | ⚠️ | Not exercised — no action may be fired that completes or posts a document |
-| `neo_widget` / generators | ⚠️ | Not re-probed; carried from job B |
+| `etendo_update` | ✅ | Probed on a writable entity *and* on a read-only one (405) |
+| `etendo_action` | ⚠️ | Not exercised — no action may be fired that completes or posts a document |
+| `etendo_widget` / generators | ⚠️ | Not re-probed; carried from job B |
 
 Coverage component of MARI = **6 / 6 → 100**: every surface is covered, four of them by this run's
 own evidence and two by carried evidence, each annotated above.
@@ -163,23 +163,23 @@ report (prefix `A`) so they cannot collide with the base report's §11 numbering
 
 | # | Call | Result | Backs |
 |---|---|---|---|
-| A1 | `neo_create sales-order/header` with display names (`invoiceAddress: "Juan Perez"`) | **422** `not_found`, `field: "invoiceAddress"`, detail names the tool to use next (`neo_selectors`) | IMP-5 envelope live; the first of the 6 calls the cold create cost |
-| A2 | `neo_create` called with `data:` instead of `fields:` | **422** `validation_error`, `field: "fields"`, `hint`, `seeAlso`, `tool: "neo_create"` | **IMP-17** — a routing error, fully wrapped |
-| A3 | `neo_create sales-order/header`, `orderDate: "03-04-2026"` | **422** `validation_error`, `reason: "ambiguous"`, `candidates: ["2026-04-03","2026-03-04"]`, `expectedFormat`, `example`, `hint` — **no record created** | **IMP-24** |
-| A4 | `neo_update sales-order/header`, `orderDate: "03-04-2026"` | **422**, identical envelope | **IMP-24** — closes the update-verb checkbox |
-| A5 | `neo_create sales-order/header` with `esteCampoNoExiste: "x"` and `totalPaidAmount: 500` | **200**, record created, **no `unknownFields` key** | **IMP-18** — write half still open |
-| A6 | `neo_update` on that record with the same two unknown names | **200**, **no `unknownFields` key** | **IMP-18** — same gap on the update verb |
-| A7 | `neo_list sales-invoice/header`, `fields: [..., "esteCampoNoExiste"]` | **200** with `"unknownFields": ["esteCampoNoExiste","totalPaidAmount"]` | **IMP-18** — read half works |
-| A8 | `neo_update product/stock` | **405** `method_not_allowed` — *"This entity is read-only by configuration … Do not retry this CRUD operation."* | **IMP-28** entity half — and a **refutation** of §8.4 |
-| A9 | `neo_create sales-order/header` with `grandTotalAmount: 9999` and `documentStatus: "CO"` | **200** — both persisted verbatim on a zero-line, `processed: false` draft | **IMP-30**, **IMP-31** |
+| A1 | `etendo_create sales-order/header` with display names (`invoiceAddress: "Juan Perez"`) | **422** `not_found`, `field: "invoiceAddress"`, detail names the tool to use next (`etendo_selectors`) | IMP-5 envelope live; the first of the 6 calls the cold create cost |
+| A2 | `etendo_create` called with `data:` instead of `fields:` | **422** `validation_error`, `field: "fields"`, `hint`, `seeAlso`, `tool: "etendo_create"` | **IMP-17** — a routing error, fully wrapped |
+| A3 | `etendo_create sales-order/header`, `orderDate: "03-04-2026"` | **422** `validation_error`, `reason: "ambiguous"`, `candidates: ["2026-04-03","2026-03-04"]`, `expectedFormat`, `example`, `hint` — **no record created** | **IMP-24** |
+| A4 | `etendo_update sales-order/header`, `orderDate: "03-04-2026"` | **422**, identical envelope | **IMP-24** — closes the update-verb checkbox |
+| A5 | `etendo_create sales-order/header` with `esteCampoNoExiste: "x"` and `totalPaidAmount: 500` | **200**, record created, **no `unknownFields` key** | **IMP-18** — write half still open |
+| A6 | `etendo_update` on that record with the same two unknown names | **200**, **no `unknownFields` key** | **IMP-18** — same gap on the update verb |
+| A7 | `etendo_list sales-invoice/header`, `fields: [..., "esteCampoNoExiste"]` | **200** with `"unknownFields": ["esteCampoNoExiste","totalPaidAmount"]` | **IMP-18** — read half works |
+| A8 | `etendo_update product/stock` | **405** `method_not_allowed` — *"This entity is read-only by configuration … Do not retry this CRUD operation."* | **IMP-28** entity half — and a **refutation** of §8.4 |
+| A9 | `etendo_create sales-order/header` with `grandTotalAmount: 9999` and `documentStatus: "CO"` | **200** — both persisted verbatim on a zero-line, `processed: false` draft | **IMP-30**, **IMP-31** |
 | A10 | `SELECT c.name, f.isincluded, f.isreadonly, f.visibility, f.defaultvalue …` on `etgo_sf_field` | Both fields `isincluded=Y, isreadonly=Y, visibility=readOnly`, `defaultvalue` NULL | Refutes the "config gap" hypothesis for A9 |
 | A11 | Call-site search for `filterCreateRequest` across `com.etendoerp.go` | `NeoCrudHelper.java:201`, `NeoCrudHandler.java:626` — **zero in `src/com/etendoerp/go/mcp/`** | **IMP-30** root cause |
 | A12 | `SELECT e.name, e.java_qualifier FROM etgo_sf_entity …` for `sales-order` | `header → salesOrderHeaderHandler`, `lines → orderLineHandler`, other 10 NULL | **IMP-31** root cause |
-| A13 | 5 × `neo_delete` on the records of §2.2 | `{"deleted": true}` × 5 | Cleanup |
+| A13 | 5 × `etendo_delete` on the records of §2.2 | `{"deleted": true}` × 5 | Cleanup |
 
 A8's message deserves quoting in full, because it is the single best error string either MCP produced
 this run: it names the entity, names the spec, lists the enabled methods, explains *why*, points at
-the two verbs that would work, notes that a separately configured `neo_action` might still exist, and
+the two verbs that would work, notes that a separately configured `etendo_action` might still exist, and
 ends with an explicit **"Do not retry"**. That last clause is what stops an agent burning calls.
 
 ---
@@ -198,7 +198,7 @@ The item bundled two guarantees. This run separates them:
 
 Clause 4 of the item remains open and unprobed.
 
-### 6.2 IMP-30 — `neo_create` bypasses the read-only rejection path entirely
+### 6.2 IMP-30 — `etendo_create` bypasses the read-only rejection path entirely
 
 Full investigation: [`imps/IMP-30.md`](imps/IMP-30.md).
 
@@ -212,7 +212,7 @@ the two.
 What makes this more than a routine miss is A11 + A10 together: the curation is correct, the
 rejection is correct, the unit tests are green — and the two never meet on the MCP path.
 
-The tempting cheap fix, named so it can be refused: making `neo_schema view:"create"` merely *omit*
+The tempting cheap fix, named so it can be refused: making `etendo_schema view:"create"` merely *omit*
 these fields. That improves the hint and changes nothing about what the server accepts.
 
 ### 6.3 IMP-31 — the `Java_Qualifier` exemption is all-or-nothing per entity
@@ -244,11 +244,11 @@ deliberate call rather than an oversight — see §7.4, which also records how i
 
 ### 7.1 The `seeAlso` on a write-verb routing error points at the read docs
 
-A2 returned, on a **`neo_create`** failure:
+A2 returned, on a **`etendo_create`** failure:
 
 ```json
 "seeAlso": "docs(topic:\"reading records\")",
-"tool": "neo_create"
+"tool": "etendo_create"
 ```
 
 The envelope correctly names the failing tool as a write verb and then sends the agent to the reading
@@ -339,7 +339,7 @@ cannot read first. Etendo GO's read/write parity is structural, not a feature li
 | **M4** — probe coverage | 6 / 6 | **6 / 6** | Four surfaces on this run's evidence, two carried (§4) |
 
 The shadow cost figure, excluded from M1 by design: the `sales-order` create took **6 calls cold**,
-the first `neo_create` failing 422 `not_found` on `invoiceAddress`. It is not on the frozen suite and
+the first `etendo_create` failing 422 `not_found` on `invoiceAddress`. It is not on the frozen suite and
 must not be mixed into the series.
 
 ---
@@ -459,7 +459,7 @@ they are measured in job B runs.
    and is not.
 3. **`schema_forge` is committed and unpushed** on `feature/ETP-4793`; `com.etendoerp.go` `0cb67084`
    is already pushed. This skill does not push.
-4. **`neo_batch` and `neo_action` remain unprobed** for the read-only-field question. `neo_action` will
+4. **`etendo_batch` and `etendo_action` remain unprobed** for the read-only-field question. `etendo_action` will
    stay that way under the current rules: the actions worth probing complete or post documents.
 5. **ACE-p is still blocked** on the 401 at `tools/list`. It has been blocked across several runs and
    will not unblock itself.
