@@ -491,6 +491,9 @@ export default function AccountTreeView({
   sortDirection,
   onColumnsReady,
   onRecordCountChange,
+  // View-only window (runtime read-only tier or decisions `window.readOnly`): the status
+  // switch is shown but cannot be flipped.
+  windowReadOnly = false,
   // Accepted but intentionally unused — ListView always passes them
   entity: _entity,
   specName: _specName,
@@ -615,6 +618,7 @@ export default function AccountTreeView({
   const [savingActiveToggles, setSavingActiveToggles] = useState({});
 
   const handleActiveToggle = useCallback((item, nextChecked) => {
+    if (windowReadOnly) return;
     const toggleKey = `${item.id}:active`;
     runInlineToggleRequest({
       apiBaseUrl,
@@ -631,7 +635,7 @@ export default function AccountTreeView({
     }).catch((err) => {
       console.error('[AccountTreeView] Failed to toggle account active status:', err);
     });
-  }, [apiBaseUrl, token, refetchFull, ui]);
+  }, [apiBaseUrl, token, refetchFull, ui, windowReadOnly]);
 
   // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
@@ -797,7 +801,7 @@ export default function AccountTreeView({
                 onRowClick={handleRowClick}
                 ui={ui}
                 activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
-                activeDisabled={!!savingActiveToggles[toggleKey]}
+                activeDisabled={windowReadOnly || !!savingActiveToggles[toggleKey]}
                 onActiveToggle={handleActiveToggle}
                 data-testid="AccountTreeRow__c9cb6e" />
             );

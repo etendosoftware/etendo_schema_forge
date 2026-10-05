@@ -670,6 +670,11 @@ effect; a non-number puts the badge back on the page size. `window.hideRecordCou
 Do not call `useSetPageMeta` from the slot for this: `setMeta` replaces the whole meta, so two
 writers would overwrite each other. Destructure it out of any DOM spread, like `userRefreshTrigger`.
 
+`ListView` also forwards **`windowReadOnly`** (ETP-5593). It is the same view-only flag that hides
+New, Print and bulk delete in the toolbar: the runtime read-only access tier, or `window.readOnly`. A
+custom table with its own inline edits must disable them when it is `true`. The chart-of-accounts
+status switch does this. `DataTable` ignores the flag.
+
 **The toolbar Share button copies the page URL (ETP-5593).** The link button in `ListView`'s idle
 bar (`list-share-link`, hidden by `hideLink`) had no handler on any list; it now calls
 `useCopyPageLink()` (`hooks/useCopyLinkAction.js`), which copies `window.location.href` with the

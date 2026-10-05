@@ -1143,6 +1143,10 @@ export function ListView({
     clearSelectionTrigger: clearSelectionCounter,
     userRefreshTrigger: userRefreshCounter,
     onRecordCountChange: setTableRecordCount,
+    // ETP-5593 — the same view-only flag that gates the toolbar's New/Print/bulk delete,
+    // so a custom table with its own inline edits (the chart-of-accounts status switch)
+    // can disable them. DataTable ignores it.
+    windowReadOnly,
     deselectTrigger,
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,

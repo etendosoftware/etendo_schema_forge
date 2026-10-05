@@ -11,7 +11,7 @@ Maintain the account master used by finance users and provide a quick, read-only
 - Delete an account through the standard generated entity flow.
 - The tree does not show debit, credit, or balance: those YTD columns were never rendered, and ETP-5593 removed them from the tree's column list (they only leaked into Sort and Print).
 - Filter the tree by code/name (search box) or account type from the list toolbar row — matches on displayed leaf or virtual-folder code/name (including letter-suffixed codes such as `430A`) retain the matching folder and its relevant descendants, while account-type filtering remains applied to leaves; non-matching branches are hidden.
-- Deactivate or reactivate an existing subaccount directly from the tree via an inline toggle (protected `0000`-suffixed placeholder subaccounts cannot be toggled).
+- Deactivate or reactivate an existing subaccount directly from the tree via an inline toggle. Protected `0000`-suffixed placeholder subaccounts cannot be toggled, and nor can any subaccount when the window is read-only (the runtime read-only tier, or `window.readOnly`). In that case the switch still shows the status but is disabled, and "Nueva subcuenta" is hidden (ETP-5593).
 - Toggle whether the account is active directly from the tree row; the form's own `isActive` control follows the same live-toggle behavior rather than staying read-only.
 
 ## Interaction model

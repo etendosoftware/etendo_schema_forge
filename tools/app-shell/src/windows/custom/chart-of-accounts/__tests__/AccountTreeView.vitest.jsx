@@ -736,6 +736,28 @@ describe('AccountTreeView', () => {
       expect(toast.error).toHaveBeenCalled();
     });
 
+    // ETP-5593 QA — a read-only user must not be able to flip a sub-account's status.
+    it('disables every status toggle and sends no PATCH when the window is read-only', async () => {
+      const data = [{ ...DATA[0], active: true }, { ...DATA[1], active: false }];
+      renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={data} windowReadOnly />);
+      await waitFor(() => expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('account-tree-toggle-group-4000'));
+
+      const on = screen.getByTestId('account-tree-active-toggle-acc-40000001');
+      const off = screen.getByTestId('account-tree-active-toggle-acc-40000000');
+      expect(on).toBeDisabled();
+      expect(off).toBeDisabled();
+      // The state is still shown.
+      expect(on).toHaveAttribute('aria-checked', 'true');
+      expect(off).toHaveAttribute('aria-checked', 'false');
+
+      fireEvent.click(on);
+      expect(globalThis.fetch).not.toHaveBeenCalledWith(
+        expect.stringContaining('/elementValue/acc-40000001'),
+        expect.objectContaining({ method: 'PATCH' }),
+      );
+    });
+
     it('disables the toggle for a protected 0000-suffixed placeholder leaf', async () => {
       renderTree(<AccountTreeView {...defaultProps} apiBaseUrl={TEST_API_BASE_URL} data={HIERARCHY_DATA} />);
       await waitFor(() => expect(screen.getByTestId('account-tree-row-group-A')).toBeInTheDocument());
