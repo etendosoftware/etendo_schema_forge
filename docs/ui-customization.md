@@ -2414,6 +2414,91 @@ through the exported `resolveContactName(record)` rather than reading `name` dir
 
 ---
 
+### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
+
+A generic flow that offers the document that naturally follows a completed one (today:
+invoice → shipment / goods receipt; designed so orders → shipment **and** invoice, and
+shipment → invoice, can reuse it). Not a `decisions.json` option: it is wired in the
+window's custom wrapper and `topbarRight` component, because both pieces are functions.
+
+**Backend contract.** The source spec annotates every header GET with
+`followUp: { available: [<key>…], <key>: { needed, reason, pendingLines, action, targetSpec, targetEntity } }`
+(`available` = keys still needed, in display order; empty for credit notes, returns, or when
+nothing is pending). `POST <spec>/header/{id}/action/<action>` creates a Draft with only the
+pending lines and answers `201 {response:{data:{id, documentNo, followUp, spec, entity, lineCount}}}`
+or `{error:{code,…}}`. The frontend never derives "pending" itself.
+
+**Pieces** (`tools/app-shell/src/components/follow-up-documents/`):
+
+| Piece | Role |
+|---|---|
+| `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
+| `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; on success dispatches `<spec>:document-created` and calls `onCreated` |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (link to the created document); errors inline |
+| `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
+
+**Per-window config** — a map keyed by the backend follow-up key (see
+`windows/custom/shared/invoiceFollowUp.js`):
+
+```js
+questionKey,                       // question above the option(s), e.g. 'followUpInvoiceQuestion'
+                                   // («¿Qué vas a hacer con esta factura?»); default 'followUpQuestion'
+options: {
+  shipment: {
+    labelKey,                      // card title (static card or choice card) — «Crear albarán de venta»
+    descriptionKey,                // card description; receives { count } = pendingLines
+    descriptionOneKey,             // optional singular variant (count === 1)
+    badgeKey, badgeTone,           // optional badge; tone 'success' (green, default) | 'info' (blue)
+    actionLabelKey,                // primary button in the single-option layout («Crear albarán»)
+    icon,                          // lucide component
+    titleKey, buttonLabelKey,      // used when this is the only follow-up offered (no «?» in the title)
+    resultDocType,                 // ConfirmResultModal type: 'salida' | 'entrada' | 'facturaVenta' | 'facturaCompra'
+    resultTitleKey,
+  },
+},
+summary: { documentLabelKey /* required */, documentNoField, dateLabelKey, dateField, contactField, totalField, currencyField,
+           linesLabelKey /* pending-lines column, single follow-up only; default 'lines' («Líneas») */ },
+```
+
+`questionKey` is passed to `FollowUpDocumentButton` (→ `FollowUpDocumentModal`) as a prop next to
+`options` / `summary`, because the wording names the source document.
+
+A key the backend offers but the window does not configure is ignored. With several keys
+the modal shows one card per key (title `titleKey` prop or `followUpManageTitle`, button
+`buttonLabelKey` prop or `followUpManageButton`).
+
+**Opening right after Confirm.** Pass `draftMode.afterProcess = createFollowUpAfterProcess(spec, options)`
+(invoices: `getInvoiceDraftMode(ui, { afterProcess })`). When the processed record still has a
+configured follow-up it queues a prompt and returns `{ stay: true }`, so the user stays on the
+document instead of being sent to the list (the fresh record is primed into the form, see
+`runAfterProcess`); `FollowUpDocumentButton` consumes the prompt (immediately, or on mount after a
+`/new → /{id}` move). A prompt nobody consumes within 30 s (`FOLLOW_UP_PROMPT_TTL_MS`) is discarded. See `docs/decisions-reference.md` →
+`draftMode.afterProcess`.
+
+**After creation** the button calls the slot's `onRefresh` (record re-read: the annotation empties
+and the button disappears) and the `<spec>:document-created` event refreshes related documents
+(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, purchase-invoice `RelatedDocuments.jsx`).
+
+**Keyboard.** `ActionChoiceModal` (shared, also used by sales-quotation) traps Tab (focus parks on
+the dialog while every control is disabled), Esc cancels (never while a request is in flight, and
+never an Esc that a layer opened on top already handled), the cards are a roving-tabindex radio
+group (Arrow/Home/End) where Enter selects the focused card AND continues, every control has a
+visible `:focus-visible` outline, and the layout stacks below 640px. With a single option the
+radio group is replaced by the direct confirmation and focus starts on the primary button (the
+static card is not a Tab stop). The result
+phase has the same Tab trap and Esc rule and focuses the link to the created document.
+
+**Single vs multi layout** is generic: `ActionChoiceModal` switches to the single-option mode when
+it receives exactly one option. Single-option layout, top to bottom: title, summary, `question`,
+ONE static option card, footer (Cancel left, primary right). The static card looks like an idle
+choice card (1px border, 12px radius, icon box, title + badge, muted description) but is laid out
+icon-left and is plain content: no radio indicator, no `role="radio"` / `radiogroup`, not
+focusable, not clickable. Its description is the dialog's `aria-describedby`. The primary button
+carries the option's `actionLabel` and no arrow icon (the spinner still shows while loading).
+Options take an optional `badgeTone` (`'success'` default, `'info'`), mapped to the
+`--status-success-*` / `--status-info-*` tokens. sales-quotation always passes two options, no
+`badgeTone`, and is unaffected (green «Recomendado», arrow on the primary).
+
 ## Decision tree: which option to use?
 
 ```

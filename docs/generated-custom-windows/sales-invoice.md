@@ -212,6 +212,46 @@ Verifactu config table. The other seven printables are untouched.
 The VERI\*FACTU logo is **not** rendered: art. 20.1.b requires the *phrase* «Factura verificable
 en la sede electrónica de la AEAT» **or** the «VERI\*FACTU» mark, and the phrase alone complies.
 
+## Follow-up shipment after Confirm — ETP-5576
+
+Confirming an invoice that ends **Completed** with quantities still pending to ship no longer sends the
+user to the list: they stay on the invoice and see «¿Gestionar envío?». The popup and the topbar
+button «Gestionar envío» are the generic follow-up flow shared with purchase-invoice (only texts and the
+generated document differ) — see `docs/ui-customization.md` §20.
+
+- **What is pending is decided by the backend.** The header GET carries
+  `followUp.available` (`["shipment"]` or `[]`) plus `followUp.shipment.pendingLines`. Credit notes,
+  returns and fully delivered invoices come back with an empty list → no popup, no button.
+- **Confirm** (`getInvoiceDraftMode(ui, { afterProcess })` in `tools/app-shell/src/windows/custom/sales-invoice/index.jsx`):
+  `draftMode.afterProcess = createFollowUpAfterProcess('sales-invoice', …)` runs after the process
+  succeeded. With a pending `shipment` it returns `{ stay: true }` and the modal opens on the
+  invoice; otherwise the previous behaviour stays (navigate to the list with the preview).
+- **Modal** (single follow-up → direct confirmation, no radio): title «Gestionar envío» (no question
+  mark), summary (Factura / Fecha / Contacto / Líneas / Total — «Líneas» is the pending line
+  count), the question «¿Qué vas a hacer con esta factura?» (`questionKey:
+  'followUpInvoiceQuestion'`), ONE static option card (icon, «Crear albarán de venta» + blue «Borrador» badge
+  — `badgeTone: 'info'` —, «Se generará en borrador con las N líneas pendientes de envío.»,
+  singular variant for one line; not selectable, no Tab stop), footer Cancelar + «Crear albarán»
+  (label only, focused, so Enter creates). Cancel, the close icon, Esc and the
+  backdrop reject: the invoice stays Completed and nothing is created — there is no «Ahora no»
+  card. «Crear albarán» POSTs
+  `sales-invoice/header/{id}/action/createShipment`, which creates a **Draft** sales shipment (Albarán de Venta) with only
+  the pending lines; the result view links to it (`/goods-shipment/{id}`). Backend error codes
+  (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
+- **Topbar button** `follow-up-document-button` in `SalesInvoiceTopbar.jsx`: shown on a completed invoice
+  while something is pending (never for a read-only window). After a creation the record is
+  re-read (the button disappears; a partial movement later offers only what is still missing)
+  and `sales-invoice:document-created` refreshes the related documents (`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`).
+- Config: `SALES_INVOICE_FOLLOW_UP` in `tools/app-shell/src/windows/custom/shared/invoiceFollowUp.js`.
+
+The previous ad-hoc «¿Gestionar envío?» dialog in `artifacts/sales-invoice/custom/InvoiceTopbarExtra.jsx`
+(armed by a `neo:processSuccess` listener + `sessionStorage['invoice:createShipment:{id}']`) was
+removed: that event is never emitted by the draftMode Confirm (`handleSaveAndProcess`), and the
+Confirm navigated to the list anyway, so the dialog was unreachable. The sibling
+`invoice:sendAfterConfirm:{id}` flag on the same listener is kept untouched — it has the same
+limitation (it only reacts to a `DocAction` process run through `hook.handleProcess`, which this
+window does not expose), so its behaviour is unchanged.
+
 ## Known issues / Open bugs
 
 | ID | Severity | Window | Description | Status |
