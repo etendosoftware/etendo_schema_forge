@@ -812,7 +812,9 @@ export default function AccountTreeView({
   }
 
   return (
-    <div data-testid="account-tree" {...rest}>
+    // `rest` first: ListView passes every table its generic `data-testid="Table__620cbc"`,
+    // which would otherwise replace this window's own stable id.
+    <div {...rest} data-testid="account-tree">
       {showProgressBar && <ListProgressBar testId="account-tree-progress" data-testid="ListProgressBar__c9cb6e" />}
       {treeBody}
     </div>

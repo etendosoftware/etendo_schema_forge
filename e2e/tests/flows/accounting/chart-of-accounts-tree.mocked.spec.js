@@ -58,6 +58,8 @@ test.describe('Chart of Accounts — tree toolbar', () => {
     await installMocks(page);
     await page.goto('/chart-of-accounts');
     await expect(page.getByTestId('account-tree-table')).toBeVisible();
+    // The wrapper keeps its own id inside ListView (ListView passes every table a generic one).
+    await expect(page.getByTestId('account-tree')).toBeVisible();
   });
 
   test('shows every control in the list toolbar row and counts root accounts', async ({ page }) => {

@@ -1086,6 +1086,12 @@ describe('AccountTreeView', () => {
       expect(screen.getByTestId('account-tree-row-group-4000')).toBeInTheDocument();
     });
 
+    it('keeps its own test id when mounted with the generic one ListView passes to every table', () => {
+      renderTree(<AccountTreeView {...defaultProps} data-testid="Table__620cbc" />);
+      expect(screen.getByTestId('account-tree')).toBeInTheDocument();
+      expect(screen.queryByTestId('Table__620cbc')).not.toBeInTheDocument();
+    });
+
     it('never forwards userRefreshTrigger to the DOM', async () => {
       const fetchCtl = deferredFetch();
       await renderLoaded(fetchCtl, { userRefreshTrigger: 2 });
