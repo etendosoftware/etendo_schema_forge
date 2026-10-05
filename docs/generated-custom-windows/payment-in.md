@@ -281,6 +281,41 @@ prop into the `CustomLines` slot; `ApplyToInvoices.jsx` calls
 before either fetch call. `payment-out` has no equivalent custom apply-flow component — its only
 documentAction path is the already-guarded generic process button — so it needed no change.
 
+## MCP surface equals the window's — ETP-5558
+
+An agent sees what this window offers and nothing more (`MCP_CONFIG` of `payment-in/finPayment`;
+REST and the SPA are unchanged):
+
+- **Invokable buttons — exactly three, all with `parameters:{}`:** *Confirmar*
+  (`aPRMProcessPayment`; `view:"actions"` lists only the value `P`, another `docAction`/`action`
+  answers 422 with `allowedValues:["P"]` — cosmetic honesty, since `ReactivatePaymentHandler`
+  always sends `P` whatever arrives), *Reactivar* (`etprReactivatePayment`; the handler injects
+  `action:"RE"` itself) and *Eliminar* (`eTPRRemovePayment`) with the UI's own gate: it works at
+  any status except void (`RPVOID`) and except while the collection is `pisLocked` (its bank transfer
+  is live), where an agent gets **422** and nothing changes. On a processed collection it reactivates
+  it first and then removes it, and it gives back **no** credit the collection consumed — exactly as
+  the trash icon does. To delete a **draft** and get its consumed credit back, use the invoice's
+  `deletePayment` instead.
+- **Hidden buttons (405, not listed):** `psd2GenerateBankPayment`,
+  `aPRMAddScheduledpayments`, `aprmExecutepayment`, `aPRMReversePayment`, `aPRMReconcilePayment`,
+  `aeatsiiSend`, `etblkpBulkposting`, `posted`, and the PIS actions `retryPisPayment` /
+  `pisPaymentStatus` the same handler serves on the record. The PIS (PSD2) actions stay hidden
+  because fiscal and bank integrations are limited for agents (a declared narrowing, not a parity
+  gap; a bank-initiated collection also needs a person to authorize it at the bank, SCA).
+- **No create, update or delete** on the header (`MCP_CONFIG.verbs`, 405 `method_not_allowed`;
+  `neo_defaults` answers the same 405). The window has `hideCreate`, a draft header has no
+  editable field, and the generic delete of a draft fails on its payment details. A collection is
+  created, edited (draft) and deleted (draft, with credit given back) from the invoice: `neo_action(spec:'sales-invoice',
+  entity:'header', id:<invoiceId>, action:'registerPayment' | 'confirmPayment' | 'deletePayment')`
+  — see `sales-invoice.md` → "MCP payment actions".
+- **No writes on the lines** (`finPaymentScheduleDetail`, the allocation to invoice installments):
+  the hand-built allocation route is the one ETP-5558 BUG-1 corrupted data through.
+- A collection can only apply to **one invoice**, as in the UI. The *Facturas Pendientes / Apply to
+  Invoices* component above (`ApplyToInvoices.jsx`) is not wired in `decisions.json` and the
+  backend actions it calls (`pendingInvoices`, `applyToInvoices`) do not exist, so it is not a
+  route for agents either. An advance collection without an invoice is not offered by the UI
+  (`hideCreate`) and is hidden from MCP.
+
 ## Confirming a payment on a posted foreign-currency invoice, and Reactivar on a reconciled payment — ETP-5547
 
 **Confirming a reactivated draft.** Confirming a payment from the invoice's payment editor sends a `registerPayment{Out}` action POST on the invoice header. Before ETP-5547, that POST also re-synced the invoice's `C_Conversion_Rate_Document` row. For a foreign-currency invoice that the accounting background had already **posted**, Core rejected the write with `@20501@`. The error was only logged, but it aborted the request transaction, so the UI saw a success while the commit rolled back and the payment stayed in *Borrador*. Reactivar was not the cause, only the most common way to reach it. The sync now skips posted invoices and action POSTs on processed invoices, and runs under a savepoint (see `sales-invoice.md` § "Currency and exchange rate on the header"). The confirm now persists, the payment ends *Depositado*, and the invoice ends paid.
