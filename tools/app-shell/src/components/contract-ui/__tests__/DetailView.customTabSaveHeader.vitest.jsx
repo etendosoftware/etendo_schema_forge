@@ -464,19 +464,23 @@ describe('real reversedInvoices tab — id-less header save', () => {
     await saveFirstRectification();
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord'));
+    // The header WAS created: the host's toast is the only one — no misleading rectSaveError.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
     expect(mockHook.primeSaved).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(rectificationPosts()).toHaveLength(0);
   });
 
-  it('adds no unnavigable-save toast when the header save failed', async () => {
-    mockHook.handleSave = vi.fn().mockResolvedValue(null);
+  it('shows only the save failure the header save already reported', async () => {
+    // Like the real useEntity.handleSave: every failure path toasts its reason, then resolves null.
+    mockHook.handleSave = vi.fn(async () => { toast.error('requiredFieldsMissing'); return null; });
 
     await saveFirstRectification();
 
-    // The tab reports its own failed save; DetailView adds nothing on top.
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('rectSaveError'));
-    expect(toast.error).not.toHaveBeenCalledWith('savedButCannotOpenRecord');
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith('requiredFieldsMissing');
     expect(mockNavigate).not.toHaveBeenCalled();
     expect(rectificationPosts()).toHaveLength(0);
   });

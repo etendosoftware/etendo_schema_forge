@@ -30,7 +30,8 @@ import { buildTypesLabel } from './attachmentPolicy';
  *                       (recordId is the literal string "new"). Passed by
  *                       DetailView to every 'tab'-placement custom component.
  *   onSaveHeader      - ({ navigateAfter? }) => Promise<record|null>. Force-saves
- *                       the header. Only present (non-undefined) while isNew.
+ *                       the header; null means the host already told the user
+ *                       why. Only present (non-undefined) while isNew.
  *   onGoToSavedRecord - (savedRecord) => void. Navigates to the just-saved
  *                       record with this tab re-opened. Only present while isNew.
  *   readOnly          - When true, hides the single-row and "delete all" delete

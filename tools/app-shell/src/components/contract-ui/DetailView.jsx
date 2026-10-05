@@ -2766,12 +2766,12 @@ export function DetailView({
       if (prev[ct.key] === count) return prev;
       return { ...prev, [ct.key]: count };
     });
-    // Save-header-first support for custom tabs (child rows need a persisted
-    // parent FK). The tab decides WHEN: onSaveHeader({ navigateAfter: false })
-    // just persists and returns the saved record (the tab keeps its in-progress
-    // form and posts the child row itself), then calls onGoToSavedRecord to land
-    // on the saved record with this tab re-opened. The default (navigateAfter
-    // true) mirrors handleAddLineClick: save, navigate, re-open the add form.
+    // Save-header-first support for custom tabs (child rows need a persisted parent FK). The tab
+    // decides WHEN: onSaveHeader({ navigateAfter: false }) persists and returns the saved record,
+    // or null once the user has already been told why — the tab must not toast again. The tab keeps
+    // its in-progress form, posts the child row itself, then calls onGoToSavedRecord to land on the
+    // saved record with this tab re-opened. The default (navigateAfter true) mirrors
+    // handleAddLineClick: save, navigate, re-open the add form.
     const saveHeaderForCustomTab = async ({ navigateAfter = true } = {}) => {
       const saved = await hook.handleSave();
       if (!saved?.id) { reportUnnavigableSave({ saved, isNew, windowName, ui }); return null; }
