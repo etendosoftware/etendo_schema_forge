@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx
 /**
  * ETP-4404 — custom tab (placement 'tab') save-header-first wiring.
  *
@@ -17,10 +18,11 @@
  * Verified through a stub tab Component that records its props (harness
  * mirrors DetailView.processesAndBadges.vitest.jsx).
  */
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
+import ReversedInvoicesPanel from '@/windows/custom/sales-invoice/ReversedInvoicesPanel.jsx';
 
 const mockNavigate = vi.fn();
 // Mutable so each test can inject router state before rendering.
@@ -89,7 +91,25 @@ vi.mock('@/hooks/useLineGrossAmount', () => ({
 }));
 vi.mock('@/hooks/useDocumentAction', () => ({ useDocumentAction: () => ({ executeAction: vi.fn(), loading: false }) }));
 vi.mock('@/hooks/useNeoAction', () => ({ useNeoAction: () => ({ execute: vi.fn(), loading: false }) }));
-vi.mock('@/i18n', () => ({ useMenuLabel: () => (k) => k, useUI: () => (k) => k, useLabel: () => () => '' }));
+vi.mock('@/i18n', () => ({
+  useMenuLabel: () => (k) => k,
+  useUI: () => (k) => k,
+  useLabel: () => () => '',
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
+}));
+
+// Every request of DetailView and of the real ReversedInvoicesPanel goes through useApiFetch.
+// The picker lists one candidate invoice; anything else answers an empty NEO payload.
+const RECT_CANDIDATE = {
+  id: 'inv-orig-9', documentNo: '10000090', invoiceDate: '2026-05-01',
+  documentStatus: 'CO', 'businessPartner$_identifier': 'Cliente SL', grandTotalAmount: 50,
+};
+const mockApiFetch = vi.hoisted(() => vi.fn());
+vi.mock('@/auth/useApiFetch.js', () => ({ useApiFetch: () => mockApiFetch }));
+function answerApiFetch(url) {
+  const data = String(url).includes('/header') ? [RECT_CANDIDATE] : [];
+  return Promise.resolve({ ok: true, status: 200, json: async () => ({ response: { data } }) });
+}
 vi.mock('@/components/layout/PageMetaContext', () => ({ useSetPageMeta: () => vi.fn() }));
 vi.mock('@/components/layout/FavoritesContext', () => ({
   useFavorites: () => ({ isFavorite: () => false, toggleFavorite: vi.fn() }),
@@ -174,6 +194,7 @@ beforeEach(() => {
   mockHook.primeSaved = vi.fn();
   setExistingRecordHook();
   globalThis.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({}) }));
+  mockApiFetch.mockImplementation(answerApiFetch);
 });
 
 describe('renderCustomTabPanels — save-header-first props', () => {
@@ -413,5 +434,50 @@ describe('renderCustomTabPanels — passes isDocumentReadOnly through (ETP-5205)
     });
 
     expect(stubProps.isDocumentReadOnly).toBeFalsy();
+  });
+});
+
+// The stub tab above calls onSaveHeader directly; this drives it through the real
+// rectifications tab of a new sales invoice: add, pick an invoice, save.
+describe('real reversedInvoices tab — id-less header save', () => {
+  const REAL_TAB = { key: 'reversedInvoices', labelKey: 'rectificationsTab', Component: ReversedInvoicesPanel, placement: 'tab' };
+
+  async function saveFirstRectification() {
+    setNewRecordHook();
+    await act(async () => {
+      renderView({ recordId: 'new', customTabs: [REAL_TAB] });
+    });
+    fireEvent.click(await screen.findByTestId('btn__addFirstRectificacion'));
+    fireEvent.click(screen.getByText('rectifySelectInvoices'));
+    fireEvent.click(await screen.findByTestId(`invoice-picker-option-${RECT_CANDIDATE.id}`));
+    fireEvent.click(screen.getByTestId('invoice-picker-apply'));
+    fireEvent.click(screen.getByTestId('btn__saveNewLine'));
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
+  }
+
+  const rectificationPosts = () => mockApiFetch.mock.calls
+    .filter(([url, opts]) => String(url).includes('/reversedInvoices') && opts?.method === 'POST');
+
+  it('reports a successful header save whose response has no id, and posts no rectification', async () => {
+    mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'NC-NEW' });
+
+    await saveFirstRectification();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord'));
+    expect(mockHook.primeSaved).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(rectificationPosts()).toHaveLength(0);
+  });
+
+  it('adds no unnavigable-save toast when the header save failed', async () => {
+    mockHook.handleSave = vi.fn().mockResolvedValue(null);
+
+    await saveFirstRectification();
+
+    // The tab reports its own failed save; DetailView adds nothing on top.
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('rectSaveError'));
+    expect(toast.error).not.toHaveBeenCalledWith('savedButCannotOpenRecord');
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(rectificationPosts()).toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 // @covers tools/app-shell/src/components/contract-ui/DetailView.jsx
+// @covers tools/app-shell/src/components/contract-ui/LinesEmptyState.jsx
 /**
  * Covers the real (non-extracted) handleAddLineClick / handleImportClick
  * useCallback bodies inside DetailView, plus the openAddLine / openImportModal
@@ -11,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import { DetailView } from '../DetailView.jsx';
+import LinesEmptyState from '../LinesEmptyState.jsx';
 
 const mockNavigate = vi.fn();
 let mockLocationState = {};
@@ -341,6 +343,48 @@ describe('DetailView handleAddLineClick / handleImportClick (real callbacks)', (
       expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord');
       expect(mockNavigate).not.toHaveBeenCalled();
     });
+  });
+});
+
+// The stub above calls the handlers directly; these drive the same callbacks through the
+// components that really render them on a new record: the shared LinesEmptyState (no lines
+// yet) and the shared AddLineButton (no empty-state slot configured).
+describe('DetailView id-less save through the real add-line entry points', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLocationState = {};
+    mockHook.children = [];
+  });
+
+  const entryPoints = [
+    ['LinesEmptyState', { linesEmptyState: LinesEmptyState }, 'action-add-lines-empty-state'],
+    ['AddLineButton', { linesEmptyState: null }, 'action-add-line'],
+  ];
+
+  it.each(entryPoints)('%s reports a successful save whose response has no id', async (_name, props, testId) => {
+    mockHook.handleSave = vi.fn().mockResolvedValue({ documentNo: 'SO-NEW' });
+    const user = userEvent.setup();
+    renderDetailView({ recordId: 'new', ...props });
+
+    await user.click(await screen.findByTestId(testId));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('savedButCannotOpenRecord'));
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(mockHook.handleSave).toHaveBeenCalledTimes(1);
+    expect(mockHook.primeSaved).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it.each(entryPoints)('%s adds no toast of its own when the save failed', async (_name, props, testId) => {
+    mockHook.handleSave = vi.fn().mockResolvedValue(null);
+    const user = userEvent.setup();
+    renderDetailView({ recordId: 'new', ...props });
+
+    await user.click(await screen.findByTestId(testId));
+
+    await waitFor(() => expect(mockHook.handleSave).toHaveBeenCalledTimes(1));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 });
 
