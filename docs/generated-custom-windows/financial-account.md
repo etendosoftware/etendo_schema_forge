@@ -1374,7 +1374,7 @@ Detail view for a single `FIN_Financial_Account` reached from the Cuentas list p
 
 ## Intent
 
-Display the full detail of a financial account: a summary strip with KPIs, and three tabs for Movements, Reconciliation and Imported Statements. The Movements tab is the primary working surface; the Reconciliation tab hosts the manual bank reconciliation split panel (T6); the Imported Statements tab is a placeholder pending a later iteration.
+Display the full detail of a financial account: a summary strip with KPIs, and three tabs for Movements, Reconciliation and Imported Statements. The Movements tab is the primary working surface; the Reconciliation tab hosts the manual bank reconciliation split panel (T6) — or, on a cash account, the Cash close tab; the Imported Statements tab lists the account's bank statements (import, manual create, process, and their lines).
 
 ## What this view does
 
@@ -1457,6 +1457,8 @@ The footer has two actions: **Guardar** saves as **Draft** (Borrador); **Confirm
 **Edit mode**: opened from the kebab's **Editar**, available for both Draft and Processed-but-not-yet-posted manual G/L movements (`MovementRowKebab.jsx`: `canEdit = isGlTransaction && !isPosted`) — the same modal, seeded from the row (which carries the FK ids + display names + the deposit/withdrawal split), titled "Editar movimiento", saving via `action=update`. On a Draft movement everything is editable; on an already-**Processed** movement (`ETP-4500`, tightened by `ETP-4879`) **amount, direction and date are locked** (`NewTransactionModal.jsx`: `lockWhileProcessed = isEdit && Boolean(movement.processed)`, applied to `DirectionToggle`/`AmountInput`/the date `DateInput`, Classic parity for amount/direction) — G/L item, the 4 accounting dimensions and the description stay editable, and the backend (`FinancialAccountTransactionsHandler.applyEditableDimensions`) accepts exactly those fields (description, businessPartner, glItem, project, costcenter, product) and no longer touches `transactionDate`/`dateAcct` — an earlier version of this method reassigned both dates unconditionally, which silently rolled `DATEACCT` back to the transaction date on every Processed edit; ETP-4879 removed that. Once the movement is **posted** (contabilizado), Editar is no longer offered at all — it must be reactivated first (Reactivar, kebab). Delete/Reactivate happen from the kebab, backed by `?action=delete|reactivate` (delegating to the `com.etendoerp.payment.removal` `TransactionRemovalUtil`) — except for a funds-transfer leg, which `action=delete` rejects with a 409 before reaching that module (ETP-5085, see below). Posting (contabilización) stays an independent flag (the kebab's Post action).
 
 **Reactivar (kebab) and the Reconciliación tab's un-reconcile action overlap in scope but are separate code paths.** A movement matched to a bank statement can be un-done from either surface — the Reconciliación split panel's Desconciliar (`ReconciliationHandler`, see above; its sibling Reactivar was removed by ETP-5135, see below), or this Movimientos-tab kebab item (`FinancialAccountTransactionsHandler.handleReactivate` → `TransactionRemovalUtil.reactivate`, which internally un-reconciles via the same `ReconciliationRemovalUtil.removeTransactionFromReconciliation` before running Core's transaction-level `FIN_TransactionProcess` `"R"` action). One gap between them was closed in this task: when the reactivated transaction was matched to a bank-statement line that Core had physically split for a 1:N match, this kebab path only cleared the line's transaction pointer and left the ETGO-tagged split siblings fragmented — the Reconciliación tab already re-collapses them (`ReconciliationHandler.normalizeReactivatedMatchGroup`), this path didn't. `handleReactivate` now captures the linked line before reactivating and calls the same `normalizeReactivatedMatchGroup` (a plain `new ReconciliationHandler()` instantiation — no CDI wiring needed, same composition pattern `ReconciliationHandlerSupport` already uses).
+
+**ETP-5547 — the same cleanup from the payment's own Reactivar.** Reactivating a *reconciled* cobro/pago from the payment window (`ReactivatePaymentHandler`) now runs the equivalent cleanup through `ReconciledPaymentReactivation`. It captures the matched statement line before delegating, then clears its `matchingtype`/`matchedDocument` and calls `normalizeReactivatedMatchGroup` once the payment is back in draft. When the payment method's paid status is `RDNC`/`PWNC`, it also moves the payment `RPPC` → that status first, so Core restores the invoice's paid amounts. Full write-up: `payment-in.md` § ETP-5547.
 
 **Investigated but NOT fixed here (documented root cause, no reported repro):** a task originally reported `HTTP 400 {"error":{"message":"Document already Posted.: <docNo>"}}` from this same kebab action when the matched transaction's reconciliation was already posted (`FIN_Reconciliation.Posted='Y'`). Root cause: `ReconciliationRemovalUtil.removeTransactionFromReconciliation` (in `com.etendoerp.payment.removal`) calls `processReconciliation("R", reconciliation)` without first calling `Utilities.unPostReconciliation(reconciliation)` — its sibling `ReconciliationRemovalUtil.reactivate(rec)` does that unpost step; this method doesn't, so `FIN_ReconciliationProcess`'s `"R"` branch rejects with `@PostedDocument@` whenever the reconciliation is posted. Not reproducible in this environment (local reconciliations sit at `posted='D'`, not `'Y'` — no accounting run here), so left undone; the one-line fix (`if ("Y".equals(reconciliation.getPosted())) { Utilities.unPostReconciliation(reconciliation); }` before the `processReconciliation("R", …)` call) is ready to apply the moment it reproduces.
 
@@ -2573,7 +2575,7 @@ index.jsx                          — receives { recordId }, sets page meta, mo
         MovementStatusBadge.jsx    — 2 status chips: Conciliado (green) / Sin conciliar (neutral)
         PostingStatusDot.jsx       — derived posting status (RPPC → posted/green, else → orange)
         MovementRowKebab.jsx       — on-hover kebab (Ver detalle · Unreconcile disabled · Post when !posted · Unpost when posted, ETP-4505)
-    ReconciliacionTab.jsx          — placeholder (T6)
+    ReconciliationTab.jsx          — thin host for ReconciliationSplitPanel (T6); forwards windowReadOnly (ETP-5457)
     ImportedStatementsTab.jsx      — orchestrates list ↔ lines state machine
       StatementsToolbar.jsx        — back ←, date range, status filter, "Filtro por condicionales" (AdvancedFilterBuilder, same as movements), search, sort popover, refresh button, import split-button (▾ → "+ Nuevo extracto")
       StatementsTable.jsx          — columns: docNo, name (falls back to line date range), file name (rendered as a grey badge), notes, import/transaction dates, lines, out (red, −) / in (green, +), status pill (DRAFT/PENDING/PARTIAL/RECONCILED), per-row kebab (when `actions` is passed); expand chevron is a round bordered button rotating 180° (same as movements). Expanding a row keeps the parent row white and renders the lines inside a grey "Desplegado" area (lg drop shadow, raised above the next row via z-index) wrapping the white rounded lines card.
@@ -4572,21 +4574,91 @@ One thing specific to this window, unreported and fixed in passing: `ImportState
 downloaded file was headed `Error` in English in a Spanish session, while the grid beside it was
 translated. It now passes both the column caption and the skipped-by-user reason.
 
-## Solo Lectura (read-only window-access tier) gating — ETP-5205
+## Read-only access tier (ETP-5205 / ETP-5457)
+
+**Scope: UI only.** A role whose window-access tier for Financial Account is `read-only` sees the
+window browse-only: every entry point that writes is hidden (or, where hiding would break the
+layout, disabled), every dialog that leads to a write is kept shut, and every mutating handler
+returns early as defense in depth. The backend is not changed by this — it remains the boundary.
 
 Financial Account is not one of ETP-5205's originally-named windows — brought into scope
 separately after v5's audit flagged it as completely unwired. Unlike the generated-page windows,
 this window never delegates to `DetailView.jsx`/`GeneratedApp`, so `windowReadOnly` (computed from
-`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded from scratch
-through 5 files: `index.jsx` → `DetailToolbarActions`/`MovementsTab` → `MovementsTable`/
-`MovementsToolbar` → `MovementRowKebab`. Gated: the Editar/AutoMatch buttons AND their modals' own
-`open` conditions (defense-in-depth — a deep link or an auto-open effect can otherwise still mount
-a modal independently of its trigger button), the movement row kebab's 6 mutating actions, the
-"Nuevo movimiento"/"Transferir fondos" split button and its two modals, and the bulk-delete
-selection bar (its own trigger is unreachable once unmounted, no separate open-gate needed).
-**Known gap, not fixed by this ticket:** the Reconciliation tab, Imported Statements tab, and Cash
-Close carry zero `readOnly`/`windowReadOnly` references — confirmed, documented in-code near the
-`useWindowAccess` call in `index.jsx`, deliberately out of scope. Live verification against a real
-read-only-tier role was explicitly skipped (DB-confirmed: no role in the system currently holds a
-read-only grant on this window) — a deliberate scope call, not an untested gap; relies on unit-test
-coverage.
+`useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` in `index.jsx`) is threaded by hand into each
+tab. ETP-5205 covered the header and Movements; ETP-5457 closed the remaining three tabs
+(Reconciliation, Imported statements, Cash close), which until then carried no `windowReadOnly`
+reference at all, and then the accounts list ("Cuentas", `/financial-account`), whose own toolbar,
+row actions and dialogs had been left ungated.
+
+**How the tier reaches the list.** The list IS the generated `AccountPage`, which already maps the
+`read-only` tier to `window={{ ...window, readOnly: true }}` on `ListView` — so ListView's own
+selection-bar "Eliminar seleccionados" (`bulk-delete-selected`) was already dropped by the tier.
+That is the only ListView control the tier changes here: the selection bar's print and clone
+buttons never existed on this list (`AccountPage` passes `hidePrint` and no `onCloneRow`). What it could not reach is the `AccountsHeaderTable` slot
+(`artifacts/financial-account/custom/`), which draws the whole toolbar, the row actions and the
+account dialogs itself, and does not receive `window` (ListView's `tableProps` do not forward it).
+The slot therefore calls `useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D')` — the same source
+`AccountPage` reads, so list and slot cannot disagree — and threads `windowReadOnly` into
+`AccountsToolbar`, `AccountRowActions` → `AccountRowMenu`, and the name cell (`NameCell` →
+`SyncStatusInline`, through the cell context).
+
+**"Reglas de matcheo" follows the OTHER window's tier.** The button only navigates to Match Rule
+(`/match-rule`, AD_Window_ID `24963D64E83B4543A7F6BD248CF944EE`, from that artifact's
+`contract.json`), which has its own guard. It is shown when the role's tier on Match Rule is
+`read-only` or `full` and hidden when it is `none` (`useWindowAccess` fails closed, so an unloaded
+access map hides it too) — being read-only on Financial Account is not a reason to hide a link to a
+different window. Under `read-only` on Match Rule, `ListModalWindow` (ETP-4950) offers no New, no
+row actions, no selection and disables the inline toggles; rows have no click handler, so no
+editable modal is reachable.
+
+The prop is **`windowReadOnly` everywhere, never `readOnly`**: in `ReconciliationSplitPanel.jsx`,
+`readOnly` already means "the selected line is already reconciled", and the two are unrelated.
+
+The pattern, applied uniformly: **hide** entry points (toolbar buttons, row icons, row kebabs,
+bulk bar, the selection checkboxes whose only use is bulk delete); **disable** only the primary
+buttons whose removal would break the layout (the reconcile action bar, the cash-close side
+panel); force each write dialog closed with `open={... && !windowReadOnly}` so a deep link or an
+auto-open effect cannot mount it without its trigger; and never rely on passing an `undefined`
+handler, since these components still render the control.
+
+| Tab / surface | Hidden under `read-only` | Disabled under `read-only` | Still available |
+|---|---|---|---|
+| Header (`DetailToolbarActions`, ETP-5205) | Editar, AutoMatch; `EditAccountModal` and `AutoMatchSuggestionModal` kept shut (Archive / Delete / Connect are only reachable from the edit modal) | — | Refresh, Export |
+| Movements (ETP-5205) | "Nuevo movimiento" / "Transferir fondos" split button and both modals, the row kebab (`MovementRowKebab` returns `null` — all 6 items mutate), the bulk-delete bar | — | Filters, search, sort, row expansion, export |
+| Reconciliation — bank / card (`ReconciliationSplitPanel`, ETP-5457) | Per-document un-link "−" (`recon-unlink-{id}`, both in the candidate list of a reconciled line and in the partial line's "conciliado" block); the "post the difference" button of the difference banner (`recon-difference-open`); every dialog: payment method, difference, GL-item setup, un-reconcile confirmation | "Conciliar (N)" / "Desconciliar (N)" (`recon-action-reconcile`) | Selecting lines and candidates, filters, search, sort, "Dejar pendiente" (banner dismiss, changes no data), Cancel, Back |
+| Imported statements (`ImportedStatementsTab`, ETP-5457) | Import split-button (`statements-import-button`, `statements-import-split`) or bank sync (`statements-bank-sync-button`); per-row edit / delete / kebab (`StatementRowKebab` returns `null`); header and row selection checkboxes; the bulk-delete bar and its dialog; `ImportStatementModal`, `ManualStatementModal` and `StatementConfirmDialog` kept shut | — | Back, status / date / advanced filters, search, sort, refresh, row expansion (lines), CSV export |
+| Cash close (`CashCloseTab`, ETP-5457) | `CashCloseConfirmDialog` kept shut | "Confirmar cierre" (`cash-close-confirm`), "Guardar borrador" (`cash-close-save-draft`), statement date (`cash-close-statement-date`), declared balance (`cash-close-declared-balance`) | Ticking movements, hide-cleared / hide-after toggles, search, the live summary |
+| Reconciliations list | Nothing to gate — navigation only | — | Everything |
+| Accounts list (`AccountsHeaderTable`, ETP-5457) | "+ Nueva cuenta" (`cuentas-new-account-button`); row Edit (`account-row-edit-{id}`) and Sync (`account-row-refresh-{id}`) icons; every kebab item except "Abrir cuenta" (`account-row-menu-open-{id}` stays — edit, new movement, transfer, sync, disconnect, reconnect, connect, delete connection, archive / unarchive, delete are not rendered); the name cell's inline "Conectar banco" (`account-sync-connect-{id}`); the row selection checkboxes (`selectable={false}` — their only use was the bulk delete ListView already drops); `NewAccountWizard`, `EditAccountModal`, `ArchiveAccountDialog`, `DeleteAccountDialog`, the disconnect `ConfirmDialog`, `BankConnectionDeleteConfirmModal` and `FundsTransferModal` kept shut | — | Type filter, advanced filter, search, sort, refresh, KPI sidebar, row click and "Abrir cuenta" (open the detail, itself gated), the "Conciliar (N)" pill (navigation to the gated reconciliation tab), copy IBAN; "Reglas de matcheo" per the Match Rule tier (see above) |
+
+**CSV export and navigation keep working.** On Imported statements the export reads the tab's
+selection through its ref; with the checkboxes hidden the selection is always empty, so it exports
+the filtered statement headers — the same thing a full-access user gets with nothing selected.
+
+**Defense in depth in the split panel.** `ReconciliationSplitPanel` wraps each mutating handler
+(`handleReconcile`, `submitReconcile`, `confirmGlItemSetup`, `confirmDifference`,
+`requestRemoveOne`, `requestRemoveSelected`, `confirmRemove`) in the module-level
+`guardWrite(windowReadOnly, fn)`, which returns a no-op under the tier. It is the same early return
+spelled once, instead of an `if (windowReadOnly) return;` in every handler — the component already
+sits at Sonar's cognitive-complexity ceiling (javascript:S3776). `AccountsHeaderTable` uses a local
+`guardWrite(fn)` the same way for the row handlers it hands out (edit, archive, delete, transfer,
+new movement) and the toolbar's new-account handler, plus plain early returns in
+`handleBankConnectionAction` and `runDisconnect`; navigation (open, reconcile pill, matching rules)
+is not wrapped. `ImportedStatementsTab` (sync,
+confirm) and `CashCloseTab` (save draft, confirm click, run confirm) use plain early returns; the
+bulk delete needs none, since neither its bar nor its dialog is rendered under the tier.
+
+`DifferenceBanner` (`ReconciliationDifference.jsx`) gained an optional `windowReadOnly` prop
+(default `false`) that drops its post button while keeping the banner and its dismiss. Its only
+consumer is the split panel.
+
+On the list side the same optional prop (default `false`, so any other caller is unaffected) was
+added to `AccountsToolbar`, `AccountRowActions`, `AccountRowMenu`, `NameCell` and
+`SyncStatusInline`; `AccountsToolbar` also takes `showMatchingRules` (default `true`).
+`AccountRowMenu`'s write items moved into a local `AccountRowMenuWriteItems` so the tier drops them
+in one place. The quick-actions cell reserves one button under the tier instead of three.
+
+Live verification against a real read-only-tier role was not done for the tabs (at the time,
+DB-confirmed, no role held a read-only grant on this window) — a deliberate scope call; coverage
+relies on unit tests. The accounts-list gap was later reproduced live with a real read-only role
+(`AD_Window_Access.IsReadWrite = 'N'`), which is what brought the list into ETP-5457.

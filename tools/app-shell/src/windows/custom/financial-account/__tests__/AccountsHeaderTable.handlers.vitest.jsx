@@ -46,6 +46,12 @@ vi.mock('@/i18n', () => ({
 const toastError = vi.fn();
 const toastInfo = vi.fn();
 const toastSuccess = vi.fn();
+// ETP-5457 — the slot reads the access tier of this window and of match-rule through
+// useWindowAccess, which reaches useAuth. Full access keeps every existing assertion valid.
+vi.mock('@/auth/AuthContext.jsx', () => ({
+  useWindowAccess: () => 'full',
+}));
+
 vi.mock('sonner', () => ({
   toast: {
     error: (...a) => toastError(...a),

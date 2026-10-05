@@ -461,9 +461,10 @@ export function FinancialAccountDetail({ recordId }) {
   // across renders regardless of the tier (mirrors custom/sales-invoice/index.jsx).
   // ETP-5205 v6 — the "read-only" tier is now also propagated (see windowReadOnly
   // below), threaded into DetailToolbarActions, MovementsTab, and their respective
-  // modal render conditions. Reconciliation/Imported Statements/Cash Close are NOT
-  // yet covered — same gap, not yet fixed there; do not assume this window is fully
-  // closed out by this change alone.
+  // modal render conditions. ETP-5457 closed the remaining tabs the same way:
+  // ReconciliationTab (split panel), CashCloseTab and ImportedStatementsTab all take
+  // `windowReadOnly` and hide/disable their write entry points. The Reconciliations
+  // list tab has none (navigation only). UI-only: the backend is still the boundary.
   const windowAccessTier = useWindowAccess('94EAA455D2644E04AB25D93BE5157B6D');
   const windowReadOnly = windowAccessTier === 'read-only';
   if (windowAccessTier === 'none') {
@@ -545,6 +546,7 @@ export function FinancialAccountDetail({ recordId }) {
               // badge count, and that list is fetched here (not inside the tab), so it has to be
               // reloaded too — otherwise the close only shows up after a manual page refresh.
               onCloseSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadReconciliations(); }}
+              windowReadOnly={windowReadOnly}
               data-testid="CashCloseTab__f7dbb3" />
           ) : (
             <ReconciliationTab
@@ -552,12 +554,14 @@ export function FinancialAccountDetail({ recordId }) {
               account={account}
               paymentMethods={paymentMethods}
               onReconcileSuccess={() => { reloadAccountAndList(); reloadMovements(); reloadAutoMatch(); }}
+              windowReadOnly={windowReadOnly}
               data-testid="ReconciliationTab__f7dbb3" />
           ))}
           {activeTab === 'statements' && (
             <ImportedStatementsTab
               ref={statementsTabRef}
               account={account}
+              windowReadOnly={windowReadOnly}
               data-testid="ImportedStatementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliationList' && (

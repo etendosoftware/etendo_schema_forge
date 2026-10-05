@@ -5,6 +5,7 @@ import { CHIP_ICONS, CHIP_COLORS, STATUS_KEYS } from '@/components/related-docum
 import { DOCUMENT_CHIP_TYPES } from '@/components/related-documents/docChipTypes.jsx';
 import { StatusTag } from '@/components/ui/status-tag';
 import { formatAmount } from '@/components/related-documents/helpers.js';
+import { useRelatedDocuments } from '@/components/related-documents/useRelatedDocuments.js';
 
 function SectionCard({ title, onRefresh, isRefreshing, children }) {
   return (
@@ -67,19 +68,29 @@ function DocRow({ type, doc, ui, navigate }) {
     <button
       type="button"
       onClick={() => navigate(`${cfg.routePrefix}/${doc.id}`)}
+      // One line always (ETP-5527): the title and amount are never cut; when the row is too
+      // narrow, the status tag is what shrinks, with an ellipsis and the full text on hover.
       className="flex justify-between items-center py-2 w-full text-left hover:bg-muted rounded -mx-1 px-1 transition-colors"
     >
-      <div className="flex items-center gap-2 min-w-0">
+      <div className="flex items-center gap-2 shrink-0">
         <span className={`shrink-0 ${CHIP_COLORS[cfg.iconKey] ?? 'text-muted-foreground'}`}>
           {CHIP_ICONS[cfg.iconKey]}
         </span>
-        <span className="text-sm font-medium text-foreground truncate">{label}</span>
+        <span className="text-sm font-medium text-foreground whitespace-nowrap">{label}</span>
         {amountStr && (
           <span className="text-xs text-muted-foreground tabular-nums shrink-0">{amountStr}</span>
         )}
       </div>
       {statusCode && (
-        <StatusTag status={statusCode} label={statusLabel} data-testid="StatusTag__685328" />
+        <span className="flex justify-end min-w-0 ml-2" title={statusLabel}>
+          {/* StatusTag renders its label as a text node of an inline-flex span, where an
+              ellipsis cannot apply; the label is wrapped in its own truncating span. */}
+          <StatusTag
+            status={statusCode}
+            label={<span className="truncate min-w-0">{statusLabel}</span>}
+            className="max-w-full min-w-0"
+            data-testid="StatusTag__685328" />
+        </span>
       )}
     </button>
   );
@@ -94,12 +105,18 @@ function DocRow({ type, doc, ui, navigate }) {
  *   apiBaseUrl   string
  *   specs        Array<{ key, type, fetch: async(id, token, base) => row[] }>
  *   fetchExtra   async(id, token, base) => Array<{ type, doc }> — optional chained fetch
+ *   definition   related-documents definition (SALES_RELATED_DOCS entry) — ETP-5527.
+ *                When set it REPLACES specs/fetchExtra: the card lists exactly what the
+ *                form's RelatedDocuments section lists for the same record.
+ *   record       with `definition` only: the detail record, when the caller already has
+ *                it. Omit it and the card loads the detail record itself — list rows
+ *                lack the fields the backend injects on the detail GET only.
  */
-export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal }) {
+export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, specs = [], fetchExtra, docsRefreshSignal, definition, record }) {
   const ui = useUI();
   const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [legacyItems, setLegacyItems] = useState([]);
+  const [legacyLoading, setLegacyLoading] = useState(!definition);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const timeoutRef = useRef(null);
@@ -108,9 +125,19 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
     return () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); };
   }, []);
 
+  const related = useRelatedDocuments({
+    definition: definition ?? null,
+    id: documentId,
+    record,
+    token,
+    apiBaseUrl,
+    refreshSignal: docsRefreshSignal,
+  });
+
   useEffect(() => {
-    if (!documentId || specs.length === 0) { setLoading(false); return; }
-    setLoading(true);
+    if (definition) return;
+    if (!documentId || specs.length === 0) { setLegacyLoading(false); return; }
+    setLegacyLoading(true);
     const specPromises = specs.map(s =>
       s.fetch(documentId, token, apiBaseUrl)
         .then(rows => rows.map(doc => ({ type: s.type, doc })))
@@ -121,16 +148,24 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
       : Promise.resolve([]);
     Promise.all([Promise.all(specPromises), extraPromise])
       .then(([specResults, extraResults]) => {
-        setItems([...specResults.flat(), ...extraResults]);
+        setLegacyItems([...specResults.flat(), ...extraResults]);
       })
-      .finally(() => setLoading(false));
-  }, [documentId, token, apiBaseUrl, refreshKey, docsRefreshSignal]);
+      .finally(() => setLegacyLoading(false));
+  }, [documentId, token, apiBaseUrl, refreshKey, docsRefreshSignal, definition]);
 
-  if (!documentId || specs.length === 0) return null;
+  if (!documentId || (!definition && specs.length === 0)) return null;
+
+  const items = definition ? related.items : legacyItems;
+  const loading = definition ? related.loading : legacyLoading;
+  // With a definition, refreshing only makes sense when it has fetched sources (same rule
+  // as RelatedDocumentsSection); a record-only one (e.g. return material receipt) has
+  // nothing to refetch. The legacy specs path always offers it, as before.
+  const refreshable = !definition || (definition.sources ?? []).some(s => typeof s.fetch === 'function');
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setRefreshKey(k => k + 1);
+    if (definition) related.refresh();
+    else setRefreshKey(k => k + 1);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setIsRefreshing(false), 500);
   };
@@ -138,7 +173,7 @@ export default function RelatedDocumentsCard({ documentId, token, apiBaseUrl, sp
   return (
     <SectionCard
       title={ui('previewCardRelatedDocuments')}
-      onRefresh={handleRefresh}
+      onRefresh={refreshable ? handleRefresh : undefined}
       isRefreshing={isRefreshing || loading}
       data-testid="SectionCard__685328">
       {loading && (

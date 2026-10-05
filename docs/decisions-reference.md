@@ -616,7 +616,7 @@ Each entry in `actions` accepts:
 | Mutually exclusive | ✅ | ❌ |
 | Combinable | ❌ | ✅ |
 
-The two can coexist in the same window — subsets render first (segmented control), quick filters render after (toggle pills).
+The two can coexist in the same window. In the query, the subset is applied first and the quick filters refine it. On screen the order is the reverse (ETP-5509): the quick filters (toggle pills) sit on the first toolbar row, and the subsets (segmented control) sit on a second row below it — see [`list-filters.md` → "Toolbar layout (ETP-5509)"](list-filters.md#toolbar-layout-etp-5509).
 
 ### Custom Components (`window.customComponents`)
 
@@ -1362,6 +1362,13 @@ percentage label beside it (not inside). Implementation: `ProgressCircle`
 The percentage **label** is always the theme foreground colour (black), in every state
 (0%, 1-99% and 100% or more); only the arc changes colour.
 
+The ring itself is the shared, label-less `ProgressRing`
+(`tools/app-shell/src/components/contract-ui/ProgressRing.jsx`; props `size` and `variant`:
+`'default'` uses the grid theme classes, `'current'` uses `currentColor` for use inside
+pills). `ProgressCircle` (grid and preview `PercentBar`) composes it with its label, and the
+detail-header progress badges (`ProgressFieldBadge` → `DocumentStatusPill`, via its optional
+`icon` prop) reuse it at 16px with the `current` variant.
+
 - The value is assumed to be a 0-100 status. Above 100 the arc is clamped to a full ring,
   but the label still shows the real value.
 - The cell is left-aligned.
@@ -1375,6 +1382,7 @@ The percentage **label** is always the theme foreground colour (black), in every
   `tools/app-shell/src/lib/linesColumnWidth.js`, used by `columnMinWidthPx`). The lines panel
   and add-row (`columnFlex`) intentionally keep 152px, so the two constants diverge on
   purpose. An explicit `col.minWidth` still wins.
+- **Preview panel:** the document preview's `PercentBar` (`SummaryCard.jsx`, used by the order, invoice, goods shipment/receipt and return previews) renders this same `ProgressCircle`, so list and preview are consistent; unlike the old linear bar, its label shows the real value above 100%.
 - **Not covered:** the `InlineLinesPanel` percent read cell, `listModalCells`, `KPIHeader`
   and the fm303 percent inputs are different renderers and still show plain text.
 

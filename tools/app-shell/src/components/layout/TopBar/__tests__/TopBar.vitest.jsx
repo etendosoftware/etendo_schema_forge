@@ -86,12 +86,19 @@ describe('TopBar title', () => {
     expect(indicator.querySelector('[style*="width"]')).toBeTruthy();
   });
 
+  // ETP-5509: the bound that lets `truncate` act is no longer a fixed max-w cap on the title
+  // block but the left grid column itself — every box between the column and the text must be
+  // shrinkable (`min-w-0`), otherwise the text's min-content width would widen the column.
   it('truncates a long title instead of letting it overflow the header', () => {
     render(<TopBar title={LONG_NAME} />);
     const title = screen.getByText(LONG_NAME);
-    expect(title.className).toMatch(/truncate/);
-    // The block itself must be capped — truncate has no effect on an unbounded container.
-    expect(title.closest('[class*="max-w-"]')).toBeTruthy();
+    expect(title.className).toMatch(/\btruncate\b/);
+    expect(title.className).toMatch(/\bmin-w-0\b/);
+    const block = screen.getByTestId('topbar-title-block');
+    expect(block.className).toMatch(/\bmin-w-0\b/);
+    const leftColumn = block.parentElement;
+    expect(leftColumn.className).toMatch(/\bcol-start-1\b/);
+    expect(leftColumn.className).toMatch(/\bmin-w-0\b/);
   });
 
   // The full name is wired as the tooltip's own content — not asserted by actually opening the
@@ -288,22 +295,57 @@ describe('TopBar layout (ETP-5504)', () => {
     navigateMock.mockReset();
   });
 
-  it('caps the title/breadcrumb block at 256px', () => {
+  // ETP-5509 — the header is a 3-column grid (left | search | right) whose side tracks are equal
+  // `1fr`, which is what keeps the search at the exact center of the bar. jsdom has no layout, so
+  // these pin the classes that produce it; the geometry itself is measured by
+  // e2e/tests/flows/platform/topbar-centered-search.mocked.spec.js.
+  it('lets the title/breadcrumb block use the whole left grid column (no fixed width cap)', () => {
     render(<TopBar title={LONG_NAME} breadcrumb={`Finanzas / Cuentas / ${LONG_NAME}`} />);
     const block = screen.getByTestId('topbar-title-block');
-    expect(block.className).toMatch(/max-w-\[256px\]/);
-    expect(block.className).not.toMatch(/max-w-\[320px\]/);
+    expect(block.className).not.toMatch(/max-w-/);
+    expect(block.className).toMatch(/\bmin-w-0\b/);
     expect(block).toContainElement(screen.getByTestId('topbar-breadcrumb'));
+    const leftColumn = block.parentElement;
+    expect(leftColumn.className).toMatch(/\bcol-start-1\b/);
+    expect(leftColumn.className).toMatch(/\bmin-w-0\b/);
+    expect(leftColumn.className).not.toMatch(/max-w-/);
+    // The string breadcrumb elides inside the block.
+    expect(screen.getByTestId('topbar-breadcrumb').className).toMatch(/\btruncate\b/);
   });
 
-  it('keeps the search in the flex flow with a fixed 392px width (no absolute overlay)', () => {
-    render(<TopBar title="Plan de cuentas" />);
+  it('lays the header out as a 3-column grid with the search in the middle column', () => {
+    const { container } = render(
+      <TopBar title="Plan de cuentas" menuAction={{ label: 'x', onClick: vi.fn() }} />,
+    );
+    const header = container.querySelector('header');
+    expect(header.className).toMatch(/\bgrid\b/);
+    expect(header.className).toContain('grid-cols-[minmax(0,1fr)_auto_minmax(max-content,1fr)]');
+    expect(header.className).not.toMatch(/(^|\s)flex(\s|$)/);
+
     const trigger = screen.getByTestId('global-search-trigger');
     expect(trigger.className).toMatch(/w-\[392px\]/);
     const slot = screen.getByTestId('topbar-search-slot');
-    expect(slot.className).toMatch(/flex-1/);
+    expect(slot.className).toMatch(/\bcol-start-2\b/);
+    expect(slot.className).not.toMatch(/flex-1/);
     expect(slot.className).not.toMatch(/absolute/);
     expect(slot.className).not.toMatch(/inset-0/);
+
+    const right = screen.getByTestId('topbar-quick-actions');
+    expect(right.className).toMatch(/\bcol-start-3\b/);
+    expect(right.className).toMatch(/\bjustify-self-end\b/);
+
+    // The kebab never gives up width to the title.
+    expect(screen.getByTestId('topbar-more-actions').className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('keeps the search in the middle column when there is no title and no back button', () => {
+    const { container } = render(<TopBar />);
+    expect(screen.queryByTestId('topbar-title-block')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('topbar-back')).not.toBeInTheDocument();
+    expect(container.querySelector('header').className).toMatch(/\bgrid\b/);
+    // Explicit placement: without it, auto-placement would drop the slot into column 1.
+    expect(screen.getByTestId('topbar-search-slot').className).toMatch(/\bcol-start-2\b/);
+    expect(screen.getByTestId('topbar-quick-actions').className).toMatch(/\bcol-start-3\b/);
   });
 
   it('still lays out with a back button present', () => {

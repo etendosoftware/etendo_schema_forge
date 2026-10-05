@@ -178,6 +178,41 @@ describe('NameCell', () => {
   });
 });
 
+// ETP-5457 — NameCell forwards the window's "read-only" access tier to SyncStatusInline, which
+// then drops the inline "Conectar banco" CTA (a write). The rest of the cell is unaffected.
+describe('NameCell — read-only access tier (ETP-5457)', () => {
+  const OFFLINE = { ...ACCOUNT, bankConnected: false };
+
+  it('renders no connect affordance under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={vi.fn()} windowReadOnly />);
+
+    expect(screen.queryByTestId('account-sync-connect-acc-1')).not.toBeInTheDocument();
+  });
+
+  it('renders the connect affordance under full access (ETP-5457 twin)', () => {
+    const onConnect = vi.fn();
+    render(<NameCell account={OFFLINE} ui={ui} onConnect={onConnect} windowReadOnly={false} />);
+
+    fireEvent.click(screen.getByTestId('account-sync-connect-acc-1'));
+
+    expect(onConnect).toHaveBeenCalledWith(expect.objectContaining({ id: 'acc-1' }));
+  });
+
+  it('keeps the name and the offline badge under the read-only tier (ETP-5457)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
+  });
+
+  it('keeps the name and the offline badge under full access (ETP-5457 twin)', () => {
+    render(<NameCell account={OFFLINE} ui={ui} windowReadOnly={false} />);
+
+    expect(screen.getByTestId('account-row-name-acc-1')).toHaveTextContent('BBVA Principal');
+    expect(screen.getByText('financeAccountsBadgeOffline')).toBeInTheDocument();
+  });
+});
+
 describe('TypeCell', () => {
   it('renders the translated type label and the IBAN chunked in fours', () => {
     render(<TypeCell account={ACCOUNT} ui={ui} />);

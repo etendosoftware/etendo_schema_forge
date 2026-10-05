@@ -187,7 +187,12 @@ function StatusPill({ status, matched, total, ui }) {
  *   actions?: { onEdit: Function, onProcess: Function, onReactivate: Function, onDelete: Function };
  *   selectedIds?: Set<string>;
  *   onSelectionChange?: (id: string) => void;
+ *   windowReadOnly?: boolean;
  * }} props
+ *
+ * `windowReadOnly` (ETP-5457) is the window's "read-only" access tier: the per-row actions (edit,
+ * kebab, delete) and the selection checkboxes — whose only purpose is the bulk delete — are not
+ * rendered. Expanding a row to read its lines and sorting stay available.
  */
 /**
  * Sort accessors for this grid.
@@ -234,6 +239,9 @@ export function StatementsTable({
   linesRefreshToken = 0,
   // PSD2-connected account: its statements are read-only (ETP-4921). Pass-down to RowActions.
   bankConnected = false,
+  // The window's "read-only" access tier (ETP-5457) — see the JSDoc above. Distinct from
+  // `bankConnected`: that one is about where the statements come from, this one about the role.
+  windowReadOnly = false,
 }) {
   const ui = useUI();
   const { locale: appLocale } = useLocaleSwitch();
@@ -273,12 +281,15 @@ export function StatementsTable({
         )}
       >
         <span aria-hidden="true" />
+        {/* The cell stays even when the checkbox does not, so the grid columns keep lining up. */}
         <span>
-          <Checkbox
-            checked={allSelected}
-            indeterminate={someSelected}
-            onChange={handleSelectAll}
-            data-testid="Checkbox__3acaeb" />
+          {windowReadOnly ? null : (
+            <Checkbox
+              checked={allSelected}
+              indeterminate={someSelected}
+              onChange={handleSelectAll}
+              data-testid="Checkbox__3acaeb" />
+          )}
         </span>
         {STATEMENT_COLUMNS.map((col) => (
           <span key={col.name}>
@@ -308,7 +319,7 @@ export function StatementsTable({
       {/* Body */}
       {renderBody({
         loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
-        selectedIds, onSelectionChange, linesRefreshToken, bankConnected,
+        selectedIds, onSelectionChange, linesRefreshToken, bankConnected, windowReadOnly,
       })}
     </div>
   );
@@ -321,6 +332,7 @@ export function StatementsTable({
 function renderBody({
   loading, statements, ui, currency, bcpLocale, openId, toggle, actions,
   selectedIds, onSelectionChange, linesRefreshToken = 0, bankConnected = false,
+  windowReadOnly = false,
 }) {
   if (loading && statements.length === 0) {
     return [1, 2, 3, 4, 5].map((n) => (
@@ -362,6 +374,7 @@ function renderBody({
         onSelectionChange={onSelectionChange}
         linesRefreshToken={linesRefreshToken}
         bankConnected={bankConnected}
+        windowReadOnly={windowReadOnly}
         data-testid="StatementRow__3acaeb" />
     );
   });
@@ -377,6 +390,8 @@ function renderBody({
 // bank and must not be hand-edited or deleted. They are hidden rather than shown disabled because
 // that is what this row already does for a processed statement — the explanation lives on the
 // kebab's disabled Reactivar, the one affordance that stays visible.
+//
+// Under the window's "read-only" access tier (ETP-5457) StatementRow does not render this at all.
 function RowActions({ statement: s, actions, ui, bankConnected = false }) {
   const isDraft = isDraftStatement(s) && !bankConnected;
   const iconBtn = 'inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors';
@@ -454,7 +469,7 @@ function computeStatementRowClassName({ selected, open }) {
 
 function StatementRow({
   statement: s, currency, bcpLocale, ui, open, onToggle, actions, selected, onSelectionChange,
-  linesRefreshToken = 0, bankConnected = false,
+  linesRefreshToken = 0, bankConnected = false, windowReadOnly = false,
 }) {
   // Context handed to the contract-column cell renderers.
   const cellCtx = { ui, bcpLocale, displayName: (st) => statementDisplayName(st, bcpLocale) };
@@ -479,10 +494,14 @@ function StatementRow({
           <ChevronDown className="h-4 w-4" data-testid="ChevronDown__3acaeb" />
         </button>
         <span onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={selected}
-            onChange={() => onSelectionChange(s.id)}
-            data-testid="Checkbox__3acaeb" />
+          {/* ETP-5457 — selection only feeds the bulk delete, so it is not offered under read-only.
+              The cell stays to keep the grid aligned. */}
+          {windowReadOnly ? null : (
+            <Checkbox
+              checked={selected}
+              onChange={() => onSelectionChange(s.id)}
+              data-testid="Checkbox__3acaeb" />
+          )}
         </span>
         {/* Contract-driven data columns (decisions.json → contract.json) */}
         {STATEMENT_COLUMNS.map((col) => {
@@ -511,12 +530,17 @@ function StatementRow({
             data-testid="StatusPill__3acaeb" />
         </span>
         <span aria-hidden="true" />
-        {actions ? (
+        {actions && !windowReadOnly ? (
           <div
             className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-card px-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <RowActions statement={s} actions={actions} ui={ui} bankConnected={bankConnected} data-testid="RowActions__3acaeb" />
+            <RowActions
+              statement={s}
+              actions={actions}
+              ui={ui}
+              bankConnected={bankConnected}
+              data-testid="RowActions__3acaeb" />
           </div>
         ) : null}
       </div>
