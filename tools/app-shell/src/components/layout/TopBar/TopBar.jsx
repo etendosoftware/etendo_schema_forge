@@ -530,7 +530,9 @@ export default function TopBar({
                   <TooltipContent data-testid="TooltipContent__topbar-title">{title}</TooltipContent>
                 </Tooltip>
                 {recordCount != null && (
-                  <span className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[hsl(var(--border-control))] rounded-lg shrink-0">
+                  <span
+                    className="inline-flex items-center justify-center w-7 h-6 px-2 py-1 text-xs font-medium text-muted-foreground bg-page-bg border border-[hsl(var(--border-control))] rounded-lg shrink-0"
+                    data-testid="topbar-record-count">
                     {recordCount}
                   </span>
                 )}

@@ -1,19 +1,18 @@
 {
   "version": "0.9.0",
   "generatedAt": "2026-03-09T10:00:00.000Z",
-  "updatedAt": "2026-09-28T13:58:02.937Z",
-  "checksum": "4592e4b920259c83",
+  "updatedAt": "2026-10-05T13:04:35.357Z",
+  "checksum": "a6cadaa50840ec5e",
   "frontendContract": {
     "window": {
       "id": "118",
       "name": "Chart of Accounts",
       "primaryEntity": "elementValue",
       "category": "finance",
-      "hideCreate": true,
       "hideListFilters": true,
-      "hideRecordCount": true,
       "customComponents": {
-        "headerTable": "AccountTreeView"
+        "headerTable": "AccountTreeView",
+        "newRecordComponent": "NewSubAccountCreateModal"
       },
       "menuActions": [
         {
@@ -216,11 +215,10 @@
       "name": "Chart of Accounts",
       "primaryEntity": "elementValue",
       "category": "finance",
-      "hideCreate": true,
       "hideListFilters": true,
-      "hideRecordCount": true,
       "customComponents": {
-        "headerTable": "AccountTreeView"
+        "headerTable": "AccountTreeView",
+        "newRecordComponent": "NewSubAccountCreateModal"
       },
       "menuActions": [
         {

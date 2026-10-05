@@ -7,8 +7,12 @@
  * collection-level widgets from the same fetch that filled the grid — no second request.
  *
  * A non-functional `headerContent` (plain node) is rendered as-is and never receives it.
+ *
+ * Also covers the record-count badge ListView publishes through `useSetPageMeta`,
+ * including the count a custom table reports itself (`onRecordCountChange`, ETP-5593).
  */
-import { render, screen } from '@testing-library/react';
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
+import { act, render, screen } from '@testing-library/react';
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
@@ -198,5 +202,32 @@ describe('ListView — recordCount (hideRecordCount)', () => {
 
     const lastCall = useSetPageMeta.mock.calls.at(-1);
     expect(lastCall[0]).toMatchObject({ recordCount: undefined });
+  });
+
+  // ETP-5593 — a custom table that renders something other than ListView's page (the
+  // chart-of-accounts tree counts its root folders) reports its own count.
+  it('uses the count the table reports through onRecordCountChange instead of the page size', () => {
+    hookState = { items: [{ id: '1' }, { id: '2' }, { id: '3' }] };
+
+    render(<ListView {...defaultProps} />);
+    act(() => tableProps.onRecordCountChange(4));
+
+    expect(useSetPageMeta.mock.calls.at(-1)[0]).toMatchObject({ recordCount: 4 });
+  });
+
+  it('falls back to the page size when the table reports something that is not a number', () => {
+    hookState = { items: [{ id: '1' }, { id: '2' }] };
+
+    render(<ListView {...defaultProps} />);
+    act(() => tableProps.onRecordCountChange(null));
+
+    expect(useSetPageMeta.mock.calls.at(-1)[0]).toMatchObject({ recordCount: 2 });
+  });
+
+  it('keeps hiding the badge under hideRecordCount even when the table reports a count', () => {
+    render(<ListView {...defaultProps} hideRecordCount />);
+    act(() => tableProps.onRecordCountChange(4));
+
+    expect(useSetPageMeta.mock.calls.at(-1)[0]).toMatchObject({ recordCount: undefined });
   });
 });

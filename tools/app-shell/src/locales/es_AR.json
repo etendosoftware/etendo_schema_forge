@@ -13598,6 +13598,10 @@
     }
   },
   "windows": {
+    "Chart of Accounts": {
+      "label": "Plan de cuentas",
+      "newLabel": "Nueva subcuenta"
+    },
     "Event Type": {
       "label": "Event Type"
     },
