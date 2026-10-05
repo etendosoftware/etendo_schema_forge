@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { declareNoSession } from '../../helpers/auth.js';
 
 /**
  * ETP-4665 — Onboarding length limits and readable provisioning errors (mocked).
@@ -33,6 +34,7 @@ const LIMITS = {
 // ── Mock installer ───────────────────────────────────────────────────────────
 
 async function installMocks(page, { registerBehavior = 'success', onboardingResult } = {}) {
+  await declareNoSession(page);
   await page.route('**/sws/go/me', route =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"error":{"message":"invalid"}}' })
   );

@@ -156,6 +156,32 @@ export async function declareCookieSession(page, { csrfToken = 'e2e-cookie-csrf-
 }
 
 /**
+ * ETP-5550 — answers `GET /sws/go/session` with the backend's "no session" 401, for mocked
+ * specs that start signed out on `/onboarding` without going through `login()`.
+ *
+ * Left unmocked, that GET goes through the preview proxy to whatever backend is (or is not)
+ * behind it. A live Tomcat answers 401 and the login view renders, so the spec passes locally.
+ * With no backend (the mocked stage in CI), the proxy answers 500. Since ETP-5550 the
+ * onboarding reads that as "backend not answering during a deploy" and keeps retrying on its
+ * loading view instead of showing the login, so every spec that waits for the login view
+ * times out.
+ *
+ * Call it FIRST in the spec's mock installer: Playwright tries the latest-registered route
+ * first, so a spec's own `**\/sws/go/session` routes registered afterwards still win, and
+ * falling back to this one keeps the restore signed out.
+ */
+export async function declareNoSession(page) {
+  await page.route('**/sws/go/session', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Invalid or expired token', status: 401 } }),
+    });
+  });
+}
+
+/**
  * ETP-5551 — opt-in race guard for specs that override `GET /sws/go/onboarding/first-steps`
  * AFTER `login()` (enable with `login(page, { awaitFirstStepsRead: true })`).
  *

@@ -23,6 +23,9 @@ export function AccountRowActions({
   onBankConnectionAction,
   onTransfer,
   onNewMovement,
+  // ETP-5457 — the window's "read-only" access tier: Edit and Sync (both writes) are not
+  // rendered, and the kebab keeps only its navigation item ("Abrir cuenta").
+  windowReadOnly = false,
 }) {
   const ui = useUI();
 
@@ -35,23 +38,25 @@ export function AccountRowActions({
           variant is load-bearing; the unnamed one keeps compatibility with a plain
           `group` host. */}
       <div className="absolute right-0 inset-y-0 z-10 flex h-full flex-row items-center justify-center gap-0.5 px-3 opacity-0 group-hover:opacity-100 group-hover/row:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100">
-        <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
-          <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
-            <button
-              type="button"
-              aria-label={ui('financeAccountsMenuEdit')}
-              data-testid={`account-row-edit-${account.id}`}
-              onClick={() => onEdit?.(account)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
-            >
-              <Pencil className="h-5 w-5" data-testid="Pencil__acctactions" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
-        </Tooltip>
+        {!windowReadOnly && (
+          <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
+            <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
+              <button
+                type="button"
+                aria-label={ui('financeAccountsMenuEdit')}
+                data-testid={`account-row-edit-${account.id}`}
+                onClick={() => onEdit?.(account)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[hsl(var(--text-disabled))] hover:bg-[hsl(var(--border-subtle))]"
+              >
+                <Pencil className="h-5 w-5" data-testid="Pencil__acctactions" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent data-testid="TooltipContent__acctactions">{ui('financeAccountsMenuEdit')}</TooltipContent>
+          </Tooltip>
+        )}
         {/* Sync is only meaningful for bank-connected accounts — same statement fetch as the
             kebab's "Sincronizar ahora" / the statements tab's "Sincronizar extractos". */}
-        {account.bankConnected === true ? (
+        {!windowReadOnly && account.bankConnected === true ? (
           <Tooltip delayDuration={0} data-testid="Tooltip__acctactions">
             <TooltipTrigger asChild data-testid="TooltipTrigger__acctactions">
               <button
@@ -76,6 +81,7 @@ export function AccountRowActions({
           onBankConnectionAction={onBankConnectionAction}
           onTransfer={onTransfer}
           onNewMovement={onNewMovement}
+          windowReadOnly={windowReadOnly}
           data-testid="AccountRowMenu__acctactions" />
       </div>
     </TooltipProvider>

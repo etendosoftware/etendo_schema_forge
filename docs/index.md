@@ -23,6 +23,8 @@
 
 | File | Description |
 |------|-------------|
+| [testing/test-reuse-policy.md](testing/test-reuse-policy.md) | **Test reuse policy** (reuse-first protocol): locate existing tests with `make find-tests`, Extend / Rewrite / New with justification, the `@covers` tag, no ticket-named files, stop-and-escalate on a correct failing test, and the `test-hygiene` CI checks in both repos. Single source for `tester-functional`, `tester-go`, the dev repro exception and Alex |
+| [testing/etendo-test-skill-review.md](testing/etendo-test-skill-review.md) | Where the `dev-assistant:etendo-test` skill conflicts with the test reuse policy, plus the upstream change request |
 | [e2e-testing-guide.md](e2e-testing-guide.md) | E2E testing guide: discover with agent-browser, automate with Playwright |
 | [etp-5045-durable-payment-state.md](etp-5045-durable-payment-state.md) | **ETP-5045 as one summary** (both repos): why payment state moved out of process memory into `ETGO_CHECKOUT_REQUEST` and `ETGO_BILLING_EVENT`, the forward-only checkout lifecycle, the webhook claim and its at-most-once crash window, why check ordering is a security control, the two Stripe credentials, and the `smartbuild` sampledata gap |
 | [stripe-local-testing.md](stripe-local-testing.md) | Stripe hosted Checkout local testing: offline webhook simulator and session stub, Test Mode forwarding, durable checkout/billing-event state (`ETGO_CHECKOUT_REQUEST`, `ETGO_BILLING_EVENT`), restart replay matrix, plus the ETP-5443 subscription lifecycle (grace anchor, correlation, offline/Test Mode recipes, the two account endpoints) |
@@ -44,7 +46,7 @@
 | [ui-customization.md](ui-customization.md) | **UI customization guide**: all extension points driven by `decisions.json` (statusBar, listKpiCards, customComponents, menuActions, layoutType, etc.) with real examples and decision tree |
 | [ui-design-guidelines.md](ui-design-guidelines.md) | **UI design guidelines**: z-index scale, scrim opacity, overlay/drawer patterns, monetary amount formatting (`formatCurrency` vs `formatDashboardAmount`), column alignment |
 | [walkthrough-flows.md](walkthrough-flows.md) | **Guided walkthroughs**: the flow JSON contract (step shape, `advance` modes, route/target resolution), where the engine vs. the flow data lives, failure behaviour, and the checklist for adding a flow |
-| [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which |
+| [list-filters.md](list-filters.md) | **List view filters reference**: subset filters, quick filters, document-type filters, advanced filter popover — composition rules, URL-param hooks, when to use which; plus the list toolbar layout (two rows + separator, ETP-5509) |
 | [pipeline-validator-reference.md](pipeline-validator-reference.md) | **Pipeline completeness validator**: rules F1–F10, artifact classification, CLI flags, exit codes, and troubleshooting |
 | [document-printables.md](document-printables.md) | **Document printables** — the TWO document designs and which button shows each, the criteria a change must meet, the PDF cache and its (missing) invalidation, and the decisions on record. Governing skill: `/document-printables` |
 | [contract-generation-ownership.md](contract-generation-ownership.md) | **Contract/generated output ownership**: producers, consumers, regeneration triggers, and split-ready artifact rules |

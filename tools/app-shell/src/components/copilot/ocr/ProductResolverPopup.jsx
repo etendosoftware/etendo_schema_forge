@@ -5,6 +5,7 @@ import { useUI } from '@/i18n';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { buildSearchUrl, readSearchRows } from './ocrQuery.js';
 /* eslint-disable react/prop-types */
 
 const SELECTOR_PAGE_SIZE = 50;
@@ -195,22 +196,15 @@ function InlineSelector({ selectorUrl, apiFetch, token, initialQuery, value, onP
       setLoading(true);
       setFailed(false);
       try {
-        const params = new URLSearchParams({
-          limit: String(SELECTOR_PAGE_SIZE),
-          offset: '0',
+        const url = buildSearchUrl(selectorUrl, {
+          query,
+          limit: SELECTOR_PAGE_SIZE,
+          params: { offset: '0' },
         });
-        const trimmed = query.trim();
-        if (trimmed) {
-          const escaped = trimmed.replace(/'/g, "''");
-          params.set('_query', trimmed);
-          params.set('name', trimmed);
-          params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
-        }
-        const res = await apiFetch(`${selectorUrl}?${params}`, { token });
+        const res = await apiFetch(url, { token });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
-        const list = data?.items ?? data?.response?.data ?? [];
-        if (!cancelled) setItems(Array.isArray(list) ? list : []);
+        if (!cancelled) setItems(readSearchRows(data));
       } catch {
         if (!cancelled) { setItems([]); setFailed(true); }
       } finally {
@@ -340,27 +334,18 @@ function SelectorDialog({
       setLoading(true);
       setFailed(false);
       try {
-        const params = new URLSearchParams({
-          limit: String(SELECTOR_PAGE_SIZE),
-          offset: '0',
+        // Selector endpoints (.../selectors/<col>) take the text as `q`, CRUD lists as
+        // `criteria` — never an HQL `_neoWhere`, which the production WAF blocks (ocrQuery.js).
+        const url = buildSearchUrl(selectorUrl, {
+          query,
+          limit: SELECTOR_PAGE_SIZE,
+          params: { offset: '0' },
         });
-        const trimmed = query.trim();
-        if (trimmed) {
-          // Selector endpoints (.../selectors/<col>) accept `name`/`_query`.
-          // CRUD list endpoints accept `_neoWhere` (HQL fragment). Send all
-          // three so either path filters server-side; unknown params are
-          // ignored. Escape single quotes per HQL convention.
-          const escaped = trimmed.replace(/'/g, "''");
-          params.set('_query', trimmed);
-          params.set('name', trimmed);
-          params.set('_neoWhere', `lower(name) like '%${escaped.toLowerCase()}%' and active = true`);
-        }
-        const res = await apiFetch(`${selectorUrl}?${params}`, { token });
+        const res = await apiFetch(url, { token });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const data = await res.json();
-        const list = data?.items ?? data?.response?.data ?? [];
         if (!cancelled) {
-          setItems(Array.isArray(list) ? list : []);
+          setItems(readSearchRows(data));
         }
       } catch {
         if (!cancelled) {

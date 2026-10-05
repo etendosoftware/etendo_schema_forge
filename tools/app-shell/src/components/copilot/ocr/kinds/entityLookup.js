@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
+import { buildSearchUrl, deriveSelectorUrl, readSearchRows } from '../ocrQuery.js';
 export const SEARCH_DEBOUNCE_MS = 250;
 
-export function escHql(value) {
-  return String(value).replace(/'/g, "''");
-}
-
-export function deriveEntityEndpoint({ entitySpec, apiBaseUrl, contactsBase } = {}) {
+/**
+ * Endpoint an OCR entity field searches. `selector` (`<spec>/<entity>/<COLUMN>`) targets a
+ * NEO selector; `entitySpec` (`<spec>/<entity>`) targets a CRUD list.
+ */
+export function deriveEntityEndpoint({ entitySpec, selector, apiBaseUrl, contactsBase } = {}) {
+  if (selector) {
+    const [selSpec, selEntity, column] = String(selector).split('/');
+    return selSpec && selEntity && column
+      ? deriveSelectorUrl(apiBaseUrl, selSpec, selEntity, column)
+      : null;
+  }
   const [spec, entity] = String(entitySpec || '').split('/');
   if (!spec || !entity) return null;
   if (spec === 'contacts') {
@@ -29,10 +36,12 @@ export function useClickOutside(ref, enabled, onOutside) {
   }, [enabled, ref, onOutside]);
 }
 
-export function useEntitySearch({ open, endpoint, token, query, filter, limit }) {
+export function useEntitySearch({ open, endpoint, token, query, params, limit }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const apiFetch = useApiFetch('');
+  // `params` is usually a config literal; key the effect on its content, not its identity.
+  const paramsKey = JSON.stringify(params || {});
 
   useEffect(() => {
     if (!open || !endpoint) return undefined;
@@ -40,17 +49,12 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
     const trimmed = query.trim();
     const timer = setTimeout(async () => {
       setLoading(true);
-      const baseFilter = filter || 'active = true';
-      const where = trimmed
-        ? `lower(name) like lower('%${escHql(trimmed)}%') and ${baseFilter}`
-        : baseFilter;
-      const url = `${endpoint}?_neoWhere=${encodeURIComponent(where)}&limit=${limit}`;
+      const url = buildSearchUrl(endpoint, { query: trimmed, limit, params: JSON.parse(paramsKey) });
       try {
         const res = await apiFetch(url, { baseUrl: '' });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const json = await res.json();
-        const data = json?.response?.data ?? json?.data ?? [];
-        if (!cancelled) setItems(Array.isArray(data) ? data : []);
+        if (!cancelled) setItems(readSearchRows(json));
       } catch {
         if (!cancelled) setItems([]);
       } finally {
@@ -61,7 +65,7 @@ export function useEntitySearch({ open, endpoint, token, query, filter, limit })
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [open, endpoint, token, query, filter, limit, apiFetch]);
+  }, [open, endpoint, token, query, paramsKey, limit, apiFetch]);
 
   return { items, loading };
 }

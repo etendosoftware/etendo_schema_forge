@@ -12,10 +12,10 @@ describe('getProgressTone', () => {
     assert.equal(getProgressTone(0.9995), 'success');
   });
 
-  it('returns warning between 0 and the success threshold', () => {
-    assert.equal(getProgressTone(0.5), 'warning');
-    assert.equal(getProgressTone(0.99), 'warning');
-    assert.equal(getProgressTone(0.01), 'warning');
+  it('returns neutral (not warning) between 0 and the success threshold', () => {
+    assert.equal(getProgressTone(0.5), 'neutral');
+    assert.equal(getProgressTone(0.99), 'neutral');
+    assert.equal(getProgressTone(0.01), 'neutral');
   });
 
   it('returns neutral at 0%', () => {

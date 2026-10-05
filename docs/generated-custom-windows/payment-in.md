@@ -315,3 +315,34 @@ REST and the SPA are unchanged):
   backend actions it calls (`pendingInvoices`, `applyToInvoices`) do not exist, so it is not a
   route for agents either. An advance collection without an invoice is not offered by the UI
   (`hideCreate`) and is hidden from MCP.
+
+## Confirming a payment on a posted foreign-currency invoice, and Reactivar on a reconciled payment — ETP-5547
+
+**Confirming a reactivated draft.** Confirming a payment from the invoice's payment editor sends a `registerPayment{Out}` action POST on the invoice header. Before ETP-5547, that POST also re-synced the invoice's `C_Conversion_Rate_Document` row. For a foreign-currency invoice that the accounting background had already **posted**, Core rejected the write with `@20501@`. The error was only logged, but it aborted the request transaction, so the UI saw a success while the commit rolled back and the payment stayed in *Borrador*. Reactivar was not the cause, only the most common way to reach it. The sync now skips posted invoices and action POSTs on processed invoices, and runs under a savepoint (see `sales-invoice.md` § "Currency and exchange rate on the header"). The confirm now persists, the payment ends *Depositado*, and the invoice ends paid.
+
+**Refreshing the detail after the confirm (ETP-5547, frontend).** Even with the backend persisting, the detail window kept showing *Borrador* until a manual reload: the process-confirm modal's `onRefresh` (`DetailView.jsx` → `renderProcessConfirmModal`, which `ReactivarConfirmModal` → `PaymentEditModalLauncher` calls from `onSaved` after the `registerPayment{Out}` 201) ran `fetchById` without `{ force: true }`, so it served the cached pre-mutation record and issued no GET. It now calls the shared `refreshRecordAfterMutation(hook, id)` helper (`detailViewHelpers.jsx`: `invalidateEntityCache()` + `fetchById(id, { force: true })` + `refresh()`, the ETP-5290 contract), so the header re-reads and the grid row updates right after the confirm.
+
+**Reactivar on a reconciled payment (`RPPC`).** `ReactivatePaymentHandler.handleReactivate` still delegates to `com.etendoerp.payment.removal` with action `RE`. The semantics are unchanged: the reactivated payment keeps its invoice schedule detail, and the UI routes the user to edit that draft. The delegation is now bracketed by `ReconciledPaymentReactivation`, and both halves are no-ops for a payment that is not reconciled.
+- **Before:** it captures the bank-statement line matched to the payment's transaction. If the payment method marks invoices paid at the *deposited / withdrawn, not cleared* level (`RDNC`/`PWNC`), it also moves the payment `RPPC` → that status, as Core's `APRM_MatchingUtility.unmatch` does. Core's `FIN_TransactionProcess "R"` and the payment's own `RE` only restore the invoice's paid amounts when the payment's status sequence equals the paid status's sequence. With `RDNC`/`PWNC` (sequence 50), neither step matched from `RPPC` (60), and the payment went back to draft while the invoice still read as paid. With `RPR`/`PPM` or `RPPC` as the paid status, the old flow already restored exactly once, so the status is left alone there.
+- **After, on success** (the payment is no longer processed): it clears the line's `matchingtype`/`matchedDocument`, as Core's unmatch does and the module does not. It then re-collapses a split 1:N line with `ReconciliationHandler.normalizeReactivatedMatchGroup`, the same call the Movimientos kebab Reactivar makes (ETP-4951). This runs under a savepoint, so a cleanup failure never undoes the reactivation.
+- **After, on failure** (the payment is still processed and still reconciled): it puts `RPPC` back. The module commits partway through (`ResetAccounting`), so this is an explicit compensating step, not an assumed rollback. When the delegated call throws, the request transaction is rolled back first (`finishAfterFailure`), because PostgreSQL rejects every statement in an aborted transaction. The revert then runs on a fresh transaction.
+- **The transaction is never poisoned.** The status change and its revert are raw-JDBC UPDATEs under a savepoint (`JdbcSavepoints`), and so is the statement-line cleanup. If the reactivation's own pending writes fail to flush, that failure is not swallowed: the request answers an error instead of 2xx.
+- **Expected DB state after a successful Reactivar:** the payment is `RPAP` with no `FIN_Finacc_Transaction`. The invoice's `outstandingamt` equals total − other payments, and `ispaid = 'N'`. The statement line has no transaction and no matching metadata.
+
+## List toolbar / body separator — ETP-5509
+
+The list showed no line between the toolbar and the body: the toolbar ended and the summary
+sidebar and the grid started directly below it, the sidebar's right border hanging from nothing.
+`PaymentHeaderTableBase.jsx` (shared with Payment Out) never drew one, and neither did the shared list bar.
+
+The line is now part of the shared list bar itself (`ListView.jsx`, a `border-b` in
+`--border-subtle` on the toolbar container, full card width), so this window gets it without any
+change to `PaymentHeaderTableBase.jsx` — and so does every other window that keeps the native
+bar. Payment Out gets the same line. See `docs/list-filters.md` → "Toolbar layout". This window has no tab group, so its
+toolbar stays single-row.
+
+The list toolbar has no "New …" button here (`window.hideCreate: true`), so the ticket's
+acceptance line about the "New" button staying visible does not apply to this window.
+
+Manual verification: open `/payment-in` at 1280×720 and at 1920×1080 and confirm a gray horizontal line
+runs under the toolbar, above both the sidebar and the grid, across the full width of the card.

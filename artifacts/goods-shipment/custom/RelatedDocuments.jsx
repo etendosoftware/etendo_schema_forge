@@ -1,47 +1,19 @@
-import { useNavigate } from 'react-router-dom';
-import { DocChip, RelatedDocumentsShell, docChipProps } from '@/components/related-documents';
-import { useUI } from '@/i18n';
+import { RelatedDocumentsSection, SALES_RELATED_DOCS } from '@/components/related-documents';
 
-export default function RelatedDocuments({ data }) {
-  const navigate = useNavigate();
-  const ui = useUI();
-
-  const orders = Array.isArray(data?.linkedOrders) ? data.linkedOrders : [];
-  const invoices = Array.isArray(data?.linkedInvoices) ? data.linkedInvoices : [];
-  const returnReceipts = Array.isArray(data?.returnReceipts) ? data.returnReceipts : [];
-
-  const chips = [];
-
-  for (const ord of orders) {
-    chips.push(
-      <DocChip
-        key={`order-${ord.id}`}
-        {...docChipProps({ type: 'sales-order', doc: ord, ui, navigate })}
-      />
-    );
-  }
-
-  for (const inv of invoices) {
-    chips.push(
-      <DocChip
-        key={`inv-${inv.id}`}
-        {...docChipProps({ type: 'sales-invoice', doc: inv, ui, navigate })}
-      />
-    );
-  }
-
-  for (const ret of returnReceipts) {
-    chips.push(
-      <DocChip
-        key={`return-${ret.id}`}
-        {...docChipProps({ type: 'return-material-receipt', doc: ret, ui, navigate })}
-      />
-    );
-  }
-
+/**
+ * "Related documents" section of the form. ETP-5527: the documents, criteria, chips
+ * and statuses come from the shared definition SALES_RELATED_DOCS['goods-shipment'], the
+ * same one the list preview renders, so the form and the preview always match.
+ */
+export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, docsRefreshSignal }) {
   return (
-    <RelatedDocumentsShell loading={false}>
-      {chips}
-    </RelatedDocumentsShell>
+    <RelatedDocumentsSection
+      definition={SALES_RELATED_DOCS['goods-shipment']}
+      recordId={recordId ?? data?.id}
+      record={data}
+      token={token}
+      apiBaseUrl={apiBaseUrl}
+      docsRefreshSignal={docsRefreshSignal}
+      data-testid="RelatedDocumentsSection__edd68c" />
   );
 }

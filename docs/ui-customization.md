@@ -189,6 +189,16 @@ component's own JSDoc for the full shape), `showSend` + `onSendClick`, `showCopy
 `true`), and `children` for a window-specific secondary action that isn't Copy link/Clone/Send
 (e.g. a fiscal "send to SII/TBAI" button) but still belongs in the DF's "Enviar" position.
 
+**Clone result verification (ETP-5547) — shared `CloneOrderModal` behaviour.** Every clone, from the
+grid or from `DocumentSecondaryActions`, is re-read with `GET /{headerEntity}/{id}` after the clone
+POST. Each result row is `ok` (link), `notFound` (404 — red, not clickable, `cloneResultNotFound`),
+`unverified` (any other GET failure — still clickable, flagged with `cloneResultUnverified`) or
+`missingId` (2xx POST with no usable id — not clickable, `cloneResultMissingId`). The done title
+counts only clones not proven missing and switches to `cloneFailedTitle*` when none exist; only
+openable ids reach `onCloned`. Legacy callers without `routePrefix` now also wait for these GETs and
+stay on the result view (instead of closing and navigating) when a clone cannot be opened. Relies
+on the server committing before the POST response (no early flush in `NeoServlet`).
+
 **A `SendDocumentModal` needs client-rendered PDF context `DocumentSecondaryActions` does not
 have.** Nine migrated windows (see the table below) keep their existing `SendDocumentModal`
 inside their `topbarRight` component instead of duplicating it, and bridge the Send *button* in
@@ -388,6 +398,43 @@ Adds a "Related Documents" tab/section to the detail view. Requires a hand-writt
 
 **Real examples:** `goods-shipment`, `payment-in`, `sales-invoice`.
 
+#### 7.a Sales documents: one definition for the form and the list preview (ETP-5527)
+
+For the five sales documents (`sales-quotation`, `sales-order`, `sales-invoice`, `goods-shipment`, `return-material-receipt`) the form's "Related documents" section and the list preview's `RelatedDocumentsCard` render **the same definition**, so they always list the same documents with the same chips, statuses and navigation. Do not add a related-document source to only one of the two views — add it to the definition.
+
+| Piece | Location (`tools/app-shell/src/components/related-documents/`) | Role |
+|---|---|---|
+| `SALES_RELATED_DOCS`, `getSalesRelatedDocs(spec)` | `salesRelatedDocs.js` | One entry per sales spec: `spec`, `entity` (header entity), optional `refreshEvent`, optional `depsKey(record)`, and `sources[]`. Each source has a `key`, a `type` (a `DOCUMENT_CHIP_TYPES` key, or `(doc) => key`) and either `select(record)` (synchronous, read from the record) or `fetch({ id, record, token, apiBaseUrl })` (async). `getSalesRelatedDocs` returns `null` for any non-sales spec. |
+| `useRelatedDocuments({ definition, id, record, token, apiBaseUrl, refreshSignal })` | `useRelatedDocuments.js` | Resolves a definition into `{ items: [{ type, doc }], loading, refresh }`, deduplicating by chip type + id. `record === undefined` → the hook loads the **detail** record itself (preview mode); `record === null` → waits for it (form still loading). Listens to `refreshEvent`; refetches async sources when `depsKey` or `refreshSignal` changes. |
+| `RelatedDocumentsSection` | `RelatedDocumentsSection.jsx` | Form renderer (`RelatedDocumentsShell` + `DocChip`). Each window's `artifacts/<spec>/custom/RelatedDocuments.jsx` is now a thin wrapper passing `SALES_RELATED_DOCS['<spec>']`. The refresh button is shown only when the definition has at least one `fetch` source. |
+| `fetchListInvoices` | `helpers.js` | Invoices through the `listInvoices` header action (also finds invoices linked only through their lines). |
+
+Payments (cobros) are deliberately **not** related documents: no sales order or invoice lists its payments as chips (functional decision, ETP-5527). Do not add a payments source to a definition.
+
+The definition always reads the **detail** record: `linkedShipments`, `sourceInvoice`, `originInvoices` and the goods-shipment `linked*` fields are injected by the backend handlers on the detail GET only, so a list row is not enough.
+
+`RelatedDocumentsCard` (`tools/app-shell/src/windows/custom/shared/preview-cards/`) gained two optional props:
+
+- `definition` — a `SALES_RELATED_DOCS` entry. When set it **replaces** `specs`/`fetchExtra`, and the refresh button follows the same rule as the form section.
+- `record` — with `definition` only: the detail record when the caller already has it. Omit it and the card loads the detail record itself. (`return-material-receipt` passes the row, because its handler injects `sourceShipments`/`returnInvoices` on the list GET too.)
+
+Without `definition` the card keeps the legacy `specs`/`fetchExtra` behavior; purchase documents still use it (their migration is ETP-5539). `InvoicePreview` likewise accepts an optional `relatedDocs` definition — the sales-invoice list and the fiscal monitor pass it for sales invoices; without it (purchase invoices) the legacy order/shipment specs are used.
+
+Each preview row (`DocRow`) is a single line: the document title and amount are never truncated; when space runs out the status tag shrinks with an ellipsis and shows the full status on hover.
+
+```jsx
+// Preview: the card loads the detail record and lists what the form lists.
+<RelatedDocumentsCard documentId={row.id} token={token} apiBaseUrl={apiBaseUrl}
+  definition={SALES_RELATED_DOCS['sales-order']} />
+
+// Form (artifacts/sales-order/custom/RelatedDocuments.jsx)
+<RelatedDocumentsSection definition={SALES_RELATED_DOCS['sales-order']}
+  recordId={recordId ?? data?.id} record={data} token={token} apiBaseUrl={apiBaseUrl}
+  docsRefreshSignal={docsRefreshSignal} />
+```
+
+Parity is locked by `tools/app-shell/src/components/related-documents/__tests__/relatedDocumentsParity.vitest.jsx`; per-window sources by `salesRelatedDocs.vitest.js` and the hook by `useRelatedDocuments.vitest.jsx`.
+
 ---
 
 ### 7.b `window.attachments` — file attachments tab
@@ -568,6 +615,11 @@ selection at all simply keeps `selectable={false}` on its own `DataTable` and
 never renders rows that can be picked — so it never sees a selection bar either
 way. Conversely, a window that wants checkboxes but not the *generic* delete
 button uses `hideBulkDelete`, not `hideListBar`.
+
+Dropping the idle bar also drops the toolbar/body separator that comes with it
+(ETP-5509 — the line is a `border-b` on the native bar, see `docs/list-filters.md`
+→ "Toolbar layout"). A slot that draws its own toolbar draws its own line, as
+`AccountsHeaderTable.jsx` does.
 
 `ListView` forwards its authoritative **`selectedRows`** in the Table-slot props, read-only for the
 slot. **What you must do with it is destructure it out of the spread**, whether or not you use it:
@@ -2460,7 +2512,9 @@ declared by hand rather than derived from grid fields.
 **What it does:** lets a custom `headerTable` component expose a second component as a static
 property — `MyHeaderTable.ToolbarQuickFilter = SomeComponent` — that `ListView.jsx` renders inline
 in its OWN toolbar row, immediately left of the "Filtros" (advanced filter) trigger, alongside
-"Ordenar por"/"Actualizar"/subset filters/quick filters. Same convention `DetailView.jsx` already
+"Ordenar por"/"Actualizar"/quick filters — that is row 1 of the toolbar; since ETP-5509 the
+subset-filter tab group sits on a second row below it (`docs/list-filters.md` → "Toolbar
+layout"). Same convention `DetailView.jsx` already
 uses for `formFooter.inlineInHeaderCard` (§3) — a companion flag/property attached to a slot
 component so the generic shell can special-case how it renders.
 
