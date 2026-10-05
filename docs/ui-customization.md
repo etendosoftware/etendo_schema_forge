@@ -693,7 +693,8 @@ status switch does this. `DataTable` ignores the flag.
 **The toolbar Share button copies the page URL (ETP-5593).** The link button in `ListView`'s idle
 bar (`list-share-link`, hidden by `hideLink`) had no handler on any list; it now calls
 `useCopyPageLink()` (`hooks/useCopyLinkAction.js`), which copies `window.location.href` with the
-`linkCopied` / `copyFailed` toasts. Anything a window keeps in the query string travels with the
+`linkCopied` / `copyFailed` toasts. Not-posted documents' own toolbar uses the same hook, so pages that build
+their own toolbar should use it too. Anything a window keeps in the query string travels with the
 link. For example, chart-of-accounts keeps `q` and `accountType` there, so a shared link reproduces
 the filtered tree. Put filter state in the URL when you want Share to reproduce it.
 
