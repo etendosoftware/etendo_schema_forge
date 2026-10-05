@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ACCOUNT_TYPE_UI_KEYS } from './accountTypeLabels';
 
@@ -24,9 +24,16 @@ export function useChartOfAccountsFilters() {
   const accountType = parseAccountType(searchParams.get(ACCOUNT_TYPE_PARAM));
   const query = searchParams.get(SEARCH_PARAM) ?? '';
 
+  // react-router's functional updater hands over the params of the render that created
+  // the callback, not the live URL. The search box writes from a debounce timer, so a
+  // stale callback would rewrite the URL as it was before a type was picked and drop it.
+  // Writes therefore start from the latest rendered params.
+  const latestParamsRef = useRef(searchParams);
+  latestParamsRef.current = searchParams;
+
   const setParam = useCallback((name, value) => {
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
+    setSearchParams(() => {
+      const params = new URLSearchParams(latestParamsRef.current);
       if (value) params.set(name, value);
       else params.delete(name);
       return params;

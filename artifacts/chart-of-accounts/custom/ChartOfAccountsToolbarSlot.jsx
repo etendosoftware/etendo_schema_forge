@@ -39,10 +39,24 @@ export function ChartOfAccountsToolbarSlot() {
   const searchTimerRef = useRef(null);
   useEffect(() => { setDraft(query); }, [query]);
   useEffect(() => () => clearTimeout(searchTimerRef.current), []);
+  const pendingSearchRef = useRef(null);
   const handleSearchChange = (text) => {
     setDraft(text);
+    pendingSearchRef.current = text;
     clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
+    searchTimerRef.current = setTimeout(() => {
+      pendingSearchRef.current = null;
+      setQuery(text);
+    }, SEARCH_DEBOUNCE_MS);
+  };
+  // Leaving the box (e.g. to press Compartir or open Tipo de cuenta) writes a pending
+  // search at once, so the copied link and the next filter see it.
+  const flushSearch = () => {
+    if (pendingSearchRef.current === null) return;
+    clearTimeout(searchTimerRef.current);
+    const text = pendingSearchRef.current;
+    pendingSearchRef.current = null;
+    setQuery(text);
   };
 
   // "Todos los tipos de cuenta" first, then the six types by translated label (A→Z).
@@ -80,6 +94,7 @@ export function ChartOfAccountsToolbarSlot() {
           type="search"
           value={draft}
           onChange={(e) => handleSearchChange(e.target.value)}
+          onBlur={flushSearch}
           placeholder={ui('search')}
           aria-label={ui('search')}
           className="min-w-0 flex-1 bg-transparent text-foreground placeholder:text-text-secondary focus:outline-none"

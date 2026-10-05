@@ -89,6 +89,8 @@ test.describe('Chart of Accounts — tree toolbar', () => {
     await expect(row(page, 'group-P')).toHaveCount(0);
     await expect(page).toHaveURL(/[?&]q=2100/);
 
+    // Clear the search and pick a type right away, while the cleared search may still be
+    // pending: both must end up in the URL (a stale pending write used to drop the type).
     await page.getByTestId('coa-search-input').fill('');
     await page.getByTestId('coa-filter-account-type').click();
     // The option rows carry no ids of their own. The list renders "all" first, then the
@@ -97,9 +99,19 @@ test.describe('Chart of Accounts — tree toolbar', () => {
     const popover = page.getByTestId('PopoverContent__cd3aa9');
     await popover.getByRole('button').nth(1).click();
     await expect(page).toHaveURL(/[?&]accountType=A/);
+    await expect(page).not.toHaveURL(/[?&]q=/);
     await expect(row(page, 'group-A')).toBeVisible();
     await expect(row(page, 'group-P')).toHaveCount(0);
     await expect(row(page, 'group-6')).toHaveCount(0);
+  });
+
+  test('a search typed just before picking a type keeps both filters', async ({ page }) => {
+    await page.getByTestId('coa-search-input').fill('2100');
+    await page.getByTestId('coa-filter-account-type').click();
+    await page.getByTestId('PopoverContent__cd3aa9').getByRole('button').nth(1).click(); // es_ES: Activo
+    await expect(page).toHaveURL(/[?&]q=2100/);
+    await expect(page).toHaveURL(/[?&]accountType=A/);
+    await expect(row(page, 'acc-21000001')).toBeVisible();
   });
 
   test('a shared link with filters reproduces the view', async ({ page }) => {

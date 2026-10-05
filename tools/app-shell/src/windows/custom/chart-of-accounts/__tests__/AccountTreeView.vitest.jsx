@@ -1215,6 +1215,45 @@ describe('AccountTreeView', () => {
       }
     });
 
+    // QA BUG-1 — the timer's write used the params of the render where the user typed and
+    // wiped an account type picked during the pause.
+    it('a pending search write keeps an account type picked during the pause', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value: 'Sales' } });
+        fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+        fireEvent.click(within(screen.getByTestId('PopoverContent__cd3aa9')).getByText('accountTypeRevenue'));
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+
+        const search = screen.getByTestId('location-search').textContent;
+        expect(search).toContain('q=Sales');
+        expect(search).toContain('accountType=R');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    // QA BUG-2 — leaving the box (to press Share, open the type picker…) writes at once.
+    it('leaving the search box writes the pending search immediately', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        const input = screen.getByTestId('coa-search-input');
+        fireEvent.change(input, { target: { value: 'Sales' } });
+        fireEvent.blur(input);
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sales');
+
+        // The flushed timer must not write again later.
+        fireEvent.click(screen.getByTestId('coa-filter-account-type'));
+        fireEvent.click(within(screen.getByTestId('PopoverContent__cd3aa9')).getByText('accountTypeRevenue'));
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+        expect(screen.getByTestId('location-search').textContent).toContain('accountType=R');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('drops a pending search write when the toolbar unmounts', () => {
       const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
       vi.useFakeTimers();
