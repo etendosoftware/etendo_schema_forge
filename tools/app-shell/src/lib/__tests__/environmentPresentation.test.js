@@ -6,6 +6,7 @@ import {
   environmentRelationshipLabel,
   environmentTrialLabel,
   isProductiveEnvironment,
+  isPurchaseSourceDemo,
   sortEnvironments,
 } from '../environmentPresentation.js';
 
@@ -49,4 +50,12 @@ test('shows trial status only when backend lifecycle metadata is present', () =>
   assert.equal(environmentTrialLabel({ plan: 'free', trialDaysRemaining: 3 }, ui), '3 days left');
   assert.equal(environmentTrialLabel({ plan: 'free', trialDaysRemaining: 0 }, ui), 'environmentDemoExpired');
   assert.equal(environmentTrialLabel({ plan: 'productive', trialDaysRemaining: 3 }, ui), null);
+});
+
+test('a demo that already originated a productive environment is not a purchase source', () => {
+  assert.equal(isPurchaseSourceDemo({ plan: 'free' }), true);
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', associatedWithProductive: false }), true);
+  assert.equal(isPurchaseSourceDemo({ plan: 'free', associatedWithProductive: true }), false);
+  assert.equal(isPurchaseSourceDemo({ plan: 'productive' }), false);
+  assert.equal(isPurchaseSourceDemo(undefined), false);
 });

@@ -4,6 +4,17 @@ export function isProductiveEnvironment(environment) {
   return String(environment?.plan || '').trim().toLowerCase() === PRODUCTIVE_PLAN;
 }
 
+/**
+ * A demo can originate one productive environment. Once it has (the backend reports
+ * `associatedWithProductive`), it is no longer offered as a purchase source: a later purchase
+ * creates a clean productive environment (ETP-5548).
+ */
+export function isPurchaseSourceDemo(environment) {
+  return Boolean(environment)
+    && !isProductiveEnvironment(environment)
+    && environment.associatedWithProductive !== true;
+}
+
 export function environmentPlanLabelKey(environment) {
   return isProductiveEnvironment(environment) ? 'environmentProductive' : 'environmentDemo';
 }
