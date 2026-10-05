@@ -546,6 +546,31 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
+  // Review W2 (ETP-5602): the focusout exception for the picker covers only the picker
+  // closing itself. Focus moving from a picker checkbox to something outside the palette
+  // is the user leaving, and must still close the palette.
+  it('closes the palette when focus leaves a picker checkbox for an element outside it', async () => {
+    render(
+      <>
+        <button type="button" data-testid="outside-palette">outside</button>
+        <CommandPalette />
+      </>,
+    );
+    openPalette();
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
+    const option = (await screen.findAllByTestId('vector-search-target-option'))[0];
+    const checkbox = option.querySelector('input') ?? option;
+    act(() => checkbox.focus());
+    expect(checkbox).toHaveFocus();
+
+    // Not wrapped in act(): act() would flush the picker's dismissal synchronously, so the
+    // checkbox would already be gone when the deferred focusout check runs — jsdom-only
+    // timing the browser does not have (verified in Chrome).
+    screen.getByTestId('outside-palette').focus();
+
+    await waitFor(() => expect(screen.queryByTestId('cmd-dialog')).not.toBeInTheDocument());
+  });
+
   it('returns the keep-open decision to the top-bar keyboard bridge', () => {
     function KeyboardBridge() {
       const { open, setOpen, handleKeyDown, registerKeyboardHandler } = useGlobalSearch();

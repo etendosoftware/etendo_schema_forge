@@ -206,16 +206,20 @@ export function CommandPalette() {
       const fromPicker = event.target?.closest?.('[data-testid="vector-search-target-picker"]');
       window.setTimeout(() => {
         if (!openRef.current) return;
+        const active = document.activeElement;
+        const input = document.querySelector('[data-testid="global-search-input"]');
+        const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
+        const dialog = document.querySelector('[data-testid="cmd-dialog"]');
         // The picker closing itself (Escape) removes the focused checkbox: focus drops to
         // <body> until Radix returns it to the trigger, so that focusout is not the user leaving.
-        if (fromPicker && !event.target.isConnected) return;
+        // Decided by where focus went, not by whether the checkbox is already unmounted: focus
+        // on an element outside the palette is the user leaving, and must still close it.
+        const focusNowhere = !active || active === document.body;
+        if (fromPicker && (focusNowhere || dialog?.contains(active) || targetPickerRef.current?.contains(active))) return;
         if (dropdownInteractionRef.current) {
           dropdownInteractionRef.current = false;
           return;
         }
-        const active = document.activeElement;
-        const input = document.querySelector('[data-testid="global-search-input"]');
-        const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
         if (!input?.contains(active) && !dropdown?.contains(active) && !targetPickerRef.current?.contains(active)) setOpen(false);
       }, 0);
     };
