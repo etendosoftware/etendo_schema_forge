@@ -40,13 +40,13 @@ of the three registered:
 
 | # | Defect | Count |
 |---|--------|-------|
-| (iv) | actions curated `visibility:"discarded"` and still advertised `invokeVia:"etendo_action"` | **17 of 22** |
+| (iv) | actions curated `visibility:"discarded"` and still advertised `invokeVia:"neo_action"` | **17 of 22** |
 | (v) | an action advertised as callable with no `processName`/`processId` at all (`createLinesFrom`) | 1 |
 | (vi) | two actions with identical semantics and nothing saying which to use (`aPRMProcessinvoice` duplicates `documentAction`: same 12 `actionValues`, same `actionParameter:"docAction"`, different `processId`) | 1 pair |
 | (vii) | `agentPrompt` on `documentAction` only; `posted` — the other business-critical action — has none | 21 without |
 
 (iv) is the defect that makes the catalog unusable rather than merely rough. An agent asking
-`etendo_schema({view:"actions"})` was handed 22 entries all claiming `invokeVia:"etendo_action"`, with no
+`neo_schema({view:"actions"})` was handed 22 entries all claiming `invokeVia:"neo_action"`, with no
 signal separating the handful the window actually exposes from the 17 that curation had deliberately
 put out of scope. `visibility:"discarded"` was present on each of the 17 — the truth was in the
 object — but it sat next to a contradicting claim, and a field-visibility value designed for form
@@ -96,7 +96,7 @@ stays where it was and no longer has a neighbour disagreeing with it.
 
 ### 3.2 `invokeVia` is a claim, not a decoration — clauses (iv) and (v)
 
-`addButtonInfo` takes the curated `visibility` and emits `invokeVia:"etendo_action"` only when the
+`addButtonInfo` takes the curated `visibility` and emits `invokeVia:"neo_action"` only when the
 button really is invokable. Otherwise it emits `invokable:false` plus a machine-readable
 `notInvokableReason`, for one of two causes, in the order an agent cares about:
 
@@ -112,7 +112,7 @@ Three decisions inside that:
 
 * **The action stays in the catalog.** Knowing an action exists but is out of scope is useful — it
   stops an agent hunting for a capability the window genuinely lacks, and it keeps
-  `etendo_schema({view:"actions"})` a description of the window rather than of the curation. Being told
+  `neo_schema({view:"actions"})` a description of the window rather than of the curation. Being told
   an action is callable when it is not is the only unrecoverable case, and that is what changed.
 * **An uncurated button (`visibility == null`) with a process stays invokable.** Absence of curation
   is not a decision to exclude, and treating it as one would silently retire actions on the 89
@@ -121,7 +121,7 @@ Three decisions inside that:
 * **`discarded` is reported before `no process`.** They can both hold; the curation is the more
   informative answer, because it tells the agent a human decided this, not that AD is incomplete.
 
-`etendo_action` itself is unchanged. This clause corrects what the catalog *claims*, and deliberately
+`neo_action` itself is unchanged. This clause corrects what the catalog *claims*, and deliberately
 does not add a runtime gate — a gate would be a behaviour change on a path the React UI also drives,
 and the defect registered here is a description defect.
 
@@ -188,7 +188,7 @@ the other says why it is not. The underlying duplication in AD is untouched, and
 
 Added after the §6 live verification, which is what surfaced the defect: the fix above left a
 misleading entry in the catalog — one that the analysis noticed, and, as §6.1 found, a second it did
-not. `processNow` came back `invokeVia:"etendo_action"` carrying no
+not. `processNow` came back `invokeVia:"neo_action"` carrying no
 `actionValues`, no `actionParameter`, no `agentPrompt` and `businessCritical:false` — and it points
 at the **same** `AD_Process` as `documentAction`:
 
@@ -236,7 +236,7 @@ decided this.
 
 ## 4. Blast radius
 
-`etendo_schema`'s default full-field dump changes for button fields only: `required` disappears,
+`neo_schema`'s default full-field dump changes for button fields only: `required` disappears,
 `invokeVia` becomes conditional, `businessCritical` can now be `true`, and `EM_*` labels improve. No
 non-button field changes in any way.
 
@@ -245,8 +245,8 @@ non-button field changes in any way.
 * **`McpResourceProvider`** — unaffected. It builds its own field JSON and borrows only
   `mapColumnType`/`mapSelectorType` from this class.
 * **NEO REST / the React UI** — untouched. Nothing in this change is on the REST path; the UI reads
-  buttons from its own metadata, not from `etendo_schema`.
-* **`etendo_action`** — untouched (§3.2).
+  buttons from its own metadata, not from `neo_schema`.
+* **`neo_action`** — untouched (§3.2).
 
 ### 4.1 Tests
 
@@ -256,7 +256,7 @@ per the coverage-gate rule, and each rewrite guards the new behaviour at the exa
 asserted the defect:
 
 * `buttonColumnWithNoProcessEmitsOnlyTrigger` → `buttonColumnWithNoProcessIsNotInvokable`. The old
-  name is worth keeping in mind: it asserted `invokeVia:"etendo_action"` on a button with no process,
+  name is worth keeping in mind: it asserted `invokeVia:"neo_action"` on a button with no process,
   i.e. it *pinned* defect (v).
 * `buildSchemaFieldButtonIncludesTriggerValue` now also asserts `required` is absent.
 * `buttonWhoseListLookupReturnsNullOmitsActionValues`'s "the rest is still emitted" assertion moved
@@ -307,7 +307,7 @@ field with no column, case-insensitive matching and a null tab.
 
 ## 6. Verified live — 2026-08-12
 
-Read back from the deployed instance, `etendo_schema({spec:"sales-invoice", entity:"header",
+Read back from the deployed instance, `neo_schema({spec:"sales-invoice", entity:"header",
 view:"actions"})`. All four owed assertions hold:
 
 | Owed | Result |
@@ -352,8 +352,8 @@ Same call after the redeploy. The catalog is now `actionCount:22`, **`invokableC
 | `processNow` | `invokable:false` | `hidden:` — the target of §3.7 |
 | `generateTo` | `invokable:false` | `hidden:` — **not predicted** |
 | `createLinesFrom` | `invokable:false` | `no process:` — reached the *third* blocker, so the missing-`AD_Field` guard held |
-| `posted` | `invokeVia:"etendo_action"` | — |
-| `documentAction` | `invokeVia:"etendo_action"` | — |
+| `posted` | `invokeVia:"neo_action"` | — |
+| `documentAction` | `invokeVia:"neo_action"` | — |
 | the other 17 | `invokable:false` | `discarded:` — still reported ahead of `hidden` |
 
 **The number was wrong, not the fix.** The 4 → 3 prediction was written having checked

@@ -1,6 +1,6 @@
 # There is no way to ask the server who the "default customer" is
 
-**Found:** 2026-09-14 · **Source:** `etendo_feedback` session `1901b25c-418a-41cc-b420-984d211162af`
+**Found:** 2026-09-14 · **Source:** `neo_feedback` session `1901b25c-418a-41cc-b420-984d211162af`
 (17:44:11), corroborated by every run of `create-empty-default-customer` · **Target:** `etendo-go-local`
 **Severity (proposed, not authoritative):** medium — forces guessing on a very common instruction
 
@@ -43,5 +43,5 @@ closed as a false alarm.
 
 - Whether a default business partner exists at all in this tenant, as a preference, a window default
   or a user setting.
-- Whether `etendo_defaults` already returns one for `businessPartner` on some other spec, which would
+- Whether `neo_defaults` already returns one for `businessPartner` on some other spec, which would
   make this an inconsistency rather than an absence.

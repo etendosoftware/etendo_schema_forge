@@ -10,18 +10,18 @@
 `find-own-order` reported it could not use the reference field it expected. Chasing that produced a
 sharper result than the probe itself saw.
 
-`orderReference` (AD column `POReference`) is declared by `etendo_schema` as
+`orderReference` (AD column `POReference`) is declared by `neo_schema` as
 `"visibility": "discarded"`. That turns out to affect ONLY the read projection. Verbatim sequence,
 run by hand against the order the same run had created:
 
 ```
-etendo_update {id: F6BFDCD2..., updated: <ts>, fields: {orderReference: "HARNESS-PROBE-XYZ"}}
+neo_update {id: F6BFDCD2..., updated: <ts>, fields: {orderReference: "HARNESS-PROBE-XYZ"}}
   -> 200, record returned
 
-etendo_get    {id: F6BFDCD2...}
+neo_get    {id: F6BFDCD2...}
   -> orderReference: None        <-- the value is not projected
 
-etendo_list   {filters: {orderReference: "HARNESS-PROBE-XYZ"}}
+neo_list   {filters: {orderReference: "HARNESS-PROBE-XYZ"}}
   -> totalRows: 1                <-- but the value IS in the database and IS filterable
 ```
 
@@ -43,12 +43,12 @@ Etendo GO UI at all, because `visibility: "discarded"` removes it from the windo
 is blocked, and a probe that asked for this field would be a broken probe, not a finding.
 
 The claim here is narrower and is about the MCP's own consistency: the three tools disagree with
-each other about whether the field exists. `etendo_update` accepts it, `etendo_list` filters on it,
-`etendo_get` denies it. Whichever answer is correct, they should agree.
+each other about whether the field exists. `neo_update` accepts it, `neo_list` filters on it,
+`neo_get` denies it. Whichever answer is correct, they should agree.
 
 ## Not verified
 
-- Whether `etendo_create` (as opposed to `etendo_update`) also accepts `orderReference`.
+- Whether `neo_create` (as opposed to `neo_update`) also accepts `orderReference`.
 - Whether this is specific to `sales-order/header` or applies to every `visibility: "discarded"`
   field on every entity. Only this one field was tested.
 - Whether the read projection is intended behaviour for discarded fields. If it is, then the defect

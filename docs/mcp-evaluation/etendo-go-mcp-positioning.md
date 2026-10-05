@@ -54,11 +54,11 @@ had said what was wrong. Etendo GO answers with a structured envelope, not prose
 { "status": 422, "error": "validation_error",
   "detail": "Missing required fields that could not be auto-resolved",
   "missingFields": [{ "name": "product", "type": "foreignKey", "hasSelector": true }],
-  "hint": "Provide these fields, or use etendo_selectors to find valid values",
+  "hint": "Provide these fields, or use neo_selectors to find valid values",
   "seeAlso": "docs(topic:\"creating records\")" }
 ```
 
-*(measured — verbatim from a live `etendo_create`)*
+*(measured — verbatim from a live `neo_create`)*
 
 Everything the agent needs to retry is machine-readable: which field, what kind, which tool resolves
 it, where the documentation lives. A wrong entity name comes back with the list of valid ones. **The

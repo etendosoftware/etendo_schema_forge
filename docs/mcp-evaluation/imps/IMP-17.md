@@ -22,7 +22,7 @@ citation was a typo. Corrected in the registry as part of this change.
 
 ## 2. Why §9.4 lands here rather than on a new number
 
-IMP-23 §9.4 recorded that omitting a required FK on a `etendo_batch` create answered **500
+IMP-23 §9.4 recorded that omitting a required FK on a `neo_batch` create answered **500
 `server_error`** carrying a raw Postgres not-null violation whose `detail` dumped the entire failing
 row — ~90 columns of internals — while a 281-char value in the same tool answered a clean 400 naming
 the field, the length and the maximum. §9.4's own recommendation was *"this most likely belongs to
@@ -134,7 +134,7 @@ for named filters (`Available: completed, pending, partial`, evidence B19). The 
 the failure path only, and it is the query the agent would otherwise have to make itself.
 
 An unknown **spec** deliberately does not. The catalog can hold dozens, and dumping them into every
-mistyped call is a context cost (ACE) the agent did not ask for; `etendo_discover` is the tool that
+mistyped call is a context cost (ACE) the agent did not ask for; `neo_discover` is the tool that
 enumerates them, so the hint points there instead.
 
 A related trap avoided: `SFSpec`'s primary key is a UUID, distinct from its `name`. An error built
@@ -147,9 +147,9 @@ Missing required fields were reported three ways depending on how you asked:
 
 | Path | Shape |
 |---|---|
-| `etendo_create` | IMP-5's `missingFields` 422 |
+| `neo_create` | IMP-5's `missingFields` 422 |
 | REST CRUD | ETP-3894's `MISSING_REQUIRED_FIELDS` 400 with `fields` |
-| `etendo_batch` | whatever came back |
+| `neo_batch` | whatever came back |
 
 The REST shape **stays**. The React UI highlights fields from it, so changing it would be a UI
 regression in service of an agent-facing tidy-up. The translation to the agent's `missingFields` 422
@@ -241,12 +241,12 @@ Status codes emitted, by cause:
 
 ## 6. What this closes beyond its own row
 
-- **C14** — IMP-5's clause (ii), the raw `Error executing etendo_list: …` on an unknown named filter.
+- **C14** — IMP-5's clause (ii), the raw `Error executing neo_list: …` on an unknown named filter.
   Closed here, and it had to be (§4.5).
 - **IMP-5 clause (iii)**, *"read-verb errors are wrapped `{"response":{…}}` while write-verb errors
   are bare"* — **adjudicated by the live run (§9.6), and the answer is not the flattering one.** All
   five DAL call sites do render one flat envelope, and every read *error* probed came back flat. But
-  every read *success* is still wrapped: `etendo_list` returns `{"response":{startRow,…,status:0}}`
+  every read *success* is still wrapped: `neo_list` returns `{"response":{startRow,…,status:0}}`
   verbatim from the DAL. So the nesting the clause describes was never on the error path this item
   fixes — it is the success body, which IMP-17 does not touch and should not. The error half of the
   clause is closed and measured; the asymmetry itself survives and stays with IMP-5.
@@ -273,9 +273,9 @@ mapping.
 Two tests asserted the old prose through their own stubs — they passed only because the stub threw the
 string the assertion looked for. Both now assert the envelope:
 
-- `unknownSpecReturnsError` → 404, `field:"spec"`, hint naming `etendo_discover`, and **no `available`
+- `unknownSpecReturnsError` → 404, `field:"spec"`, hint naming `neo_discover`, and **no `available`
   key**, which pins §4.3's deliberate omission rather than leaving it to a comment;
-- `unknownEntityReturnsError` → 404, `field:"entity"`, `tool:"etendo_list"`, and the two valid names in
+- `unknownEntityReturnsError` → 404, `field:"entity"`, `tool:"neo_list"`, and the two valid names in
   `available`.
 
 `resolveIncludedEntityOrExplain`'s report-spec test kept its message assertions and gained the
@@ -314,13 +314,13 @@ entry in this file.
 
 | Probe | Result |
 |---|---|
-| `etendo_list(nonexistent-spec-probe, header)` | 404 `not_found`, `field:"spec"`, hint → `etendo_discover`, **no `available`** |
-| `etendo_list(product, header)` — **B20's exact vector** | 404 `not_found`, `field:"entity"`, `available` = the 25 real entity names |
-| `etendo_list(sales-invoice, header, {status:"nonexistent-status-probe"})` — **C14** | 422 `validation_error`, `field:"status"`, `available` = `["completed","pending","partial"]` |
-| `etendo_create(conversion-rate-downloader-log, …)` | 405 `method_not_allowed`, **no `hint`**, no `field` |
-| `etendo_create(sales-invoice, header, …)` with `etsgDateOperation` after `invoiceDate` — **B13** | 422 `validation_error`, the callout message intact, no `field`, no `status:-4` |
-| `etendo_batch` with `partnerAddress` omitted — **IMP-23 §9.4** | ❌ **500** + stripped dump → fixed → ✅ 422 `missingFields:["partnerAddress"]` |
-| `etendo_create(product, transactions, {})` | 422 `missingFields` with 4 fields — the IMP-5/IMP-24 path, unbroken |
+| `neo_list(nonexistent-spec-probe, header)` | 404 `not_found`, `field:"spec"`, hint → `neo_discover`, **no `available`** |
+| `neo_list(product, header)` — **B20's exact vector** | 404 `not_found`, `field:"entity"`, `available` = the 25 real entity names |
+| `neo_list(sales-invoice, header, {status:"nonexistent-status-probe"})` — **C14** | 422 `validation_error`, `field:"status"`, `available` = `["completed","pending","partial"]` |
+| `neo_create(conversion-rate-downloader-log, …)` | 405 `method_not_allowed`, **no `hint`**, no `field` |
+| `neo_create(sales-invoice, header, …)` with `etsgDateOperation` after `invoiceDate` — **B13** | 422 `validation_error`, the callout message intact, no `field`, no `status:-4` |
+| `neo_batch` with `partnerAddress` omitted — **IMP-23 §9.4** | ❌ **500** + stripped dump → fixed → ✅ 422 `missingFields:["partnerAddress"]` |
+| `neo_create(product, transactions, {})` | 422 `missingFields` with 4 fields — the IMP-5/IMP-24 path, unbroken |
 | Read successes throughout | still `{"response":{…}}` — see §9.6 |
 
 ### 8.1 §9.4 failed live, and the reason was written in §9.4 itself
@@ -355,12 +355,12 @@ visible in that result too — the handler returns ETP-3894's 400 and `toMcpBatc
 §4.3 justified carrying `available` for an entity on the grounds that *"a spec exposes a handful of
 entities"*. `product` exposes **25**, about 300 characters. So the premise is wrong for the largest
 spec, and the honest framing is not "handful" but: the list is the answer to the agent's next
-question, and 300 characters beats a `etendo_discover` round trip that returns far more. The
+question, and 300 characters beats a `neo_discover` round trip that returns far more. The
 spec-vs-entity asymmetry stands on that, not on the count.
 
 ### 8.3 Two verbs got confirmation for free
 
-`etendo_create(product, transactions)` was aimed at the 405 and missed — that entity **does** enable POST
+`neo_create(product, transactions)` was aimed at the 405 and missed — that entity **does** enable POST
 — returning instead the `missingFields` 422 with all four unresolvable fields. A miss that exercises a
 neighbouring path is still evidence, and it makes the point that 405 is a configuration fact, not a
 guess about which entities look derived.
@@ -372,7 +372,7 @@ error to locate the next probe is the behaviour §4.3 was designed for, performe
 ### 8.4 IMP-22's C4/C5 vector passed as a side effect
 
 B13's probe deliberately sent both FKs as **display labels** — `businessPartner:"Juan Perez"` and
-`partnerAddress:"Madrid, Avenida Independiente 23"`, the byte-identical label `etendo_selectors` had just
+`partnerAddress:"Madrid, Avenida Independiente 23"`, the byte-identical label `neo_selectors` had just
 returned. Reaching the callout at all means both resolved, which is exactly the C4/C5 failure IMP-22
 fixed and had listed as unverified. Recorded here and cross-referenced from IMP-22 rather than claimed
 as IMP-17's own result.

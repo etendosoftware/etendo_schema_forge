@@ -13,16 +13,16 @@ wrong, see §4
 
 ## 1. The defect, as an agent experiences it
 
-`etendo_schema` tells the agent, in two separate places, to filter on two keys that are never present.
+`neo_schema` tells the agent, in two separate places, to filter on two keys that are never present.
 
 The response `hint`, verbatim:
 
-> "Fields with **userRequired=true**: MUST be provided in etendo_create. Fields with
+> "Fields with **userRequired=true**: MUST be provided in neo_create. Fields with
 > **visibility=system** are auto-derived by Etendo callouts — omit them. Fields with
 > **visibility=discarded** are excluded — do not send them. Fields with readOnly=true are
 > auto-generated (DocumentNo, IDs). […]"
 
-And the `etendo_schema` tool description advertises `visibility (editable/readOnly/system/discarded)`.
+And the `neo_schema` tool description advertises `visibility (editable/readOnly/system/discarded)`.
 
 On `sales-invoice/header` (157 fields): **0 carry `visibility`, 0 carry `userRequired`.**
 
@@ -33,7 +33,7 @@ totals, and ~20 fields belonging to unrelated localisation modules (`aeatsii*`, 
 empty set and has to guess.
 
 **This is why M2 is 40 % and not higher.** It is upstream of the whole write path: B11's failed
-`etendo_create` is a direct consequence.
+`neo_create` is a direct consequence.
 
 ## 2. Hypotheses, and which one survived
 
@@ -164,7 +164,7 @@ grep -rn 'PROPERTY_VISIBILITY|get("visibility")|getVisibility()' src/
 ```
 
 Nothing in `NeoServlet`, the CRUD handlers, the selectors, the defaults service or the frontend reads
-it. So populating the column **cannot change runtime API behaviour** — it changes the `etendo_schema`
+it. So populating the column **cannot change runtime API behaviour** — it changes the `neo_schema`
 response and nothing else. That is what makes this a safe first item: maximum unblocking, no blast
 radius.
 
@@ -205,7 +205,7 @@ On `sales-invoice/header` (164 fields in the backend contract): 95 `discarded`, 
 buttons and localisation columns to eleven fields it can actually send.
 
 *(The 59 here and the 52 counted in B6 are different measurements — the local contract includes
-`discarded` fields that never reach `etendo_schema`. Not a discrepancy; do not merge them.)*
+`discarded` fields that never reach `neo_schema`. Not a discrepancy; do not merge them.)*
 
 ## 3. Why the data is not the hard part
 
@@ -291,14 +291,14 @@ resolve the index from the SQL column list, so the next appended column cannot b
 suite: **2825 / 2825 passing**.
 
 **Still required before any status moves:** the backfill (step 3). 6340 rows are NULL today, so
-`etendo_schema` output is byte-identical to B6 until every spec is re-pushed. This also means the
+`neo_schema` output is byte-identical to B6 until every spec is re-pushed. This also means the
 `ETGO_SF_FIELD.xml` sourcedata diff will gain ~6340 `<VISIBILITY>` lines on the next
 `export.database` — the largest part of the change by line count, and not code.
 
 ## 4.2 Backfill done — verified live on `etendo-go-local` (2026-08-06)
 
 The user ran `make regen … PUSH_TO_NEO=1` on the 0.3.28 preview, then `export.database`. Verified
-read-only (SELECT probes + `etendo_schema` calls), no records mutated.
+read-only (SELECT probes + `neo_schema` calls), no records mutated.
 
 - **The column is populated.** 4343 rows classified: `system` 1881, `discarded` 1027, `editable` 1016,
   `readOnly` 419. The sourcedata diff is exactly 4343 `<VISIBILITY>` additions, `0` deletions, no
@@ -306,7 +306,7 @@ read-only (SELECT probes + `etendo_schema` calls), no records mutated.
 - **The collapse is confirmed, and now recoverable.** 2300 rows share the same `Y/Y`
   `isIncluded`/`isReadOnly` pair while splitting `system` (1881) from `readOnly` (419) — the exact
   distinction the `hint` asks agents to act on, and the reason the two booleans were never enough.
-- **The response carries it.** `etendo_schema(purchase-invoice)` now returns `"visibility": "system"`
+- **The response carries it.** `neo_schema(purchase-invoice)` now returns `"visibility": "system"`
   and `"userRequired": true` per field, with no Java rebuild — the reader was always correct.
 - **`sales-invoice/header`: 157/157 fields classified**, 24 `editable` of which 11 mandatory, versus
   59 `required: true` before. That is the §5 target reached for curated entities.
@@ -317,7 +317,7 @@ Two residual gaps, split by whether the MCP can see them:
   `java_qualifier` and `seqno` all NULL, and `updated` still `2026-06-23` where classified siblings
   show `2026-08-06`; `upsertSingleField` matches by `columnname`, so they are unaddressable. They
   never reach an agent: `McpToolRouterSupport.editablePropertyNames` drops any row whose column is
-  null. Measured — `etendo_schema(purchase-invoice, basicDiscounts)` reports `fieldCount: 5` where the
+  null. Measured — `neo_schema(purchase-invoice, basicDiscounts)` reports `fieldCount: 5` where the
   DB holds 9 rows. This also explains all 5 "mixed" entities, so e.g. `sales-order/header` still
   serves 97 fully-classified fields.
 
@@ -334,10 +334,10 @@ Two residual gaps, split by whether the MCP can see them:
   — and is safe only because pass 1 populates that list *after* its own `adColumn == null` check
   ~45 lines earlier. It cannot NPE today, but the invariant is invisible at the point of use, so a
   future reordering of the two passes would turn these inert rows into a 500 on
-  `etendo_defaults(sales-order, header)`. A comment now marks the dependency.
+  `neo_defaults(sales-order, header)`. A comment now marks the dependency.
 - **1892 fields across 105 *uncurated* entities — real impact, out of IMP-11's scope.** No contract
   covers them, and the writer loop iterates `extractFieldsFromContract`, so a regen has nothing to
-  refresh them from. `etendo_schema(sales-invoice, ticketbai)` returns 4 fields with **no**
+  refresh them from. `neo_schema(sales-invoice, ticketbai)` returns 4 fields with **no**
   `visibility`/`userRequired` while carrying the same `hint` that tells agents to filter on them. The
   hazard is new: absence used to be uniform, so it carried no signal; it is now non-uniform, which
   invites the inference "no visibility ⇒ editable". Two cheap remedies — stop exposing uncurated
@@ -356,11 +356,11 @@ deferred with the `:158` typed-getter nit for the same reason: it costs a compil
 > therefore assert the **new** rule, not the one this item shipped: on `sales-invoice/header` the
 > expected `userRequired: true` set is 6 fields, not 11.
 
-- [ ] `etendo_schema` on `sales-invoice/header` returns `visibility` on all 157 fields and
+- [ ] `neo_schema` on `sales-invoice/header` returns `visibility` on all 157 fields and
       `userRequired` on the editable-and-mandatory-and-undefaulted subset.
 - [ ] The `userRequired: true` set is small and *sendable* — no buttons, no `id`/`documentNo`, no
       computed totals, no foreign-module compliance fields.
-- [ ] An agent following the `hint` verbatim can build a valid `etendo_create` payload for
+- [ ] An agent following the `hint` verbatim can build a valid `neo_create` payload for
       `sales-invoice/header` **on the first call** (this is the M2 measurement, re-run via
       `/mcp-comparison`).
 - [ ] The `hint` and the tool description are no longer aspirational — they describe behaviour that
@@ -404,7 +404,7 @@ field descriptor on an **uncurated** spec now carries both keys — the case the
  "description":"A fast method for finding a particular record."}
 ```
 
-So the response `hint` and the `etendo_schema` tool description no longer promise a key the payload
+So the response `hint` and the `neo_schema` tool description no longer promise a key the payload
 omits, which was the whole of this item. Registry §3 moved the row ⚠️ → ✅ and 2.5 → 5/5. Note the
 outstanding condition this file recorded — *staging re-verification* — is **still outstanding**: the
 run probed local only, so the ✅ holds on local. A run against staging would tell us whether it is

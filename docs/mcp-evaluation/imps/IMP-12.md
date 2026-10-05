@@ -1,4 +1,4 @@
-# IMP-12 — Projection for `etendo_schema` (`view:"create"`, `fields:[…]`)
+# IMP-12 — Projection for `neo_schema` (`view:"create"`, `fields:[…]`)
 
 | | |
 |---|---|
@@ -13,16 +13,16 @@ This file is a job-C investigation: root cause and design, no measurement and no
 
 ## 1. The defect, as an agent experiences it
 
-`etendo_schema("sales-invoice","header")` returns every field of the tab — 157 of them, 61,963
+`neo_schema("sales-invoice","header")` returns every field of the tab — 157 of them, 61,963
 characters. On 2026-08-06 (B6) the call did not merely waste budget: it **failed outright** against
 the client's token limit. That distinction matters for the priority. A verbose response is a tax; a
-response that cannot be received at all makes `etendo_schema` unusable for the widest windows, which
+response that cannot be received at all makes `neo_schema` unusable for the widest windows, which
 are exactly the ones an agent most needs described.
 
 The irony is that the agent wants a small subset. To create a sales invoice it must decide values
 for a handful of fields; the other ~140 are compliance columns, audit metadata, read-only totals and
-buttons. `etendo_list` already solved its own version of this in IMP-2 (`fields:[…]` + `view:"summary"`)
-and `etendo_schema` already accepts one projection view (`view:"actions"`, IMP-6). The gap is that
+buttons. `neo_list` already solved its own version of this in IMP-2 (`fields:[…]` + `view:"summary"`)
+and `neo_schema` already accepts one projection view (`view:"actions"`, IMP-6). The gap is that
 nothing shrinks the *create-oriented* read.
 
 ## 2. Where the response is built
@@ -55,14 +55,14 @@ Worth stating both, because the obvious reuse is the wrong one.
   ~86 lines including licence header. `view:"create"` is the same class with a different predicate.
 - **`McpFieldProjection`** ([`McpFieldProjection.java:47-122`](../../../../modules/com.etendoerp.go/src/com/etendoerp/go/mcp/McpFieldProjection.java))
   is **not** reusable here, despite the name and despite IMP-12's spec saying the feature should
-  "mirror what `etendo_list` already offers". Its `apply` walks
+  "mirror what `neo_list` already offers". Its `apply` walks
   `response.data[]` and trims *record rows* (`:90-109`), keying on `id` and `$`-suffixed FK
   companions. A schema `fields` array is a list of *field descriptors*, filtered by each entry's
   `name`. The two share a concept and no code. `parseFields` (`:66-82`) is the one piece that
   transfers verbatim — and it is already `static` and DAL-free, so it can be lifted or called
   directly.
 
-Recording this because "mirror `etendo_list`" reads like an instruction to reuse
+Recording this because "mirror `neo_list`" reads like an instruction to reuse
 `McpFieldProjection.apply`, and doing so would silently no-op: a schema response has no
 `response.data`, so `apply` returns at `:98-100` having done nothing.
 
@@ -94,7 +94,7 @@ OutstandingAmt  readOnly  mandatory  businessCritical
 An agent must **not** send any of them — `DocumentNo` is sequence-generated, the other two are
 computed totals. `businessCritical` answers a different question ("must I confirm this value with
 the user before writing?") and is orthogonal to "may I supply it". Including it unconditionally puts
-fields in a create-shaped view that a `etendo_create` will reject or ignore. **The term belongs, but
+fields in a create-shaped view that a `neo_create` will reject or ignore. **The term belongs, but
 intersected with `editable`, not unioned across all visibilities.**
 
 ## 5. The real derivation: `mandatory` is not `userRequired`
@@ -123,11 +123,11 @@ columns: the three `EM_*` booleans are mandatory in AD but default to `'N'`, so 
 drops them without needing a module allowlist.
 
 **The correct predicate is `editable ∧ mandatory ∧ no-default`, plus `editable ∧ businessCritical`.**
-And the server already computes "what I will supply for you": that is `etendo_defaults`, whose
+And the server already computes "what I will supply for you": that is `neo_defaults`, whose
 `McpDefaultsView` splits its output into `confirm` (the `editable` ones) and `systemManaged`
 ([`McpDefaultsView.java:36-46, 84-109`](../../../../modules/com.etendoerp.go/src/com/etendoerp/go/mcp/McpDefaultsView.java)),
 classified from `McpToolRouterSupport.editablePropertyNames`. So `view:"create"` and
-`etendo_defaults(view:"minimal")` are two projections of one underlying question, and they must not
+`neo_defaults(view:"minimal")` are two projections of one underlying question, and they must not
 disagree — an agent that reads both and gets different answers is worse off than one that reads
 neither.
 
@@ -139,7 +139,7 @@ All in `com.etendoerp.go`; nothing in `schema_forge_core`, and no DB or sourceda
    filtering `fieldsArray` on the §5 predicate, and a `buildResponse` emitting
    `{spec, entity, fields, fieldCount, hint}` — dropping `table`/`methods`/`namedFilters`, which a
    create payload does not need.
-2. **`fields:[…]` on `etendo_schema`**: filter `fieldsArray` by descriptor `name`. Reuse
+2. **`fields:[…]` on `neo_schema`**: filter `fieldsArray` by descriptor `name`. Reuse
    `McpFieldProjection.parseFields`; do **not** reuse its `apply` (§3).
 3. **Wire both at [`McpToolRouter.java:803`](../../../../modules/com.etendoerp.go/src/com/etendoerp/go/mcp/McpToolRouter.java)**,
    next to the existing `view:"actions"` branch, so the three views share one dispatch point.
@@ -158,14 +158,14 @@ every existing caller and hide the size problem instead of giving the agent a wa
 
 ## 7. Done when
 
-- [ ] ~~`etendo_schema("sales-invoice","header",view:"create")` returns **under 4 KB**.~~
+- [ ] ~~`neo_schema("sales-invoice","header",view:"create")` returns **under 4 KB**.~~
       **Target corrected to under 8 KB** — see §10.2. 4 KB was authored before anything was measured
       and is only reachable by degrading `optional` to a bare name list, which costs the agent a
       second call and so works against the very metric (M1) this item serves.
 - [ ] Every field it returns is one the agent may actually supply — no `readOnly`, no
       sequence-generated `DocumentNo`, no computed `GrandTotal`/`OutstandingAmt`.
 - [ ] Fields the server will default (`C_Currency_ID`, `DateInvoiced`, the `EM_*` compliance
-      booleans) are **absent**, and what remains agrees with `etendo_defaults(view:"minimal")`.
+      booleans) are **absent**, and what remains agrees with `neo_defaults(view:"minimal")`.
 - [ ] `fields:["businessPartner","invoiceDate"]` returns exactly those two descriptors.
 - [ ] An omitted `view`/`fields` returns the current response byte-for-byte (♻️ means ♻️).
 - [ ] The `view` enum in `ToolRegistry` advertises `create`, so it is discoverable.
@@ -175,8 +175,8 @@ every existing caller and hide the size problem instead of giving the agent a wa
 ## 8. Open questions
 
 - **Should `view:"create"` include the `lines` entity's required fields?** A sales invoice is
-  useless without lines, and the agent currently needs a second `etendo_schema` call plus a
-  `etendo_batch` to discover the `parentRef` shape. Out of scope here, but if the answer is yes it
+  useless without lines, and the agent currently needs a second `neo_schema` call plus a
+  `neo_batch` to discover the `parentRef` shape. Out of scope here, but if the answer is yes it
   changes the response envelope, which is cheaper to decide before shipping than after.
 - **`requiredWhen` (`:795`) interacts with the filter.** A field that is conditionally required
   is not `mandatory` in AD, so the §5 predicate drops it — correct for the common case, wrong for
@@ -232,7 +232,7 @@ on the emitted fields and gates nothing.
 ### 9.4 `unknownFields`, not silent dropping
 
 A `fields:[…]` name that matches no descriptor comes back under `unknownFields`. This pre-empts the
-defect IMP-18 tracks on `etendo_list`'s projection, where a typo makes the field vanish and
+defect IMP-18 tracks on `neo_list`'s projection, where a typo makes the field vanish and
 the agent concludes it does not exist.
 
 ### 9.5 Uncurated entities return nothing
@@ -256,7 +256,7 @@ at `6cc522f5`.
 
 ### 10.1 `view:"create"` works, and the required set is exactly the 6 §5 predicted
 
-`etendo_schema("sales-invoice","header",view:"create")` returned `requiredCount: 6`,
+`neo_schema("sales-invoice","header",view:"create")` returned `requiredCount: 6`,
 `optionalCount: 18` — 24 suppliable fields out of 157, matching the `editable` count exactly.
 
 The 6 required: `transactionDocument`, `businessPartner`, `paymentMethod`, `partnerAddress`,
@@ -292,7 +292,7 @@ items shipping in the same wave.
 
 `under 4 KB` (§7, authored before any measurement) is only reachable by the last two rows, both of
 which strip `type`, `label` and `hasSelector` off the optional group. An agent that then wants to set
-one optional field must call `etendo_schema` a second time — spending an M1 call to save bytes, in an
+one optional field must call `neo_schema` a second time — spending an M1 call to save bytes, in an
 item whose whole purpose is fewer calls. **Target corrected to under 8 KB**, met at 7,767.
 
 What ships instead is a rule with no arbitrary cutoff: *no key in this view is redundant with the
@@ -303,7 +303,7 @@ while carrying `required: true`.
 
 `defaultExpression`/`defaultSource` go with them, for a second reason: on this entity two AEAT
 compliance columns carry 806 and 604 characters of raw `@SQL=…` that no agent can evaluate.
-`etendo_defaults` resolves them server-side, and the hint now says so. Slimming copies rather than
+`neo_defaults` resolves them server-side, and the hint now says so. Slimming copies rather than
 mutates, so the default response stays byte-for-byte unchanged.
 
 ### 10.3 The ♻️ guarantee holds; the ⚙️ part is visible
@@ -315,7 +315,7 @@ except for the rewritten `hint` — which is exactly the ⚙️ surface §9.2 de
 
 Both attempts returned the full 71,742-char dump. The parameter is declared correctly server-side,
 but **this Claude Code session cached the tool list at connect time**, before the deploy: the loaded
-`etendo_schema` schema still advertises `view` as `enum: ["actions"]` with no `fields` property, so the
+`neo_schema` schema still advertises `view` as `enum: ["actions"]` with no `fields` property, so the
 client strips the unknown argument before it reaches the servlet. `view:"create"` got through only
 because the client passes enum values as opaque strings rather than validating them.
 
@@ -343,14 +343,14 @@ rather than mutates.
 `purchase-invoice/header` returns the same 6 / 18 shape and the same six required FKs, so the
 predicate is not overfitted to one window.
 
-### 11.2 `etendo_defaults` contradicts `required` — 4 of the 6
+### 11.2 `neo_defaults` contradicts `required` — 4 of the 6
 
 This is the finding that matters, and it invalidates one of §7's checkboxes rather than ticking it.
 
-`etendo_defaults("sales-invoice","header",view:"minimal")` resolves live values for **four of the six
+`neo_defaults("sales-invoice","header",view:"minimal")` resolves live values for **four of the six
 fields `view:"create"` reports as `required`**:
 
-| Field | `view:"create"` says | `etendo_defaults` returns |
+| Field | `view:"create"` says | `neo_defaults` returns |
 |---|---|---|
 | `transactionDocument` | **required** | `40EE9B1C…` — *AR Invoice* |
 | `paymentMethod` | **required** | `EA002232…` — *Efectivo* |
@@ -370,7 +370,7 @@ descriptor, and those come from `AD_Column.DefaultValue`. But these four columns
 `AD_Column.DefaultValue` — their values are resolved at runtime by `NeoDefaultsService` from session
 preferences, the business partner's own configuration and AD callouts. **`AD_Column.DefaultValue` is
 an incomplete proxy for "the server will supply this."** The authoritative answer is whatever
-`etendo_defaults` returns, and only `etendo_defaults` computes it.
+`neo_defaults` returns, and only `neo_defaults` computes it.
 
 The default-aware narrowing in §9.2 was therefore *directionally* right and *quantitatively* short: it
 caught the 2 statically-defaulted fields (`invoiceDate`, `currency`) and missed the 4 dynamically
@@ -383,7 +383,7 @@ resolved ones. The genuinely agent-supplied set on this entity is closer to **1�
 |---|---|
 | Under the corrected 8 KB | ✅ 7,853 chars |
 | Every returned field is one the agent may supply | ✅ no `readOnly`, no `DocumentNo`, no `GrandTotal`/`OutstandingAmt` |
-| Server-defaulted fields absent, and agrees with `etendo_defaults(view:"minimal")` | ❌ **§11.2** — 4 of 6 `required` are resolved by `etendo_defaults` |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ❌ **§11.2** — 4 of 6 `required` are resolved by `neo_defaults` |
 | `fields:["businessPartner","invoiceDate"]` returns those two | ⏳ unverifiable at the time — resolved ✅ in §13.2 after an `/mcp` reconnect |
 | Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ verified by `diff` |
 | The `view` enum advertises `create` | ⏳ correct in `ToolRegistry`, unverifiable through the cached client — resolved ✅ in §13.2 |
@@ -400,7 +400,7 @@ Two ❌/⏳ that need a decision and one that needs a reconnect. **The item stay
 *"SII - Cause Exemption"*. An IMP-1 gap, not an IMP-12 one; recorded here because this is where it
 surfaced.
 
-## 12. The `etendo_defaults` cross-check (2026-08-06, committed `977daf85`, unprobed)
+## 12. The `neo_defaults` cross-check (2026-08-06, committed `977daf85`, unprobed)
 
 The fix the user authorized for §11.2, from three candidates. The two rejected ones are recorded
 because the reason they lost is the reason this one is right:
@@ -409,17 +409,17 @@ because the reason they lost is the reason this one is right:
 |---|---|
 | Reword the `hint` to stop claiming `required` is exhaustive | Makes the doc honest and the data still wrong. The agent's problem is not the sentence, it is that it will ask the user for `paymentTerms`. |
 | Drop `required`/`optional` and emit one flat list | Throws away the only thing that made the view worth 7.8 kB. The grouping *is* the answer to "what do I have to decide". |
-| **Cross-check against `etendo_defaults` inside the view** | Chosen. `required` becomes true by construction rather than by assertion. |
+| **Cross-check against `neo_defaults` inside the view** | Chosen. `required` becomes true by construction rather than by assertion. |
 
 ### 12.1 The rule
 
 `view:"create"` now asks the authoritative source instead of a proxy. A field whose name
-`etendo_defaults` resolves a **usable** value for is routed to `optional` and flagged
+`neo_defaults` resolves a **usable** value for is routed to `optional` and flagged
 `serverDefaulted: true` — however mandatory AD says it is.
 
 Three keys are excluded from "resolved", each for a distinct reason:
 
-- `metadata` — `etendo_defaults`' own envelope, not a field.
+- `metadata` — `neo_defaults`' own envelope, not a field.
 - `*$_identifier` — the display name of a FK, not something the agent could send.
 - `""` / blank / `null` — **the server knows the field and could not resolve it.** `partnerAddress`
   returns `""`, which is exactly the case where the agent must still supply a value. Treating an
@@ -436,13 +436,13 @@ One `NeoDefaultsService.resolveDefaults` call, paid **only** when `view:"create"
 default response and `view:"actions"` do no extra work at all, so the ♻️ guarantee proved by `diff`
 in §11.1 is untouched.
 
-That cost buys back more than it spends: the agent was going to call `etendo_defaults` anyway before
+That cost buys back more than it spends: the agent was going to call `neo_defaults` anyway before
 creating a record. This is the same resolution, moved earlier, in exchange for not interrogating the
 user four times.
 
 Resolution is **best-effort**: a throw, a `null` response, or `httpStatus >= 400` falls back to the
 static `AD_Column.DefaultValue` rule and logs a warning. An over-reported `required` field is a worse
-answer, not a broken one — a `etendo_schema` call must never fail because the cross-check failed.
+answer, not a broken one — a `neo_schema` call must never fail because the cross-check failed.
 
 ### 12.3 What landed
 
@@ -463,7 +463,7 @@ required: [ businessPartner, partnerAddress ]      requiredCount: 2
 optional: [ 22 fields, 4 of them serverDefaulted ] optionalCount: 22
 ```
 
-`partnerAddress` stays required because `etendo_defaults` returns `""` for it. If the live run shows
+`partnerAddress` stays required because `neo_defaults` returns `""` for it. If the live run shows
 anything other than 2 / 22, the `resolvedDefaultNames` predicate is what to re-examine first.
 
 **The item stays ⏳ open at 0 / 5** — nothing here has been compiled or probed, and the §11.3 verdict
@@ -526,7 +526,7 @@ shows `enum: ["create","actions"]` and the widened tool description.
 |---|---|
 | Under the corrected 8 KB | ✅ 7,853 chars (§11.1) |
 | Every returned field is one the agent may supply | ✅ (§11.1) |
-| Server-defaulted fields absent, and agrees with `etendo_defaults(view:"minimal")` | ❌ still — cross-check written twice, effective zero times so far (§13.1) |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ❌ still — cross-check written twice, effective zero times so far (§13.1) |
 | `fields:["businessPartner","invoiceDate"]` returns those two | ✅ **§13.2**, plus `unknownFields` |
 | Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ verified by `diff` (§11.1) |
 | The `view` enum advertises `create` | ✅ **§13.2**, confirmed through the reconnected client |
@@ -549,11 +549,11 @@ over-reporting 4 of 6 live, which is the defect that matters most here.
 
 All four fields §11.2 caught over-reported — `transactionDocument`, `paymentMethod`, `paymentTerms`,
 `priceList` — are now under `optional` with `serverDefaulted: true`. `partnerAddress` correctly stayed
-`required`: `etendo_defaults` returns `""` for it, and the blank-value guard is what kept it there. That
+`required`: `neo_defaults` returns `""` for it, and the blank-value guard is what kept it there. That
 guard was the one part of §12.1 with no live evidence behind it; it now has some.
 
 13 of the 22 optional fields carry `serverDefaulted`, 9 do not. The `required` group's hint — *"neither
-an AD default nor etendo_defaults resolves a value for them"* — is now **true as measured**, which is what
+an AD default nor neo_defaults resolves a value for them"* — is now **true as measured**, which is what
 §11.2 said it had to become.
 
 ### 14.2 Not overfitted: `purchase-invoice/header` gives 2 / 22 too
@@ -579,7 +579,7 @@ Three ways out, none of them free:
 
 | Option | Cost |
 |---|---|
-| Pay the defaults resolution on the default path too | Every `etendo_schema` call gets slower, including the ones that never create anything. Breaks the ♻️ classification measured by `diff` in §11.1. |
+| Pay the defaults resolution on the default path too | Every `neo_schema` call gets slower, including the ones that never create anything. Breaks the ♻️ classification measured by `diff` in §11.1. |
 | Drop `userRequired` from the default dump and point at `view:"create"` | ⚙️ on the default response — the shape IMP-11 just backfilled. Removes the wrong answer instead of correcting it. |
 | Leave it, and treat the default dump's `userRequired` as documented-as-approximate | Free, and honest only if the tool description says so. It currently does say so, since `fed3902a` widened it. |
 
@@ -612,10 +612,10 @@ projection IMP-12 built, which is why it is recorded here rather than against th
 ### 15.1 The response
 
 ```
-etendo_schema(spec:"bp-location", entity:"bpLocation", view:"create")
+neo_schema(spec:"bp-location", entity:"bpLocation", view:"create")
 → { "required": [], "optional": [], "requiredCount": 0, "optionalCount": 0,
     "hint": "…Anything omitted from this view is either auto-derived, read-only or excluded —
-             do not send it, and do not call etendo_schema again to look for it. …" }
+             do not send it, and do not call neo_schema again to look for it. …" }
 ```
 
 `isAgentSuppliable` filters on `visibility`, and every `ETGO_SF_FIELD` row of this entity has
@@ -669,7 +669,7 @@ recommended yet.
 ### 15.4 Proposed shape — candidate IMP, not registered here
 
 1. **Java, small:** when the create view emits zero fields, replace the closing "do not call
-   `etendo_schema` again" clause with one that says the entity is not curated for agent input and points
+   `neo_schema` again" clause with one that says the entity is not curated for agent input and points
    at the full dump. A false statement is worse than a verbose one.
 2. **Schema Forge data, larger:** set `ispost = 'N'` on the auxiliary sub-tabs, closing ~85 write
    surfaces that should never have been offered.
@@ -683,7 +683,7 @@ the next `/mcp-comparison` run's call — this section is the investigation, not
 |---|---|
 | Under the corrected 8 KB | ✅ 7,853 chars (§11.1) |
 | Every returned field is one the agent may supply | ✅ (§11.1) |
-| Server-defaulted fields absent, and agrees with `etendo_defaults(view:"minimal")` | ✅ **§14.1** — 2 / 22, agrees field-for-field |
+| Server-defaulted fields absent, and agrees with `neo_defaults(view:"minimal")` | ✅ **§14.1** — 2 / 22, agrees field-for-field |
 | `fields:["businessPartner","invoiceDate"]` returns those two | ✅ §13.2, plus `unknownFields` |
 | Omitted `view`/`fields` returns the previous response byte-for-byte | ✅ `diff` (§11.1), re-confirmed §14.3 |
 | The `view` enum advertises `create` | ✅ §13.2 |
@@ -717,7 +717,7 @@ WHERE c.columnname = 'EM_Aeatsii_Cause_Exemption_ID';
 -- (no row for Purchase Invoice)
 ```
 
-— and with no `AD_Field` there is nothing to read a label or a `help` text from, so `etendo_schema`
+— and with no `AD_Field` there is nothing to read a label or a `help` text from, so `neo_schema`
 falls back to the DB column name. This reframes part of IMP-1's remaining 43 raw labels: they are
 not all *unlabelled fields*, some are *absent `AD_Field` records*, and the two cases are fixed in
 different repos (an AD record in `com.etendoerp.go` vs an `applyCuratedLabels` override in
@@ -728,7 +728,7 @@ the answer decides which repo the fix lands in.
 
 ## 2026-08-13 — re-measured by a `/mcp-comparison` run (job B); registry row moved ⚠️ → ✅
 
-`etendo_schema view:"create"` on `product/header` returned **4,932 bytes** where the full dump was
+`neo_schema view:"create"` on `product/header` returned **4,932 bytes** where the full dump was
 61,963 chars, and the call no longer fails against the context limit — the failure this file
 reproduced byte-for-byte on 08-06. `etendo-go-local`, build `8f0d1cce`. Registry §3 moved the row
 ⚠️ → ✅ and 2.5 → 5/5, and §2.6 records the 4,932 B figure as the first ACE-v datum for this surface.
@@ -736,7 +736,7 @@ reproduced byte-for-byte on 08-06. `etendo-go-local`, build `8f0d1cce`. Registry
 **§15's defect got sharper and is now its own P1.** This file already recorded that on an uncurated
 entity `view:"create"` returns empty *and* its `hint` tells the agent not to look further. The 08-13
 run hit the non-empty variant of the same trap: on `product/header` the projection returns a useful
-subset that **omits every price and stock field**, with the same "do not call `etendo_schema` again"
+subset that **omits every price and stock field**, with the same "do not call `neo_schema` again"
 hint — so the agent is told the writable set is complete when the three fields the task needs are
 missing from it. That is registered as **IMP-28**, not as a regression here: the projection *works*,
 its editorial choice of what to include is the new item. §15's own count (89 of 230 POST-able entities

@@ -4,15 +4,15 @@
 |---|---|
 | **Registry row** | [`mcp-improvements-registry.md`](../mcp-improvements-registry.md) §3 — **P1**, cohort C5, 0 / 5, ♻️ same call. Registered 2026-08-12 on a human-authorised quota re-base (§7) |
 | **Specification** | registered from a code + DB investigation during the IMP-21 run (2026-08-12), not from a probe vector |
-| **Evidence** | 22 `ETGO_SF_FIELD` rows across 6 specs where `visibility` and its own `mapVisibility()` projection disagree (§2), confirmed agent-visible on `tax` via `etendo_schema` (§3) |
+| **Evidence** | 22 `ETGO_SF_FIELD` rows across 6 specs where `visibility` and its own `mapVisibility()` projection disagree (§2), confirmed agent-visible on `tax` via `neo_schema` (§3) |
 | **Repo** | `com.etendoerp.go` (reader) + `schema_forge_core` (writer) |
 | **Related** | IMP-11 (uncurated entities — same `visibility` column, different failure), IMP-27 (cannot ship before this one, §6) |
 | **Implemented** | not started |
 
 ## 1. The claim
 
-`etendo_schema` tells an agent a field is writable and required. NEO refuses to write it. Or
-`etendo_schema` tells the agent not to send a field at all, and NEO serves and accepts it.
+`neo_schema` tells an agent a field is writable and required. NEO refuses to write it. Or
+`neo_schema` tells the agent not to send a field at all, and NEO serves and accepts it.
 
 Both happen today, on the same records, because **the MCP describes a field from one database column
 and NEO gates it from two others**, and nothing keeps the three in agreement.
@@ -114,7 +114,7 @@ control deliberately rather than accidentally.
 
 ## 3. Measured agent-visible, not inferred
 
-`etendo_schema` on `tax`:
+`neo_schema` on `tax`:
 
 - `name`, `rate`, `validFromDate` come back as ordinary writable fields with
   **`userRequired:true`** — while `ETGO_SF_FIELD` has them `isreadonly='Y'` and
@@ -284,7 +284,7 @@ proxy here.
 projecting to a pair other than the one stored. The larger population is the opposite shape:
 `visibility` never written at all while the flags say included. So F23 **BLOCKs** contradictions
 (only a writer bug or a hand-edit reaches that state) and **WARNs** the unwritten rows (the runtime is
-unaffected; `etendo_schema` just reports no visibility, so an agent cannot tell `readOnly` from
+unaffected; `neo_schema` just reports no visibility, so an agent cannot tell `readOnly` from
 `system`). Had it been one BLOCKing rule it would have gone red on 409 rows on day one and been
 skipped within a week.
 
@@ -368,7 +368,7 @@ Three notes, because the price is easy to misread:
 - The query in §2.1 returns **0 rows**. — measured 0 on 2026-08-13, in the DB and in the exported
   XML independently (§5.3.1). Note what this does *not* cover: that query only sees the
   contradiction class, and 409 rows of the unwritten class remain.
-- `etendo_schema` on `tax` no longer reports `userRequired:true` for `name` / `rate` / `validFromDate`,
+- `neo_schema` on `tax` no longer reports `userRequired:true` for `name` / `rate` / `validFromDate`,
   and `taxExempt` / `notTaxable` are either genuinely excluded from NEO or no longer reported
   `discarded` — the two stacks agreeing is the assertion, not either one's value.
 - The recurrence guard is in place, with its blast radius (§5.3) checked rather than assumed.

@@ -1,7 +1,7 @@
 # ETP-4232 — Cross-domain plan
 
 **Feature:** New `POST /amortization/generate-plan` MCP endpoint + `businessCritical`
-per-field advisory flag in `etendo_schema` (ETP-4233 absorbed into this branch).
+per-field advisory flag in `neo_schema` (ETP-4233 absorbed into this branch).
 
 This PR touches the Schema Forge pipeline (generator changes, window:assets artifacts)
 and the `com.etendoerp.go` module (new Java service, DB model column, MCP wiring).
@@ -38,9 +38,9 @@ and the `com.etendoerp.go` module (new Java service, DB model column, MCP wiring
   process via `NeoProcessService`, reads back the plan, returns structured output.
 - `NeoBuiltInEndpointHandler.java` — REST route `POST /sws/neo/amortization/generate-plan`.
 - `McpToolRouter.java` + `ToolRegistry.java` + `McpConstants.java` — MCP tool
-  `etendo_generate_amortization_plan` wiring.
+  `neo_generate_amortization_plan` wiring.
 - `McpToolRouterSupport.java` — `loadFieldMetadata` / `buildSchemaField` emit
-  `businessCritical` bool per field in the `etendo_schema` response.
+  `businessCritical` bool per field in the `neo_schema` response.
 - `ETGO_SF_FIELD.xml` (model) — new column `ISBUSINESSCRITICAL CHAR(1) DEFAULT 'N'`.
 - `AD_ELEMENT.xml`, `AD_COLUMN.xml`, `sourcedata/ETGO_SF_FIELD.xml` — AD entries and
   full sourcedata export (117 rows tagged; 12 with `Y`, rest `N`).
@@ -64,12 +64,12 @@ and the `com.etendoerp.go` module (new Java service, DB model column, MCP wiring
 - `McpToolRouterSupportTest.java` — 6 new cases: `businessCritical` true/false/null
   in `buildSchemaField` and `loadFieldMetadata`. Compiles clean.
 - `ToolRegistryGenerateToolsTest.java`, `McpToolRouterRouteTest.java` — coverage for
-  `etendo_generate_amortization_plan` tool registration and routing.
+  `neo_generate_amortization_plan` tool registration and routing.
 
 ## Rollback
 
 - **generate-plan endpoint:** delete `AmortizationPlanService.java`; remove the
-  `etendo_generate_amortization_plan` case from `McpToolRouter` and `ToolRegistry`;
+  `neo_generate_amortization_plan` case from `McpToolRouter` and `ToolRegistry`;
   remove the `generate-plan` route from `NeoBuiltInEndpointHandler`. No persisted
   data affected — the endpoint only reads and fires a native process.
 - **businessCritical flag:** remove the flag from `decisions.json` for the 12 fields,
@@ -83,5 +83,5 @@ and the `com.etendoerp.go` module (new Java service, DB model column, MCP wiring
   apply nullability changes to existing columns. The Java consumer uses
   `Boolean.TRUE.equals(...)` throughout — fully null-safe. Default `N` ensures no
   nulls in practice.
-- `etendo_schema` is MCP-only; the acceptance criteria CPs (E1/E2/E3) must be validated
+- `neo_schema` is MCP-only; the acceptance criteria CPs (E1/E2/E3) must be validated
   via MCP, not REST.

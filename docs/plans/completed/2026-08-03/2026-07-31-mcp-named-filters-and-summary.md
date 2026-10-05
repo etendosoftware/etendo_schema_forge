@@ -82,7 +82,7 @@ by `push-to-neo`, not hand-edited).
   `export.database`.**
 - **P4 — MCP consumption.** `McpToolRouterSupport.appendStatusCondition` reads the entity's
   `NAMED_FILTERS` JSON and appends the matching `where`; unknown name → clean 400, not 500. Expose the
-  available named filters per spec in `etendo_schema` (documentation). Remove hardcoded
+  available named filters per spec in `neo_schema` (documentation). Remove hardcoded
   `McpBusinessFilters` invoice status + invoice column constants; drop `overdue`. Update `ToolRegistry`
   descriptions. Tests.
 - **P5 — docs.** `decisions-reference.md` (new `namedFilters` construct), `mcp-comparison` report

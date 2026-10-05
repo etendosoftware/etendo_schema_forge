@@ -16,7 +16,7 @@ both reductions happened before a line of this change was written:
 
 | | Scope at that point |
 |---|---|
-| As registered | `etendo_update orderDate:"09-08-2026"` returns `status: 0` and stores `0015-02-16`, on that field **and** on a sibling the call never named |
+| As registered | `neo_update orderDate:"09-08-2026"` returns `status: 0` and stores `0015-02-16`, on that field **and** on a sibling the call never named |
 | After IMP-16 §9 | That vector was a **missing `coerceFieldTypes` call** in `handleUpdate`. Closed there. What remained was only the *loud rejection* half |
 | After the IMP-16 §9.1 deploy | Measured rather than assumed: an unusable date is already refused — nothing lands in the first century — so this became **reshape an existing rejection**, not *add one* |
 
@@ -72,8 +72,8 @@ The witness is per-verb, and neither needed inventing:
 
 | Verb | Witness | Why |
 |---|---|---|
-| `etendo_create` | `userProvided` — the snapshot taken before `injectMandatoryDefaults` | already there for the IMP-15 uOM decision, for the same reason: it is the only reliable record of what the agent chose |
-| `etendo_update` | none needed (`null`) | this path never injects defaults, so **every** key in the body is the caller's. IMP-16's own comment at that call site already said so |
+| `neo_create` | `userProvided` — the snapshot taken before `injectMandatoryDefaults` | already there for the IMP-15 uOM decision, for the same reason: it is the only reliable record of what the agent chose |
+| `neo_update` | none needed (`null`) | this path never injects defaults, so **every** key in the body is the caller's. IMP-16's own comment at that call site already said so |
 
 ## 4. What landed
 
@@ -128,7 +128,7 @@ fixing precisely because the lenient parser **succeeds** on them.
 - [x] Unit tests green — 147/147 across `McpToolRouterSupportTest` + `NeoDateFormatTest`, plus 27/27 on the call-site guard and the REST coercer, run standalone against the deployed jars
 - [x] **Verified live** on `etendo-go-local` after a user-run compile + deploy — see §7
 - [x] `./gradlew test` on the full module — run by the user 2026-08-10, green. This is the check that counts — after IMP-16 §9.2, a standalone run does not
-- [ ] The `etendo_update` call site probed live (§7, probe 6 — blocked, not run)
+- [ ] The `neo_update` call site probed live (§7, probe 6 — blocked, not run)
 - [ ] Corpus row in `etendo-go-docs` mentioning the 422 (separate repo → separate PR, and delivery needs a Context7 reindex — see [IMP-14](IMP-14.md))
   - **Written and submitted 2026-08-13** — `etendo-go-docs` `25d787a`, PR
     [#35](https://github.com/etendosoftware/etendo-go-docs/pull/35) → `main`, open. See §9. Left
@@ -137,7 +137,7 @@ fixing precisely because the lenient parser **succeeds** on them.
 
 ## 7. Live verification (2026-08-10, after a user-run compile + deploy)
 
-Every probe is a `etendo_create` with a **deliberately incomplete** payload. The date 422 is emitted
+Every probe is a `neo_create` with a **deliberately incomplete** payload. The date 422 is emitted
 before the `missingFields` check, so in *any* branch — fix working, fix broken, or the DAL rejecting —
 nothing persists. No record was created, and none was touched.
 
@@ -148,7 +148,7 @@ nothing persists. No record was created, and none was touched.
 | 3 | `orderDate:"2026-13-40"` + `scheduledDeliveryDate:"banana"` | **422** listing **both**, in order |
 | 4 | `orderDate:"2026-08-11"` + `scheduledDeliveryDate:"11-08-2026"` | **No date rejection** — falls through to `missingFields`. `11-08-2026` is *repaired*, not refused |
 | 5 | `datePrinted:"2026-08-11T14:30:00+02:00"` | Not rejected. But see below — this probe did **not** exercise the classifier |
-| 6 | `etendo_update` with a bad date and a non-existent id | **Not run** — blocked by the permission classifier |
+| 6 | `neo_update` with a bad date and a non-existent id | **Not run** — blocked by the permission classifier |
 
 **Probe 4 is the one that shows the design is a split, not a rejection.** A `dd-MM-yyyy` value is
 still repaired by IMP-16's coercer; only the irreparable is rejected. A change that rejected
@@ -205,7 +205,7 @@ whichever page Context7 retrieved incomplete. Only `agentic/` is indexed — `do
 MkDocs site and was correctly left alone.
 
 The row's wording is drawn from a live call rather than from `neo-headless.md`, using the same probe
-that opened §1 — `orderDate:"06/08/2026"` on a `etendo_create`:
+that opened §1 — `orderDate:"06/08/2026"` on a `neo_create`:
 
 ```json
 { "status": 422, "error": "validation_error",
@@ -313,7 +313,7 @@ reparable from irreparable, and an ambiguous value is, by construction, entirely
 
 ### Why the fix is small and safe — the witness already exists
 
-The reason a blanket rejection is unacceptable is that our own `etendo_defaults` injects `dd-MM-yyyy`
+The reason a blanket rejection is unacceptable is that our own `neo_defaults` injects `dd-MM-yyyy`
 values; rejecting them would blame the agent for a value the server supplied. The `callerSupplied`
 witness that distinguishes the two is **already threaded end-to-end**:
 `McpToolRouter.coerceFieldTypes` computes it per key (`McpToolRouter.java:1619`:
@@ -335,16 +335,16 @@ So the fix is two additions on existing plumbing, not a redesign:
 Note the predicate rejects `03-04-2026` and still repairs `20-09-2026`. That asymmetry is correct and
 is the point: only genuinely ambiguous values cost the agent a round trip.
 
-### `etendo_batch` — a second, lower-priority gap
+### `neo_batch` — a second, lower-priority gap
 
 `handleBatch` (`McpToolRouter.java:1051`) delegates to `BatchService.forBatchOnly().executeBatch`
 (`:1090`) → `NeoCrudHandler#handleDefault` → `NeoTypeCoercionHelper.coerceTypes`/`coerceField`
 (`NeoTypeCoercionHelper.java:174-197`), which only WARNs and passes through — it never builds a
-rejection. So `etendo_batch` gets **neither** half: not the irreparable-value 422 that shipped in phase 2,
+rejection. So `neo_batch` gets **neither** half: not the irreparable-value 422 that shipped in phase 2,
 nor the ambiguity check proposed above, because it never reaches `coerceFieldTypes` at all.
 
 The leniency of the REST path is justified in code by *"the React form has a date picker and is not an
-agent"*. That argument does not extend to `etendo_batch`, which is an agent write verb. This is an unmet
+agent"*. That argument does not extend to `neo_batch`, which is an agent write verb. This is an unmet
 clause of this item's own title (*on write*), not a new number — but it is separable from the
 ambiguity fix and should ship after it.
 
@@ -362,13 +362,13 @@ whether any MCP-facing tool description discloses the side effect to an agent. N
 ### Declared verification gaps, unchanged
 
 - The offset-datetime classifier is covered by unit tests only; never probed live.
-- The `etendo_update` call site (`:660`) was never probed live — only `etendo_create`.
+- The `neo_update` call site (`:660`) was never probed live — only `neo_create`.
 
 ### Revised `Done when:` delta
 
 - [ ] A caller-supplied ambiguous date (`03-04-2026`) is **rejected** with the IMP-5 envelope, while
       an unambiguous one (`20-09-2026`) is still repaired and a server-injected one is untouched —
       pinned by unit tests over all three cases, not a spot check.
-- [ ] `etendo_batch` reaches the same coercion path, or the decision that it stays REST-lenient forever
+- [ ] `neo_batch` reaches the same coercion path, or the decision that it stays REST-lenient forever
       is recorded here with its reason.
-- [ ] Re-probed live on `etendo_create` **and** `etendo_update`.
+- [ ] Re-probed live on `neo_create` **and** `neo_update`.

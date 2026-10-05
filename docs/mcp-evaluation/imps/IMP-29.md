@@ -10,7 +10,7 @@
 
 ---
 
-## 1. What was observed (`etendo_discover`, `etendo-go-local`, build `8f0d1cce`)
+## 1. What was observed (`neo_discover`, `etendo-go-local`, build `8f0d1cce`)
 
 Entity names come back in mixed languages, because they are derived from AD tab names in the tenant's
 language:
@@ -43,7 +43,7 @@ instance of (3) and should be covered by the same predicate rather than listed s
 | # | Hypothesis | How to test | Verdict |
 |---|---|---|---|
 | H1 | The entity name is derived at **spec-authoring** time from `AD_Tab.Name` in whatever language the authoring session used, and stored in `ETGO_SF_ENTITY` — so the leak is baked into the config rows and every tenant's DB differs | `SELECT` the entity names from `ETGO_SF_ENTITY` and compare against `AD_Tab` / `AD_Tab_Trl`; check whether the extractor reads the translated name | *not tested* |
-| H2 | The name is derived at **request** time from the AD tab in the session language, so the same DB serves different identifiers to different users | Call `etendo_discover` twice under two session languages on one tenant and diff | *not tested* |
+| H2 | The name is derived at **request** time from the AD tab in the session language, so the same DB serves different identifiers to different users | Call `neo_discover` twice under two session languages on one tenant and diff | *not tested* |
 | H3 | Both: authored names are stored, but a fallback re-derives them when the stored value is blank (the same per-window fallback shape as IMP-1) | Find the fallback and check which specs hit it — the affected specs above are all localization/compliance modules, which is suspicious | *not tested* |
 
 H1 and H2 have **very different fixes**: H1 needs a slug function in `schema_forge_core`'s extractor

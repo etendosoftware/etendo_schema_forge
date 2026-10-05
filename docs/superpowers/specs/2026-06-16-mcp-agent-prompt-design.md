@@ -1,4 +1,4 @@
-# Configurable Agent Prompt for `etendo_discover` / `etendo_schema`
+# Configurable Agent Prompt for `neo_discover` / `neo_schema`
 
 **Date:** 2026-06-16
 **Status:** Approved (design)
@@ -9,8 +9,8 @@ Allow customizing an "agent guidance" text at two levels — **spec** (`ETGO_SF_
 and **field** (`ETGO_SF_FIELD`) — configurable from `decisions.json`, flowing
 through the pipeline to the database, and returned in the MCP responses:
 
-- **Spec-level prompt** → returned by `etendo_discover` (one per spec).
-- **Field-level prompt** → returned by `etendo_schema` (inside each `fieldObj`).
+- **Spec-level prompt** → returned by `neo_discover` (one per spec).
+- **Field-level prompt** → returned by `neo_schema` (inside each `fieldObj`).
 
 The text is consumed by AI agents that introspect the NEO Headless MCP server to
 understand how to operate each window/process and each field.
@@ -74,13 +74,13 @@ decisions.json (window.agentPrompt + field.agentPrompt)
   → push-to-neo.js + neo-writer.js (SQL)
   → ETGO_SF_SPEC.AGENT_PROMPT / ETGO_SF_FIELD.AGENT_PROMPT
   → McpToolRouterSupport.buildDiscoverSpec / buildFieldObj
-  → etendo_discover (spec prompt) / etendo_schema (field prompt)
+  → neo_discover (spec prompt) / neo_schema (field prompt)
 ```
 
 ## Out of scope
 
 - Global server-wide agent instructions (not per-spec/per-field).
-- Listing fields inside `etendo_discover` (fields stay in `etendo_schema`).
+- Listing fields inside `neo_discover` (fields stay in `neo_schema`).
 - i18n/translation of the prompt (single-language free text for now).
 
 ## Backward compatibility

@@ -1,4 +1,4 @@
-# ETP-4274 — NEO Headless: `etendo_create` ignores non-mandatory column defaults
+# ETP-4274 — NEO Headless: `neo_create` ignores non-mandatory column defaults
 
 **Type:** Error (Mayor) · **Repo:** `com.etendoerp.go` (Go-only) · **Branch:** `feature/ETP-4274`
 **Reporter:** agentic-validation bot (label `validacion-agentica`) · Sebastian Barrozo
@@ -12,9 +12,9 @@
 defaults — including non-mandatory ones such as `C_Currency_ID` (from session var
 `@C_Currency_ID@`). But the CREATE path (`NeoDefaultsService.injectMandatoryDefaults`)
 only iterates **mandatory** columns, so every legitimately-resolved non-mandatory default
-the client just received from `/defaults` is **silently dropped** on `etendo_create`. The
-client is forced into an extra `etendo_update` round-trip, and any process that depends on
-that field (e.g. `etendo_action(Processed)` needing a currency) fails until the round-trip
+the client just received from `/defaults` is **silently dropped** on `neo_create`. The
+client is forced into an extra `neo_update` round-trip, and any process that depends on
+that field (e.g. `neo_action(Processed)` needing a currency) fails until the round-trip
 is done.
 
 This is a **defaults/create asymmetry**: the read path is broad, the write path is
@@ -26,10 +26,10 @@ mandatory-only.
 
 | Step | Call | Result |
 |------|------|--------|
-| 1 | `etendo_defaults(spec=assets, entity=assets)` | returns `"currency": "102"` (`EUR`) ✅ |
-| 2 | `etendo_create(spec=assets, entity=assets, {name, searchKey})` | record created with **`"currency": null`** ❌ |
-| 3 | (per ticket) `etendo_action(Processed)` | fails *"Currency field must be defined"* |
-| 4 | Workaround `etendo_update(currency="102")` then retry | succeeds |
+| 1 | `neo_defaults(spec=assets, entity=assets)` | returns `"currency": "102"` (`EUR`) ✅ |
+| 2 | `neo_create(spec=assets, entity=assets, {name, searchKey})` | record created with **`"currency": null`** ❌ |
+| 3 | (per ticket) `neo_action(Processed)` | fails *"Currency field must be defined"* |
+| 4 | Workaround `neo_update(currency="102")` then retry | succeeds |
 
 `assets.currency` schema confirms the trigger condition:
 `required: false`, `defaultExpression: "@C_Currency_ID@"`, `type: foreignKey`,
@@ -148,7 +148,7 @@ on create. No change for mandatory columns (they still get all five passes).
 
 | Acceptance criterion | How it's met |
 |----------------------|--------------|
-| `etendo_create` applies a resolved default for any column `/defaults` would return | Non-mandatory columns now run passes 1–3, the same resolution `/defaults` uses |
+| `neo_create` applies a resolved default for any column `/defaults` would return | Non-mandatory columns now run passes 1–3, the same resolution `/defaults` uses |
 | User-supplied values always win | `body.has(propName)` early-return unchanged |
 | PK / audit columns excluded | Guards moved into the loop, applied to all columns |
 | Search-type FK fallbacks excluded (preserve ETP-3894) | Non-mandatory path stops before `tryInjectFirstFromLookup`; mandatory path keeps the existing combo-only (never Search) behaviour |
@@ -176,9 +176,9 @@ on create. No change for mandatory columns (they still get all five passes).
 
 1. **Unit/contract regression test** (delegate to Tester): create `assets` with only
    `{name, searchKey}` → assert `currency` is populated without explicit input; then
-   `etendo_action(Processed)` succeeds with no intermediate `etendo_update`.
+   `neo_action(Processed)` succeeds with no intermediate `neo_update`.
 2. **Over-injection guard test:** create a `sales-order` / `purchase-order` header via
-   `etendo_create` and diff the persisted record against the pre-fix behaviour — confirm no
+   `neo_create` and diff the persisted record against the pre-fix behaviour — confirm no
    *new* unexpected non-mandatory fields are set.
 3. **Manual MCP re-run** of the §2 reproduction on the built branch — currency must be
    non-null on create.
@@ -201,7 +201,7 @@ on create. No change for mandatory columns (they still get all five passes).
 - [ ] Add `boolean mandatory` param to `injectMandatoryDefaultForColumn`; gate passes 4–5.
 - [ ] Move PK + audit guards into the loop; drop the `!col.isMandatory()` early-continue.
 - [ ] Pass `col.isMandatory()` at the call site.
-- [ ] Regression test: `assets` currency on create (+ `etendo_action(Processed)`).
+- [ ] Regression test: `assets` currency on create (+ `neo_action(Processed)`).
 - [ ] Over-injection test on a document window (orders/invoices).
 - [ ] Manual MCP re-verification of §2.
 - [ ] Self-doc: note the parity change in `docs/neo-headless.md` if defaults behaviour is

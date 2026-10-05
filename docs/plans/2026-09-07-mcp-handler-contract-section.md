@@ -12,7 +12,7 @@
 
 ## 1. Resumen ejecutivo
 
-`etendo_schema` deriva el contrato de escritura de una entidad **del diccionario AD**: recorre las
+`neo_schema` deriva el contrato de escritura de una entidad **del diccionario AD**: recorre las
 `AD_Column` de la tabla de la pestaña, decide qué es obligatorio, qué tiene selector y qué es
 opcional. Para las entidades servidas por CRUD genérico ese contrato es exacto.
 
@@ -36,7 +36,7 @@ información que el MCP publica.
 
 ### 2.1 El schema anuncia un contrato que el handler no implementa
 
-`etendo_schema(spec:"contacts", entity:"locationAddress", view:"create")` lista `locationAddress`
+`neo_schema(spec:"contacts", entity:"locationAddress", view:"create")` lista `locationAddress`
 (columna `C_Location_ID`) como **required**, con selector de tipo Search — o sea: "buscá una
 ubicación existente y mandame su id".
 
@@ -162,7 +162,7 @@ que su feature se use.
 ## 6. Riesgo principal
 
 `ownedFields` implica un cambio en **`validateMandatoryFields`**, que es la compuerta de escritura
-de *todo* el MCP: la atraviesan `etendo_create` y `etendo_update` de las 287 entidades. Un salteo mal
+de *todo* el MCP: la atraviesan `neo_create` y `neo_update` de las 287 entidades. Un salteo mal
 resuelto ahí no falla ruidosamente — deja pasar un payload incompleto y el error reaparece más
 abajo como violación de constraint, que es exactamente la clase de error no autocorregible que esta
 propuesta busca eliminar.
@@ -204,8 +204,8 @@ Ambas cosas ya están en `feature/ETP-5184`:
    `C_Location.RegionName`. Antes toda provincia argentina se rechazaba con
    `500 - The region "Córdoba" does not exist in Argentina.` La ruta estricta se conserva donde
    significa algo: un país que sí define regiones sigue rechazando un nombre desconocido.
-2. **`AGENT_PROMPT` de entidad ahora se emite también en `etendo_schema`**, incluida
-   `view:"create"` — antes sólo salía por `etendo_discover`, que es el catálogo que el agente lee una
+2. **`AGENT_PROMPT` de entidad ahora se emite también en `neo_schema`**, incluida
+   `view:"create"` — antes sólo salía por `neo_discover`, que es el catálogo que el agente lee una
    vez al principio de la sesión. Y se pobló el `AGENT_PROMPT` del campo `locationAddress`
    explicando en prosa el contrato real del handler.
 

@@ -24,9 +24,9 @@
 
 | Call | Result |
 |---|---|
-| `etendo_selectors(businessPartner, query: "*")` | `{items: [], totalCount: 0, hasMore: false}` — **empty** |
-| `etendo_selectors(businessPartner, query: "")` | real partners (`Alimentos y Supermercados, S.A`, …) |
-| `etendo_selectors(businessPartner)` — no query | real partners |
+| `neo_selectors(businessPartner, query: "*")` | `{items: [], totalCount: 0, hasMore: false}` — **empty** |
+| `neo_selectors(businessPartner, query: "")` | real partners (`Alimentos y Supermercados, S.A`, …) |
+| `neo_selectors(businessPartner)` — no query | real partners |
 
 ~~`*` is Etendo's own search convention and the UI selectors accept it.~~ **REFUTED 2026-09-15 —
 the UI selectors do NOT accept it: `*` returns nothing in the Etendo GO UI either, and nothing in
@@ -90,7 +90,7 @@ opposite being true. It is not.
 **2. A selector narrows a list; listing everything is what the entity's own list verb is for.**
 This argument is independent of the measurement and is the more durable half of the correction. Even
 if `*` *did* expand, asking a selector to return the unfiltered universe asks it to do a job that is
-not its own — `etendo_list` on the entity is that job, and an omitted `query` (which already returns
+not its own — `neo_list` on the entity is that job, and an omitted `query` (which already returns
 real partners, per the table above) is the selector's own way of saying "no narrowing yet". So the
 behaviour under discussion was never a missing capability; it was a capability requested from the
 wrong verb.

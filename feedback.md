@@ -52,9 +52,9 @@ Each entry should include: date, context, what happened, and suggested fix or st
 **Test results:** `npm test` passes with 12,554 passing tests and 9 skipped tests. `npm --workspace @schema-forge/app-shell run test:vitest -- src/lib/__tests__/selectorContext.vitest.js` passes with 35/35 selector-context tests.
 
 **Remaining work (com.etendoerp.go repo):**
-- Extend MCP `etendo_selectors` to accept `recordContext` and map to selector params.
+- Extend MCP `neo_selectors` to accept `recordContext` and map to selector params.
 - Add missing-context diagnostics to selector responses.
-- Verify `etendo_defaults` returns `transactionDocument` and default `priceList`.
+- Verify `neo_defaults` returns `transactionDocument` and default `priceList`.
 - Add per-entity `NeoHandler` fallbacks where generic behavior is insufficient.
 - Java/runtime tests for selector/default behavior.
 

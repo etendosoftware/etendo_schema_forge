@@ -147,12 +147,12 @@ total**. §5.8 does exactly that.
 
 ### 3.2 Runtime verification (MCP `etendo-go-experimental`)
 
-Dataset: 4 sales invoices. `etendo_schema` confirms the DAL property names —
+Dataset: 4 sales invoices. `neo_schema` confirms the DAL property names —
 `eTGODeliveryStatus` (`em_etgo_delivery_status`, number) and `eTGODueDate` (`em_etgo_due_date`, date).
 
 | Test | Result |
 |---|---|
-| Baseline `etendo_list` (no filter, no order) | 200, `totalRows: 4`, order `10000016, 10000018, 10000019, 10000017` (server default `order by e.id desc`) |
+| Baseline `neo_list` (no filter, no order) | 200, `totalRows: 4`, order `10000016, 10000018, 10000019, 10000017` (server default `order by e.id desc`) |
 | `orderBy: eTGODueDate` (**`V` column**) | **200 — sort really applied.** Returned `10000018` (the only row with a date, `2026-09-23`) **first**, then the three nulls. Different from baseline, and consistent with `ASC NULLS LAST`. |
 | `orderBy: documentNo` (control, plain column) | 200, correctly ascending — proves `orderBy` is honored in general, so the previous row is a real sort and not a coincidence |
 | `filters: {eTGODeliveryStatus: {gt: 0}}` (**`V` column**) | **HTTP 500.** `Exception when creating query select e from Invoice as e where ( … and (e.eTGODeliveryStatus > 0) ) …` |
@@ -860,7 +860,7 @@ thing standing between the pipeline and an editable input bound to a column the 
 `insert="false" update="false"`. Do not omit it.
 
 **R10 — DAL property name.** `eTGOTbaiStatus` is inferred by analogy with `eTGODeliveryStatus`, whose
-mapping from `em_etgo_delivery_status` was **confirmed at runtime** via `etendo_schema`. The new one is
+mapping from `em_etgo_delivery_status` was **confirmed at runtime** via `neo_schema`. The new one is
 still only inferred; Step 15 fixes it and Steps 16-17 carry a placeholder until then.
 
 **R11 — Field length.** `TBAI_SYNCINVOICE.ESTADO` is `VARCHAR(10)` and `"Rechazado"` is 9 characters

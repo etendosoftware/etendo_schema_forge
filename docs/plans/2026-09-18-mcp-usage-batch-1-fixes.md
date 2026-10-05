@@ -13,7 +13,7 @@ marked `isactive = 'N'` on both instances, so a second export returns only new t
 | Errors | 21 (8.3 %) | 39 (6.0 %) |
 
 The two environments measure different things. Experimental is **exploration**: 37 short
-sessions, mostly reads (`etendo_list` 104, `etendo_schema` 39, `etendo_discover` 37), across nine
+sessions, mostly reads (`neo_list` 104, `neo_schema` 39, `neo_discover` 37), across nine
 distinct MCP clients. Production is **two long write sessions and little else** — 94 % of
 its rows belong to `7b522816` (409 rows, a bulk contact load, 0 errors) and `57b82d0d`
 (209 rows, an agentic validation run on bank reconciliation, **36 of the 39 errors**).
@@ -43,7 +43,7 @@ agent something the server does not do.
 
 ## CODE
 
-### C1 — `etendo_action` does not forward the record ID to Classic processes
+### C1 — `neo_action` does not forward the record ID to Classic processes
 
 **Not verified 18/09.** The blind run that exercised the action path completed a sales order with
 `documentAction`, which is a document action rather than a Classic process, so the condition this
@@ -51,7 +51,7 @@ item describes was never reached. M2's run did hit a Classic process and failed 
 `"Process class is not a supported handler type"` — so on this build a Classic process may not be
 reachable far enough to observe C1 at all. Settle M2 first.
 
-**Evidence.** 5 `etendo_action` rows on `financial-account/importedBankStatements`
+**Evidence.** 5 `neo_action` rows on `financial-account/importedBankStatements`
 (`57b82d0d`, 16/09 13:05 → 13:40), `outcome = error`, `error_code` NULL, 106–315 ms.
 `fields_touched` shows the ID was sent three different ways:
 `FIN_BankStatement_ID, docAction, inpRecordId, inpTabId, recordId`.
@@ -71,7 +71,7 @@ The user was sent to the UI.
 
 **Not verified 18/09.** No OBUIAPP process was exercised by the blind runs; still open.
 
-**Evidence.** `etendo_action` on `financial-account/account` (`57b82d0d`, 16/09 15:17 →
+**Evidence.** `neo_action` on `financial-account/account` (`57b82d0d`, 16/09 15:17 →
 17/09 13:19), `error_code` NULL. One of the rows carries `_buttonValue` in
 `fields_touched` — the agent passed it explicitly and still failed. Feedback (16/09
 15:18:41) gives the server answer: `JSONObject["_buttonValue"] not found.`, for both
@@ -89,9 +89,9 @@ agent at all.
 8 rows because those are the entities agents happened to try; the real surface is **16 entities**.
 
 ```
-etendo_schema(not-posted-documents, header) → 500 server_error "No AD_Tab linked to entity: header"
-etendo_list  (not-posted-documents, header) → 500 server_error "No AD_Tab linked to entity: header"
-etendo_list  (contacts, bp-stats)           → 500 server_error "No AD_Tab linked to entity: bp-stats"
+neo_schema(not-posted-documents, header) → 500 server_error "No AD_Tab linked to entity: header"
+neo_list  (not-posted-documents, header) → 500 server_error "No AD_Tab linked to entity: header"
+neo_list  (contacts, bp-stats)           → 500 server_error "No AD_Tab linked to entity: bp-stats"
 ```
 
 **Cause.** The router resolves the entity's `AD_Tab` before dispatching, so an entity with
@@ -112,7 +112,7 @@ All 16 are `isactive='Y'` and `isincluded='Y'`, so they are advertised.
 error walks the agent straight into the crash:
 
 ```json
-etendo_list(not-posted-documents, "xxx")
+neo_list(not-posted-documents, "xxx")
 {"status":404,"error":"not_found","available":["header"],"hint":"Retry with one of the names in 'available'."}
 ```
 
@@ -122,11 +122,11 @@ The only name offered is the one guaranteed to return a 500.
 los documentos que estan sin contabilizar"* — with no mention of this defect and no hint about
 which spec to use. It:
 
-1. called `etendo_discover` and found `not-posted-documents` listed there, one entity `header`,
+1. called `neo_discover` and found `not-posted-documents` listed there, one entity `header`,
    `primaryEntity: header` — so the spec is advertised at the catalog level, not merely in a
    `not_found` response;
-2. called `etendo_list(not-posted-documents, header)` → 500;
-3. called `etendo_schema(...)` → same 500;
+2. called `neo_list(not-posted-documents, header)` → 500;
+3. called `neo_schema(...)` → same 500;
 4. **abandoned the spec entirely** and spent eight more calls rebuilding the answer by hand —
    searching `docs` (nothing relevant), discovering the `posted` column from `sales-invoice`'s
    schema, then querying sales-invoice / purchase-invoice / sales-order / payment-in one at a time.
@@ -149,7 +149,7 @@ the workaround path itself could not be validated here. The 500 and the abandonm
 
 ```
 REST   GET /sws/neo/not-posted-documents/header       → 200 OK   (the SPA screen renders)
-MCP    etendo_list(not-posted-documents, header)          → 500 "No AD_Tab linked to entity: header"
+MCP    neo_list(not-posted-documents, header)          → 500 "No AD_Tab linked to entity: header"
 ```
 
 The REST dispatcher reaches the handler; the MCP path resolves the entity's `AD_Tab` first and dies
@@ -197,7 +197,7 @@ REST untouched.
   the names the handler already reads from the SPA.
 * `McpRoutingException.entityHasNoTab` replaces the bare `IllegalArgumentException`: **405** naming
   the tools that do work when a handler is registered, **422** when none is. This also covers
-  `etendo_schema`, `etendo_defaults` and the write paths, which still cannot serve these entities but no
+  `neo_schema`, `neo_defaults` and the write paths, which still cannot serve these entities but no
   longer claim a server fault.
 
 **Blind verification (18/09).** Same request as the failing run, same conditions, a context-free
@@ -210,15 +210,15 @@ agent told nothing about the defect.
 | spec abandoned | yes | no |
 
 ```
-1. etendo_schema(not-posted-documents, header)
+1. neo_schema(not-posted-documents, header)
    → 405 "is served by a dedicated handler, not by a window"
-     hint: "Read it with etendo_list or etendo_get, which route through the handler"
-2. etendo_list(not-posted-documents, header)   → 200 {rows: [], total: 0}
+     hint: "Read it with neo_list or neo_get, which route through the handler"
+2. neo_list(not-posted-documents, header)   → 200 {rows: [], total: 0}
 ```
 
-The agent still opened with `etendo_schema` — the reflex before touching any entity — and still hit an
+The agent still opened with `neo_schema` — the reflex before touching any entity — and still hit an
 error. What changed is where the error left it: *"el propio mensaje de error me indicó la ruta
-correcta, así que cambié de estrategia y fui directo a `etendo_list`"*. The same agent, given the 500,
+correcta, así que cambié de estrategia y fui directo a `neo_list`"*. The same agent, given the 500,
 wrote the capability off. Given a 405 that names the alternative, it self-corrected in one call.
 That is the whole value of clause 2, independent of clause 1.
 
@@ -229,7 +229,7 @@ handler ran **and** honoured client isolation. What this run does not prove is t
 rows — the SPA exercises that over the same handler.
 
 **Still open: the 80 tab-backed entities.** Reads now dispatch a handler only when there is no tab,
-so an entity that has both a tab and a handler still runs no hook on `etendo_list`/`etendo_get` — while
+so an entity that has both a tab and a handler still runs no hook on `neo_list`/`neo_get` — while
 REST runs both. 43 handler classes implement `afterHandle`, and `BusinessPartnerHandler`'s own
 javadoc documents one of the consequences: on a GET it fills `etgoEmail` from a contact when the
 partner's own email is blank, which happens over REST and not over MCP. No error, no warning, just a
@@ -241,7 +241,7 @@ visible; these 80 are not, and there are five times as many.
 **Proposed fix.**
 
 1. **Give the MCP read path the hook dispatch the write path already has**, so a handler-backed
-   entity can serve `etendo_list`/`etendo_get` the way it already serves REST. This is the real fix and it
+   entity can serve `neo_list`/`neo_get` the way it already serves REST. This is the real fix and it
    covers all 16 tab-less entities at once; their configuration needs no change.
 2. **Make the tab lookup conditional on there being no handler.** An entity with neither is
    genuinely unserviceable — that one deserves an error, and a 4xx naming the tool that does serve
@@ -257,14 +257,14 @@ serve fine over REST, and the read path has no handler dispatch to reorder.
 
 **Evidence.** Feedback 16/09 17:04:48. Setting `financialAccountTransaction` on a line
 drives `eTGOPendingAmount` to 0 and sets `matchingtype`. Setting `gLItem` leaves both
-untouched, and the update reports success. No `etendo_action` exists on `bankStatementLines`
+untouched, and the update reports success. No `neo_action` exists on `bankStatementLines`
 to close the cycle afterwards.
 
 **Fix.** Either make the two reconciliation paths behave alike, or expose an action on
 `bankStatementLines` / `importedBankStatements` that performs the matching step after an
 assignment. Silently succeeding while doing nothing is the worst of the three options.
 
-### C5 — `etendo_feedback` rejected one submission with `validation_error` — **NOT REPRODUCED**
+### C5 — `neo_feedback` rejected one submission with `validation_error` — **NOT REPRODUCED**
 
 **NOT REPRODUCED — 18/09.** A context-free agent sent a full report (`outcome`, `summary`,
 `achieved`, `plannedApproach`, `howKnown`, four `wastedCalls`, two `frictions`, three `suggestions`)
@@ -280,15 +280,15 @@ a shape problem — if a field is malformed, store the rest and warn.
 
 ### C6 — 23 production rows have NULL `session_key` and NULL `client_name`
 
-**Evidence.** 23 rows across 16–18/09, mostly `etendo_schema` (14), plus `etendo_widget` (3),
-`etendo_discover` (2), `docs` (2), `generate_aging_receivable` (1), `etendo_selectors` (1).
+**Evidence.** 23 rows across 16–18/09, mostly `neo_schema` (14), plus `neo_widget` (3),
+`neo_discover` (2), `docs` (2), `generate_aging_receivable` (1), `neo_selectors` (1).
 
 **Fix.** Find the entry path that does not propagate client identity into
 `McpUsageLogger`. Until then, any per-session analysis of production silently omits these.
 
-### C7 — `etendo_create` does not persist the default currency the REST path does (ETP-5284) — **FIXED 18/09**
+### C7 — `neo_create` does not persist the default currency the REST path does (ETP-5284) — **FIXED 18/09**
 
-**Ticket.** ETP-5284 — *"etendo_create no asigna moneda por defecto al crear Contacto"*, reported
+**Ticket.** ETP-5284 — *"neo_create no asigna moneda por defecto al crear Contacto"*, reported
 11/09, status *Defined*, no PRs or branches attached. **Retested 18/09: not fixed**, on
 experimental and on local (a newer MCP build).
 
@@ -296,11 +296,11 @@ experimental and on local (a newer MCP build).
 
 ```
 value   | name                            | organisation | BP_Currency_ID
-1000000 | ETP-5284 local test 18-09       | vale MCP     | NULL   ← etendo_create
+1000000 | ETP-5284 local test 18-09       | vale MCP     | NULL   ← neo_create
 1000001 | Prueba                          | vale MCP     | 102    ← Etendo Go UI
 1000002 | ETP5284 UI net                  | vale MCP     | 102    ← Etendo Go UI
-1000003 | ETP5284 MCP con org             | vale MCP     | NULL   ← etendo_create + explicit organization
-1000004 | ETP5284 MCP currency explicita  | vale MCP     | 102    ← etendo_create + explicit currency
+1000003 | ETP5284 MCP con org             | vale MCP     | NULL   ← neo_create + explicit organization
+1000004 | ETP5284 MCP currency explicita  | vale MCP     | 102    ← neo_create + explicit currency
 ```
 
 The UI's create request does **not** send the currency:
@@ -342,8 +342,8 @@ if (StringUtils.isNotBlank(currencyId)) body.put(FIELD_CURRENCY, currencyId); //
 conventions**, and the MCP write path silently discards whatever does not match its own:
 
 ```
-etendo_create fields:{"currency":"102"}       → BP_Currency_ID = 102    (MCP name, accepted)
-etendo_create fields:{"bPCurrencyID":"102"}   → BP_Currency_ID = NULL   (REST name, discarded)
+neo_create fields:{"currency":"102"}       → BP_Currency_ID = 102    (MCP name, accepted)
+neo_create fields:{"bPCurrencyID":"102"}   → BP_Currency_ID = NULL   (REST name, discarded)
 ```
 
 `FIELD_CURRENCY` is `"bPCurrencyID"` (line 134) — the REST body convention the handler was written
@@ -354,7 +354,7 @@ anywhere says a value was lost.
 
 That the `POST` block itself runs on MCP is proven separately: `stripPreCreateBillingDefaults`
 (line 404, ten lines earlier) does take effect — `priceList` and `paymentTerms` sent explicitly
-through `etendo_create` both come back NULL. Those two names happen to be identical in both
+through `neo_create` both come back NULL. Those two names happen to be identical in both
 conventions, which is exactly why that half of the handler works and this half does not.
 
 **This is a class, not a bug.** There are 132 `body.put(...)` call sites across 25 handler files in
@@ -388,7 +388,7 @@ that path contains no `bPCurrencyID` — direct evidence of the convention split
 **Status.** Fixed, deployed and verified. The temporary `ETP-5284` trace that pinned the cause down
 has been removed; the comments left in the code explain why two constants exist for one column and
 say to collapse them once the conventions are reconciled. Re-verified on the clean build: record
-`1000010`, created through `etendo_create`, carries `BP_Currency_ID = 102`, with no trace lines left in
+`1000010`, created through `neo_create`, carries `BP_Currency_ID = 102`, with no trace lines left in
 the log. ETP-5284 is *En curso* and carries a comment pointing at ETP-5405.
 
 Not covered by tests. A regression test that creates through both paths and asserts the column is
@@ -409,13 +409,13 @@ currency breaks purchase invoice confirmation later on (`ProcessInvoiceUtil` val
 future failed invoice.
 
 **Related.** The handler's constant is `FIELD_CURRENCY = "bPCurrencyID"` while the MCP schema calls
-the same column `currency`, and `etendo_get` rejects `currency` as an unknown field — see M10. That
+the same column `currency`, and `neo_get` rejects `currency` as an unknown field — see M10. That
 naming split is worth keeping in view while instrumenting: it is the one difference between the two
 paths that a reader would not expect.
 
 ### C8 — Mandatory-field validation runs before the pre-hook that fills the field
 
-**Evidence.** `etendo_create` on `contacts/businessPartner` without `searchKey`:
+**Evidence.** `neo_create` on `contacts/businessPartner` without `searchKey`:
 
 ```json
 {"status":422,"error":"validation_error","detail":"Missing required fields that could not be auto-resolved",
@@ -436,12 +436,12 @@ demanded from the caller. Pair it with M9 below.
 
 ---
 
-### C9 — `etendo_action` reports success on a record that does not exist — **NEW 18/09**
+### C9 — `neo_action` reports success on a record that does not exist — **NEW 18/09**
 
 Found by a context-free agent probing the unreconciliation route with a placeholder id:
 
 ```
-etendo_action(payment-in, finPayment, id:"0", action:"EM_Etpr_Reactivate_Payment")
+neo_action(payment-in, finPayment, id:"0", action:"EM_Etpr_Reactivate_Payment")
 → processResult: "success"
   "Proceso completado satisfactoriamente List of payments reactivated or removed"
 ```
@@ -497,7 +497,7 @@ being surfaced verbatim and then wrapped in a generic explanation that misfires 
 
 The agent recovered only by inference, and the surrounding confusion made that harder: the spec
 named `bp-location` serves rows whose `_entityName` is `Location`, so the ids most readily to hand
-are exactly the ones this field must not receive. `etendo_schema` on `partnerAddress` says
+are exactly the ones this field must not receive. `neo_schema` on `partnerAddress` says
 `"type": "foreignKey", "column": "C_BPartner_Location_ID"` and nothing about which entity supplies a
 valid value.
 
@@ -506,14 +506,14 @@ value and suppress the AD-default hint when the named field was not server-fille
 `foreignKey` field publish the entity its values come from, so the pairing is knowable before the
 call rather than after the refusal.
 
-### C12 — An empty `etendo_selectors` result does not say why it is empty — **NEW 18/09**
+### C12 — An empty `neo_selectors` result does not say why it is empty — **NEW 18/09**
 
-`etendo_selectors(sales-order, header, partnerAddress, recordContext:{businessPartner:…})` returned zero
+`neo_selectors(sales-order, header, partnerAddress, recordContext:{businessPartner:…})` returned zero
 for every business partner a context-free agent tried. The answer was correct — the tenant holds nine
 raw `Location` rows and not one `BusinessPartnerLocation` link — but a bare empty list does not
 separate *there is nothing to offer* from *you asked wrongly*, and the agent assumed the latter,
 which is the reasonable assumption. It spent roughly six calls probing: other partners, the DB column
-name in place of the field name, `etendo_schema` with `view:"full"` on the single field.
+name in place of the field name, `neo_schema` with `view:"full"` on the single field.
 
 Same shape as C3: the result was not wrong, it was mute. A selector that resolves its context
 successfully and finds nothing knows the difference and can say it.
@@ -524,7 +524,7 @@ successfully and finds nothing knows the difference and can say it.
 
 **ALREADY FIXED — verified 18/09** by a context-free agent asked *"decime qué acciones puedo
 ejecutar sobre una factura de venta, y para cada una qué datos tengo que darte"*. It answered in
-**one call**. `etendo_schema(view:"actions")` returned each invokable action with its parameter, its
+**one call**. `neo_schema(view:"actions")` returned each invokable action with its parameter, its
 value list and an `agentPrompt` that goes well beyond the parameter names — it states the
 preconditions for `CO`, warns that completing does not post to the ledger, and names the values that
 come from the shared AD list and do not belong to this window's flow. The twenty non-invokable
@@ -536,10 +536,10 @@ required `name`, `currency` and `Fin_Bankstatement_ID`; the agent found them one
 by reading `validation_error` messages:
 
 ```
-15:17  etendo_action  validation_error  fields: (none)                          → "Name is required"
-15:17  etendo_action  validation_error  fields: Fin_Bankstatement_ID            → "Currency is required"
-15:17  etendo_action  validation_error  fields: Fin_Bankstatement_ID, name      → …
-15:18  etendo_action  (null)            fields: …, currency, …                  → _buttonValue bug (C2)
+15:17  neo_action  validation_error  fields: (none)                          → "Name is required"
+15:17  neo_action  validation_error  fields: Fin_Bankstatement_ID            → "Currency is required"
+15:17  neo_action  validation_error  fields: Fin_Bankstatement_ID, name      → …
+15:18  neo_action  (null)            fields: …, currency, …                  → _buttonValue bug (C2)
 ```
 
 The same walk repeats on 17/09 for `aPRMImportBankFile` (12:36 → 12:37) and again at
@@ -551,7 +551,7 @@ The same walk repeats on 17/09 for `aPRMImportBankFile` (12:36 → 12:37) and ag
 **Count.** 10 of production's 18 `validation_error` rows are parameter discovery, not real
 validation failures. **This single fix removes about a quarter of all production errors.**
 
-**Fix.** `etendo_schema view:actions` must return, per action, the full parameter contract:
+**Fix.** `neo_schema view:actions` must return, per action, the full parameter contract:
 name, type, required, and the reference/selector where applicable. If the contract cannot
 be derived for a given process type, say that explicitly rather than returning an action
 that looks callable with no arguments.
@@ -560,7 +560,7 @@ that looks callable with no arguments.
 
 **CONFIRMED 18/09**, with the cause. A context-free agent asked to import a bank statement
 found the route, filled the parameters one refusal at a time (`name` required → `currency` required
-→ invalid currency → resolved via `etendo_selectors` to `102`) and only then hit:
+→ invalid currency → resolved via `neo_selectors` to `102`) and only then hit:
 
 ```
 processResult: "error"
@@ -572,11 +572,11 @@ Fifteen calls to reach a wall that was there from the first one. It is a Classic
 bridge cannot execute, and the refusal arrives as a business-level `processResult`, not a 4xx — so
 the action stays advertised as invokable through parameter validation and right up to execution.
 The fix is to decide invokability from whether the process class is a supported handler type, and
-say so at `etendo_schema(view:"actions")` time via `notInvokableReason`, the way the twenty curated-out
+say so at `neo_schema(view:"actions")` time via `notInvokableReason`, the way the twenty curated-out
 actions on `sales-invoice` already do.
 
-**Evidence.** Feedback 17/09 12:41:31. `etendo_schema view:actions` returns it with
-`invokeVia: etendo_action`; the server then rejects it at runtime:
+**Evidence.** Feedback 17/09 12:41:31. `neo_schema view:actions` returns it with
+`invokeVia: neo_action`; the server then rejects it at runtime:
 
 > `Process class is not a supported handler type: org.openbravo.advpaymentmngt.ad_actionbutton.ImportBankFile`
 
@@ -596,7 +596,7 @@ searched all 60 specs for an entity whose name contains `attach` (zero hits), re
 `setNewCurrency`). Its conclusion: the only upload mechanism is the organisation logo's `image`
 field, which is a single typed column, not a general attachment surface.
 
-**Evidence.** Same feedback. `etendo_request_image_upload` / `etendo_upload_image` accept PNG and
+**Evidence.** Same feedback. `neo_request_image_upload` / `neo_upload_image` accept PNG and
 JPEG only. CSV bank statement import — a core workflow — has no agent path at all.
 
 **Fix.** Either accept base64 `fileContent` on the import action, or add a generic upload
@@ -611,9 +611,9 @@ spec's entity names, so the correct casing is visible in the answer itself.
 **Evidence.** 3 `not_found` rows, experimental 17/09 17:28, session `87a85f5b`:
 
 ```
-etendo_schema  not_found  sales-invoice/Header
-etendo_schema  not_found  goods-shipment/Header
-etendo_schema  not_found  return-material-receipt/header   ← this entity genuinely does not exist
+neo_schema  not_found  sales-invoice/Header
+neo_schema  not_found  goods-shipment/Header
+neo_schema  not_found  return-material-receipt/header   ← this entity genuinely does not exist
 ```
 
 The first two work with a lowercase `header`.
@@ -625,7 +625,7 @@ name the close match. This is one keystroke of agent error costing a full round 
 
 **ALREADY FIXED — verified 18/09** against local. `McpRoutingException.entityNotFound` carries
 the list; `specNotFound` deliberately does not (the catalog is large; the hint points at
-`etendo_discover` instead). Live probe, `etendo_schema(sales-invoice, "Header")`:
+`neo_discover` instead). Live probe, `neo_schema(sales-invoice, "Header")`:
 
 ```json
 {"status":404,"error":"not_found","detail":"No entity 'Header' in spec 'sales-invoice'",
@@ -646,12 +646,12 @@ in the error turns a dead end into a correct retry, and it subsumes M4.
 
 **ALREADY FIXED — verified 18/09** against local. `McpRoutingException.unknownFilterField`
 carries the filterable names, caps the list and says so when it truncates. Live probe,
-`etendo_list(contacts, businessPartner, filters:{"nombreInventado":"x"})`:
+`neo_list(contacts, businessPartner, filters:{"nombreInventado":"x"})`:
 
 ```json
 {"status":422,"error":"unknown_filter_field","field":"nombreInventado",
  "available":["account","acquisitionCost",…,"deliveryMethod"],
- "hint":"Retry with one of the names in 'available'. That list is truncated — call etendo_schema
+ "hint":"Retry with one of the names in 'available'. That list is truncated — call neo_schema
          with view:\"full\" for this entity to see every filterable field."}
 ```
 
@@ -686,24 +686,24 @@ silent default — if it stays discarded, the reason belongs in `notInvokableRea
 ### M8 — `serverDefaulted: true` on fields nothing ever fills — **CONFIRMED 18/09**
 
 **CONFIRMED 18/09**, and a context-free agent stated the defect better than this item did.
-Creating a customer, `etendo_defaults` resolved `priceList`, `paymentTerms`, `purchasePricelist` and
-`pOPaymentTerms`; `etendo_create` left all four `null` and the agent needed a second `etendo_update` to
+Creating a customer, `neo_defaults` resolved `priceList`, `paymentTerms`, `purchasePricelist` and
+`pOPaymentTerms`; `neo_create` left all four `null` and the agent needed a second `neo_update` to
 set them. Those four are in `BusinessPartnerHandler.PRECREATE_BILLING_FIELDS`, stripped by
 `stripPreCreateBillingDefaults` before persist — cause confirmed, no further investigation needed.
 
 What sharpens the item is that `currency`, flagged identically, **did** fill itself without being
 sent. In the agent's words: *"`serverDefaulted: true` no garantiza que el AD complete el valor real
 en el create — para algunos campos sí hay un default a nivel de columna AD, para otros el valor solo
-existe como sugerencia de `etendo_defaults` y no se aplica solo."* The bug is not the missing values,
+existe como sugerencia de `neo_defaults` y no se aplica solo."* The bug is not the missing values,
 it is that **the flag does not predict the behaviour**, so an agent that trusts it is wrong roughly
 half the time. (The `currency` that filled itself is C7's fix running on the MCP path — a third
 independent confirmation, from an agent that did not know the subject existed.)
 
-**Evidence.** `etendo_schema view:create` on `contacts/businessPartner` marks these foreign keys
-`serverDefaulted: true`, and `etendo_defaults` returns a resolved value for every one of them. None
+**Evidence.** `neo_schema view:create` on `contacts/businessPartner` marks these foreign keys
+`serverDefaulted: true`, and `neo_defaults` returns a resolved value for every one of them. None
 of them is on the record afterwards — **by any path**, UI included:
 
-| Field | `etendo_defaults` | UI-created record | MCP-created record |
+| Field | `neo_defaults` | UI-created record | MCP-created record |
 |---|---|---|---|
 | `priceList` | Tarifa de venta principal | null | null |
 | `purchasePricelist` | Tarifa de compra principal | null | null |
@@ -721,7 +721,7 @@ MCP here, and the fields are not lost by accident: `BusinessPartnerHandler.handl
 on purpose** at line 404 via `stripPreCreateBillingDefaults`, whose `PRECREATE_BILLING_FIELDS` set
 (line 122) is exactly `priceList, paymentMethod, paymentTerms, account, customerBlocking,
 purchasePricelist, pOPaymentMethod, pOPaymentTerms, pOFinancialAccount, vendorBlocking`. Verified:
-`priceList` and `paymentTerms` sent explicitly through `etendo_create` both come back NULL. So the
+`priceList` and `paymentTerms` sent explicitly through `neo_create` both come back NULL. So the
 server deliberately refuses these values on create — and the schema tells the agent the opposite.
 The defect is the promise, not the behaviour. The `view:create` hint states it outright — *"those carrying serverDefaulted=true are
 mandatory in Etendo but the server already has a value for them, so do not ask the user"* — and
@@ -734,11 +734,11 @@ rather than by hand. A field the server refuses on create should be marked as su
 gap.
 
 **Contradiction to resolve first.** The two tool descriptions disagree, and until that is settled
-no wording is correct. `etendo_schema view:create` says the server has the value and the agent should
-not send it. `etendo_defaults` on the same build says the opposite: *"an optional field this call
+no wording is correct. `neo_schema view:create` says the server has the value and the agent should
+not send it. `neo_defaults` on the same build says the opposite: *"an optional field this call
 resolved (a price list, payment terms, a financial account, …) is NOT copied into the record unless
 you send it explicitly in fields."* Decide which semantics is intended, then align all three
-surfaces — the `serverDefaulted` flag, the `view:create` hint and the `etendo_defaults` description.
+surfaces — the `serverDefaulted` flag, the `view:create` hint and the `neo_defaults` description.
 Today an agent cannot get this right by reading the tools.
 
 ### M9 — `searchKey` is listed as required but is sequence-generated and discarded — **CONFIRMED 18/09**
@@ -764,17 +764,17 @@ Note this is **not** closed by C7: C7 made the injected value arrive, M10 is the
 still exposing two names for `BP_Currency_ID`. The per-path key selection in
 `BusinessPartnerHandler` collapses back to one constant when M10 is fixed.
 
-**Evidence.** `etendo_create` accepts `currency` and persists it. `etendo_get` with
+**Evidence.** `neo_create` accepts `currency` and persists it. `neo_get` with
 `fields:["currency"]` returns it under `unknownFields` and the record carries `bPCurrencyID`
 instead. An agent that writes a field cannot read it back by the name it just used.
 
-**Fix.** Use one name on both surfaces, or have `etendo_get` accept the write-side alias. This is
+**Fix.** Use one name on both surfaces, or have `neo_get` accept the write-side alias. This is
 also what makes C7 hard to diagnose: the handler's constant is `FIELD_CURRENCY = "bPCurrencyID"`
 while the MCP schema calls the same column `currency`.
 
 ### M11 — An expired MCP session is reported as a business-rule validation error
 
-**Evidence.** With a stale session, `etendo_create` on `contacts/businessPartner` returned:
+**Evidence.** With a stale session, `neo_create` on `contacts/businessPartner` returned:
 
 ```json
 {"status":422,"error":"validation_error","detail":"Could not find Sequence for: EM_Etgo_Identifier",
@@ -796,13 +796,13 @@ cannot ever work. This cost a full test run before the cause was spotted.
 **CONFIRMED 18/09** — and the answer is now known, so this is writing, not research. A
 context-free agent asked *"¿cómo configuro el logo de mi empresa para que salga en las facturas
 impresas?"* got nothing from four `docs` calls and found it by brute force through
-`etendo_discover` + `etendo_schema`:
+`neo_discover` + `neo_schema`:
 
 * spec `organization`, entity `information` (table `AD_OrgInfo`, child of `organization`)
 * field **`yourCompanyDocumentImage`** (column `Your_Company_Document_Image`), type `image`
 * the field's own description already says *"La imagen que se muestra en los documentos impresos"*
-* to set it: `etendo_request_image_upload` (or `etendo_upload_image` under 256 KB) for an `imageId`, then
-  `etendo_update` on `organization/information`
+* to set it: `neo_request_image_upload` (or `neo_upload_image` under 256 KB) for an `imageId`, then
+  `neo_update` on `organization/information`
 
 But see D3 before scheduling this: documentation the agent cannot retrieve does not help it.
 
@@ -828,7 +828,7 @@ what the MCP injects on its behalf.
 
 **Fix.** One page in `com.etendoerp.go/docs/` describing the supported process handler
 types, which parameters the MCP fills in automatically, and what an agent must supply.
-Reference it from the `etendo_action` tool description.
+Reference it from the `neo_action` tool description.
 
 ---
 
@@ -869,20 +869,20 @@ conversation, one agent or one task will merge unrelated work. This is the same 
 the other end, and it means C6 cannot be fixed by populating the existing column — a separate
 per-conversation identifier is needed.
 
-**`fields_touched` is empty on `etendo_list` validation errors.** 18 production rows in this batch are
+**`fields_touched` is empty on `neo_list` validation errors.** 18 production rows in this batch are
 consequently undiagnosable: the row records that a list call was refused for a bad field, without
 recording which field. Everything needed to answer that is in hand at the throw site —
 `unknownFilterField` already carries the key and the available names.
 
 
-- **Latency.** Production p50 309 ms, p90 685 ms — healthy. The tail is 9 `etendo_batch` calls
+- **Latency.** Production p50 309 ms, p90 685 ms — healthy. The tail is 9 `neo_batch` calls
   between 13 s and 23.4 s (max 23372 ms) during the bulk contact load. Nothing is broken;
   this is the current ceiling and worth watching if batch sizes grow.
 - **Feedback rate.** 7 feedback rows over 8 production sessions is a good signal; 1 over 37
   experimental sessions is not. Worth deciding whether the client should emit feedback on
   session close rather than only when an agent chooses to.
-- **`parent_required`** (2 rows, `etendo_defaults` on `purchase-order/lines`) and
-  **`stale_record`** (1 row, `etendo_update` on `financial-account/account`) behaved correctly
+- **`parent_required`** (2 rows, `neo_defaults` on `purchase-order/lines`) and
+  **`stale_record`** (1 row, `neo_update` on `financial-account/account`) behaved correctly
   and need no change.
 
 ---

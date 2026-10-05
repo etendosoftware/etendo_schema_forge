@@ -1,4 +1,4 @@
-# `etendo_create` accepts an unknown field silently and discards it
+# `neo_create` accepts an unknown field silently and discards it
 
 **Found:** 2026-09-14 · **Run:** `20260914T1536-local-c4ae` · **Target:** `etendo-go-local`
 (`http://localhost:8080/etendo/sws/mcp`) · **Probe:** `create-empty-default-customer`
@@ -10,15 +10,15 @@ The agent was asked to put a reference marker on a new sales order. It sent the 
 called `reference`. The real fields are `orderReference` / `POReference`; `reference` does not exist
 on the entity.
 
-`etendo_create` **returned success**. The order was created. The marker was never persisted.
+`neo_create` **returned success**. The order was created. The marker was never persisted.
 
 ```
-etendo_create(spec: "sales-order", entity: "header", fields: {
+neo_create(spec: "sales-order", entity: "header", fields: {
     ..., "reference": "20260914T1536-local-c4ae" })
 → 200, order created
 ```
 
-Verified absent afterwards: `etendo_list` filtered by that runId returns `totalRows: 0`.
+Verified absent afterwards: `neo_list` filtered by that runId returns `totalRows: 0`.
 
 ## Why it matters more than one lost field
 
@@ -27,7 +27,7 @@ distinguishing "stored" from "ignored". An integration that writes to a mistyped
 loses that data permanently and cannot detect it — not from the response, and not from a later read,
 because the field simply is not there.
 
-Note the asymmetry with the read path: `etendo_list` already reports `unknownFields` for a bad
+Note the asymmetry with the read path: `neo_list` already reports `unknownFields` for a bad
 projection (IMP-18). The write path has no equivalent.
 
 ## The UI test (D22)
@@ -51,5 +51,5 @@ the probes are rewritten to use a field that exists.
 
 ## Not verified
 
-- Whether other write verbs (`etendo_update`, `etendo_batch`) behave the same way.
+- Whether other write verbs (`neo_update`, `neo_batch`) behave the same way.
 - Whether the shared root cause with IMP-30/31 is real.

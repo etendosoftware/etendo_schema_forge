@@ -29,17 +29,17 @@ nothing. That is worse than a rejection, because there is no signal to recover f
 
 Four steps, each one a recorded call in the run report:
 
-**(a) `etendo_schema view:"create"` on `product/header` omits every price and stock field**, and its
-`hint` instructs the agent not to look further — *do not call `etendo_schema` again to look for it*.
+**(a) `neo_schema view:"create"` on `product/header` omits every price and stock field**, and its
+`hint` instructs the agent not to look further — *do not call `neo_schema` again to look for it*.
 So the projection is not merely incomplete; it actively closes the discovery path.
 
-**(b) `etendo_create` accepts `price` / `purchasePrice` / `stock` and drops them in silence.** The silent
+**(b) `neo_create` accepts `price` / `purchasePrice` / `stock` and drops them in silence.** The silent
 part is IMP-18 (unknown names are reported on reads, not on writes) and stays scored there.
 
-**(c) The `etendo_create` response reveals the real names** — `eTGOSalePrice`, `eTGOPurchasePrice`,
+**(c) The `neo_create` response reveals the real names** — `eTGOSalePrice`, `eTGOPurchasePrice`,
 `eTGOStock` — i.e. the fields exist on the entity and are simply absent from `view:"create"`.
 
-**(d) `etendo_update` with those exact names returns 200 with all three still `null`.**
+**(d) `neo_update` with those exact names returns 200 with all three still `null`.**
 
 The descriptor that should have warned instead contradicts itself:
 
@@ -49,7 +49,7 @@ The descriptor that should have warned instead contradicts itself:
  "businessCritical":false}
 ```
 
-`readOnly:false` and `visibility:"readOnly"` in one object. The `etendo_schema` hint documents
+`readOnly:false` and `visibility:"readOnly"` in one object. The `neo_schema` hint documents
 `readOnly`; an agent that trusts it concludes the field is writable and is wrong.
 
 Note the `label` too — a raw AD column name. That is IMP-1's per-window fallback, re-confirmed here,
@@ -92,7 +92,7 @@ actually lives.
 |---|---|---|---|
 | H1 | `readOnly` and `visibility` are populated from two different sources (one from `AD_Column`/`AD_Field`, the other from the Schema Forge spec's `ETGO_SF_FIELD`), so they can disagree by construction | Read the field serializer in `com.etendoerp.go`; `SELECT` the spec row for `EM_ETGO_Sale_Price` and compare both values against the emitted JSON | *not tested* |
 | H2 | Same source, but `readOnly` is computed from `AD_Column.IsUpdatable`/`readOnlyLogic` while `visibility` comes from the curated decision — i.e. AD says writable and the curation says display-only | Same reads; check whether the spec is curated at all (the 08-13 evidence says `product` is **uncurated**, which makes this the likelier of the two) | *not tested* |
-| H3 | The write verb consults neither key and drops the field for an unrelated reason (not in the writable column set, EM_ column handling, computed column) | Trace one `etendo_create` with the field present through the write path | *not tested* |
+| H3 | The write verb consults neither key and drops the field for an unrelated reason (not in the writable column set, EM_ column handling, computed column) | Trace one `neo_create` with the field present through the write path | *not tested* |
 | H4 | The `view:"create"` filter uses `visibility` (correctly excluding it) while the full dump's `readOnly` is the stale key — meaning the projection is right and the descriptor is wrong | Compare the `view:"create"` inclusion predicate against both keys — note IMP-12 §14.3 already found the two views disagree on `userRequired`, so this is the same class of divergence | *not tested* |
 
 H2 + H4 together would be a coherent story and would resolve the §3 question as **R**. That is a
@@ -102,9 +102,9 @@ guess, and it is recorded here as a guess so that the next reader can kill it ra
 
 1. A field with `visibility:"readOnly"` must serialize `readOnly:true`. One object must not carry two
    contradictory answers to the same question.
-2. `etendo_create` / `etendo_update` must **reject** a write to a read-only field with an IMP-5 envelope,
+2. `neo_create` / `neo_update` must **reject** a write to a read-only field with an IMP-5 envelope,
    not return 200 and drop it.
-3. The `etendo_schema` hint must document `visibility:"readOnly"`, since it currently documents only the
+3. The `neo_schema` hint must document `visibility:"readOnly"`, since it currently documents only the
    key that gives the wrong answer.
 
 **The trap worth naming explicitly**, because it is the tempting cheap fix: making the descriptor
@@ -122,7 +122,7 @@ known name the caller may not write". The messages differ and so does the verdic
 - [ ] `readOnly` and `visibility` never disagree on any field of any spec — pinned by a test that
       asserts the invariant, not by a spot check on `product/header`.
 - [ ] A write to a read-only field returns an IMP-5 envelope naming the field, instead of 200.
-- [ ] The `etendo_schema` hint documents `visibility`, and no longer tells the agent to stop looking when
+- [ ] The `neo_schema` hint documents `visibility`, and no longer tells the agent to stop looking when
       the field it needs is reachable elsewhere.
 - [ ] Re-measured by a `/mcp-comparison` run (job A or B) with **frozen-suite task 3 either completing
       or failing with an error that says why**. The registry status moves only then, and only there.
@@ -170,7 +170,7 @@ that already backs `visibility`.
 The decisive evidence that the correct source is already available: a sibling class,
 `McpResourceProvider.buildFieldsArray()` (`McpResourceProvider.java:424`), computes `readOnly`
 correctly as `Boolean.TRUE.equals(field.isReadOnly())` over the same data. The DAL model is wired;
-`etendo_schema` simply does not consult it.
+`neo_schema` simply does not consult it.
 
 **This is a `com.etendoerp.go` code fix, not an AD data fix.**
 
@@ -198,7 +198,7 @@ No `schema_forge_core` change: the correct `isReadOnly` already flows through `p
    passing it through. Keep the passthrough for genuinely default-carrying read-only fields (e.g.
    `transactionDocument`, `bookQuantity` — `InventoryLineHandler.java:176`).
 3. `McpSchemaCreateView.CREATE_HINT` — name `visibility` as authoritative and soften *"do not call
-   `etendo_schema` again"*.
+   `neo_schema` again"*.
 
 **Must not touch:** `isAgentSuppliable` / `view:"create"`'s filter (already correct),
 `filterWriteRequest`'s `writable` set (already strips these on PATCH), `ProductPriceHandler` (works),
@@ -227,7 +227,7 @@ the costing columns alongside it (`em_etgo_valuation`, `em_etgo_cost`). The `isP
 config **looks safe and is not backed by a handler that makes it safe**.
 
 > **Downgraded 2026-08-13, same day, by a live read — the paragraph above overstates (b) and is kept
-> visible per the no-rewriting rule.** `etendo_schema` on `product/stock` with `view:"create"` returns
+> visible per the no-rewriting rule.** `neo_schema` on `product/stock` with `view:"create"` returns
 > **`required: []`, `optional: []` — zero writable fields**. Every field on the entity carries
 > `visibility` of `readOnly` or `system`, and `NeoFieldFilter` keys off `visibility` correctly (H4),
 > so it strips the entire payload. A POST therefore cannot carry a single caller-supplied value: it
@@ -443,7 +443,7 @@ not a re-measurement: it is one call on one entity, so no status moves and MARI 
 A/B run is still what closes this item.
 
 `SELECT` over `ETGO_SF_ENTITY` — all 13 entities now read
-`ispost=N ispatch=N isput=N isdelete=N`. Then `etendo_schema spec:"product" entity:"stock"
+`ispost=N ispatch=N isput=N isdelete=N`. Then `neo_schema spec:"product" entity:"stock"
 fields:["quantityOnHand"]` on `etendo-go-local`:
 
 ```json
@@ -474,7 +474,7 @@ Not verified: whether a POST to a still-writable handler-backed entity now retur
 (no write probe was authorized in this session), and the §8.4 handler-exemption gap is unaffected by
 any of the above.
 
-### 8.2 Scope added 2026-08-19 — actionable `notes` on `etendo_defaults`
+### 8.2 Scope added 2026-08-19 — actionable `notes` on `neo_defaults`
 
 **Human decision, same ticket (ETP-4918).** The 2026-08-19 measurement run (below) found the
 task reachable only because the operator read a value out of the database. The blocking field was
@@ -491,7 +491,7 @@ carrying short actionable prose — *why* a field is missing and *what to do*:
 
 ```json
 "notes": ["storageBin: its default needs @M_WAREHOUSE_ID@ from the parent record, but no parentId
-was given. Call etendo_defaults again with parentId to resolve it."]
+was given. Call neo_defaults again with parentId to resolve it."]
 ```
 
 Two reasons this shape was preferred over widening `unresolvedFields`:
@@ -520,8 +520,8 @@ Anything not attributable to one of those emits nothing. Silence beats a vague n
 
 **Still not fixed, and deliberately out of scope:** `view:"create"` classified `storageBin` under
 `optional` while it is in fact mandatory, because the view judges by whether a default *exists*, not
-whether it *resolves*. `etendo_schema` receives no `parentId`, so it structurally cannot know. Closing
-that means changing `etendo_schema`'s signature — a separate item, not approved.
+whether it *resolves*. `neo_schema` receives no `parentId`, so it structurally cannot know. Closing
+that means changing `neo_schema`'s signature — a separate item, not approved.
 
 #### 8.2.1 Measured coverage of the `notes` mechanism (2026-08-19, live + diagnostic)
 

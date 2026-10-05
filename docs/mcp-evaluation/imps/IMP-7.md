@@ -1,4 +1,4 @@
-# IMP-7 — Lean / grouped `etendo_defaults`
+# IMP-7 — Lean / grouped `neo_defaults`
 
 | | |
 |---|---|
@@ -84,12 +84,12 @@ values a compliance flag legitimately carries.
 |---|---|
 | `mcp/McpDefaultsView.java` | `isUnresolvedValue`, `KEY_UNRESOLVED_FIELDS`, blank routing in `apply()`, `withUnresolved()` merge helper |
 | `mcp/McpSchemaCreateView.java` | inline blank check replaced by the shared predicate |
-| `mcp/ToolRegistry.java` | `etendo_defaults` `view` description states that blanks appear in `metadata.unresolvedFields` |
+| `mcp/ToolRegistry.java` | `neo_defaults` `view` description states that blanks appear in `metadata.unresolvedFields` |
 | `src-test/…/McpDefaultsViewTest.java` | `BlankValues` — blanks reported, `systemManaged` blanks left alone, FK base property, metadata merge + non-mutation, predicate |
 
 ### 2.4 Live probe (2026-08-06, `etendo-go-local`, commit `5c0d4a4c`)
 
-`etendo_defaults(spec:"sales-invoice", entity:"header", view:"minimal")`:
+`neo_defaults(spec:"sales-invoice", entity:"header", view:"minimal")`:
 
 ```
 "confirm": { … 18 keys, partnerAddress absent … }
@@ -115,7 +115,7 @@ would have three entries of which two are noise, on the very response whose poin
 
 Cross-reading the two views on the same entity:
 
-| Field | `view:"create"` | `etendo_defaults(view:"minimal")` |
+| Field | `view:"create"` | `neo_defaults(view:"minimal")` |
 |---|---|---|
 | `partnerAddress` | `required` | `metadata.unresolvedFields` |
 | `businessPartner` | `required` | **absent entirely** |
@@ -130,12 +130,12 @@ So `unresolvedFields` means **"the server tried to fill this and could not"**, n
 you owe". An agent using `view:"minimal"` as its to-do list on this window concludes that only the
 address is missing and forgets the customer — the single most important field on an invoice.
 
-This is not a defect introduced by §2.2; it is a pre-existing property of `etendo_defaults` that §2.2 made
+This is not a defect introduced by §2.2; it is a pre-existing property of `neo_defaults` that §2.2 made
 visible by giving the array its first non-empty value. It is also an argument for IMP-12's conclusion
-rather than against it: **`etendo_schema(view:"create")` is the only response that answers "what must I
+rather than against it: **`neo_schema(view:"create")` is the only response that answers "what must I
 supply" completely**, because it enumerates from the field metadata rather than from what defaults
 resolution happened to touch. Candidate follow-up, deliberately not decided here: either state that
-constraint in the `etendo_defaults` description, or have the grouped views also list mandatory fields the
+constraint in the `neo_defaults` description, or have the grouped views also list mandatory fields the
 defaults body omitted — the second overlaps `view:"create"` and probably should not exist twice.
 
 ## 3. Half B — the 7 compliance keys are not a quick win

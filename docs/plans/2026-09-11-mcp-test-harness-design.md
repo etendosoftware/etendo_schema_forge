@@ -14,7 +14,7 @@
 >
 > **Nothing described here is tested.** No test was written for any of the 2026-09-14 work, on
 > either track: `mcp-tests/` has no test suite at all, and the Java classes added for the `$ref`
-> fix and for `etendo_feedback` v3 ship without one. Wherever this document says something "is
+> fix and for `neo_feedback` v3 ship without one. Wherever this document says something "is
 > implemented", that means *the code exists and was exercised by hand against a live server* —
 > never *it is covered*. Tests are outstanding on both tracks and are not scheduled here.
 >
@@ -164,7 +164,7 @@ A write probe's post-condition, as implemented (D34):
     prompt: >
       Necesito armar un pedido para el cliente de siempre. Poné {{marker}} en la descripción.
     expectEffect:
-      tool: etendo_list
+      tool: neo_list
       args: { spec: sales-order, filter: "description==*{{marker}}*" }
       expect: atLeastOne          # atLeastOne | none
 ```
@@ -179,17 +179,17 @@ happened — including a setup that failed halfway.
     mode: write
     prompt: "Cobrame entera la factura con referencia {{marker}}."
     setup:
-      - tool: etendo_create
+      - tool: neo_create
         args: { spec: sales-invoice, entity: header, data: { description: "{{marker}}", … } }
         saveAs: invoice                      # result readable as {{steps.invoice.<path>}}
-      - tool: etendo_action
+      - tool: neo_action
         args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.id}}", action: documentAction, … }
     expectEffect: { … }                      # may use {{steps.…}} too
     teardown:
-      - tool: etendo_action                     # list what the agent left behind …
+      - tool: neo_action                     # list what the agent left behind …
         args: { …, action: invoicePayments }
         saveAs: payments
-      - tool: etendo_action                     # … and undo each one
+      - tool: neo_action                     # … and undo each one
         forEach: "{{steps.payments.items}}"  # once per element, element is {{item.<path>}}
         args: { …, id: "{{item.paymentId}}" }
 ```
@@ -203,7 +203,7 @@ happened — including a setup that failed halfway.
   setup`, the agent never runs). Teardown keeps going after a failure.
 - `teardownClean` is `false` as soon as **any** teardown step failed. There is no "expected
   failure": a step that only makes sense in some states is made conditional by reading the state
-  first and looping over the answer — `etendo_list` with `filters: {id: …, posted: "Y"}` saved as
+  first and looping over the answer — `neo_list` with `filters: {id: …, posted: "Y"}` saved as
   `posted`, then `forEach: "{{steps.posted.data}}"` runs the unpost zero or one times. That keeps
   the runner free of conditionals and every recorded failure meaningful.
 - The calls are recorded in `probes/<id>.json` as `setup[]` and `teardown[]` (tool, resolved
@@ -591,7 +591,7 @@ Each entry now carries:
 | `resultBytes` | The **true** UTF-8 size, measured **before** truncation. |
 | `resultTruncated` | Whether the stored body was cut. |
 
-The cap (`[run] max_result_chars`, default 20000) exists because one `etendo_discover` answer is
+The cap (`[run] max_result_chars`, default 20000) exists because one `neo_discover` answer is
 ~79 KB and would otherwise dominate every probe file. Splitting the size from the body is what keeps
 that cheap: **the cap costs detail, never the metric** — §6.6 reads `resultBytes`, which stays
 honest whether or not the body next to it was cut. A call with no result at all (the loop died on
@@ -677,7 +677,7 @@ a run does not in fact record what it measured against. **`repeat` is always `1`
       "phase": "discovery | schema | write | action | read" }
   ],
   "failures": [
-    { "tool": "etendo_create",
+    { "tool": "neo_create",
       "payload": { "...": "the exact arguments sent" },
       "error": "verbatim error returned",
       "recovered": true,
@@ -685,7 +685,7 @@ a run does not in fact record what it measured against. **`repeat` is always `1`
   ],
   // --- v2 -------------------------------------------------------------------
   "wastedCalls": [
-    { "tool": "etendo_selectors",
+    { "tool": "neo_selectors",
       "expected": "what the agent expected BEFORE the call",
       "whatHappened": "what came back, and why it was of no use" }
   ],
@@ -780,7 +780,7 @@ held can reach it. Three fields land on the probe file:
 
 ```jsonc
 { "effectVerified": true | false | null,
-  "effectCheck": { "tool": "etendo_list", "args": { … }, "expect": "atLeastOne", "rows": 1 } }
+  "effectCheck": { "tool": "neo_list", "args": { … }, "expect": "atLeastOne", "rows": 1 } }
 ```
 
 `null` means *could not verify*, which is deliberately **not** the same as *verified absent* — the
@@ -804,8 +804,8 @@ the sketch omitted and which is what makes a run readable after the fact rather 
 ```
 {"t":"run_started","ts":"…","runId":"…","probes":12,"target":"local","model":"openai/gpt-5.2","suite":"sales-order.yaml","maxSteps":25}
 {"t":"probe_started","ts":"…","probe":"create-simple","attempt":1,"mode":"write"}
-{"t":"tool_call","ts":"…","probe":"create-simple","tool":"etendo_discover","id":"call_x","argsBytes":42,"args":{…}}
-{"t":"tool_result","ts":"…","probe":"create-simple","tool":"etendo_discover","id":"call_x","ok":true,"bytes":80917,"ms":340,"preview":"…","previewTruncated":true}
+{"t":"tool_call","ts":"…","probe":"create-simple","tool":"neo_discover","id":"call_x","argsBytes":42,"args":{…}}
+{"t":"tool_result","ts":"…","probe":"create-simple","tool":"neo_discover","id":"call_x","ok":true,"bytes":80917,"ms":340,"preview":"…","previewTruncated":true}
 {"t":"effect_checked","ts":"…","probe":"create-simple","verified":true,"rows":1}
 {"t":"probe_finished","ts":"…","probe":"create-simple","outcome":"MIXED","steps":7,"exhausted":false}
 {"t":"probe_aborted","ts":"…","probe":"create-simple","kind":"provider","detail":"…","toolCalls":4}
@@ -832,12 +832,12 @@ results, **`EVENT_ARGS_PREVIEW_CHARS = 4000`** for arguments.
 They are not the same kind of value. A **result** is large by default and its *head* is diagnostic —
 the `$ref` defect is recognisable in the first 60 characters of a row — and the full body lives in
 the probe file anyway. **Arguments** are tiny by default (a filter, an id), so the cap almost never
-fires; the one call that breaks that rule is `etendo_feedback`, whose arguments are a whole
+fires; the one call that breaks that rule is `neo_feedback`, whose arguments are a whole
 verdict-shaped report (D27), and for which a 400-character head is *worthless*: truncated JSON does
 not parse, so the live view cannot render it as the report it is. The cost is bounded and it is not
 per-call — in practice one report per probe.
 
-Deliberately **not** a per-tool cap. Keying the limit on `etendo_feedback` would put product knowledge
+Deliberately **not** a per-tool cap. Keying the limit on `neo_feedback` would put product knowledge
 into the event layer, which is precisely what the harness keeps out of itself.
 
 #### Two rules that keep the stream honest
@@ -984,7 +984,7 @@ All four v1 views were built:
 Two things the design did not anticipate that the implementation needed:
 
 - **One verdict renderer, two callers.** A probe's own verdict and the *arguments* of a
-  `etendo_feedback` call are rendered by the same function, because they carry the same schema on
+  `neo_feedback` call are rendered by the same function, because they carry the same schema on
   purpose (D27). A second renderer for one schema is how two renderings drift apart. The UI checks
   the shape as well as the tool name before doing this, so that if the two schemas ever diverge it
   falls back to showing the raw value — which is always correct — instead of confidently
@@ -1051,11 +1051,11 @@ in a changelog.
 | D24 | **`ETGO_MCP_USAGE` is the source of truth; Mixpanel is a projection.** Everything the product decides must be answerable from the table alone. | 2026-09-14 | Mixpanel can drop, cap, sample or be down, and is a third party. Also: per-instance opt-out is mandatory, so nothing may depend on the exporter being on. |
 | D25 | **Telemetry records shape, never content**, and is written **out of the business transaction**, fire-and-forget. | 2026-09-14 | Content adds risk and no diagnostic signal. An in-transaction write means a telemetry failure rolls back the user's order — the same hazard as a synchronous computed column. |
 | D26 | ~~Build a Mixpanel exporter~~ → **REVISED 2026-09-14: integrate with the module's existing `NeoTelemetrySink` pipeline instead.** The `/import` migration, `$insert_id`, batching and backoff become improvements to that shared sink. | 2026-09-14 | The original decision was made without checking what the module already had — a July 2026 telemetry pipeline with a working Mixpanel sink, in use by three callers, with tests. EU residency, which the original treated as the headline risk, was already the default (`api-eu.mixpanel.com`). Recorded rather than quietly replaced, because the mistake was procedural (skipped orientation) and worth remembering. |
-| D27 | **`etendo_feedback` reuses the harness verdict schema (§6.3) verbatim.** | 2026-09-14 | So lab feedback and production feedback aggregate into one corpus and the same friction is the same row. Feedback text is stored as data, never instructions, and rate-limited per session. |
+| D27 | **`neo_feedback` reuses the harness verdict schema (§6.3) verbatim.** | 2026-09-14 | So lab feedback and production feedback aggregate into one corpus and the same friction is the same row. Feedback text is stored as data, never instructions, and rate-limited per session. |
 | D28 | **Telemetry is ON by default, with per-instance opt-out.** | 2026-09-14 | Off-by-default means nobody turns it on and the track produces nothing. Defensible because B1 stores shape, not content (D25); the opt-out matters mainly for the Mixpanel export, which leaves our control. |
 | D29 | **Table name: `ETGO_MCP_USAGE`.** | 2026-09-14 | Holds both tool calls and feedback — both are MCP usage. |
 | D30 | **Harness traffic is NOT distinguished from production traffic** — no `source` column. | 2026-09-14 | Accepted consequence: harness runs are mixed into production statistics. Mitigated at zero cost by `client_name` from the `initialize` handshake, which already identifies the harness if separation is ever wanted. |
-| D31 | **`etendo_feedback` is stored in `ETGO_MCP_USAGE`**, discriminated by `row_type`, report in a `payload` CLOB. | 2026-09-14 | One table, and the feedback sits in the same session sequence as the calls that provoked it. Cost: `payload` is null on virtually every row. |
+| D31 | **`neo_feedback` is stored in `ETGO_MCP_USAGE`**, discriminated by `row_type`, report in a `payload` CLOB. | 2026-09-14 | One table, and the feedback sits in the same session sequence as the calls that provoked it. Cost: `payload` is null on virtually every row. |
 | D32 | **Mixpanel export runs on an in-process async thread**, in-memory buffer, batched flush. | 2026-09-14 | Accepted consequence: a restart loses what is buffered — tolerable *because* of D24 (the committed row is the record; Mixpanel is the projection). Upgrade path is a queue column on the same table. |
 | D33 | **No retention policy in v1** — no purge, no aggregation. | 2026-09-14 | The growth rate is a guess until there is real traffic. Stated consequence: we will learn the table is too big from a customer rather than from a plan. Revisit after a month of real use. |
 | D22 | **The arbiter for both probe validity and defect status is the UI: if a task can be done in the Etendo GO UI, it must be possible through the MCP.** A task nobody could do in the UI is a broken probe, not a finding. | 2026-09-11 | §4b. Replaces the vaguer *"resolvable in the tenant"*. Gives an objective, checkable reference point on both sides: it keeps unattributable probes out of the suite, and it turns a real failure into a defect claim that names the window and field a person would have used. |
@@ -1147,7 +1147,7 @@ Standard Etendo AD columns (`ad_client_id`, `ad_org_id`, `isactive`, `created`, 
 | Column | Meaning |
 |---|---|
 | `session_id` | MCP session, so a sequence of calls can be reconstructed as one task |
-| `tool_name` | `etendo_create`, `etendo_list`, … |
+| `tool_name` | `neo_create`, `neo_list`, … |
 | `verb` | the CRUD/action verb the call resolved to |
 | `entity` | spec / entity touched (`sales-order`, `business-partner`) |
 | `fields_touched` | field **names** only, never values |
@@ -1170,7 +1170,7 @@ transaction as the business operation means a telemetry failure **rolls back the
 the write is out-of-transaction: its own transaction, fire-and-forget, every exception swallowed and
 logged.
 
-**2. Shape, not content.** The table records *that* `etendo_create` was called on `sales-order` touching
+**2. Shape, not content.** The table records *that* `neo_create` was called on `sales-order` touching
 `businessPartner` and `orderDate`. It does **not** record the partner, the amount, or anything the
 user typed. Diagnosis needs the shape; the content adds risk and no signal.
 
@@ -1243,20 +1243,20 @@ regardless. Point 4 is about the other callers.
 D24 stands unchanged: `ETGO_MCP_USAGE` is the source of truth and Mixpanel is a projection. Nothing
 above makes the sink authoritative — it makes it shared.
 
-## B3. `etendo_feedback` — the agent reports for itself
+## B3. `neo_feedback` — the agent reports for itself
 
 A tool the calling agent invokes to report, in its own words, what was confusing, what it could not
 find, what it had to guess, and what failed. In-band, unprompted, from real usage.
 
 ### Why this is the highest-value item in Track B
 
-B1 sees *that* an agent called `etendo_schema` five times before giving up. It cannot see **what the
+B1 sees *that* an agent called `neo_schema` five times before giving up. It cannot see **what the
 agent was trying to do** or what it expected. That intent is precisely what turns a metric into an
 actionable defect, and the agent is the only party that has it.
 
 ### Reuse the harness verdict schema
 
-`etendo_feedback`'s payload should be **the same schema as the harness verdict** (§6.3) — `outcome`,
+`neo_feedback`'s payload should be **the same schema as the harness verdict** (§6.3) — `outcome`,
 `frictions[]` with their `phase`, `failures[]` with tool + payload + error + whether it self-
 recovered, `suggestions[]`.
 
@@ -1267,9 +1267,9 @@ are the same row. One schema, `schemaVersion` shared (D14).
 **Implemented, and D27 was put to the test immediately.** `McpFeedbackVerdict.SCHEMA_VERSION = 3`
 tracks `verdict.py`'s `VERDICT_SCHEMA_VERSION = 3` in lockstep, and `ToolRegistry#buildFeedbackTool`
 advertises the same fields with the same descriptions — including `wastedCalls[]` and the classified
-`suggestions[]`. The verdict schema changed twice within three days of `etendo_feedback` being written,
+`suggestions[]`. The verdict schema changed twice within three days of `neo_feedback` being written,
 and the shared schema survived both, which is the strongest evidence D27 was right that a design
-document can offer. The Streamlit UI renders a `etendo_feedback` call's arguments with the *probe
+document can offer. The Streamlit UI renders a `neo_feedback` call's arguments with the *probe
 verdict* renderer for exactly this reason (§9).
 
 `suggestions` going from `list[str]` to a list of objects is the first change that altered the
@@ -1289,7 +1289,7 @@ An agent will not volunteer feedback it was never invited to give. Two mechanism
   most.
 
 **Storage: in `ETGO_MCP_USAGE`** (D31), discriminated by `row_type = 'feedback'`, with the report in
-the `payload` CLOB. A `etendo_feedback` call *is* a tool call, so it carries the same session, tenant,
+the `payload` CLOB. A `neo_feedback` call *is* a tool call, so it carries the same session, tenant,
 timestamp and client columns for free, and the feedback sits in the same sequence as the calls that
 provoked it — which is what makes it readable as a story rather than an isolated complaint. Cost
 accepted: `payload` is empty on virtually every row.
@@ -1317,7 +1317,7 @@ Recorded because the design asserted things the code found to be false.
 `$ref` is a reserved key inside Google Gemini's `function_response.response`, where it means *"a
 pointer to an attached part, resolvable by `display_name`"*. Openbravo's
 `DataToJsonConverter#toJsonObject` puts one on **every** serialised record, so every row of every
-`etendo_list` and `etendo_get` carried one. Gemini tried to resolve the pointer, found no such part, and
+`neo_list` and `neo_get` carried one. Gemini tried to resolve the pointer, found no such part, and
 rejected the **whole** request with HTTP 400. The failure is on the tool *result*, so no prompt
 change and no retry can route around it: **the Etendo GO MCP was unusable with every Gemini model
 as soon as the agent read a single record.**
@@ -1340,7 +1340,7 @@ construction rule once. Four things about it are design, not implementation deta
 2. **Removing the value must not remove the knowledge.** `encodeReference` builds the value as
    `entityName + "/" + id`, and both halves are already on the same row as `_entityName` and `id`.
    So `RECORD_REF_NOTE` states the construction rule **once**, in the two places an agent learns
-   shapes — `etendo_schema`'s hint and the `docs` preamble — instead of paying for it on every row of
+   shapes — `neo_schema`'s hint and the `docs` preamble — instead of paying for it on every row of
    every response. That makes this an Agent Context Economy win as well as a fix.
 3. **It operates on the `JSONObject`, never on rendered text.** Re-parsing a rendered body to strip
    a key would silently rewrite the numbers in it: jettison parses JSON numbers into
@@ -1348,7 +1348,7 @@ construction rule once. Four things about it are design, not implementation deta
    trip. Stripping in place, before rendering, leaves every `BigDecimal` exactly as the producer put
    it.
 4. **Only the key spelled exactly `$ref` is removed**, recursively through nested objects and
-   arrays. A *value* of the form `"$ref:<opId>"` — the `etendo_batch` placeholder — is untouched,
+   arrays. A *value* of the form `"$ref:<opId>"` — the `neo_batch` placeholder — is untouched,
    because this code only ever looks at key names.
 
 ### Why this belongs in a document about a test harness

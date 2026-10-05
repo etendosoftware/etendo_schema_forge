@@ -9,11 +9,11 @@
 ### Ticket description (verbatim)
 
 > Round 3 (Juan Carlos, 2026-06-19) found documentType keeps defaultExpression="0" in the schema
-> of sales-order and purchase-order. etendo_defaults resolves to a valid ID correctly, but an agent
+> of sales-order and purchase-order. neo_defaults resolves to a valid ID correctly, but an agent
 > reading only the schema would use "0" as an invalid ID. Low severity (defaults DO resolve
 > correctly).
 >
-> Scope: etendo_schema / defaults should not surface "0" as a usable default; reflect the resolved
+> Scope: neo_schema / defaults should not surface "0" as a usable default; reflect the resolved
 > default ID, or omit the default. Fix in NeoDefaultsService or in how the schema reports
 > defaultExpression. Can be folded with G3 metadata accuracy.
 >
@@ -22,9 +22,9 @@
 
 ### Reproduction (LOCAL MCP, `etendo-go-local`)
 
-**Request 1 — `etendo_schema` (verbatim tool call):**
+**Request 1 — `neo_schema` (verbatim tool call):**
 ```json
-{"tool": "etendo_schema", "arguments": {"spec": "sales-order", "entity": "header"}}
+{"tool": "neo_schema", "arguments": {"spec": "sales-order", "entity": "header"}}
 ```
 
 **Response (relevant excerpt, verbatim):**
@@ -43,9 +43,9 @@
 }
 ```
 
-**Request 2 — `etendo_defaults` (same spec/entity, verbatim tool call):**
+**Request 2 — `neo_defaults` (same spec/entity, verbatim tool call):**
 ```json
-{"tool": "etendo_defaults", "arguments": {"spec": "sales-order", "entity": "header"}}
+{"tool": "neo_defaults", "arguments": {"spec": "sales-order", "entity": "header"}}
 ```
 
 **Response (relevant excerpt, verbatim):**
@@ -60,11 +60,11 @@
 }
 ```
 
-This confirms the ticket exactly: `etendo_schema` reports `defaultExpression: "0"` for `documentType`
-(`C_DocType_ID`), while `etendo_defaults` resolves the real record ID
-(`CB6EEA256BBC41109911215C5A14D39B`, "Standard Order"). An agent that reads only `etendo_schema`
-(e.g. to pre-fill a form without calling `etendo_defaults`) would treat `"0"` as a usable FK value and
-fail on `etendo_create`/`etendo_update`.
+This confirms the ticket exactly: `neo_schema` reports `defaultExpression: "0"` for `documentType`
+(`C_DocType_ID`), while `neo_defaults` resolves the real record ID
+(`CB6EEA256BBC41109911215C5A14D39B`, "Standard Order"). An agent that reads only `neo_schema`
+(e.g. to pre-fill a form without calling `neo_defaults`) would treat `"0"` as a usable FK value and
+fail on `neo_create`/`neo_update`.
 
 ### Root cause — traced to exact code
 
@@ -74,7 +74,7 @@ with no real default get the literal string `"0"` in the AD, which the classic S
 renders as a "usable" default; it's a sentinel meaning "compute this via callout/session logic
 instead."
 
-**`etendo_schema` builds its `defaultExpression` field naively from the raw column, with no
+**`neo_schema` builds its `defaultExpression` field naively from the raw column, with no
 sentinel handling:**
 
 `modules/com.etendoerp.go/src/com/etendoerp/go/mcp/McpToolRouterSupport.java:407-412`
@@ -87,10 +87,10 @@ private static void addDefaultExpression(JSONObject fieldObj, Column col) throws
 }
 ```
 Called from `buildSchemaField()` at `McpToolRouterSupport.java:344`, which is invoked by
-`buildSchemaFieldsArray()` (`:312-324`) — the function backing the `etendo_schema` tool's field list.
+`buildSchemaFieldsArray()` (`:312-324`) — the function backing the `neo_schema` tool's field list.
 No knowledge of the `"0"` FK sentinel exists anywhere in this file.
 
-**The write path (`etendo_defaults` / `etendo_create`) already has this exact special case**, proving the
+**The write path (`neo_defaults` / `neo_create`) already has this exact special case**, proving the
 product itself knows `"0"` is not a real ID:
 
 `modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/NeoDefaultsService.java:973-984`
@@ -111,7 +111,7 @@ private static void applyResolvedDefault(JSONObject body, Column col,
 (`modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/DocTypeResolver.java:169-186`) queries
 `C_DocType` by `DocBaseType` + `IsSOTrx` + client/org + the tab's HQL subtype filter — a
 **session/context-dependent SQL resolution**, not something derivable from the `Column` metadata
-alone. This is why `etendo_schema`, which only has `Column`/`Tab`/`Entity` in scope
+alone. This is why `neo_schema`, which only has `Column`/`Tab`/`Entity` in scope
 (`buildSchemaFieldsArray` signature, `McpToolRouterSupport.java:312-315` — no `NeoContext`), cannot
 trivially replicate the full resolution without being threaded a request context.
 
@@ -131,18 +131,18 @@ corrected in the same change that resolves this ticket.
 
 **Design decision reversed from the original Option A.** The initially-favored fix (resolve the
 real `C_DocType_ID` — e.g. `CB6EEA256BBC41109911215C5A14D39B` — and put it directly in
-`etendo_schema`'s `defaultExpression`) was **rejected**. Rationale:
+`neo_schema`'s `defaultExpression`) was **rejected**. Rationale:
 
-> **A resolved default ID is tenant-scoped data, not structure.** `etendo_schema` is a *stable
+> **A resolved default ID is tenant-scoped data, not structure.** `neo_schema` is a *stable
 > structural contract* — the same response shape should describe the field's type/format
 > regardless of which tenant, client, or org is asking. `DocTypeResolver.resolveDefaultDocTypeId`
 > resolves per `AD_Client_ID`/`AD_Org_ID`/`IsSOTrx` — the ID it returns is correct **only for the
 > calling tenant's current org/client** and would be wrong (or simply a different real record) in
 > any other tenant, or even the same tenant's other orgs. Baking it into the schema risks an agent
-> reading `etendo_schema` once and hardcoding that ID into later `etendo_create` calls across sessions —
+> reading `neo_schema` once and hardcoding that ID into later `neo_create` calls across sessions —
 > exactly the failure mode ETP-4279 already flagged for a different field ("assuming cardinality/
 > value from a static read instead of querying live"). The schema must stay tenant-agnostic;
-> **only `etendo_selectors`/`etendo_defaults` are context-aware and may return real values.**
+> **only `neo_selectors`/`neo_defaults` are context-aware and may return real values.**
 
 The revised fix therefore does two things, both **generic across any `_ID` FK column carrying the
 legacy `"0"` sentinel** — no `documentType`/`sales-order`/`purchase-order`-specific branching:
@@ -155,7 +155,7 @@ legacy `"0"` sentinel** — no `documentType`/`sales-order`/`purchase-order`-spe
 **File to change:** `modules/com.etendoerp.go/src/com/etendoerp/go/mcp/McpToolRouterSupport.java`
 (repo: `com.etendoerp.go`, confirmed — not schema_forge; no `decisions.json`/generator role here).
 
-### What `etendo_schema` already exposes for FK fields today (investigated)
+### What `neo_schema` already exposes for FK fields today (investigated)
 
 For `documentType` (and every FK field), `buildSchemaField()` (`McpToolRouterSupport.java:330-355`)
 already emits, from data available with **zero extra queries**:
@@ -165,7 +165,7 @@ already emits, from data available with **zero extra queries**:
   `mapSelectorType(refId)` (`:158-...`), when `refId` is in the tracked `selectorRefs` set.
 - `column: "C_DocType_ID"` — the raw DB column name, which **already encodes the target table** by
   Etendo's universal `<Table>_ID` naming convention (confirmed generic: `C_BPartner_ID` →
-  `C_BPartner`, `M_Warehouse_ID` → `M_Warehouse`, etc. — visible throughout the `etendo_schema`
+  `C_BPartner`, `M_Warehouse_ID` → `M_Warehouse`, etc. — visible throughout the `neo_schema`
   reproduction in §1).
 
 **Nothing today emits an explicit "this default is server/context-resolved" signal**, and nothing
@@ -191,7 +191,7 @@ stop emitting `defaultExpression` and instead emit a small structural block, e.g
   "readOnly": false,
   "defaultSource": "server",
   "defaultFormat": "32-char hex ID (FK)",
-  "defaultHint": "Resolved per-tenant at request time — call etendo_defaults to get the value",
+  "defaultHint": "Resolved per-tenant at request time — call neo_defaults to get the value",
   "businessCritical": false,
   "hasSelector": true,
   "selectorType": "TableDir"
@@ -202,7 +202,7 @@ Field names above are proposed, not final — align with whatever naming the tea
 **shape contract** is: no literal value, only (a) a marker that the default is dynamically
 resolved, and (b) the value's format/type, and (c) which tool actually resolves it. This is
 symmetric with how `hasSelector`/`selectorType` already tell an agent "don't guess this value,
-call `etendo_selectors`" without embedding a selectable row.
+call `neo_selectors`" without embedding a selectable row.
 
 Sketch of the change (fully generic — no window/spec/`documentType`-specific branch, matches the
 `@Named`/generic-service rule since this lives in the shared schema-building path, not a
@@ -229,7 +229,7 @@ private static boolean isLegacyZeroFkSentinel(String defaultExpr, Column col) {
 private static void addDynamicDefaultHint(JSONObject fieldObj) throws JSONException {
   fieldObj.put("defaultSource", "server");
   fieldObj.put("defaultFormat", "32-char hex ID (FK)");
-  fieldObj.put("defaultHint", "Resolved per-tenant at request time — call etendo_defaults to get the value");
+  fieldObj.put("defaultHint", "Resolved per-tenant at request time — call neo_defaults to get the value");
 }
 ```
 
@@ -237,8 +237,8 @@ No signature change to `addDefaultExpression`/`buildSchemaField`/`buildSchemaFie
 needed — this stays fully local to `McpToolRouterSupport.java`, unlike the rejected Option A which
 required threading `NeoContext`/`SFEntity` in to call `DocTypeResolver`. That coupling is now
 avoided entirely: **the schema path never calls `DocTypeResolver`**, which is correct, since
-`DocTypeResolver` is inherently tenant/context-resolving and belongs only on the `etendo_defaults`/
-`etendo_create` write path (`NeoDefaultsService.java:973-984`, unchanged by this fix).
+`DocTypeResolver` is inherently tenant/context-resolving and belongs only on the `neo_defaults`/
+`neo_create` write path (`NeoDefaultsService.java:973-984`, unchanged by this fix).
 
 **Generality check:** `isLegacyZeroFkSentinel` triggers on *any* `_ID` column with raw default
 `"0"`, not just `C_DocType_ID`/`C_DocTypeTarget_ID`. This also generically covers other tables with
@@ -253,7 +253,7 @@ type `number`) and `chargeAmount` (`ChargeAmt`, type `number`) both correctly re
 
 ### Why this layer, not schema_forge
 
-`defaultExpression` in `etendo_schema` output is computed live from `AD_Column.DefaultValue` at
+`defaultExpression` in `neo_schema` output is computed live from `AD_Column.DefaultValue` at
 request time (`McpToolRouterSupport.addDefaultExpression`) — it is not sourced from
 `ETGO_SF_FIELD`/`decisions.json` at all. There is no generated contract field, no
 `decisions.json` key, and no generator step involved. `make regen` would not touch this. The fix
@@ -273,7 +273,7 @@ Add regression tests to `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/
    a future regression that reintroduces a tenant-scoped value here.
 2. **Unit test — non-FK "0" defaults preserved:** mock a numeric/boolean column whose literal
    default is legitimately `"0"` (e.g. `ChargeAmt`/`EM_Etgo_Total_Discount`, both seen in the raw
-   `etendo_schema` reproduction with `defaultExpression: "0"` and non-`_ID` columns) — assert these
+   `neo_schema` reproduction with `defaultExpression: "0"` and non-`_ID` columns) — assert these
    are **unaffected** (still report `defaultExpression: "0"`, no dynamic-default fields added), so
    the fix only targets `_ID`-suffixed FK columns.
 3. **Unit test — legitimate FK default preserved:** mock an `_ID` column with a real non-"0"
@@ -283,9 +283,9 @@ Add regression tests to `modules/com.etendoerp.go/src-test/src/com/etendoerp/go/
    (e.g. a hypothetical `C_BPartner_ID` with raw default `"0"`) to confirm the fix is column-name
    generic and not special-cased to `C_DocType_ID`/`C_DocTypeTarget_ID`.
 5. **Integration test:** extend an `McpToolRouterTest`/`McpToolRouterSupportTest` scenario hitting
-   `etendo_schema` end-to-end for `sales-order` and `purchase-order` to confirm `documentType`'s field
+   `neo_schema` end-to-end for `sales-order` and `purchase-order` to confirm `documentType`'s field
    object carries the dynamic-default descriptor and no `defaultExpression`/literal ID, and that
-   `etendo_defaults` (unchanged, `NeoDefaultsService`/`DocTypeResolver` untouched by this fix) still
+   `neo_defaults` (unchanged, `NeoDefaultsService`/`DocTypeResolver` untouched by this fix) still
    resolves the real per-tenant ID correctly.
 
 Delegate substantial test authoring to the Tester agent per project policy once implementation
@@ -295,14 +295,14 @@ starts.
 
 **Ticket quality:** high — this was one of the more complete ETP-4288-family tickets. It named the
 exact field (`documentType`), the exact specs (`sales-order`, `purchase-order`), the exact
-symptom (`defaultExpression="0"`), contrasted it against the working `etendo_defaults` behavior, and
+symptom (`defaultExpression="0"`), contrasted it against the working `neo_defaults` behavior, and
 gave a concrete acceptance criterion.
 
 **Rubric gaps (minor, did not block resolution but would have sped it up):**
 - **#3 verbatim JSON-RPC request/response** — the ticket describes the symptom in prose
   ("documentType keeps defaultExpression='0' in the schema") but does not paste the actual
-  `etendo_schema` request/response JSON. Reconstructing and confirming the exact reproduction (this
-  doc's §1) took one extra tool round-trip. **Ask:** paste the raw `etendo_schema` output snippet for
+  `neo_schema` request/response JSON. Reconstructing and confirming the exact reproduction (this
+  doc's §1) took one extra tool round-trip. **Ask:** paste the raw `neo_schema` output snippet for
   the `documentType` field next time — it's a single field, cheap to include verbatim.
 - **#7 contract/spec version** — not stated; not load-bearing here since the bug is live-computed
   (not contract-driven), but the omission meant an extra step to confirm this wasn't a stale-push

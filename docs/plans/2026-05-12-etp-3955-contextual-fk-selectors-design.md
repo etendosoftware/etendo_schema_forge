@@ -18,7 +18,7 @@ Transactional document windows share a repeated failure mode:
 - `transactionDocument` / `C_DocTypeTarget_ID` is required in several specs, but it is often hidden from the form and expected to come from defaults.
 - line-level `tax` depends on sales/purchase mode, document date, price list, and sometimes partner address / tax zone.
 
-The SPA already patches several of these cases with component-level selector context. MCP agents, however, call `etendo_selectors` and `etendo_create` directly and do not get the same implicit form state. The fix therefore cannot live only in the React components.
+The SPA already patches several of these cases with component-level selector context. MCP agents, however, call `neo_selectors` and `neo_create` directly and do not get the same implicit form state. The fix therefore cannot live only in the React components.
 
 ## Goals
 
@@ -67,10 +67,10 @@ Out of scope for `schema_forge`:
 
 Expected `com.etendoerp.go` changes:
 
-- Extend MCP `etendo_selectors` to accept structured `recordContext` / `parentContext`, or expose equivalent selector-context metadata through `etendo_schema` if structured context is deferred.
+- Extend MCP `neo_selectors` to accept structured `recordContext` / `parentContext`, or expose equivalent selector-context metadata through `neo_schema` if structured context is deferred.
 - Map contract selector metadata into NEO selector query parameters at runtime.
 - Return actionable missing-context diagnostics for agent calls instead of undiagnosed empty selector responses where possible.
-- Ensure `etendo_defaults` / NEO defaults return hidden required values such as `transactionDocument` and required price list defaults.
+- Ensure `neo_defaults` / NEO defaults return hidden required values such as `transactionDocument` and required price list defaults.
 - Add narrow per-entity `NeoHandler` fallbacks only when generic selector/default behavior cannot represent the rule.
 - Add Java/runtime tests for NEO selector/default behavior and MCP tool behavior.
 
@@ -104,7 +104,7 @@ It must not encode a spec-specific rule in a generic NEO service.
 | `generate-contract.js` selector context output | `schema_forge` | Adds machine-readable context requirements. |
 | App-shell selector context builder | `schema_forge` | Keeps SPA behavior equivalent and testable. |
 | Contract/app-shell/E2E tests | `schema_forge` | Covers generated metadata and browser selector behavior. |
-| MCP `etendo_selectors` structured context | `com.etendoerp.go` | Accepts `recordContext` / `parentContext` and maps it to selector params. |
+| MCP `neo_selectors` structured context | `com.etendoerp.go` | Accepts `recordContext` / `parentContext` and maps it to selector params. |
 | Runtime missing-context diagnostics | `com.etendoerp.go` | Prevents silent empty results for agents. |
 | NEO defaults for hidden required fields | `com.etendoerp.go` | Ensures `transactionDocument`, `priceList`, and derived addresses are available when safe. |
 | Per-entity `NeoHandler` fallback logic | `com.etendoerp.go` | Only where generic configuration/runtime behavior cannot express the rule. |
@@ -289,7 +289,7 @@ Preferred runtime behavior:
 
   `GET /sws/neo/{spec}/{entity}/selectors/{column}?C_BPartner_ID=...`
 
-- MCP `etendo_selectors` accepts optional `recordContext`:
+- MCP `neo_selectors` accepts optional `recordContext`:
 
 ```json
 {
@@ -308,7 +308,7 @@ Preferred runtime behavior:
   - parent/header date -> `DateInvoiced`;
   - parent/header price list -> `priceList`.
 
-If adding `recordContext` to MCP is out of scope for ETP-3955, the minimum acceptable runtime design is to document the query params in `etendo_schema`/`etendo_discover` so agents can pass them explicitly.
+If adding `recordContext` to MCP is out of scope for ETP-3955, the minimum acceptable runtime design is to document the query params in `neo_schema`/`neo_discover` so agents can pass them explicitly.
 
 ### Layer 4: Defaults and Create-Time Fallbacks
 
@@ -439,8 +439,8 @@ Schema Forge changes:
 
 Runtime changes:
 
-- MCP `etendo_selectors` should infer `isSOTrx` from spec/category when omitted.
-- `etendo_defaults` should include default `priceList` for transactional document headers where required.
+- MCP `neo_selectors` should infer `isSOTrx` from spec/category when omitted.
+- `neo_defaults` should include default `priceList` for transactional document headers where required.
 
 Tests:
 
@@ -497,7 +497,7 @@ Schema Forge changes:
 
 Runtime changes:
 
-- MCP `etendo_selectors` maps record/header context to tax params.
+- MCP `neo_selectors` maps record/header context to tax params.
 - If `recordContext` contains ISO date, runtime or MCP router formats it for Classic validation.
 - Optionally include auxiliary tax data such as rate in selector result, matching current frontend expectations.
 
@@ -667,10 +667,10 @@ Owner: `schema_forge`.
 
 Owner: `com.etendoerp.go`.
 
-- Extend MCP `etendo_selectors` to accept `recordContext` and `parentContext`.
+- Extend MCP `neo_selectors` to accept `recordContext` and `parentContext`.
 - Use generated metadata to build query params.
 - Include `contextUsed` and `missingContext` in responses.
-- If the MCP layer cannot be changed in this task, expose the same metadata through `etendo_schema` and document explicit query params.
+- If the MCP layer cannot be changed in this task, expose the same metadata through `neo_schema` and document explicit query params.
 
 ### Step 6: Defaults and Hidden Required Fields
 
@@ -755,8 +755,8 @@ Add or update:
 
 If MCP changes are included:
 
-- `etendo_selectors` for `partnerAddress` with `recordContext.businessPartner` returns options.
-- `etendo_selectors` for line `tax` with parent/header context returns options.
+- `neo_selectors` for `partnerAddress` with `recordContext.businessPartner` returns options.
+- `neo_selectors` for line `tax` with parent/header context returns options.
 - missing context response includes `missingContext`, not a silent empty list.
 
 ## Edge Cases
@@ -789,7 +789,7 @@ If MCP changes are included:
 ## Open Questions
 
 - Should selector context metadata be persisted into `ETGO_SF_FIELD`, or is contract/MCP metadata enough?
-- Should `etendo_selectors` accept `recordContext` as a structured object, or should agents pass raw selector query params?
+- Should `neo_selectors` accept `recordContext` as a structured object, or should agents pass raw selector query params?
 - Should hidden required `invoiceAddress` be made visible in order specs or derived from partner address/BP billing defaults?
 - Can all document-type defaults be derived generically from AD window/spec configuration, or do returns require per-window handlers?
 - Should no-results selector responses include diagnostics at the NEO endpoint level or only at MCP tool level?
@@ -798,10 +798,10 @@ If MCP changes are included:
 
 - [x] Address selectors return options with only `businessPartner` context. *(schema_forge: decisions.json normalized, contract context metadata generated)*
 - [x] Price list selectors return mode-correct options for sales and purchase specs. *(schema_forge: context metadata with isSOTrx from window category)*
-- [ ] Document-type defaults are available for hidden required `transactionDocument` fields. *(com.etendoerp.go: verify etendo_defaults, add NeoHandler if needed)*
+- [ ] Document-type defaults are available for hidden required `transactionDocument` fields. *(com.etendoerp.go: verify neo_defaults, add NeoHandler if needed)*
 - [ ] Tax selectors return valid options with date and SO/PO context. *(com.etendoerp.go: map DateInvoiced context to selector params)*
 - [x] Selector context requirements are visible in generated contracts or MCP schema output. *(schema_forge: apiPrediction.selectors[].context)*
-- [ ] MCP agents can resolve required FK values without hardcoding IDs. *(com.etendoerp.go: extend etendo_selectors with recordContext)*
+- [ ] MCP agents can resolve required FK values without hardcoding IDs. *(com.etendoerp.go: extend neo_selectors with recordContext)*
 - [x] No window-specific logic is added to generic NEO services. *(schema_forge: generic buildSelectorContext, no spec-specific branches)*
 - [x] Tests cover sales, purchase, invoice, receipt/shipment, and return representative flows. *(schema_forge: 34 selectorContext tests + 5 contract generation tests)*
 
