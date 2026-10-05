@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
-import { getProgressTone } from '@/lib/progressTone';
-import { TONE_STYLES } from '@/components/ui/status-tag-tokens.js';
+import ProgressFieldBadge from '@/windows/custom/shared/ProgressFieldBadge';
 import { useApiFetch } from '@/auth/useApiFetch.js';
 
 export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
@@ -62,31 +61,18 @@ export default function OrderDraftChips({ data, recordId, token, apiBaseUrl }) {
 
   return (
     <>
-      <ProgressBadge label={ui('soAllDelivered')} pct={deliveredPct} />
-      <ProgressBadge label={ui('soAllInvoiced')} pct={invoicedPct} />
+      <ProgressFieldBadge
+        documentStatus={data?.documentStatus}
+        value={Number.isFinite(deliveredPct) ? deliveredPct * 100 : 0}
+        label={ui('soAllDelivered')}
+        testId="order-progress-badge"
+      />
+      <ProgressFieldBadge
+        documentStatus={data?.documentStatus}
+        value={Number.isFinite(invoicedPct) ? invoicedPct * 100 : 0}
+        label={ui('soAllInvoiced')}
+        testId="order-progress-badge"
+      />
     </>
-  );
-}
-
-function ProgressBadge({ label, pct }) {
-  const tone = getProgressTone(pct);
-  const palette = TONE_STYLES[tone];
-  const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(1, pct)) : 0;
-  const percent = Math.round(safePct * 100);
-  return (
-    <span
-      data-testid="order-progress-badge"
-      data-tone={tone}
-      style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '4px 12px', borderRadius: 6,
-        fontSize: 12, fontWeight: 500,
-        background: palette.background,
-        color: palette.color,
-      }}
-    >
-      {label}
-      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{percent}%</span>
-    </span>
   );
 }

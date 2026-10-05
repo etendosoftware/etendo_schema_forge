@@ -300,8 +300,9 @@ test.describe('Printable downloads — sales flow (integration)', () => {
       const shipmentIsDraft = (await statusPill.getAttribute('data-status')) === 'DR';
 
       if (shipmentIsDraft) {
-        // `billing-badge` (GoodsShipmentBillingBadge) renders only when invoiceStatus > 0,
-        // so an absent badge means 0% — i.e. NOT fully invoiced. The digits and the `%`
+        // `billing-badge` (GoodsShipmentBillingBadge) always renders on a completed
+        // shipment, but in a draft it renders only when invoiceStatus > 0 (showWhenPositive),
+        // so here an absent badge means 0% — i.e. NOT fully invoiced. The digits and the `%`
         // are language-independent; only the word before them is translated.
         const billingBadge = page.getByTestId('billing-badge');
         const shipmentIsFullyInvoiced = await billingBadge.isVisible().catch(() => false)
