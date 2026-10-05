@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/hooks/useEntity.js
 /**
  * ETP-4563 [SEC T01 2/3] — RED tests for integrating the app-shell-core shared
  * cache into useEntity.
@@ -605,5 +606,47 @@ describe('useEntity — shared cache integration (ETP-4563)', () => {
     const b = renderHook(() => useEntity('header', 'lines', opts()), { wrapper });
     await waitFor(() => expect(b.result.current.items.length).toBe(1));
     expect(counts.list).toBe(2);
+  });
+  // --- ETP-5602 regression: a forced record re-read also re-reads its lines ---
+  // Reactivating a completed invoice runs C_INVOICE_POST, which bumps UPDATED on every
+  // line. The post-action refresh (DetailMoreActionsMenu runDocumentAction, and
+  // handleProcessSuccess here) re-read the header with force, but fetchById re-read the
+  // lines through the cache, so the pre-action lines (and their remembered `updated`) were
+  // served for up to the stale time. The first inline line edit then sent the old version
+  // and NEO answered 409 stale_record — the SaveConflictDialog appeared on an untouched row.
+
+  it('23. fetchById with { force: true } also refetches the cached children of the record', async () => {
+    const { fetchMock, counts } = makeFetch();
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { await a.result.current.fetchById('42'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    // Contrast: a plain re-read within the freshness window reuses the cached lines.
+    await act(async () => { await a.result.current.fetchById('42'); });
+    expect(counts.children).toBe(1);
+
+    await act(async () => { await a.result.current.fetchById('42', { force: true }); });
+    await waitFor(() => expect(counts.children).toBe(2));
+  });
+
+  it('24. a successful handleProcess refetches the cached children of the record', async () => {
+    const { fetchMock, counts } = makeFetch({
+      handler: ({ method, path }) => (method === 'POST' && /\/header\/[^/]+\/action\//.test(path)
+        ? { ok: true, status: 200, _label: 'process', json: async () => ({}) }
+        : null),
+    });
+    globalThis.fetch = fetchMock;
+
+    const a = renderHook(() => useEntity('header', 'lines', opts({ skipListFetch: true })), { wrapper });
+    await act(async () => { await a.result.current.fetchById('99'); });
+    await waitFor(() => expect(counts.children).toBe(1));
+
+    await act(async () => {
+      await a.result.current.handleProcess({ columnName: 'DOC_ACTION', label: 'Reactivate' });
+    });
+    expect(counts.process).toBe(1);
+    await waitFor(() => expect(counts.children).toBe(2));
   });
 });
