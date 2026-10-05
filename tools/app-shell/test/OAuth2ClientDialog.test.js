@@ -42,7 +42,9 @@ describe('OAuth2ClientDialog source', () => {
     assert.ok(src.includes("'etendo:write'"), 'ALL_SCOPES should include etendo:write');
     assert.ok(src.includes("'etendo:process'"), 'ALL_SCOPES should include etendo:process');
     assert.ok(src.includes("'etendo:report'"), 'ALL_SCOPES should include etendo:report');
-    assert.ok(!/'neo:(read|write|process|report|\*)'/.test(src), 'no legacy neo:* scope should be offered');
+    const offered = src.match(/const ALL_SCOPES = \[[^\]]*\]/)[0];
+    assert.ok(!offered.includes('neo:'), 'no legacy neo:* scope should be offered');
+    assert.ok(src.includes("'neo:read': 'etendo:read'"), 'legacy names map onto the etendo:* ones');
   });
 
   it('determines edit mode from truthy client prop', () => {
@@ -65,8 +67,8 @@ describe('OAuth2ClientDialog source', () => {
   it('wildcard scope toggles all granular scopes together', () => {
     const src = readFileSync(SOURCE, 'utf8');
     assert.ok(src.includes('scope === WILDCARD_SCOPE'), 'toggleScope should special-case the wildcard');
-    assert.ok(src.includes('setScopes([...ALL_SCOPES])'), 'should set all scopes when wildcard toggled on');
-    assert.ok(src.includes('setScopes([])'), 'should clear all scopes when wildcard toggled off');
+    assert.ok(src.includes('[...kept, ...ALL_SCOPES]'), 'should set all scopes when wildcard toggled on');
+    assert.ok(src.includes('hasWildcard ? kept'), 'should clear the offered scopes, keeping the rest, when toggled off');
   });
 
   it('shows SecretRevealDialog after successful client creation with secret', () => {

@@ -177,6 +177,35 @@ describe('OAuth2ClientDialog', () => {
     expect(updateClient.mock.calls.at(-1)[2].scopes).toEqual(['etendo:read', 'etendo:report']);
   });
 
+  // Public-API-key clients carry internal `neo:` markers the server looks up by name
+  // (PublicApiKeyPolicy). Only the five legacy scope names are renamed; markers must survive a save.
+  it('keeps internal neo: markers untouched and accepts the space-separated string the server returns', async () => {
+    updateClient.mockResolvedValue({});
+    const client = {
+      id: '1', name: 'Key', isActive: true,
+      scopes: 'neo:read neo:public-api-key neo:public-api-owner-org:ORG1',
+    };
+    render(<OAuth2ClientDialog {...defaultProps} client={client} />);
+
+    fireEvent.submit(screen.getByTestId('dialog-content').querySelector('form'));
+    await waitFor(() => expect(updateClient).toHaveBeenCalled());
+    expect(updateClient.mock.calls.at(-1)[2].scopes)
+      .toEqual(['etendo:read', 'neo:public-api-key', 'neo:public-api-owner-org:ORG1']);
+  });
+
+  it('keeps internal markers when the wildcard is toggled on and off', async () => {
+    updateClient.mockResolvedValue({});
+    const client = { id: '1', name: 'Key', isActive: true, scopes: ['neo:public-api-key'] };
+    render(<OAuth2ClientDialog {...defaultProps} client={client} />);
+    const wildcard = () => screen.getAllByRole('checkbox').find((box) => box.parentElement.textContent === 'etendo:*');
+
+    fireEvent.click(wildcard());
+    fireEvent.click(wildcard());
+    fireEvent.submit(screen.getByTestId('dialog-content').querySelector('form'));
+    await waitFor(() => expect(updateClient).toHaveBeenCalled());
+    expect(updateClient.mock.calls.at(-1)[2].scopes).toEqual(['neo:public-api-key']);
+  });
+
   it('calls updateClient on submit in edit mode', async () => {
     updateClient.mockResolvedValue({});
     const client = { id: '1', name: 'Test', scopes: [], isActive: true };

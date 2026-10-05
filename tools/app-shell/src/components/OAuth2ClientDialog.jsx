@@ -19,10 +19,21 @@ const WILDCARD_SCOPE = 'etendo:*';
 const ALL_SCOPES = ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', WILDCARD_SCOPE];
 const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== WILDCARD_SCOPE);
 
-// Clients created before the rename are stored with `neo:*` scopes; the server still accepts
-// them, but the dialog only offers the `etendo:*` names, so show (and re-save) them as such.
-function toCurrentScopes(scopes = []) {
-  return [...new Set(scopes.map((scope) => scope.replace(/^neo:/, 'etendo:')))];
+// Clients created before the rename carry the legacy scope names; the server still accepts them
+// (ApiScopes.canonical), but the dialog offers only the etendo:* names, so show and re-save them as
+// such. Exactly these five — every other scope (e.g. the internal `neo:public-api-key` markers the
+// server looks up by name) passes through untouched.
+const LEGACY_SCOPES = {
+  'neo:read': 'etendo:read',
+  'neo:write': 'etendo:write',
+  'neo:process': 'etendo:process',
+  'neo:report': 'etendo:report',
+  'neo:*': WILDCARD_SCOPE,
+};
+
+function toCurrentScopes(scopes) {
+  const list = typeof scopes === 'string' ? scopes.split(/\s+/) : (scopes ?? []);
+  return [...new Set(list.filter(Boolean).map((scope) => LEGACY_SCOPES[scope] ?? scope))];
 }
 
 /**
@@ -69,11 +80,11 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
   const toggleScope = (scope) => {
     if (scope === WILDCARD_SCOPE) {
       // Toggle wildcard: if already set, clear all; otherwise set wildcard + all granular
-      if (hasWildcard) {
-        setScopes([]);
-      } else {
-        setScopes([...ALL_SCOPES]);
-      }
+      // Scopes the dialog does not offer (internal markers) are kept either way.
+      setScopes((prev) => {
+        const kept = prev.filter((s) => !ALL_SCOPES.includes(s));
+        return hasWildcard ? kept : [...kept, ...ALL_SCOPES];
+      });
     } else {
       if (hasWildcard) return; // granular scopes locked when wildcard is on
       setScopes((prev) =>
