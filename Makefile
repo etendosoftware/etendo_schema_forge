@@ -634,17 +634,20 @@ TUNNEL_FLAGS = $(if $(PROFILE),--profile $(PROFILE)) $(if $(SSH_HOST),--ssh-host
 
 # --- MCP usage telemetry export ---
 #
-# HOST is an SSH alias (etendo-go-experimental, etendo-go-production). The script
+# PROFILE names a remote-connection profile (~/.config/schema-forge/remote/<name>.env)
+# whose SSH_HOST + GRADLE_PROPERTIES say which host to SSH into and where its
+# gradle.properties lives; HOST=<ssh-alias> still works (default path). The script
 # reads that host's own gradle.properties, so no credentials are passed here.
 # Dumps land in the gitignored mcp-usage/ folder. Run `make mcp-usage-help` for every option.
 
 HOST ?=
+MCP_TARGET = $(or $(PROFILE),$(HOST))
 
 .PHONY: mcp-usage
-mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
+mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (PROFILE=<name>|HOST=<ssh-alias> [MARK_REVIEWED=1] [INCLUDE_REVIEWED=1] [ARGS='...'])
 	@if [ "$(HELP)" = "1" ]; then $(MAKE) -s mcp-usage-help; exit 0; fi; \
-	if [ -z "$(HOST)" ]; then echo "HOST is required, e.g. make mcp-usage HOST=etendo-go-experimental"; exit 1; fi; \
-	scripts/mcp-usage-dump.sh $(HOST) \
+	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-usage PROFILE=production"; exit 1; fi; \
+	scripts/mcp-usage-dump.sh $(MCP_TARGET) \
 		$(if $(filter 1,$(MARK_REVIEWED)),--mark-reviewed) \
 		$(if $(filter 1,$(INCLUDE_REVIEWED)),--include-reviewed) \
 		$(if $(filter 1,$(COUNT)),--count) \
@@ -656,6 +659,19 @@ mcp-usage: ## Export ETGO_MCP_USAGE from a deployed instance (HOST=<ssh-alias> [
 .PHONY: mcp-usage-help
 mcp-usage-help: ## Show usage and examples for `make mcp-usage`
 	@scripts/mcp-usage-dump.sh --help
+
+.PHONY: mcp-metrics
+mcp-metrics: ## MCP usage/feedback + Copilot conversations/messages counts (PROFILE=<name>|HOST=<ssh-alias> [DAILY=1] [DAYS=30] [SINCE=] [UNTIL=] [CLIENT=] [CSV=1])
+	@if [ "$(HELP)" = "1" ]; then scripts/mcp-metrics.sh --help; exit 0; fi; \
+	if [ -z "$(MCP_TARGET)" ]; then echo "PROFILE (or HOST) is required, e.g. make mcp-metrics PROFILE=production DAYS=30 DAILY=1"; exit 1; fi; \
+	scripts/mcp-metrics.sh $(MCP_TARGET) \
+		$(if $(filter 1,$(DAILY)),--daily) \
+		$(if $(filter 1,$(CSV)),--csv) \
+		$(if $(DAYS),--last-days $(DAYS)) \
+		$(if $(SINCE),--since $(SINCE)) \
+		$(if $(UNTIL),--until $(UNTIL)) \
+		$(if $(CLIENT),--client '$(CLIENT)') \
+		$(ARGS)
 
 .PHONY: db-tunnel
 db-tunnel: ## Open a persistent SSH tunnel to a remote DB (connection vars or PROFILE=)

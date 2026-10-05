@@ -358,6 +358,16 @@ See `docs/window-templates.md` for full `templateConfig` reference.
 
 **Real examples:** `product` (gallery), many kanban/calendar windows.
 
+**Gallery card grid (ETP-5516).** A `{Name}Gallery.jsx` must lay its cards out with the shared
+`GalleryGrid` (`tools/app-shell/src/components/ui/gallery-grid.jsx`), never with viewport
+breakpoint classes (`xl:grid-cols-6`, ...). `GalleryGrid` is width-driven: its columns are
+`repeat(auto-fill, minmax(min(GALLERY_CARD_MIN_WIDTH_PX, 100%), 1fr))`, so the number of cards per
+row follows the width of the gallery's own container. Expanding the Navigation Rail or narrowing
+the window makes cards wrap to the next row instead of shrinking below the minimum, and a wider
+container fits more cards. `GALLERY_CARD_MIN_WIDTH_PX` (220 px, taken from the Figma product
+gallery) is the single place to change that minimum. The report catalog gallery
+(`ReportViewerPage.jsx`) uses the same component, so the two galleries cannot drift apart.
+
 ---
 
 ### 6b. `window.agentPrompt` / field `agentPrompt` — AI agent guidance
@@ -466,6 +476,7 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 **Limitations (v1):**
 - Only available on `layoutType: "default"`. Kanban, calendar, gallery, and custom layouts ignore the option entirely.
 - No pagination — the list does a single lazy fetch when the tab becomes active.
+- The tab label shows the real number of attachments as soon as the record opens (ETP-5526): while the tab is inactive only the count is fetched (`.../count` endpoint below), the full list stays lazy. Once the list is read the label follows its length. If the count cannot be fetched (older backend without the endpoint, network error) the label shows no number — never `0` — until the tab is opened; no error is shown for it.
 - Hard upload limit of **10 MB** enforced by the NEO servlet (`MultipartConfig`). `maxSizeMB > 10` will fail at upload time.
 
 **Endpoints exposed by NEO Headless:**
@@ -473,6 +484,7 @@ Adds a transversal **Attachments** tab to the detail view for uploading, listing
 | Method | URL | Action |
 |--------|-----|--------|
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}` | List attachments for the record |
+| `GET` | `/sws/neo/attachments/{tableName}/{recordId}/count` | `{ "count": N }` — number of attachments without loading them (tab badge, ETP-5526) |
 | `POST` | `/sws/neo/attachments/{tableName}/{recordId}` (multipart/form-data) | Upload a new attachment |
 | `GET` | `/sws/neo/attachments/file/{attachmentId}` | Download a single attachment |
 | `GET` | `/sws/neo/attachments/{tableName}/{recordId}/zip` | Download all attachments as a ZIP archive |

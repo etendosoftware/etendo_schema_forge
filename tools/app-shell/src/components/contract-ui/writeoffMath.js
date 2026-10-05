@@ -23,13 +23,15 @@ export const WRITEOFF_EPSILON = 0.005;
  *                                   {@code ReconciliationHandler.assertWithinWriteoffLimit}.
  * @param {boolean} [args.eligible] caller-side gate — a single selected invoice in the
  *                                  reconciliation modal, not editing a draft in the payment modal.
- * @returns {{visible: boolean, blocked: boolean, amount: number}}
+ * @returns {{visible: boolean, blocked: boolean, amount: number, limit: number|null}} `limit` is
+ *   the effective cap for the blocked hint — `null` when there is none, never 0 (ETP-5558: the
+ *   payment modal read a missing `limit` and showed "0,00 €").
  */
 export function writeoffState({ difference, limit = null, eligible = true }) {
   const amount = Number(difference) || 0;
+  const cap = Number(limit) > 0 ? Number(limit) : null;
   if (!eligible || amount < WRITEOFF_EPSILON) {
-    return { visible: false, blocked: false, amount };
+    return { visible: false, blocked: false, amount, limit: cap };
   }
-  const cap = Number(limit) || 0;
-  return { visible: true, blocked: cap > 0 && amount > cap, amount };
+  return { visible: true, blocked: cap !== null && amount > cap, amount, limit: cap };
 }
