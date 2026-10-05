@@ -2,7 +2,7 @@
 -- @gap: S1
 -- @risk: medium
 -- @type: sql
--- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no open subscription, copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire that tenant's now-stale ETGO_TenantPlan preference in the SAME transaction (ETP-5046)
+-- @description: Backfill one open ETGO_SUBSCRIPTION row on the grandfathered legacy-productive plan for every tenant carrying the AD_Preference ETGO_TenantPlan='productive' marker but no open subscription, copying Stripe ids from its ETGO_CHECKOUT_REQUEST when one exists, and retire the ETGO_TenantPlan preference of every tenant that has any ETGO_SUBSCRIPTION row (backfilled here or not, open or closed) in the SAME transaction (ETP-5046)
 
 -- Why this file is dated 2026-10-05 (READ BEFORE RE-DATING IT)
 -- --------------------------------------------------------------------------------------------
@@ -132,17 +132,48 @@
 -- carrying the grep marker ETP-5046-TRANSITIONAL-FALLBACK) is provably safe. Until then the
 -- remaining rows ARE the worklist.
 --
--- The DELETE is guarded on an open subscription EXISTING for the tenant, not on "the INSERT above
--- just ran". Guarding on existence makes the statement self-healing: a tenant that got its
--- subscription by ANY route -- the runtime paid-upgrade path, a manual correction, an earlier
--- partially-applied run -- has its preference retired the next time this fix is invoked for it,
--- without the fix needing to know how the row got there. A "we just inserted" guard would only
--- ever clean up after itself.
+-- The DELETE is guarded on a subscription row EXISTING for the tenant -- ANY row, open or closed,
+-- active or not -- not on "the INSERT above just ran". Guarding on existence makes the statement
+-- self-healing: a tenant that got its subscription by ANY route -- the runtime paid-upgrade path, a
+-- manual correction, an earlier partially-applied run -- has its preference retired the next time
+-- this fix is invoked for it, without the fix needing to know how the row got there. A "we just
+-- inserted" guard would only ever clean up after itself. (Until ETP-5046's develop merge the guard
+-- was an OPEN row; it was widened to any row -- see "WIDENED RETIREMENT" below.)
+--
+-- WIDENED RETIREMENT -- every subscribed tenant, not only the ones this fix backfills (R42)
+-- --------------------------------------------------------------------------------------------
+-- A tenant that HAS a subscription row is on the row model: the row is its plan record, and any
+-- ETGO_TenantPlan marker it carries is stale whatever it says. So @check selects a tenant on
+-- either of two independent grounds, and @apply retires the marker in both:
+--   (A) BACKFILL     -- an active productive marker and NO open subscription (the original gap);
+--   (B) RETIREMENT   -- ANY ETGO_TenantPlan row visible at the tenant AND ANY subscription row.
+-- Branch (B) exists because of develop's
+-- 20260929T190000Z__R42-paid-provisioning-commercial-metadata.sql (ETP-5548, immutable). R42
+-- INSERTS an active ETGO_TenantPlan='productive' marker for every paid-provisioned owned tenant that
+-- lacks one, deciding "paid" from etgo_checkout_request and knowing nothing about
+-- etgo_subscription. With ONBOARDING_PROVISIONED_THROUGH at 2026-09-02 it is a candidate for every
+-- tenant onboarded after ETP-5046 too -- tenants whose paid upgrade opened a subscription row and
+-- deliberately did NOT write the marker. Without branch (B) such a tenant has an open row AND an
+-- R42 marker, branch (A) is false, this fix records SKIPPED_NOT_NEEDED and the marker survives
+-- forever: the count(*) end condition never reaches 0, and the day the row is closed (ETP-5047's
+-- close-on-cancel, open-and-notable-topics §5.13) resolvePlan falls through to
+-- TenantPlanPreferenceFallback, reads the stale marker, and a canceled tenant reads productive.
+--
+-- Why "any row" and not "an open row": a closed row is still proof the tenant is on the row model
+-- (only a plan change or a cancel closes one), and keeping a marker next to a closed row is
+-- precisely the configuration that resurrects a canceled tenant through the fallback.
+--
+-- Branch (A) and statements 1-2 of @apply are UNCHANGED by the widening: the backfill still keys
+-- on "active productive marker AND no OPEN subscription". Consequence worth knowing: a tenant with
+-- ONLY closed rows and an active productive marker is still backfilled with a fresh open
+-- 'legacy-productive' row (preserving the effective access the fallback gives it today) before
+-- statement 3 retires the marker. No tenant is in that state today -- nothing writes END_DATE yet
+-- -- but see the ORDERING INVARIANT below for why R42 can produce it once ETP-5047 closes rows.
 --
 -- WHY THE DELETE IGNORES the preference's own value and isactive flag. @check keys on an ACTIVE
 -- 'productive' row, but the DELETE removes EVERY ETGO_TenantPlan row visible at the tenant,
 -- whatever it holds. Three reasons, in order of weight:
---   1. Once the tenant has an open subscription, the subscription IS its plan. Any surviving
+--   1. Once the tenant has a subscription row, the row model IS its plan record. Any surviving
 --      ETGO_TenantPlan row is a second answer to a question that now has one authority -- stale
 --      by definition, regardless of what it says.
 --   2. An inactive or non-'productive' leftover would keep the end-condition count above zero
@@ -172,13 +203,27 @@
 -- file name (the UTC timestamp prefix makes lexical order == chronological order) and applies, per
 -- tenant, only fixes strictly newer than that tenant's watermark -- the newest timestamp among its
 -- PROCESSED ledger rows. So for any single tenant:
---   * within one run, R31 (2026-09-01) is always visited before R37 (2026-09-24);
---   * once R37 is PROCESSED the watermark is >= 2026-09-24T15:00:00Z, so R31 is skipped on every
+--   * within one run, R31 (2026-09-01) is always visited before R37 (2026-10-05);
+--   * once R37 is PROCESSED the watermark is >= 2026-10-05T18:00:00Z, so R31 is skipped on every
 --     later run -- including the case where R31 itself FAILED, because the watermark is a date,
 --     not a per-fix flag.
 -- R31 can therefore never execute against a tenant whose preference this fix has already retired.
 -- Neither R31 nor R32 is edited here: an applied data-fix is immutable (sql/README.md rule 3) and
 -- is superseded by a new dated file, never edited in place.
+--
+-- The same argument covers develop's R42 (20260929T190000Z__R42-paid-provisioning-commercial-
+-- metadata.sql), the THIRD fix that keys on ETGO_TenantPlan -- on its ABSENCE, to INSERT it. R42
+-- sorts before this file, so for any single tenant the chain visits R42 and then R37 in the same
+-- run, and branch (B) of @check retires whatever marker R42 just wrote; once R37 is PROCESSED, R42
+-- is below the watermark and never runs again. A failed R42 halts the tenant's chain before R37,
+-- and the next run resumes at R42 -- still R42 first. The ONE way to run R42 after R37 for a tenant
+-- is an operator forcing it with `run.js --fix <R42>`, which ignores chain order and the
+-- watermark: whoever does that must follow it with `run.js --fix <R37> --client <same tenant>`.
+-- Residual (accepted, see the map doc's S1 row): R42 is gated on a PROVISIONED paid checkout and
+-- excludes REFUNDED/CANCELED/EXPIRED checkouts, NOT on etgo_subscription. A tenant whose ONLY
+-- subscription row is already closed when its first post-ETP-5046 chain runs would get an R42
+-- marker and then a fresh open 'legacy-productive' row from branch (A). Unreachable while nothing
+-- writes END_DATE; ETP-5047 must re-check it before closing rows on cancel.
 --
 -- ==> ANY FUTURE FIX MUST KEY ON etgo_subscription, NOT ON ETGO_TenantPlan. After this fix, the
 --     preference is present ONLY for tenants the backfill has not reached, so "has no productive
@@ -195,25 +240,47 @@
 -- therefore never appear inside the @report section itself -- only here, in this header.
 
 -- @check
--- Returns >=1 row when the fix IS needed: the tenant carries the productive plan marker AND has
--- no open subscription. 0 rows => SKIPPED_NOT_NEEDED, @apply never runs. Converges to 0 after a
--- successful @apply for TWO independent reasons: the inserted row is itself an open subscription,
--- and statement 3 retires the productive preference this probe also requires.
+-- Returns >=1 row when the fix IS needed, on either of two grounds (see "WIDENED RETIREMENT"):
+--   (A) BACKFILL   -- the tenant carries an active productive plan marker AND has no open
+--                     subscription (unchanged since the fix was authored);
+--   (B) RETIREMENT -- the tenant carries ANY ETGO_TenantPlan row (any value, any isactive) AND
+--                     has ANY subscription row (open or closed, active or not). This is what
+--                     catches a marker develop's R42 re-inserted next to an existing row.
+-- 0 rows => SKIPPED_NOT_NEEDED, @apply never runs. Converges to 0 after a successful @apply: (A)
+-- turns false because the inserted row is itself an open subscription AND statement 3 retires the
+-- marker; (B) turns false because statement 3 retires every marker row of a subscribed tenant.
+-- After @apply the only marker that can remain is an inactive or non-productive one on a tenant
+-- with NO subscription row at all, and that tenant matches neither branch.
 SELECT 1
 FROM ad_client c
 WHERE c.ad_client_id = :client_id
-  AND EXISTS (
-    SELECT 1 FROM ad_preference tp
-    WHERE tp.attribute = 'ETGO_TenantPlan'
-      AND tp.visibleat_client_id = :client_id
-      AND tp.isactive = 'Y'
-      AND upper(trim(tp.value)) = 'PRODUCTIVE'
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM etgo_subscription s
-    WHERE s.environment_client_id = :client_id
-      AND s.isactive = 'Y'
-      AND s.end_date IS NULL
+  AND (
+    (
+      EXISTS (
+        SELECT 1 FROM ad_preference tp
+        WHERE tp.attribute = 'ETGO_TenantPlan'
+          AND tp.visibleat_client_id = :client_id
+          AND tp.isactive = 'Y'
+          AND upper(trim(tp.value)) = 'PRODUCTIVE'
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM etgo_subscription s
+        WHERE s.environment_client_id = :client_id
+          AND s.isactive = 'Y'
+          AND s.end_date IS NULL
+      )
+    )
+    OR (
+      EXISTS (
+        SELECT 1 FROM ad_preference tp
+        WHERE tp.attribute = 'ETGO_TenantPlan'
+          AND tp.visibleat_client_id = :client_id
+      )
+      AND EXISTS (
+        SELECT 1 FROM etgo_subscription s
+        WHERE s.environment_client_id = :client_id
+      )
+    )
   )
 LIMIT 1;
 
@@ -381,23 +448,24 @@ WHERE c.ad_client_id = :client_id
 -- rows for every tenant (the silent-no-op mistake that has already nearly shipped twice on this
 -- ticket; verified on the live fleet: via_visibleat=6, via_adclient=0).
 --
--- Guarded on an open subscription EXISTING -- not on "the statement above just inserted one" -- so
--- it is self-healing for a tenant that obtained its subscription by any other route. When the
--- guard is false the statement removes nothing and the fallback keeps answering for that tenant,
--- which is the safe direction.
+-- Guarded on a subscription row EXISTING -- ANY row, open or closed, active or not; not on "the
+-- statement above just inserted one" -- so it is self-healing for a tenant that obtained its
+-- subscription by any other route, and it retires a marker develop's R42 re-inserted next to an
+-- existing row (@check branch (B), "WIDENED RETIREMENT" in the header). The guard is a strict
+-- superset of the old open-row guard, so every tenant the old statement retired is still retired.
+-- When the guard is false the tenant has no subscription row at all -- then statement 2 did not
+-- fire either, so its marker is inactive or non-productive (the fallback reads it as free anyway)
+-- -- and the statement removes nothing.
 --
--- Idempotency: after this statement the tenant has a subscription and no preference, so @check
--- (which requires a productive preference AND no open subscription) returns 0 rows on every later
--- run -- it now converges for two independent reasons instead of one -- and @apply is never
--- invoked again. A second invocation would in any case remove nothing.
+-- Idempotency: after this statement a subscribed tenant has no preference left, so neither branch
+-- of @check can match on any later run and @apply is never invoked again.
+-- A second invocation would in any case remove nothing.
 DELETE FROM ad_preference tp
  WHERE tp.attribute = 'ETGO_TenantPlan'
    AND tp.visibleat_client_id = :client_id
    AND EXISTS (
      SELECT 1 FROM etgo_subscription s
      WHERE s.environment_client_id = :client_id
-       AND s.isactive = 'Y'
-       AND s.end_date IS NULL
    );
 
 -- @report
@@ -414,8 +482,8 @@ DELETE FROM ad_preference tp
 --
 -- It reads the POST-state, which is what makes it trustworthy: it reports what is true at commit
 -- time rather than what the statement intended. The inference "no row remains => this fix retired
--- it" is sound because @apply only runs when @check returned rows, and @check requires an active
--- productive preference -- so on every invocation a row existed beforehand.
+-- it" is sound because @apply only runs when @check returned rows, and BOTH branches of @check
+-- require an ETGO_TenantPlan row -- so on every invocation a row existed beforehand.
 --
 -- The wording deliberately avoids the three bare DML keywords, in the CASE labels AND in this
 -- comment: the regression test asserts @report is read-only by scanning the whole section for
@@ -449,20 +517,19 @@ SELECT 'tenant-plan-preference' AS item,
                 WHERE tp.attribute = 'ETGO_TenantPlan'
                   AND tp.visibleat_client_id = :client_id
               )
-           THEN 'ETGO_TenantPlan preference STILL PRESENT for this tenant: it has no open '
-                || 'subscription, so the per-tenant retirement did not fire. The transitional '
-                || 'preference fallback keeps answering for it.'
+           THEN 'ETGO_TenantPlan preference STILL PRESENT for this tenant: it has no '
+                || 'subscription row at all, so the per-tenant retirement did not fire. The '
+                || 'transitional preference fallback keeps answering for it.'
          WHEN EXISTS (
                 SELECT 1 FROM etgo_subscription s2
                 WHERE s2.environment_client_id = :client_id
-                  AND s2.isactive = 'Y'
-                  AND s2.end_date IS NULL
               )
-           THEN 'ETGO_TenantPlan preference retired for this tenant in the same transaction as '
-                || 'its open subscription; no row remains (either it was removed here, or there '
+           THEN 'ETGO_TenantPlan preference retired for this tenant: it has a subscription row '
+                || '(backfilled in this same transaction, or already present); '
+                || 'no row remains (either it was removed here, or there '
                 || 'was none left to remove). The subscription is now its only plan record.'
-         ELSE 'No ETGO_TenantPlan preference remains for this tenant and it has no open '
-              || 'subscription either; nothing was retired.'
+         ELSE 'No ETGO_TenantPlan preference remains for this tenant and it has no '
+              || 'subscription row either; nothing was retired.'
        END AS outcome,
        c.ad_client_id AS ref
 FROM ad_client c
