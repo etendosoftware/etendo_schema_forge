@@ -2,19 +2,68 @@
 
 Complete reference for the filter stack rendered above every list view (`ListView` component in `tools/app-shell/src/components/contract-ui/ListView.jsx`).
 
-The toolbar can show up to four filter surfaces, always in this left-to-right order:
+The toolbar can show up to four filter surfaces, laid out in up to two rows (ETP-5509):
 
 ```
-┌──────────────────┐  ┌──────┐  ┌──────┐ ┌──────┐  ┌──┐
-│ Subset | Subset  │  │Quick │  │Status│ │Date  │  │▽ │
-│ (segmented)      │  │(pill)│  │      │ │range │  │  │
-└──────────────────┘  └──────┘  └──────┘ └──────┘  └──┘
-     ^                   ^          ^        ^       ^
-     1. Subset           2. Quick   3. Document-type filters   4. Advanced
-     filters             filters    (auto-added by column type)   filter popover
+row 1  ┌──────┐  ┌──────┐ ┌──────┐  ┌──┐                 ┌──┐ ┌──┐ ┌──┐ ┌─────────┐
+       │Quick │  │Status│ │Date  │  │▽ │                 │⇅ │ │⟳ │ │… │ │ + New … │
+       │(pill)│  │      │ │range │  │  │                 └──┘ └──┘ └──┘ └─────────┘
+       └──────┘  └──────┘ └──────┘  └──┘                 main actions (sort, refresh,
+          ^          ^        ^       ^                  import/export, print, create)
+          2. Quick   3. Document-type filters   4. Advanced
+          filters    (auto-added by column type)   filter popover
+
+row 2  ┌──────────────────┐  ┌───────┐
+       │ Subset | Subset  │  │ ▤ | ▦ │      only when the window has a tab group
+       │ (segmented)      │  │       │
+       └──────────────────┘  └───────┘
+          ^                     ^
+          1. Subset filters     list / gallery view toggle
+───────────────────────────────────────────────────────────────────────  separator
 ```
 
 All four combine with AND at query time. Empty / default selections contribute nothing — a totally unfiltered list shows when every surface is at its default state.
+
+## Toolbar layout (ETP-5509)
+
+The idle list bar is a column of up to two rows, closed by a separator line.
+
+- **Row 1** — quick filters, a custom table's `ToolbarQuickFilter`, the status / date-range
+  filters and the "Filtros" button on the left; the main actions (link, sort, refresh,
+  import/export, print, "New …") on the right.
+- **Row 2 — the tab group** — the subset-filter segmented control and the list/gallery view
+  toggle. It is rendered **only** when the window has one of them (`subsetFilters` with at least
+  one entry, or a `galleryRenderer`); a window with neither (e.g. Warehouse) keeps a single-row
+  toolbar and no empty band. *Provisional:* treating the view toggle as part of the tab group
+  (Product, whose second row holds only the toggle) is an interpretation of the ticket's "tab
+  group", pending product confirmation.
+- **Separator** — a `border-b` in `--border-subtle` on the toolbar container, spanning the full
+  width of the card. Every window that keeps the native bar gets it by construction. A window
+  that drops the bar with `hideListBar` draws its own toolbar and therefore its own line
+  (financial-account). *Provisional:* in a standard window this line is drawn in addition to the
+  existing line under the column headers; keeping both is pending product confirmation.
+
+Why two rows: the tab group used to open row 1. At the minimum supported viewport (1280×720 with
+the navigation rail expanded) it competed for width with the filters and the actions. The tabs
+sit on their own row at **every** width — that is a product decision, not a breakpoint. If UX
+later wants them inline above some width, the change is local to the idle bar in `ListView.jsx`:
+render `<ListToolbarTabs>` at the start of row 1's left cluster above the breakpoint and gate
+row 2 on the opposite condition. `ListToolbarTabs` returns the controls without a row wrapper
+precisely so that either placement can host it.
+
+Stable test ids: `list-toolbar` (container, carries the separator), `list-toolbar-main-row`
+(row 1), `list-toolbar-tabs-row` (row 2, absent when there is no tab group). The controls keep
+theirs: `filter-<key>` (subset entries — the entry's `key`, else its `label` lowercased),
+`quick-filter-<key>`, `view-toggle`. Row 1 also holds `filter-status`, `filter-type`,
+`filter-date` and `filter-advanced`, which share the `filter-` prefix with the subset entries, so
+scope prefix queries to a row. The Playwright guard for the layout is described in
+`docs/e2e-testing-guide.md` → "Layout reference: list toolbar at 1280×720 (ETP-5509)".
+
+Out of scope of the shared layout: only what `ListView` itself renders is moved. A window that
+replaces the bar through `hideListBar` (financial-account's `AccountsToolbar`, which has no tab
+group — its account-type filter is a dropdown) and pages that are not a `ListView` at all (the
+report catalog, which reuses `ViewToggle` in its own header; fiscal monitor; fiscal models) keep
+their own layout.
 
 ## 1. Subset filters (`window.subsetFilters`)
 
@@ -22,6 +71,8 @@ Radio-style segmented control. **Always one active**, mutually exclusive, applie
 
 - Source: `decisions.json → window.subsetFilters` (propagated by `resolve-curated.js`, emitted by `generate-frontend.js`).
 - Visual: a single rounded group of connected buttons, separated by thin dividers.
+- Placement: the toolbar's second row, below the quick filters and actions — see
+  [Toolbar layout](#toolbar-layout-etp-5509).
 - Behavior: clicking a different entry switches selection. Clicking the currently active entry does nothing.
 - When to use: "which universe am I looking at" — e.g. *All contacts* / *Customers* / *Vendors*, *Open* / *Closed* documents.
 - Full schema + examples: [`decisions-reference.md → Subset Filters`](decisions-reference.md).
@@ -69,6 +120,7 @@ The funnel button on the far right opens a **conditional-filter builder**. Each 
 - **`Está vacío` / `No está vacío` are dropped for any column with `required: true`** (ETP-4609) — a mandatory field can never legitimately be empty, so those two operators are filtered out of the list regardless of mode. This applies to every column in every window; `required` is read straight off the column object (same one DataTable renders), not from a separate config.
 - `Es cualquiera de` (inSet) is **only ever offered for `enum`/status-mode columns** — it is not a general "any field" operator. A text or selector column will never show it in the operator list; that's by design, not a bug (see `docs/generated-custom-windows/` guides for which columns of a given window are enum-typed).
 - Value input adapts to the column type: text/number/date input; enum dropdown using `enumLabels`; boolean dropdown using `badgeLabels`; `Entre` renders two inputs; `Es cualquiera de` takes a comma-separated list of **raw codes** (not translated labels) via a plain text box, matched **case-insensitively** (ETP-4609) — `i,s` matches the same rows as `I,S`. Internally each code is sent as a separate `iEquals` criterion OR-composed together (`buildRowCriteria` → `generateInSetCriteria` in `lib/gridQuery.js`), since the backend's plain `inSet`/`equals` operators are case-sensitive and there is no native case-insensitive "in" operator.
+- **Several values in one row: positive operators OR-compose, negative ones AND-compose (ETP-5009).** A multi-select picker (`DistinctEnumPicker`, `IdentifierMultiPicker`) sends an array; `buildRowCriteria` → `buildMultiValueCriteria` (`lib/gridQuery.js`, mirrored in core `app-shell-core/src/lib/gridQuery.js`) emits one clause per value. `Es A, B` means "A **or** B"; `No es A, B` means "neither A **nor** B", so `notEqual` (and every other negative operator: `iNotEqual`, `notContains`, `iNotContains`, `notStartsWith`, `iNotStartsWith`) is AND-composed — OR-ing `notEqual DR` with `notEqual CO` is always true and excluded nothing. Both junctions are wrapped in their own `AdvancedCriteria`, never returned flat, because `buildAdvancedFilterCriteria` spreads row items into an outer OR when the rows are joined with `O`. `No es Borrador, Completado` on `documentStatus` sends `{ _constructor: 'AdvancedCriteria', operator: 'and', criteria: [{ fieldName: 'documentStatus', operator: 'notEqual', value: 'DR' }, { fieldName: 'documentStatus', operator: 'notEqual', value: 'CO' }] }`. A single value still sends the plain clause. The client-side evaluators (`paymentInvoiceFilter.js`, `financial-account/advancedFilterApply.js`) already read an array `notEqual` as "not in the list".
 - The funnel button turns primary-tinted whenever **any** filter is active (column header row *or* advanced).
 
 ### Which columns are offered

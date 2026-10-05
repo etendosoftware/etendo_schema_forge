@@ -1271,6 +1271,32 @@ bypasses `useEntity` mutations altogether via its raw fetch, so the generic `han
 alone does not reach it — `buildCustomAddModalOnSaved`'s own extra `invalidateEntityCache()` call
 is what closes the gap for this window's Location tab.
 
+## ETP-5571 — Renaming a contact no longer leaves document Contacto selectors stale
+
+**Symptom.** After editing a contact's Razón Social here and saving, the Contacto selector of a
+Sales/Purchase document that had already been opened in the session kept listing the old name
+until a full reload (F5).
+
+**Root cause.** Selector option pages are cached in the shared cache under `entity: 'selector'`
+for `catalogStaleTime` (5 min — ETP-4564's table above), and re-opening a selector reads through
+`fetchQuery`, which serves a fresh entry. `useContactsCacheInvalidation` only marks the Contacts
+window's own keys (`businessPartner`, `bp-stats`, `bp-trend`) stale, so nothing touched the
+selector entries the document windows had cached.
+
+**Fix.** Central, not per-window: `WRITE_INVALIDATES_ENTITIES` in
+`tools/app-shell/src/lib/crossSpecCacheInvalidation.js` maps `contacts → selector`, and the local
+`useApiFetch` applies it after every successful non-GET whose URL has the `contacts` path segment
+(see `docs/request-policy.md` → *Writes to Contactos invalidate every cached selector page*). It
+covers every Contacts write that goes through the hook — header save (`useEntity`), inline table
+edit/delete, bulk delete, the financial panel, billing preferences, the Location modal, and the
+"+ Crear contacto" dialog opened from a document — and every document window with a Contacto
+field, since they all render it through `CreatableSearchSelect`. All selector pages are marked
+stale, not only Contacto ones; the cost is one extra GET when each is next opened.
+
+**Not covered:** the CSV/XLSX import (`contactsImportDescriptor.js`) writes through the
+plain-module `apiFetch`, which has no access to the cache, so names changed by an import still
+wait out the 5-minute `catalogStaleTime`.
+
 ## Solo Lectura (read-only window-access tier) gating — ETP-5205
 
 Etendo GO's per-role window-access tier (`useWindowAccess('123')` → `'none' | 'read-only' |
@@ -1283,3 +1309,19 @@ rendered unconditionally in the shared `ListView.jsx`, regardless of `windowRead
 shared call site (`!windowReadOnly &&` prefix) rather than in Contacts itself, so every current and
 future `selectionBarRightActions` consumer gets the gate for free (`ListView.jsx`, see the
 ETP-5205 commit history for the fix and its test).
+
+## List toolbar: tab group on its own row — ETP-5509
+
+The list toolbar is laid out by the shared `ListView` in up to two rows: quick filters, "Filtros"
+and the main actions (sort, refresh, import, export, "New …") on the first, and the **Todos / Personas / Empresas** subset tabs on a second row
+below it, followed by a gray separator line between toolbar and body. Before ETP-5509 the tab
+group opened the first row and, at 1280×720 with the navigation rail expanded, competed for width
+with the filters and the actions. The tabs are on the second row at every width, and they behave
+as before: choosing another entry filters the grid and highlights the selection.
+
+Nothing changed in this window's own files or in `decisions.json` — the layout, the row's test id
+(`list-toolbar-tabs-row`) and the reasoning live in `docs/list-filters.md` → "Toolbar layout".
+
+Manual verification: at 1280×720 with the rail expanded, open `/contacts` and confirm "Filtros" sits on the
+first row with sort, refresh, import, export and "New contact" on the right, untruncated; the
+three tabs sit on the second row; switching tab still filters the grid.

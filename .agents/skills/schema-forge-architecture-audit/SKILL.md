@@ -121,7 +121,7 @@ Workflow when the user picks an audit finding and asks to fix it:
 2. **Classify** the duplication against [`patterns/INDEX.md`](patterns/INDEX.md). If no pattern fits, propose a new one and ask the user before continuing.
 3. **Check precedent** in [`cases/`](cases/) — prior cases ground prop naming, file location, prop shape.
 4. **Produce a refactor brief** (template below) and confirm with the user.
-5. **Verify tests exist** for every consumer being touched. If missing, delegate to Tester (`test-generator` subagent) FIRST, then refactor.
+5. **Verify tests exist** for every consumer being touched. If missing, delegate to the `tester-functional` subagent FIRST, then refactor.
 6. **Apply the refactor**, run the test suite, confirm zero regressions.
 7. **Add tests** for the new shared component(s).
 8. **Write a case file** in `cases/` documenting the refactor (template below). The skill learns from it.

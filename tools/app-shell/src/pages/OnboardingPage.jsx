@@ -39,6 +39,8 @@ export default function OnboardingPage() {
       fiscalIdValue: '',
       address: '',
       sector: 'technology',
+      // ETP-5426: the "include sample data" opt-in starts unticked, without exception.
+      includeSampleData: false,
     },
     checkReadiness: (fetchImpl, apiBase, token) => {
       return checkSalesInvoiceReadiness(fetchImpl, apiBase, token);

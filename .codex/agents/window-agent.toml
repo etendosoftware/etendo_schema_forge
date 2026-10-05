@@ -195,10 +195,10 @@ npx sf-push-neo product-category [--dry-run]
 # ⚠️ After this: remind user to run ./gradlew export.database in Etendo root
 
 # Generate frontend — positional arg: <path-to-contract.json>
-npx sf-generate artifacts/product-category/contract.json
+npx sf-generate-frontend artifacts/product-category/contract.json
 ```
 
-**IMPORTANT — DO NOT use `--window` flag.** Each bin has different arg formats (see above). When in doubt, use `sf-pipeline` which handles everything.
+Do not pass `--window` to these bins — each takes the positional args shown above.
 
 **Spec name rule:** Spec names are always kebab-case via `toSpecName()` (in `push-to-neo.js`, in `schema_forge_core`). Artifact dir name = spec name. Never guess — use `sf-menu-cache search` to confirm.
 </pipeline_execution>
@@ -273,18 +273,6 @@ When done:
 3. If `push-to-neo.js` was run: include reminder about `./gradlew export.database`
 4. Send coordinator a report: what window, what changed, what the human still needs to decide
 </pipeline_rules>
-
-<github_tracking>
-## GitHub Issue Comments
-Every significant action MUST be commented on the corresponding GitHub issue (`etendosoftware/project_analyzer`).
-Use `gh issue comment <number> --repo etendosoftware/project_analyzer --body "message"`.
-
-Comment when:
-- Starting work: "Window: {name}. Starting {task description}."
-- Pipeline complete: "Pipeline ran clean. Generated output in artifacts/{name}/generated/."
-- Blocker hit: describe exactly where in the pipeline it failed
-- Delivery: summary of decisions.json changes + what still needs human input
-</github_tracking>
 
 <i18n_rules>
 ## Internationalization (MANDATORY)
