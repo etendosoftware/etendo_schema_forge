@@ -51,6 +51,7 @@ import { toast } from 'sonner';
 import AccountTreeView from '@generated/chart-of-accounts/custom/AccountTreeView.jsx';
 import NewSubAccountCreateModal from '@generated/chart-of-accounts/custom/NewSubAccountCreateModal.jsx';
 import { resetChartOfAccountsTreeStore } from '@generated/chart-of-accounts/custom/chartOfAccountsTreeStore.js';
+import { SEARCH_DEBOUNCE_MS } from '@generated/chart-of-accounts/custom/ChartOfAccountsToolbarSlot.jsx';
 import { ELEMENT_LEVEL_UI_KEYS } from '@generated/chart-of-accounts/custom/accountTypeLabels';
 
 // --- Harness ---
@@ -91,7 +92,17 @@ function renderTree(ui, { entry = '/chart-of-accounts' } = {}) {
   return { ...utils, rerender: (next) => utils.rerender(wrap(next)) };
 }
 
-const typeIntoSearch = (value) => fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value } });
+// The search box writes the URL after a pause (SEARCH_DEBOUNCE_MS); type, then let the
+// pause elapse, so the tree has re-filtered when the helper returns.
+function typeIntoSearch(value) {
+  vi.useFakeTimers();
+  try {
+    fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value } });
+    act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); });
+  } finally {
+    vi.useRealTimers();
+  }
+}
 
 // --- Fixtures ---
 
@@ -1179,6 +1190,41 @@ describe('AccountTreeView', () => {
       typeIntoSearch('');
       expect(screen.getByTestId('account-tree-row-acc-50000001')).toBeInTheDocument(); // 5000 still open
       expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument(); // 4000 closed again
+    });
+
+    it('debounces the search: the box updates at once, the URL and the tree after a pause', () => {
+      renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        const input = screen.getByTestId('coa-search-input');
+        fireEvent.change(input, { target: { value: 'Sal' } });
+        fireEvent.change(input, { target: { value: 'Sales' } });
+        expect(input).toHaveValue('Sales');
+        expect(screen.getByTestId('location-search')).toHaveTextContent('');
+        expect(screen.queryByTestId('account-tree-row-acc-40000000')).not.toBeInTheDocument();
+
+        act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS - 1); });
+        expect(screen.getByTestId('location-search')).toHaveTextContent('');
+
+        act(() => { vi.advanceTimersByTime(1); });
+        // Only the last value is written, once.
+        expect(screen.getByTestId('location-search')).toHaveTextContent('?q=Sales');
+        expect(screen.getByTestId('account-tree-row-acc-40000000')).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('drops a pending search write when the toolbar unmounts', () => {
+      const { unmount } = renderTree(<AccountTreeView {...defaultProps} />);
+      vi.useFakeTimers();
+      try {
+        fireEvent.change(screen.getByTestId('coa-search-input'), { target: { value: 'Sales' } });
+        unmount();
+        expect(() => act(() => { vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS); })).not.toThrow();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('keeps the search and the account type in the URL (shareable)', () => {

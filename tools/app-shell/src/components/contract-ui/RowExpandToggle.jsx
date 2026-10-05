@@ -47,7 +47,7 @@ export function RowExpandToggle({
         if (stopPropagation) e.stopPropagation();
         onToggle?.(e);
       }}
-      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] ${className}`.trim()}
+      className={`flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--border-control))] bg-card text-[hsl(var(--muted-foreground))] transition-transform hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] ${className}`.trim()}
       style={{ transform: expanded ? expandedRotation : undefined }}
       aria-label={label ?? ui(expanded ? 'collapse' : 'expand')}
       aria-expanded={expanded}

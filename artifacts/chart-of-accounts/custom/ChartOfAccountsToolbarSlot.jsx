@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowUp, Search } from 'lucide-react';
 import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import {
   useChartOfAccountsTree,
 } from './chartOfAccountsTreeStore';
 
+export const SEARCH_DEBOUNCE_MS = 250;
+
 /**
  * ChartOfAccountsToolbarSlot — the Chart of Accounts controls, rendered by ListView in
  * its OWN toolbar row through `AccountTreeView.ToolbarQuickFilter` (ETP-5188 convention,
@@ -21,8 +23,9 @@ import {
  *   open, "Contraer todo" as soon as one is (by this button or by a row's chevron).
  *   State comes from `chartOfAccountsTreeStore`, shared with the tree.
  * - Search and type live in the URL (`q`, `accountType` — see chartOfAccountsFilters.js).
- *   The search box keeps a local draft so typing never waits on a URL round-trip, and
- *   follows the URL when it changes from outside (Back, a shared link).
+ *   The search box keeps a local draft so typing never waits on a URL round-trip; the
+ *   draft reaches the URL after a short pause (SEARCH_DEBOUNCE_MS), and the box follows
+ *   the URL when it changes from outside (Back, a shared link).
  */
 export function ChartOfAccountsToolbarSlot() {
   const ui = useUI();
@@ -30,8 +33,17 @@ export function ChartOfAccountsToolbarSlot() {
   const hasExpandedFolder = useChartOfAccountsTree(selectHasExpandedFolder);
   const filtering = query.trim() !== '' || accountType !== null;
 
+  // The box updates on every key; the URL — and with it the re-filter of the whole tree
+  // (600+ accounts on a real chart) — only once typing pauses.
   const [draft, setDraft] = useState(query);
+  const searchTimerRef = useRef(null);
   useEffect(() => { setDraft(query); }, [query]);
+  useEffect(() => () => clearTimeout(searchTimerRef.current), []);
+  const handleSearchChange = (text) => {
+    setDraft(text);
+    clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
+  };
 
   // "Todos los tipos de cuenta" first, then the six types by translated label (A→Z).
   const typeCodes = useMemo(
@@ -67,10 +79,7 @@ export function ChartOfAccountsToolbarSlot() {
         <input
           type="search"
           value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setQuery(e.target.value);
-          }}
+          onChange={(e) => handleSearchChange(e.target.value)}
           placeholder={ui('search')}
           aria-label={ui('search')}
           className="min-w-0 flex-1 bg-transparent text-foreground placeholder:text-text-secondary focus:outline-none"

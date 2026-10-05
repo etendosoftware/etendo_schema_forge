@@ -386,6 +386,7 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
               expanded={isExpanded}
               orientation="horizontal"
               stopPropagation
+              className="shrink-0"
               onToggle={() => onToggle(item.id)}
               iconTestId={`account-tree-toggle-icon-${item.id}`}
               data-testid={`account-tree-toggle-${item.id}`} />
