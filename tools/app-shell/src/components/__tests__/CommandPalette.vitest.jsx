@@ -460,6 +460,18 @@ describe('CommandPalette', () => {
     expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
   });
 
+  it('closes only the picker, not the palette, on Escape inside the picker', async () => {
+    render(<CommandPalette />);
+    openPalette();
+    fireEvent.click(await screen.findByTestId('vector-search-target-picker-trigger'));
+    const option = (await screen.findAllByTestId('vector-search-target-option'))[0];
+
+    fireEvent.keyDown(option, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByTestId('vector-search-target-picker')).not.toBeInTheDocument());
+    expect(screen.getByTestId('cmd-dialog')).toBeInTheDocument();
+  });
+
   it('returns the keep-open decision to the top-bar keyboard bridge', () => {
     function KeyboardBridge() {
       const { open, setOpen, handleKeyDown, registerKeyboardHandler } = useGlobalSearch();

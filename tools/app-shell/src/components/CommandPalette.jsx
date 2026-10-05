@@ -179,7 +179,9 @@ export function CommandPalette() {
 
   useEffect(() => {
     const down = (e) => {
-      if (e.key === 'Escape' && openRef.current) {
+      // A nested layer (the window-filter picker) that handled Escape marks it defaultPrevented:
+      // that Escape closes the layer only, not the palette.
+      if (e.key === 'Escape' && openRef.current && !e.defaultPrevented) {
         e.preventDefault();
         setOpen(false);
         return;
