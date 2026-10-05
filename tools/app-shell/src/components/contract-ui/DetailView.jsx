@@ -3435,8 +3435,7 @@ export function DetailView({
                                 apiBaseUrl={apiBaseUrl}
                                 onRefresh={() => {
                                   hook.invalidateEntityCache?.();
-                                  hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                  hook.fetchById?.(data?.id || recordId, { force: true });
+                                  hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                 }}
                                 onSave={handleImportClick}
                                 forceOpen={forceOpenImport}
@@ -3641,8 +3640,7 @@ export function DetailView({
                                         apiBaseUrl={apiBaseUrl}
                                         onRefresh={() => {
                                           hook.invalidateEntityCache?.();
-                                          hook.fetchChildren?.(data?.id || recordId, { force: true });
-                                          hook.fetchById?.(data?.id || recordId, { force: true });
+                                          hook.fetchById?.(data?.id || recordId, { force: true }); // forced: re-reads the lines too
                                         }}
                                         onSave={handleImportClick}
                                         forceOpen={forceOpenImport}

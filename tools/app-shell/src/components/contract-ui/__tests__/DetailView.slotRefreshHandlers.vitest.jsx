@@ -7,7 +7,7 @@
  *
  * Covered surfaces (DetailView.jsx):
  *   - headerExtra slotProps.onRefresh / onRefreshChildren / onSave (~4011-4026)
- *   - LinesEmptyState onRefresh (~4221-4224)
+ *   - LinesEmptyState onRefresh (one forced fetchById; it re-reads the lines, ETP-5602)
  *   - justSaved fast-path: force-fetch children + one-shot state clear (~2989-3005)
  *
  * Harness mirrors DetailView.neoActionMenu.vitest.jsx, but useLocation/useNavigate
@@ -274,7 +274,7 @@ describe('DetailView — topbar slot refresh (ETP-4563)', () => {
 describe('DetailView — LinesEmptyState onRefresh (ETP-4563)', () => {
   beforeEach(resetState);
 
-  it('force-refetches children and header when the empty-state refresh fires', async () => {
+  it('force-refetches the header, which re-reads the lines once, when the empty-state refresh fires', async () => {
     mockHook.children = [];
     const LinesEmptyState = ({ onRefresh }) => {
       useEffect(() => { onRefresh(); }, [onRefresh]);
@@ -283,15 +283,15 @@ describe('DetailView — LinesEmptyState onRefresh (ETP-4563)', () => {
     renderDetailView({ linesEmptyState: LinesEmptyState });
 
     await screen.findByTestId('lines-empty-state');
-    await waitFor(() => expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true }));
-    expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    await waitFor(() => expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true }));
+    expect(mockHook.fetchChildren).not.toHaveBeenCalledWith('123', { force: true });
   });
 });
 
 describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => {
   beforeEach(resetState);
 
-  it('force-refreshes children and header after a detail extra action', async () => {
+  it('force-refreshes the header (and so the lines) after a detail extra action', async () => {
     const user = userEvent.setup();
     const DetailExtraActions = ({ onRefresh }) => (
       <button data-testid="detail-extra-refresh" onClick={onRefresh}>refresh</button>
@@ -303,10 +303,11 @@ describe('DetailView — remaining mutation refresh surfaces (ETP-4563)', () => 
       addLineFields: { entry: [{ key: 'quantity', type: 'number' }], derived: [] },
     });
 
+    mockHook.fetchChildren.mockClear();
     await user.click(screen.getByTestId('detail-extra-refresh'));
 
-    expect(mockHook.fetchChildren).toHaveBeenCalledWith('123', { force: true });
     expect(mockHook.fetchById).toHaveBeenCalledWith('123', { force: true });
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
   });
 
   it('force-refreshes the header (and so the lines) from a custom lines tab', async () => {
@@ -596,7 +597,8 @@ describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () =
     clearRefreshSpies();
     await user.click(await screen.findByTestId('empty-state-refresh'));
 
-    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
   });
 
   it('importing lines from the add-line menu must not leave a stale row in the grid', async () => {
@@ -614,7 +616,8 @@ describe('DetailView — stale grid rows after a form mutation (ETP-5378)', () =
     clearRefreshSpies();
     await user.click(screen.getByTestId('detail-extra-refresh'));
 
-    expectInvalidatedBeforeRefetch(mockHook.fetchChildren, mockHook.fetchById);
+    expectInvalidatedBeforeRefetch(mockHook.fetchById);
+    expect(mockHook.fetchChildren).not.toHaveBeenCalled();
   });
 
   it('a custom lines panel refresh must not leave a stale row in the grid', async () => {
