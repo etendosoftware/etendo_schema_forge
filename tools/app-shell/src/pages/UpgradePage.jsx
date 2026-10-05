@@ -22,7 +22,7 @@ import {
   UPGRADE_ERROR_CODES,
 } from '@/lib/upgrade/api.js';
 import { ENVIRONMENT_LIST_REFRESH_EVENT, useEnvironmentSwitch } from '@/hooks/useEnvironmentSwitch.js';
-import { isProductiveEnvironment } from '@/lib/environmentPresentation.js';
+import { isProductiveEnvironment, isPurchaseSourceDemo } from '@/lib/environmentPresentation.js';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { minorUnitsToAmount } from '@/lib/upgrade/currency.js';
 
@@ -64,6 +64,14 @@ const PENDING_CHECKOUT_STARTED_AT = 'sf_pending_checkout_started_at';
 const PENDING_CHECKOUT_DATA_TRANSFER = 'sf_pending_checkout_data_transfer';
 const DEFAULT_DATA_TRANSFER = { products: true, contacts: true };
 const PAYMENT_CONFIRMED_PURCHASE_STATUSES = new Set(['PAID', 'PROVISIONING', 'PROVISIONED']);
+const RECOVERABLE_PROVISIONING_STATUSES = new Set(['provisioning_failed', 'stalled']);
+/**
+ * Localized cause of a failed paid provisioning, keyed by the backend's stable `failureCode`.
+ * The status endpoint never returns the raw cause; an unknown code falls back to the generic text.
+ */
+const RECOVERY_ERROR_KEYS = {
+  CLIENT_NAME_IN_USE: 'upgradeProvisioningFailedNameInUse',
+};
 
 /** Checkout funnel telemetry — see docs/paid-tenant-infrastructure.md §3.6. */
 function emitUpgradeEvent(eventDefinition, properties) {
@@ -210,6 +218,8 @@ async function resumeCheckoutProvisioning({
   onPendingProvisioning,
   onDataTransfer,
   onTransferWarning,
+  onRecovery,
+  onExistingProvisioning,
   onReady,
 }) {
   const purchase = await getBillingPurchase(baseUrl, requestId);
@@ -218,6 +228,21 @@ async function resumeCheckoutProvisioning({
   onTenantName(tenantName);
 
   const status = await waitForCheckoutPayment({ baseUrl, requestId });
+  if (RECOVERABLE_PROVISIONING_STATUSES.has(status.status)) {
+    onRecovery({ purchaseId: requestId, clientName: tenantName, retryAllowed: status.retryAllowed,
+      failureCode: status.failureCode });
+    return;
+  }
+  if (status.status === 'provisioning' || status.status === 'provisioned') {
+    if (isCancelled()) return;
+    storage.removeItem(PENDING_CHECKOUT_NAME);
+    storage.removeItem(PENDING_CHECKOUT_ACTION);
+    storage.removeItem(PENDING_CHECKOUT_STARTED_AT);
+    storage.removeItem(PENDING_CHECKOUT_DATA_TRANSFER);
+    window.history.replaceState({}, '', '/upgrade');
+    onExistingProvisioning(purchase);
+    return;
+  }
   if (status.status !== 'paid') throw new Error('Checkout payment is not confirmed');
 
   // A purchase without a persisted demo source (productive origin) never carries a transfer.
@@ -601,6 +626,7 @@ export default function UpgradePage() {
   const [entering, setEntering] = useState(false);
   const [enterError, setEnterError] = useState(false);
   const [pendingProvisioning, setPendingProvisioning] = useState(null);
+  const [recoveryPurchase, setRecoveryPurchase] = useState(null);
   const [dataTransfer, setDataTransfer] = useState(DEFAULT_DATA_TRANSFER);
   const [dataTransferChosen, setDataTransferChosen] = useState(false);
   const [transferWarning, setTransferWarning] = useState(false);
@@ -662,6 +688,25 @@ export default function UpgradePage() {
       });
     } catch (error) {
       setEntering(false);
+      setPendingProvisioning(null);
+      try {
+        const status = await getCheckoutStatus(getUpgradeBaseUrl(), pendingProvisioning.paymentToken);
+        if (RECOVERABLE_PROVISIONING_STATUSES.has(status.status)) {
+          setRecoveryPurchase({
+            purchaseId: pendingProvisioning.paymentToken,
+            clientName: status.clientName || pendingProvisioning.clientName,
+            retryAllowed: status.retryAllowed,
+            failureCode: status.failureCode,
+          });
+          setPhase('recovery');
+          emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
+            errorCode: error?.code || 'generic',
+          });
+          return;
+        }
+      } catch {
+        // The purchase remains durable; the account billing activity can restore it later.
+      }
       setFormError(error?.code || 'upgradeCheckoutCreationFailed');
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
         errorCode: error?.code || 'generic',
@@ -697,6 +742,7 @@ export default function UpgradePage() {
     setProvisioningPurchaseId(purchase.purchaseId);
     setForm(previous => ({ ...previous, tenantName: purchase.clientName, upgradeAction: 'create-productive' }));
     setFormError(null);
+    setRecoveryPurchase(null);
     setPhase('running');
     setPendingProvisioning({
       clientName: purchase.clientName,
@@ -729,32 +775,25 @@ export default function UpgradePage() {
           setPhase(environmentIsListed ? 'success' : 'syncing-environment');
           return;
         }
-        if (current?.status === 'PAID') {
+        const status = await getCheckoutStatus(getUpgradeBaseUrl(), purchase.purchaseId);
+        if (RECOVERABLE_PROVISIONING_STATUSES.has(status.status)) {
+          setRecoveryPurchase({ purchaseId: purchase.purchaseId, clientName: purchase.clientName,
+            retryAllowed: status.retryAllowed, failureCode: status.failureCode });
+          setPhase('recovery');
+          return;
+        }
+        if (status.status === 'paid' && current?.status === 'PAID') {
           await resumePaidPurchase(current);
           return;
         }
-        if (current?.status !== 'PROVISIONING') break;
       } catch {
         // Keep polling; the purchase remains durable and another request can recover it.
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    // Only a purchase with a persisted demo source carries a transfer; the recorded selection
-    // stays authoritative over the local choice.
-    const hasPersistedDemoSource = Boolean(String(purchase?.demoClientId ?? '').trim());
-    const selectedTransfer = hasPersistedDemoSource
-      ? purchaseDataTransfer(purchase, dataTransferChosen ? dataTransfer : null)
-      : null;
-    setTransferWarning(hasPersistedDemoSource && isMissingRecordedSelection(purchase));
-    setPendingProvisioning({
-      clientName: purchase.clientName,
-      paymentToken: purchase.purchaseId,
-      upgradeAction: 'create-productive',
-      language: getStoredLocale(),
-      ...(selectedTransfer ? { dataTransfer: selectedTransfer } : {}),
-    });
-    setFormError(null);
-    setPhase('running');
+    // The lease can outlive this bounded browser poll. Let the user check again rather than
+    // submitting a concurrent onboarding request while another worker still owns the claim.
+    setPhase('waiting-provisioning');
   };
 
   const retryEnvironmentSync = async () => {
@@ -774,6 +813,19 @@ export default function UpgradePage() {
     if (ready) setPhase('success');
   };
 
+  const retryPaidProvisioning = async () => {
+    if (!recoveryPurchase?.purchaseId || recoveryPurchase.retryAllowed !== true) return;
+    setResumingPurchaseId(recoveryPurchase.purchaseId);
+    try {
+      const purchase = await getBillingPurchase(getUpgradeBaseUrl(), recoveryPurchase.purchaseId);
+      await resumePaidPurchase(purchase);
+    } catch {
+      setFormError('upgradeProvisioningRetryUnavailable');
+    } finally {
+      setResumingPurchaseId(null);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     fetchEnvironments(fetch, getUpgradeBaseUrl())
@@ -781,7 +833,7 @@ export default function UpgradePage() {
         if (cancelled) return;
         const nextEnvironments = Array.isArray(list) ? list : [];
         setEnvironments(nextEnvironments);
-        const demos = nextEnvironments.filter(environment => environment.plan !== 'productive');
+        const demos = nextEnvironments.filter(isPurchaseSourceDemo);
         const current = currentClientIdRef.current
           ? nextEnvironments.find(environment => environment.clientId === currentClientIdRef.current)
           : undefined;
@@ -789,8 +841,10 @@ export default function UpgradePage() {
         setSelectedDemoClientId(String(currentDemo?.clientId || ''));
         // Preserve the current environment's name; only use a demo fallback when there is one.
         // The source itself remains an explicit ID choice when the current environment is not a demo.
-        const currentIsProductive = Boolean(current && isProductiveEnvironment(current));
-        const prefillName = currentIsProductive
+        // A productive environment, or a demo that already originated one, starts a clean purchase,
+        // so its name is not carried over.
+        const currentIsNotASource = Boolean(current && !isPurchaseSourceDemo(current));
+        const prefillName = currentIsNotASource
           ? ''
           : current?.clientName || (demos.length === 1 ? demos[0].clientName : '');
         if (prefillName) {
@@ -885,6 +939,16 @@ export default function UpgradePage() {
         setDataTransferChosen(true);
       },
       onTransferWarning: setTransferWarning,
+      onRecovery: purchase => {
+        if (cancelled) return;
+        setRecoveryPurchase(purchase);
+        setPendingProvisioning(null);
+        window.history.replaceState({}, '', '/upgrade');
+        setPhase('recovery');
+      },
+      onExistingProvisioning: purchase => {
+        if (!cancelled) waitForExistingProvisioning(purchase);
+      },
       onReady: () => setPhase('running'),
     }).catch(error => {
       if (cancelled) return;
@@ -949,9 +1013,14 @@ export default function UpgradePage() {
       });
       if (existingPurchaseHandled) return;
       setPhase('form');
-      setFormError(
-        Object.values(UPGRADE_ERROR_CODES).includes(error.code) ? error.code : 'upgradeGenericError'
-      );
+      if (error?.code === UPGRADE_ERROR_CODES.tenantNameInUse) {
+        // Refused before payment: the name belongs to another account, so it is a field error.
+        setErrors({ tenantName: UPGRADE_ERROR_CODES.tenantNameInUse });
+      } else {
+        setFormError(
+          Object.values(UPGRADE_ERROR_CODES).includes(error.code) ? error.code : 'upgradeGenericError'
+        );
+      }
       // No durationMs here: provisioning has not started, only the checkout
       // session request failed, so there is no meaningful interval to report.
       emitUpgradeEvent(OBSERVABILITY_EVENTS.UPGRADE_TENANT_PROVISIONING_FAILED, {
@@ -978,15 +1047,17 @@ export default function UpgradePage() {
     setHighestReachedCheckoutStep(previous => Math.max(previous, stepIndex));
     setCheckoutStep(step);
   };
-  const demoEnvironments = environments.filter(environment => environment.plan !== 'productive');
+  // A demo that already originated a productive environment is not a source any more.
+  const demoEnvironments = environments.filter(isPurchaseSourceDemo);
   // A session that names no current environment is inside none of them: comparing two empty IDs
   // would otherwise adopt any listed environment without an ID as the purchase origin.
   const currentEnvironment = currentClientId
     ? environments.find(environment => String(environment?.clientId ?? '') === String(currentClientId))
     : undefined;
   // Only a verified demo origin can provide a data-transfer source. Productive-origin
-  // purchases create an independent environment, even when the account owns other demos.
-  const isDemoOrigin = Boolean(currentEnvironment && !isProductiveEnvironment(currentEnvironment));
+  // purchases create an independent environment, even when the account owns other demos, and
+  // so do purchases from a demo that already originated one (ETP-5548).
+  const isDemoOrigin = isPurchaseSourceDemo(currentEnvironment);
   const includeDataTransfer = isDemoOrigin;
   const offerIntervalLabel = ({ day: 'upgradeBillingIntervalDay', week: 'upgradeBillingIntervalWeek', month: 'upgradeBillingIntervalMonth', year: 'upgradeBillingIntervalYear' })[billingOffer?.interval];
   const offerPrice = formatOfferAmount(billingOffer);
@@ -1022,13 +1093,11 @@ export default function UpgradePage() {
       return;
     }
 
-    // AD_Client.name is globally unique, and the backend treats a name matching a tenant this
-    // account already owns as "resume that tenant" (EtendoGoJwtServlet.isResumingOwnedTenant),
-    // not "create a new one" — the user would pay and land back in the SAME environment. A
-    // match against the account's DEMO environment is allowed: that is the demo-to-pro
-    // conversion path, not a collision.
-    // TODO: this guard exists only because AD_Client.name is globally unique today. If that
-    // constraint is ever lifted, revisit whether a name match should still block the request.
+    // Product rule (ETP-5548): an account never has two productive environments with the same
+    // name — telling them apart would be left to the user. The backend refuses it too, before
+    // checkout (409 CLIENT_NAME_IN_USE); this check only saves the round trip. The demo's name,
+    // or another account's, is free to reuse: the purchase always creates a new productive
+    // environment and never converts the demo.
     const normalizedName = tenantName.toLowerCase();
     const takenByOwnedProductiveEnvironment = environments.some(environment => (
       isProductiveEnvironment(environment)
@@ -1141,6 +1210,48 @@ export default function UpgradePage() {
           data-testid="AddonsStep__58bad7" />
       )}
       {phase === 'running' && <ProgressPanel steps={steps} ui={ui} data-testid="ProgressPanel__58bad7" />}
+      {phase === 'waiting-provisioning' && (
+        <Card data-testid="upgrade-provisioning-waiting">
+          <CardContent className="space-y-3 py-6" data-testid="upgrade-provisioning-waiting-content">
+            <p className="font-semibold">{ui('upgradeProvisioningWaitingTitle')}</p>
+            <p className="text-sm text-muted-foreground">{ui('upgradeProvisioningWaitingBody')}</p>
+            <Button type="button" onClick={() => {
+              if (provisioningPurchaseId) waitForExistingProvisioning({
+                purchaseId: provisioningPurchaseId,
+                clientName: form.tenantName,
+              });
+            }} data-testid="upgrade-provisioning-check-again">
+              {ui('upgradeProvisioningCheckAgain')}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {phase === 'recovery' && recoveryPurchase && (
+        <Card data-testid="upgrade-provisioning-recovery">
+          <CardHeader data-testid="upgrade-provisioning-recovery-header">
+            <CardTitle className="text-base" data-testid="upgrade-provisioning-recovery-title">{ui('upgradeProvisioningRecoveryTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4" data-testid="upgrade-provisioning-recovery-content">
+            <p className="text-sm text-muted-foreground" data-testid="upgrade-provisioning-recovery-body">
+              {ui(recoveryPurchase.retryAllowed === true
+                ? 'upgradeProvisioningRecoveryBody'
+                : 'upgradeProvisioningRecoveryNoRetryBody')}
+            </p>
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive"
+              data-testid="upgrade-error">
+              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" data-testid="upgrade-provisioning-recovery-error-icon" />
+              <span>{ui(formError || RECOVERY_ERROR_KEYS[recoveryPurchase.failureCode]
+                || 'upgradeProvisioningRecoveryError')}</span>
+            </div>
+            {recoveryPurchase.retryAllowed === true && (
+              <Button type="button" onClick={retryPaidProvisioning} disabled={Boolean(resumingPurchaseId)}
+                data-testid="upgrade-provisioning-retry">
+                {resumingPurchaseId ? <Loader2 className="h-4 w-4 animate-spin" data-testid="upgrade-provisioning-retry-spinner" /> : ui('upgradeProvisioningRetry')}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
       {phase === 'syncing-environment' && (
         <Card data-testid="upgrade-environment-sync-pending" aria-busy={environmentSyncPending}>
           <CardContent className="space-y-3 py-6" data-testid="CardContent__58bad7">

@@ -116,6 +116,7 @@ export default function AttachmentsTab({
 
   const {
     items,
+    count,
     loading,
     uploadingFiles,
     upload,
@@ -131,6 +132,8 @@ export default function AttachmentsTab({
     apiBaseUrl,
     isActive,
     config: effectiveConfig,
+    // ETP-5526: only a tab that reports a badge pays for the count request.
+    prefetchCount: Boolean(onCountChange),
   });
 
   const [deletingAttachment, setDeletingAttachment] = useState(null);
@@ -139,9 +142,15 @@ export default function AttachmentsTab({
 
   const onCountChangeRef = useRef(onCountChange);
   useEffect(() => { onCountChangeRef.current = onCountChange; });
+  // ETP-5526: report the real count as soon as the record opens — the hook
+  // fetches it from the lightweight count endpoint while the full list stays
+  // lazy (ETP-4564), and switches to the list length once the list is read.
+  // `null` when it is still unknown or cannot be fetched (e.g. an older
+  // backend without the endpoint): the badge then shows no number, never a
+  // fake 0 that reads as "the file was lost".
   useEffect(() => {
-    if (!loading) onCountChangeRef.current?.(items.length);
-  }, [items.length, loading]);
+    if (!loading) onCountChangeRef.current?.(count);
+  }, [count, loading]);
 
   const uploadToNewRecord = useCallback(async (file) => {
     if (!onSaveHeader) return;

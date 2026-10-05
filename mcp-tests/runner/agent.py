@@ -39,6 +39,30 @@ PROMPT_VERSION = 4
 DEFAULT_MAX_RESULT_CHARS = 20000
 
 
+#: How many times one model turn may come back EMPTY — no text, no tool call —
+#: before the probe is given up as a provider failure. Seen on the Gemini route
+#: of the gateway (2026-10-01): with 28 tools bound, 4 first turns out of 5 came
+#: back as an empty `stop`. LangGraph reads that as "the agent is done", so the
+#: probe ended with 0 tool calls and a verdict saying no tools were provided —
+#: a provider fault reported as a product result. An empty turn carries no
+#: decision, so asking again from the same state is not a retry of anything
+#: the agent chose; it is the call that never answered.
+MAX_EMPTY_COMPLETIONS = 3
+
+
+class EmptyCompletion(RuntimeError):
+    """The model kept answering with nothing at all (see MAX_EMPTY_COMPLETIONS)."""
+
+
+def is_empty_completion(message: Any) -> bool:
+    """An AI turn with neither text nor tool calls: the model said nothing."""
+    if message.__class__.__name__ not in ("AIMessage", "AIMessageChunk"):
+        return False
+    if getattr(message, "tool_calls", None):
+        return False
+    return not _result_text(getattr(message, "content", None)).strip()
+
+
 class ProbeAborted(Exception):
     """A probe died before it could produce a verdict, but left evidence.
 
@@ -236,6 +260,7 @@ async def run_probe(
     # tool node, hence the doubling, and +1 for the final model answer.
     messages: list[Any] = []
     exhausted = False
+    empty_completions = 0
 
     def record(**extra: Any) -> dict[str, Any]:
         """The objective half of the result, always buildable from `messages`."""
@@ -245,6 +270,9 @@ async def run_probe(
             "toolCallCount": len(tool_calls),
             "toolCalls": tool_calls,
             "exhausted": exhausted,
+            # Model turns that came back empty and were asked again from the
+            # same state. Non-zero is worth knowing: it is provider noise.
+            "emptyCompletions": empty_completions,
             **extra,
         }
 
@@ -290,28 +318,50 @@ async def run_probe(
                 )
         emitted = len(messages)
 
-    try:
-        async for state in agent.astream(
-            {"messages": [("user", prompt)]},
-            config={"recursion_limit": max_steps * 2 + 1},
-            stream_mode="values",
-        ):
-            messages = state["messages"]
-            # Never let a failing event sink break the measurement.
-            try:
-                drain()
-            except Exception:  # noqa: BLE001
-                on_event = None
-    except GraphRecursionError:
-        # A probe that spirals is a FINDING, not a harness error (design §5):
-        # it still gets a verdict, reported over the transcript it did produce.
-        exhausted = True
-    except Exception as exc:  # noqa: BLE001
-        # Anything else — a provider 400 mid-loop, a 401, a timeout — is a
-        # harness/provider failure with no verdict to report. `Exception`, not
-        # `BaseException`: CancelledError and KeyboardInterrupt must still stop
-        # the run. The transcript produced so far is handed to the caller.
-        raise ProbeAborted(exc, record()) from exc
+    inputs: list[Any] = [("user", prompt)]
+    while True:
+        # A resumed stream gets what is left of the step budget, so retrying an
+        # empty turn never buys the agent extra steps.
+        turns = sum(1 for m in inputs if m.__class__.__name__ == "AIMessage")
+        try:
+            async for state in agent.astream(
+                {"messages": inputs},
+                config={"recursion_limit": max(max_steps - turns, 1) * 2 + 1},
+                stream_mode="values",
+            ):
+                messages = state["messages"]
+                # Never let a failing event sink break the measurement.
+                try:
+                    drain()
+                except Exception:  # noqa: BLE001
+                    on_event = None
+        except GraphRecursionError:
+            # A probe that spirals is a FINDING, not a harness error (design §5):
+            # it still gets a verdict, reported over the transcript it did produce.
+            exhausted = True
+        except Exception as exc:  # noqa: BLE001
+            # Anything else — a provider 400 mid-loop, a 401, a timeout — is a
+            # harness/provider failure with no verdict to report. `Exception`, not
+            # `BaseException`: CancelledError and KeyboardInterrupt must still stop
+            # the run. The transcript produced so far is handed to the caller.
+            raise ProbeAborted(exc, record()) from exc
+
+        if exhausted or not messages or not is_empty_completion(messages[-1]):
+            break
+        empty_completions += 1
+        if empty_completions > MAX_EMPTY_COMPLETIONS:
+            messages = messages[:-1]
+            raise ProbeAborted(
+                EmptyCompletion(
+                    f"the model answered {empty_completions} times with an empty turn "
+                    f"(no text, no tool call); nothing was measured"
+                ),
+                record(),
+            )
+        # Ask again from the state the empty turn answered, without it.
+        inputs = messages[:-1]
+        messages = list(inputs)
+        emitted = len(inputs)
 
     # method="function_calling" on purpose. OpenAI's strict structured-output
     # mode rejects `failures[].payload`, which is a free-form object by design
