@@ -79,6 +79,21 @@
 .fm-page--freeflow .fm-tabs { border-bottom: none; margin-bottom: 0; }
 .fm-tabs-sticky { position: sticky; top: 0; z-index: 20; background: var(--fm-bg-card, hsl(var(--card))); }
 
+/* ─── ETP-5584 detail page — fixed header + scrolling body ───────────
+   `.fm-page--detail` (303/349 detail) is a non-scrolling flex column: the header (title +
+   action bar, `FmDetailHeader`) never scrolls, and `.fm-detail-scroll` is the ONE scrolling
+   ancestor of everything below it (banners, KPIs, tabs, tab content). The sticky tabs bar,
+   303's section nav and 349's filter row / totals keep their `top` offsets (0 / 49 / 97)
+   because they are now measured against `.fm-detail-scroll`, which starts under the header. */
+.fm-detail-header { flex-shrink: 0; background: hsl(var(--card)); padding: 12px 20px 8px; display: flex; flex-direction: column; gap: 12px; }
+.fm-detail-title__row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fm-detail-title__text { font: 600 20px/28px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fm-detail-title__breadcrumb { font: 400 12px/16px var(--fm-font-sans, system-ui); color: hsl(var(--text-disabled)); margin-top: 2px; }
+.fm-detail-actionbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.fm-detail-actionbar__group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fm-detail-actionbar__group:empty { display: none; }
+.fm-detail-scroll { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+
 /* ─── Toolbar ──────────────────────────────────────────────────────── */
 .fm-toolbar {
   padding: 8px 16px;
@@ -1420,8 +1435,9 @@
 .fm-aeat-ident-inline-field__select--compact { min-width: 0; width: 280px; }
 .fm-aeat-ident-inline-field__input { background: hsl(var(--card)); border: 1px solid hsl(var(--border-control)); border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); box-shadow: 0px 1px 2px hsl(var(--foreground) / 0.05); outline: none; }
 .fm-aeat-ident-inline-field__input:focus { border-color: hsl(var(--focus-ring)); box-shadow: 0 0 0 2px hsl(var(--focus-ring) / 0.15); }
-.fm-aeat-ident-inline-field__select { background: var(--fm-bg-subtle); border: 1px solid hsl(var(--border-control)); border-radius: 6px; padding: 5px 10px; font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); box-shadow: 0px 1px 2px hsl(var(--foreground) / 0.05); outline: none; min-width: 240px; cursor: pointer; }
-.fm-aeat-ident-inline-field__select:focus { border-color: hsl(var(--focus-ring)); box-shadow: 0 0 0 2px hsl(var(--focus-ring) / 0.15); }
+/* ETP-5584 — the trigger is the app's SelectTrigger (border, height, padding, focus ring come
+   from it); this class only sizes it inside the identification rows. */
+.fm-aeat-ident-inline-field__select { width: auto; min-width: 240px; color: hsl(var(--foreground)); background: hsl(var(--card)); }
 
 /* ── Spin animation for loading states ─────────────────────────────── */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -1439,7 +1455,10 @@
 .fm-aeat-section--divided { border-top: 1px solid hsl(var(--border-subtle)); margin-top: 8px; padding-top: 24px; }
 
 /* ── Sub-section heading (criterio de caja, etc.) ───────────────────── */
-.fm-aeat-subheading { font: 700 18px/28px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); padding: 16px 0 8px; }
+/* ETP-5584 — a heading row is a long AEAT sentence ("Exclusivamente para aquellos sujetos
+   pasivos…"), so it uses the label typography of the column headers below it (600 14/20),
+   not a section-title size. */
+.fm-aeat-subheading { font: 600 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); padding: 16px 0 8px; }
 .fm-aeat-subheading--sep { border-top: 1px solid hsl(var(--border-subtle)); margin-top: 8px; padding-top: 16px; }
 
 /* ── Bicolumn layout (resultado info boxes) ─────────────────────────── */
@@ -1462,11 +1481,19 @@
 .fm-aeat-terrbox__unit { font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--muted-foreground)); }
 
 /* ── Compact casilla cells (liquidación sections) ───────────────────── */
-.fm-aeat-section--compact .fm-aeat-cell { width: 180px; height: 40px; }
-.fm-aeat-section--compact .fm-aeat-cell--empty { width: 180px; height: 40px; }
+/* ETP-5584 — the compact cell width is one variable so the label column can keep its room on
+   narrower screens (1280px with the app sidebar open): the cells shrink to 150px instead of the
+   row labels wrapping onto 3 lines, and the group bracket follows the same variable. */
+.fm-aeat-section--compact { --fm-aeat-cell-w: 180px; }
+@media (max-width: 1440px) { .fm-aeat-section--compact { --fm-aeat-cell-w: 150px; } }
+.fm-aeat-section--compact .fm-aeat-cell { width: var(--fm-aeat-cell-w); height: 40px; }
+.fm-aeat-section--compact .fm-aeat-cell--empty { width: var(--fm-aeat-cell-w); height: 40px; }
 .fm-aeat-section--compact .fm-aeat-cell__value { line-height: 40px; }
-.fm-aeat-section--compact .fm-aeat-col-headers__cell { width: 180px; }
-.fm-aeat-section--compact .fm-aeat-group-bracket::before { right: 568px; } /* 3×180 − same gap offsets = 808−240 */
+.fm-aeat-section--compact .fm-aeat-col-headers__cell { width: var(--fm-aeat-cell-w); }
+/* 3 cells + 2 inner gaps (12×2) + half the label-to-cell gap (4) — 568px at 180px cells */
+.fm-aeat-section--compact .fm-aeat-group-bracket::before { right: calc(3 * var(--fm-aeat-cell-w) + 28px); }
+.fm-aeat-section--compact .fm-aeat-row__label,
+.fm-aeat-section--compact .fm-aeat-col-headers__label { min-width: 200px; }
 
 /* ─── ETP-5584 popups — Registrar/Presentar + Presentación telemática AEAT ───
    Both are `.fm-config-modal`s (standard header / body / footer, 20px gutters).

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUI } from '@/i18n';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Pencil } from 'lucide-react';
 import { getLayout303, matchesVisibility, isFieldRequired } from './fm303Layouts.js';
 import { formatAmount, formatPercent, NEGATIVE_NOT_ALLOWED_BOXES, exceedsTypedIntegerDigits, exceedsTypedDecimalDigits } from '../../fiscalModelsUtils.js';
@@ -191,22 +192,34 @@ export default function FmBoxes303({ boxes, year, period, sectionIds, identifica
     );
   };
 
+  // ETP-5584 — the app's Select (Radix, `@/components/ui/select`) instead of the browser's
+  // native <select>, so these dropdowns look like every other form field of the app. Radix
+  // reserves the empty string for "no value", so an unset field is passed as `undefined` and the
+  // "Seleccionar…" text is rendered as the trigger placeholder (not as an empty option).
   const renderIdentSelectField = (f, compact = false) => (
     <div key={f.id} className="fm-aeat-ident-inline-field">
       <span className="fm-aeat-ident-inline-field__label">
         {t(f.labelKey)}{isFieldRequired(f, identification) && <span className="fm-aeat-required-mark" aria-hidden="true">*</span>}
       </span>
-      <select
-        className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
-        value={identification?.[f.id] ?? ''}
-        onChange={e => onIdentChange?.(f.id, e.target.value)}
+      <Select
+        value={identification?.[f.id] || undefined}
+        onValueChange={value => onIdentChange?.(f.id, value)}
         disabled={readOnly}
       >
-        <option value="">{t('fm.ident.decl.placeholder')}</option>
-        {f.options?.map(opt => (
-          <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
-        ))}
-      </select>
+        <SelectTrigger
+          className={`fm-aeat-ident-inline-field__select${compact ? ' fm-aeat-ident-inline-field__select--compact' : ''}`}
+          aria-label={t(f.labelKey)}
+          data-field-id={f.id}
+          data-testid="FmBoxes303__identSelect"
+        >
+          <SelectValue placeholder={t('fm.ident.decl.placeholder')} data-testid="SelectValue__49d327" />
+        </SelectTrigger>
+        <SelectContent data-testid="SelectContent__49d327">
+          {f.options?.map(opt => (
+            <SelectItem key={opt.value} value={opt.value} data-option-value={opt.value} data-testid="SelectItem__49d327">{t(opt.labelKey)}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
 // Vitest component tests for FmBoxes303.jsx
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
@@ -6,6 +7,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', () => ({
   TrendingUp: () => null,
   TrendingDown: () => null,

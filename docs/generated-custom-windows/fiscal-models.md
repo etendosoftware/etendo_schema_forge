@@ -449,6 +449,13 @@ badge text is identical for `submitted` and `submitted_ack`; only the `submissio
 (when present) still tells them apart. The now-orphaned `fm.status.submitted_ack` locale key was
 removed from `en_US.json`, `es_ES.json`, and `es_AR.json`.
 
+**Update (ETP-5584): now in 2 places, not 4.** The list chip (`StatusText`, formerly local to
+`FmListPage.jsx`) moved to `FmDetailChrome.jsx` as `FmStatusChip`, which exports `statusLabelKey`
+and is now rendered by the list's "Estado" column AND both detail action bars — so the local copies
+in `FmListPage.jsx`, `FmModel303Page.jsx` and `FmModel349Page.jsx` are gone. The remaining second
+copy is `FmCommon.jsx`'s (unused-by-pages) `StatusPill`. The paragraph below describes the
+pre-ETP-5584 state.
+
 **Duplicated, deliberately, in 4 places** — `FmListPage.jsx`, `FmCommon.jsx`, `FmModel303Page.jsx`,
 `FmModel349Page.jsx` — rather than exported once from `fiscalModelsUtils.js`. Adding it there would
 be the natural fix, but ~13 existing tests mock `fiscalModelsUtils.js` without expecting a new named
@@ -520,7 +527,18 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 
 ### Action bar
 
-Left to right: **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+**Current layout (ETP-5584) — supersedes the button ORDER described in the rest of this section.**
+The action bar follows the generic `DetailView` toolbar split. **Left:** Cancelar, the status chip,
+Calcular, Generar fichero 303. **Right:** Guardar, then the primary **Registrar/Presentar**.
+Guardar therefore sits right before the primary action, which is `saveActions.jsx`'s
+Save-before-Confirm order. Every button except Cancelar is still hidden once submitted. All buttons
+render through `FmDetailButton` (`FmDetailChrome.jsx`). It wraps the app's `Button` at the
+`DetailCancelButton` size: `h-10 px-3 rounded-lg`, with a border-control outline, or the filled
+variant for the primary. The status chip is the list's own chip (`FmStatusChip`): the bare status,
+with no "Estado:" prefix. See "Detail page header, action bar and 1280×720 layout (ETP-5584)" below.
+The handlers, gates and data-safety behaviour described in the rest of this section are unchanged.
+
+Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 **Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -898,6 +916,19 @@ value. Flagged as a follow-up, not fixed here.
 ### Identification section (`tipo_declaracion` + bank data)
 
 The top of the Boxes tab shows the declaration type selector and, conditionally, the bank data section (`datos_bancarios`).
+
+**App Select, not the browser's `<select>` (ETP-5584).** Every `type: 'select'` identification
+field is rendered by `renderIdentSelectField` in `FmBoxes303.jsx`. That covers `tipo_declaracion`,
+`motivo_rectificacion` and the bank SEPA mark. All of them use the app's Radix `Select`
+(`@/components/ui/select`). The trigger keeps the `fm-aeat-ident-inline-field__select(--compact)`
+classes, which only size it now: border, height, padding and focus ring come from `SelectTrigger`.
+It also carries `data-testid="FmBoxes303__identSelect"` and `data-field-id`. Each option carries
+`data-option-value`. Radix reserves `''` for "no value", so an unset field is passed as `undefined`
+and `fm.ident.decl.placeholder` is the trigger placeholder. Tests drive it in two ways:
+- **Vitest:** mock the module with `__tests__/testUtils/nativeSelectMock.jsx`, which renders a
+  native `<select>`, so `fireEvent.change` still works.
+- **Playwright:** open the trigger and click `[role="option"][data-option-value="X"]`. See
+  `pickTipoDeclaracion` in `fiscal-models-303-identification.mocked.spec.js`.
 
 **`tipo_declaracion` options:** `C` (Compensación), `D` (Devolución), `I` (Ingreso), `U` (Domiciliación), `N` (Resultado cero), `V` (Devolución cta. corriente), `X` (Devolución transferencia extranjero).
 
@@ -1929,6 +1960,41 @@ a boundary-legal value round-trips exactly), and two updated cases in `FmBoxes30
 ("percent cell input attributes" describe block) covering the new amount-cell decimal hard-stop
 and its digit-by-digit vs. one-shot-paste distinction.
 
+### Detail page header, action bar and 1280×720 layout (ETP-5584)
+
+Applies to both detail pages (303 and 349). The shared pieces live in `FmDetailChrome.jsx`:
+`FmDetailHeader`, `FmDetailActionBar`, `FmDetailButton` and `FmStatusChip`.
+
+`FmDetailChrome.jsx` is a separate module, not part of `FmCommon.jsx`, on purpose. About 45 page
+tests mock `FmCommon.jsx` with an explicit export list, and any new `FmCommon` export would have to
+be added to every one of those mocks before the pages render at all.
+
+- **The title and the action bar never scroll away.** The page root is `.fm-page.fm-page--detail`,
+  a non-scrolling flex column. It holds two children:
+  - `FmDetailHeader` (`.fm-detail-header`): the title, the breadcrumb and the action bar. It sits
+    outside the scroll and is always visible.
+  - `.fm-page--freeflow.fm-detail-scroll`: the one scrolling element. It holds the banners, the
+    KPIs, the tabs and the tab content.
+
+  The KPI cards scroll away, and the tabs bar sticks right under the header. Before this change,
+  `.fm-page` itself scrolled, so the title and buttons were lost as soon as the user scrolled.
+  Because `.fm-detail-scroll` starts under the header, the existing sticky offsets keep working
+  unchanged: `.fm-tabs-sticky` `top: 0`, 303's section nav `top: 49`, and 349's filter row `49` and
+  totals `97px`. A future sticky element must be measured against `.fm-detail-scroll`.
+- **1280×720.** The header is about 118px tall. Once the KPIs scroll away, the 303 Liquidación
+  section gets about 480px for its rows, against one visible row before the change. Compact casilla
+  cells (Liquidación, Información adicional, Resultado) take their width from
+  `--fm-aeat-cell-w`: 180px by default, and 150px at viewport widths of 1440px or less. That leaves
+  the row labels room on a 1280px screen with the app sidebar open, so they no longer wrap onto 3
+  lines. Row labels in compact sections keep `min-width: 200px`. The group bracket is positioned
+  from the same variable: `right: calc(3 * var(--fm-aeat-cell-w) + 28px)`.
+- **KPI gutter (303).** The KPI row uses the same 20px side gutter as the header, so the cards line
+  up with the Cancelar and Registrar/Presentar edges. 349's KPI row is left as it was (349.2 is
+  tracked separately).
+- **"Información adicional" heading.** The heading row (`.fm-aeat-subheading`, the "Exclusivamente
+  para aquellos sujetos pasivos…" sentence) now uses the column-header label typography
+  (600 14/20), down from 700 18/28.
+
 ### Sticky sections while scrolling (ETP-5456, layout follow-up)
 
 The 303 and 349 detail pages both use "free-flow" scrolling — `.fm-page--freeflow` makes
@@ -2707,6 +2773,11 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
   `useUI()` does `{param}` substitution only — it has no plural rules.
 
 ### Action bar and kebab menu
+
+**ETP-5584:** the 349 action bar uses the same shared header and button split as 303. **Left:**
+Cancelar, the status chip, Calcular, Generar fichero 349. **Right:** Guardar, Registrar/Presentar.
+See "Detail page header, action bar and 1280×720 layout (ETP-5584)". The title row is unchanged:
+the title format and the kebab position (349.1) are out of that ticket's scope.
 
 The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 

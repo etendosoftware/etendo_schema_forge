@@ -8,6 +8,7 @@ import {
   X, Save,
 } from 'lucide-react';
 import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
@@ -21,13 +22,6 @@ import '../../fiscal-models.css';
 // "Presentación con Acuse de recibo" upload path here — no telematic
 // submission flow (no backend endpoint for it yet).
 const FISCAL_DECL_TABLE = 'ETGO_Fiscal_Decl';
-
-// statusLabelKey (ETP-4755): see FmModel303Page.jsx for the identical helper — the status
-// badge must always read the plain "Presentado" for BOTH `submitted` and `submitted_ack`;
-// HOW it was submitted is shown exclusively via the `submissionMethod` suffix below.
-function statusLabelKey(status) {
-  return status === 'submitted_ack' ? 'submitted' : status;
-}
 
 // ── Constants ────────────────────────────────────────────────────
 const KEY_IDS = ['E', 'S', 'A', 'I'];
@@ -1210,383 +1204,348 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   ];
 
   return (
-    <div className="fm-page fm-page--freeflow">
-      {/* ── Title bar ────────────────────────────────────────────── */}
-      <div style={{
-        padding: '12px 20px',
-        background: 'hsl(var(--card))', flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span className="fm-model-badge fm-model-badge--349">349</span>
-          <span style={{ fontWeight: 600, fontSize: 20, color: 'hsl(var(--foreground))' }}>
-            {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-          </span>
-          <div style={{ flex: 1 }} />
-          <MoreOptionsMenu
-            favKey="fiscal-models"
-            favLabel={ui('fm.breadcrumb.section')}
-            data-testid="MoreOptionsMenu__346dd5" />
+    <div className="fm-page fm-page--detail">
+      {/* ── Sticky header: title + action bar (ETP-5584) ─────────────
+          Rendered outside `.fm-detail-scroll`, so it never scrolls away — see FmDetailChrome.
+          The title row itself (format, kebab position) is unchanged here — 349.1 is tracked
+          separately. */}
+      <FmDetailHeader data-testid="FmDetailHeader__346dd5">
+        <div className="fm-detail-title">
+          <div className="fm-detail-title__row">
+            <span className="fm-model-badge fm-model-badge--349">349</span>
+            <span className="fm-detail-title__text">
+              {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
+            </span>
+            <div style={{ flex: 1 }} />
+            <MoreOptionsMenu
+              favKey="fiscal-models"
+              favLabel={ui('fm.breadcrumb.section')}
+              data-testid="MoreOptionsMenu__346dd5" />
+          </div>
+          <div className="fm-detail-title__breadcrumb">
+            {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
+          </div>
         </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-        </div>
-      </div>
-      {/* ── Action bar ───────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '6px 20px 10px',
-        background: 'hsl(var(--card))', flexShrink: 0,
-      }}>
-        <button className="fm-btn" onClick={onBack}
-          style={{ borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}>
-          {t('fm.action.cancel') ?? 'Cancelar'}
-        </button>
-        <span style={{
-          padding: '4px 8px', borderRadius: 8, fontSize: 14, fontWeight: 400,
-          background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
-        }}>
-          {t('fm.col.status') ?? 'Estado'}: {t(`fm.status.${statusLabelKey(status)}`) ?? status}
-          {/* submissionMethod (ETP-4755) — see FmModel303Page.jsx for the identical pattern.
-              The badge text itself never varies between `submitted` and `submitted_ack`
-              (see `statusLabelKey`) — only this sub-suffix does. */}
-          {submissionMethod && (status === 'submitted' || status === 'submitted_ack') && (
-            <span style={{ opacity: .75 }}> · {t(`fm.present.method.${submissionMethod}`)}</span>
-          )}
-        </span>
-
-        <div style={{ flex: 1 }} />
-
-        {/* ETP-5338 pt.5 — "Guardar", right-aligned leftmost of the primary-action group
-            (matching 303 and `saveActions.jsx`'s Save-before-Confirm convention). See
-            `handleSave`'s own comment above for why this is a deliberate no-op confirmation:
-            349 has no locally-edited declaration data to actually persist. Hidden once
-            submitted, same `!isSubmitted` gate as "Calcular"/"Registrar-Presentar". */}
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={handleSave}
-            disabled={isSavingManualData}
-            title={t('fm.action.save') ?? 'Guardar'}
-            aria-label={t('fm.action.save') ?? 'Guardar'}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14, color: 'hsl(var(--foreground))' }}
-            data-testid="FmModel349Page__save"
-          >
-            {isSavingManualData
-              ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
-              : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
-            {t('fm.action.save') ?? 'Guardar'}
-          </button>
-        )}
-
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={handleCompute}
-            disabled={computing}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
-          >
-            {computing
-              ? <Loader2
-                  size={16}
-                  strokeWidth={1.75}
-                  style={{ animation: 'spin 1s linear infinite' }}
-                  data-testid="Loader2__346dd5" />
-              : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />
-            }
-            {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-          </button>
-        )}
-
-        {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
-            re-generated, matching "Calcular"/"Registrar-Presentar"'s existing `!isSubmitted`
-            gate above. Previously always visible regardless of status (see
-            docs/generated-custom-windows/fiscal-models.md's Modelo 303 "Action bar" note for
-            the ANALOGOUS, still-deliberate 303 behavior — NOT changed here, out of this
-            ticket's scope). */}
-        {!isSubmitted && (
-          <button
-            className="fm-btn"
-            onClick={() => setShowFilegen(true)}
-            disabled={generating}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid hsl(var(--border-control))', boxShadow: '0px 1px 2px hsl(var(--foreground) / 0.05)', padding: '9px 12px', fontSize: 14 }}
-          >
-            <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
-            {t('fm.action.gen349') ?? 'Generar fichero 349'}
-          </button>
-        )}
-
-        {!isSubmitted && (
-          <button
-            className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowPresent(true)}
-          >
-            <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
-            {t('fm.action.present') ?? 'Registrar/Presentar'}
-          </button>
-        )}
-      </div>
-      {/* ── VIES banner ──────────────────────────────────────────── */}
-      <ViesBanner
-        onValidate={handleValidateVies}
-        validating={validatingVies}
-        viesPending={viesPending}
-        dismissed={viesBannerDismissed}
-        onDismiss={() => setViesBannerDismissed(true)}
-        t={t}
-        data-testid="ViesBanner__346dd5" />
-      {/* ── KPI bar ──────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', flexDirection: 'row', alignItems: 'center',
-        gap: 12, padding: '0 8px',
-        height: 84, flexShrink: 0,
-      }}>
-        <KpiWidget
-          icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.operators') ?? 'Operadores'}
-          value={String(operatorCount)}
-          badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--text-disabled))"
-          data-testid="KpiWidget__346dd5" />
-        <KpiWidget
-          icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
-          value={formatAmount(totalBase)}
-          badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
-          badgeBg="hsl(var(--muted))"
-          badgeColor="hsl(var(--text-disabled))"
-          data-testid="KpiWidget__346dd5" />
-        <KpiWidget
-          icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
-          value={String(rectifications)}
-          badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
-          badgeBg="var(--status-warning-bg)"
-          badgeColor="var(--status-warning-fg)"
-          data-testid="KpiWidget__346dd5" />
-        {/* ETP-5027 — informational severity, not an error: the banner right above
-            this bar states the VIES check is "informativa, no bloquea la
-            declaración", so the destructive/red token was overstating it. Uses the
-            SAME --status-info-* pair as that banner. The genuinely-invalid VIES
-            state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
-        <KpiWidget
-          icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
-          iconColor="hsl(var(--text-disabled))"
-          label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
-          value={String(viesPending)}
-          valueColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--foreground))'}
-          badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
-          badgeBg={viesPending > 0 ? 'var(--status-info-bg)' : 'hsl(var(--muted))'}
-          badgeColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'}
-          data-testid="KpiWidget__346dd5" />
-      </div>
-      {/* ── Tabs ─────────────────────────────────────────────────── */}
-      <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
-        <Tabs
-          tabs={TABS}
-          active={activeTab}
-          onSelect={(id) => { setActiveTab(id); if (originFilter && id !== originFilter.tab) setOriginFilter(null); }}
-          data-testid="Tabs__346dd5" />
-      </div>
-      {/* ── Body ─────────────────────────────────────────────────── */}
-      <div className="fm-page__body">
-
-        {activeTab === 'operators' && (
-          <div>
-            {/* Filter + search + new operator row */}
-            {/* ETP-5456 (layout follow-up) — sticky, stacked directly below `.fm-tabs-sticky`
-                (top: 49, see that class's own comment for the 48px-tab-height + 1px-border
-                derivation). Before this it scrolled with the content and ended up peeking out
-                half-hidden under the (already-sticky) tabs bar — this docks it cleanly instead.
-                `marginTop`/`marginBottom` became `paddingTop`/`paddingBottom` on purpose: for a
-                sticky element the offset in `top` is measured from the MARGIN edge, so a margin
-                here would have shifted the actual stick point away from 49px; padding keeps the
-                same visual spacing while keeping the box's own height (and therefore the stick
-                point) predictable. `background` is required — without an opaque background the
-                table rows scrolling underneath would show through this bar once it is pinned.
-                `zIndex: 15` is intentionally below the tabs bar's 20 (they never overlap — this
-                bar docks strictly below the tabs — but keeps the ordering explicit) and above the
-                unset/auto z-index of the scrolling table content below.
-                `.fm-349-totals`'s `top` was bumped from 49 to 97 to dock below BOTH sticky bars —
-                97 = 49 (tabs) + 48 (this bar's own rendered height: 8px paddingTop + 36px content
-                row [`.fm-toolbar__pill` / the search box, both padding 7px 12px + ~20px line
-                content + 1px+1px border = 36px border-box] + 4px paddingBottom). See
-                `.fm-349-totals`'s own comment in fiscal-models.css for the full sticky-stack
-                writeup. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 4, paddingTop: 8, flexWrap: 'wrap', position: 'sticky', top: 49, zIndex: 15, background: 'hsl(var(--card))' }}>
-              <KeyFilterDropdown
-                value={keyFilter}
-                onChange={setKeyFilter}
+        {/* ETP-5584 — same split as 303 and the generic DetailView toolbar: Cancelar, the
+            list's status chip (no "Estado:" prefix) and the secondary actions on the LEFT;
+            Guardar next to the primary action (Registrar/Presentar) on the RIGHT. Every action
+            except Cancelar is hidden once submitted (ETP-5438). */}
+        <FmDetailActionBar
+          left={(
+            <>
+              <FmDetailButton onClick={onBack} data-testid="FmModel349Page__cancel">
+                {t('fm.action.cancel') ?? 'Cancelar'}
+              </FmDetailButton>
+              <FmStatusChip
+                status={status}
+                submissionMethod={submissionMethod}
                 t={t}
-                data-testid="KeyFilterDropdown__346dd5" />
-              {/* ETP-5456 (layout follow-up) — "Sustitutiva" moved here, right next to the key
-                  filter it now shares a toolbar row with, per the design's placement. The
-                  separator matches the one the toolbar already uses elsewhere (.fm-toolbar__sep)
-                  so the checkbox reads as its own grouped control rather than crowding the
-                  dropdown. Same `!isSubmitted || sustitutiva` visibility this section always had
-                  (still shown, read-only via `isSubmitted`, once a substitute declaration has
-                  been presented). */}
-              {(!isSubmitted || sustitutiva) && (
-                <>
-                  <span className="fm-toolbar__sep" aria-hidden="true" />
-                  <SubstitutiveSection
-                    identChecks={identChecks}
-                    onChange={handleIdentChange}
-                    isSubmitted={isSubmitted}
-                    t={t}
-                    data-testid="SubstitutiveSection__346dd5" />
-                </>
+                methodPlacement="inline"
+                data-testid="FmStatusChip__346dd5" />
+              {!isSubmitted && (
+                <FmDetailButton onClick={handleCompute} disabled={computing} data-testid="FmModel349Page__compute">
+                  {computing
+                    ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
+                    : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+                  {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+                </FmDetailButton>
               )}
-              <div style={{ flex: 1 }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
-                <Search
-                  size={15}
-                  strokeWidth={1.75}
-                  style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
-                  data-testid="Search__346dd5" />
-                <input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder={t('fm.m349.search_placeholder')}
-                  style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'hsl(var(--muted-foreground))', width: '100%' }}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
+              {!isSubmitted && (
+                <FmDetailButton onClick={() => setShowFilegen(true)} disabled={generating} data-testid="FmModel349Page__generate">
+                  <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+                  {t('fm.action.gen349') ?? 'Generar fichero 349'}
+                </FmDetailButton>
+              )}
+            </>
+          )}
+          right={!isSubmitted && (
+            <>
+              {/* ETP-5338 pt.5 — "Guardar" is a deliberate no-op confirmation (see `handleSave`):
+                  349 has no locally-edited declaration data to persist. */}
+              <FmDetailButton
+                onClick={handleSave}
+                disabled={isSavingManualData}
+                title={t('fm.action.save') ?? 'Guardar'}
+                aria-label={t('fm.action.save') ?? 'Guardar'}
+                data-testid="FmModel349Page__save"
+              >
+                {isSavingManualData
+                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__save" />
+                  : <Save size={16} strokeWidth={1.75} data-testid="Save__save" />}
+                {t('fm.action.save') ?? 'Guardar'}
+              </FmDetailButton>
+              <FmDetailButton primary onClick={() => setShowPresent(true)} data-testid="FmModel349Page__present">
+                <CircleCheck size={16} strokeWidth={1.75} data-testid="CircleCheck__346dd5" />
+                {t('fm.action.present') ?? 'Registrar/Presentar'}
+              </FmDetailButton>
+            </>
+          )}
+          data-testid="FmDetailActionBar__346dd5" />
+      </FmDetailHeader>
+      {/* ── Scrolling region: banners, KPIs, tabs, tab content ───── */}
+      <div className="fm-page--freeflow fm-detail-scroll">
+        {/* ── VIES banner ──────────────────────────────────────────── */}
+        <ViesBanner
+          onValidate={handleValidateVies}
+          validating={validatingVies}
+          viesPending={viesPending}
+          dismissed={viesBannerDismissed}
+          onDismiss={() => setViesBannerDismissed(true)}
+          t={t}
+          data-testid="ViesBanner__346dd5" />
+        {/* ── KPI bar ──────────────────────────────────────────────── */}
+        <div style={{
+          display: 'flex', flexDirection: 'row', alignItems: 'center',
+          gap: 12, padding: '0 8px',
+          height: 84, flexShrink: 0,
+        }}>
+          <KpiWidget
+            icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.operators') ?? 'Operadores'}
+            value={String(operatorCount)}
+            badge={t('fm.m349.kpi.operators_desc') ?? 'Activos'}
+            badgeBg="hsl(var(--muted))"
+            badgeColor="hsl(var(--text-disabled))"
+            data-testid="KpiWidget__346dd5" />
+          <KpiWidget
+            icon={<Calculator size={20} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.total_ops') ?? 'Total operaciones'}
+            value={formatAmount(totalBase)}
+            badge={t('fm.m349.kpi.total_ops_desc') ?? 'Base total'}
+            badgeBg="hsl(var(--muted))"
+            badgeColor="hsl(var(--text-disabled))"
+            data-testid="KpiWidget__346dd5" />
+          <KpiWidget
+            icon={<PenLine size={20} strokeWidth={1.75} data-testid="PenLine__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.rectif') ?? 'Rectificaciones'}
+            value={String(rectifications)}
+            badge={t('fm.m349.kpi.rectif_desc') ?? 'Previos'}
+            badgeBg="var(--status-warning-bg)"
+            badgeColor="var(--status-warning-fg)"
+            data-testid="KpiWidget__346dd5" />
+          {/* ETP-5027 — informational severity, not an error: the banner right above
+              this bar states the VIES check is "informativa, no bloquea la
+              declaración", so the destructive/red token was overstating it. Uses the
+              SAME --status-info-* pair as that banner. The genuinely-invalid VIES
+              state stays red — that lives in ViesBadge (.fm-vies--invalid). */}
+          <KpiWidget
+            icon={<ShieldAlert size={20} strokeWidth={1.75} data-testid="ShieldAlert__346dd5" />}
+            iconColor="hsl(var(--text-disabled))"
+            label={t('fm.m349.kpi.vies_pending') ?? 'Pendientes VIES'}
+            value={String(viesPending)}
+            valueColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--foreground))'}
+            badge={t('fm.m349.kpi.vies_pending_desc') ?? 'Sin validar'}
+            badgeBg={viesPending > 0 ? 'var(--status-info-bg)' : 'hsl(var(--muted))'}
+            badgeColor={viesPending > 0 ? 'var(--status-info-fg)' : 'hsl(var(--text-disabled))'}
+            data-testid="KpiWidget__346dd5" />
+        </div>
+        {/* ── Tabs ─────────────────────────────────────────────────── */}
+        <div className="fm-tabs-sticky" style={{ padding: '0 8px' }}>
+          <Tabs
+            tabs={TABS}
+            active={activeTab}
+            onSelect={(id) => { setActiveTab(id); if (originFilter && id !== originFilter.tab) setOriginFilter(null); }}
+            data-testid="Tabs__346dd5" />
+        </div>
+        {/* ── Body ─────────────────────────────────────────────────── */}
+        <div className="fm-page__body">
+
+          {activeTab === 'operators' && (
+            <div>
+              {/* Filter + search + new operator row */}
+              {/* ETP-5456 (layout follow-up) — sticky, stacked directly below `.fm-tabs-sticky`
+                  (top: 49, see that class's own comment for the 48px-tab-height + 1px-border
+                  derivation). Before this it scrolled with the content and ended up peeking out
+                  half-hidden under the (already-sticky) tabs bar — this docks it cleanly instead.
+                  `marginTop`/`marginBottom` became `paddingTop`/`paddingBottom` on purpose: for a
+                  sticky element the offset in `top` is measured from the MARGIN edge, so a margin
+                  here would have shifted the actual stick point away from 49px; padding keeps the
+                  same visual spacing while keeping the box's own height (and therefore the stick
+                  point) predictable. `background` is required — without an opaque background the
+                  table rows scrolling underneath would show through this bar once it is pinned.
+                  `zIndex: 15` is intentionally below the tabs bar's 20 (they never overlap — this
+                  bar docks strictly below the tabs — but keeps the ordering explicit) and above the
+                  unset/auto z-index of the scrolling table content below.
+                  `.fm-349-totals`'s `top` was bumped from 49 to 97 to dock below BOTH sticky bars —
+                  97 = 49 (tabs) + 48 (this bar's own rendered height: 8px paddingTop + 36px content
+                  row [`.fm-toolbar__pill` / the search box, both padding 7px 12px + ~20px line
+                  content + 1px+1px border = 36px border-box] + 4px paddingBottom). See
+                  `.fm-349-totals`'s own comment in fiscal-models.css for the full sticky-stack
+                  writeup. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 4, paddingTop: 8, flexWrap: 'wrap', position: 'sticky', top: 49, zIndex: 15, background: 'hsl(var(--card))' }}>
+                <KeyFilterDropdown
+                  value={keyFilter}
+                  onChange={setKeyFilter}
+                  t={t}
+                  data-testid="KeyFilterDropdown__346dd5" />
+                {/* ETP-5456 (layout follow-up) — "Sustitutiva" moved here, right next to the key
+                    filter it now shares a toolbar row with, per the design's placement. The
+                    separator matches the one the toolbar already uses elsewhere (.fm-toolbar__sep)
+                    so the checkbox reads as its own grouped control rather than crowding the
+                    dropdown. Same `!isSubmitted || sustitutiva` visibility this section always had
+                    (still shown, read-only via `isSubmitted`, once a substitute declaration has
+                    been presented). */}
+                {(!isSubmitted || sustitutiva) && (
+                  <>
+                    <span className="fm-toolbar__sep" aria-hidden="true" />
+                    <SubstitutiveSection
+                      identChecks={identChecks}
+                      onChange={handleIdentChange}
+                      isSubmitted={isSubmitted}
+                      t={t}
+                      data-testid="SubstitutiveSection__346dd5" />
+                  </>
                 )}
+                <div style={{ flex: 1 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: `1px solid ${searchQuery ? 'hsl(var(--focus-ring))' : 'hsl(var(--border-subtle))'}`, borderRadius: 8, fontSize: 14, color: 'hsl(var(--muted-foreground))', background: 'hsl(var(--card))', minWidth: 240 }}>
+                  <Search
+                    size={15}
+                    strokeWidth={1.75}
+                    style={{ flexShrink: 0, color: 'hsl(var(--muted-foreground))' }}
+                    data-testid="Search__346dd5" />
+                  <input
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder={t('fm.m349.search_placeholder')}
+                    style={{ border: 'none', outline: 'none', background: 'transparent', fontSize: 14, color: 'hsl(var(--muted-foreground))', width: '100%' }}
+                  />
+                  {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: 0, lineHeight: 1, fontSize: 16 }}>×</button>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Full-width separator above NIF-IVA columns */}
-            <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
+              {/* Full-width separator above NIF-IVA columns */}
+              <div style={{ margin: '4px -20px 0', borderTop: '1px solid hsl(var(--border-subtle))' }} />
 
-            {/* Layout: totals panel + table */}
-            {/* ETP-5456 (bug follow-up) — `alignItems: 'flex-start'` so TotalsCard (now
-                `position: sticky`, see `.fm-349-totals` in fiscal-models.css) keeps its own short,
-                natural height instead of the default `stretch` matching it to the operators
-                table's height. A stretched sticky panel already spans the whole scrollable range,
-                leaving nothing for `position: sticky` to visibly reposition — same fix 303's
-                CasillasTab sidebar needed. See `.fm-349-totals`'s own comment for the full
-                root-cause writeup (this used to be papered over by a padding/margin trick that
-                does not actually work on a flex item, and caused a separate phantom-scroll bug). */}
-            <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
-              <TotalsCard
-                operators={operators}
-                rectifSummary={rectifSummary}
-                t={t}
-                data-testid="TotalsCard__346dd5" />
+              {/* Layout: totals panel + table */}
+              {/* ETP-5456 (bug follow-up) — `alignItems: 'flex-start'` so TotalsCard (now
+                  `position: sticky`, see `.fm-349-totals` in fiscal-models.css) keeps its own short,
+                  natural height instead of the default `stretch` matching it to the operators
+                  table's height. A stretched sticky panel already spans the whole scrollable range,
+                  leaving nothing for `position: sticky` to visibly reposition — same fix 303's
+                  CasillasTab sidebar needed. See `.fm-349-totals`'s own comment for the full
+                  root-cause writeup (this used to be papered over by a padding/margin trick that
+                  does not actually work on a flex item, and caused a separate phantom-scroll bug). */}
+              <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+                <TotalsCard
+                  operators={operators}
+                  rectifSummary={rectifSummary}
+                  t={t}
+                  data-testid="TotalsCard__346dd5" />
 
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="fm-table-wrap" style={{ flex: 'none' }}>
-                  <table className="fm-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
-                          <CheckboxField
-                            checked={allSelected}
-                            onToggle={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
-                            onClick={e => e.stopPropagation()}
-                            data-testid="CheckboxField__346dd5" />
-                        </th>
-                        <th>{t('fm.m349.col.nif_iva')}</th>
-                        <th>{t('fm.m349.col.operator')}</th>
-                        <th>{t('fm.m349.col.key')}</th>
-                        <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
-                        <th>{t('fm.m349.col.vies')}</th>
-                        <th>{t('fm.m349.col.origin')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredOps.map(op => (
-                        <tr
-                          key={rowKey(op)}
-                          className={selected.has(rowKey(op)) ? 'fm-table__row--selected' : ''}
-                          data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
-                        >
-                          <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="fm-table-wrap" style={{ flex: 'none' }}>
+                    <table className="fm-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
                             <CheckboxField
-                              checked={selected.has(rowKey(op))}
-                              onToggle={() => toggleSelect(rowKey(op))}
+                              checked={allSelected}
+                              onToggle={() => setSelected(allSelected ? new Set() : new Set(filteredOps.map(rowKey)))}
                               onClick={e => e.stopPropagation()}
                               data-testid="CheckboxField__346dd5" />
-                          </td>
-                          <td>{op.nif}</td>
-                          <td style={{ fontWeight: 600 }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {op.name}
-                              {isRectificativeOp(op) && (
-                                <RectificativeBadge
-                                  t={t}
-                                  period={declaredPeriodLabel(op)}
-                                  data-testid="RectificativeBadge__346dd5" />
-                              )}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
-                              <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
-                            </span>
-                          </td>
-                          <td
-                            style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
-                            className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
-                          >
-                            {formatAmount(op.base)}
-                          </td>
-                          <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
-                          <td>
-                            {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
-                                invoice rows, so the link would land on the "not kept" note:
-                                plain text there, link everywhere else. */}
-                            {formatOrigin(op) && snapshotServed && (
-                              <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
-                            )}
-                            {formatOrigin(op) && !snapshotServed && (
-                              <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
-                            )}
-                            {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
-                          </td>
+                          </th>
+                          <th>{t('fm.m349.col.nif_iva')}</th>
+                          <th>{t('fm.m349.col.operator')}</th>
+                          <th>{t('fm.m349.col.key')}</th>
+                          <th style={{ textAlign: 'right' }}>{t('fm.m349.col.taxable_base')}</th>
+                          <th>{t('fm.m349.col.vies')}</th>
+                          <th>{t('fm.m349.col.origin')}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredOps.map(op => (
+                          <tr
+                            key={rowKey(op)}
+                            className={selected.has(rowKey(op)) ? 'fm-table__row--selected' : ''}
+                            data-rectificative={isRectificativeOp(op) ? 'true' : undefined}
+                          >
+                            <td style={{ paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
+                              <CheckboxField
+                                checked={selected.has(rowKey(op))}
+                                onToggle={() => toggleSelect(rowKey(op))}
+                                onClick={e => e.stopPropagation()}
+                                data-testid="CheckboxField__346dd5" />
+                            </td>
+                            <td>{op.nif}</td>
+                            <td style={{ fontWeight: 600 }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                {op.name}
+                                {isRectificativeOp(op) && (
+                                  <RectificativeBadge
+                                    t={t}
+                                    period={declaredPeriodLabel(op)}
+                                    data-testid="RectificativeBadge__346dd5" />
+                                )}
+                              </span>
+                            </td>
+                            <td>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <KeyBadge k={op.key} data-testid="KeyBadge__346dd5" />
+                                <span style={{ fontSize: 14, color: 'var(--fm-fg-1)' }}>{t(`fm.m349.key.${op.key}`)}</span>
+                              </span>
+                            </td>
+                            <td
+                              style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+                              className={(parseFloat(op.base) || 0) < 0 ? 'fm-349-amount--negative' : undefined}
+                            >
+                              {formatAmount(op.base)}
+                            </td>
+                            <td><ViesBadge status={op.vies} data-testid="ViesBadge__346dd5" /></td>
+                            <td>
+                              {/* ETP-5438 — a snapshot-served declaration keeps the counts but not the
+                                  invoice rows, so the link would land on the "not kept" note:
+                                  plain text there, link everywhere else. */}
+                              {formatOrigin(op) && snapshotServed && (
+                                <span className="fm-origin-text" data-testid="fm-origin-text">{formatOrigin(op)}</span>
+                              )}
+                              {formatOrigin(op) && !snapshotServed && (
+                                <button className="fm-origin-link" onClick={() => goToOrigin(op)}>{formatOrigin(op)}</button>
+                              )}
+                              {!formatOrigin(op) && <span style={{ color: 'var(--fm-fg-4)' }}>—</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
-        {activeTab === 'rectif' && !snapshotServed && (
-          <RectificationsTabContent
-            rows={rectifRows}
-            t={t}
-            originFilter={rectifOriginFilter}
-            onClearOriginFilter={() => setOriginFilter(null)}
-            data-testid="RectificationsTabContent__346dd5" />
-        )}
+          {activeTab === 'rectif' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
+          {activeTab === 'rectif' && !snapshotServed && (
+            <RectificationsTabContent
+              rows={rectifRows}
+              t={t}
+              originFilter={rectifOriginFilter}
+              onClearOriginFilter={() => setOriginFilter(null)}
+              data-testid="RectificationsTabContent__346dd5" />
+          )}
 
+        </div>
+        {/* Shared tab content — same layout as 303 */}
+        {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
+        <DetailTabContent
+          activeTab={detailTabFor(snapshotServed, activeTab)}
+          decl={decl}
+          liveInvoices={liveInvoices}
+          blocking={blocking}
+          warning={warning}
+          t={t}
+          onGoToSources={() => { setOriginFilter(null); setActiveTab('invoices'); }}
+          token={token}
+          apiBaseUrl={apiBaseUrl}
+          status={status}
+          originFilter={invoiceOriginFilter}
+          onClearOriginFilter={() => setOriginFilter(null)}
+          data-testid="DetailTabContent__346dd5" />
       </div>
-      {/* Shared tab content — same layout as 303 */}
-      {activeTab === 'invoices' && snapshotServed && <InvoiceDetailNotKept t={t} data-testid="InvoiceDetailNotKept__346dd5" />}
-      <DetailTabContent
-        activeTab={detailTabFor(snapshotServed, activeTab)}
-        decl={decl}
-        liveInvoices={liveInvoices}
-        blocking={blocking}
-        warning={warning}
-        t={t}
-        onGoToSources={() => { setOriginFilter(null); setActiveTab('invoices'); }}
-        token={token}
-        apiBaseUrl={apiBaseUrl}
-        status={status}
-        originFilter={invoiceOriginFilter}
-        onClearOriginFilter={() => setOriginFilter(null)}
-        data-testid="DetailTabContent__346dd5" />
       {/* Overlays */}
       {showPresent && (
         <PresentModal

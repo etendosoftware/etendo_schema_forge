@@ -6,6 +6,7 @@ import {
   ChevronDown, Calendar, Clock, TriangleAlert, OctagonAlert, Check,
 } from 'lucide-react';
 import { EmptyState, KpiWidget } from './FmCommon.jsx';
+import { FmStatusChip } from './FmDetailChrome.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
 import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
@@ -179,21 +180,6 @@ function FilterDropdown({ label, value, options, onChange }) {
   );
 }
 
-const STATUS_PLAIN_LABEL = {
-  submitted_ext: 'Presentado en otra plataforma',
-};
-
-// statusLabelKey (ETP-4755): the status BADGE text must always read the plain
-// "Presentado"/"Submitted" for BOTH `submitted` and `submitted_ack` — `submitted_ack`
-// collapses onto `submitted`'s i18n key here. HOW it was submitted (manual ack, no
-// receipt, real AEAT telematic ack) is shown exclusively via the `submissionMethod`
-// sub-label rendered underneath, never inside the badge text itself. `submitted_ext`
-// is untouched — a distinct legacy status, not part of this unification.
-function statusLabelKey(status) {
-  return status === 'submitted_ack' ? 'submitted' : status;
-}
-
-const STATUS_GREEN = new Set(['ready', 'submitted', 'submitted_ext', 'submitted_ack']);
 
 // Fixed status filter options (consolidated)
 const STATUS_FILTER_OPTIONS = [
@@ -247,41 +233,6 @@ function sortDeclarations(list, sortColumn, sortDirection) {
     return sortDirection === 'asc' ? cmp : -cmp;
   });
   return sorted;
-}
-
-// SUBMISSION_METHOD_STATUSES (ETP-4755) — only these two statuses can carry a
-// submissionMethod (the two manual "Presentado" paths persist it themselves via
-// handlePresent; a real AEAT telematic success also lands on submitted_ack, set
-// server-side). submitted_ext (the removed "otra plataforma" path) never carries one.
-const SUBMISSION_METHOD_STATUSES = new Set(['submitted', 'submitted_ack']);
-
-// submissionMethod (ETP-4755, optional) — shown as a compact sub-label under the status
-// badge, only for the statuses that can actually carry one, and only when present (a
-// declaration that predates this feature simply shows the bare status badge, unchanged).
-function StatusText({ status, submissionMethod, t }) {
-  const label = STATUS_PLAIN_LABEL[status] ?? (t(`fm.status.${statusLabelKey(status)}`) ?? status);
-  const isGreen = STATUS_GREEN.has(status);
-  const methodLabel = submissionMethod && SUBMISSION_METHOD_STATUSES.has(status)
-    ? t(`fm.present.method.${submissionMethod}`)
-    : null;
-  return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
-      <span style={{
-        display: 'inline-flex', alignItems: 'center',
-        padding: '2px 8px', borderRadius: 6,
-        fontSize: 12, fontWeight: 400, lineHeight: '16px',
-        background: isGreen ? 'var(--status-success-bg)' : 'hsl(var(--muted))',
-        color: isGreen ? 'var(--status-success-fg)' : 'hsl(var(--muted-foreground))',
-      }}>
-        {label}
-      </span>
-      {methodLabel && (
-        <span style={{ fontSize: 11, color: 'hsl(var(--muted-foreground))', paddingLeft: 2 }}>
-          {methodLabel}
-        </span>
-      )}
-    </span>
-  );
 }
 
 const RESULT_BADGE_STYLE = {
@@ -1112,7 +1063,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
                     is safe without a `decl.model` guard. */}
                 <td>{declTypeLabel}</td>
                 <td>
-                  <StatusText status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
+                  <FmStatusChip status={decl.status} submissionMethod={decl.submissionMethod} t={t} data-testid="StatusText__cb728e" />
                 </td>
                 <td style={{ textAlign: 'right' }}>
                   <ResultText

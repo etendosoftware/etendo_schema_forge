@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/fm303Layouts.js
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmBoxes303.jsx
 // ETP-5393 manual-QA fix — reproduces the exact bug the user reported: the bank block
 // (datos_bancarios section, tab "identificacion") became visible once rectificativa was
 // checked AND box 111 (Rectificación - Importe, tab "resultado_final") carried a non-zero
@@ -26,6 +28,8 @@ vi.mock('../../../FmOverlays.jsx', () => ({
 vi.mock('@/components/attachments', () => ({
   AttachmentsTab: () => null, useAttachments: () => ({ upload: vi.fn() }),
 }));
+// ETP-5584 — FmBoxes303 renders the app's Radix Select; drive it as a native <select>.
+vi.mock('@/components/ui/select', () => import('../../../__tests__/testUtils/nativeSelectMock.jsx'));
 vi.mock('lucide-react', async (importOriginal) => {
   const actual = await importOriginal();
   const mocked = {};
