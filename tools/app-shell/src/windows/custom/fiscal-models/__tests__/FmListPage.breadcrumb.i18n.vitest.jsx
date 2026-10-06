@@ -19,7 +19,7 @@
 // this file needs to fix). This file mocks the path FmListPage.jsx actually
 // imports ('@/i18n') so the real locale dictionary is genuinely exercised.
 import { render, screen, act } from '@testing-library/react';
-import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
+import { PageMetaProvider, usePageMeta, useSetPageMeta } from '@/components/layout/PageMetaContext';
 import React from 'react';
 import { loadLocaleDictionary, makeRealUI } from '../../shared/__tests__/testUtils/realLocaleUI.js';
 
@@ -175,5 +175,42 @@ describe('FmListPage — TopBar page meta and declarations heading (ETP-5584)', 
       rerender(<PageMetaProvider><FmListPage declarations={[]} {...defaultProps} active /><MetaProbe /></PageMetaProvider>);
     });
     expect(lastMeta.title).toBe('Modelos Fiscales');
+  });
+});
+
+// ETP-5584 — the list stays mounted (hidden) while a 303/349 detail page is open, for
+// auto-compute polling. It must leave the TopBar to the detail page: publishing an empty meta
+// while hidden would let a poll (declarations count change) wipe the detail's title.
+describe('FmListPage — hands the TopBar to the detail page while inactive (ETP-5584)', () => {
+  function DetailPublisher() {
+    useSetPageMeta({ title: 'Modelo 303 - 2026/T1' }, []);
+    return null;
+  }
+  const tree = (listProps, withDetail) => (
+    <PageMetaProvider>
+      <FmListPage {...defaultProps} {...listProps} />
+      {withDetail && <DetailPublisher />}
+      <MetaProbe />
+    </PageMetaProvider>
+  );
+
+  it('leaves the detail title in place while inactive, and takes the TopBar back when active again', () => {
+    activeUi = realUiEs;
+    const decls = [{ id: 'd1', model: '303', year: 2026, period: '1T', status: 'draft' }];
+    const { rerender } = render(tree({ declarations: decls, active: true }, false));
+    expect(lastMeta.title).toBe('Modelos Fiscales');
+
+    // Detail opened: the list goes inactive and the detail publishes its own meta.
+    rerender(tree({ declarations: decls, active: false }, true));
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T1');
+
+    // Any further list re-render while hidden must not touch the TopBar.
+    rerender(tree({ declarations: decls, active: false }, true));
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T1');
+
+    // Cancelar: the detail unmounts and the list re-publishes.
+    rerender(tree({ declarations: decls, active: true }, false));
+    expect(lastMeta.title).toBe('Modelos Fiscales');
+    expect(lastMeta.recordCount).toBe(1);
   });
 });

@@ -1,9 +1,12 @@
 import React from 'react';
 import { Button } from '@/components/ui/button.jsx';
+import { useSetPageMeta } from '@/components/layout/PageMetaContext';
+import { useFavorites } from '@/components/layout/FavoritesContext';
+import { useSupportChatSafe } from '@/components/support/SupportChatContext.jsx';
 
-// Shared chrome of the Modelo 303 / 349 detail pages (ETP-5584): the status chip (also used by
-// the list's "Estado" column), the sticky page header and its action bar, and the action-bar
-// button. Both detail pages render through these so their header, button sizes and button
+// Shared chrome of the Modelo 303 / 349 detail pages (ETP-5584): the app top-bar meta (title,
+// breadcrumb, model badge, kebab), the status chip (also used by the list's "Estado" column), the
+// sticky action bar, and the action-bar button. Both detail pages render through these so their header, button sizes and button
 // order cannot drift apart again.
 //
 // Lives in its own module rather than in FmCommon.jsx on purpose: nearly every fiscal-models
@@ -86,11 +89,41 @@ export function FmStatusChip({ status, submissionMethod, t, methodPlacement = 'b
   );
 }
 
+// ── App top bar ──────────────────────────────────────────────────────────────
+// The declaration title lives in the app TopBar, at the same place as the list's "Modelos
+// Fiscales" title, published through the same `useSetPageMeta` the list uses:
+//   title       "Modelo 303 - 2026/T1"
+//   breadcrumb  "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" (the TopBar subtitle)
+//   titleExtra  the model badge ("303"/"349") — TopBar's adornment slot next to the title
+//               (precedent: financial-account's sync status); the badge is the same
+//               `.fm-model-badge` element the list's model column renders, not a lookalike.
+//   kebab       onAddToFavorites / isFavorite / onPageHelp — the exact two items the in-page
+//               kebab (FmCommon's MoreOptionsMenu) had: favourite "fiscal-models" + page help.
+// The meta is withdrawn on unmount (useSetPageMeta's cleanup); the list re-publishes its own
+// when it becomes active again (FmListPage's `ListPageMeta`).
+export function useFmDetailPageMeta({ model, title, breadcrumb, favLabel }) {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { actions: supportActions } = useSupportChatSafe();
+  const favActive = isFavorite('fiscal-models');
+  useSetPageMeta({
+    title,
+    breadcrumb,
+    titleExtra: (
+      <span className={`fm-model-badge fm-model-badge--${model}`} data-testid="FmDetailTopBar__modelBadge">
+        {model}
+      </span>
+    ),
+    onAddToFavorites: () => toggleFavorite('fiscal-models', favLabel),
+    isFavorite: favActive,
+    onPageHelp: () => { supportActions.setTab('ayuda'); supportActions.open(); },
+  }, [model, favActive, favLabel]);
+}
+
 // ── Detail header ────────────────────────────────────────────────────────────
-// Title block + action bar, kept OUTSIDE the scrolling region of the detail page (see
-// `.fm-detail-header` / `.fm-detail-scroll` in fiscal-models.css), so the title and the actions
-// stay on screen while the user scrolls the boxes — the generic DetailView keeps its action bar
-// fixed the same way. KPIs, tabs and tab content scroll underneath.
+// The action bar row, kept OUTSIDE the scrolling region of the detail page (see
+// `.fm-detail-header` / `.fm-detail-scroll` in fiscal-models.css), so the actions stay on screen
+// while the user scrolls the boxes — the generic DetailView keeps its action bar fixed the same
+// way. KPIs, tabs and tab content scroll underneath. The title is in the app top bar.
 export function FmDetailHeader({ children }) {
   return (
     <div className="fm-detail-header" data-testid="FmDetailHeader">
@@ -99,8 +132,8 @@ export function FmDetailHeader({ children }) {
   );
 }
 
-// Action bar — same split as the generic DetailView toolbar: Cancelar + status chip + the
-// secondary actions on the left, Guardar next to the primary action on the right.
+// Action bar — Cancelar + status chip on the left; every action on the right, ending with
+// Guardar and then the primary action (right-most), as in the generic DetailView toolbar.
 export function FmDetailActionBar({ left, right }) {
   return (
     <div className="fm-detail-actionbar" data-testid="FmDetailActionBar">

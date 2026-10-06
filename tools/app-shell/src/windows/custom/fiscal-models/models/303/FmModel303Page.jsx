@@ -8,8 +8,8 @@ import {
   Calculator, Loader2, TrendingUp, TrendingDown,
   ClipboardCheck, ReceiptText, FileCheck,
 } from 'lucide-react';
-import { Tabs, KpiWidget, MoreOptionsMenu } from '../../FmCommon.jsx';
-import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton } from '../../FmDetailChrome.jsx';
+import { Tabs, KpiWidget } from '../../FmCommon.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
@@ -1361,31 +1361,27 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
 
   const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
 
+  // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
+  // model badge, kebab), like the list's "Modelos Fiscales" title. See FmDetailChrome.
+  const declTitle = `${t('fm.config.m303.title') ?? 'Modelo 303'} - ${periodLabel}`;
+  useFmDetailPageMeta({
+    model: '303',
+    title: declTitle,
+    breadcrumb: `${ui('finance')} / ${ui('fm.breadcrumb.section')} / ${declTitle}`,
+    favLabel: ui('fm.breadcrumb.section'),
+  });
+
   return (
     <div className="fm-page fm-page--detail">
-      {/* ── Sticky header: title + action bar (ETP-5584) ─────────────
-          Rendered outside `.fm-detail-scroll`, so it never scrolls away — see FmDetailChrome. */}
+      {/* ── Sticky action bar (ETP-5584) — the first row of the page, outside
+          `.fm-detail-scroll`, so it never scrolls away. The title, breadcrumb, model badge and
+          kebab are in the app top bar (useFmDetailPageMeta above). ─────────────────── */}
       <FmDetailHeader data-testid="FmDetailHeader__4f6c0d">
-        <div className="fm-detail-title">
-          <div className="fm-detail-title__row">
-            <span className="fm-model-badge fm-model-badge--303">303</span>
-            <span className="fm-detail-title__text">
-              {t('fm.config.m303.title') ?? 'Modelo 303'} - {periodLabel}
-            </span>
-            <MoreOptionsMenu
-              favKey="fiscal-models"
-              favLabel={ui('fm.breadcrumb.section')}
-              data-testid="MoreOptionsMenu__4f6c0d" />
-          </div>
-          <div className="fm-detail-title__breadcrumb">
-            {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m303.title') ?? 'Modelo 303'} - {periodLabel}
-          </div>
-        </div>
-        {/* ETP-5584 — same split as the generic DetailView toolbar: Cancelar, the status chip
-            and the secondary actions (Calcular, Generar fichero 303) on the LEFT; Guardar right
-            next to the primary action (Registrar/Presentar) on the RIGHT. The status chip is
-            the list's own chip (FmStatusChip) — no "Estado:" prefix. Every action except
-            Cancelar is hidden once submitted: nothing left to save, compute, generate or file. */}
+        {/* ETP-5584 — Cancelar + the list's status chip (FmStatusChip, no "Estado:" prefix) on
+            the LEFT; on the RIGHT, in order: Calcular, Generar fichero, Guardar, and the primary
+            Registrar/Presentar right-most (Save-before-primary, as in `saveActions.jsx`). The
+            whole right group is hidden once submitted: nothing left to compute, generate, save
+            or file. */}
         <FmDetailActionBar
           left={(
             <>
@@ -1398,58 +1394,54 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 t={t}
                 methodPlacement="inline"
                 data-testid="FmStatusChip__4f6c0d" />
-              {!isSubmitted && (
-                <FmDetailButton
-                  onClick={handleComputeClick}
-                  disabled={computing}
-                  data-testid="FmModel303Page__compute"
-                >
-                  {computing
-                    ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__4f6c0d" />
-                    : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
-                  {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-                </FmDetailButton>
-              )}
-              {/* ETP-5438 — hidden once submitted: a declaration already presented must not be
-                  re-generated (same `!isSubmitted` gate as Calcular / Registrar-Presentar). */}
-              {!isSubmitted && (
-                <FmDetailButton
-                  onClick={() => {
-                    // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
-                    // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
-                    if (missingRequiredFields.length > 0) {
-                      missingRequiredFieldsToast(
-                        'fm.validation.missing_required_generate',
-                        "Completá {fields} antes de generar el fichero.",
-                      );
-                      return;
-                    }
-                    // ETP-5456 — same gate handleGenerate itself enforces; checked here too so the
-                    // "Generar fichero 303" modal never even opens while a computed box is out of range.
-                    if (outOfRangeBoxes.length > 0) {
-                      outOfRangeToast(
-                        'fm.validation.out_of_range_generate',
-                        'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
-                      );
-                      return;
-                    }
-                    setShowFilegen(true);
-                  }}
-                  disabled={generating}
-                  data-testid="FmModel303Page__generate"
-                >
-                  <Download
-                    size={16}
-                    strokeWidth={1.75}
-                    style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
-                    data-testid="Download__4f6c0d" />
-                  {t('fm.action.gen303') ?? 'Generar fichero 303'}
-                </FmDetailButton>
-              )}
             </>
           )}
           right={!isSubmitted && (
             <>
+              <FmDetailButton
+                onClick={handleComputeClick}
+                disabled={computing}
+                data-testid="FmModel303Page__compute"
+              >
+                {computing
+                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__4f6c0d" />
+                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__4f6c0d" />}
+                {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+              </FmDetailButton>
+              {/* ETP-5438 — hidden once submitted (the whole right group is): a declaration
+                  already presented must not be re-generated. */}
+              <FmDetailButton
+                onClick={() => {
+                  // ETP-5187 — same required-field gate handleGenerate itself enforces; checked here
+                  // too so the "Generar fichero 303" modal never even opens on an unset declaration type.
+                  if (missingRequiredFields.length > 0) {
+                    missingRequiredFieldsToast(
+                      'fm.validation.missing_required_generate',
+                      "Completá {fields} antes de generar el fichero.",
+                    );
+                    return;
+                  }
+                  // ETP-5456 — same gate handleGenerate itself enforces; checked here too so the
+                  // "Generar fichero 303" modal never even opens while a computed box is out of range.
+                  if (outOfRangeBoxes.length > 0) {
+                    outOfRangeToast(
+                      'fm.validation.out_of_range_generate',
+                      'El resultado de {subject} {verb} el rango admitido por la AEAT. Se debe corregir el dato de origen antes de generar el fichero.',
+                    );
+                    return;
+                  }
+                  setShowFilegen(true);
+                }}
+                disabled={generating}
+                data-testid="FmModel303Page__generate"
+              >
+                <Download
+                  size={16}
+                  strokeWidth={1.75}
+                  style={{ color: fileBlocked ? 'hsl(var(--destructive))' : 'hsl(var(--foreground))' }}
+                  data-testid="Download__4f6c0d" />
+                {t('fm.action.gen303') ?? 'Generar fichero 303'}
+              </FmDetailButton>
               {/* ETP-5338 PIVOT — "Guardar" persists pending manual edits (handleSave) without
                   navigating away. ETP-5584: it sits right before the primary action, matching
                   `saveActions.jsx`'s Save-before-Confirm order in every generic detail view. */}

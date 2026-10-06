@@ -32,7 +32,7 @@ debug contracts.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
 - Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`).
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
@@ -528,10 +528,10 @@ A former 6th tab, **Historial** (`HistoryTab`), was removed together with this p
 ### Action bar
 
 **Current layout (ETP-5584) — supersedes the button ORDER described in the rest of this section.**
-The action bar follows the generic `DetailView` toolbar split. **Left:** Cancelar, the status chip,
-Calcular, Generar fichero 303. **Right:** Guardar, then the primary **Registrar/Presentar**.
-Guardar therefore sits right before the primary action, which is `saveActions.jsx`'s
-Save-before-Confirm order. Every button except Cancelar is still hidden once submitted. All buttons
+**Left:** Cancelar and the status chip. **Right**, in this order: Calcular, Generar fichero 303,
+Guardar, and the primary **Registrar/Presentar**, right-most. Guardar sits right before the
+primary action, which is `saveActions.jsx`'s Save-before-Confirm order. The whole right group is
+hidden once submitted, so only Cancelar and the chip remain. All buttons
 render through `FmDetailButton` (`FmDetailChrome.jsx`). It wraps the app's `Button` at the
 `DetailCancelButton` size: `h-10 px-3 rounded-lg`, with a border-control outline, or the filled
 variant for the primary. The status chip is the list's own chip (`FmStatusChip`): the bare status,
@@ -1963,16 +1963,44 @@ and its digit-by-digit vs. one-shot-paste distinction.
 ### Detail page header, action bar and 1280×720 layout (ETP-5584)
 
 Applies to both detail pages (303 and 349). The shared pieces live in `FmDetailChrome.jsx`:
-`FmDetailHeader`, `FmDetailActionBar`, `FmDetailButton` and `FmStatusChip`.
+`useFmDetailPageMeta`, `FmDetailHeader`, `FmDetailActionBar`, `FmDetailButton` and `FmStatusChip`.
+
+**The declaration title is in the app TopBar**, at the same place as the list's "Modelos
+Fiscales" title. There is no in-page title row. `useFmDetailPageMeta` publishes it through the
+same `useSetPageMeta` the list uses:
+
+| TopBar slot | Value |
+|---|---|
+| `title` | "Modelo 303 - 2026/T1" — `` `${t('fm.config.m303.title')} - ${periodLabel}` `` (349: its own `periodLabel` format, unchanged; P9 will unify it) |
+| `breadcrumb` (subtitle) | "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T1" |
+| `titleExtra` (next to the title) | the model badge: the same `.fm-model-badge fm-model-badge--303` / `--349` element the list's model column renders |
+| kebab (⋮) | `onAddToFavorites` + `isFavorite` (favourite `fiscal-models`) and `onPageHelp` (support chat "Ayuda" tab) — the same two items the removed in-page `MoreOptionsMenu` had |
+
+The badge uses `titleExtra` because it is the TopBar's only adornment slot for arbitrary content.
+`financial-account` uses the same slot for its sync status. `recordCount` was not used: it is a
+count, not a label. The badge renders after the title, not before it as the old in-page row did.
+
+**Hand-over between list and detail.** The list stays mounted (hidden) while a detail page is
+open. It publishes its meta from a `ListPageMeta` child that renders only while `active`, so the
+list never touches the TopBar while hidden.
+- **Opening a declaration:** `ListPageMeta` unmounts and withdraws the list meta once, then the
+  detail publishes its own.
+- **Cancelar:** the detail unmounts and withdraws its meta, then `ListPageMeta` mounts again and
+  re-publishes the list meta.
+- **Opening another declaration:** the title updates through `useSetPageMeta`'s `title` dependency.
+
+Before this, the hidden list published `{}`. Because `useSetPageMeta`'s cleanup resets the TopBar
+on every dependency change, a list poll that changed `decls.length` would have wiped the detail's
+title.
 
 `FmDetailChrome.jsx` is a separate module, not part of `FmCommon.jsx`, on purpose. About 45 page
 tests mock `FmCommon.jsx` with an explicit export list, and any new `FmCommon` export would have to
 be added to every one of those mocks before the pages render at all.
 
-- **The title and the action bar never scroll away.** The page root is `.fm-page.fm-page--detail`,
-  a non-scrolling flex column. It holds two children:
-  - `FmDetailHeader` (`.fm-detail-header`): the title, the breadcrumb and the action bar. It sits
-    outside the scroll and is always visible.
+- **The action bar never scrolls away.** The page root is `.fm-page.fm-page--detail`, a
+  non-scrolling flex column. It holds two children:
+  - `FmDetailHeader` (`.fm-detail-header`): the action bar, the first row of the page. It sits
+    outside the scroll and is always visible. The title is in the app TopBar.
   - `.fm-page--freeflow.fm-detail-scroll`: the one scrolling element. It holds the banners, the
     KPIs, the tabs and the tab content.
 
@@ -1981,8 +2009,9 @@ be added to every one of those mocks before the pages render at all.
   Because `.fm-detail-scroll` starts under the header, the existing sticky offsets keep working
   unchanged: `.fm-tabs-sticky` `top: 0`, 303's section nav `top: 49`, and 349's filter row `49` and
   totals `97px`. A future sticky element must be measured against `.fm-detail-scroll`.
-- **1280×720.** The header is about 118px tall. Once the KPIs scroll away, the 303 Liquidación
-  section gets about 480px for its rows, against one visible row before the change. Compact casilla
+- **1280×720.** With the title in the TopBar, the action bar is the only fixed row, about 60px tall.
+  Once the KPIs scroll away, the 303 Liquidación section gets about 540px for its rows, against one
+  visible row before ETP-5584. Compact casilla
   cells (Liquidación, Información adicional, Resultado) take their width from
   `--fm-aeat-cell-w`: 180px by default, and 150px at viewport widths of 1440px or less. That leaves
   the row labels room on a 1280px screen with the app sidebar open, so they no longer wrap onto 3
@@ -2774,10 +2803,11 @@ pending NIF-IVAs — before ETP-5027 it was a `<button>` with no `onClick` at al
 
 ### Action bar and kebab menu
 
-**ETP-5584:** the 349 action bar uses the same shared header and button split as 303. **Left:**
-Cancelar, the status chip, Calcular, Generar fichero 349. **Right:** Guardar, Registrar/Presentar.
-See "Detail page header, action bar and 1280×720 layout (ETP-5584)". The title row is unchanged:
-the title format and the kebab position (349.1) are out of that ticket's scope.
+**ETP-5584:** the 349 action bar uses the same shared header and button order as 303. **Left:**
+Cancelar and the status chip. **Right:** Calcular, Generar fichero 349, Guardar, and
+Registrar/Presentar, right-most. The title, breadcrumb, model badge and kebab are in the app
+TopBar, as on 303. The 349 title format is unchanged for now (P9). See "Detail page header, action
+bar and 1280×720 layout (ETP-5584)".
 
 The kebab menu (`MoreOptionsMenu349`) now only has two entries: **VIES** and **"Vista previa PDF"**. "Generar fichero 349" is no longer in the kebab — it is a standalone button in the action bar (`onClick={() => setShowFilegen(true)}`), positioned next to **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10). Both buttons — along with "Guardar" and "Calcular" — are wrapped `{!isSubmitted && ...}` (ETP-5438): "Generar fichero 349" used to be unconditionally visible regardless of submission status, but is now gated on submission status exactly like "Registrar/Presentar", so the whole primary-action group disappears once the declaration reaches a submitted-family status. See "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard.
 
@@ -2908,13 +2938,13 @@ block is rendered. The published meta is:
 | `breadcrumb` (subtitle line) | `` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` `` — "Finanzas / Modelos Fiscales" |
 | kebab (⋮ next to the title) | `onAddToFavorites` → `toggleFavorite('fiscal-models', <window name>)` + `isFavorite`, and `onPageHelp` → the support chat "Ayuda" tab (`useSupportChatSafe`), i.e. the same two items `MoreOptionsMenu` offers on the detail pages |
 
-**Hidden list, empty meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with
+**Hidden list, no meta.** `FiscalModelsPage` keeps `FmListPage` mounted (hidden with
 `display: none`) while a 303/349 detail page is shown, so auto-compute polling survives. It passes
-`active={!inDetail}`, and an inactive `FmListPage` publishes an empty meta (`{}`); otherwise the
-"Modelos Fiscales" title, count and kebab would leak into the detail pages' TopBar. The detail pages
-publish no meta of their own and keep their in-content title bars (with `MoreOptionsMenu`) unchanged;
-their breadcrumbs are plain text, and going back to the list is the "Cancelar" button (`onBack`), which
-flips `active` back to `true` and republishes the list meta.
+`active={!inDetail}`. The list publishes its meta from a `ListPageMeta` child rendered only while
+`active`, so a hidden list does not touch the TopBar at all. The detail pages publish their own
+meta: declaration title, breadcrumb, model badge and kebab (see "Detail page header, action bar
+and 1280×720 layout"). "Cancelar" (`onBack`) unmounts the detail and flips `active` back to
+`true`, and `ListPageMeta` re-publishes the list meta.
 
 The page content, top to bottom (no bordered panels around any of it):
 
@@ -2948,9 +2978,10 @@ This is scoped to the list page's own toolbar. `ConfigDrawer` as a component sti
 
 ### "More options" menu — favorites and help (`MoreOptionsMenu`, ETP-4755)
 
-(Since ETP-5584 the list page no longer renders `MoreOptionsMenu`: its kebab is the TopBar's own,
-fed the same two actions through `useSetPageMeta` — see "List page header (app TopBar) and
-declarations toolbar" above. The detail pages still use `MoreOptionsMenu`.)
+(Since ETP-5584 no page renders `MoreOptionsMenu`. The list and both detail pages use the TopBar's
+own kebab, fed the same two actions through `useSetPageMeta`: see "List page header (app TopBar)
+and declarations toolbar" and "Detail page header, action bar and 1280×720 layout". The component
+is still exported from `FmCommon.jsx`.)
 
 The page-title `MoreVertical` icon in all three surfaces — the list header, `FmModel303Page`, and
 `FmModel349Page` — used to render with no `onClick` at all, a leftover from the old kebabs described

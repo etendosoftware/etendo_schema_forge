@@ -527,6 +527,24 @@ function resolveDeclTypeLabel(decl, t) {
   return t('fm.type.ordinary');
 }
 
+// Publishes the list's TopBar meta (ETP-5584). Rendered by FmListPage only while it is the
+// visible page, so mounting/unmounting it is what hands the TopBar over to and back from the
+// 303/349 detail pages — see the "Top-bar page meta" comment inside FmListPage.
+function ListPageMeta({ title, breadcrumb, recordCount }) {
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const { actions: supportActions } = useSupportChatSafe();
+  const favActive = isFavorite('fiscal-models');
+  useSetPageMeta({
+    title,
+    breadcrumb,
+    recordCount,
+    onAddToFavorites: () => toggleFavorite('fiscal-models', title),
+    isFavorite: favActive,
+    onPageHelp: () => { supportActions.setTab('ayuda'); supportActions.open(); },
+  }, [favActive, recordCount]);
+  return null;
+}
+
 export default function FmListPage({ declarations: propDecls, onSelect, onComputeUpdate, declStatusPatch, declManualDataPatch, token, apiBaseUrl, active = true }) {
   const ui = useUI();
   const t  = ui;
@@ -1107,24 +1125,23 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
   // ── Top-bar page meta (ETP-5584) ─────────────────────────────────────────
   // Same mechanism every generated list window uses (ListView.jsx): the app TopBar renders the
   // title, the record-count badge, the breadcrumb subtitle and the kebab (favorites + page help).
-  // `active` is false while FiscalModelsPage shows a 303/349 detail page — this component stays
-  // mounted (hidden) for auto-compute polling, so it must publish an EMPTY meta then, or the
-  // "Modelos Fiscales" title/kebab would leak into the detail pages' top bar.
+  // Published by <ListPageMeta> (rendered below) ONLY while `active`. This component stays
+  // mounted (hidden) while FiscalModelsPage shows a 303/349 detail page, for auto-compute
+  // polling. Publishing an empty meta from here instead would be wrong: useSetPageMeta's cleanup
+  // resets the TopBar on every dep change, so a poll that changed `decls.length` while a detail
+  // page is open would wipe the detail's title. Unmounting <ListPageMeta> withdraws the list
+  // meta exactly once, when the detail opens; remounting it re-publishes on the way back.
   const windowTitle = ui('fm.breadcrumb.section');
-  const { toggleFavorite, isFavorite } = useFavorites();
-  const { actions: supportActions } = useSupportChatSafe();
-  const favActive = isFavorite('fiscal-models');
-  useSetPageMeta(active ? {
-    title: windowTitle,
-    breadcrumb: `${ui('finance')} / ${windowTitle}`,
-    recordCount: decls.length,
-    onAddToFavorites: () => toggleFavorite('fiscal-models', windowTitle),
-    isFavorite: favActive,
-    onPageHelp: () => { supportActions.setTab('ayuda'); supportActions.open(); },
-  } : {}, [active, favActive, decls.length]);
 
   return (
     <div className="fm-page">
+      {active && (
+        <ListPageMeta
+          title={windowTitle}
+          breadcrumb={`${ui('finance')} / ${windowTitle}`}
+          recordCount={decls.length}
+          data-testid="ListPageMeta__cb728e" />
+      )}
       {/* ── Content row 1 — page actions, right-aligned (ETP-5584). Mirrors the first content
           row of a generated ListView under the TopBar: outline secondary, then the dark
           primary "New" button right-most (Button classes copied from ListView.jsx). ── */}

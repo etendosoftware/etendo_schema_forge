@@ -130,9 +130,11 @@ describe('FmModel349Page — rendering', () => {
     expect(document.body.textContent).toContain('349');
   });
 
-  it('shows year in header', () => {
+  // ETP-5584 — the title moved to the app TopBar (useSetPageMeta); the year/period are
+  // asserted on the published meta in FmModel349Page.breadcrumb.i18n.vitest.jsx.
+  it('renders no in-page title row (the title is in the app TopBar)', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
-    expect(document.body.textContent).toContain('2026');
+    expect(document.body.textContent).not.toContain('fm.config.m349.title');
   });
 
   it('renders the tab bar', () => {
@@ -504,34 +506,20 @@ describe('FmModel349Page — no Historial tab', () => {
 // once submitted, same as its 303 counterpart.
 
 describe('FmModel349Page — Guardar button (ETP-5338 pt.5)', () => {
-  // ETP-5584 — same split as the generic DetailView toolbar: Cancelar + status chip + the
-  // secondary actions (Calcular, Generar fichero) on the LEFT; Guardar immediately before the
-  // primary action (Registrar/Presentar) on the RIGHT.
-  // ETP-5584 — the status reads exactly like the list's "Estado" chip: the bare status, no
-  // "Estado:" prefix, rendered by the shared FmStatusChip.
-  it('shows the bare status in the list status chip, with no "Estado:" prefix', () => {
-    render(<FmModel349Page decl={makeDecl({ status: 'draft' })} {...defaultProps} />);
-    const left = screen.getByTestId('FmDetailActionBar__left');
-    const chip = left.querySelector('.fm-status-chip');
-    expect(chip).toBeTruthy();
-    expect(chip.getAttribute('data-status')).toBe('draft');
-    expect(chip.textContent).toBe('fm.status.draft');
-    expect(left.textContent).not.toContain('fm.col.status');
-  });
-
-  it('renders Calcular and Generar fichero on the left, and Guardar right before Registrar/Presentar on the right', () => {
+  // ETP-5584 — Cancelar + status chip on the LEFT; on the RIGHT, in this order: Calcular,
+  // Generar fichero, Guardar, and the primary Registrar/Presentar right-most.
+  it('renders Cancelar + status chip on the left, and Calcular, Generar fichero, Guardar, Registrar/Presentar on the right', () => {
     render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
     const left = screen.getByTestId('FmDetailActionBar__left');
     const right = screen.getByTestId('FmDetailActionBar__right');
-    const texts = (el) => Array.from(el.querySelectorAll('button')).map(b => b.textContent);
-    const leftTexts = texts(left);
-    expect(leftTexts[0]).toContain('fm.action.cancel');
-    expect(leftTexts.some(t => t.includes('fm.action.comput'))).toBe(true);
-    expect(leftTexts.some(t => t.includes('fm.action.gen349'))).toBe(true);
-    const rightBtns = Array.from(right.querySelectorAll('button'));
-    expect(rightBtns).toHaveLength(2);
-    expect(rightBtns[0].getAttribute('data-testid')).toBe('FmModel349Page__save');
-    expect(rightBtns[1].textContent).toContain('fm.action.present');
+    const leftBtns = Array.from(left.querySelectorAll('button'));
+    expect(leftBtns).toHaveLength(1);
+    expect(leftBtns[0].textContent).toContain('fm.action.cancel');
+    expect(left.querySelector('.fm-status-chip')).toBeTruthy();
+    const rightIds = Array.from(right.querySelectorAll('button')).map(b => b.getAttribute('data-testid'));
+    expect(rightIds).toEqual([
+      'FmModel349Page__compute', 'FmModel349Page__generate', 'FmModel349Page__save', 'FmModel349Page__present',
+    ]);
   });
 
   it('confirms immediately with a success toast and issues no network call — there is nothing to persist', async () => {

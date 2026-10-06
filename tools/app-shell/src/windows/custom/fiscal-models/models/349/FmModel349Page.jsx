@@ -7,8 +7,8 @@ import {
   TriangleAlert, ReceiptText, Calculator, PenLine, ShieldAlert, Info, FileCheck,
   X, Save,
 } from 'lucide-react';
-import { KpiWidget, Tabs, MoreOptionsMenu } from '../../FmCommon.jsx';
-import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton } from '../../FmDetailChrome.jsx';
+import { KpiWidget, Tabs } from '../../FmCommon.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
@@ -1203,33 +1203,27 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
     { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
+  // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
+  // model badge, kebab), like the list's "Modelos Fiscales" title. See FmDetailChrome.
+  const declTitle = `${t('fm.config.m349.title') ?? 'Modelo 349'} - ${periodLabel}`;
+  useFmDetailPageMeta({
+    model: '349',
+    title: declTitle,
+    breadcrumb: `${ui('finance')} / ${ui('fm.breadcrumb.section')} / ${declTitle}`,
+    favLabel: ui('fm.breadcrumb.section'),
+  });
+
   return (
     <div className="fm-page fm-page--detail">
-      {/* ── Sticky header: title + action bar (ETP-5584) ─────────────
-          Rendered outside `.fm-detail-scroll`, so it never scrolls away — see FmDetailChrome.
-          The title row itself (format, kebab position) is unchanged here — 349.1 is tracked
-          separately. */}
+      {/* ── Sticky action bar (ETP-5584) — the first row of the page, outside
+          `.fm-detail-scroll`, so it never scrolls away. The title, breadcrumb, model badge and
+          kebab are in the app top bar (useFmDetailPageMeta above). ─────────────────── */}
       <FmDetailHeader data-testid="FmDetailHeader__346dd5">
-        <div className="fm-detail-title">
-          <div className="fm-detail-title__row">
-            <span className="fm-model-badge fm-model-badge--349">349</span>
-            <span className="fm-detail-title__text">
-              {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-            </span>
-            <div style={{ flex: 1 }} />
-            <MoreOptionsMenu
-              favKey="fiscal-models"
-              favLabel={ui('fm.breadcrumb.section')}
-              data-testid="MoreOptionsMenu__346dd5" />
-          </div>
-          <div className="fm-detail-title__breadcrumb">
-            {ui('finance')} / {ui('fm.breadcrumb.section')} / {t('fm.config.m349.title') ?? 'Modelo 349'} - {periodLabel}
-          </div>
-        </div>
-        {/* ETP-5584 — same split as 303 and the generic DetailView toolbar: Cancelar, the
-            list's status chip (no "Estado:" prefix) and the secondary actions on the LEFT;
-            Guardar next to the primary action (Registrar/Presentar) on the RIGHT. Every action
-            except Cancelar is hidden once submitted (ETP-5438). */}
+        {/* ETP-5584 — Cancelar + the list's status chip (FmStatusChip, no "Estado:" prefix) on
+            the LEFT; on the RIGHT, in order: Calcular, Generar fichero, Guardar, and the primary
+            Registrar/Presentar right-most (Save-before-primary, as in `saveActions.jsx`). The
+            whole right group is hidden once submitted: nothing left to compute, generate, save
+            or file. */}
         <FmDetailActionBar
           left={(
             <>
@@ -1242,24 +1236,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                 t={t}
                 methodPlacement="inline"
                 data-testid="FmStatusChip__346dd5" />
-              {!isSubmitted && (
-                <FmDetailButton onClick={handleCompute} disabled={computing} data-testid="FmModel349Page__compute">
-                  {computing
-                    ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
-                    : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
-                  {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
-                </FmDetailButton>
-              )}
-              {!isSubmitted && (
-                <FmDetailButton onClick={() => setShowFilegen(true)} disabled={generating} data-testid="FmModel349Page__generate">
-                  <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
-                  {t('fm.action.gen349') ?? 'Generar fichero 349'}
-                </FmDetailButton>
-              )}
             </>
           )}
           right={!isSubmitted && (
             <>
+              <FmDetailButton onClick={handleCompute} disabled={computing} data-testid="FmModel349Page__compute">
+                {computing
+                  ? <Loader2 size={16} strokeWidth={1.75} style={{ animation: 'spin 1s linear infinite' }} data-testid="Loader2__346dd5" />
+                  : <Calculator size={16} strokeWidth={1.75} data-testid="Calculator__346dd5" />}
+                {computing ? (t('fm.action.computing') ?? 'Calculando…') : (t('fm.action.compute') ?? 'Calcular')}
+              </FmDetailButton>
+              <FmDetailButton onClick={() => setShowFilegen(true)} disabled={generating} data-testid="FmModel349Page__generate">
+                <Download size={16} strokeWidth={1.75} data-testid="Download__346dd5" />
+                {t('fm.action.gen349') ?? 'Generar fichero 349'}
+              </FmDetailButton>
               {/* ETP-5338 pt.5 — "Guardar" is a deliberate no-op confirmation (see `handleSave`):
                   349 has no locally-edited declaration data to persist. */}
               <FmDetailButton

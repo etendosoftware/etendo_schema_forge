@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Real-locale breadcrumb regression coverage (ETP-4945).
 //
 // FmModel349Page.jsx used to render
@@ -12,6 +14,7 @@
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
 import { render } from '@testing-library/react';
+import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
 const esES = loadLocaleDictionary('es_ES');
@@ -106,14 +109,32 @@ const defaultProps = {
   apiBaseUrl: '/api/fiscal-models',
 };
 
+// ETP-5584 — the title/breadcrumb now live in the app TopBar, published through
+// useSetPageMeta; read them back through a PageMetaProvider probe (same pattern as
+// FmListPage.breadcrumb.i18n.vitest.jsx).
+let lastMeta = null;
+function MetaProbe() {
+  lastMeta = usePageMeta();
+  return null;
+}
+function renderWithMeta(ui) {
+  lastMeta = null;
+  return render(<PageMetaProvider>{ui}<MetaProbe /></PageMetaProvider>);
+}
+
 describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
   it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1", not the stale "Tesorería / Declaraciones"', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    const { container } = renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1');
-    expect(container.textContent).not.toContain('Tesorería');
+    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026 T1');
+    expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--349');
+    expect(typeof lastMeta.onAddToFavorites).toBe('function');
+    expect(typeof lastMeta.onPageHelp).toBe('function');
+    // ETP-5584 — no in-page title row any more: nothing duplicated with the TopBar.
+    expect(container.textContent).not.toContain('Modelo 349 - 2026 T1');
   });
 
   // ETP-5338 — the "Modelo 349" segment itself used to be a hardcoded Spanish
@@ -124,10 +145,10 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026 T1", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
-    const { container } = render(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finance / Fiscal Models / Form 349 - 2026 T1');
-    expect(container.textContent).not.toContain('Modelo 349');
+    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 349 - 2026 T1');
+    expect(lastMeta.title).toBe('Form 349 - 2026 T1');
   });
 
   // ETP-5338 — a MONTHLY declaration's periodLabel used to derive its month name
@@ -140,17 +161,16 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   it('formats a monthly period\'s month name in Spanish under es_ES ("octubre")', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
-    const { container } = render(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Modelo 349 - 2026 / octubre');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026 / octubre');
   });
 
   it('formats a monthly period\'s month name in English under en_US ("October"), not the stale "octubre"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
-    const { container } = render(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
+    renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Form 349 - 2026 / October');
-    expect(container.textContent).not.toContain('octubre');
+    expect(lastMeta.title).toBe('Form 349 - 2026 / October');
   });
 });

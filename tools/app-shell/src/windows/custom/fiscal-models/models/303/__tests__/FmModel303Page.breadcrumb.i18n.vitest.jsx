@@ -1,16 +1,19 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/303/FmModel303Page.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Real-locale breadcrumb regression coverage (ETP-4945).
 //
 // FmModel303Page.jsx used to render `Tesorería / Modelo 303 - {periodLabel}` —
 // a raw hardcoded Spanish literal. The fix is
 // `${ui('finance')} / ${ui('fm.breadcrumb.section')} / Modelo 303 - {periodLabel}`,
-// 3 segments, matching the fm-list breadcrumb's root+section. Breadcrumb is
-// inline JSX text (not a useSetPageMeta call), so this asserts the rendered
-// title-bar text directly, following the sibling FmModel303Page.vitest.jsx's
-// mocking shape but with `useUI` backed by the real locale dictionary instead
-// of its identity mock.
+// 3 segments, matching the fm-list breadcrumb's root+section. Since ETP-5584 the
+// title and breadcrumb are published to the app TopBar through useSetPageMeta
+// (no in-page title row), so this asserts the published meta, following the
+// sibling FmModel303Page.vitest.jsx's mocking shape but with `useUI` backed by
+// the real locale dictionary instead of its identity mock.
 import { vi, describe, it, expect } from 'vitest';
 import React from 'react';
 import { render } from '@testing-library/react';
+import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
 import { loadLocaleDictionary, makeRealUI } from '../../../../shared/__tests__/testUtils/realLocaleUI.js';
 
 const esES = loadLocaleDictionary('es_ES');
@@ -82,13 +85,26 @@ const defaultProps = {
   onStatusChange: vi.fn(),
 };
 
+// ETP-5584 — the title/breadcrumb now live in the app TopBar, published through
+// useSetPageMeta; read them back through a PageMetaProvider probe (same pattern as
+// FmListPage.breadcrumb.i18n.vitest.jsx).
+let lastMeta = null;
+function MetaProbe() {
+  lastMeta = usePageMeta();
+  return null;
+}
+function renderWithMeta(ui) {
+  lastMeta = null;
+  return render(<PageMetaProvider>{ui}<MetaProbe /></PageMetaProvider>);
+}
+
 describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
   it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2", not the stale "Tesorería"', () => {
     activeUi = realUiEs;
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2');
-    expect(container.textContent).not.toContain('Tesorería');
+    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 303 - 2026/T2');
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
   });
 
   // ETP-5338 — the "Modelo 303" segment itself used to be a hardcoded Spanish
@@ -98,9 +114,51 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
   it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 303 - 2026/T2", not the stale "Modelo"', () => {
     activeUi = realUiEn;
-    const { container } = render(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
 
-    expect(container.textContent).toContain('Finance / Fiscal Models / Form 303 - 2026/T2');
-    expect(container.textContent).not.toContain('Modelo 303');
+    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 303 - 2026/T2');
+    expect(lastMeta.title).toBe('Form 303 - 2026/T2');
+  });
+});
+
+// ETP-5584 — the declaration header moved from an in-page title row to the app TopBar.
+describe('FmModel303Page — app TopBar meta (ETP-5584)', () => {
+  it('publishes the model badge and the same kebab items as the list (favourite + page help)', () => {
+    activeUi = realUiEs;
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--303');
+    expect(lastMeta.titleExtra.props.children).toBe('303');
+    expect(typeof lastMeta.onAddToFavorites).toBe('function');
+    expect(typeof lastMeta.onPageHelp).toBe('function');
+    expect(lastMeta.isFavorite).toBe(false);
+  });
+
+  it('renders no in-page title, breadcrumb or kebab (nothing duplicated with the TopBar)', () => {
+    activeUi = realUiEs;
+    const { container } = renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(container.textContent).not.toContain('Modelo 303 - 2026/T2');
+    expect(container.textContent).not.toContain('Finanzas / Modelos Fiscales');
+    expect(container.querySelector('[data-testid="fm-more-options-trigger"]')).toBeNull();
+  });
+
+  it('updates the title when another declaration is opened in the same page instance', () => {
+    activeUi = realUiEs;
+    const { rerender } = renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
+    rerender(
+      <PageMetaProvider>
+        <FmModel303Page decl={{ ...BASE_DECL, id: '303-2026-T3', period: 'T3' }} {...defaultProps} />
+        <MetaProbe />
+      </PageMetaProvider>,
+    );
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T3');
+  });
+
+  it('withdraws its meta on unmount (Cancelar back to the list)', () => {
+    activeUi = realUiEs;
+    const { rerender } = renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
+    rerender(<PageMetaProvider><MetaProbe /></PageMetaProvider>);
+    expect(lastMeta.title).toBeUndefined();
   });
 });
