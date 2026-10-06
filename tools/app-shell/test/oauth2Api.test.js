@@ -86,7 +86,7 @@ describe('oauth2Api runtime behaviour (mock apiFetch)', () => {
     const { createClient } = await import('../src/lib/oauth2Api.js');
     const created = { clientId: 'abc', clientSecret: 's3cr3t' };
     const apiFetch = async () => ({ ok: true, json: async () => created, text: async () => '' });
-    const result = await createClient(apiFetch, { name: 'Agent', scopes: ['neo:read'], isActive: true });
+    const result = await createClient(apiFetch, { name: 'Agent', scopes: ['etendo:read'], isActive: true });
     assert.equal(result.clientSecret, 's3cr3t');
   });
 

@@ -29,10 +29,10 @@ Repos:
 | File | What it is / when to read | Key symbols |
 |------|---------------------------|-------------|
 | `mcp/McpServlet.java` | HTTP handler, OAuth2 auth, JSON-RPC dispatch, session. Read for auth/transport/dispatch errors. | (not yet traced) |
-| `mcp/McpAuthorizationService.java` | OAuth2 scope validation. Read for scope rejections. | `neo_discover` case `~70` |
+| `mcp/McpAuthorizationService.java` | OAuth2 scope validation. Read for scope rejections. | `etendo_discover` case `~70` |
 | `mcp/McpSessionManager.java` | `Mcp-Session-Id` sessions, scoped `OBContext`/Hibernate session. Read for session/context bleed. | `~50-62` scoped-callable exec |
 | `mcp/McpHookExecutor.java` | Runs `NeoHandler` hooks. Read for window-specific behavior. | (not yet traced) |
-| `mcp/McpSelectorContextHelper.java` | Builds selector context (recordContext/parentContext). Read when `neo_selectors` returns empty/wrong rows. | (not yet traced) |
+| `mcp/McpSelectorContextHelper.java` | Builds selector context (recordContext/parentContext). Read when `etendo_selectors` returns empty/wrong rows. | (not yet traced) |
 | `mcp/NeoAccessUtils.java` | RBAC helpers (`hasProcessAccess`, `hasWindowAccess`). Read for access-denied triage. | `hasProcessAccess(id)`, `hasWindowAccess(id)` |
 
 ### Resources / definitions / constants
@@ -52,7 +52,7 @@ Repos:
 | `schemaforge/NeoRequestRouter.java` | **LIVE** top-level spec dispatch (P/R/W). After ETP-4255 the R path is NEO-handler-or-non-callable; Jasper fallback removed. | `handleSpecRequest() ~70-89` (R→`handleReportSpecRequest`); `handleReportSpecRequest()` — `NeoReportCallability.resolveReportHandlerQualifier`→`dispatchReportHandler` (NEO-native), else `NeoResponse.ok(buildNotConfiguredResponse)` (HTTP 200); `dispatchReportHandler() ~176` |
 | `schemaforge/NeoProcessReportEndpoint.java` | **LIVE** POST executor. After ETP-4255 only `handleProcessSpec()` remains; report method removed. | `handleProcessSpec() ~48` (process, KEEP) |
 | `schemaforge/util/NeoProcessReportHelper.java` | **DELETED (ETP-4255)** — was dead-code duplicate of the report/process logic. Its test `NeoProcessReportHelperTest` must also be deleted. | (removed) |
-| `schemaforge/NeoDiscoveryHandler.java` / `util/NeoDiscoveryHelper.java` | NEO `handleDiscovery` (the source the MCP `neo_discover` mirrors). Read for discover/callability shape on the NEO side. | (discovery spec listing — not yet line-traced) |
+| `schemaforge/NeoDiscoveryHandler.java` / `util/NeoDiscoveryHelper.java` | NEO `handleDiscovery` (the source the MCP `etendo_discover` mirrors). Read for discover/callability shape on the NEO side. | (discovery spec listing — not yet line-traced) |
 | `schemaforge/AgingReportHandler.java` | NEO-native report handler (KEEP). `@Named("agingReportHandler")`. GET describes params, POST returns JSON rows (no Jasper). | `@Named :60`; `handle() ~140` GET=`describeReport() ~155` / POST=execute `~180`; doc `/sws/neo/aging-report ~50-51` |
 | `schemaforge/InventoryStockReportHandler.java` | NEO-native report handler (KEEP). `@Named("inventoryStockReportHandler")`. POST returns JSON rows. | `@Named :38`; `handle()` |
 | `schemaforge/TaxReportHandler.java` | NEO-native report handler (KEEP). `@Named("taxReportHandler")`. GET describes, POST returns JSON rows. | `@Named :51`; `handle()` |
@@ -102,4 +102,4 @@ Repos:
 - **ETP-4287** (code-bug — explicit read-only discovery metadata): `mcp/McpToolRouterSupport.java` (`buildEntitySummaryArray`, new `buildDiscoverEntity` and `isReadOnlyEntity`, derives `readOnly` from enabled methods); `mcp/McpSchemaFieldBuilder.java` and `mcp/McpResourceProvider.java` (existing camel-case `readOnly` convention consulted); `src-db/database/sourcedata/ETGO_SF_ENTITY.xml` (`bp-stats`/`bp-trend` GET-only, `tax` writable); `McpToolRouterSupportTest.java` (discovery contract regression coverage).
 - **ETP-4280** (validator-side / diagnostic gap — investigation): `schemaforge/FinancialAccountHandler.java` (`validateAndEnrichCreate`, `normalizeType`: preserves `B`/`C`/`CA` before generic persistence); `mcp/McpToolRouter.java` (`handleCreate`: runs handler pre-hook); `mcp/McpHookExecutor.java` (`neoResponseToMcpResult`: returns hook validation body as MCP error text).
 - **ETP-4255** (code-bug — remove runtime Jasper from Etendo Go): `McpToolRouter.java` (handleReport, handleDiscover), `McpToolRouterSupport.java` (buildDiscoverSpec), `ToolRegistry.java` (processSpec, buildReportTool), `McpResourceProvider.java` (process coupling), `NeoReportService.java` (Jasper exportJR), `cli/src/neo-writer.js` (P/R as process-backed).
-- **ETP-4284** (code-bug — expose `neo_widget` enum tool, G4; investigation/plan only): planned touch points `McpConstants.java`, `ToolRegistry.java` (buildWidgetTool + isCrudTool), `McpAuthorizationService.java` (neo:read), `McpToolRouter.java` (route + handleWidget reusing `McpHookExecutor` lookup), `McpToolRouterSupport.java`/`ToolRegistry.addWindowSpec` (exclude `dashboard` from W discovery). Plan: `docs/plans/ETP-4284-neo-widget-tool.md`.
+- **ETP-4284** (code-bug — expose `etendo_widget` enum tool, G4; investigation/plan only): planned touch points `McpConstants.java`, `ToolRegistry.java` (buildWidgetTool + isCrudTool), `McpAuthorizationService.java` (neo:read), `McpToolRouter.java` (route + handleWidget reusing `McpHookExecutor` lookup), `McpToolRouterSupport.java`/`ToolRegistry.addWindowSpec` (exclude `dashboard` from W discovery). Plan: `docs/plans/ETP-4284-neo-widget-tool.md`.

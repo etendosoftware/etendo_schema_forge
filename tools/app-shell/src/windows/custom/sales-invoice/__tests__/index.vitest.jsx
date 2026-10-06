@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/sales-invoice/index.jsx
 // Coverage-recovery suite (ETP-4346 batch 2): a genuine render smoke test for
 // the sales-invoice custom window wrapper. The existing index.test.js is a
 // source-reading suite (regex-only, per this project's convention for thin
@@ -182,6 +183,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthContextMock, createFiscalConfigMock } from '@/test/mockOrderWindowAuth.jsx';
 import SalesInvoiceWindow from '../index.jsx';
+import { consumeFollowUpPrompt } from '@/components/follow-up-documents/followUpDocuments.js';
 
 describe('SalesInvoiceWindow — render smoke tests', () => {
   beforeEach(() => {
@@ -244,6 +246,18 @@ describe('SalesInvoiceWindow — render smoke tests', () => {
     expect(lastHeaderPageProps.draftMode).toMatchObject({ enabled: true, processValue: 'CO' });
     // No Verifactu profile configured for the org -> no processing modal.
     expect(lastHeaderPageProps.draftMode.processingModal).toBeNull();
+  });
+
+  // Confirm → draftMode.afterProcess: this window stays on the invoice (and queues the
+  // follow-up prompt) only for ITS follow-up key; anything else keeps the list navigation.
+  it.each([
+    ['its own pending follow-up', 'shipment', 'createShipment', { stay: true }],
+    ['a follow-up it does not configure', 'receipt', 'createReceipt', null],
+  ])('wires draftMode.afterProcess for %s', (_, key, action, expected) => {
+    render(<SalesInvoiceWindow windowName="sales-invoice" recordId="inv-1" apiBaseUrl="/api" token="tkn" />);
+    const processed = { id: 'inv-1', followUp: { available: [key], [key]: { needed: true, pendingLines: 1, action } } };
+    expect(lastHeaderPageProps.draftMode.afterProcess(processed)).toEqual(expected);
+    expect(Boolean(consumeFollowUpPrompt('sales-invoice', 'inv-1'))).toBe(expected !== null);
   });
 
   it('enables the Verifactu processing modal on draftMode when the org profile is verifactu', () => {
