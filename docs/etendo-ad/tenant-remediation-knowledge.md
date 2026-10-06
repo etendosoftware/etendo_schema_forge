@@ -3458,3 +3458,22 @@ restart — but it argues for running this fix close to a restart.
   subscription row; one `etgo_subscription` row, `canceled` with `end_date` set (E2E tenant
   `769A5DE5…`, no marker) — so a closed-only row DOES exist locally even though no product code
   writes `END_DATE` yet (test fixture). R37 dry-run: 6 `WOULD_APPLY`, all branch (A).
+
+## ETP-5047 — S1 R37 backfill guard narrowed to "no active row": close-on-cancel made the R42 edge reachable (2026-10-06)
+
+- **Wrong assumption:** "R37 branch (A) keying on *no open row* is harmless, because nothing writes
+  `END_DATE`." **Fact:** ETP-5047 closes the row on `customer.subscription.deleted` (and on an
+  update to Stripe's terminal `canceled`), and on the row route that write touches only the row —
+  not `etgo_checkout_request.checkout_status`, not `ETGO_SubscriptionStatus`. Neither of R42's
+  exclusions therefore fires, so a tenant that pays and cancels before its first post-ETP-5046
+  data-fix chain gets an R42 marker, and the old branch (A) backfilled a fresh open
+  `legacy-productive` row seeded `active` (no status preference on the row route): a canceled
+  customer read as paying again.
+- **Apply:** branch (A) of `@check` and the guards of `@apply` statements 1-2 now require *no
+  active subscription row, open or closed* (`isactive = 'Y'`, `END_DATE` ignored) — the same rows
+  `SubscriptionService#findLatest` answers from, and the only case in which
+  `TenantPlanService#resolvePlan` still consults the marker. Such a tenant now takes branch (B)
+  only: marker retired, nothing inserted. A tenant whose only rows are inactive is still
+  backfilled (`findLatest` ignores them, so the marker decides for it today). R37 is edited in
+  place, which is safe in either release order: before ETP-5047 deploys no tenant can have a
+  closed row, so every tenant the old text reached gets the same outcome from the new one.

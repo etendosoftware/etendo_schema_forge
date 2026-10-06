@@ -106,8 +106,9 @@ physical-inventory correction first).
    `20260730T180000Z__R17-rectificativa-doctype-sequence.sql` (steps 0a/0b, ETP-4799) for a
    worked example.
 4. **Decide "paying or free" from `etgo_subscription`, never from the `ETGO_TenantPlan`
-   preference.** Since ETP-5046's R37 backfill the preference is retired per tenant as soon as the
-   tenant gains an open subscription, and a tenant paid after ETP-5046 never has it. "No productive
+   preference.** Since ETP-5046's R37 backfill the preference is retired for every tenant that has
+   any subscription row, and a tenant paid after ETP-5046 has it only when develop's R42 re-inserted
+   it (R37 then retires it). "No productive
    preference" therefore no longer means "a free tenant" — increasingly it means "a paying tenant
    that has already been migrated". A fix keyed on the preference inverts its own intent, silently,
    on exactly the tenants that pay; for a fix that forces test mode (as R31 does) that routes real

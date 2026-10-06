@@ -276,26 +276,31 @@ describe('R37 data-fix — tenant isolation (no statement is unscoped)', () => {
   });
 });
 
-describe('R37 data-fix — @check (productive tenant without an open subscription)', () => {
+describe('R37 data-fix — @check (productive tenant without an active subscription row)', () => {
   it('requires an active ETGO_TenantPlan=productive marker', () => {
     assert.match(normCheck, /EXISTS \( SELECT 1 FROM ad_preference tp/);
     assert.match(normCheck, /tp\.isactive = 'Y'/);
     assert.match(normCheck, /upper\(trim\(tp\.value\)\) = 'PRODUCTIVE'/);
   });
 
-  it('requires the tenant to have NO open subscription yet', () => {
+  it('requires the tenant to have NO active subscription row yet, open or closed', () => {
     assert.match(
       normCheck,
-      /NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/,
+      /NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' \)/,
     );
   });
 
-  it('keeps branch (A) intact: active productive marker AND no open subscription', () => {
+  it('branch (A): active productive marker AND no ACTIVE subscription row, END_DATE ignored', () => {
+    // ETP-5047 closes a row on cancel and SubscriptionService#findLatest then answers from that
+    // closed row, so the marker no longer decides for the tenant. A "no OPEN row" guard backfilled
+    // a fresh open 'legacy-productive' row for a canceled tenant once R42 re-inserted its marker,
+    // and the tenant read as paying again. The guard must mirror findLatest: isactive only.
     const branchA = normCheck.slice(0, normCheck.indexOf(' OR ( '));
+    assert.doesNotMatch(branchA, /s\.end_date/);
     assert.match(branchA, /tp\.isactive = 'Y' AND upper\(trim\(tp\.value\)\) = 'PRODUCTIVE'/);
     assert.match(
       branchA,
-      /AND NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/,
+      /AND NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' \)/,
     );
   });
 
@@ -586,12 +591,14 @@ describe('R37 data-fix — @apply statement 3 (per-tenant retirement of the ETGO
 });
 
 describe('R37 data-fix — idempotency (converges to zero, never trips the partial unique index)', () => {
-  it('carries the same NOT EXISTS open-subscription guard in BOTH @check and @apply', () => {
-    const guard = /NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' AND s\.end_date IS NULL \)/;
+  it('carries the same NOT EXISTS active-subscription guard in BOTH @check and @apply', () => {
+    const guard = /NOT EXISTS \( SELECT 1 FROM etgo_subscription s WHERE s\.environment_client_id = :client_id AND s\.isactive = 'Y' \)/;
     assert.match(normCheck, guard);
     assert.match(normApply, guard);
     const applyGuards = (normApply.match(new RegExp(guard.source, 'g')) || []).length;
     assert.equal(applyGuards, 2, 'expected the guard on BOTH the abort guard and the INSERT');
+    // No backfill guard may narrow itself back to OPEN rows (ETP-5047, see branch (A) above).
+    assert.doesNotMatch(normApply, /s\.end_date IS NULL/);
   });
 
   it('gates both sections on the same productive-plan marker, so the two layers agree', () => {
@@ -603,8 +610,8 @@ describe('R37 data-fix — idempotency (converges to zero, never trips the parti
   });
 
   it('converges after the retirement too: no preference left means @check can never match again', () => {
-    // Two independent reasons now: @check requires an ACTIVE productive preference AND no open
-    // subscription. After @apply the tenant has the subscription and no preference at all, so
+    // Two independent reasons now: @check requires an ACTIVE productive preference AND no active
+    // subscription row. After @apply the tenant has the subscription and no preference at all, so
     // both halves of the probe are false and the runner records SKIPPED_NOT_NEEDED forever.
     assert.match(normCheck, /EXISTS \( SELECT 1 FROM ad_preference tp/);
     assert.match(normCheck, /NOT EXISTS \( SELECT 1 FROM etgo_subscription s/);
