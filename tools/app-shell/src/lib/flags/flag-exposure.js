@@ -35,10 +35,19 @@ let rumClientPromise;
 
 /** Datadog RUM feature flag keys accept identifier characters only. */
 export function sanitizeRumFeatureFlagKey(flagKey) {
-  const sanitized = String(flagKey ?? '')
-    .replace(/[^A-Za-z0-9_]/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 100);
+  const source = String(flagKey ?? '');
+  let sanitized = '';
+  for (const character of source.split('')) {
+    const code = character.charCodeAt(0);
+    const allowed = code === 95 || (code >= 48 && code <= 57) ||
+      (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+    sanitized += allowed ? character : '_';
+  }
+  let start = 0;
+  while (sanitized[start] === '_') start += 1;
+  let end = sanitized.length;
+  while (end > start && sanitized[end - 1] === '_') end -= 1;
+  sanitized = sanitized.slice(start, end).slice(0, 100);
   return sanitized || 'flag';
 }
 
@@ -102,7 +111,10 @@ export function createFlagExposureHook({
         Promise.resolve(trackImpl(event.name, event.properties)).catch(() => {});
         // The startup no-op provider is useful for business exposure telemetry,
         // but it is not a real assignment and must not enter RUM flag context.
-        if (!/^no[- ]?op provider$/i.test(String(provider || ''))) {
+        const normalizedProvider = String(provider || '').toLowerCase();
+        const isNoOpProvider = normalizedProvider === 'no op provider' ||
+          normalizedProvider === 'no-op provider' || normalizedProvider === 'noop provider';
+        if (!isNoOpProvider) {
           Promise.resolve(rumEvaluationImpl(sanitizeRumFeatureFlagKey(flagKey), value)).catch(() => {});
         }
       } catch {

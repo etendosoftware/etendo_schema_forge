@@ -42,15 +42,62 @@ export function resolveTracingUrls(raw, logger = console) {
 
 /** Sanitize automatic SDK telemetry as well as manually dispatched events. */
 export function redactErrorText(value) {
-  return String(value ?? '').replace(/https?:\/\/[^\s)]+/g, match => {
+  const redactedUrls = String(value ?? '').replace(/https?:\/\/[^\s)]+/g, match => {
     const position = match.match(/:\d+:\d+$/)?.[0] || '';
     const raw = position ? match.slice(0, -position.length) : match;
     try { const url = new URL(raw); return `${url.origin}${url.pathname}${position}`; } catch { return '[url]'; }
-  }).replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+  });
+  return redactEmailAddresses(redactedUrls)
     .replace(/(authorization|token|password|secret|code)=([^\s&]+)/gi, '$1=[redacted]');
 }
 
-export function redactDatadogEvent(event) {
+function isEmailLocalCharacter(character) {
+  const code = character.charCodeAt(0);
+  return code === 46 || code === 37 || code === 43 || code === 45 || code === 95 ||
+    (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isEmailDomainCharacter(character) {
+  const code = character.charCodeAt(0);
+  return code === 45 || code === 46 || (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isEmailTld(value) {
+  if (value.length < 2) return false;
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (!((code >= 65 && code <= 90) || (code >= 97 && code <= 122))) return false;
+  }
+  return true;
+}
+
+function redactEmailAddresses(value) {
+  let output = '';
+  let cursor = 0;
+  while (cursor < value.length) {
+    const at = value.indexOf('@', cursor);
+    if (at < 0) return output + value.slice(cursor);
+    let start = at - 1;
+    while (start >= cursor && isEmailLocalCharacter(value[start])) start -= 1;
+    const domainStart = at + 1;
+    let end = domainStart;
+    while (end < value.length && isEmailDomainCharacter(value[end])) end += 1;
+    const domain = value.slice(domainStart, end);
+    const dot = domain.lastIndexOf('.');
+    const valid = start < at - 1 && dot > 0 && isEmailTld(domain.slice(dot + 1));
+    if (valid) {
+      output += value.slice(cursor, start + 1) + '[email]';
+      cursor = end;
+    } else {
+      output += value.slice(cursor, at + 1);
+      cursor = at + 1;
+    }
+  }
+  return output;
+}
+
+function normalizeEventRoutes(event) {
   if (event.view) {
     event.view.url = normalizeRoute(event.view.url);
     if (event.view.referrer) event.view.referrer = normalizeRoute(event.view.referrer);
@@ -58,16 +105,54 @@ export function redactDatadogEvent(event) {
   }
   if (event.resource?.url) event.resource.url = normalizeRoute(event.resource.url);
   if (event.error?.resource?.url) event.error.resource.url = normalizeRoute(event.error.resource.url);
-  if (event.error) {
-    event.error.message = redactErrorText(event.error.message);
-    if (event.error.stack) event.error.stack = redactErrorText(event.error.stack);
-  }
+}
+
+function redactEventError(event) {
+  if (!event.error) return;
+  event.error.message = redactErrorText(event.error.message);
+  if (event.error.stack) event.error.stack = redactErrorText(event.error.stack);
+}
+
+function sanitizeEventIdentity(event) {
   event.context = sanitizeEventProperties(event.context ?? {});
   delete event.context.username;
   // User names/emails are never sent. Hosts can assign an opaque account identity.
   if (event.usr) event.usr = event.usr.id ? { id: event.usr.id } : {};
   if (event.account) event.account = event.account.id ? { id: event.account.id } : {};
+}
+
+export function redactDatadogEvent(event) {
+  normalizeEventRoutes(event);
+  redactEventError(event);
+  sanitizeEventIdentity(event);
   return true;
+}
+
+function initializeDatadogRum({ env, logger, datadogRum, reactPlugin }) {
+  const remoteConfigurationId = env.VITE_DATADOG_REMOTE_CONFIGURATION_ID;
+  datadogRum.init({
+    applicationId: env.VITE_DATADOG_APPLICATION_ID,
+    clientToken: env.VITE_DATADOG_CLIENT_TOKEN,
+    site: env.VITE_DATADOG_SITE,
+    env: env.VITE_APP_ENV,
+    service: env.VITE_DATADOG_SERVICE || 'etendo-go-web',
+    version: env.VITE_APP_VERSION,
+    sessionSampleRate: boundedSampleRate(env.VITE_DATADOG_SESSION_SAMPLE_RATE),
+    sessionReplaySampleRate: boundedSampleRate(env.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE, 20),
+    ...(remoteConfigurationId ? { remoteConfiguration: { id: remoteConfigurationId } } : {}),
+    trackFeatureFlagsForEvents: DATADOG_RUM_FEATURE_FLAG_EVENTS,
+    allowedTracingUrls: resolveTracingUrls(env.VITE_DATADOG_TRACE_API_BASES, logger),
+    traceSampleRate: boundedSampleRate(env.VITE_DATADOG_TRACE_SAMPLE_RATE, 20),
+    traceContextInjection: 'sampled',
+    defaultPrivacyLevel: 'mask',
+    trackUserInteractions: true,
+    trackViewsManually: true,
+    trackResources: true,
+    trackLongTasks: true,
+    ...(typeof reactPlugin === 'function' ? { plugins: [reactPlugin({ router: false })] } : {}),
+    beforeSend: redactDatadogEvent,
+  });
+  return datadogRum;
 }
 
 export function createDatadogProvider({
@@ -90,29 +175,7 @@ export function createDatadogProvider({
   function getClient() {
     if (!enabled) return Promise.resolve(undefined);
     if (!clientPromise) clientPromise = loader().then(({ datadogRum, reactPlugin }) => {
-      const remoteConfigurationId = env.VITE_DATADOG_REMOTE_CONFIGURATION_ID;
-      datadogRum.init({
-        applicationId: env.VITE_DATADOG_APPLICATION_ID,
-        clientToken: env.VITE_DATADOG_CLIENT_TOKEN,
-        site: env.VITE_DATADOG_SITE,
-        env: env.VITE_APP_ENV,
-        service: env.VITE_DATADOG_SERVICE || 'etendo-go-web',
-        version: env.VITE_APP_VERSION,
-        sessionSampleRate: boundedSampleRate(env.VITE_DATADOG_SESSION_SAMPLE_RATE),
-        sessionReplaySampleRate: boundedSampleRate(env.VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE, 20),
-        ...(remoteConfigurationId ? { remoteConfiguration: { id: remoteConfigurationId } } : {}),
-        trackFeatureFlagsForEvents: DATADOG_RUM_FEATURE_FLAG_EVENTS,
-        allowedTracingUrls: resolveTracingUrls(env.VITE_DATADOG_TRACE_API_BASES, logger),
-        traceSampleRate: boundedSampleRate(env.VITE_DATADOG_TRACE_SAMPLE_RATE, 20),
-        traceContextInjection: 'sampled',
-        defaultPrivacyLevel: 'mask',
-        trackUserInteractions: true,
-        trackViewsManually: true,
-        trackResources: true,
-        trackLongTasks: true,
-        ...(typeof reactPlugin === 'function' ? { plugins: [reactPlugin({ router: false })] } : {}),
-        beforeSend: redactDatadogEvent,
-      });
+      initializeDatadogRum({ env, logger, datadogRum, reactPlugin });
       currentRoute = normalizeRoute(globalThis.location?.pathname || '/');
       datadogRum.startView({ name: currentRoute });
       return datadogRum;
