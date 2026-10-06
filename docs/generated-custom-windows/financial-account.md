@@ -4764,3 +4764,39 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
 
 The agent-facing recipes are in `etendo-go-docs` → `agentic/finance/bank-reconciliation.md` and
 `agentic/finance/treasury.md`.
+
+## Last bank sync label (ETP-5582)
+
+Connected bank accounts (`bankConnected === true`) show **when the last successful statement sync
+finished**, as relative time. Cash, offline/reconnectable and unconnected accounts show nothing.
+
+- **Source:** one column, `FIN_Financial_Account.EM_PSD2_Last_Sync_Date` (psd2 module). It is
+  stamped only by a sync that finished OK, including one that brought 0 new transactions. It is NOT
+  stamped on an error, an expired consent, a connection that went inactive during the sync, a
+  missing API key, an `Import To Date` skip, or when the account has no active connection.
+- **Where it is exposed:**
+  - `financial-accounts-page` (page endpoint): `accounts[].lastSyncDate` (ISO instant or null).
+  - `GET bank-connection?action=status` and the `sync` response: `lastSyncDate`.
+  - `financial-account` spec (R and W rows, entity `account`): field `pSD2LastSyncDate`,
+    `readOnly`, hidden from grid and form in `decisions.json` (the UI renders it through the label
+    below, so `neo_get` / `neo_list` can return it without a column showing up).
+- **Where it renders** (one shared component, `components/financial-accounts/LastSyncLabel.jsx`):
+
+  | Place | Text | Source |
+  |---|---|---|
+  | List row / detail header (`SyncStatusInline`) | "Sincronizado hace 54 segundos" | `account.lastSyncDate` |
+  | Edit connection modal (`BankConnectionPanel`, under the provider name) | "Última sincronización hace 54 segundos" | `bankConnection.status.lastSyncDate` |
+
+- **No date:** "Nunca sincronizada" (`financeAccountsNeverSynced`), shown only for a connected account that has never completed a sync, with a GRAY dot and text (muted-foreground) instead of green (list row and detail header, same `SyncStatusInline`); unconnected accounts show nothing.
+- **Tooltip:** absolute locale-ordered date, 24h time (e.g. `06/10/2026 11:45` es, `10/06/2026 11:45` en; `formatDateTime`, instant formatter; not `formatCalendarDate`).
+- **Relative text:** `formatRelativeTime` (`lib/relativeTime.js`, `Intl.RelativeTimeFormat`,
+  `numeric: 'auto'`; seconds, minutes, hours, days, months). It ticks by itself through `useNow`
+  (`hooks/useNow.js`), one shared 30 s interval for all labels on screen.
+- **Refresh after a sync:** the list reloads (rows + summary); the modal re-fetches status after
+  `runSync`; the detail reloads the account after `runSync` (modal `onSaved`) and after
+  `handleSyncStatements` in the Statements tab (`onSynced`).
+- **i18n:** `financeAccountsSyncedAgo`, `financeAccountsLastSyncAgo`
+  (both with `{time}`), `financeAccountsNeverSynced`. The old `financeAccountsSyncedJustNow`,
+  `financeAccountsSyncUpdatedAgo`, `financeAccountsUpdatedAgo` and `financeAccountsUnsyncedNotice` were removed.
+- The sidebar "Saldo" header carries no sync pill (removed by product decision); only the per-account labels exist.
+- Out of scope: a "next sync in..." estimate (the sync is a per-client scheduled process).

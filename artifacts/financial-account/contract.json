@@ -1,7 +1,8 @@
 {
-  "version": "0.1.0",
+  "version": "0.3.0",
   "generatedAt": "2026-09-29T12:00:08.872Z",
-  "checksum": "024b2fcec65e5973",
+  "updatedAt": "2026-10-06T14:35:29.396Z",
+  "checksum": "4335aaf5953524e5",
   "frontendContract": {
     "window": {
       "id": "94EAA455D2644E04AB25D93BE5157B6D",
@@ -818,6 +819,21 @@
             },
             "validation": {
               "maxLength": 12
+            }
+          },
+          {
+            "name": "pSD2LastSyncDate",
+            "apiKey": "pSD2LastSyncDate",
+            "column": "EM_PSD2_Last_Sync_Date",
+            "label": "Last Sync Date",
+            "type": "dateTime",
+            "tsType": "string",
+            "visibility": "readOnly",
+            "required": false,
+            "grid": false,
+            "form": false,
+            "validation": {
+              "maxLength": 19
             }
           }
         ],
@@ -3833,6 +3849,14 @@
             "type": "foreignKey",
             "visibility": "system",
             "required": true
+          },
+          {
+            "name": "pSD2LastSyncDate",
+            "apiKey": "pSD2LastSyncDate",
+            "column": "EM_PSD2_Last_Sync_Date",
+            "type": "dateTime",
+            "visibility": "readOnly",
+            "required": false
           }
         ],
         "javaQualifier": "financialAccountHeaderHandler"
@@ -7829,6 +7853,14 @@
         "description": "Field 'pSD2ImportToDate' should be present in account"
       },
       {
+        "id": "t-field-presence-account-pSD2LastSyncDate",
+        "category": "field-presence",
+        "entity": "account",
+        "field": "pSD2LastSyncDate",
+        "runner": "node",
+        "description": "Field 'pSD2LastSyncDate' should be present in account"
+      },
+      {
         "id": "t-field-presence-account-psd2Provider",
         "category": "field-presence",
         "entity": "account",
@@ -8683,6 +8715,14 @@
         "field": "pSD2ImportToDate",
         "runner": "node",
         "description": "Field 'pSD2ImportToDate' should have type 'string' in account"
+      },
+      {
+        "id": "t-field-type-account-pSD2LastSyncDate",
+        "category": "field-type",
+        "entity": "account",
+        "field": "pSD2LastSyncDate",
+        "runner": "node",
+        "description": "Field 'pSD2LastSyncDate' should have type 'string' in account"
       },
       {
         "id": "t-field-type-account-psd2Provider",
@@ -12933,15 +12973,15 @@
       }
     ],
     "summary": {
-      "total": 865,
+      "total": 867,
       "byCategory": {
         "action-endpoint": 28,
         "crud-flags": 7,
         "default-value-type": 33,
         "displaylogic-evaluable": 51,
         "displaylogic-valid": 51,
-        "field-presence": 107,
-        "field-type": 107,
+        "field-presence": 108,
+        "field-type": 108,
         "readonlylogic-evaluable": 33,
         "readonlylogic-valid": 33,
         "rule-declared": 226,
@@ -12951,7 +12991,7 @@
         "visibility": 7
       },
       "byRunner": {
-        "node": 865,
+        "node": 867,
         "junit": 0
       }
     }

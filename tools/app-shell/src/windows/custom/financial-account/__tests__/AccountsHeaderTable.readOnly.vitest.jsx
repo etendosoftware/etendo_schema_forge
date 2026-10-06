@@ -143,10 +143,13 @@ vi.mock('@/components/contract-ui', () => ({
 }));
 
 const mockNavigate = vi.fn();
+vi.mock('@/hooks/useNow.js', () => ({ refreshNow: vi.fn(), useNow: () => Date.now() }));
+
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+import { refreshNow } from '@/hooks/useNow.js';
 import AccountsHeaderTable from '@generated/financial-account/custom/AccountsHeaderTable.jsx';
 
 const CONNECTED = {
@@ -600,5 +603,18 @@ describe('AccountsHeaderTable — runDisconnect guard (ETP-5457)', () => {
     expect(mockDisconnect).toHaveBeenCalledWith('acc-1', { permanentDeletion: false });
     expect(toastSuccess).toHaveBeenCalledWith('financeAccountsBankConnectionDisconnectDone');
     expect(onDataMutated).toHaveBeenCalled();
+  });
+});
+
+describe('AccountsHeaderTable — toolbar refresh (ETP-5582)', () => {
+  it('Actualizar reloads the list and recomputes the relative sync labels immediately', () => {
+    onDataMutated.mockClear();
+    refreshNow.mockClear();
+    renderTable();
+
+    act(() => { toolbarProps.onRefresh(); });
+
+    expect(onDataMutated).toHaveBeenCalledTimes(1);
+    expect(refreshNow).toHaveBeenCalledTimes(1);
   });
 });

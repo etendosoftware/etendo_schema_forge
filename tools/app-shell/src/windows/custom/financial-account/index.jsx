@@ -451,7 +451,7 @@ export function FinancialAccountDetail({ recordId }) {
       titleExtra: account ? <SyncStatusInline account={account} data-testid="SyncStatusInline__f7dbb3" /> : null,
       breadcrumb: `${ui('financeMenuLabel')} / ${ui('financeAccountsPageTitle')} / ${accountName}`,
     },
-    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending],
+    [accountName, account?.type, account?.bankConnected, account?.bankConnectionPending, account?.lastSyncDate],
   );
 
   // ETP-4658 — this custom window never delegated to the generated AccountPage.jsx
@@ -562,6 +562,7 @@ export function FinancialAccountDetail({ recordId }) {
               ref={statementsTabRef}
               account={account}
               windowReadOnly={windowReadOnly}
+              onSynced={reloadAccountAndList}
               data-testid="ImportedStatementsTab__f7dbb3" />
           )}
           {activeTab === 'reconciliationList' && (

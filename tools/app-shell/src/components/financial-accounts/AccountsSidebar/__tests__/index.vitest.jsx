@@ -1,11 +1,12 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/index.jsx
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
-  useUI: () => (key) => {
+  useLocaleSwitch: () => ({ locale: 'es_ES', setLocale: () => {} }),
+  useUI: () => (key, params = {}) => {
     const map = {
       financeAccountsBalanceTitle: 'Saldo',
       financeAccountsBalanceInfo: 'Info',
-      financeAccountsSyncUpdatedAgo: 'Actualizado',
       financeAccountsBalanceByCurrency: 'Por moneda',
       financeAccountsBalanceEmpty: 'Sin saldos',
       financeAccountsPendingTitle: 'Pendientes',
@@ -26,6 +27,14 @@ const baseSummary = {
   ],
   pending: { accountsWithPending: 3, suggestionsReady: 2, byRule: 1 },
 };
+
+describe('AccountsSidebar — no sync pill', () => {
+  it('does not render any sync/updated label in the header', () => {
+    render(<AccountsSidebar summary={baseSummary} loading={false} />);
+    expect(screen.queryByTestId('sidebar-last-sync')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Actualizado/)).not.toBeInTheDocument();
+  });
+});
 
 describe('AccountsSidebar', () => {
   it('renders the Saldo header and the formatted total balance', () => {
