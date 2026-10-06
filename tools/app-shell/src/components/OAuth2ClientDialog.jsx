@@ -15,8 +15,26 @@ import { createClient, updateClient } from '@/lib/oauth2Api.js';
 import { toast } from 'sonner';
 import { Copy, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 
-const ALL_SCOPES = ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'];
-const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== 'neo:*');
+const WILDCARD_SCOPE = 'etendo:*';
+const ALL_SCOPES = ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', WILDCARD_SCOPE];
+const GRANULAR_SCOPES = ALL_SCOPES.filter((s) => s !== WILDCARD_SCOPE);
+
+// Clients created before the rename carry the legacy scope names; the server still accepts them
+// (ApiScopes.canonical), but the dialog offers only the etendo:* names, so show and re-save them as
+// such. Exactly these five — every other scope (e.g. the internal `neo:public-api-key` markers the
+// server looks up by name) passes through untouched.
+const LEGACY_SCOPES = {
+  'neo:read': 'etendo:read',
+  'neo:write': 'etendo:write',
+  'neo:process': 'etendo:process',
+  'neo:report': 'etendo:report',
+  'neo:*': WILDCARD_SCOPE,
+};
+
+function toCurrentScopes(scopes) {
+  const list = typeof scopes === 'string' ? scopes.split(/\s+/) : (scopes ?? []);
+  return [...new Set(list.filter(Boolean).map((scope) => LEGACY_SCOPES[scope] ?? scope))];
+}
 
 /**
  * Dialog for creating or editing an OAuth2 client.
@@ -44,7 +62,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
         setName(client.name || '');
         setAdUserId(client.adUserId || '');
         setAdRoleId(client.adRoleId || '');
-        setScopes(client.scopes || []);
+        setScopes(toCurrentScopes(client.scopes));
         setIsActive(client.isActive !== false);
       } else {
         setName('');
@@ -57,16 +75,16 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
     }
   }, [open, client]);
 
-  const hasWildcard = scopes.includes('neo:*');
+  const hasWildcard = scopes.includes(WILDCARD_SCOPE);
 
   const toggleScope = (scope) => {
-    if (scope === 'neo:*') {
+    if (scope === WILDCARD_SCOPE) {
       // Toggle wildcard: if already set, clear all; otherwise set wildcard + all granular
-      if (hasWildcard) {
-        setScopes([]);
-      } else {
-        setScopes([...ALL_SCOPES]);
-      }
+      // Scopes the dialog does not offer (internal markers) are kept either way.
+      setScopes((prev) => {
+        const kept = prev.filter((s) => !ALL_SCOPES.includes(s));
+        return hasWildcard ? kept : [...kept, ...ALL_SCOPES];
+      });
     } else {
       if (hasWildcard) return; // granular scopes locked when wildcard is on
       setScopes((prev) =>
@@ -192,7 +210,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
               <Label data-testid="Label__4aea7f">Scopes</Label>
               <div className="grid grid-cols-2 gap-2">
                 {ALL_SCOPES.map((scope) => {
-                  const isGranular = scope !== 'neo:*';
+                  const isGranular = scope !== WILDCARD_SCOPE;
                   const checked = scopes.includes(scope) || (isGranular && hasWildcard);
                   const disabled = isGranular && hasWildcard;
 
@@ -212,7 +230,7 @@ export default function OAuth2ClientDialog({ open, onOpenChange, client, apiFetc
                         onChange={() => toggleScope(scope)}
                         className="rounded border-input"
                       />
-                      <span className={`font-mono ${scope === 'neo:*' ? 'font-semibold' : ''}`}>
+                      <span className={`font-mono ${scope === WILDCARD_SCOPE ? 'font-semibold' : ''}`}>
                         {scope}
                       </span>
                     </label>

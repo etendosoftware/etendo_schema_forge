@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/attachments/AttachmentsTab.jsx
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -234,7 +235,9 @@ describe('AttachmentsTab', () => {
       expect(onGoToSavedRecord).not.toHaveBeenCalled();
     });
 
-    it('uploads directly, without forcing a save, when saveBeforeAttach is not set', () => {
+    // ETP-5309: without saveBeforeAttach the dropzone used to stay active on a new
+    // record and POST against the literal id "new" — the backend answered a raw 500.
+    it('shows a save-first hint instead of the dropzone when saveBeforeAttach is not set', () => {
       const onSaveHeader = vi.fn();
 
       render(
@@ -246,11 +249,35 @@ describe('AttachmentsTab', () => {
         />
       );
 
-      const file = small();
-      drop(file);
-
+      expect(screen.getByTestId('attachments-save-first-hint')).toHaveTextContent('attachmentsSaveFirstHint');
+      expect(screen.queryByText('attachmentsDropHere')).not.toBeInTheDocument();
       expect(onSaveHeader).not.toHaveBeenCalled();
-      expect(hookState.upload).toHaveBeenCalledWith(file);
+      expect(hookState.upload).not.toHaveBeenCalled();
+    });
+
+    it('keeps the dropzone (no hint) on a new record when saveBeforeAttach is set', () => {
+      render(
+        <AttachmentsTab
+          {...baseProps}
+          recordId="new"
+          isNew
+          config={{ ...baseProps.config, saveBeforeAttach: true }}
+          onSaveHeader={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText('attachmentsDropHere')).toBeInTheDocument();
+      expect(screen.queryByTestId('attachments-save-first-hint')).not.toBeInTheDocument();
+    });
+  });
+
+  // ETP-5309: DetailView reads this static to disable the tab button on a new record.
+  describe('requiresSavedRecord (ETP-5309)', () => {
+    it('requires a saved record unless the tab config sets saveBeforeAttach', () => {
+      expect(AttachmentsTab.requiresSavedRecord({ config: {} })).toBe(true);
+      expect(AttachmentsTab.requiresSavedRecord({})).toBe(true);
+      expect(AttachmentsTab.requiresSavedRecord({ config: { saveBeforeAttach: true } })).toBe(false);
+      expect(AttachmentsTab.savedRecordHintKey).toBe('attachmentsSaveFirstHint');
     });
   });
 });

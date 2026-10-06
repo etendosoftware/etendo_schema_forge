@@ -32,19 +32,25 @@ function resolveId(value) {
 }
 
 // ─── Blocking toggle (canonical PillToggle switch — ON = true = blocked) ─────
-// Same switch as the Assets "Depreciar" toggle. Label sits above the toggle to
-// stay aligned with the sibling payment-terms field in the same row.
+// Same switch as the Assets "Depreciar" toggle, laid out as `[switch] Bloquear` (ETP-5519
+// design): the product's form-switch pattern (EntityForm's `toggle` renderer — switch first,
+// clickable label to its right). `pt-7` skips the label line of the neighbouring selector
+// cells (their input starts 28px below the cell top) and the `h-9` row (= FIELD_HEIGHT)
+// centres the switch on that input line, level with the Condiciones de pago selector.
 
-function BlockingToggle({ label, value, onCheckedChange }) {
+function BlockingToggle({ id, label, value, onCheckedChange, 'data-testid': testId }) {
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-[hsl(var(--foreground))]">{label}</p>
-      <div className="flex items-center gap-3 h-10">
+    <div className="pt-7">
+      <div className="flex items-center gap-2 h-9">
         <PillToggle
+          id={id}
           checked={value}
           onCheckedChange={onCheckedChange}
           aria-label={label}
-          data-testid="PillToggle__7f0756" />
+          data-testid={testId ?? 'PillToggle__7f0756'} />
+        <label htmlFor={id} className="text-sm font-medium text-[hsl(var(--foreground))] cursor-pointer">
+          {label}
+        </label>
       </div>
     </div>
   );
@@ -280,7 +286,12 @@ export default function BillingPreferencesForm(props) {
   const discountLoading = discountRecord === undefined;
   const currentDiscountId = discountRecord?.discount ?? null;
 
-  const customerTopBillingFields = [
+  // ETP-5519: every Financiero control of a side (Tarifa, Método de pago, Cuenta, Condiciones
+  // de pago and the Bloquear switch) lives in ONE EntityForm grid, so all five share the same
+  // column width and stay aligned at any viewport. Bloquear is the grid's `trailing` cell, so
+  // it lands right after Condiciones de pago. Splitting payment terms + Bloquear into a second
+  // flex row (as before) gave them half the row each — wider than the 3-column cells above.
+  const customerBillingFields = [
     { key: 'priceList', column: 'M_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'paymentMethod', column: 'FIN_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     // ETP-5183: `dependsOn` (kept as type:'selector' so it still renders through
@@ -295,12 +306,10 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'paymentMethod', filterKey: 'Fin_Paymentmethod_ID' },
     },
-  ];
-  const customerPaymentTermsField = [
     { key: 'paymentTerms', column: 'C_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
   ];
 
-  const vendorTopBillingFields = [
+  const vendorBillingFields = [
     { key: 'purchasePricelist', column: 'PO_PriceList_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     { key: 'pOPaymentMethod', column: 'PO_Paymentmethod_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
     // ETP-5183: same dependsOn treatment as `account` above, mirrored for the vendor side.
@@ -312,8 +321,6 @@ export default function BillingPreferencesForm(props) {
       inputMode: 'dependent',
       dependsOn: { field: 'pOPaymentMethod', filterKey: 'PO_Paymentmethod_ID' },
     },
-  ];
-  const vendorPaymentTermsField = [
     { key: 'pOPaymentTerms', column: 'PO_PaymentTerm_ID', type: 'selector', section: 'principal', inputMode: 'selector' },
   ];
 
@@ -348,26 +355,17 @@ export default function BillingPreferencesForm(props) {
                 <EntityForm
                   {...props}
                   onChange={handleCustomerChange}
-                  fields={customerTopBillingFields}
+                  fields={customerBillingFields}
                   selectorContext={customerSelectorContext}
-                  data-testid="EntityForm__7f0756" />
-                <div className="flex flex-row gap-5 items-start">
-                  <div className="flex-1 min-w-0">
-                    <EntityForm
-                      {...props}
-                      fields={customerPaymentTermsField}
-                      cols={1}
-                      selectorContext={customerSelectorContext}
-                      data-testid="EntityForm__7f0756" />
-                  </div>
-                  <div className="flex-1 min-w-0">
+                  trailing={(
                     <BlockingToggle
+                      id="contacts-customer-blocking"
                       label={ui('customerBlockField')}
                       value={data?.customerBlocking}
                       onCheckedChange={(next) => onChange?.('customerBlocking', next, 'Customer_Blocking')}
                       data-testid="BlockingToggle__7f0756-customer" />
-                  </div>
-                </div>
+                  )}
+                  data-testid="EntityForm__7f0756-customer" />
               </>
             )}
           </div>
@@ -384,26 +382,17 @@ export default function BillingPreferencesForm(props) {
                 <EntityForm
                   {...props}
                   onChange={handleVendorChange}
-                  fields={vendorTopBillingFields}
+                  fields={vendorBillingFields}
                   selectorContext={vendorSelectorContext}
-                  data-testid="EntityForm__7f0756" />
-                <div className="flex flex-row gap-5 items-start">
-                  <div className="flex-1 min-w-0">
-                    <EntityForm
-                      {...props}
-                      fields={vendorPaymentTermsField}
-                      cols={1}
-                      selectorContext={vendorSelectorContext}
-                      data-testid="EntityForm__7f0756" />
-                  </div>
-                  <div className="flex-1 min-w-0">
+                  trailing={(
                     <BlockingToggle
+                      id="contacts-vendor-blocking"
                       label={ui('vendorBlockField')}
                       value={data?.vendorBlocking}
                       onCheckedChange={(next) => onChange?.('vendorBlocking', next, 'Vendor_Blocking')}
                       data-testid="BlockingToggle__7f0756-vendor" />
-                  </div>
-                </div>
+                  )}
+                  data-testid="EntityForm__7f0756-vendor" />
               </>
             )}
           </div>

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/forms/fields.jsx
 // ETP-5107 — MaskedAmountInput (Holded-style live-masked numeric input).
 // See docs/plans/2026-09-08-etp5107-price-input-locale-fix.md §6.2/§6.3 for the
 // full design. This suite exercises the component in isolation (not through one
@@ -412,5 +413,71 @@ describe('MaskedAmountInput — other passthrough props', () => {
   it('defaults to a stable data-testid derived from `name` when none is given explicitly', () => {
     render(<MaskedAmountInput value={5} name="listPrice" />);
     expect(screen.getByTestId('field-number-listPrice')).toBeInTheDocument();
+  });
+});
+
+// ETP-5611 — line grids pre-fill debit/credit/amount cells with 0, shown as "0,00". Opt-in
+// `clearZeroOnFocus` empties a zero on focus so the user types straight into a blank cell, and
+// leaving it blank without typing keeps the 0 (no commit, so no null PATCH / validation error).
+describe('MaskedAmountInput — clearZeroOnFocus (ETP-5611)', () => {
+  it('empties a committed zero on focus', async () => {
+    const user = userEvent.setup();
+    render(<MaskedAmountInput value={0} clearZeroOnFocus data-testid="mi" />);
+    const input = getInput('mi');
+    expect(input).toHaveValue('0,00');
+    await user.click(input);
+    expect(input).toHaveValue('');
+  });
+
+  it('also treats a string "0" as zero', async () => {
+    const user = userEvent.setup();
+    render(<MaskedAmountInput value="0" clearZeroOnFocus data-testid="mi" />);
+    await user.click(getInput('mi'));
+    expect(getInput('mi')).toHaveValue('');
+  });
+
+  it('typing after the clear reports only the typed value', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const onCommit = vi.fn();
+    function Host() {
+      const [value, setValue] = useState(0);
+      return (
+        <MaskedAmountInput value={value} clearZeroOnFocus
+          onChange={(clean) => { setValue(clean); onChange(clean); }} onCommit={onCommit} data-testid="mi" />
+      );
+    }
+    render(<Host />);
+    await user.click(getInput('mi'));
+    await user.keyboard('25');
+    await user.tab();
+    expect(onChange).toHaveBeenLastCalledWith('25');
+    expect(onCommit).toHaveBeenCalledWith(25, '25');
+  });
+
+  it('blurring without typing does not commit and restores the zero display', async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    const onBlur = vi.fn();
+    render(<MaskedAmountInput value={0} clearZeroOnFocus onCommit={onCommit} onBlur={onBlur} data-testid="mi" />);
+    await user.click(getInput('mi'));
+    await user.tab();
+    expect(onCommit).not.toHaveBeenCalled();
+    expect(onBlur).toHaveBeenCalled();
+    expect(getInput('mi')).toHaveValue('0,00');
+  });
+
+  it('leaves a non-zero value untouched on focus', async () => {
+    const user = userEvent.setup();
+    render(<MaskedAmountInput value={12.5} clearZeroOnFocus data-testid="mi" />);
+    await user.click(getInput('mi'));
+    expect(getInput('mi')).toHaveValue('12,50');
+  });
+
+  it('without the prop a zero stays on focus (default behavior unchanged)', async () => {
+    const user = userEvent.setup();
+    render(<MaskedAmountInput value={0} data-testid="mi" />);
+    await user.click(getInput('mi'));
+    expect(getInput('mi')).toHaveValue('0,00');
   });
 });

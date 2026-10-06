@@ -336,11 +336,12 @@ function toIdleDisplay(value, grouping) {
  * @param {boolean} [bare=false] - skip the `Field`/label wrapper, for a dense table cell
  * @param {boolean} [grouping=true] - live thousands-grouping + 2-decimal idle format (price/amount-shaped fields); false keeps a plain, ungrouped look (quantity/integer/number/decimal/percent — matches today's behavior)
  * @param {import('react').RefObject} [inputRef] - optional external ref to the underlying input (e.g. for a caller-managed autoFocus)
+ * @param {boolean} [clearZeroOnFocus=false] - ETP-5611: when the committed value is exactly 0, focus shows an empty field so the user types straight in; blurring it still blank without a keystroke commits nothing and the 0 comes back (line-grid amount cells)
  */
 export function MaskedAmountInput({
   label, required, value, onChange, onCommit, onBlur, onFocus, onKeyDown, placeholder, disabled,
   className = '', name, currency, bare = false, grouping = true, autoFocus, inputRef,
-  inputMode = 'decimal', 'data-testid': dataTestId,
+  inputMode = 'decimal', clearZeroOnFocus = false, 'data-testid': dataTestId,
 }) {
   const internalRef = useRef(null);
   const activeRef = inputRef || internalRef;
@@ -376,6 +377,9 @@ export function MaskedAmountInput({
   }
   const display = draft != null ? draft : toIdleDisplay(value, grouping);
   const desiredCursorRef = useRef(null);
+  // True between a clearZeroOnFocus focus and the first keystroke/paste: a blur in that window
+  // is "the user looked and left", not "the user erased the amount".
+  const zeroClearedRef = useRef(false);
 
   useLayoutEffect(() => {
     if (desiredCursorRef.current == null || !activeRef.current) return;
@@ -398,6 +402,7 @@ export function MaskedAmountInput({
     const newDisplay = grouping ? formatGrouped(filtered, thousandsSeparator, decimalSeparator) : filtered;
 
     desiredCursorRef.current = positionAfterSignificant(newDisplay, sigBeforeCursor, groupSeparator);
+    zeroClearedRef.current = false;
     setDraft(newDisplay);
 
     const clean = toCleanValue(filtered, decimalSeparator);
@@ -433,6 +438,7 @@ export function MaskedAmountInput({
     if (parsed == null || !Number.isFinite(parsed)) return;
 
     e.preventDefault();
+    zeroClearedRef.current = false;
     const { thousandsSeparator, decimalSeparator } = getCurrencyFormatConfig();
     const clean = String(parsed);
     const filtered = filterMaskChars(clean.split('.').join(decimalSeparator), decimalSeparator, grouping);
@@ -440,11 +446,25 @@ export function MaskedAmountInput({
     onChange?.(clean, parsed);
   };
 
+  const handleFocus = (e) => {
+    setFocused(true);
+    if (clearZeroOnFocus && value !== '' && value != null && Number(value) === 0) {
+      zeroClearedRef.current = true;
+      setDraft('');
+    }
+    onFocus?.(e);
+  };
+
   const handleBlur = () => {
     setFocused(false);
     // Drop the editing draft so the field goes back to rendering the committed `value`,
     // whatever the parent makes of what was just committed (accepted, clamped or rejected).
     setDraft(null);
+    if (zeroClearedRef.current) {
+      zeroClearedRef.current = false;
+      onBlur?.();
+      return;
+    }
     const { decimalSeparator } = getCurrencyFormatConfig();
     // `display` may still hold a grouped string (when grouping is on) — re-run
     // the strict filter to strip it back down to the clean shape before commit.
@@ -476,7 +496,7 @@ export function MaskedAmountInput({
       value={display}
       onChange={handleChange}
       onPaste={handlePaste}
-      onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+      onFocus={handleFocus}
       onBlur={handleBlur}
       onKeyDown={(e) => {
         onKeyDown?.(e);
