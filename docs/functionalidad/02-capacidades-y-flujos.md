@@ -157,7 +157,7 @@ Nota de arquitectura previa a todo lo demás: la UI de onboarding (`OnboardingPa
 - **Flujo principal:**
   1. Login: `POST /sws/go/login` — verifica `hasLocalPassword` + hash de password, emite nuevo token de sesión.
   2. Forgot password: `POST /sws/go/password-reset/request` — respuesta siempre neutral exista o no el email (anti-enumeración), TTL de token de 30 minutos.
-  3. Reset confirm: URL con `?resetToken=...` rutea directo a la subvista `reset-password` → `POST /sws/go/password-reset/confirm` → limpia sesión local, muestra éxito, vuelve a login.
+  3. Reset confirm: URL con `?resetToken=...` rutea directo a la subvista `reset-password` → `POST /sws/go/password-reset/confirm` → limpia sesión local, muestra éxito, vuelve a login. Es la misma vista que abre una cuenta SSO desde el mail de "crear contraseña" (set-password). Muestra la checklist de fuerza en vivo y el submit queda deshabilitado hasta que la contraseña cumple la política; un enlace inválido/vencido responde `PASSWORD_RESET_INVALID` y se muestra traducido (ETP-5258).
 - **Variantes / errores observables:** errores de login mapeados a mensajes fijos localizados, nunca se muestra el mensaje crudo del backend.
 - **Resultado esperado:** Sesión nueva tras login correcto; contraseña actualizada tras reset válido.
 - **Reglas / permisos implicados:** Anti-enumeración de emails en forgot-password.

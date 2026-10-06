@@ -19,9 +19,16 @@ import CloneOrderModal from '@/components/contract-ui/CloneOrderModal';
 import { CreateContactContext } from '@/components/contract-ui/CreateContactContext.js';
 import { useCreateContactModal } from '@/components/contract-ui/useCreateContactModal.jsx';
 import { getInvoiceDraftMode, buildInvoiceRowQuickActions, useClearSavedRecord } from '../shared/useInvoiceWindow.js';
+import { PURCHASE_INVOICE_FOLLOW_UP } from '../shared/invoiceFollowUp.js';
+import { createFollowUpAfterProcess } from '@/components/follow-up-documents/followUpDocuments.js';
 import { useTaxSifLineRowActions } from '../shared/useTaxSifLineRowActions.jsx';
 
 /* eslint-disable react/prop-types */
+
+// ETP-5576 — after a Confirm that leaves a receipt pending, stay on the invoice and open
+// the follow-up modal (rendered by the topbar's FollowUpDocumentButton) instead of
+// navigating to the list. Built once: the config is static.
+const FOLLOW_UP_AFTER_PROCESS = createFollowUpAfterProcess(PURCHASE_INVOICE_FOLLOW_UP.spec, PURCHASE_INVOICE_FOLLOW_UP.options);
 
 // Mirrors artifacts/purchase-invoice/decisions.json → window.lineTaxSifTrigger (ETP-4888
 // point 5, docs/decisions-reference.md). See sales-invoice/index.jsx's identical constant
@@ -194,7 +201,7 @@ export default function PurchaseInvoiceWindow(props) {
   // DetailView: the generated HeaderPage sets draftMode from the contract but expands
   // {...props} AFTER it, so this value wins and the contract's never applies here.
   // draft-mode-allowlist-sync.test.js fails if the two drift apart.
-  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'] });
+  const draftModeOverride = getInvoiceDraftMode(ui, { keepSaveWhenCompletedFields: ['orderReference', 'accountingDate'], afterProcess: FOLLOW_UP_AFTER_PROCESS });
 
   // ETP-4520 — this custom window's own hand-rolled list view (below) never delegated
   // to GeneratedApp, so it never picked up the generated HeaderPage's access-tier guard.

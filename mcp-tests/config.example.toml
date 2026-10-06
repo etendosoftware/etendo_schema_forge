@@ -32,7 +32,7 @@ model = "openai/gpt-5.2"
 #        function_response.response does not match to a display_name in
 #        function_response.parts"
 #     — a LiteLLM -> Gemini translation defect on tool RESULTS, triggered by the
-#     `$ref` that neo_selectors returns. Auth is not the blocker.
+#     `$ref` that etendo_selectors returns. Auth is not the blocker.
 # To try it anyway, without editing this file:
 #     make mcp-test MODEL=gemini-3.6-flash
 
@@ -49,7 +49,7 @@ max_steps = 25
 
 # Per tool call, how much of the RESULT body is stored in the run file. Results
 # are recorded so a failure is diagnosable from runs/ alone; the cap exists
-# because one `neo_discover` answer is ~79 KB. The true size is always kept as
+# because one `etendo_discover` answer is ~79 KB. The true size is always kept as
 # `resultBytes`, truncated or not.
 max_result_chars = 20000
 
@@ -76,7 +76,7 @@ auth = "oauth"
 url  = "https://go.experimental.etendo.cloud/mcp"
 auth = "oauth"
 # Optional. Defaults to the scopes the authorization server advertises.
-scopes = "neo:read neo:write"
+scopes = "etendo:read etendo:write"
 # Optional. The loopback redirect port, which is registered with the server and
 # must therefore be stable. Change it only if 8765 is taken.
 redirect_port = 8765

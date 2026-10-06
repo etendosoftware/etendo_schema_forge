@@ -85,10 +85,10 @@ test('an oversized entry is not stored and drops the stale one', () => {
   assert.equal(store.get('s'), undefined);
 });
 
-const call = id => ({ role: 'assistant', content: [{ type: 'tool-call', toolCallId: id, toolName: 'neo_discover', input: {} }] });
+const call = id => ({ role: 'assistant', content: [{ type: 'tool-call', toolCallId: id, toolName: 'etendo_discover', input: {} }] });
 const result = (id, size) => ({
   role: 'tool',
-  content: [{ type: 'tool-result', toolCallId: id, toolName: 'neo_discover', output: { type: 'json', value: { blob: 'x'.repeat(size) } } }],
+  content: [{ type: 'tool-result', toolCallId: id, toolName: 'etendo_discover', output: { type: 'json', value: { blob: 'x'.repeat(size) } } }],
 });
 
 test('elision shrinks old big results, keeps the latest turn and every call/result pair', () => {
@@ -99,7 +99,7 @@ test('elision shrinks old big results, keeps the latest turn and every call/resu
   const out = elideOldToolResults(history, 1000);
   assert.match(out[2].content[0].output.value, /^\[elided \d+ chars\]$/);
   assert.equal(out[2].content[0].toolCallId, 'c1');
-  assert.equal(out[2].content[0].toolName, 'neo_discover');
+  assert.equal(out[2].content[0].toolName, 'etendo_discover');
   assert.equal(out[6], history[6], 'latest turn result untouched');
   const calls = out.flatMap(m => m.role === 'assistant' && Array.isArray(m.content) ? m.content.filter(p => p.type === 'tool-call') : []);
   const results = out.flatMap(m => m.role === 'tool' ? m.content : []);

@@ -40,7 +40,7 @@ debug mode, test plan, and known issues.
 a submission log: rows are produced by the AEAT SII integration, never by a user or an agent.
 Both consumers see the restriction — NEO Headless answers
 `405 "<METHOD> not enabled for <entity>"` to the React app *and* to the MCP agent, and
-`neo_discover` reports `readOnly: true`.
+`etendo_discover` reports `readOnly: true`.
 
 The window is read-only for CRUD only; action/process, callout, selector, defaults and
 evaluate-display endpoints are unaffected. Criteria and the full mechanism:
