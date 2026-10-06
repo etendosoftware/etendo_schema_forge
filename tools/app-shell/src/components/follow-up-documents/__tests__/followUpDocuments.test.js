@@ -2,7 +2,8 @@
 //
 // The pure half of the follow-up document flow: reading the backend `followUp` annotation,
 // building the action URL, mapping error codes to i18n keys, reading the created document,
-// and the afterProcess → topbar prompt hand-off (queue, consume once, TTL).
+// the input-required round-trip (reading the backend `input` block, its labels, and the
+// collected values), and the afterProcess → topbar prompt hand-off (queue, consume once, TTL).
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -12,9 +13,13 @@ import {
   consumeFollowUpPrompt,
   createFollowUpAfterProcess,
   followUpErrorMessage,
+  followUpInputLabelKeys,
+  followUpInputLabels,
+  mergeFollowUpInputValues,
   readConfiguredFollowUpEntries,
   readCreatedDocument,
   readFollowUpEntries,
+  readFollowUpInputRequest,
   requestFollowUpPrompt,
 } from '../followUpDocuments.js';
 import enUS from '../../../locales/en_US.json' with { type: 'json' };
@@ -121,6 +126,8 @@ describe('followUpErrorMessage', () => {
     ['FOLLOW_UP_NOTHING_PENDING', 'followUpErrorNothingPending'],
     ['FOLLOW_UP_DRAFT_IN_PROGRESS', 'followUpErrorDraftInProgress'],
     ['FOLLOW_UP_MISSING_SETUP', 'followUpErrorMissingSetup'],
+    ['FOLLOW_UP_WAREHOUSE_REQUIRED', 'followUpErrorWarehouseRequired'],
+    ['FOLLOW_UP_INVALID_INPUT', 'followUpErrorInvalidInput'],
   ]) {
     it(`translates ${code} to ${key}`, () => {
       assert.equal(followUpErrorMessage({ error: { code } }, ui), `t:${key}`);
@@ -157,14 +164,105 @@ describe('followUpErrorMessage', () => {
       const codes = [
         'FOLLOW_UP_SOURCE_NOT_FOUND', 'FOLLOW_UP_WRONG_DIRECTION', 'FOLLOW_UP_SOURCE_NOT_COMPLETED',
         'FOLLOW_UP_SOURCE_TYPE_NOT_ELIGIBLE', 'FOLLOW_UP_NOTHING_PENDING', 'FOLLOW_UP_DRAFT_IN_PROGRESS',
-        'FOLLOW_UP_MISSING_SETUP', 'UNKNOWN',
+        'FOLLOW_UP_MISSING_SETUP', 'FOLLOW_UP_WAREHOUSE_REQUIRED', 'FOLLOW_UP_INVALID_INPUT', 'UNKNOWN',
       ];
       for (const code of codes) {
         const message = followUpErrorMessage({ error: { code } }, translate);
         assert.ok(message && !message.startsWith('followUpError'), `${locale}: ${code} → ${message}`);
       }
     });
+
+    it(`${locale} translates the warehouse input label, its helper text and the generic fallback`, () => {
+      const labels = dictionary.genericLabels;
+      const translate = (key) => labels[key] ?? key;
+      const known = followUpInputLabels('warehouseId', translate);
+      const unknown = followUpInputLabels('somethingNew', translate);
+      for (const text of [known.label, known.help, unknown.label]) {
+        assert.ok(text && !text.startsWith('followUpInput'), `${locale}: ${text}`);
+      }
+    });
   }
+});
+
+describe('readFollowUpInputRequest', () => {
+  const WAREHOUSES = [{ id: 'wh-1', name: 'Central' }, { id: 'wh-2', name: 'Norte' }];
+  const inputError = (input, code = 'FOLLOW_UP_WAREHOUSE_REQUIRED') => ({ error: { code, status: 409, message: 'raw', input } });
+
+  for (const [name, body, expected] of [
+    ['the documented 409 body', inputError({ key: 'warehouseId', options: WAREHOUSES }), { key: 'warehouseId', options: WAREHOUSES }],
+    ['the older { response: { error } } shape', { response: { error: { input: { key: 'warehouseId', options: WAREHOUSES } } } },
+      { key: 'warehouseId', options: WAREHOUSES }],
+    ['any input key (nothing warehouse-specific)', inputError({ key: 'locationId', options: [{ id: 'l-1', name: 'Dock' }] }, 'OTHER'),
+      { key: 'locationId', options: [{ id: 'l-1', name: 'Dock' }] }],
+    ['options without id dropped, numeric ids stringified, a missing name falls back to the id',
+      inputError({ key: 'warehouseId', options: [null, { name: 'no id' }, { id: '' }, { id: 7 }, { id: 'wh-9', name: 'Sur' }] }),
+      { key: 'warehouseId', options: [{ id: '7', name: '7' }, { id: 'wh-9', name: 'Sur' }] }],
+  ]) {
+    it(`reads ${name}`, () => {
+      assert.deepEqual(readFollowUpInputRequest(body), expected);
+    });
+  }
+
+  for (const [name, body] of [
+    ['a null body', null],
+    ['an error without input', { error: { code: 'FOLLOW_UP_WAREHOUSE_REQUIRED' } }],
+    ['an input without key', inputError({ options: WAREHOUSES })],
+    ['an input whose key is not an identifier', inputError({ key: '__proto__', options: WAREHOUSES })],
+    ['an input whose key is inherited from Object.prototype', inputError({ key: 'constructor', options: WAREHOUSES })],
+    ['an input with a dotted key', inputError({ key: 'a.b', options: WAREHOUSES })],
+    ['an input with empty options', inputError({ key: 'warehouseId', options: [] })],
+    ['an input whose options are not an array', inputError({ key: 'warehouseId', options: 'wh-1' })],
+    ['an input whose options all lack an id', inputError({ key: 'warehouseId', options: [{ name: 'x' }] })],
+  ]) {
+    it(`returns null for ${name}`, () => {
+      assert.equal(readFollowUpInputRequest(body), null);
+    });
+  }
+});
+
+describe('followUpInputLabelKeys / followUpInputLabels', () => {
+  it('derives the label and helper keys from the input key', () => {
+    assert.deepEqual(followUpInputLabelKeys('warehouseId'), {
+      labelKey: 'followUpInputWarehouseId', helpKey: 'followUpInputWarehouseIdHelp',
+    });
+  });
+
+  const catalog = { followUpInputWarehouseId: 'Almacén', followUpInputWarehouseIdHelp: 'Elige', followUpInputGeneric: 'Selecciona' };
+  const echoing = (key) => catalog[key] ?? key;
+
+  for (const [name, inputKey, ui, expected] of [
+    ['a translated key', 'warehouseId', echoing, { label: 'Almacén', help: 'Elige' }],
+    ['an untranslated key: generic label, no raw helper key', 'binId', echoing, { label: 'Selecciona', help: null }],
+    ['no translator at all', 'warehouseId', undefined, { label: 'followUpInputGeneric', help: null }],
+  ]) {
+    it(`labels ${name}`, () => {
+      assert.deepEqual(followUpInputLabels(inputKey, ui), expected);
+    });
+  }
+});
+
+describe('mergeFollowUpInputValues', () => {
+  const ONE = { key: 'warehouseId', options: [{ id: 'wh-1' }] };
+  const TWO = { key: 'warehouseId', options: [{ id: 'wh-1' }, { id: 'wh-2' }] };
+
+  for (const [name, request, previous, expected] of [
+    ['preselects the only option', ONE, {}, { warehouseId: 'wh-1' }],
+    ['leaves the value empty with several options', TWO, {}, {}],
+    ['keeps a previous choice that is still offered', TWO, { warehouseId: 'wh-2' }, { warehouseId: 'wh-2' }],
+    ['drops a previous choice that is no longer offered', TWO, { warehouseId: 'wh-gone' }, {}],
+    ['replaces a stale choice with the only option', ONE, { warehouseId: 'wh-gone' }, { warehouseId: 'wh-1' }],
+    ['keeps the values already collected for other keys', TWO, { binId: 'b-1' }, { binId: 'b-1' }],
+  ]) {
+    it(name, () => {
+      assert.deepEqual(mergeFollowUpInputValues(request, previous), expected);
+    });
+  }
+
+  it('does not mutate the previous values', () => {
+    const previous = { warehouseId: 'wh-gone' };
+    mergeFollowUpInputValues(TWO, previous);
+    assert.deepEqual(previous, { warehouseId: 'wh-gone' });
+  });
 });
 
 describe('readCreatedDocument', () => {

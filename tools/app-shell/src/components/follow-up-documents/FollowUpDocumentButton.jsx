@@ -36,7 +36,7 @@ export default function FollowUpDocumentButton({
   onRefresh, windowReadOnly = false,
 }) {
   const ui = useUI();
-  const { entries, session, open, close, create } = useFollowUpDocuments({
+  const { entries, session, open, close, create, setInputValue, releaseInput } = useFollowUpDocuments({
     apiBaseUrl, spec, entity, record: data, options, onCreated: () => onRefresh?.(),
   });
 
@@ -67,6 +67,8 @@ export default function FollowUpDocumentButton({
         questionKey={questionKey}
         onClose={close}
         onCreate={create}
+        onInputChange={setInputValue}
+        onSelectionChange={releaseInput}
         data-testid="FollowUpDocumentModal__e212d2" />
     </>
   );

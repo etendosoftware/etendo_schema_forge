@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { useLocaleSwitch, useUI } from '@/i18n';
 import ActionChoiceModal, { isOwnEscape, useDialogFocusTrap } from '@/components/contract-ui/ActionChoiceModal.jsx';
 import { ConfirmResultModal } from '@/components/contract-ui/ConfirmResultModal.jsx';
+import { CreatableSearchSelect } from '@/components/contract-ui/CreatableSearchSelect.jsx';
+import RequiredMark from '@/components/ui/required-mark.jsx';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import { formatCalendarDate } from '@/lib/dateOnly.js';
-import { readConfiguredFollowUpEntries } from './followUpDocuments.js';
+import { followUpInputLabels, readConfiguredFollowUpEntries, readFollowUpInputValue } from './followUpDocuments.js';
 
 /**
  * ETP-5576 — generic follow-up document modal: the choice → loading → result flow on top
@@ -23,6 +25,18 @@ import { readConfiguredFollowUpEntries } from './followUpDocuments.js';
  * There is no "not now" card: rejecting is Cancel, the close icon, Esc or the backdrop, and
  * the source document simply stays as it is.
  *
+ * Input-required round-trip: while `session.inputRequest` is set (the backend answered the
+ * POST with an `input` block), a required selector is rendered below the option(s) — the
+ * same searchable combo the other document modals use (CreatableSearchSelect over static
+ * options, as PriceListSelectField does). Its label is `followUpInput<Key>` (generic
+ * `followUpInputGeneric` fallback) and its helper text `followUpInput<Key>Help`; the key and
+ * the options come from the backend, nothing here is window-specific. Focus moves to it
+ * when it appears, the primary button stays disabled until a value is chosen, Enter on the
+ * closed selector retries, and Esc on the closed selector cancels like anywhere else.
+ * The request belongs to the follow-up whose action asked (`session.inputs.forKey`): in the
+ * multi-option layout the selector and the disabled primary apply only while that option is
+ * the selected one, and selecting another option releases the request (`onSelectionChange`).
+ *
  * @param {object} props
  * @param {object|null} props.session from useFollowUpDocuments
  * @param {Object<string, FollowUpOptionConfig>} props.options per-key config
@@ -32,6 +46,10 @@ import { readConfiguredFollowUpEntries } from './followUpDocuments.js';
  *   («¿Qué vas a hacer con esta factura?»); defaults to the generic `followUpQuestion`
  * @param {() => void} props.onClose reject / close (Cancel, close icon, Esc, backdrop, result close)
  * @param {(key: string) => void} props.onCreate create the follow-up document for `key`
+ * @param {(value: string|null) => void} [props.onInputChange] records the value chosen in the
+ *   backend-requested selector (useFollowUpDocuments' `setInputValue`)
+ * @param {(key: string) => void} [props.onSelectionChange] the selected follow-up changed
+ *   (useFollowUpDocuments' `releaseInput`)
  *
  * @typedef {object} FollowUpOptionConfig
  * @property {string} labelKey        card title
@@ -58,7 +76,9 @@ import { readConfiguredFollowUpEntries } from './followUpDocuments.js';
  * @property {string} [currencyField='currency$_identifier']
  * @property {string} [linesLabelKey='lines'] label of the pending-lines column (single follow-up only)
  */
-export default function FollowUpDocumentModal({ session, options, summary, titleKey, questionKey, onClose, onCreate }) {
+export default function FollowUpDocumentModal({
+  session, options, summary, titleKey, questionKey, onClose, onCreate, onInputChange, onSelectionChange,
+}) {
   if (!session) return null;
   const content = session.phase === 'result'
     ? (
@@ -77,6 +97,8 @@ export default function FollowUpDocumentModal({ session, options, summary, title
         questionKey={questionKey}
         onClose={onClose}
         onCreate={onCreate}
+        onInputChange={onInputChange}
+        onSelectionChange={onSelectionChange}
         data-testid="FollowUpChoice__ccd4ed" />
     );
   // Portal: the trigger lives in the detail topbar, whose ancestors must not become the
@@ -84,7 +106,9 @@ export default function FollowUpDocumentModal({ session, options, summary, title
   return typeof document === 'undefined' ? content : createPortal(content, document.body);
 }
 
-function FollowUpChoice({ session, options, summary, titleKey, questionKey, onClose, onCreate }) {
+function FollowUpChoice({
+  session, options, summary, titleKey, questionKey, onClose, onCreate, onInputChange, onSelectionChange,
+}) {
   const ui = useUI();
   const { locale } = useLocaleSwitch();
   const entries = useMemo(
@@ -119,6 +143,11 @@ function FollowUpChoice({ session, options, summary, titleKey, questionKey, onCl
     || (titleKey && ui(titleKey))
     || ui('followUpManageTitle');
 
+  const { inputRequest, inputs } = session;
+  const inputValue = inputRequest ? readFollowUpInputValue(inputs?.values, inputRequest.key) : '';
+  // The request applies only while its own follow-up is the selected option.
+  const inputApplies = (selectedId) => Boolean(inputRequest) && selectedId === inputs?.forKey;
+
   return (
     <ActionChoiceModal
       title={title}
@@ -133,9 +162,104 @@ function FollowUpChoice({ session, options, summary, titleKey, questionKey, onCl
       error={session.error}
       loadingLabel={ui('creating')}
       testId="follow-up-document-modal"
-      data-testid="ActionChoiceModal__ccd4ed" />
+      primaryDisabled={(selectedId) => inputApplies(selectedId) && !inputValue}
+      onSelectionChange={onSelectionChange}
+      data-testid="ActionChoiceModal__ccd4ed">
+      {(selectedId) => inputApplies(selectedId) && (
+        <FollowUpInputField
+          request={inputRequest}
+          value={inputValue}
+          loading={session.loading}
+          onChange={(value) => onInputChange?.(value)}
+          onSubmit={() => onCreate(inputs?.forKey)}
+          onCancel={onClose}
+          data-testid="FollowUpInputField__ccd4ed" />
+      )}
+    </ActionChoiceModal>
   );
 }
+
+/**
+ * The value the backend asked for (`session.inputRequest`): a required, labelled
+ * CreatableSearchSelect over the options the backend sent, with a helper text. A disabled
+ * fieldset while the retry is in flight (every control inside is disabled at once).
+ *
+ * Keyboard, on top of the combo's own (Arrows / Enter pick an option, Esc closes the list):
+ *   - Enter with the list closed and a value chosen retries — same as the primary button;
+ *   - Esc with the list closed cancels the modal (the combo's input swallows every Esc, so
+ *     the dialog would otherwise never see it while focus is here).
+ */
+function FollowUpInputField({ request, value, loading, onChange, onSubmit, onCancel }) {
+  const ui = useUI();
+  const wrapperRef = useRef(null);
+  const fieldKey = `follow-up-input-${request.key}`;
+  const labelId = `${fieldKey}-label`;
+  const helpId = `${fieldKey}-help`;
+  const { label, help } = followUpInputLabels(request.key, ui);
+  // Stable reference (CreatableSearchSelect keys internal effects off `field`).
+  const field = useMemo(() => ({ key: fieldKey, id: fieldKey, required: true }), [fieldKey]);
+  const displayValue = request.options.find((opt) => opt.id === value)?.name || '';
+
+  // Focus moves to the selector when it appears (or when the backend asks again): the
+  // search input, or the chip of a preselected single option.
+  useEffect(() => {
+    wrapperRef.current?.querySelector('input, button')?.focus?.();
+  }, [request]);
+
+  const handleKeyDownCapture = (event) => {
+    if (loading) return;
+    const target = event.target;
+    if (target?.getAttribute?.('aria-expanded') === 'true') return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
+    } else if (event.key === 'Enter' && value && target?.getAttribute?.('role') !== 'button') {
+      // role="button" is the chip's clear (X) control: Enter there clears, it must not submit.
+      event.preventDefault();
+      event.stopPropagation();
+      onSubmit();
+    }
+  };
+
+  return (
+    <fieldset
+      ref={wrapperRef}
+      disabled={loading}
+      aria-labelledby={labelId}
+      aria-describedby={help ? helpId : undefined}
+      data-testid="follow-up-input"
+      data-input-key={request.key}
+      onKeyDownCapture={handleKeyDownCapture}
+      style={inputFieldsetStyle}
+    >
+      {/* htmlFor only while the combo's <input id={fieldKey}> exists: with a value chosen it
+          renders a chip button instead (no id), and the fieldset carries the name. */}
+      <label id={labelId} htmlFor={value ? undefined : fieldKey} style={inputLabelStyle}>
+        {label}
+        <RequiredMark aria-hidden="true" data-testid="RequiredMark__ccd4ed" />
+      </label>
+      <CreatableSearchSelect
+        field={field}
+        value={value || null}
+        displayValue={displayValue}
+        onChange={(id) => onChange(id ?? null)}
+        resolvedLabel={label}
+        staticOptions={request.options}
+        data-testid="CreatableSearchSelect__ccd4ed" />
+      {help && <p id={helpId} style={inputHelpStyle}>{help}</p>}
+    </fieldset>
+  );
+}
+
+const inputFieldsetStyle = {
+  display: 'flex', flexDirection: 'column', gap: 6,
+  margin: 0, padding: 0, border: 'none', minWidth: 0,
+};
+
+const inputLabelStyle = { fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' };
+
+const inputHelpStyle = { margin: 0, fontSize: 12, lineHeight: '16px', color: 'hsl(var(--muted-foreground))' };
 
 /**
  * Summary table: document number, optional date, contact, pending lines (only when one

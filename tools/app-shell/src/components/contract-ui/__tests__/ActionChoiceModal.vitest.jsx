@@ -10,7 +10,7 @@
 vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
 
 import { createPortal } from 'react-dom';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import ActionChoiceModal, { nextOptionId } from '../ActionChoiceModal.jsx';
@@ -429,6 +429,141 @@ describe.each(MODES)('ActionChoiceModal — %s: closing and loading', (_, modePr
     rerender(<ActionChoiceModal {...props} loading />);
     expect(dialog()).toHaveFocus();
     rerender(<ActionChoiceModal {...props} loading={false} error="failed" />);
+    expect(submitControl()).toHaveFocus();
+  });
+});
+
+// ── Extra content, primary gate and selection reporting (follow-up input flow) ────────
+
+const EXTRA = 'extra-content';
+const before = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+describe.each([
+  ['single option', { options: [SINGLE], defaultOptionId: undefined }, () => screen.getByTestId(SINGLE.testId), SINGLE.id],
+  ['multiple options', {}, () => screen.getByRole('radiogroup'), ORDER_ID],
+])('ActionChoiceModal — %s: children and primaryDisabled', (_, modeProps, choiceArea, currentId) => {
+  it('renders children between the option(s) and the error', () => {
+    renderModal({ ...modeProps, error: 'failed', children: <div data-testid={EXTRA}>extra</div> });
+    const extra = screen.getByTestId(EXTRA);
+    expect(before(choiceArea(), extra)).toBe(true);
+    expect(before(extra, screen.getByRole('alert'))).toBe(true);
+  });
+
+  it('calls a children function with the selected option id and renders its result', () => {
+    const children = vi.fn((id) => <span data-testid={EXTRA}>{`for-${id}`}</span>);
+    renderModal({ ...modeProps, children });
+    expect(children).toHaveBeenCalledWith(currentId);
+    expect(screen.getByTestId(EXTRA)).toHaveTextContent(`for-${currentId}`);
+  });
+
+  it.each([
+    ['true', () => true, true],
+    ['a function returning true for the selected id', () => vi.fn(id => id === currentId), true],
+    ['false', () => false, false],
+  ])('primaryDisabled %s gates the primary button (attribute and click)', (__, makeGate, disabled) => {
+    const gate = makeGate();
+    const { props } = renderModal({ ...modeProps, primaryDisabled: gate });
+    if (vi.isMockFunction(gate)) expect(gate).toHaveBeenCalledWith(currentId);
+    expect(primary().disabled).toBe(disabled);
+    fireEvent.click(primary());
+    if (disabled) {
+      expect(props.onContinue).not.toHaveBeenCalled();
+    } else {
+      expect(props.onContinue).toHaveBeenCalledWith(currentId);
+    }
+  });
+});
+
+describe('ActionChoiceModal — selection-dependent children, gate and reporting', () => {
+  it('single option: a disabled primary cannot take the initial focus, so Enter confirms nothing', async () => {
+    const user = userEvent.setup();
+    const { props } = renderSingle({ primaryDisabled: true });
+    expect(primary()).not.toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(props.onContinue).not.toHaveBeenCalled();
+  });
+
+  it('multiple options: Enter on a card still continues while the primary is disabled (the caller must refuse it)', () => {
+    const { props } = renderModal({ primaryDisabled: true });
+    expect(primary()).toBeDisabled();
+    fireEvent.keyDown(screen.getByTestId(ORDER_TEST_ID), { key: 'Enter' });
+    expect(props.onContinue).toHaveBeenCalledWith(ORDER_ID);
+  });
+
+  it('re-evaluates children and primaryDisabled when the selection moves', () => {
+    renderModal({
+      primaryDisabled: (id) => id === INVOICE_ID,
+      children: (id) => id === INVOICE_ID && <input data-testid={EXTRA} aria-label="extra" />,
+    });
+    expect(screen.queryByTestId(EXTRA)).toBeNull();
+    expect(primary()).toBeEnabled();
+    fireEvent.click(screen.getByTestId(INVOICE_TEST_ID));
+    expect(screen.getByTestId(EXTRA)).toBeInTheDocument();
+    expect(primary()).toBeDisabled();
+    fireEvent.click(screen.getByTestId(ORDER_TEST_ID));
+    expect(screen.queryByTestId(EXTRA)).toBeNull();
+    expect(primary()).toBeEnabled();
+  });
+
+  it.each([
+    ['single option', { options: [SINGLE], defaultOptionId: undefined }],
+    ['multiple options', {}],
+  ])('does not report the initial selection on mount (%s)', (_, modeProps) => {
+    const onSelectionChange = vi.fn();
+    renderModal({ ...modeProps, onSelectionChange });
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a click on another card', () => fireEvent.click(screen.getByTestId(INVOICE_TEST_ID)), INVOICE_ID],
+    ['ArrowRight', () => fireEvent.keyDown(document.activeElement, { key: 'ArrowRight' }), INVOICE_ID],
+    ['ArrowLeft (wrapping)', () => fireEvent.keyDown(document.activeElement, { key: 'ArrowLeft' }), 'third'],
+    ['End', () => fireEvent.keyDown(document.activeElement, { key: 'End' }), 'third'],
+  ])('reports %s once with the new id', (_, act, expectedId) => {
+    const onSelectionChange = vi.fn();
+    renderModal({ options: THREE, onSelectionChange });
+    act();
+    expect(onSelectionChange).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).toHaveBeenCalledWith(expectedId);
+  });
+
+  it('does not report a click on the card that is already selected', () => {
+    const onSelectionChange = vi.fn();
+    renderModal({ onSelectionChange });
+    fireEvent.click(screen.getByTestId(ORDER_TEST_ID));
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(MODES)('ActionChoiceModal — %s: focus when loading ends', (_, modeProps, submitControl) => {
+  it('keeps the focus on a control that appeared inside the dialog (autofocused input)', () => {
+    const { props, rerender } = renderModal(modeProps);
+    rerender(<ActionChoiceModal {...props} loading />);
+    rerender(
+      <ActionChoiceModal {...props} loading={false}>
+        {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+        <input data-testid={EXTRA} aria-label="extra" autoFocus />
+      </ActionChoiceModal>,
+    );
+    expect(screen.getByTestId(EXTRA)).toHaveFocus();
+  });
+
+  it('keeps the focus on an enabled control inside the dialog that held it during loading', () => {
+    const withInput = <input data-testid={EXTRA} aria-label="extra" />;
+    const { props, rerender } = renderModal({ ...modeProps, children: withInput });
+    screen.getByTestId(EXTRA).focus();
+    rerender(<ActionChoiceModal {...props} loading />);
+    expect(screen.getByTestId(EXTRA)).toHaveFocus();
+    rerender(<ActionChoiceModal {...props} loading={false} />);
+    expect(screen.getByTestId(EXTRA)).toHaveFocus();
+  });
+
+  it('returns the focus to the submit control when it had left the dialog', () => {
+    const { props, rerender } = renderModal(modeProps);
+    rerender(<ActionChoiceModal {...props} loading />);
+    act(() => { document.activeElement.blur(); });
+    expect(document.body).toHaveFocus();
+    rerender(<ActionChoiceModal {...props} loading={false} />);
     expect(submitControl()).toHaveFocus();
   });
 });

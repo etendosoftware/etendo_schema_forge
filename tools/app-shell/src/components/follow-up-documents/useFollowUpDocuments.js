@@ -8,15 +8,21 @@ import {
   buildFollowUpActionUrl,
   consumeFollowUpPrompt,
   followUpErrorMessage,
+  mergeFollowUpInputValues,
   readConfiguredFollowUpEntries,
   readCreatedDocument,
+  readFollowUpInputRequest,
+  readFollowUpInputValue,
 } from './followUpDocuments.js';
 
 /**
  * ETP-5576 — state machine of the generic follow-up document flow.
  *
  *   closed ──open()──▶ choice ──create(key)──▶ (loading) ──201──▶ result ──close()──▶ closed
- *                        │                         └──error──▶ choice (error shown inline)
+ *                        │                         ├──error──▶ choice (error shown inline)
+ *                        │                         └──error with `input`──▶ choice + selector
+ *                        │                                (no error; create(key) retries the POST
+ *                        │                                 with the chosen value in the body)
  *                        └──close() (Cancel / X / Esc / backdrop)──▶ closed
  *
  * A session freezes the record it was opened with (`session.record`): the record is
@@ -31,6 +37,15 @@ import {
  * @param {Object<string, object>} params.options per-key presentation config (see FollowUpDocumentModal)
  * @param {(created: object) => void} [params.onCreated] called after a document is created
  *   (the window re-reads the record here so the annotation and related documents refresh)
+ *
+ * Input-required round-trip: when the POST fails with an `input` block
+ * (readFollowUpInputRequest), the session keeps the request in `session.inputRequest`
+ * (`{ key, options }`) and the values collected so far in `session.inputs`
+ * (`{ forKey, values }` — `forKey` is the follow-up key whose action asked). `setInputValue`
+ * records the user's choice; `create(forKey)` refuses to POST while the requested value is
+ * missing and otherwise sends `inputs.values` as the body. A create for another follow-up
+ * key starts from an empty body (the collected values belong to the action that asked), and
+ * `releaseInput(selectedKey)` drops the request as soon as the user selects another follow-up.
  */
 export function useFollowUpDocuments({ apiBaseUrl, spec, entity = 'header', record, options, onCreated }) {
   const ui = useUI();
@@ -53,7 +68,9 @@ export function useFollowUpDocuments({ apiBaseUrl, spec, entity = 'header', reco
   const open = useCallback((snapshot) => {
     const source = snapshot ?? latest.current.record;
     if (readConfiguredFollowUpEntries(source, latest.current.options).length === 0) return false;
-    setSession({ record: source, phase: 'choice', loading: false, error: null, created: [] });
+    setSession({
+      record: source, phase: 'choice', loading: false, error: null, created: [], inputRequest: null, inputs: null,
+    });
     return true;
   }, []);
 
@@ -63,20 +80,53 @@ export function useFollowUpDocuments({ apiBaseUrl, spec, entity = 'header', reco
     setSession(current => (current?.loading ? current : null));
   }, []);
 
+  const setInputValue = useCallback((value) => {
+    setSession((s) => {
+      if (!s?.inputRequest || s.loading) return s;
+      const values = { ...s.inputs?.values };
+      if (value == null || value === '') delete values[s.inputRequest.key];
+      else values[s.inputRequest.key] = String(value);
+      return { ...s, inputs: { ...s.inputs, values } };
+    });
+  }, []);
+
+  // Multi-option layout: the requested input belongs to `inputs.forKey`; once the user selects
+  // another follow-up it no longer applies and is dropped (a later POST asks again if needed).
+  const releaseInput = useCallback((selectedKey) => {
+    setSession(s => (s?.inputs && s.inputs.forKey !== selectedKey ? { ...s, inputRequest: null, inputs: null } : s));
+  }, []);
+
   const create = useCallback(async (key) => {
     const current = sessionRef.current;
     if (!current || current.loading || inFlightRef.current) return null;
     const entry = readConfiguredFollowUpEntries(current.record, latest.current.options).find(e => e.key === key);
     if (!entry) return null;
+    const sameAction = current.inputs?.forKey === key;
+    const values = sameAction ? current.inputs.values : {};
+    // Guard for every way of submitting (primary button, Enter on a choice card, Enter in
+    // the selector): the value the backend asked for must have been chosen.
+    if (sameAction && current.inputRequest && !readFollowUpInputValue(values, current.inputRequest.key)) return null;
     inFlightRef.current = true;
     setSession(s => (s ? { ...s, loading: true, error: null } : s));
     try {
       const res = await apiFetch(
         buildFollowUpActionUrl({ apiBaseUrl, spec, entity, recordId: current.record.id, action: entry.action }),
-        { method: 'POST', body: JSON.stringify({}) },
+        { method: 'POST', body: JSON.stringify(values) },
       );
       const body = await res.json().catch(() => null);
       const doc = res.ok ? readCreatedDocument(body) : null;
+      const inputRequest = res.ok ? null : readFollowUpInputRequest(body);
+      if (inputRequest) {
+        // Not an error: the modal stays open and asks for the value (see FollowUpDocumentModal).
+        setSession(s => (s ? {
+          ...s,
+          loading: false,
+          error: null,
+          inputRequest,
+          inputs: { forKey: key, values: mergeFollowUpInputValues(inputRequest, values) },
+        } : s));
+        return null;
+      }
       if (!doc) {
         const message = res.ok ? (ui(FOLLOW_UP_GENERIC_ERROR_KEY) || FOLLOW_UP_GENERIC_ERROR_KEY) : followUpErrorMessage(body, ui);
         setSession(s => (s ? { ...s, loading: false, error: message } : s));
@@ -134,5 +184,5 @@ export function useFollowUpDocuments({ apiBaseUrl, spec, entity = 'header', reco
     setSession(current => (current && current.record?.id !== recordId && !current.loading ? null : current));
   }, [recordId, sessionLoading]);
 
-  return { entries, session, open, close, create };
+  return { entries, session, open, close, create, setInputValue, releaseInput };
 }

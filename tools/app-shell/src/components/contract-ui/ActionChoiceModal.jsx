@@ -36,6 +36,15 @@ import { MODAL_STYLES } from './modal-styles.js';
  *   - Optional per-option `icon`, optional summary, `primaryLabel` / `loadingLabel`
  *     overrides (defaults are the original `continue` / `soProcessing` keys) and an
  *     optional `testId` for the dialog. The dialog is named through `aria-labelledby`.
+ *   - Optional `children`, rendered below the option(s) and above the error — extra input
+ *     the action needs (e.g. the follow-up flow's backend-requested selector) — and
+ *     `primaryDisabled`, which keeps the primary button disabled until that input is
+ *     complete (the caller must also refuse a submit from Enter on a choice card). Both may
+ *     be a function of the selected option id (the single option's id in single-option mode)
+ *     when the extra input belongs to one option only; `onSelectionChange(id)` reports every
+ *     later change of the selected option (not the initial one). When
+ *     loading ends and the caller already moved focus to a control inside the dialog (an
+ *     input that just appeared), that focus is kept instead of going back to the primary.
  *
  * @param {object} props
  * @param {string} props.title Modal title.
@@ -52,6 +61,9 @@ import { MODAL_STYLES } from './modal-styles.js';
  * @param {string} [props.primaryLabel] Primary button text; defaults to `ui('continue')`.
  * @param {string} [props.loadingLabel] Primary button text while loading; defaults to `ui('soProcessing')`.
  * @param {string} [props.testId] data-testid of the dialog element.
+ * @param {boolean|((selectedId: string) => boolean)} [props.primaryDisabled] Disables the primary button (e.g. a required input is empty).
+ * @param {import('react').ReactNode|((selectedId: string) => import('react').ReactNode)} [props.children] Extra content between the option(s) and the error.
+ * @param {(selectedId: string) => void} [props.onSelectionChange] Called when the selected option changes (not on mount).
  */
 export default function ActionChoiceModal({
   title,
@@ -67,6 +79,9 @@ export default function ActionChoiceModal({
   primaryLabel,
   loadingLabel,
   testId,
+  primaryDisabled = false,
+  children,
+  onSelectionChange,
 }) {
   const ui = useUI();
   const titleId = useId();
@@ -77,6 +92,19 @@ export default function ActionChoiceModal({
   const optionRefs = useRef({});
   const primaryRef = useRef(null);
   const singleOption = options.length === 1 ? options[0] : null;
+  const currentId = singleOption ? singleOption.id : selectedId;
+  const extraContent = typeof children === 'function' ? children(currentId) : children;
+  const primaryBlocked = Boolean(typeof primaryDisabled === 'function' ? primaryDisabled(currentId) : primaryDisabled);
+
+  // Report selection changes (not the initial selection) to the caller.
+  const reportedIdRef = useRef(selectedId);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
+  useEffect(() => {
+    if (reportedIdRef.current === selectedId) return;
+    reportedIdRef.current = selectedId;
+    onSelectionChangeRef.current?.(selectedId);
+  }, [selectedId]);
 
   // Latest values for the window-level key listener, so it is registered once.
   const stateRef = useRef({ loading, onCancel });
@@ -106,6 +134,8 @@ export default function ActionChoiceModal({
     const wasLoading = wasLoadingRef.current;
     wasLoadingRef.current = loading;
     if (!wasLoading || loading) return;
+    const active = typeof document === 'undefined' ? null : document.activeElement;
+    if (active && active !== dialogRef.current && dialogRef.current?.contains(active)) return;
     const target = singleOption ? primaryRef.current : optionRefs.current[selectedId];
     target?.focus?.();
     // Only the loading transition matters.
@@ -217,6 +247,8 @@ export default function ActionChoiceModal({
             </div>
             )}
 
+            {extraContent}
+
             {error && <div role="alert" style={errorStyle}>{error}</div>}
 
             <div style={footerStyle}>
@@ -227,10 +259,10 @@ export default function ActionChoiceModal({
                 ref={primaryRef}
                 type="button"
                 data-testid="action-confirm-modal"
-                onClick={() => onContinue(singleOption ? singleOption.id : selectedId)}
-                disabled={loading}
+                onClick={() => onContinue(currentId)}
+                disabled={loading || primaryBlocked}
                 className={FOCUS_RING_CLS}
-                style={getPrimaryBtnStyle(loading, Boolean(singleOption))}
+                style={getPrimaryBtnStyle(loading, Boolean(singleOption), primaryBlocked)}
               >
                 <PrimaryIcon loading={loading} showArrow={!singleOption} data-testid="PrimaryIcon__6f7a22" />
                 {loading
@@ -419,9 +451,9 @@ function PrimaryIcon({ loading, showArrow }) {
 
 // Single-option mode: label-only pill (no arrow), so the padding is symmetric — except
 // while loading, when the spinner takes the arrow's place on the left.
-function getPrimaryBtnStyle(loading, labelOnly) {
+function getPrimaryBtnStyle(loading, labelOnly, disabled = false) {
   const base = labelOnly && !loading ? { ...primaryBtnStyle, padding: '8px 20px' } : primaryBtnStyle;
-  if (loading) {
+  if (loading || disabled) {
     return { ...base, opacity: 0.6, cursor: 'not-allowed' };
   }
   return base;

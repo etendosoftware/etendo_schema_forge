@@ -203,6 +203,17 @@ generated document differ) — see `docs/ui-customization.md` §20.
   `purchase-invoice/header/{id}/action/createGoodsReceipt`, which creates a **Draft** goods receipt (Albarán de Compra) with only
   the pending lines; the result view links to it (`/goods-receipt/{id}`). Backend error codes
   (`FOLLOW_UP_*`) are shown inline, translated (`followUpError*` keys).
+- **Warehouse asked when the backend cannot decide it.** The goods receipt needs a target warehouse. When
+  the backend cannot determine it on its own, `createGoodsReceipt` answers `409 FOLLOW_UP_WAREHOUSE_REQUIRED`
+  with an `input` block (`key: "warehouseId"` + the candidate warehouses). The modal then stays open,
+  without an error, and shows a required «Almacén» selector («Elige el almacén donde se creará el
+  documento.») under the option card; with a single candidate it is preselected but still shown.
+  «Crear recepción» stays disabled until a warehouse is chosen, and the retry POSTs
+  `{"warehouseId": "<id>"}`. A rejected id (`400 FOLLOW_UP_INVALID_INPUT`) shows «El valor
+  seleccionado ya no es válido…» and keeps the selector; a 409 with no candidates (no `input` block)
+  shows «No se pudo determinar el almacén del documento…». When the backend can decide the warehouse
+  itself, nothing is asked and the flow is the one above. The selector is generic (key and options
+  come from the backend) — see `docs/ui-customization.md` §20 «Input-required round-trip».
 - **Topbar button** `follow-up-document-button` in `PurchaseInvoiceTopbar.jsx`: shown on a completed invoice
   while something is pending (never for a read-only window). After a creation the record is
   re-read (the button disappears; a partial movement later offers only what is still missing)
