@@ -349,7 +349,7 @@ Field editability in the top section:
   `/sws/neo/financial-accounts-page`, which both the Cuentas list and the detail view's
   `useFinancialAccount`/`useFinancialAccounts` hooks read) and, for completeness, also by
   `FinancialAccountHandler.afterHandle` on the generic `/sws/neo/financial-account/account` GET
-  path (MCP `neo_list`/generic CRUD consumers). This is a **different, stricter** condition than
+  path (MCP `etendo_list`/generic CRUD consumers). This is a **different, stricter** condition than
   `bankConnected`: an offline (never-connected) account can still accumulate real movements
   (manual statements, funds transfers), and the currency must lock the moment that history exists
   so past balances and journal entries stay consistent. `useAccountFields` exposes this as
@@ -1124,7 +1124,7 @@ options available.
 
 ## Backend endpoint — `financial-account` spec (W, generic CRUD + hook)
 
-**ETP-4239 converted the spec from report-style (`SPEC_TYPE=R`, `?action=` routing) to a generic W (window) spec** over the core Financial Account AD window (`94EAA455D2644E04AB25D93BE5157B6D`). The `account` header entity is served by the generic NEO CRUD, with `FinancialAccountHandler` (`@Named("financialAccountHeaderHandler")`, wired via `ETGO_SF_ENTITY.Java_Qualifier`) running as a **pre/post hook** — the same pattern as `SalesInvoiceHeaderHandler`. This also makes the entity **agentic**: MCP agents can `neo_list` / `neo_create` financial accounts of the 3 types (Bank `B` / Cash `C` / Card `CA`).
+**ETP-4239 converted the spec from report-style (`SPEC_TYPE=R`, `?action=` routing) to a generic W (window) spec** over the core Financial Account AD window (`94EAA455D2644E04AB25D93BE5157B6D`). The `account` header entity is served by the generic NEO CRUD, with `FinancialAccountHandler` (`@Named("financialAccountHeaderHandler")`, wired via `ETGO_SF_ENTITY.Java_Qualifier`) running as a **pre/post hook** — the same pattern as `SalesInvoiceHeaderHandler`. This also makes the entity **agentic**: MCP agents can `etendo_list` / `etendo_create` financial accounts of the 3 types (Bank `B` / Cash `C` / Card `CA`).
 
 | Operation | HTTP | URL | Notes |
 |-----------|------|-----|-------|
@@ -1140,7 +1140,7 @@ options available.
 - POST: validates `name` (required, max 60, unique per org → 409), `currency` (required, valid), `iBAN` ≤ 34 / `swiftCode` ≤ 20; normalises `type` (`'C'`/`'CA'` kept, anything else → `'B'`); then requires `country` (all types, see below) and validates the `(IBAN, country)` pair and a default `matchingAlgorithm` (first active) when absent, and returns `null` so the generic CRUD persists.
 - PUT/PATCH: name uniqueness (excluding self) + a sent `country` must resolve (clearing it is only refused on a Bank account with an IBAN) + the same `(IBAN, country)` pair validation; a bare `{active}` PATCH (archive/unarchive) passes straight through since it only validates keys the body actually carries.
 - DELETE (ETP-4871): re-validates `deletable` server-side and 409s if any dependency exists, otherwise performs the real, permanent delete.
-- **Sub-endpoints are not account writes (ETP-5468).** Button actions (`POST /account/{id}/action/<button>`, MCP `neo_action`), callouts and display-logic evaluation reach the hook with `httpMethod=POST` too. `handle()` and `afterHandle()` now act only when `NeoContext.getEndpointType()` is `CRUD` (or `null`, which internal callers such as batch/clone leave unset) — see `FinancialAccountHandler.isCrudRequest`. Before, every button call on `account` first ran the create validation, so an agent had to invent a unique `name` and a `currency` to get its button through, and the post-hook could provision a "new" account off an action response.
+- **Sub-endpoints are not account writes (ETP-5468).** Button actions (`POST /account/{id}/action/<button>`, MCP `etendo_action`), callouts and display-logic evaluation reach the hook with `httpMethod=POST` too. `handle()` and `afterHandle()` now act only when `NeoContext.getEndpointType()` is `CRUD` (or `null`, which internal callers such as batch/clone leave unset) — see `FinancialAccountHandler.isCrudRequest`. Before, every button call on `account` first ran the create validation, so an agent had to invent a unique `name` and a `currency` to get its button through, and the post-hook could provision a "new" account off an action response.
 - `matchingAlgorithm` is declared `visibility: "system"` in `decisions.json` so its `ETGO_SF_FIELD` row stays **included** — required for the injected value to survive `NeoFieldFilter`. `country` is `visibility: "editable"` (ETP-4896, see below) — it was `"system"` before. `deletable`/`deleteBlockedReason` are virtual, handler-injected fields, the same shape as `hasTransactions`/`pendingCount`.
 
 ### Country field + IBAN↔country validation (ETP-4896)
@@ -1173,9 +1173,9 @@ options available.
 
 Server-side IBAN/country validation helpers live in `FinancialAccountCountrySupport` (`com.etendoerp.go`), extracted out of `FinancialAccountHandler` to keep it under Sonar's method-count ceiling — same rationale as `FinancialAccountDeleteSupport`.
 
-**MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` by `Java_Qualifier` and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `neo_create` / `neo_update` / `neo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
+**MCP hook parity (ETP-4239, runtime change):** `McpToolRouter` now resolves the entity's `NeoHandler` by `Java_Qualifier` and runs `handle()` (pre, may mutate the body) / `afterHandle()` (post) around `etendo_create` / `etendo_update` / `etendo_delete` — previously MCP writes bypassed ALL entity hooks (no validation, no derivation). This applies to every W spec, not just financial-account.
 
-**MCP delete response + unknown-id status (ETP-5474, runtime change):** `FinancialAccountHandler.deleteAccount` answers a successful account `DELETE` with `204 No Content`, which `neo_delete` used to render as `{}` — so an agent read a successful delete as a failure. `McpToolRouter.handleDelete` now returns `{"deleted": true, "id": "<id>"}` for any handler 2xx (other than 202) with an empty body, the same shape as the generic delete path; REST and the SPA are unchanged (still 204). An **unknown** account id on `DELETE` now answers `404 not_found` ("Account not found") instead of 400; a blank id stays 400 and dependency blockers stay 409 with the reason sentence (e.g. "Cannot delete this account. This account has registered transactions. …"). No UI impact: `useBulkRowDelete`/`batchDelete` treat any 4xx as a refusal alike, and `useAccountMutations().deleteAccount` only special-cases 409. Out of scope: `guardArchive` (the `PATCH {active: false}` path) still answers 400 for a missing account. Verified live via MCP on 2026-09-28 (delete → confirmation and row gone; second delete → 404; "Caja", with transactions → 409 with reason, row kept). Platform reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.16.
+**MCP delete response + unknown-id status (ETP-5474, runtime change):** `FinancialAccountHandler.deleteAccount` answers a successful account `DELETE` with `204 No Content`, which `etendo_delete` used to render as `{}` — so an agent read a successful delete as a failure. `McpToolRouter.handleDelete` now returns `{"deleted": true, "id": "<id>"}` for any handler 2xx (other than 202) with an empty body, the same shape as the generic delete path; REST and the SPA are unchanged (still 204). An **unknown** account id on `DELETE` now answers `404 not_found` ("Account not found") instead of 400; a blank id stays 400 and dependency blockers stay 409 with the reason sentence (e.g. "Cannot delete this account. This account has registered transactions. …"). No UI impact: `useBulkRowDelete`/`batchDelete` treat any 4xx as a refusal alike, and `useAccountMutations().deleteAccount` only special-cases 409. Out of scope: `guardArchive` (the `PATCH {active: false}` path) still answers 400 for a missing account. Verified live via MCP on 2026-09-28 (delete → confirmation and row gone; second delete → 404; "Caja", with transactions → 409 with reason, row kept). Platform reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.16.
 
 The spec + entity + field source-data records live in `src-db/database/sourcedata/ETGO_SF_SPEC.xml`, `ETGO_SF_ENTITY.xml` and `ETGO_SF_FIELD.xml` of `com.etendoerp.go` (regenerated by `push-to-neo financial-account` + `export.database`).
 
@@ -1187,7 +1187,7 @@ edited, processed, reactivated or deleted from the row kebab (`MovementRowKebab`
 from the MCP as **declared actions of the `account` entity**:
 
 ```
-neo_action {spec:"financial-account", entity:"account", id:<financial account id>, action, parameters}
+etendo_action {spec:"financial-account", entity:"account", id:<financial account id>, action, parameters}
 ```
 
 | Action | Kind | Parameters (required in **bold**) | What the UI allows, and so the action |
@@ -1248,11 +1248,11 @@ shape as reconciliation on `bank-reconciliation` (see *Reconciliation happens on
 `bank-reconciliation`* below). An agent calls
 
 ```
-neo_action {spec:"bank-statements", entity:"bank-statements", id, action, parameters}
+etendo_action {spec:"bank-statements", entity:"bank-statements", id, action, parameters}
 ```
 
 and reads the catalogue (descriptions, `idDescription`, JSON-Schema parameters) with
-`neo_schema({spec:"bank-statements", view:"actions"})`.
+`etendo_schema({spec:"bank-statements", view:"actions"})`.
 
 | Action | Kind | `id` = | Engine route |
 |---|---|---|---|
@@ -1275,7 +1275,7 @@ positive amount, no over-long texts, known contact / G/L item ids, only the decl
 caps an imported file at 1 MiB; the SPA route keeps its current behaviour.
 
 **Reads:** besides the `listStatements` / `statementLines` actions (the same handler methods the
-Extractos tab uses), the generic `neo_list` / `neo_get` on `financial-account/importedBankStatements`
+Extractos tab uses), the generic `etendo_list` / `etendo_get` on `financial-account/importedBankStatements`
 (statements, with their persisted `EM_ETGO_*` aggregates) and `financial-account/bankStatementLines`
 (their lines) keep working — either route gives an agent a statement id.
 
@@ -1292,7 +1292,7 @@ is untouched: its requests carry no endpoint type and never enter the ACTION bra
 **Generic CRUD writes are blocked (405), in two layers.** Both entities are declared
 `"readOnly": true` in `decisions.json` (ETP-5469), so `ETGO_SF_ENTITY` (`495659D9…`, `6EFF323F…`)
 grants `GET` + `GETBYID` only and `POST` / `PUT` / `PATCH` / `DELETE` answer `405 "<METHOD> not
-enabled for <entity>"` on REST and MCP (`neo_create` / `neo_update` / `neo_delete`). Both also carry
+enabled for <entity>"` on REST and MCP (`etendo_create` / `etendo_update` / `etendo_delete`). Both also carry
 `Java_Qualifier = bankStatementEntityHandler` (ETP-5447, set in `decisions.json`), so any generic write
 that still reaches `BankStatementEntityHandler` answers `405` with a message naming the `bank-statements` action to use (`createStatement` /
 `importStatement` with the account id, `updateStatement`, `deleteStatement`; any line write →
@@ -1325,7 +1325,7 @@ real date. `?action=preview` is unchanged: it returns no statement header, only 
 `periodTo`, and `periodTo` is the value the import now stores.
 
 **The classic APRM button also works over MCP now, but prefer `processStatement`.**
-`neo_action {spec:"financial-account", entity:"importedBankStatements", id, action:"aPRMProcessBankStatement", parameters:{docAction:"P"}}`
+`etendo_action {spec:"financial-account", entity:"importedBankStatements", id, action:"aPRMProcessBankStatement", parameters:{docAction:"P"}}`
 runs Classic `FIN_BankStatementProcess` after two engine fixes: `NeoButtonActionHelper.addTabParamsCore`
 also passes the real key column `FIN_Bankstatement_ID` (it previously failed with *id to load is
 required for loading*), and `NeoProcessService.buildBundleParams` aliases `docAction` to the
@@ -1335,9 +1335,9 @@ required for loading*), and `NeoProcessService.buildBundleParams` aliases `docAc
 
 Agent prompts: `agent-prompts/financial-account/account.md` and
 `agent-prompts/financial-account/importedBankStatements.md` — short pointers only (the
-`bank-statements` spec and action names, reads via `neo_list`/`neo_get`, generic writes 405; and,
+`bank-statements` spec and action names, reads via `etendo_list`/`etendo_get`, generic writes 405; and,
 since ETP-5558, the account's movement actions and how a movement differs from a statement line). The
-parameters are documented once, in the catalogue: `neo_schema({spec:"bank-statements", view:"actions"})`.
+parameters are documented once, in the catalogue: `etendo_schema({spec:"bank-statements", view:"actions"})`.
 
 ## New components
 
@@ -1784,12 +1784,12 @@ Transaction") and `EM_Aprm_Findtransactionspd` are `visibility: "discarded"` in
 `artifacts/financial-account/decisions.json`. AD hides both with a constant display logic `'false'`
 (they only exist to back Classic's Match Statement popup, and never appear in the Etendo GO UI), but
 NEO and MCP only honour `AD_Field.IsDisplayed = 'N'`, so as `editable` fields they were advertised by
-`neo_schema(view:"actions")` and executable through `neo_action` and
+`etendo_schema(view:"actions")` and executable through `etendo_action` and
 `POST /sws/neo/financial-account/account/{id}/action/<button>`. "Add Transaction" matched a
 statement line into the account's existing **draft** reconciliation without processing it: the line
 ended with a transaction and no confirmed reconciliation, `pendingLines` showed it pending and
 `reconcileGroup` answered 409 "Statement line is already reconciled". Discarded means
-`ISINCLUDED = 'N'`: `neo_schema` reports them `invokable:false` with the curated-out reason and
+`ISINCLUDED = 'N'`: `etendo_schema` reports them `invokable:false` with the curated-out reason and
 `NeoButtonActionHelper.findButtonColumn` answers 404 "Action not found".
 
 The **visible** Core buttons (`EM_APRM_MatchTransactions` "Match Statement",
@@ -1800,9 +1800,9 @@ unsupported Classic handler — see `docs/plans/2026-09-18-mcp-usage-batch-1-fix
 ever become executable, the draft guard below is what keeps them from being finalized silently.
 
 **Agents reconcile through the same routes as the UI (ETP-5468, front A).** The
-`bank-reconciliation` spec now publishes its actions to MCP: `neo_action(spec:"bank-reconciliation",
+`bank-reconciliation` spec now publishes its actions to MCP: `etendo_action(spec:"bank-reconciliation",
 entity:"bank-reconciliation", id:<financial account id>, action, parameters)`, with
-`neo_schema(..., view:"actions")` returning each action's parameter schema. Actions: `pendingLines`,
+`etendo_schema(..., view:"actions")` returning each action's parameter schema. Actions: `pendingLines`,
 `candidates`, `autoMatch` (read-only) and `reconcileGroup`, `reconcileDifference`,
 `applySuggestions`, `undoReconciliation` (the SPA's `reactivate`), `removeOperation`,
 `reactivateSelected`. Each one re-enters the exact `ReconciliationHandlerSupport` wrapper the SPA's
@@ -4755,12 +4755,12 @@ offer (REST and the SPA are unchanged; full tables in `com.etendoerp.go/docs/neo
   withdrawal or funds transfer, and editing, processing, reactivating or deleting a movement, are
   not available through MCP; they are done from the account's movements in the UI. The movement
   buttons `etprReactivateTransaction`, `etprRemoveTransaction`, `posted` and `etblkpBulkposting` are
-  hidden (405, not listed). What stays is posting: `neo_action(spec:'financial-account',
+  hidden (405, not listed). What stays is posting: `etendo_action(spec:'financial-account',
   entity:'transaction', id:<transactionId>, action:'post'|'unpost', parameters:{})`, served by the
   `document-posting` qualifier (`DocumentPostingService`, as the SPA's kebab). They are
   handler-served, so `view:"actions"` does not list them.
 - **`reconciliations` — read-only through MCP.** Create, update and delete answer 405 with the
-  hint `neo_action` on `bank-reconciliation` (`id` = the financial account).
+  hint `etendo_action` on `bank-reconciliation` (`id` = the financial account).
 
 The agent-facing recipes are in `etendo-go-docs` → `agentic/finance/bank-reconciliation.md` and
 `agentic/finance/treasury.md`.

@@ -145,6 +145,14 @@ describe('TopBar title', () => {
     window.history.pushState({}, '', '/');
   });
 
+  // ETP-5602: the mic rendered as a role="button" with no handler — a control that does nothing.
+  // It stays hidden until voice search exists.
+  it('does not render a voice-search control in the global search box', () => {
+    render(<TopBar title="Inicio" />);
+    expect(screen.queryByTestId('Mic__133e64')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'searchWithVoice' })).not.toBeInTheDocument();
+  });
+
   it('clears the scope pill when Backspace is pressed at the start of a non-empty query', async () => {
     window.history.pushState({}, '', '/sales-invoice');
     render(<TopBar title="Sales Invoice" />);

@@ -43,7 +43,7 @@ function buildWellKnownPayloads(base) {
   const protectedResource = {
     resource: `${base}/mcp`,
     authorization_servers: [base],
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     bearer_methods_supported: ['header'],
   };
   const oauthServerMeta = {
@@ -51,7 +51,7 @@ function buildWellKnownPayloads(base) {
     authorization_endpoint: `${base}/authorize`,
     token_endpoint: `${base}/oauth2/token`,
     registration_endpoint: `${base}/oauth2/register`,
-    scopes_supported: ['neo:read', 'neo:write', 'neo:process', 'neo:report', 'neo:*'],
+    scopes_supported: ['etendo:read', 'etendo:write', 'etendo:process', 'etendo:report', 'etendo:*'],
     response_types_supported: ['code'],
     grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none', 'client_secret_post'],

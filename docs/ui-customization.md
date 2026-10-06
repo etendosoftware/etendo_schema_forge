@@ -389,8 +389,8 @@ Not a UI feature — guidance text returned to AI agents that consume the NEO He
 
 | Level | decisions key | Persisted to | Returned by |
 |-------|---------------|--------------|-------------|
-| Spec | `window.agentPrompt` | `ETGO_SF_SPEC.AGENT_PROMPT` | `neo_discover` (per spec) |
-| Field | `entities.{e}.fields.{f}.agentPrompt` | `ETGO_SF_FIELD.AGENT_PROMPT` | `neo_schema` (per field) |
+| Spec | `window.agentPrompt` | `ETGO_SF_SPEC.AGENT_PROMPT` | `etendo_discover` (per spec) |
+| Field | `entities.{e}.fields.{f}.agentPrompt` | `ETGO_SF_FIELD.AGENT_PROMPT` | `etendo_schema` (per field) |
 
 `push-to-neo` reads these straight from `decisions.json` (like `defaultExpr`) and writes the DB columns; the value is also mirrored into `contract.mcp.json → agentProfile.agentPrompt` for inspection. Omitted from the MCP response when empty. See `docs/decisions-reference.md`.
 

@@ -13,6 +13,7 @@ import {
   resolveWindowSearchSuggestions,
 } from '@/lib/vectorSearchConfig.js';
 import { rankVectorMatches } from '@/lib/vectorSearchRanking.js';
+import { filterMenuGroups, splitSearchHighlight } from '@/lib/globalSearchMenu.js';
 import {
   GlobalSearchDialog as CommandDialog,
   GlobalSearchEmpty as CommandEmpty,
@@ -20,6 +21,7 @@ import {
   GlobalSearchItem as CommandItem,
   GlobalSearchList as CommandList,
 } from '@/components/global-search/GlobalSearchPrimitives.jsx';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.jsx';
 import menuConfig from '../menu.json';
 
 import {
@@ -49,15 +51,10 @@ const ICON_MAP = {
 };
 
 function HighlightedQuery({ text, query }) {
-  const value = String(text ?? '');
-  const normalizedQuery = query.trim();
-  if (!normalizedQuery) return [value];
-  const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const parts = value.split(new RegExp(`(${escapedQuery})`, 'ig'));
-  return parts.map((part, index) => (
-    part.toLowerCase() === normalizedQuery.toLowerCase()
-      ? <mark key={`${part}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{part}</mark>
-      : part
+  return splitSearchHighlight(text, query).map((segment, index) => (
+    segment.match
+      ? <mark key={`${segment.text}-${index}`} data-testid="search-text-highlight" className="rounded bg-accent-highlight/40 px-0.5 text-inherit">{segment.text}</mark>
+      : segment.text
   ));
 }
 
@@ -84,8 +81,9 @@ export function CommandPalette() {
   const openRef = useRef(false);
   const keyboardIndexRef = useRef(-1);
   const dropdownInteractionRef = useRef(false);
+  // Last pointerdown landed outside the palette and the picker (cleared on keydown / once read).
+  const outsidePointerRef = useRef(false);
   const targetPickerRef = useRef(null);
-  const targetPickerTriggerRef = useRef(null);
   const vectorSearchContracts = useVectorSearchContracts(open);
   const [selectedVectorTargetKeys, setSelectedVectorTargetKeys] = useState(null);
   const [isTargetPickerOpen, setIsTargetPickerOpen] = useState(false);
@@ -184,7 +182,9 @@ export function CommandPalette() {
 
   useEffect(() => {
     const down = (e) => {
-      if (e.key === 'Escape' && openRef.current) {
+      // A nested layer (the window-filter picker) that handled Escape marks it defaultPrevented:
+      // that Escape closes the layer only, not the palette.
+      if (e.key === 'Escape' && openRef.current && !e.defaultPrevented) {
         e.preventDefault();
         setOpen(false);
         return;
@@ -199,43 +199,49 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    if (!isTargetPickerOpen) return undefined;
-    const closePickerOutside = (event) => {
-      if (targetPickerRef.current?.contains(event.target)) return;
-      if (targetPickerTriggerRef.current?.contains(event.target)) return;
-      setIsTargetPickerOpen(false);
-    };
-    document.addEventListener('pointerdown', closePickerOutside, true);
-    document.addEventListener('focusin', closePickerOutside, true);
-    return () => {
-      document.removeEventListener('pointerdown', closePickerOutside, true);
-      document.removeEventListener('focusin', closePickerOutside, true);
-    };
-  }, [isTargetPickerOpen]);
-
-  useEffect(() => {
     const preserveDropdownClick = (event) => {
       const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-      if (dropdown?.contains(event.target)) dropdownInteractionRef.current = true;
+      const insideLayer = dropdown?.contains(event.target) || targetPickerRef.current?.contains(event.target);
+      if (insideLayer) {
+        dropdownInteractionRef.current = true;
+      }
+      const input = document.querySelector('[data-testid="global-search-input"]');
+      const dialog = document.querySelector('[data-testid="cmd-dialog"]');
+      outsidePointerRef.current = !insideLayer && !input?.contains(event.target) && !dialog?.contains(event.target);
     };
-    const closeOnFocusOut = () => {
+    const clearOutsidePointer = () => { outsidePointerRef.current = false; };
+    const closeOnFocusOut = (event) => {
+      const fromPicker = event.target?.closest?.('[data-testid="vector-search-target-picker"]');
       window.setTimeout(() => {
+        const pointerLeft = outsidePointerRef.current;
+        outsidePointerRef.current = false;
         if (!openRef.current) return;
+        const active = document.activeElement;
+        const input = document.querySelector('[data-testid="global-search-input"]');
+        const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
+        const dialog = document.querySelector('[data-testid="cmd-dialog"]');
+        // The picker closing itself (Escape) removes the focused checkbox: focus drops to
+        // <body> until Radix returns it to the trigger, so that focusout is not the user leaving.
+        // Decided by where focus went, not by whether the checkbox is already unmounted: focus
+        // on an element outside the palette is leaving, and must still close it. A click on a
+        // non-focusable spot outside also leaves focus on <body>, so a preceding outside
+        // pointerdown tells that apart from Esc.
+        const focusNowhere = (!active || active === document.body) && !pointerLeft;
+        if (fromPicker && (focusNowhere || dialog?.contains(active) || targetPickerRef.current?.contains(active))) return;
         if (dropdownInteractionRef.current) {
           dropdownInteractionRef.current = false;
           return;
         }
-        const active = document.activeElement;
-        const input = document.querySelector('[data-testid="global-search-input"]');
-        const dropdown = document.querySelector('[data-testid="CommandDropdown__8e5d1a"]');
-        if (!input?.contains(active) && !dropdown?.contains(active)) setOpen(false);
+        if (!input?.contains(active) && !dropdown?.contains(active) && !targetPickerRef.current?.contains(active)) setOpen(false);
       }, 0);
     };
     document.addEventListener('focusout', closeOnFocusOut);
     document.addEventListener('pointerdown', preserveDropdownClick, true);
+    document.addEventListener('keydown', clearOutsidePointer, true);
     return () => {
       document.removeEventListener('focusout', closeOnFocusOut);
       document.removeEventListener('pointerdown', preserveDropdownClick, true);
+      document.removeEventListener('keydown', clearOutsidePointer, true);
     };
   }, []);
 
@@ -351,6 +357,26 @@ export function CommandPalette() {
     false,
   );
 
+  const featureFlagValues = {
+    [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
+    [PUBLIC_API_KEYS]: publicApiKeysEnabled,
+    [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
+    [UNIFIED_CALENDAR_POC]: unifiedCalendarPocEnabled,
+  };
+  const visibleMenuGroups = menuConfig.menu
+    .filter((group) => !group.hidden)
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((i) => !i.hidden
+        && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
+        && (!i.capability || capabilities?.[i.capability] === true)),
+    }))
+    .filter((group) => group.items.length > 0);
+  // With a query only the matching windows are listed; they render above the record
+  // results so the first one is what Enter opens, and it does not move when the
+  // (debounced, remote) record results arrive.
+  const matchingMenuGroups = filterMenuGroups(visibleMenuGroups, query, tMenu);
+
   const renderVectorMatch = (match) => {
     const fields = Object.entries(match.fields || {})
       .filter(([fieldName, value]) => value && fieldName.toLowerCase() !== 'issotrx')
@@ -394,19 +420,26 @@ export function CommandPalette() {
             <span className="truncate">{vectorSearchScopeLabel}</span>
             <X className="h-3 w-3 shrink-0" aria-hidden="true" data-testid="X__73263e" />
           </button>
+          {/* Portaled (Radix) so the cmdk-root's overflow-hidden — the dialog is only as wide and
+              as tall as the search box and its results — can never clip it; Radix flips/shifts it
+              to stay inside the viewport. z-60: a dropdown above the z-50 palette. */}
+          <Popover open={isTargetPickerOpen} onOpenChange={setIsTargetPickerOpen}>
+          <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => setIsTargetPickerOpen((isOpen) => !isOpen)}
-            ref={targetPickerTriggerRef}
             className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-expanded={isTargetPickerOpen}
             data-testid="vector-search-target-picker-trigger"
           >
             {ui('filterWindows')}
           </button>
-          </div>
-          {isTargetPickerOpen && (
-          <div ref={targetPickerRef} className="absolute left-[300px] top-12 z-20 w-72 rounded-2xl border bg-popover p-2 shadow-lg" data-testid="vector-search-target-picker">
+          </PopoverTrigger>
+          <PopoverContent
+            ref={targetPickerRef}
+            align="start"
+            collisionPadding={16}
+            className="z-[60] max-h-[min(18rem,var(--radix-popover-content-available-height))] w-72 overflow-y-auto rounded-2xl p-2 shadow-lg"
+            data-testid="vector-search-target-picker"
+          >
             {vectorSearchTargets.map((target) => {
               const checked = !selectedVectorTargetKeys || selectedVectorTargetKeys.includes(target.target);
               const label = tMenu(target.label) || target.label;
@@ -423,8 +456,9 @@ export function CommandPalette() {
                 </label>
               );
             })}
+          </PopoverContent>
+          </Popover>
           </div>
-          )}
         </div>
       )}
       {isVectorSearchLoading && (
@@ -437,7 +471,7 @@ export function CommandPalette() {
         </div>
       )}
       <CommandList data-testid="CommandList__73263e">
-        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && (
+        {query.trim().length > 0 && !isVectorSearchLoading && vectorMatches.length === 0 && matchingMenuGroups.length === 0 && (
           <CommandEmpty data-testid="CommandEmpty__73263e">{ui('noResultsFound')}</CommandEmpty>
         )}
         {query.trim().length === 0 && (
@@ -503,27 +537,14 @@ export function CommandPalette() {
             })}
           </CommandGroup>
         )}
-        {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
-        {menuConfig.menu.filter(g => !g.hidden).map((group) => {
+        {matchingMenuGroups.map((group) => {
           const Icon = ICON_MAP[group.icon] || Package;
-          const featureFlagValues = {
-            [ACCT_PROCESS_MONITOR]: accountingProcessMonitorEnabled,
-            [PUBLIC_API_KEYS]: publicApiKeysEnabled,
-            [PROOF_OF_CONCEPT_MENU]: proofOfConceptMenuEnabled,
-            [UNIFIED_CALENDAR_POC]: unifiedCalendarPocEnabled,
-          };
-          const visibleItems = group.items.filter(i => !i.hidden
-            && (!i.featureFlag || featureFlagValues[i.featureFlag] === true)
-            && (!i.capability || capabilities?.[i.capability] === true));
-          if (visibleItems.length === 0) return null;
           return (
             <CommandGroup
-              key={group.group}
+              key={`${group.tier ?? 0}:${group.group}`}
               heading={tMenu(group.group)}
               data-testid="CommandGroup__73263e">
-              {visibleItems.map((item) => {
+              {group.items.map((item) => {
                 const translatedLabel = tMenu(item.label);
                 return (
                   <CommandItem
@@ -542,6 +563,9 @@ export function CommandPalette() {
             </CommandGroup>
           );
         })}
+        {exactVectorMatches.length > 0 && <CommandGroup heading={ui('exactSearchResults')} data-testid="vector-search-exact">{exactVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {semanticVectorMatches.length > 0 && <CommandGroup heading={ui('relevantSearchResults')} data-testid="vector-search-relevant">{semanticVectorMatches.map(renderVectorMatch)}</CommandGroup>}
+        {relatedVectorMatches.length > 0 && !vectorMatchesConcentrated && <CommandGroup heading={ui('relatedSearchResults')} data-testid="vector-search-related">{relatedVectorMatches.map(renderVectorMatch)}</CommandGroup>}
       </CommandList>
       <div className="flex h-10 shrink-0 items-center justify-between border-t border-[hsl(var(--border-control))] bg-muted/30 px-3 text-sm text-muted-foreground" data-testid="command-search-help">
         <div className="flex items-center gap-2">

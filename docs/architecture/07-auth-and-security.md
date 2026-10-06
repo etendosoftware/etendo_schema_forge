@@ -251,8 +251,8 @@ The security responsibilities remain deliberately split:
 
 - **Schema Forge** declares the contract surface: which specs, entities, fields, and optional
   capabilities are exposed. It does not mint or infer role grants.
-- **MCP** authenticates the token, enforces the OAuth scope axis (`neo:read`, `neo:write`,
-  `neo:process`, `neo:report`), and creates the `OBContext` from the token identity before tool
+- **MCP** authenticates the token, enforces the OAuth scope axis (`etendo:read`, `etendo:write`,
+  `etendo:process`, `etendo:report`; the legacy `neo:*` names are still accepted), and creates the `OBContext` from the token identity before tool
   discovery, resource access, or tool execution. Its `NeoAccessUtils` facade delegates role checks
   to the canonical runtime helper; it must not maintain a second permission model.
 - **NEO/Etendo runtime** remains the authority for `AD_Window_Access`, `AD_Process_Access`,

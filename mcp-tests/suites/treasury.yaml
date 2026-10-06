@@ -18,7 +18,7 @@
 #      minute or two, and a posted invoice refuses to reactivate ("Factura contabilizada"). The
 #      `posted` action is a TOGGLE, not an unpost — on an unposted invoice it would POST it — so it
 #      must run only when the invoice is posted. The runner has no conditionals (D41): the state is
-#      read with a filtered neo_list ({id, posted: "Y"}) and the toggle runs in a forEach over that
+#      read with a filtered etendo_list ({id, posted: "Y"}) and the toggle runs in a forEach over that
 #      answer, i.e. zero or one times;
 #   3. reactivate it IF it is completed — the same idiom ({id, documentStatus: "CO"});
 #   4. delete the draft; its success is what proves the invoice is gone.
@@ -42,7 +42,7 @@
 # own description is filled by Etendo ("Factura Nº : …") and payment headers are not writable by
 # agents. So the marker is on the INVOICE header `description`, editable on both sales-invoice and
 # purchase-invoice, and the prompt names the invoice by it ("la factura con referencia …"). The
-# effect is read off that invoice with neo_list exact-match filters: `paymentComplete` (Ispaid,
+# effect is read off that invoice with etendo_list exact-match filters: `paymentComplete` (Ispaid,
 # both directions) and `totalPaid` (Totalpaid, purchase-invoice only — discarded on sales-invoice).
 #
 # DATA. Local tenant *valentin mcp*: business partner *Cliente Paridad* (customer AND vendor — the
@@ -59,7 +59,7 @@ x-fixtures:
   # Steps are anchored one by one because YAML cannot concatenate two aliased lists: a setup
   # that needs the invoice AND a collection lists the step aliases it wants.
   si-create: &si-create
-      tool: neo_create
+      tool: etendo_create
       args:
         spec: sales-invoice
         entity: header
@@ -72,43 +72,43 @@ x-fixtures:
           description: "{{marker}}"
       saveAs: invoice
   si-line: &si-line
-      tool: neo_create
+      tool: etendo_create
       args:
         spec: sales-invoice
         entity: lines
         parentId: "{{steps.invoice.data.0.id}}"
         fields: { product: 4F6C20F68E3C4C6090CD678DE917470E, invoicedQuantity: 1, unitPrice: 100 }
   si-complete: &si-complete
-      tool: neo_action
+      tool: etendo_action
       args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
               action: documentAction, parameters: { docAction: CO } }
 
   sales-invoice-setup: &sales-invoice-setup [*si-create, *si-line, *si-complete]
 
   sales-invoice-teardown: &sales-invoice-teardown
-    - tool: neo_action
+    - tool: etendo_action
       args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}", action: invoicePayments }
       saveAs: payments
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.payments.response.data}}"
       args: { spec: payment-in, entity: finPayment, id: "{{item.id}}", action: eTPRRemovePayment }
-    - tool: neo_list
+    - tool: etendo_list
       args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
       saveAs: posted
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.posted.data}}"
       args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
-    - tool: neo_list
+    - tool: etendo_list
       args: { spec: sales-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
       saveAs: completed
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.completed.data}}"
       args: { spec: sales-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
-    - tool: neo_delete
+    - tool: etendo_delete
       args: { spec: sales-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
 
   purchase-invoice-setup: &purchase-invoice-setup
-    - tool: neo_create
+    - tool: etendo_create
       args:
         spec: purchase-invoice
         entity: header
@@ -120,41 +120,41 @@ x-fixtures:
           paymentMethod: 6975C748E18B4079812A5F2C0C782FDD
           description: "{{marker}}"
       saveAs: invoice
-    - tool: neo_create
+    - tool: etendo_create
       args:
         spec: purchase-invoice
         entity: lines
         parentId: "{{steps.invoice.data.0.id}}"
         fields: { product: 4F6C20F68E3C4C6090CD678DE917470E, invoicedQuantity: 1, unitPrice: 100 }
-    - tool: neo_action
+    - tool: etendo_action
       args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}",
               action: documentAction, parameters: { docAction: CO } }
 
   purchase-invoice-teardown: &purchase-invoice-teardown
-    - tool: neo_action
+    - tool: etendo_action
       args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}", action: invoicePayments }
       saveAs: payments
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.payments.response.data}}"
       args: { spec: payment-out, entity: header, id: "{{item.id}}", action: eTPRRemovePayment }
-    - tool: neo_list
+    - tool: etendo_list
       args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", posted: "Y" } }
       saveAs: posted
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.posted.data}}"
       args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: posted, parameters: { docAction: "Y" } }
-    - tool: neo_list
+    - tool: etendo_list
       args: { spec: purchase-invoice, entity: header, filters: { id: "{{steps.invoice.data.0.id}}", documentStatus: CO } }
       saveAs: completed
-    - tool: neo_action
+    - tool: etendo_action
       forEach: "{{steps.completed.data}}"
       args: { spec: purchase-invoice, entity: header, id: "{{item.id}}", action: documentAction, parameters: { docAction: RE } }
-    - tool: neo_delete
+    - tool: etendo_delete
       args: { spec: purchase-invoice, entity: header, id: "{{steps.invoice.data.0.id}}" }
 
   # A collection confirmed in setup, for the probes that start from one.
   si-collect: &si-collect
-    tool: neo_action
+    tool: etendo_action
     args:
       spec: sales-invoice
       entity: header
@@ -173,7 +173,7 @@ probes:
       El cliente ya me pagó entera la factura con referencia {{marker}}: me hizo la
       transferencia ayer, 30 de septiembre, al Banco Paridad. Registrame el cobro.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: sales-invoice
         entity: header
@@ -191,7 +191,7 @@ probes:
       50 € a cuenta por transferencia desde el Banco Paridad. El resto se lo pagamos más
       adelante. Dejá anotado ese pago.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: purchase-invoice
         entity: header
@@ -232,7 +232,7 @@ probes:
       El cobro de la factura con referencia {{marker}} lo registré por error: el cliente
       todavía no me pagó. Borrámelo, la factura tiene que quedar pendiente.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: sales-invoice
         entity: header
@@ -250,7 +250,7 @@ probes:
   # movement: the account balance does not change.
   # Until ETP-5558 only (b) existed over MCP, and the blind run 20261001T1949-local-a00c did exactly
   # that. Since then (a) is offered to agents as the account's declared movement actions
-  # (neo_action(spec:'financial-account', entity:'account', action:'createMovement'), same handler
+  # (etendo_action(spec:'financial-account', entity:'account', action:'createMovement'), same handler
   # as the UI), and the 405 on financial-account/transaction names them.
   # So correct now means: the agent BOOKS a deposit movement of 100 € dated 30/09/2026 in Banco
   # Paridad, with the marker in its description. Wrong: a bank-statement line reported as "deposit
@@ -263,7 +263,7 @@ probes:
   # concept. Several G/L items fit "aporte del socio" (e.g. 11800000 Aportaciones de socios o
   # propietarios); picking a plausible one or asking are both acceptable.
   # The effect check finds the booked movement by the marker: a processed manual deposit has status
-  # RDNC (a draft stays RPAE). It is one exact-match neo_list, so the amount and the date are read
+  # RDNC (a draft stays RPAE). It is one exact-match etendo_list, so the amount and the date are read
   # from the transcript (the createMovement answer echoes both).
   # Teardown, whatever happened: reactivate every booked movement carrying the marker (undoing its
   # posting, if background accounting already posted it), then delete every movement carrying the
@@ -273,14 +273,14 @@ probes:
   - id: manual-deposit
     mode: write
     setup:
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: account, filters: { name: Banco Paridad } }
         saveAs: account
     prompt: >
       Anotá un depósito de 100 € en el Banco Paridad, con fecha de ayer, 30 de septiembre: es un
       aporte del socio a la empresa. Ponele de descripción {{marker}}.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: financial-account
         entity: transaction
@@ -288,34 +288,34 @@ probes:
         filters: { description: "{{marker}}", status: RDNC }
       expect: atLeastOne
     teardown:
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: transaction, parentId: "{{steps.account.data.0.id}}",
                 filters: { description: "{{marker}}", status: RDNC } }
         saveAs: bookedMovements
-      - tool: neo_action
+      - tool: etendo_action
         forEach: "{{steps.bookedMovements.data}}"
         args: { spec: financial-account, entity: account, id: "{{steps.account.data.0.id}}",
                 action: reactivateMovement, parameters: { movementId: "{{item.id}}" } }
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: transaction, parentId: "{{steps.account.data.0.id}}",
                 filters: { description: "{{marker}}" } }
         saveAs: movements
-      - tool: neo_action
+      - tool: etendo_action
         forEach: "{{steps.movements.data}}"
         args: { spec: financial-account, entity: account, id: "{{steps.account.data.0.id}}",
                 action: deleteMovement, parameters: { movementId: "{{item.id}}" } }
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: importedBankStatements, parentId: "{{steps.account.data.0.id}}",
                 filters: { name: "{{marker}}", processed: true } }
         saveAs: processedStatements
-      - tool: neo_action
+      - tool: etendo_action
         forEach: "{{steps.processedStatements.data}}"
         args: { spec: bank-statements, entity: bank-statements, id: "{{item.id}}", action: reactivateStatement, parameters: {} }
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: importedBankStatements, parentId: "{{steps.account.data.0.id}}",
                 filters: { name: "{{marker}}" } }
         saveAs: statements
-      - tool: neo_action
+      - tool: etendo_action
         forEach: "{{steps.statements.data}}"
         args: { spec: bank-statements, entity: bank-statements, id: "{{item.id}}", action: deleteStatement, parameters: {} }
 
@@ -323,7 +323,7 @@ probes:
   # THE UI TEST (D22): Movimientos -> "Transferir" (FundsTransferModal, `financial-account-
   # transactions?action=transfer`) moves money between two accounts: a withdrawal in the source and
   # a deposit in the destination, both processed, DATED TODAY (the modal offers no other date).
-  # Agents have the same thing since ETP-5558: neo_action(spec:'financial-account', entity:'account',
+  # Agents have the same thing since ETP-5558: etendo_action(spec:'financial-account', entity:'account',
   # id:<source>, action:'transferFunds'), with transferDestinations to find the destination and
   # today's rate. Locally the only other account of the tenant is *Banco USD Paridad*, so this probe
   # also exercises the conversion rate (the system's EUR->USD rate for today, as the modal prefills).
@@ -352,17 +352,17 @@ probes:
   - id: transfer-between-accounts
     mode: write
     setup:
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: account, filters: { name: Banco Paridad } }
         saveAs: account
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: account, filters: { name: Banco USD Paridad } }
         saveAs: usdAccount
     prompt: >
       Pasá 10 € del Banco Paridad al Banco USD Paridad; es para cubrir pagos en dólares, un
       traspaso entre nuestras propias cuentas. Poné de descripción {{marker}}.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: financial-account
         entity: transaction
@@ -370,11 +370,11 @@ probes:
         filters: { description: "{{marker}}", transactionType: BPW }
       expect: atLeastOne
     teardown:
-      - tool: neo_list
+      - tool: etendo_list
         args: { spec: financial-account, entity: transaction, parentId: "{{steps.usdAccount.data.0.id}}",
                 filters: { description: "{{marker}}", transactionType: BPD } }
         saveAs: arrivals
-      - tool: neo_action
+      - tool: etendo_action
         forEach: "{{steps.arrivals.data}}"
         args: { spec: financial-account, entity: account, id: "{{steps.usdAccount.data.0.id}}",
                 action: transferFunds,
@@ -396,7 +396,7 @@ probes:
       transferencia por el banco desde el Banco Paridad, así no tengo que entrar a la web del
       banco.
     expectEffect:
-      tool: neo_list
+      tool: etendo_list
       args:
         spec: purchase-invoice
         entity: header

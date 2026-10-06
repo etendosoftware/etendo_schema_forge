@@ -548,7 +548,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
     });
   };
 
-  const companyName = invitationData?.clientName || successData?.clientName || 'Etendo Go';
+  const companyName = invitationData?.clientName || successData?.clientName || 'Etendo';
   const invitedEmail = invitationData?.email || invitationData?.maskedEmail || '';
   // Whether there is a tenant to stay in. Resolved by the effect above rather than read from
   // storage on every render, but for the same reason the storage read was unconditional: the
@@ -560,7 +560,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   // The marketing shell is identical on every full-page state; the pre-existing states below
   // spell it out inline, the ETP-5202 states share this bag rather than copying it three times.
   const shellProps = {
-    brandLabel: 'Etendo Go',
+    brandLabel: 'Etendo',
     marketingTitle: ui('onboardingMarketingTitle'),
     marketingDescription: ui('onboardingMarketingDescription'),
     featureLabels: [
@@ -575,7 +575,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (loading) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -682,7 +682,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         <LoginStep
           config={{
             apiBase,
-            brandLabel: 'Etendo Go',
+            brandLabel: 'Etendo',
             localeCodes: ['es_ES', 'en_US'],
           }}
           stepData={{ email: invitationData.email }}
@@ -701,7 +701,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         <RegisterStep
           config={{
             apiBase,
-            brandLabel: 'Etendo Go',
+            brandLabel: 'Etendo',
             localeCodes: ['es_ES', 'en_US'],
           }}
           stepData={{ email: invitationData.email }}
@@ -717,7 +717,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && errorState) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -752,7 +752,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && !errorState && successData) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -836,7 +836,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
   if (!loading && !errorState && !successData && invitationData?.branch === 'existing_account' && existingAuthenticated) {
     return (
       <AuthShell
-        brandLabel="Etendo Go"
+        brandLabel="Etendo"
         marketingTitle={ui('onboardingMarketingTitle')}
         marketingDescription={ui('onboardingMarketingDescription')}
         featureLabels={[
@@ -928,7 +928,7 @@ export default function InviteAcceptancePage({ apiBase = import.meta.env.VITE_AP
         {/* State: Success */}
         {!loading && !errorState && successData && (
           <AuthShell
-            brandLabel="Etendo Go"
+            brandLabel="Etendo"
             marketingTitle={ui('onboardingMarketingTitle')}
             marketingDescription={ui('onboardingMarketingDescription')}
             featureLabels={[
