@@ -576,9 +576,9 @@ Auto-memory (NOT committed) only for: GitHub usernames, local paths, personal pr
 
 **A divergence between paths must be declared, not discovered.** If two channels must genuinely behave differently, record it in `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §4.12.9 in the same change. Precedent: `neo_batch` persisted order lines at price 0 while `neo_create` priced them correctly, for months — the injection was present and simply ran too early to see the parent, and nothing in any response or log said so.
 
-**Two binding mechanisms, both live.** Prefer the first for anything new:
-- **`@NeoExtension(spec = "<spec>", entity = "<entity>")`** on the customization class, resolved by `NeoExtensionIndex`. Proxy-safe, annotation-first, and it covers every surface (CRUD, DEFAULTS, ACTION, SELECTOR, CALLOUT, READ) on every channel.
-- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named`** — the original binding, still resolved as the fallback. Described below.
+**Two binding mechanisms, but only one is for new code.**
+- **`@NeoExtension(spec = "<spec>", entity = "<entity>")`** on the customization class, resolved by `NeoExtensionIndex`. **Use this for anything new.** Proxy-safe, annotation-first, the binding is visible in the file, splitting a handler needs no data change, and it covers every surface (CRUD, DEFAULTS, ACTION, SELECTOR, CALLOUT, READ) on every channel.
+- **`ETGO_SF_ENTITY.Java_Qualifier` + `@Named`** — the original binding. **On its way out.** Still resolved as the fallback, so existing handlers keep working and migrate opportunistically (when someone opens the file anyway), but **do not add a new one**. Full comparison and the migration rule: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a.
 
 **How the qualifier binding works:**
 1. Set `Java_Qualifier` on the `ETGO_SF_ENTITY` record (e.g. `"internal-consumption-line"`).
@@ -593,13 +593,16 @@ public class InternalConsumptionLineHandler implements NeoHandler {
     @Override public NeoResponse afterHandle(NeoContext context) { return null; } // post-hook
 }
 ```
-**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). See `docs/neo-headless-extensibility.md` §2.2.
+**⚠️ `@Named` only — NEVER `@ApplicationScoped` (or any normal scope).** `lookupHandler()` reads `@Named` off `handler.getClass()`; a normal-scoped bean resolves to a Weld client proxy whose subclass does not carry the (non-`@Inherited`) `@Named`, so it is silently skipped. `@Named`-only defaults to `@Dependent` (no proxy). This trap is one of the reasons `@NeoExtension` exists: it binds by annotation index, not by reading `@Named` off the instance class. See `docs/neo-headless-extensibility.md` §2.2.
 
 - `handle()` → `null` continues to default CRUD; `NeoResponse` short-circuits.
 - `afterHandle()` → `null` keeps default result; `NeoResponse` replaces it.
 - Place handlers in: `{etendo_root}/modules/com.etendoerp.go/src/com/etendoerp/go/schemaforge/handlers/`
 
-Full reference: `docs/neo-headless-extensibility.md`
+Full reference: `{etendo_root}/modules/com.etendoerp.go/docs/neo-headless.md` §5.3.a — **start there**, it is
+the one that covers `@NeoExtension`. `docs/neo-headless-extensibility.md` documents the hook
+lifecycle (`handle`/`afterHandle`, contexts, examples) but predates the annotation, so its
+registration steps still describe the legacy binding only.
 
 ## Adding a New Etendo GO Webhook — NEO Pseudo-Spec Bridge Pattern (com.etendoerp.go)
 
