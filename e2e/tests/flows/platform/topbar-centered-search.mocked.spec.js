@@ -48,8 +48,9 @@ import { login } from '../../helpers/auth.js';
  *   - `/sales-order/:id`   document detail; the record has a very long document number, so the
  *                          title AND the breadcrumb's current level must elide (no back button:
  *                          document details do not publish one)
- *   - `/report-viewer?report=:id`  report viewer, the page that publishes `onBack`: back button +
- *                          very long report title + breadcrumb that must elide
+ *   - `/report-viewer?report=:id`  report viewer: very long report title + breadcrumb that must
+ *                          elide. No back button: the report view publishes no `onBack` (its
+ *                          in-page Cancel is the way back, ETP-5519), so no page here shows one
  * Each at 1280×720 and 1920×1080, with the navigation rail expanded and collapsed.
  */
 
@@ -122,11 +123,11 @@ const PAGES = [
     structuredBreadcrumb: true,
   },
   {
-    name: 'report viewer, back button + long title + breadcrumb',
+    name: 'report viewer, no back button + long title + breadcrumb',
     path: `/report-viewer?report=${LONG_REPORT_ID}`,
     expectedTitle: LONG_REPORT_TITLE,
     long: true,
-    back: true,
+    back: false,
     structuredBreadcrumb: true,
   },
 ];

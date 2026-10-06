@@ -1668,7 +1668,9 @@ function ReportViewer({ report, onBack, token, selectedOrgId, selectedOrgName, r
 
   const favLabel = report.title?.en_US || report.title?.en || report.id;
   const favLabels = report.title && typeof report.title === 'object' ? report.title : undefined;
-  useSetPageMeta({ title, breadcrumb, onBack, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
+  // ETP-5519: no `onBack` here — the report view does not show the TopBar ← button. The
+  // in-page Cancel button (`action-cancel`) is the way back to the report catalog.
+  useSetPageMeta({ title, breadcrumb, onAddToFavorites: () => toggleFavorite(favKey, favLabel, favLabels), isFavorite: favActive }, [favActive]);
 
   // document.title (ETP-5013) — this page never set one, so the browser's
   // OWN native print (Cmd/Ctrl+P on the live preview — a different path

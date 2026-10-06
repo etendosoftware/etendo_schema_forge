@@ -966,6 +966,25 @@ describe('ReportViewer (viewer sub-component)', () => {
     expect(paramsArg.has('report')).toBe(false);
   });
 
+  // ETP-5519: the report view publishes no `onBack`, so the TopBar renders no ← (`topbar-back`
+  // only exists when the page meta carries `onBack`). The in-page Cancel is the way back.
+  it('publishes page meta without onBack (no TopBar back button)', async () => {
+    useSetPageMeta.mockClear();
+    render(<ReportViewerPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    });
+    const viewerMetas = useSetPageMeta.mock.calls
+      .map(([meta]) => meta)
+      // The catalog publishes title 'Reports'; every other meta is the report viewer's.
+      .filter((meta) => meta && meta.title !== 'Reports');
+    expect(viewerMetas.length).toBeGreaterThan(0);
+    for (const meta of viewerMetas) {
+      expect(meta).not.toHaveProperty('onBack');
+      expect(meta.title).toBeTruthy();
+    }
+  });
+
   it('renders ReportSidebar with parameter sections', async () => {
     render(<ReportViewerPage />);
     await waitFor(() => {

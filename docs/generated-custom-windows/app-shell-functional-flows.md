@@ -238,6 +238,9 @@ Any authenticated route can also be opened with `?embedded=1`; in that mode the 
     title row, right after the title (and count / `titleExtra`), not beside the whole block, so it
     no longer keeps a long breadcrumb a kebab's width short of the column edge.
   - **Back button** (`topbar-back`, `onBack` page meta) still renders to the left of the title.
+    The report viewer (`/report-viewer?report=<id>`, every category) does **not** pass `onBack`
+    since ETP-5519, so no ← button shows there; its in-page **Cancelar** button (`action-cancel`)
+    returns to the report catalog.
 - **Breadcrumb levels.** `breadcrumb` page meta accepts either the historical `' / '`-joined
   string or an array of `string | { label, href?, onClick? }`. Up to 3 levels render as-is. With
   more than 3: first level, `⋯` (`topbar-breadcrumb-overflow`), current page
