@@ -2865,6 +2865,32 @@ developer-only debug/mock profile override the same way. Regression test added t
 scheme.~~ **Retracted (2026-09-23):** the 401 came from a scripted `page.request` call, not the app;
 promoting/demoting through the real UI works under cookie sessions. Not a bug.
 
+**One more instance found later (2026-10-05, ETP-5546): `fiscal-models`.** Same exact gap —
+`tools/app-shell/src/windows/custom/fiscal-models/index.jsx` was a bare
+`export { default } from './FiscalModelsPage'` with zero `useWindowAccess`/`WindowAccessGuard`
+wiring, so a role without the "Modelos Fiscales" grant (the Tax Report window,
+`3E8FEA1EA7404D979306C9EE7FD2E7E8`, per the ETP-5116 window-access-proxy convention) rendered the
+full page on direct navigation to `/fiscal-models`. This case was worse than
+`organization`/`fiscal-config`/`fiscal-monitor` above: on the backend, `AbstractFiscalHandler`
+(every `/fiscal303/*`/`/fiscal349/*` sub-route) and the separate
+`fiscal-models-catalog` endpoint had **no access check of their own either** — so the missing
+frontend guard was not merely showing an ugly raw error, as in the three cases above, the API
+itself answered `200` to any authenticated role. Fixed on both sides: frontend guard wired
+identically (`FISCAL_MODELS_WINDOW_ID` + `useWindowAccess`/`WindowAccessGuard` in `index.jsx`),
+plus two new backend gates (`AbstractFiscalHandler.handle()`'s single entry point, and
+`NeoBuiltInEndpointHandler.handleFiscalModelsCatalogEndpoint` separately) both calling
+`NeoAccessHelper.hasWindowAccess(TAX_REPORT_WINDOW_ID, method)`. See
+`docs/generated-custom-windows/fiscal-models.md` → "Access control (ETP-5546)" and
+`com.etendoerp.go`'s `docs/neo-headless.md` §7 for the full writeup.
+
+**Extended lesson:** this ETP-5395 sweep covered the custom windows known at the time; it was not
+exhaustive, and a missing frontend guard can mask (or be masked by) a missing *backend* gate on the
+same window — fixing only the visible UI symptom without checking whether the API itself enforces
+the grant leaves the real vulnerability (any role, any client, direct API call) wide open even
+after the UI "looks" gated. When auditing one custom window for this gate, grep sibling custom
+windows for the same `export { default } from` bare re-export shape AND independently verify the
+backend entry point(s) it calls — don't assume either side implies the other.
+
 ---
 
 ## Post/Unpost menuActions Declared Without Backend Routing or Field (ETP-5436)
