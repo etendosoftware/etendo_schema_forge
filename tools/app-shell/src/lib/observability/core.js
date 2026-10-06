@@ -19,6 +19,8 @@ import { buildEventPayload, SAFE_EVENT_PROPERTY_KEYS } from './payload.js';
  * created and `init()`-ed inside `initObservability()`, flagged synchronously before its
  * first await, and every other operation is a no-op until then.
  */
+const MAX_PENDING_FLAG_EVALUATIONS = 100;
+
 function isProviderEnabled(provider) {
   return provider && provider.enabled !== false;
 }
@@ -31,6 +33,7 @@ export function createObservability(options = {}) {
   let context = {};
   let metadata = {};
   let initialized = false;
+  const pendingFlags = new Map();
 
   function getContext() {
     return { ...context };
@@ -52,12 +55,30 @@ export function createObservability(options = {}) {
       initialized = true;
 
       await gateway.init(getContext());
+      const pending = [...pendingFlags];
+      pendingFlags.clear();
+      await Promise.all(pending.map(([key, value]) => gateway.addFeatureFlagEvaluation(key, value)));
     },
 
     async track(eventName, properties = {}) {
       if (!initialized || !eventName) return;
       const payload = buildEventPayload({ properties, context, metadata });
       await gateway.track(eventName, payload);
+    },
+
+    /**
+     * A flag evaluation for the providers that attach flag state to their events (Datadog).
+     * The flag provider usually answers before telemetry starts, and each evaluation is
+     * reported once per page (`flag-exposure.js`), so those made before `initObservability()`
+     * are kept (the latest value per key, bounded) and replayed once the gateway is up.
+     */
+    async addFeatureFlagEvaluation(key, value) {
+      if (!key) return;
+      if (!initialized) {
+        if (pendingFlags.has(key) || pendingFlags.size < MAX_PENDING_FLAG_EVALUATIONS) pendingFlags.set(key, value);
+        return;
+      }
+      await gateway.addFeatureFlagEvaluation(key, value);
     },
 
     async page(path, properties = {}) {

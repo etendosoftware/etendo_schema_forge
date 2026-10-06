@@ -115,6 +115,37 @@ describe('track', () => {
   });
 });
 
+describe('addFeatureFlagEvaluation', () => {
+  it('forwards through the gateway to the providers that implement it', async () => {
+    const obs = createObservability();
+    const datadog = makeProvider('datadog', {
+      addFeatureFlagEvaluation: vi.fn().mockResolvedValue(undefined),
+    });
+    const other = makeProvider('mixpanel');
+    await obs.initObservability({ providers: [datadog, other] });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+
+    expect(datadog.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+    expect(other.addFeatureFlagEvaluation).toBeUndefined();
+  });
+
+  it('holds evaluations made before initialization and sends them once it happens', async () => {
+    const obs = createObservability();
+    const provider = makeProvider('datadog', {
+      addFeatureFlagEvaluation: vi.fn(),
+    });
+
+    await obs.addFeatureFlagEvaluation('sample_flag', false);
+    await obs.addFeatureFlagEvaluation('sample_flag', true);
+    expect(provider.addFeatureFlagEvaluation).not.toHaveBeenCalled();
+
+    await obs.initObservability({ providers: [provider] });
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledTimes(1);
+    expect(provider.addFeatureFlagEvaluation).toHaveBeenCalledWith('sample_flag', true);
+  });
+});
+
 describe('page', () => {
   it('calls provider.page with normalized route', async () => {
     const obs = createObservability();

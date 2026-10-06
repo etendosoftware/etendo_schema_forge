@@ -12,7 +12,7 @@ import {
  * ETP-4578 guardrail — provider SDKs have exactly one home in the host.
  *
  * Every telemetry payload must cross the core's sanitizing gateway, whose provider
- * adapters receive their SDK by injection. A component that imports `@sentry/react`,
+ * adapters receive their SDK by injection. A component that imports `@datadog/browser-rum`,
  * `mixpanel-browser` or `aws-rum-web` itself can reach the provider without passing
  * through any of it. The only file allowed to import a provider SDK is the one that
  * hands them to the adapters; the scanner (and its list of banned packages and scopes)

@@ -6,74 +6,42 @@ API instead of importing vendor SDKs directly.
 
 ## Providers
 
-The browser initializer registers these providers:
+The browser initializer registers Datadog for analytics, errors and performance,
+optional independent Mixpanel for analytics, and legacy AWS RUM during migration.
+Sentry/GlitchTip are removed. See [current migration/configuration](#datadog-migration-etp-5605)
+and the committed `.env.observability.example` for all current environment variables.
 
-| Provider | Enabled when | Purpose |
-|----------|--------------|---------|
-| Sentry | `VITE_SENTRY_DSN` is set | Error capture, tracing, and app context |
-| AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set | Browser performance, error, and HTTP telemetry |
-| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set | Product analytics events |
+### Every provider goes through the telemetry gateway (ETP-4578)
 
-Sentry sends with `sendDefaultPii: false` in every environment; there is no
-override (ETP-4578). Release is
-set from `VITE_SENTRY_RELEASE` when present, otherwise from available build
-metadata such as `SENTRY_RELEASE.id` injected at build time.
+The three providers are the core's adapters (`@etendosoftware/app-shell-core/observability/adapters/*`)
+with this app's environment wiring (`providers/datadog.js`, `rum.js`, `providers/mixpanel.js`).
+The facade (`observability/core.js`) hands every payload to the core's sanitizing gateway, which
+applies the host allowlist again before any adapter sees it; the adapters then close what each
+SDK collects on its own in the SDK's own hooks (Datadog `beforeSend`, AWS RUM `clientBuilder`,
+Mixpanel `before_send_*`). The full inventory, what each hook rewrites and the open items live in
+the core's `docs/security/telemetry-egress.md`.
 
-The environment is not derived from the hostname. The deploy workflow knows its
-target and injects `VITE_APP_ENV` (Sentry `environment`) and the RUM IDs of that
-target, so a domain change is an Actions variable edit (`PUBLIC_ORIGIN_*`) plus a
-redeploy, with no code change. `VITE_RUM_SESSION_SAMPLE_RATE` is parsed as a
-bounded number from `0` to `1`; invalid or missing values fall back to the
-conservative default `0.1`. Missing RUM IDs are a no-op.
+`observability/sdk.js` is the only file allowed to import a provider SDK;
+`test/no-direct-provider-sdk.test.js` fails on any other. Datadog and Mixpanel are lazy-loaded,
+only when enabled and not killed.
 
-AWS RUM is opt-in (ETP-4578). The injected IDs alone no longer switch it on: the
-build also needs `VITE_RUM_ENABLED=true`, so a deploy that does not set it runs
-without RUM. Its SDK has no before-send hook, so every batch is sanitized through
-the SDK's `clientBuilder` before it is serialized and signed (page titles, record
-ids and query strings never leave). Cookies are off unless
-`VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy.
+| Provider | Enabled when |
+|----------|--------------|
+| Datadog | `VITE_DATADOG_ENABLED=true` plus application id, client token, site and `VITE_APP_ENV` |
+| AWS RUM | `VITE_RUM_ENABLED=true` and both RUM IDs are set |
+| Mixpanel | `VITE_MIXPANEL_ENABLED=true` and `VITE_MIXPANEL_TOKEN` is set |
 
-**Production errors (as of 2026-10-01).** GlitchTip has been decommissioned and
-`VITE_SENTRY_DSN` is not set for the deploy, so the Sentry adapter is inert in production and
-**CloudWatch RUM is the only source of frontend errors**. RUM has been opt-in since ETP-4578
-(the injected IDs alone no longer switch it on); the deploy workflow turns it on with
-`VITE_RUM_ENABLED: "true"` for every target. Its session sample rate is left at the default
-`0.1` (an infra cost decision), so only 10% of sessions are sampled. RUM also calls
+AWS RUM is opt-in (ETP-4578): the injected IDs alone no longer switch it on. Its SDK has no
+before-send hook, so every batch is sanitized through the SDK's `clientBuilder` before it is
+serialized and signed (page titles, record ids and query strings never leave). Cookies are off
+unless `VITE_RUM_ALLOW_COOKIES=true`; that is an open question for Privacy. RUM also calls
 `cognito-identity` at startup and keeps temporary credentials in `localStorage`.
-
-Mixpanel is opt-in. If `VITE_MIXPANEL_ENABLED=true` is set without
-`VITE_MIXPANEL_TOKEN`, the provider logs a warning and remains disabled. The SDK
-is lazy-loaded only when the provider is enabled and used.
-
-## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `VITE_SENTRY_DSN` | Enables Sentry. |
-| `VITE_SENTRY_RELEASE` | Optional explicit Sentry release. If unset, the app falls back to available build metadata. |
-| `VITE_SENTRY_SEND_DEFAULT_PII` | **Ignored** (ETP-4578). `sendDefaultPii` is fixed to `false` in every environment; the variable can no longer turn it on. |
-| `VITE_APP_ENV` | Deploy target (`production`, `experimental`, `staging`). Sentry `environment`; unset means `development`. |
-| `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; the IDs below are also required. |
+| `VITE_RUM_ENABLED` | Set to `true` to enable AWS RUM. Off by default; both RUM IDs are also required. |
 | `VITE_RUM_ALLOW_COOKIES` | Set to `true` to let RUM keep its session in cookies. Off by default (consent is undecided). |
-| `VITE_RUM_APP_MONITOR_ID` | CloudWatch RUM app monitor of the deploy target (from `RUM_APP_MONITOR_ID_<TARGET>`). |
-| `VITE_RUM_IDENTITY_POOL_ID` | CloudWatch RUM identity pool of the deploy target (from `RUM_IDENTITY_POOL_ID_<TARGET>`). |
-| `VITE_RUM_SESSION_SAMPLE_RATE` | Optional RUM session sample rate. Values are clamped to `0..1`; invalid values fall back to `0.1`. |
-| `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See Kill Switch. |
-| `VITE_MIXPANEL_ENABLED` | Set to `true` to enable Mixpanel. |
-| `VITE_MIXPANEL_TOKEN` | Mixpanel project token. Required when Mixpanel is enabled. |
-| `VITE_MIXPANEL_DEBUG` | Optional Mixpanel debug flag. |
-| `VITE_MIXPANEL_API_HOST` | Optional custom Mixpanel API host (e.g. `https://api-eu.mixpanel.com`). |
-
-For local development create `.env.development.local` (not committed):
-
-```
-VITE_MIXPANEL_TOKEN=<your-token>
-VITE_MIXPANEL_API_HOST=https://api-eu.mixpanel.com
-VITE_MIXPANEL_ENABLED=true
-```
-
-Staging reads `VITE_MIXPANEL_TOKEN` from the `${{ secrets.VITE_MIXPANEL_TOKEN }}`
-GitHub Actions secret.
+| `VITE_TELEMETRY_KILL` | Build-default kill switch: `true` stops every provider, a comma list (`mixpanel,aws-rum`) stops those. See [Kill Switch](#kill-switch). |
 
 ## Kill Switch
 
@@ -85,23 +53,27 @@ it is shut down in place.
 | Layer | How | Scope |
 |-------|-----|-------|
 | Build default | `VITE_TELEMETRY_KILL=true`, or a comma list such as `mixpanel,aws-rum` | Holds from the first millisecond, needs no network, and cannot be lifted remotely. |
-| Runtime flag | `telemetry-kill-all`, `telemetry-kill-sentry`, `telemetry-kill-aws-rum`, `telemetry-kill-mixpanel` in the OpenFeature control plane (ConfigCat, or `VITE_FEATURE_FLAGS` locally) | Applies to a running tab when the control plane pushes the change (poll interval `VITE_CONFIGCAT_POLL_SECONDS`, 60 s by default). Setting it back to `false` restarts the provider. |
+| Runtime flag | `telemetry-kill-all`, `telemetry-kill-datadog`, `telemetry-kill-aws-rum`, `telemetry-kill-mixpanel` in the OpenFeature control plane (ConfigCat, or `VITE_FEATURE_FLAGS` locally) | Applies to a running tab when the control plane pushes the change (poll interval `VITE_CONFIGCAT_POLL_SECONDS`, 60 s by default). Setting it back to `false` restarts the provider. |
 
-The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpanel`.
+The provider names are the gateway's adapter names: `datadog`, `aws-rum`, `mixpanel`.
 
 - A flag can only STOP telemetry the build allows; it never starts a provider the build
   did not configure, and it never lifts a kill the build asked for.
 - The defaults are `false` for every switch, so an unreachable control plane keeps
-  today's behaviour instead of silently turning telemetry off.
+  today's behaviour instead of silently turning telemetry off. The four flags must exist in
+  ConfigCat before a deploy that reads them: a missing key is evaluated as `false` but the
+  ConfigCat SDK logs an error for it on every evaluation.
+- Datadog cannot drop a view event from `beforeSend`, so its kill withdraws tracking consent
+  (`setTrackingConsent('not-granted')`): the SDK sends the end of the current view, sanitized,
+  and stops collecting. Lifting it grants consent again and starts a new session.
 - If the flag client itself breaks, a running gateway keeps its current state: a broken
   read never revives a stopped provider.
 - Startup waits at most 1.5 s for the flag provider (`FLAGS_READY_WAIT_MS`) before starting
   telemetry. A kill flag that answers later still applies, in place, **but traffic has
-  already gone out by then**: RUM has made its 2 `cognito-identity` calls and Sentry has
-  started and may have sent. Measured with the real SDKs: a late flag gave 2 Cognito calls
-  before it and 0 after. **For a kill that holds from the very first request, use
-  `VITE_TELEMETRY_KILL` (a build default), not the flag.** The wait is deliberately not
-  longer: it would delay the first errors of every session for the sake of a rare case.
+  already gone out by then** (for RUM, its 2 `cognito-identity` calls, measured with the real
+  SDK). **For a kill that holds from the very first request, use `VITE_TELEMETRY_KILL` (a
+  build default), not the flag.** The wait is deliberately not longer: it would delay the
+  first errors of every session for the sake of a rare case.
 - The switches are not reported as flag exposures (they would emit telemetry about the
   telemetry they control) and are operational controls, not feature flags, so they are
   not in `flags-registry.json` and do not enter the flag-debt scorecard.
@@ -109,7 +81,7 @@ The provider names are the gateway's adapter names: `sentry`, `aws-rum`, `mixpan
 ### Verifying egress in a browser
 
 `e2e/tests/flows/telemetry-egress.mocked.spec.js` aborts and records every request to the
-providers' hosts (Sentry/GlitchTip, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
+providers' hosts (Datadog intake, Mixpanel, CloudWatch RUM data plane and Cognito). Providers
 are configured at BUILD time, so each scenario needs its own bundle; `run-e2e-full.sh` builds
 one and passes `VITE_*` through to it. The fake values below never reach a real account.
 
@@ -119,7 +91,11 @@ it. Scenarios 2 and 3 each need a bundle built with the fake provider configurat
 ```bash
 # 2. Positive control, providers configured and NOT killed: requests are attempted.
 (
-  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_DATADOG_ENABLED=true
+  export VITE_DATADOG_APPLICATION_ID=fake-application
+  export VITE_DATADOG_CLIENT_TOKEN=fake-client-token
+  export VITE_DATADOG_SITE=datadoghq.eu
+  export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
   export VITE_RUM_ENABLED=true
@@ -132,7 +108,11 @@ it. Scenarios 2 and 3 each need a bundle built with the fake provider configurat
 
 # 3. Providers configured and killed by the build default: zero requests.
 (
-  export VITE_SENTRY_DSN=https://pub@o1.ingest.sentry.io/1
+  export VITE_DATADOG_ENABLED=true
+  export VITE_DATADOG_APPLICATION_ID=fake-application
+  export VITE_DATADOG_CLIENT_TOKEN=fake-client-token
+  export VITE_DATADOG_SITE=datadoghq.eu
+  export VITE_APP_ENV=e2e
   export VITE_MIXPANEL_ENABLED=true
   export VITE_MIXPANEL_TOKEN=fake-project-token
   export VITE_RUM_ENABLED=true
@@ -160,9 +140,9 @@ Run 2 before trusting 3: if the control sees no request, the interceptor is what
   mixing letters and digits (`oauth2-clients`: 14 characters and a `2`) reads as an id to the
   core's scrub, which runs on the route after it is normalized and cannot tell it is a route.
   The host has always kept a first segment as the screen name, so this loses the page's name in
-  Sentry, Mixpanel and RUM. It over-collapses and leaks nothing. Follow-up (a core change, so a
+  Datadog, Mixpanel and RUM. It over-collapses and leaks nothing. Follow-up (a core change, so a
   new preview and repin): a route's first segment must never collapse, which means routing
-  `gateway.page` and the three adapters through a route-aware sanitize. Anchor:
+  `gateway.page` and the adapters through a route-aware sanitize. Anchor:
   `KNOWN_COLLAPSED` in `tools/app-shell/src/lib/__tests__/observability-routes.test.js`, which
   turns red when it is fixed.
 
@@ -210,20 +190,16 @@ Helpers live in `tools/app-shell/src/lib/observability/health-events.js`.
 | `document_created` | A new record is saved for the first time (`isNew === true`) | `trackDocumentCreated()` |
 | `transaction_posted` | A transactional document completes a posting action | `trackTransactionPosted()` |
 
-`trackSessionStarted` calls `identify(username)` first when a username is present,
-linking the Mixpanel device ID to the user profile so that subsequent events are
-attributed to the identified user rather than an anonymous `$device:…` ID. It then
-calls `group('account_id', clientId)` to associate the session with the Mixpanel
-group. When a client name is available — either from the `clientName` parameter or
-from the in-memory session identity (`lib/sessionIdentity.js`) — it also calls
-`groupSet('account_id', clientId, { $name: clientName })`, which writes the `$name`
-property on the Mixpanel Group Profile so the account appears by its company name
-in Mixpanel → Users → Accounts. Finally it calls `flush()` to guarantee delivery
-before the page potentially navigates away.
+`trackSessionStarted` stores session metadata, updates the OpenFeature context,
+associates `account_id` with the tenant and optionally sets the Mixpanel group
+name. It does not identify by username. Authenticated account resolution in
+`useAccountIdentity` identifies providers by the opaque platform account ID.
+The helper awaits the shared dispatch and lifecycle `flush`; Datadog's Browser
+SDK has no public intake-acknowledgement flush API.
 
-`trackDocumentCreated` and `trackTransactionPosted` are `async` functions that
-call `flush()` internally before returning. Call sites must `await` them; no
-separate `flush()` call is needed from outside.
+`trackDocumentCreated` and `trackTransactionPosted` dispatch fire-and-forget.
+Awaiting them does not guarantee remote delivery before navigation. Their
+provider SDKs manage delivery; they are product telemetry, not durable audit logs.
 
 `trackDocumentCreated` and `trackTransactionPosted` are no-ops when the current
 URL does not map to a known window in `health-events.map.js`, or when the window
@@ -267,8 +243,7 @@ File: `tools/app-shell/src/hooks/useDocumentAction.js`
 
 Used by generated `menuActions` (e.g., Reactivate). After a successful
 `documentAction` POST, `execute()` calls `await trackTransactionPosted()`.
-`flush()` is handled internally by the helper; no separate call is needed at
-the hook level.
+The helper dispatches fire-and-forget; SDK lifecycle handling owns delivery.
 
 ### Seam 2 — `useEntity.js` `handleSaveAndProcess` (Complete button in draftMode)
 
@@ -277,7 +252,7 @@ File: `tools/app-shell/src/hooks/useEntity.js`
 Used by the Complete button for documents that use `draftMode` (sales invoices,
 purchase invoices, goods shipments, etc.). After the `documentAction` POST
 succeeds, `await trackTransactionPosted()` is called before `refresh()`.
-`flush()` is handled internally by the helper; no separate call is needed here.
+The helper dispatches fire-and-forget; SDK lifecycle handling owns delivery.
 
 ### Seam 3 — `OrderCreateInvoice.jsx` (sales order "Create Invoice" modal)
 
@@ -291,8 +266,8 @@ await trackTransactionPosted();
 window.dispatchEvent(new CustomEvent('sales-order:document-created'));
 ```
 
-`flush()` is called internally by `trackTransactionPosted`, so delivery is
-guaranteed before the `CustomEvent` triggers a context reload.
+The event is dispatched before the `CustomEvent`; remote acknowledgement is
+not guaranteed before the context reload.
 
 ### Seam 4 — `PurchaseOrderActions.jsx` (purchase order confirm modal)
 
@@ -305,8 +280,8 @@ await trackTransactionPosted();
 window.dispatchEvent(new CustomEvent('purchase-order:document-created'));
 ```
 
-`flush()` is handled internally by `trackTransactionPosted`; awaiting the helper
-is sufficient before the CustomEvent that causes a context reload.
+The event is dispatched before the CustomEvent; awaiting this helper does not
+wait for remote acknowledgement.
 
 ### Why the modals need their own seam
 
@@ -316,16 +291,11 @@ to the modal. The modal calls `fetch` directly, so `useDocumentAction` and
 `handleSaveAndProcess` are never invoked. Any instrumentation added to those hooks
 would never fire for these two windows when posting via the modal.
 
-### `flush()` and the async helpers
+### Delivery lifecycle
 
-`trackTransactionPosted`, `trackDocumentCreated`, and `trackSessionStarted` all
-call `flush()` internally before resolving. Always `await` these helpers at the
-call site — that is sufficient to guarantee delivery in every scenario (navigation,
-reload, CustomEvent, or in-place re-fetch).
-
-Do **not** import or call `flush()` separately from outside the helper. The
-internal call already covers the case where a page unload or reload follows
-immediately.
+Only `trackSessionStarted` awaits shared `track` and `flush`. Document helpers
+are fire-and-forget. Do not promise durable delivery or Datadog acknowledgement
+on navigation; use an authoritative audit mechanism for transactional evidence.
 
 ## Adding `trackTransactionPosted` to a New Custom Modal
 
@@ -339,7 +309,7 @@ immediately.
    ```js
    await trackTransactionPosted();
    ```
-   No separate `flush()` import or call is needed — it runs inside the helper.
+   The helper is fire-and-forget; no intake acknowledgement is implied.
 4. Place the `await` before any `window.location` change or reload-triggering event.
 5. Add a unit test that mocks `track` and asserts the event name and safe payload.
 
@@ -481,13 +451,16 @@ Expected tests for new instrumentation:
 
 ## Adding A Provider
 
-1. Implement a provider object with `name`, `enabled`, and any supported methods:
-   `init`, `track`, `page`, `identify`, `captureException`, `setContext`, or
-   `flush`.
-2. Register it from `buildBrowserObservabilityConfig`.
-3. Keep initialization optional and failure-contained.
-4. Add unit tests for disabled config, missing config, successful dispatch, and
-   provider failures.
+1. Add an adapter to the core (`packages/app-shell-core/src/observability/adapters/`) that
+   receives its SDK by injection and closes the SDK's own egress in its hooks. It needs a
+   core preview and a repin; the provider-import guard bans the SDK everywhere else.
+2. Import the SDK only in `observability/sdk.js`, wire the adapter in a host provider file and
+   register it from `buildBrowserObservabilityConfig`. Add its name to
+   `TELEMETRY_KILL_PROVIDER_FLAGS` (`lib/flags/flag-keys.js`).
+3. Keep it opt-in, and initialization failure-contained (the gateway already isolates
+   adapter failures and timeouts).
+4. Add unit tests for disabled config, missing config, successful dispatch, provider
+   failures, and a real-SDK test of what goes on the wire.
 
 The Mixpanel provider passes a callback as the fourth argument to `client.track`
 so that the returned `Promise` resolves after Mixpanel confirms dispatch. This is
@@ -502,5 +475,113 @@ app startup, rendering, routing, or other providers.
 - Observability is scoped to `tools/app-shell`.
 - `packages/apps-sdk` does not receive observability context yet.
 - Broad business-event instrumentation is not included.
-- Product analytics payloads remain allowlisted and redacted even when Sentry is
-  enabled.
+- Product analytics payloads remain allowlisted and redacted for every provider.
+
+## Datadog migration (ETP-5605)
+
+The current browser initializer registers Datadog, optional independent Mixpanel
+and legacy AWS RUM. Sentry/GlitchTip initialization, dependencies and build plugin
+have been removed. Their DSN and upload token no longer configure this application.
+AWS RUM remains available during migration; disable its per-target IDs after live
+Datadog validation to avoid duplicate performance collection across vendors.
+
+Datadog uses the official Browser RUM SDK for Product Analytics actions, browser
+errors, resources and long tasks. One shared `track()` dispatch becomes one custom
+Datadog action and, independently when enabled, one Mixpanel event. The event catalog
+uses the `analytics` capability instead of a vendor destination. Automatic clicks
+and session replay are enabled automatically, with replay defaulting to 20% and
+Datadog privacy settings still applying. The React plugin registers the React
+integration; the vendor-neutral root boundary still reports through the shared facade, so each
+application error has one reporting path. Routes become manually tracked, normalized views;
+the initial view is created during SDK initialization and a duplicate initial route
+is suppressed. Browser uncaught exceptions and unhandled rejections are collected
+by the SDK; the root React error boundary reports caught rendering errors through
+`captureException`. Manual errors retain their Error stack, and metadata passes
+through the common allowlist. The core adapter's `beforeSend` normalizes and scrubs view,
+resource, LCP and long-task URLs, error messages and stacks, action names and the event context
+with the gateway's sanitizers: an error message carrying an email or a token is sent as
+`[REDACTED]`. A referrer from another site is dropped. Stack frame URLs and positions are kept,
+so source maps still resolve (a frame whose URL had a query string loses its position). The SDK
+reverts changes to `usr`, `account` and `error.causes`, so only an opaque `id` is ever set on
+the first two, and an error whose causes would need scrubbing is dropped.
+`observability-datadog-envelope.test.js` drives the real SDK and checks what reaches the intake.
+
+Configure the values in `tools/app-shell/.env.observability.example`. Set
+`VITE_DATADOG_ENABLED=true` and supply `VITE_DATADOG_APPLICATION_ID`,
+`VITE_DATADOG_CLIENT_TOKEN`, `VITE_DATADOG_SITE` and `VITE_APP_ENV`.
+`VITE_APP_VERSION` is the release identifier and defaults to the CI commit SHA in
+release builds. The session sample rate is a percentage bounded to 0..100 (default
+100), and `VITE_DATADOG_SESSION_REPLAY_SAMPLE_RATE` defaults to 20. Set
+`VITE_DATADOG_REMOTE_CONFIGURATION_ID` to enable Datadog-managed RUM settings.
+RUM feature flag context is attached to views, errors, vitals, actions, long
+tasks and resources when the ConfigCat OpenFeature provider is enabled. The
+OpenFeature exposure hook forwards real evaluations to RUM independently of
+the shared `feature_flag_evaluated` business event, which remains the single
+manual exposure event. RUM keys are sanitized for Datadog's identifier rules;
+the business event retains the original flag key.
+There is no browser API key. Incomplete configuration stays disabled and warns.
+
+The account ID from the authenticated session is the opaque user targeting key;
+the AD_Client is the analytics account/tenant ID. Names and emails are not
+attached to Datadog profiles. Logout clears the common context, Datadog user,
+account and global context, Mixpanel identity and OpenFeature evaluation context.
+An old session response arriving after logout cannot restore identity.
+
+CI resolves application ID/client token separately for PRODUCTION, EXPERIMENTAL
+and STAGING from `VITE_DATADOG_APPLICATION_ID_<TARGET>` and
+`VITE_DATADOG_CLIENT_TOKEN_<TARGET>` Actions variables. `DD_SITE` sets the site;
+`VITE_DATADOG_ENABLED` enables RUM and `VITE_CONFIGCAT_SDK_KEY` enables remote
+feature flags independently. Mixpanel is independently opt-in through
+`VITE_MIXPANEL_ENABLED`.
+
+When Datadog telemetry is enabled, CI uploads hidden source maps using the
+server-side `DATADOG_API_KEY` secret, service `etendo-go-web`, commit SHA release
+and the target public origin. Upload failure fails the release job. Source maps
+are then removed from the public release package, including when Datadog is off.
+The release version/service/public asset prefix must match the actual deployed
+bundle. No credentials, uploads or deployment were performed by this change.
+
+Live acceptance: enable the appropriate Datadog products and intake/CSP access,
+then exercise sign-in, navigation, a business action, a caught render exception,
+an uncaught exception and rejection, and sign-out followed by another account.
+Verify single action/view counts, sanitized payloads, correct tenant/profile reset,
+resource/long-task collection, and stack source-map symbolication for the exact
+release. Confirm optional Mixpanel still receives the same business event once.
+SDK delivery is lifecycle-managed; the Browser SDK has no public flush API and
+`flush()` is not a promise of intake acknowledgement for Datadog. Live intake and
+symbolication require deployment credentials and remain unverified locally.
+
+Official references: [Browser SDK](https://docs.datadoghq.com/real_user_monitoring/application_monitoring/browser/setup/),
+[Product Analytics](https://docs.datadoghq.com/product_analytics/),
+[browser errors](https://docs.datadoghq.com/error_tracking/frontend/collecting_browser_errors/).
+
+### Browser/server trace correlation
+
+`VITE_DATADOG_TRACE_API_BASES` is a JSON array of explicitly trusted NEO API base
+URLs, including the Etendo context, for example
+`["https://core.example.com/etendo"]`. No bases means no propagation. Parsing
+rejects credentials, query/hash, wildcards and non-HTTP protocols. A matcher
+requires the exact origin and the base's `/sws/neo` path boundary; unrelated
+hosts, lookalike host suffixes, other endpoint paths and third-party services
+receive no trace headers. Propagators are W3C `tracecontext` and `datadog`.
+`VITE_DATADOG_TRACE_SAMPLE_RATE` is bounded to 0..100 (default 20), independently
+of session sampling. `traceContextInjection: sampled` retains the backend's own
+sampling decision for browser requests not selected for tracing.
+
+CI uses target-specific `VITE_DATADOG_TRACE_API_BASES_PRODUCTION`, `_STAGING`,
+and `_EXPERIMENTAL` variables. Set each explicitly to the appropriate first-party
+API base; never configure a catch-all domain regex. The chosen Datadog site is
+EU (`datadoghq.eu`) unless `DD_SITE` is explicitly configured.
+
+Runtime prerequisites: instrument Tomcat with the Datadog Java APM javaagent,
+configure the service/environment/release and an Agent/collector accepting APM,
+retain tracecontext/datadog propagation headers across proxy hops, and permit
+those headers in backend CORS only for already trusted frontend origins. The
+backend module's CorsUtils contains the matching header allowlist. Existing
+shared authenticated API helpers continue to own credentials and language
+headers; the RUM SDK injects correlation on their Fetch/XHR requests. Early
+requests before SDK initialization are not correlated. Prove live correlation
+by navigating a RUM resource to its matching Java APM trace under the configured
+release and tenant; a successful unit build does not prove collector delivery.
+
+Reference: [Connect RUM and traces](https://docs.datadoghq.com/tracing/other_telemetry/rum/).

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import ElementValueTable from '../../../custom/AccountTreeView';
 import ElementValueForm from './ElementValueForm';
 import { AttachmentsTab } from '@/components/attachments';
+import NewSubAccountCreateModal from '../../../custom/NewSubAccountCreateModal';
 import NewAccountModal from '../../../custom/NewAccountModal';
 import catalogs from './mockCatalogs';
 
@@ -85,6 +86,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
   const effectiveWindow = useMemo(() => (
     windowAccessTier === 'read-only' ? { ...(props.window || {}), readOnly: true } : props.window
   ), [windowAccessTier, props.window]);
+  const [showNewModal, setShowNewModal] = useState(false);
   const [showNewSubAccountMenuModal, setNewSubAccountMenuModal] = useState(false);
   const [newSubAccountMenuContext, setNewSubAccountMenuContext] = useState(null);
   if (windowAccessTier === 'none') {
@@ -119,6 +121,7 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
   }
 
   return (
+    <>
     <ListView
       entity="elementValue"
       Table={ElementValueTable}
@@ -126,12 +129,14 @@ export default function ElementValuePage({ windowName, recordId, ...props }) {
       windowName={windowName}
       breadcrumb={breadcrumb}
       api={api}
-      hideCreate
       hideListFilters
       hideRecordCount
       rowQuickActions={{}}
       {...props} window={effectiveWindow}
+      onNew={() => setShowNewModal(true)}
     />
+    {showNewModal && <NewSubAccountCreateModal token={props.token} apiBaseUrl={props.apiBaseUrl} windowName={windowName} onClose={() => setShowNewModal(false)} />}
+    </>
   );
 }
 // @sf-generated-end component:ElementValuePage

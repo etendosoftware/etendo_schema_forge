@@ -55,7 +55,7 @@ the registry. A run report states only what **changed**, in these three sentence
 
 ```
 * Added IMP-15 — contradictory FK contracts across write verbs (P1, ⚙️).
-* Advanced IMP-4 — resolves display names on neo_create; still absent from neo_batch. ✅ → ⚠️.
+* Advanced IMP-4 — resolves display names on etendo_create; still absent from etendo_batch. ✅ → ⚠️.
 * Resolved IMP-6 — actions-only view shipped (McpActionsView, commit bbfce9db).
 ```
 
@@ -150,7 +150,7 @@ they defer to the registry now. Refresh a section here only when its *reference 
 | 2 | Method & Scope | Per-server call inventory, call count, out-of-scope, the "no records were mutated" claim | Update the call list, the count, and **which Etendo GO environment(s)** were probed | ✅ yes |
 | 3 | Architecture Contrast | ~19-row table (tool model, generic verbs, introspection, read/write parity, FK resolution, error signaling, response shape, pagination, agentic-safety, guidance/recipes, onboarding friction…) | Rewrite only the rows the wave changed — a shipped item must not still be described as the current gap | ✅ yes (affected rows) |
 | 4 | Holded Tool Inventory (by domain) | Holded's tool catalog grouped by domain | Re-enumerate the catalog. Holded ships tools independently — do not assume it is unchanged | ❌ (B only) |
-| 5 | Etendo GO Spec Inventory | The spec list + the count ("56 = 48 windows + 8 reports") | Recount from `neo_discover`; never carry the old number forward. **Counts are per environment** | ✅ yes |
+| 5 | Etendo GO Spec Inventory | The spec list + the count ("56 = 48 windows + 8 reports") | Recount from `etendo_discover`; never carry the old number forward. **Counts are per environment** | ✅ yes |
 | 6 | Domain Coverage Matrix | ~25 rows scored ✅/⚠️/❌ per side, with legend | Re-score only rows whose evidence changed. Keep the legend intact | ❌ usually |
 | 7 | Overlapping Features Where Holded Is Better | 9 subsections, each `Observed:` / `Impact:` / `Improve:` + a side-by-side example. Maps to IMP-*: 7.1→IMP-1, 7.2→IMP-2, 7.3→IMP-3, 7.4→IMP-4, 7.5→IMP-5, 7.6→IMP-6, 7.7 walk-through (call-count table), 7.8a→IMP-7, 7.8b→IMP-8, 7.8c→IMP-9, 7.9→IMP-10 | `Observed:` is a historical observation — **keep it**. Annotate the `Improve:` bullet when it ships, pointing at the IMP-* item. Re-count 7.7's call table if a shipped item removed calls | ✅ yes (`Improve:` bullets, 7.7 counts) |
 | 8 | Where Etendo GO Is Already Better | 10 numbered strengths + 2 examples (read parity, `businessCritical` guardrail) | Verify the strengths still hold — a strength can regress too. **Promote here anything the wave took from Holded's column** (Step 3b.2) | ✅ yes |
@@ -181,7 +181,7 @@ Two structural conventions the report relies on — do not break them:
    the write.
 
    **But read-only cannot measure the write path** — M2 (first-call success rate) on
-   `neo_create` is the single most important metric in the scoreboard, and it is unobservable
+   `etendo_create` is the single most important metric in the scoreboard, and it is unobservable
    without writing. So the skill supports a **write-probe mode**, gated as follows:
 
    - **The human must authorize it explicitly, per run.** Never infer authorization from a previous
@@ -196,7 +196,7 @@ Two structural conventions the report relies on — do not break them:
    - **Scope discipline.** Create the minimum record that exercises the path; never mutate a
      pre-existing record (create your own and act on that); prefer draft/unposted documents; never
      run a completion/posting action (`documentAction`, `posted`, Holded's `approve_*`/`send_*`) —
-     those have downstream accounting and outbound-email effects. `neo_delete` is allowed **only**
+     those have downstream accounting and outbound-email effects. `etendo_delete` is allowed **only**
      on a record this run created.
    - **Tag the data.** Put an identifiable marker in a free-text field (e.g. a description
      containing `MCP-BENCHMARK <date>`) so every artifact this skill created is greppable later.
@@ -218,8 +218,8 @@ Two structural conventions the report relies on — do not break them:
 
      Concretely, every task runs in two separate passes:
 
-     - **Measured pass — this is M1/M2.** MCP tools only: `neo_discover`, `neo_schema`,
-       `neo_defaults` (including its `parentId`), `neo_selectors`, `docs`, and the write verbs.
+     - **Measured pass — this is M1/M2.** MCP tools only: `etendo_discover`, `etendo_schema`,
+       `etendo_defaults` (including its `parentId`), `etendo_selectors`, `docs`, and the write verbs.
        Nothing else. If the contract does not surface a value the task needs, **the task fails, and
        that failure is the finding.** Record the exact dead-end verbatim and stop there.
      - **Diagnostic pass — scores nothing.** Allowed only *after* the measured pass is recorded as
@@ -304,7 +304,7 @@ Rules:
   set that differs from the report may be an **environment difference, not a regression** —
   confirm the target before reporting a regression.
 
-Smoke test the chosen target with `neo_discover()`. If it errors or the server is absent, **stop
+Smoke test the chosen target with `etendo_discover()`. If it errors or the server is absent, **stop
 and tell the user** which server failed — do not retry in a loop, do not silently fall back to
 another environment, and never fabricate responses. `etendo-go-local` in particular has been
 disconnected in past sessions; it is the single most common blocker.
@@ -353,22 +353,22 @@ excerpt for each — that excerpt is what lands in the report.
 
 | # | Call | What it establishes |
 |---|---|---|
-| 6 | `neo_discover()` | spec count + entities/methods (**and IMP-10 `guidance` pointer, IMP-9 `primaryEntity`**) |
-| 7 | `neo_list` on `tax/tax` | reference-data shape |
-| 8 | `neo_schema` on `sales-order/header` | field count, **IMP-1 curated labels + descriptions**, action discovery, `businessCritical`, **IMP-6 `view:"actions"`** |
-| 9 | `neo_list` on `sales-invoice/header` | row verbosity, **IMP-2 `fields` projection + `view:"summary"`**, **IMP-3 `namedFilters`** |
-| 10 | `neo_get` with a nonexistent id | **IMP-5 structured `not_found`** + **IMP-10 `seeAlso`** |
-| 11 | `neo_defaults` on `sales-invoice/header` | **IMP-7 grouped `confirm`/`systemManaged` + `view:"minimal"`** |
-| 12 | `neo_selectors` on `sales-invoice/header` | **IMP-8 `field` alias for `column`** + self-correcting missing-arg error |
-| 13 | `docs(topic:"create sales invoice with lines")` | recipe quality + **IMP-10 tool-name drift (`etendo_neo_*` → `neo_*`)** |
+| 6 | `etendo_discover()` | spec count + entities/methods (**and IMP-10 `guidance` pointer, IMP-9 `primaryEntity`**) |
+| 7 | `etendo_list` on `tax/tax` | reference-data shape |
+| 8 | `etendo_schema` on `sales-order/header` | field count, **IMP-1 curated labels + descriptions**, action discovery, `businessCritical`, **IMP-6 `view:"actions"`** |
+| 9 | `etendo_list` on `sales-invoice/header` | row verbosity, **IMP-2 `fields` projection + `view:"summary"`**, **IMP-3 `namedFilters`** |
+| 10 | `etendo_get` with a nonexistent id | **IMP-5 structured `not_found`** + **IMP-10 `seeAlso`** |
+| 11 | `etendo_defaults` on `sales-invoice/header` | **IMP-7 grouped `confirm`/`systemManaged` + `view:"minimal"`** |
+| 12 | `etendo_selectors` on `sales-invoice/header` | **IMP-8 `field` alias for `column`** + self-correcting missing-arg error |
+| 13 | `docs(topic:"create sales invoice with lines")` | recipe quality + **IMP-10 tool-name drift (`etendo_neo_*` → `etendo_*`)** |
 | 14 | entity-name scan across specs | entity-naming convention / root-entity discoverability |
 
 Two extra probes worth adding on a refresh (they were not in the original 14 and are the ones a
 post-wave run most needs):
 
-- `neo_list({spec:"sales-invoice", entity:"header", filters:{status:"<unknown>"}})` — IMP-3's
+- `etendo_list({spec:"sales-invoice", entity:"header", filters:{status:"<unknown>"}})` — IMP-3's
   *handled* error must list the valid names, not 500.
-- `neo_list({..., filters:{outstandingAmount:{gt:0}}})` — IMP-3 range operators.
+- `etendo_list({..., filters:{outstandingAmount:{gt:0}}})` — IMP-3 range operators.
 
 ### Write probes (**authorized runs only** — see Step 0.1)
 
@@ -377,18 +377,18 @@ the calls each one took, including the failures. The failures are the data.
 
 | # | Etendo GO | Holded | What it measures |
 |---|---|---|---|
-| W1 | `neo_create` on `sales-order/header` using **only** what `neo_schema` said was required, first attempt, no corrections | `create_sales_order` from its tool schema alone, first attempt | **M2 first-call success** — the headline number |
+| W1 | `etendo_create` on `sales-order/header` using **only** what `etendo_schema` said was required, first attempt, no corrections | `create_sales_order` from its tool schema alone, first attempt | **M2 first-call success** — the headline number |
 | W2 | count the corrections W1 needed until it succeeded | same | **M1 calls-to-outcome** on the write path |
-| W3 | `neo_create` with a **name** where a FK id is expected (e.g. `businessPartner: "Juan Perez"`) | pass a contact name where Holded wants an id | **IMP-4 FK-by-name** — the only way to verify it |
-| W4 | `neo_create` omitting a genuinely required field | same | validation-error quality: does the error name the field and how to resolve it |
-| W5 | `neo_batch` header+lines with `parentRef` | Holded's line-embedding equivalent | transactional integrity (an Etendo strength — verify it) |
-| W6 | `neo_delete` the record W1 created | `delete_sales_order` on the record it created | cleanup path + read/write parity |
+| W3 | `etendo_create` with a **name** where a FK id is expected (e.g. `businessPartner: "Juan Perez"`) | pass a contact name where Holded wants an id | **IMP-4 FK-by-name** — the only way to verify it |
+| W4 | `etendo_create` omitting a genuinely required field | same | validation-error quality: does the error name the field and how to resolve it |
+| W5 | `etendo_batch` header+lines with `parentRef` | Holded's line-embedding equivalent | transactional integrity (an Etendo strength — verify it) |
+| W6 | `etendo_delete` the record W1 created | `delete_sales_order` on the record it created | cleanup path + read/write parity |
 
 Do **not** extend this set to completion or posting actions. `documentAction`, `posted`, and
 Holded's `approve_*` / `send_*` are out of scope in every mode — they book accounting entries and
 send outbound email.
 
-Recount the inventory for §5 (it says "56 specs = 48 windows + 8 reports") from `neo_discover`
+Recount the inventory for §5 (it says "56 specs = 48 windows + 8 reports") from `etendo_discover`
 itself; do not carry the old number forward.
 
 ---
@@ -460,7 +460,7 @@ Where to look, in order of yield:
 - **Where you personally got stuck while probing.** You are the agent this report is about. Any call
   you had to retry, any argument you had to guess, any response you had to post-filter, is a
   first-hand finding — the original report's IMP-8 came from exactly that (a guaranteed first-try
-  failure on `neo_selectors`).
+  failure on `etendo_selectors`).
 - **Multi-environment gaps** (if you probed several): shipped-but-not-released is a delivery
   finding, not an IMP.
 
@@ -487,7 +487,7 @@ keep it honest in both directions:
   new spec needs no new tool; uniform read/write across every spec (Holded has no `get`/`list` for
   contacts or products at all, while its own `update_*` docs tell the agent to "GET first");
   `businessCritical` confirm-before-write guardrails; callout-aware dependent selectors; inline
-  `$_identifier` FK labels; real accounting and ES/EU fiscal compliance; `neo_batch`/`neo_action`
+  `$_identifier` FK labels; real accounting and ES/EU fiscal compliance; `etendo_batch`/`etendo_action`
   and the report generators; the `docs` recipe layer. Re-verify — do not copy §8 forward unchecked.
 - **Why an agent would still prefer Holded** — and this is the half that must not be softened:
   fewer calls to the same outcome (§7.7: ~2–3 vs ~6–8 from a cold start), named verbs that are
@@ -554,7 +554,7 @@ and Coverage are the activity half (40 %). If they ever disagree, **lead with M1
 |---|---|---|---|---|
 | **M1** | **Calls-to-outcome ratio** | Calls an agent needs, from a cold start with no cached ids, to complete the frozen task suite — Etendo GO ÷ Holded. **1.0 = parity** | §7.7 walk-through, extended to the suite below | ↓ toward 1.0 |
 | **M2** | **First-call success rate** | Of the suite's calls, the fraction where the *natural* first call shape succeeds (no retry, no arg guessing) | Count retries during your own probing | ↑ toward 100% |
-| **M3** | **Payload signal ratio** | Useful fields ÷ total fields returned, on the three canonical shapes: `neo_list` row, `neo_defaults`, `neo_schema` | Count keys in the responses | ↑ |
+| **M3** | **Payload signal ratio** | Useful fields ÷ total fields returned, on the three canonical shapes: `etendo_list` row, `etendo_defaults`, `etendo_schema` | Count keys in the responses | ↑ |
 | **M4** | **Self-correctable error rate** | Of the error probes, the fraction whose response alone lets an agent fix the call (structured status + names the offending field/arg + `seeAlso`) | The error-path probes | ↑ toward 100% |
 | **Delivery** | `earned / quota` | Sum the registry's `Pts` column: weight P1 5 · P2 3 · P3 1, credit ✅ 1.0 · ⚠️ 0.5 · ⏳/❌ 0 | registry §3 | ↑ |
 | **Coverage** | `probed / 6` | A surface counts as probed only if this or a past run recorded a verbatim response from it | registry §2.5 | ↑ toward 6/6 |
@@ -617,8 +617,8 @@ change:**
 4. Complete / process a sales order (action discovery + invoke).
 5. Read a record that does not exist, and attempt an invalid write (error paths).
 
-Count **calls actually issued**, including failed attempts and lookups (`neo_selectors`,
-`neo_schema`, `neo_defaults`) — the round-trips are the cost. For writes, count the calls the
+Count **calls actually issued**, including failed attempts and lookups (`etendo_selectors`,
+`etendo_schema`, `etendo_defaults`) — the round-trips are the cost. For writes, count the calls the
 documented contract requires; do not execute them (Step 0 rule 1).
 
 ### Baseline (2026-07-21, from the report's own live calls)
@@ -628,10 +628,10 @@ Carry this column forward as the origin; do not recompute it:
 | Metric | Etendo GO | Holded | Notes |
 |---|---|---|---|
 | M1 task 1 | ~6–8 calls | ~2–3 calls | ratio ≈ **2.7×** (§7.7) |
-| M2 | ≥1 guaranteed first-try failure (`neo_selectors` `column` vs `field`) | — | §7.8b / IMP-8 |
-| M3 `neo_list` invoice row | ~5 useful of ~60 → **~8%** | ~8 of ~8 → ~100% | §7.2 |
-| M3 `neo_defaults` | ~5 of ~70 → **~7%** | n/a (params *are* the short list) | §7.8a |
-| M3 `neo_schema` to find an action | 97 fields | 1 named verb | §7.6 |
+| M2 | ≥1 guaranteed first-try failure (`etendo_selectors` `column` vs `field`) | — | §7.8b / IMP-8 |
+| M3 `etendo_list` invoice row | ~5 useful of ~60 → **~8%** | ~8 of ~8 → ~100% | §7.2 |
+| M3 `etendo_defaults` | ~5 of ~70 → **~7%** | n/a (params *are* the short list) | §7.8a |
+| M3 `etendo_schema` to find an action | 97 fields | 1 named verb | §7.6 |
 | M4 | 0 of 2 (`{data:[],status:0}` ambiguous; missing-arg error unhelpful) → **0%** | 1 of 1 (RFC-7807) → 100% | §7.5 |
 
 ### Rules
@@ -687,7 +687,7 @@ live-call row behind it.
 Touch it **only** when reference material changed, and only with human authorization (it is the
 published document):
 
-- **§5** spec count, recounted from `neo_discover` — never carried forward.
+- **§5** spec count, recounted from `etendo_discover` — never carried forward.
 - **§3** rows that still describe fixed behavior as current.
 - **§7** `**Improve:**` bullets annotated as shipped, pointing at the IMP-n. Leave `**Observed:**`
   intact — it is the historical record. Re-count **§7.7's call table** if round-trips changed.

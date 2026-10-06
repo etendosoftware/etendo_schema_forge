@@ -34,6 +34,12 @@ export const ACCT_PROCESS_MONITOR = 'acct-process-monitor';
 export const PUBLIC_API_KEYS = 'public-api-keys';
 
 /**
+ * Reveals the Unified Calendar proof of concept (static mock data, no backend) in the
+ * Proof of Concept menu group. Short-lived: see its flags-registry.json entry.
+ */
+export const UNIFIED_CALENDAR_POC = 'unified-calendar-poc';
+
+/**
  * Telemetry kill switches (ETP-4578, D2). They are "kill" flags: `true` STOPS telemetry, so the
  * safe default is `false` (today's shipped behaviour: providers run as configured). They are
  * read by `observability/killSwitch.js`, never rendered by the UI, and are excluded from flag
@@ -44,7 +50,7 @@ export const PUBLIC_API_KEYS = 'public-api-keys';
  */
 export const TELEMETRY_KILL_ALL = 'telemetry-kill-all';
 export const TELEMETRY_KILL_PROVIDER_FLAGS = Object.freeze({
-  sentry: 'telemetry-kill-sentry',
+  datadog: 'telemetry-kill-datadog',
   'aws-rum': 'telemetry-kill-aws-rum',
   mixpanel: 'telemetry-kill-mixpanel',
 });
@@ -60,6 +66,7 @@ export const FLAG_DEFAULTS = Object.freeze({
   [PAGE_HELP_SUGGESTIONS]: false,
   [ACCT_PROCESS_MONITOR]: false,
   [PUBLIC_API_KEYS]: false,
+  [UNIFIED_CALENDAR_POC]: false,
   [TELEMETRY_KILL_ALL]: false,
   ...Object.fromEntries(Object.values(TELEMETRY_KILL_PROVIDER_FLAGS).map((key) => [key, false])),
 });

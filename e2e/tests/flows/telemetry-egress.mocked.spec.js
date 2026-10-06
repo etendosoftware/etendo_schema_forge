@@ -6,7 +6,7 @@ import { login } from '../helpers/auth.js';
  *
  * Every request to a provider host is intercepted and aborted, so nothing ever leaves the test
  * machine, and each one is recorded. The bundle under test decides which scenario applies,
- * because providers are configured at BUILD time (VITE_SENTRY_DSN, VITE_MIXPANEL_*, VITE_RUM_*):
+ * because providers are configured at BUILD time (VITE_DATADOG_*, VITE_MIXPANEL_*, VITE_RUM_*):
  *
  *  1. DEFAULT (`run-e2e-full.sh` as it is): a bundle with no provider configuration. Zero
  *     requests. This guards against an SDK that starts on its own defaults or a hardcoded key.
@@ -30,8 +30,9 @@ const SCENARIO = process.env.E2E_TELEMETRY || 'default';
 
 // The hosts the providers talk to. Deliberately narrow: the app's own backend is never matched.
 const PROVIDER_HOSTS = [
-  /(^|\.)sentry\.io$/,
-  /glitchtip/,
+  // Datadog intake (`browser-intake-datadoghq.eu`), its remote configuration and every site.
+  /(^|[.-])datadoghq\.(eu|com)$/,
+  /(^|[.-])ddog-gov\.com$/,
   /(^|\.)mixpanel\.com$/,
   /(^|\.)mxpnl\.com$/,
   /(^|\.)dataplane\.rum\.[a-z0-9-]+\.amazonaws\.com$/,

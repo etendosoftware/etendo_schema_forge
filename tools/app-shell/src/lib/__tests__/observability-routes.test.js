@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { sanitizeSentryEvent } from '@etendosoftware/app-shell-core/observability/adapters/sentry';
+import { sanitizeDatadogEvent } from '@etendosoftware/app-shell-core/observability/adapters/datadog';
 import { sanitizeMixpanelEvent } from '@etendosoftware/app-shell-core/observability/adapters/mixpanel';
 import { sanitizeRumRequest } from '@etendosoftware/app-shell-core/observability/adapters/rum';
 
@@ -11,7 +11,7 @@ import { sanitizeRumRequest } from '@etendosoftware/app-shell-core/observability
 // The route table is read from runtime-routes.jsx, so a route added there without a row
 // below turns this test red instead of shipping un-reviewed. Each concrete pathname is then
 // sent through what each provider actually does with a route:
-//   - Sentry: the transaction name;
+//   - Datadog: the view name (also what its automatic view URLs become);
 //   - Mixpanel: `$current_url` (URL mode `path`);
 //   - RUM: the page id in an event's metadata.
 // The expected values are the ones MEASURED against the host's own normalizeRoute on
@@ -61,7 +61,7 @@ function expand(pattern) {
 
 /** What each provider sends for `pathname`, given whether it is the router's or the browser's form. */
 function throughProviders(pathname) {
-  const sentry = sanitizeSentryEvent({ type: 'transaction', transaction: pathname }, {}).transaction;
+  const datadog = sanitizeDatadogEvent({ type: 'view', view: { name: pathname } }).view.name;
   const mixpanel = sanitizeMixpanelEvent(
     { event: 'page_view', properties: {} },
     { allowedKeys: [], currentUrl: () => `https://go.etendo.cloud${pathname}`, referrer: () => '' },
@@ -69,15 +69,15 @@ function throughProviders(pathname) {
   const rum = JSON.parse(sanitizeRumRequest({
     RumEvents: [{ id: '1', timestamp: 1, type: 'com.amazon.rum.page_view_event', metadata: JSON.stringify({ pageId: pathname }), details: '{}' }],
   }).RumEvents[0].metadata).pageId;
-  return { sentry, mixpanel, rum };
+  return { datadog, mixpanel, rum };
 }
 
 function assertAllProviders(pathname, expected, label) {
   const out = throughProviders(pathname);
-  assert.deepEqual(out, { sentry: expected, mixpanel: expected, rum: expected }, `${label}: ${pathname}`);
+  assert.deepEqual(out, { datadog: expected, mixpanel: expected, rum: expected }, `${label}: ${pathname}`);
 }
 
-describe('real host routes through Sentry, Mixpanel and RUM (ETP-4578 H7)', () => {
+describe('real host routes through Datadog, Mixpanel and RUM (ETP-4578 H7)', () => {
   const patterns = routePaths();
 
   it('reads the route table, so the test cannot go stale silently', () => {

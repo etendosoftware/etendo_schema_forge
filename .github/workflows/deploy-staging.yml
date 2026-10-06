@@ -59,6 +59,9 @@ jobs:
               echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
               echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_PRODUCTION }}" >> $GITHUB_OUTPUT
+              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_PRODUCTION }}" >> $GITHUB_OUTPUT
               ;;
             staging)
               echo "s3_bucket=${{ vars.S3_BUCKET_STAGING }}" >> $GITHUB_OUTPUT
@@ -68,6 +71,9 @@ jobs:
               echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_STAGING }}" >> $GITHUB_OUTPUT
               echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_STAGING }}" >> $GITHUB_OUTPUT
               echo "configcat_sdk_key=" >> $GITHUB_OUTPUT
+              echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_STAGING }}" >> $GITHUB_OUTPUT
+              echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_STAGING }}" >> $GITHUB_OUTPUT
+              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_STAGING }}" >> $GITHUB_OUTPUT
               ;;
             *)
               echo "s3_bucket=${{ vars.S3_BUCKET_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
@@ -77,6 +83,9 @@ jobs:
               echo "rum_app_monitor_id=${{ vars.RUM_APP_MONITOR_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "rum_identity_pool_id=${{ vars.RUM_IDENTITY_POOL_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               echo "configcat_sdk_key=${{ vars.VITE_CONFIGCAT_SDK_KEY_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "datadog_application_id=${{ vars.VITE_DATADOG_APPLICATION_ID_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "datadog_client_token=${{ vars.VITE_DATADOG_CLIENT_TOKEN_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
+              echo "datadog_trace_api_bases=${{ vars.VITE_DATADOG_TRACE_API_BASES_EXPERIMENTAL }}" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -131,9 +140,14 @@ jobs:
           VITE_RUM_ENABLED: "true"
           VITE_RUM_APP_MONITOR_ID: ${{ steps.target.outputs.rum_app_monitor_id }}
           VITE_RUM_IDENTITY_POOL_ID: ${{ steps.target.outputs.rum_identity_pool_id }}
-          # Sentry — DSN as variable (public, baked into JS bundle), token as secret
-          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Datadog RUM — client credentials are public by design; API key remains secret for source maps.
+          VITE_DATADOG_ENABLED: "true"
+          VITE_DATADOG_APPLICATION_ID: ${{ steps.target.outputs.datadog_application_id }}
+          VITE_DATADOG_CLIENT_TOKEN: ${{ steps.target.outputs.datadog_client_token }}
+          VITE_DATADOG_SITE: ${{ vars.VITE_DATADOG_SITE || 'datadoghq.eu' }}
+          VITE_DATADOG_SERVICE: etendo-go-web
+          VITE_DATADOG_TRACE_API_BASES: ${{ steps.target.outputs.datadog_trace_api_bases }}
+          VITE_APP_VERSION: ${{ github.sha }}
           # Mixpanel — token as secret, API host as variable
           VITE_MIXPANEL_ENABLED: "true"
           VITE_MIXPANEL_TOKEN: ${{ secrets.VITE_MIXPANEL_TOKEN }}
@@ -154,6 +168,23 @@ jobs:
           VITE_CONFIGCAT_SDK_KEY: ${{ steps.target.outputs.configcat_sdk_key }}
           VITE_CONFIGCAT_POLL_SECONDS: "60"
         # .env.production (committed) provides VITE_MOCK=false and VITE_API_BASE=/etendo
+
+      - name: Upload Datadog source maps
+        env:
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_SITE: ${{ vars.DATADOG_SITE || 'datadoghq.eu' }}
+        run: |
+          if [[ -z "${DATADOG_API_KEY:-}" ]]; then
+            echo "Datadog API key is not configured; skipping source-map upload."
+            exit 0
+          fi
+          npx datadog-ci sourcemaps upload tools/app-shell/dist \
+            --service etendo-go-web \
+            --release-version "${{ github.sha }}" \
+            --minified-path-prefix "${{ steps.target.outputs.public_origin }}/"
+
+      - name: Remove source maps from deployment package
+        run: find tools/app-shell/dist -name '*.map' -delete
 
       - name: Generate reports manifest
         run: npx sf-generate-reports-manifest

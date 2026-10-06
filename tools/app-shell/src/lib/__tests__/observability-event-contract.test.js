@@ -4,7 +4,7 @@ import { REDACTED, sanitizeValue } from '@etendosoftware/app-shell-core/observab
 import { createObservability } from '../observability/core.js';
 import { OBSERVABILITY_EVENT_LIST, buildObservabilityEvent } from '../observability/events.js';
 import { SAFE_EVENT_PROPERTY_KEYS, sanitizeEventProperties } from '../observability/payload.js';
-import { createSentryProvider } from '../sentry.js';
+import { createDatadogProvider } from '../observability/providers/datadog.js';
 import { createRumProvider } from '../rum.js';
 import { createMixpanelProvider } from '../observability/providers/mixpanel.js';
 
@@ -29,18 +29,20 @@ function samplesFor(keys) {
 
 /** The three real host providers in ONE gateway, wired to SDKs that record what they receive. */
 function threeProviders() {
-  const seen = { mixpanelTrack: [], sentryExtra: [], rumRecorded: [] };
-  const sentry = createSentryProvider({
-    dsn: 'https://pub@o1.ingest.sentry.io/1',
-    sentry: {
-      init() {},
-      browserTracingIntegration: () => 'tracing',
-      captureException(_error, hint) { seen.sentryExtra.push(hint?.extra ?? {}); },
-      close: async () => true,
-      getClient: () => ({ getOptions: () => ({}) }),
+  const seen = { mixpanelTrack: [], datadogActions: [], datadogErrorContext: [], rumRecorded: [] };
+  const datadog = createDatadogProvider({
+    env: {
+      VITE_DATADOG_ENABLED: 'true', VITE_DATADOG_APPLICATION_ID: 'a', VITE_DATADOG_CLIENT_TOKEN: 't',
+      VITE_DATADOG_SITE: 'datadoghq.eu', VITE_APP_ENV: 'test',
     },
-    env: {},
     logger: silent,
+    loader: async () => ({
+      datadogRum: {
+        init() {}, startView() {}, setGlobalContext() {}, setTrackingConsent() {},
+        addAction(name, properties) { seen.datadogActions.push({ name, properties }); },
+        addError(_error, context) { seen.datadogErrorContext.push(context ?? {}); },
+      },
+    }),
   });
   class RecordingRum {
     recordError(error) { seen.rumRecorded.push(error.message); }
@@ -66,7 +68,7 @@ function threeProviders() {
       },
     }),
   });
-  return { seen, providers: [sentry, rum, mixpanel] };
+  return { seen, providers: [datadog, rum, mixpanel] };
 }
 
 async function facadeOver(providers) {
@@ -104,7 +106,7 @@ describe('every event in events.js reaches the providers whole (ETP-4578 H8)', (
   });
 
   for (const event of OBSERVABILITY_EVENT_LIST) {
-    it(`${event.name}: every declared property reaches Mixpanel intact, with the three providers running`, async () => {
+    it(`${event.name}: every declared property reaches Mixpanel and Datadog intact, with the three providers running`, async () => {
       const { seen, providers } = threeProviders();
       const observability = await facadeOver(providers);
       const samples = samplesFor(event.properties);
@@ -118,10 +120,16 @@ describe('every event in events.js reaches the providers whole (ETP-4578 H8)', (
         assert.equal(sent.properties[key], value, `${event.name}.${key} did not arrive as sent (got ${JSON.stringify(sent.properties[key])})`);
       }
       assert.equal(Object.values(sent.properties).includes(REDACTED), false, `${event.name} carries a [REDACTED] value`);
+
+      const [action] = seen.datadogActions.filter(({ name }) => name === event.name);
+      assert.ok(action, `${event.name} never reached Datadog`);
+      for (const [key, value] of Object.entries(samples)) {
+        assert.equal(action.properties[key], value, `${event.name}.${key} did not reach Datadog as sent`);
+      }
     });
   }
 
-  it('sends the same approved properties to Sentry as extra, and nothing redacted, in the same gateway', async () => {
+  it('sends the same approved properties to Datadog as error context, and nothing redacted, in the same gateway', async () => {
     const { seen, providers } = threeProviders();
     const observability = await facadeOver(providers);
     const keys = APPROVED.filter((key) => key !== 'tags');
@@ -131,11 +139,11 @@ describe('every event in events.js reaches the providers whole (ETP-4578 H8)', (
 
     for (const batch of batches) await observability.captureException(new Error('boom'), samplesFor(batch));
 
-    assert.equal(seen.sentryExtra.length, batches.length);
+    assert.equal(seen.datadogErrorContext.length, batches.length);
     batches.forEach((batch, index) => {
       const samples = samplesFor(batch);
-      const lost = batch.filter((key) => seen.sentryExtra[index][key] !== samples[key]);
-      assert.deepEqual(lost, [], `approved properties that did not reach Sentry as sent: ${lost.join(', ')}`);
+      const lost = batch.filter((key) => seen.datadogErrorContext[index][key] !== samples[key]);
+      assert.deepEqual(lost, [], `approved properties that did not reach Datadog as sent: ${lost.join(', ')}`);
     });
     assert.equal(seen.rumRecorded.length, batches.length, 'RUM records the error from the same call');
   });

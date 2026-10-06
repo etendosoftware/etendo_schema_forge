@@ -63,11 +63,11 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 
 | # | Field | Why it matters to resolution | Feedback line if missing |
 |---|---|---|---|
-| 1 | **MCP tool called** (`neo_create`/`neo_list`/`neo_get`/`neo_update`/`neo_delete`/`neo_selectors`/`neo_defaults`/`neo_schema`/`neo_batch`/`neo_action`, or a dynamic `generate_<spec>` / `<process_spec>`) | Tells you which router branch + handler to inspect | "State the exact MCP tool name." |
-| 2 | **Spec / entity** (kebab-name, e.g. `sales-order`) + header vs lines | Locates the `ETGO_SF_SPEC`/`ETGO_SF_ENTITY` and any `Java_Qualifier` NeoHandler | "Include the spec/entity name as it appears in `neo_discover`." |
+| 1 | **MCP tool called** (`etendo_create`/`etendo_list`/`etendo_get`/`etendo_update`/`etendo_delete`/`etendo_selectors`/`etendo_defaults`/`etendo_schema`/`etendo_batch`/`etendo_action`, or a dynamic `generate_<spec>` / `<process_spec>`) | Tells you which router branch + handler to inspect | "State the exact MCP tool name." |
+| 2 | **Spec / entity** (kebab-name, e.g. `sales-order`) + header vs lines | Locates the `ETGO_SF_SPEC`/`ETGO_SF_ENTITY` and any `Java_Qualifier` NeoHandler | "Include the spec/entity name as it appears in `etendo_discover`." |
 | 3 | **Verbatim JSON-RPC request** (params payload) | The single highest-value field — makes repro deterministic | "Paste the exact JSON-RPC request body sent." |
 | 4 | **Verbatim response / error** (JSON-RPC error code + message, or wrong payload) | Distinguishes a 4xx validation reject from a 500 code bug | "Paste the exact response/error returned, not a paraphrase." |
-| 5 | **Auth context** — OAuth2 client + scope (`neo:read/write/process/report/*`), AD role, user/org/client | A large fraction of 'failures' are RBAC/scope, not code bugs | "Include the OAuth2 scope and the AD role/user used." |
+| 5 | **Auth context** — OAuth2 client + scope (`etendo:read/write/process/report/*`; legacy `neo:*` still accepted), AD role, user/org/client | A large fraction of 'failures' are RBAC/scope, not code bugs | "Include the OAuth2 scope and the AD role/user used." |
 | 6 | **Context params** — `recordContext` / `parentContext` passed to selectors/defaults; session vars (`@#...@`) | Selector/defaults bugs are usually missing-context bugs | "Include any recordContext/parentContext sent." |
 | 7 | **Contract/spec version** + whether it was pushed (`export.database` run) | Rules out 'stale config' before reading code | "State the contract version and whether the spec is deployed." |
 | 8 | **Environment** — instance URL, com.etendoerp.go branch/commit | Reproduce against the right build | "Identify the instance and the module commit/branch." |
@@ -80,10 +80,10 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 2. **upstream-config** — the real source is the generated contract / `decisions.json` / generators in schema_forge (e.g. missing `prompt` metadata, a field not flagged conditional-required). Fix upstream + `make regen`, NOT in the MCP.
 3. **RBAC/scope** — role window/process access or OAuth2 scope, not a bug.
 4. **missing-module / missing-data** — entity/module not installed, or no records to operate on.
-5. **validator-side / agent-knowledge** — the *validating bot itself* was wrong: it used stale/hardcoded knowledge instead of querying MCP, assumed enum cardinality, or failed to capture the error. **The bug is in the bot, not the product.** (Evidenced: ETP-4279 — agent claimed "2 account types" from `SeedReferenceDataStep.java` instead of calling `neo_selectors`, which exposes 3.) These are pure feedback-note items — no product fix.
+5. **validator-side / agent-knowledge** — the *validating bot itself* was wrong: it used stale/hardcoded knowledge instead of querying MCP, assumed enum cardinality, or failed to capture the error. **The bug is in the bot, not the product.** (Evidenced: ETP-4279 — agent claimed "2 account types" from `SeedReferenceDataStep.java` instead of calling `etendo_selectors`, which exposes 3.) These are pure feedback-note items — no product fix.
 6. **test-data / environment gap** — spec is correct but *unevaluable* because it has no records, or the wrong instance/build was used. (Evidenced: ETP-4289 — 6 specs unevaluable for lack of seed data.)
 
-**The #1 recurring lesson (evidenced across two rounds):** the majority of reported "failures" are **not MCP code bugs** — they are categories 2–6. Field #11 + #5 + #7 let the bot pre-triage. If you resolve a ticket and find it was category 3/4/5/6, that is a *high-priority* feedback note: the bot is spending the team's time on non-bugs (and category 5 means the bot has its own defect to fix). **Key fact: the validator HAS MCP access** — it can and should attach the raw `neo_discover`/`neo_schema`/`neo_selectors` output it saw, and the verbatim failing request/response, instead of prose it expects us to reconstruct.
+**The #1 recurring lesson (evidenced across two rounds):** the majority of reported "failures" are **not MCP code bugs** — they are categories 2–6. Field #11 + #5 + #7 let the bot pre-triage. If you resolve a ticket and find it was category 3/4/5/6, that is a *high-priority* feedback note: the bot is spending the team's time on non-bugs (and category 5 means the bot has its own defect to fix). **Key fact: the validator HAS MCP access** — it can and should attach the raw `etendo_discover`/`etendo_schema`/`etendo_selectors` output it saw, and the verbatim failing request/response, instead of prose it expects us to reconstruct.
 </ticket_quality_rubric>
 
 <where_fixes_live>
@@ -96,7 +96,7 @@ For each field below: if the ticket has it, use it. If it's **missing**, that's 
 | `McpServlet.java` | HTTP handler, OAuth2 auth, JSON-RPC dispatch, session | auth/transport/dispatch errors |
 | `ToolRegistry.java` | Dynamic tool discovery (reads `ETGO_SF_SPEC` + RBAC + OAuth2 scopes) | a tool is missing / not listed / RBAC-filtered |
 | `McpToolRouter.java` + `McpToolRouterSupport.java` | Routes a tool call to the NEO Headless handler (CRUD/process/report) | wrong/empty result from a tool |
-| `McpSelectorContextHelper.java` | Builds selector context (recordContext/parentContext) | `neo_selectors` returns empty/wrong rows |
+| `McpSelectorContextHelper.java` | Builds selector context (recordContext/parentContext) | `etendo_selectors` returns empty/wrong rows |
 | `McpResourceProvider.java` | `resources/list` + `resources/read` | resource endpoints |
 | `McpSessionManager.java` | `Mcp-Session-Id` sessions, scoped `OBContext` | session/context bleed |
 | `McpAuthorizationService.java` | OAuth2 scope validation | scope rejections |
@@ -136,7 +136,7 @@ This is a **living, outward-facing report** for the external bot team. Two secti
 1. **Per-ticket log** — one dated entry per resolved ticket:
    ```
    ### <date> — ETP-XXXX — <one-line symptom>
-   - Tool/spec: <neo_create / sales-order header>
+   - Tool/spec: <etendo_create / sales-order header>
    - Root-cause category: code-bug | upstream-config | RBAC | missing-module | validator-side | test-data-gap
    - Time-to-locate: <fast / slow — and why>
    - Missing rubric fields: [#3 verbatim request, #5 auth context, ...]

@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { OpenFeature, TypedInMemoryProvider } from '@openfeature/web-sdk';
 import { createTelemetryGateway } from '@etendosoftware/app-shell-core/observability/gateway';
-import { createSentryProvider } from '../sentry.js';
+import { createDatadogProvider } from '../observability/providers/datadog.js';
 import { createRumProvider } from '../rum.js';
 import { createMixpanelProvider } from '../observability/providers/mixpanel.js';
 import {
@@ -40,18 +40,24 @@ async function useFlags(values = {}) {
 
 /** The three real host providers, wired to SDKs that only count. */
 function countingProviders() {
-  const calls = { sentryInit: 0, rumCtor: 0, mixpanelLoad: 0, mixpanelInit: 0, mixpanelTrack: 0, rumRecord: 0, sentryCapture: 0 };
-  const sentry = createSentryProvider({
-    dsn: 'https://pub@o1.ingest.sentry.io/1',
-    sentry: {
-      init() { calls.sentryInit += 1; },
-      browserTracingIntegration: () => 'tracing',
-      captureException() { calls.sentryCapture += 1; },
-      close: async () => true,
-      getClient: () => ({ getOptions: () => ({}) }),
+  const calls = { datadogLoad: 0, datadogInit: 0, rumCtor: 0, mixpanelLoad: 0, mixpanelInit: 0, mixpanelTrack: 0, rumRecord: 0, datadogCapture: 0 };
+  const datadog = createDatadogProvider({
+    env: {
+      VITE_DATADOG_ENABLED: 'true', VITE_DATADOG_APPLICATION_ID: 'a', VITE_DATADOG_CLIENT_TOKEN: 't',
+      VITE_DATADOG_SITE: 'datadoghq.eu', VITE_APP_ENV: 'test',
     },
-    env: {},
     logger: silent,
+    loader: async () => {
+      calls.datadogLoad += 1;
+      return {
+        datadogRum: {
+          init() { calls.datadogInit += 1; },
+          startView() {}, addAction() {}, setUser() {}, setAccount() {}, setGlobalContext() {},
+          addError() { calls.datadogCapture += 1; },
+          setTrackingConsent() {}, stopSession() {}, clearUser() {}, clearAccount() {}, addFeatureFlagEvaluation() {},
+        },
+      };
+    },
   });
   class FakeRum {
     constructor() { calls.rumCtor += 1; }
@@ -82,7 +88,7 @@ function countingProviders() {
       };
     },
   });
-  return { calls, providers: [sentry, rum, mixpanel] };
+  return { calls, providers: [datadog, rum, mixpanel] };
 }
 
 const total = (calls) => Object.values(calls).reduce((sum, n) => sum + n, 0);
@@ -170,7 +176,7 @@ describe('telemetry kill switch (ETP-4578 H5)', () => {
       await gateway.captureException(new Error('boom'), {});
 
       assert.equal(calls.mixpanelLoad + calls.mixpanelInit + calls.mixpanelTrack, 0);
-      assert.equal(calls.sentryInit, 1);
+      assert.equal(calls.datadogInit, 1);
       assert.equal(calls.rumCtor, 1);
     });
 
@@ -194,7 +200,7 @@ describe('telemetry kill switch (ETP-4578 H5)', () => {
         await provider.putConfiguration(flagConfig({ [TELEMETRY_KILL_PROVIDER_FLAGS.mixpanel]: true }));
         await apply();
         assert.equal(gateway.isEnabled('mixpanel'), false);
-        assert.equal(gateway.isEnabled('sentry'), true);
+        assert.equal(gateway.isEnabled('datadog'), true);
 
         const before = calls.mixpanelTrack;
         await gateway.track('after the kill', { action: 'x' });
@@ -218,7 +224,7 @@ describe('telemetry kill switch (ETP-4578 H5)', () => {
         await provider.putConfiguration(flagConfig({ [TELEMETRY_KILL_ALL]: true }));
         await new Promise((resolve) => { setTimeout(resolve, 50); });
         await apply();
-        assert.deepEqual(['sentry', 'aws-rum', 'mixpanel'].map((n) => gateway.isEnabled(n)), [false, false, false]);
+        assert.deepEqual(['datadog', 'aws-rum', 'mixpanel'].map((n) => gateway.isEnabled(n)), [false, false, false]);
       } finally {
         unbind();
       }
@@ -248,7 +254,7 @@ describe('telemetry kill switch (ETP-4578 H5)', () => {
       const broken = { getBooleanValue() { throw new Error('flag client down'); }, addHandler() {}, removeHandler() {} };
       const { apply } = bindTelemetryKillSwitch(gateway, { env: {}, initial: { all: true, names: [] }, logger: silent, client: broken });
       await apply();
-      assert.equal(['sentry', 'aws-rum', 'mixpanel'].some((n) => gateway.isEnabled(n)), false);
+      assert.equal(['datadog', 'aws-rum', 'mixpanel'].some((n) => gateway.isEnabled(n)), false);
     });
   });
 
@@ -288,12 +294,17 @@ describe('telemetry kill switch (ETP-4578 H5)', () => {
   describe('flag exposure', () => {
     it('never reports the kill switches through the telemetry they control', () => {
       const tracked = [];
-      const hook = createFlagExposureHook({ trackImpl: (...args) => tracked.push(args) });
+      const flagged = [];
+      const hook = createFlagExposureHook({
+        trackImpl: (...args) => tracked.push(args),
+        rumEvaluationImpl: (...args) => flagged.push(args),
+      });
       for (const key of NO_EXPOSURE_FLAGS) {
         hook.after({ flagKey: key, providerMetadata: { name: 'p' }, context: {} }, { value: true, variant: 'on' });
       }
       hook.after({ flagKey: 'proof-of-concept-menu', providerMetadata: { name: 'p' }, context: {} }, { value: true, variant: 'on' });
       assert.equal(tracked.length, 1);
+      assert.deepEqual(flagged, [['proof_of_concept_menu', true]], 'nor as RUM flag context');
     });
   });
 });

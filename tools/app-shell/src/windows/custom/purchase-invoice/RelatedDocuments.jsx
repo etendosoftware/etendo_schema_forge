@@ -57,6 +57,14 @@ export default function RelatedDocuments({ recordId, data, token, apiBaseUrl, do
   const apSubtype = getApSubtype(data);
   const isReturn = apSubtype === 'RECTIFICATIVA';
 
+  // ETP-5576 — the follow-up flow (useFollowUpDocuments) dispatches this after creating a
+  // goods receipt from the invoice; same `<spec>:document-created` convention as the orders.
+  useEffect(() => {
+    const handler = () => setRefreshKey(k => k + 1);
+    window.addEventListener('purchase-invoice:document-created', handler);
+    return () => window.removeEventListener('purchase-invoice:document-created', handler);
+  }, []);
+
   useEffect(() => {
     if (!recordId) return;
     setLoading(true);
