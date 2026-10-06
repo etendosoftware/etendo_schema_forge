@@ -141,7 +141,7 @@ Response shape (envelope `response.data`):
   - `totalBalanceApproximate` is `true` only when a **non-zero** foreign subtotal was converted. A foreign subtotal of exactly 0 is skipped before the rate lookup.
   - A non-zero currency with **no exchange rate** is **excluded** from `totalBalance` (never added unconverted) and listed in `missingRateCurrencies`.
   - `byCurrency` always carries the **real, unconverted** balance per currency.
-- The full rules (rate lookup direction, org-tree anchor, rounding, the no-org-currency fallback) and how `AccountsSidebar` renders them (`≈`, the "No incluye: …" warning, the ⓘ tooltip, the always-compact total — like the dashboard's financial summary, with the exact value on hover and the exact per-currency values in the breakdown) are documented once, in `financial-account.md` → "List summary — `response.summary` and its currency (ETP-5580)".
+- The full rules (rate lookup direction, org-tree anchor, rounding, the no-org-currency fallback) and how `AccountsSidebar` renders them (`≈`, the "No incluye: …" warning, the ⓘ tooltip, the full-amount total at a fixed 30px, ellipsised with an exact-value tooltip when it does not fit, and the exact per-currency values in the breakdown) are documented once, in `financial-account.md` → "List summary — `response.summary` and its currency (ETP-5580)".
 - `summary.pending.suggestionsReady` and `summary.pending.byRule` always return `0` in T1 because the `ETBR_Match_Suggestion` table lands with T5.
 
 ### Account mutations endpoint (ETP-4096)
@@ -183,7 +183,7 @@ tools/app-shell/src/
 ├── components/financial-accounts/
 │   ├── index.js, tokens.js
 │   ├── AccountsToolbar.jsx                    # + Nueva cuenta button
-│   ├── AccountsSidebar/index.jsx, balanceDisplay.js  # Saldo panel; always-compact total + hover title
+│   ├── AccountsSidebar/index.jsx, balanceDisplay.js  # Saldo panel; full total, ellipsis + tooltip
 │   ├── AccountsTable/accountColumns.jsx       # cell bodies only (NameCell/TypeCell/BalanceCell)
 │   ├── accountCellTypes.jsx                   # binds contract `cellType` → renderer
 │   ├── contractColumns.js                     # reads the grid columns from contract.json
@@ -211,7 +211,7 @@ The legacy `bank-reconciliation` placeholder entry in `menu.json` is now hidden 
 
 1. Start the dev server with `make dev` and visit `http://localhost:3100/finance/accounts` after logging in.
 2. The sidebar should match the Figma frame `3012:25602`:
-   - Total balance reflects every active account converted to the organization currency (`≈` prefix when a non-zero foreign balance was converted; a "No incluye: …" warning when a currency has no exchange rate). It is always shown compact, like the dashboard (e.g. "12,60K €"); hover the amount to see the exact value. Hover the ⓘ icon to see the explanation tooltip.
+   - Total balance reflects every active account converted to the organization currency (`≈` prefix when a non-zero foreign balance was converted; a "No incluye: …" warning when a currency has no exchange rate). It is shown in full at a fixed 30px (e.g. "12.600,00 €"); amounts under 100 million fit, except an approximate negative one from about 10 million up. A larger amount is ellipsised; hover it to see the exact value in a tooltip. Hover the ⓘ icon to see the explanation tooltip.
    - "Por moneda" lists each ISO code with its aggregated total.
    - "Pendientes de conciliar" shows the number of accounts with non-zero `pendingCount`.
 3. Toggle the type filter (Banco / Caja / Tarjeta / Todas) and confirm the table updates. Select **Inactivas** and confirm only archived accounts are listed (across all types) and the sidebar totals stay unchanged.
@@ -247,16 +247,14 @@ tier (ETP-5205 / ETP-5457)".
   modal, archive dialog), plus `hooks/__tests__/` (`useAccountMutations`) and
   `lib/__tests__/` (`validateIban`). The sidebar's ETP-5580 tests live in
   `components/financial-accounts/AccountsSidebar/__tests__/` (`index.vitest.jsx`,
-  `balanceDisplay.vitest.js`, `balanceDisplay.symbolSide.vitest.js`), plus
-  `lib/__tests__/dashboardValueTypography.test.js` for the typography helper shared with the
-  dashboard (the dashboard uses its default cutoffs; the sidebar passes its own,
-  `SIDEBAR_BALANCE_THRESHOLDS`, see `financial-account.md` → "Sidebar rendering").
-- E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the compact
-  total with its exact `title`, the `≈` converted total and the missing-rate line.
+  `balanceDisplay.vitest.js`, `balanceDisplay.symbolSide.vitest.js`; see
+  `financial-account.md` → "Sidebar rendering").
+- E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` covers the full
+  total, the `≈` converted total and the missing-rate line.
 - See `financial-account.md` → "List summary" for the full list and the known gaps:
   - an E2E check for the ⓘ tooltip (vitest already covers it);
-  - the Spanish "B" suffix;
-  - the exact total being only in `title`;
+  - the Spanish "B" suffix (dashboard only);
+  - a clipped total being reachable only through the hover tooltip (not by touch or keyboard);
   - `MoneyAmount` clipping with no tooltip in the movements table;
   - the account-detail KPI strip overflowing with huge values.
 

@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/financial-accounts/AccountsSidebar/index.jsx
+// @covers artifacts/financial-account/custom/AccountsHeaderTable.jsx
 import { test, expect } from '@playwright/test';
 import { login } from '../../helpers/auth.js';
 import { openAccountRowMenu } from '../../helpers/financial-account-helpers.js';
@@ -289,13 +291,12 @@ test.describe('Financial Accounts list — Cuentas', () => {
   // sidebar rendered 0.00 no matter what the backend sent (unit coverage:
   // `tools/app-shell/src/components/contract-ui/__tests__/ListView.headerContentMeta.vitest.jsx`).
   //
-  // ETP-5580: the total is ALWAYS shown in the dashboard's compact notation ("273,85K €"); the
-  // exact value is only in the `title`. Amount and symbol are separated by a non-breaking space:
-  // `toHaveText` normalizes whitespace, `toHaveAttribute` does not, so the title uses `\s`.
+  // ETP-5580: the total is the FULL amount ("273.853,46 €", canonical formatCurrency, no K/M/B)
+  // at a fixed 30px; when it does not fit it ellipsises and shows the exact value in a tooltip.
+  // Amount and symbol are separated by a non-breaking space, which `toHaveText` normalizes.
   test('sidebar aggregate values match the summary sibling of response.data', async ({ page }) => {
     const balance = page.getByTestId('balance-card');
-    await expect(balance).toHaveText('273,85K €');
-    await expect(balance).toHaveAttribute('title', /^273\.853,46\s€$/);
+    await expect(balance).toHaveText('273.853,46 €');
     await expect(page.getByTestId('balance-missing-rate')).toHaveCount(0);
 
     await expect(page.getByTestId('balance-by-currency-EUR')).toBeVisible();
@@ -473,12 +474,11 @@ test.describe('Financial Accounts list — Saldo converted total (ETP-5580)', ()
     await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   }
 
-  test('a converted total shows the "≈" prefix in the text and the title', async ({ page }) => {
+  test('a converted total shows the "≈" prefix in front of the full amount', async ({ page }) => {
     await openWithSummary(page, SUMMARY_CONVERTED);
 
     const balance = page.getByTestId('balance-card');
-    await expect(balance).toHaveText('≈ 274,77K €');
-    await expect(balance).toHaveAttribute('title', /^≈ 274\.773,46\s€$/);
+    await expect(balance).toHaveText('≈ 274.773,46 €');
     // The breakdown keeps the real per-currency balances, without the marker.
     await expect(page.getByTestId('balance-by-currency-USD')).toBeVisible();
     await expect(page.getByTestId('balance-by-currency-USD')).not.toContainText('≈');
@@ -488,7 +488,7 @@ test.describe('Financial Accounts list — Saldo converted total (ETP-5580)', ()
     await openWithSummary(page, SUMMARY_MISSING_RATE);
 
     const balance = page.getByTestId('balance-card');
-    await expect(balance).toHaveText('273,85K €');
+    await expect(balance).toHaveText('273.853,46 €');
     await expect(page.getByTestId('balance-missing-rate')).toBeVisible();
     await expect(page.getByTestId('balance-missing-rate')).toHaveText(
       /^(No incluye|Excludes): ARS \((sin tasa de cambio|no exchange rate)\)$/,

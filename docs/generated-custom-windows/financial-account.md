@@ -1213,41 +1213,40 @@ over the **active** rows of this response only, as before):
   is in the organization currency, that accounts in other currencies, if any, are converted with
   the system rate, which makes the total approximate (≈), and that the per-currency detail shows
   the real balances.
-- The total is **always compact**, the same way as the dashboard's financial summary
-  (`FinancialSummaryCard`). It is formatted with `formatDashboardCompact(total, { currencyLabel,
-  locale })`, using the dashboard's locale resolution (`localeFromUi(useLocaleSwitch().locale)`),
-  e.g. "≈ -797,84B €", or "$2,50K" for a USD organization (exact value on hover: "$2.500,00").
-  The symbol side comes from the currency-format config (`C_CURRENCY.ISSYMBOLRIGHTSIDE`, loaded
-  from `GET /sws/neo/currency-format`): EUR goes on the right with the scale suffix before the
-  symbol, USD on the left. A test or page that never loads that config puts every symbol on the
-  right ("2,50K $"); that is not what users see. Amounts under 1.000 stay uncompacted
-  ("-357,99 €").
-- The font size comes from the shared helper `getDashboardValueTypography(value, thresholds)` in
-  `lib/dashboardValueTypography.js`, but the sidebar passes **its own cutoffs**,
-  `SIDEBAR_BALANCE_THRESHOLDS = { mediumFrom: 15, smallFrom: 19 }` (`balanceDisplay.js`). The
-  dashboard's `FinancialSummaryCard` calls it without thresholds and keeps the defaults
-  (`DASHBOARD_VALUE_THRESHOLDS`, 12 → 20px and 10 → 24px), tuned for its narrow 3-up KPI cells.
-  With those defaults an ordinary "≈ 87.542,31B €" dropped to 20px with most of the column empty.
-  The sidebar measures the **full displayed string, `≈ ` prefix included**, because the prefix
-  takes room in the column. A leading `-` is skipped only when it is the first character, so
-  after the prefix it counts too, which errs on the safe side. The cutoffs come from the 268px
-  usable width (292px column minus `px-3`), assuming every character is a tabular digit
-  (≈0.6em in Inter; `.`, `,` and the NBSP are ≈0.3em and only add slack): 30px fits 14
-  characters (268 / 18), 24px fits 18 (268 / 14.4), 20px fits 22 (268 / 12). So: under 15
-  characters → 30px/32px, 15–18 → 24px/28px, 19 or more → 20px/24px. Every realistic total stays
-  at 30px ("≈ 87.542,31B €" is 14 characters, about 216px; "≈ -999,99K €", "-357,99 €",
-  "$14,03M"). Only totals of 10^15 and up step down: "≈ -1.000.000,00B €" → 24px,
-  "≈ -1.000.000.000,00B €" (10^18) → 20px. The span is `min-w-0 whitespace-nowrap`, so it never
-  wraps.
+- The total is the **full amount**, formatted with the canonical `formatCurrency(iso, total)`
+  (`AccountsSidebar/balanceDisplay.js`, `buildBalanceDisplay`), e.g. "-357,99 €",
+  "≈ 2.242,12 €", "46.108.698,41 €", or "$14.028.905,17" for a USD organization. There is **no**
+  K/M/B compact notation in the sidebar (the dashboard's `FinancialSummaryCard` keeps it). The
+  symbol side comes from the currency-format config (`C_CURRENCY.ISSYMBOLRIGHTSIDE`, loaded from
+  `GET /sws/neo/currency-format`): EUR on the right, USD on the left, with the minus before the
+  symbol ("≈ -$100.000.000,00"). A test or page that never loads that config puts every symbol on
+  the right ("2.500,00 $"); that is not what users see.
+- The size is **fixed at 30px / 32px** (`BALANCE_TYPOGRAPHY`, the original `text-[30px] leading-8`)
+  and never steps down with the length of the amount, because a smaller font loses visibility.
+  The sidebar does not use `getDashboardValueTypography`.
+- **Overflow: ellipsis plus tooltip.** The amount renders through `TruncatedText`
+  (`components/ui/truncated-text.jsx`, the same component as the breakdown rows and the list
+  `BalanceCell`). The row (`data-testid="balance-total"`, `flex min-w-0`) carries the 30px size and
+  bounds the width; the amount (`data-testid="balance-card"`, `min-w-0 flex-1`) ellipsises when it
+  does not fit, and only then does hovering it (hover only, it is not focusable) open a tooltip
+  (`data-testid="balance-card-tooltip"`) with the exact value, `≈ ` included. An amount that fits
+  shows no tooltip.
+- **What fits.** The usable width is 268px (292px column minus `px-3`), i.e. 268 / 30 = 8.93em.
+  With Inter's approximate advances (tabular digit 0.63em; `.`, `,`, NBSP and space 0.28em; `-`
+  0.4em; `≈` 0.6em; `€` 0.62em; `$` 0.6em): "99.999.999,99 €" is 8.04em (241px, fits),
+  "-99.999.999,99 €" 8.44em (253px, fits), "≈ 99.999.999,99 €" 8.92em (268px, fits at the limit),
+  "≈ -99.999.999,99 €" 9.32em (280px, ellipsised), "≈ -100.000.000,00 €" 9.95em (299px,
+  ellipsised). So every amount under 100 million shows in full except an approximate **and**
+  negative one from about 10 million up; anything larger is ellipsised with the exact value in the
+  tooltip. The browser decides on the real glyphs, so an amount right at the limit may go either
+  way.
 - **Breakdown rows** ("Detalle de saldos por moneda", `balance-by-currency-<ISO>`) show the exact
   `formatCurrency` balance. The ISO label is `shrink-0`; the amount is a `TruncatedText`
   (`balance-by-currency-<ISO>-amount`, `min-w-0 flex-1 text-right`), so an amount that does not
   fit next to the label ellipsises and shows the exact value in a tooltip. One that fits shows no
   tooltip.
-- The exact value (`formatCurrency`, with `≈ ` when approximate) is in the amount's `title`, shown
-  on hover. The exact per-currency balances are in the breakdown card below. The formatting lives
-  in `AccountsSidebar/balanceDisplay.js` (`buildBalanceDisplay`).
-- While loading, the amount shows "—", with no `title` and no warning line.
+- The exact per-currency balances are in the breakdown card below the total.
+- While loading, the amount shows "—" (same 30px size), with no warning line.
 - Backward compatibility: an older backend that omits the new fields gets the first `byCurrency`
   ISO (or `EUR`), no `≈` and no warning. `useFinancialAccounts`'s empty summary carries the same
   neutral defaults (`totalBalanceCurrencyIso: null`, `totalBalanceApproximate: false`,
@@ -1261,43 +1260,43 @@ Tests:
   `testBuildSummaryZeroForeignSubtotal*` cases) and `testLookupRateDelegatesToFinancialUtils`.
 - Frontend:
   - `AccountsSidebar/__tests__/index.vitest.jsx`: total currency and fallbacks, `≈`, the
-    missing-rate line, the compact total, the tooltip.
-  - `AccountsSidebar/__tests__/balanceDisplay.vitest.js`: always-compact text, exact `title`,
-    shared typography, under the default currency-format config.
+    missing-rate line, the full total in `TruncatedText`, the info tooltip.
+  - `AccountsSidebar/__tests__/balanceDisplay.vitest.js`: full `formatCurrency` text with the
+    `≈ ` prefix and the fixed 30px typography, under the default currency-format config.
   - `AccountsSidebar/__tests__/balanceDisplay.symbolSide.vitest.js`: the same helper with a
-    realistic currency-format config loaded ("$2,50K" / "$2.500,00" for USD, EUR on the right).
-    It is a separate file so the loaded module-level config cannot leak into the default-config
-    tests.
-  - `lib/__tests__/dashboardValueTypography.test.js`: the shared 30/24/20px sizes, the dashboard
-    defaults (`DASHBOARD_VALUE_THRESHOLDS`, 10 / 12, frozen), the optional `thresholds` argument
-    with the sidebar's 15 / 19 shape, and the per-key fallback.
+    realistic currency-format config loaded ("$2.500,00" for USD, EUR on the right). It is a
+    separate file so the loaded module-level config cannot leak into the default-config tests.
+  - `lib/__tests__/dashboardValueTypography.test.js`: the dashboard's 30/24/20px length steps
+    (10 / 12 characters).
   - `components/dashboard/__tests__/financialSummaryCard-typography.test.js` (updated): it now
-    exercises the real shared `getDashboardValueTypography` instead of an inline copy, and checks
+    exercises the real `getDashboardValueTypography` (dashboard only) instead of an inline copy, and checks
     that `FinancialSummaryCard` imports it.
   - `hooks/__tests__/useFinancialAccounts.vitest.jsx`: the new fields pass through unchanged.
 - E2E: `e2e/tests/flows/finance/financial-accounts-page.mocked.spec.js` mocks the ETP-5580
   `summary` contract.
-  - `sidebar aggregate values match the summary sibling of response.data` asserts the compact
-    text (`273,85K €`), the exact value in `title` (`273.853,46 €`), and that no missing-rate
-    line appears.
+  - `sidebar aggregate values match the summary sibling of response.data` asserts the full
+    total (`273.853,46 €`) and that no missing-rate line appears.
   - The "Financial Accounts list — Saldo converted total (ETP-5580)" describe covers the
-    converted total, with `≈` in both the text and the `title` and an unconverted breakdown,
-    and the `balance-missing-rate` line for a currency without an exchange rate.
+    converted total, with `≈` and an unconverted breakdown, and the `balance-missing-rate` line
+    for a currency without an exchange rate.
 
 Known gaps and follow-ups (accepted, out of scope for ETP-5580):
 
-- **E2E for the ⓘ tooltip:** the E2E covers the compact total, `≈` and the missing-rate line, but
+- **E2E for the ⓘ tooltip:** the E2E covers the total, `≈` and the missing-rate line, but
   not the `balance-info-tooltip`. Vitest already covers it (`AccountsSidebar/__tests__/index.vitest.jsx`,
   "info tooltip"), so only the browser-level check is missing.
-- **Spanish "B" suffix:** `formatDashboardCompact` uses `K`/`M`/`B` with `B` = 10^9. In Spanish a
-  *billón* is 10^12, so "797,84B €" can be misread as a thousand times larger. For example,
-  "87.542,31B €" means 87,542 × 10^9, which is 87.5 trillion in English, or 87,5 *billones* in
-  Spanish usage. A Spanish reader can take it for 87.542 *billones* (about 8.75 × 10^16). The
-  dashboard has the same problem, since the formatter is shared, so the fix belongs in
-  `formatDashboardCompact` and covers both.
-- **Exact value only in `title`:** a hover `title` is not reachable on touch devices or by keyboard
-  focus, and screen readers do not announce it reliably. Those users see only the compact total.
-  The breakdown below still shows the exact per-currency balances, but not the converted total.
+- **Spanish "B" suffix (dashboard only):** `formatDashboardCompact` uses `K`/`M`/`B` with
+  `B` = 10^9. In Spanish a *billón* is 10^12, so "797,84B €" can be misread as a thousand times
+  larger. For example, "87.542,31B €" means 87,542 × 10^9, which is 87.5 trillion in English, or
+  87,5 *billones* in Spanish usage. A Spanish reader can take it for 87.542 *billones* (about
+  8.75 × 10^16). The Cuentas sidebar no longer compacts, so this now affects only the dashboard's
+  `FinancialSummaryCard`; the fix belongs in `formatDashboardCompact`.
+- **Clipped total only in a hover tooltip:** when the total ellipsises, its exact value is only in
+  the `TruncatedText` tooltip, which opens on **hover only**. The `TruncatedText` span has no
+  `tabIndex` and cannot take focus, so the exact value of a clipped total is not reachable by
+  touch or by keyboard. Those users see the ellipsised total. The breakdown below still shows the
+  exact per-currency balances, but not the converted total. The same applies to a clipped
+  breakdown row and to the list `BalanceCell`.
 - **Movement amounts clip without a tooltip:** in the account detail's movements table
   (`MovementsTable.jsx`), the Importe and Saldo cells render `MoneyAmount` as a bare inline amount.
   A huge value is clipped by the shared `TableCell` ellipsis, and nothing reveals the rest. The
@@ -1313,8 +1312,9 @@ Known gaps and follow-ups (accepted, out of scope for ETP-5580):
 redirects there) with active accounts in two currencies, e.g. EUR + USD under an EUR org:
 
 1. With a USD → EUR `C_Conversion_Rate` valid today on the login org or one of its ancestors, the
-   sidebar total is in EUR, shows "≈", and is compact. Hover it: the `title` shows the exact
-   value, which equals EUR + USD × rate. The breakdown still lists both currencies, exact and
+   sidebar total is in EUR, shows "≈", and is the full amount at 30px, which equals
+   EUR + USD × rate. With a converted total too large for the column (e.g. "≈ -100.000.000,00 €")
+   it ellipsises; hover it and the tooltip shows the exact value. The breakdown still lists both currencies, exact and
    unconverted.
 2. Delete or expire that rate and reload. The total now counts only the EUR accounts, without "≈",
    and the line "No incluye: USD (sin tasa de cambio)" appears under it. The list GET response
@@ -1541,8 +1541,8 @@ parameters are documented once, in the catalogue: `etendo_schema({spec:"bank-sta
 | File | Purpose |
 |------|---------|
 | `validateIban.js` (root `src/`) | `isValidIban(str)` — strips spaces, uppercases, rearranges, runs mod-97. Returns `true` for valid IBANs. Used by `AccountFormStep` to gate the submit button. |
-| `components/financial-accounts/AccountsSidebar/balanceDisplay.js` (ETP-5580) | `buildBalanceDisplay(currencyIso, total, { approximate, locale })` returns `{ text, title, style }` for the sidebar's "Saldo" total: `text` is always the dashboard's compact notation (`formatDashboardCompact`), with `≈ ` when approximate; `title` is the exact `formatCurrency` value (same prefix); `style` is the font size/line height from the shared `getDashboardValueTypography` (`lib/dashboardValueTypography.js`) called with the sidebar's own `SIDEBAR_BALANCE_THRESHOLDS` (`{ mediumFrom: 15, smallFrom: 19 }`) and measured on the full displayed string, prefix included. The file's header comment carries the glyph-width math. See "List summary — `response.summary` and its currency" above. |
-| `lib/dashboardValueTypography.js` (ETP-5580) | `getDashboardValueTypography(value, thresholds?)` returns the inline `{ fontSize, lineHeight }` for a headline amount already in compact notation, measured on the string without a leading `-`: `smallFrom`+ characters → 20px/24px, `mediumFrom`+ → 24px/28px, otherwise 30px/32px. `thresholds` is optional and defaults to `DASHBOARD_VALUE_THRESHOLDS` (`{ mediumFrom: 10, smallFrom: 12 }`); a missing key falls back to its default. The dashboard's `FinancialSummaryCard` (which had the same rule inline as `getMetricValueTypography`) uses the defaults; the Cuentas "Saldo" total passes its own, wider cutoffs because its column is much wider than a dashboard KPI cell. The three sizes are shared. It is a separate module rather than part of `dashboardNumberFormat.js`, so tests that mock the formatter module still get the real rule. |
+| `components/financial-accounts/AccountsSidebar/balanceDisplay.js` (ETP-5580) | `buildBalanceDisplay(currencyIso, total, { approximate })` returns `{ text, style }` for the sidebar's "Saldo" total: `text` is the full `formatCurrency` value, with `≈ ` when approximate (no compact notation); `style` is the fixed `BALANCE_TYPOGRAPHY` (`{ fontSize: '30px', lineHeight: '32px' }`). `text` is both what is displayed and what the `TruncatedText` overflow tooltip shows. The file's header comment carries the glyph-width math for what fits in 268px at 30px. See "List summary — `response.summary` and its currency" above. |
+| `lib/dashboardValueTypography.js` (ETP-5580) | `getDashboardValueTypography(value)` returns the inline `{ fontSize, lineHeight }` for a dashboard headline amount already in compact notation, measured on the string without a leading `-`: 12+ characters → 20px/24px, 10+ → 24px/28px, otherwise 30px/32px. Used by the dashboard's `FinancialSummaryCard` (which had the same rule inline as `getMetricValueTypography`). The Cuentas "Saldo" total does not use it: it is fixed at 30px and ellipsises instead. It is a separate module rather than part of `dashboardNumberFormat.js`, so tests that mock the formatter module still get the real rule. |
 | `countryIban.js` (root `src/lib/`, ETP-4896) | `validateIbanForCountry(iban, country)` — layers a country-aware prefix/length cross-check on top of `isValidIban`, degrading gracefully (mod-97 only) for the ~198 countries with no IBAN metadata. `ibanPrefixFor`/`expectedIbanLength` read a `countryIbanRules` catalog entry (`{id, iso, name, ibanPrefix, ibanLength}`). Used by both `AccountFormStep` and `EditAccountModal`. |
 
 ## i18n keys — account management
@@ -1608,8 +1608,8 @@ financeAccountsMenuArchive           "Archive account"
 - **Cuentas "Saldo" total and large amounts** (ETP-5580): five follow-ups are listed under "List
   summary — `response.summary` and its currency" → "Known gaps and follow-ups":
   - an E2E check for the ⓘ tooltip (vitest already covers it);
-  - the ambiguous Spanish "B" suffix of `formatDashboardCompact` (shared with the dashboard);
-  - the exact total being reachable only through the hover `title`;
+  - the ambiguous Spanish "B" suffix of `formatDashboardCompact` (now dashboard only);
+  - a clipped total being reachable only through the hover tooltip (not by touch or keyboard);
   - `MoneyAmount` clipping with no tooltip in the movements table (Importe/Saldo);
   - the account-detail KPI strip overflowing with huge values.
 - **Bank connection / Connected mode** (T3): connection toggle is visible but both the "Connected" option and the Bank connection section in the edit modal are disabled.

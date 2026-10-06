@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/components/dashboard/FinancialSummaryCard.jsx
+// @covers tools/app-shell/src/lib/dashboardValueTypography.js
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -5,11 +7,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDashboardValueTypography } from '../../../lib/dashboardValueTypography.js';
 
-// FinancialSummaryCard sizes each KPI value with the shared `getDashboardValueTypography`
-// (`lib/dashboardValueTypography.js`, also used by the Financial Accounts "Saldo" total,
-// ETP-5580). These tests exercise the REAL shared function, so a change to the dashboard
-// thresholds is caught here. Three tiers: default 30px, medium ≥10 chars → 24px,
-// long ≥12 chars → 20px.
+// FinancialSummaryCard sizes each KPI value with `getDashboardValueTypography`
+// (`lib/dashboardValueTypography.js`). Only the dashboard uses it: the Financial Accounts
+// "Saldo" total is fixed at 30px and ellipsises instead (ETP-5580). These tests exercise the
+// REAL function, so a change to the dashboard thresholds is caught here. Three tiers:
+// default 30px, medium ≥10 chars → 24px, long ≥12 chars → 20px.
 //
 // Example values below use the ETP-4314 output shape (es-ES separators, currency
 // symbol after the amount, e.g. "1.234,56 €") rather than the old literal ISO

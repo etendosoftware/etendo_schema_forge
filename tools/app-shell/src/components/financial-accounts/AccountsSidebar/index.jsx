@@ -1,6 +1,5 @@
 import { Info, Check } from 'lucide-react';
-import { useUI, useLocaleSwitch } from '@/i18n';
-import { localeFromUi } from '@/lib/dashboardNumberFormat.js';
+import { useUI } from '@/i18n';
 import { formatCurrency } from '@/lib/formatCurrency.js';
 import {
   Tooltip,
@@ -9,20 +8,19 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { TruncatedText } from '@/components/ui/truncated-text.jsx';
-import { getDashboardValueTypography } from '@/lib/dashboardValueTypography.js';
-import { buildBalanceDisplay, SIDEBAR_BALANCE_THRESHOLDS } from './balanceDisplay.js';
+import { buildBalanceDisplay } from './balanceDisplay.js';
 
 /**
  * Cuentas sidebar — single column matching Figma frame `3012:25602`.
  *
  * Layout (top → bottom):
  *   1. Header — "Saldo" + info icon, sync pill underneath.
- *   2. Big balance number (30 / 32 / medium) — the total converted to the
- *      organization currency (ETP-5580): `≈` when a conversion was applied, a
- *      warning for currencies with no exchange rate. Always in the dashboard's
- *      compact K/M/B notation, sized by the dashboard's helper with the
- *      sidebar's own cutoffs (30px for every realistic total); the exact value
- *      is in the hover title (see `balanceDisplay.js`).
+ *   2. Big balance number (30 / 32 / medium, fixed) — the total converted to
+ *      the organization currency (ETP-5580): `≈` when a conversion was applied,
+ *      a warning for currencies with no exchange rate. Always the full amount
+ *      (`formatCurrency`, no K/M/B); it never shrinks. When it does not fit it
+ *      ellipsises and reveals the exact value in a tooltip (TruncatedText, see
+ *      `balanceDisplay.js`).
  *   3. Currency breakdown card (gray, rounded). Each row shows the exact
  *      balance; when it does not fit next to the ISO label it ellipsises and
  *      reveals the full amount in a tooltip (TruncatedText).
@@ -139,13 +137,8 @@ function BalanceInfoButton({ ui }) {
   );
 }
 
-const LOADING_TYPOGRAPHY = getDashboardValueTypography('—', SIDEBAR_BALANCE_THRESHOLDS);
-
 export function AccountsSidebar({ summary, loading }) {
   const ui = useUI();
-  // Same number-locale resolution as the dashboard's FinancialSummaryCard.
-  const { locale } = useLocaleSwitch();
-  const numberLocale = localeFromUi(locale);
   // ETP-5580: the total is converted server-side to the organization currency, so its
   // ISO comes from `totalBalanceCurrencyIso`. Older backends do not send it — fall back
   // to the first breakdown row as before. `||` (not `??`) so an empty string is treated
@@ -161,7 +154,6 @@ export function AccountsSidebar({ summary, loading }) {
     : [];
   const balance = buildBalanceDisplay(primaryIso, totalBalance, {
     approximate: summary?.totalBalanceApproximate === true,
-    locale: numberLocale,
   });
 
   return (
@@ -179,15 +171,18 @@ export function AccountsSidebar({ summary, loading }) {
         <SyncPill ui={ui} data-testid="SyncPill__5d6a4a" />
       </header>
       <div className="flex flex-col px-3">
-        <div className="flex min-w-0 items-center" style={{ minHeight: 32 }}>
-          <span
-            className="min-w-0 whitespace-nowrap font-medium text-[hsl(var(--foreground))] tabular-nums"
-            style={loading ? LOADING_TYPOGRAPHY : balance.style}
-            title={loading ? undefined : balance.title}
-            data-testid="balance-card"
-          >
-            {loading ? '—' : balance.text}
-          </span>
+        {/* The row carries the fixed 30px size (inherited by the amount) and bounds the
+            width; the amount (`min-w-0 flex-1`) ellipsises when it does not fit and
+            TruncatedText then shows the exact value in a tooltip. */}
+        <div
+          className="flex min-w-0 items-center"
+          style={{ minHeight: 32, ...balance.style }}
+          data-testid="balance-total"
+        >
+          <TruncatedText
+            text={loading ? '—' : balance.text}
+            className="min-w-0 flex-1 font-medium text-[hsl(var(--foreground))] tabular-nums"
+            data-testid="balance-card" />
         </div>
         {!loading && missingRateCurrencies.length > 0 ? (
           <p
