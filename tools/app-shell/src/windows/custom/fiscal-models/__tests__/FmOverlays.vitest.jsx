@@ -36,6 +36,8 @@ vi.mock('@/windows/custom/shared/CheckboxField.jsx', () => ({
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 
 import { PresentModal, FileGenModal, NewDeclModal } from '../FmOverlays.jsx';
+import { toast } from 'sonner';
+import { RECEIPT_ATTACHMENT_CONFIG } from '../fiscalModelsUtils.js';
 
 // ── PresentModal ──────────────────────────────────────────────────────────────
 
@@ -171,7 +173,10 @@ describe('PresentModal — two-column layout', () => {
 
   it('renders the "Registrar presentación" left column with both manual paths, regardless of showAeatPath', () => {
     render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
-    expect(document.body.textContent).toContain('fm.present.register_section.title');
+    // ETP-5584 P14 — single column (349): the popup title already says "Registrar
+    // presentación", so the column heading is not repeated; its description stays.
+    expect(document.body.textContent).not.toContain('fm.present.register_section.title');
+    expect(screen.queryByTestId('PresentModal__columnHeading')).not.toBeInTheDocument();
     expect(document.body.textContent).toContain('fm.present.register_section.desc');
     expect(document.body.textContent).toContain('fm.present.path.acuse');
     expect(document.body.textContent).toContain('fm.present.path.sin_acuse');
@@ -263,6 +268,65 @@ describe('PresentModal — two-column layout', () => {
   it('falls back to the generic subtitle when decl is entirely missing', () => {
     render(<PresentModal onConfirm={vi.fn()} onClose={vi.fn()} />);
     expect(document.body.textContent).toContain('fm.present.subtitle');
+  });
+});
+
+// ── PresentModal — title per variant (ETP-5584 P14) ─────────────────────────
+// 349 has no telematic submission in the backend (no `submit` entity in
+// Fiscal349BoxesHandler), so without `showAeatPath` the popup only registers a
+// presentation and must not be titled "Registrar/Presentar".
+describe('PresentModal — title matches what the popup can do (ETP-5584 P14)', () => {
+  const decl = { id: 'decl-1', model: '349', year: 2026, period: 'T4' };
+
+  it('is titled "Registrar presentación" (register-only key) without the AEAT path', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('PresentModal__title')).toHaveTextContent('fm.present.title_register_only');
+  });
+
+  it('keeps the "Registrar/Presentar" title and both column headings with the AEAT path (303)', () => {
+    render(<PresentModal decl={{ ...decl, model: '303' }} onConfirm={vi.fn()} onClose={vi.fn()} showAeatPath />);
+    expect(screen.getByTestId('PresentModal__title').textContent).toBe('fm.present.title');
+    expect(screen.getAllByTestId('PresentModal__columnHeading')).toHaveLength(2);
+  });
+});
+
+// ── PresentModal — justificante formats (ETP-5584 P13) ─────────────────────
+// The upload label, the input's `accept` and the picked-file check all derive from
+// RECEIPT_ATTACHMENT_CONFIG — the same constant the "Justificante" tab gets.
+describe('PresentModal — justificante formats come from RECEIPT_ATTACHMENT_CONFIG (ETP-5584 P13)', () => {
+  const decl = { id: 'decl-1', model: '349', year: 2026, period: 'T4' };
+  const pickAcuse = () => fireEvent.click(document.querySelectorAll('[style*="cursor: pointer"]')[0]);
+
+  it('derives the upload label and the accept attribute from the shared constant', () => {
+    render(<PresentModal decl={decl} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    pickAcuse();
+    expect(RECEIPT_ATTACHMENT_CONFIG.allowedMimeTypes).toEqual(['application/pdf']);
+    expect(screen.getByTestId('PresentModal__acuseInput')).toHaveAttribute('accept', 'application/pdf,.pdf');
+    // Label key gets the formats as a {types} param (no hardcoded "PDF/XML" any more).
+    expect(screen.getByTestId('PresentModal__acuseUpload').textContent).toContain('fm.present.upload_acuse');
+    expect(screen.getByTestId('PresentModal__acuseUpload').textContent).not.toMatch(/XML/);
+  });
+
+  it('rejects a file outside the constant (XML) and keeps Confirm disabled', () => {
+    const onConfirm = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={vi.fn()} />);
+    pickAcuse();
+    const xml = new File(['<r/>'], 'acuse.xml', { type: 'application/xml' });
+    fireEvent.change(screen.getByTestId('PresentModal__acuseInput'), { target: { files: [xml] } });
+    expect(toast.error).toHaveBeenCalledWith('attachmentsInvalidType');
+    expect(screen.queryByText('acuse.xml')).not.toBeInTheDocument();
+    const confirm = screen.getByText('fm.action.confirm_presentation').closest('button');
+    expect(confirm).toBeDisabled();
+  });
+
+  it('accepts a PDF whose browser MIME type is empty, through the extension fallback', () => {
+    const onConfirm = vi.fn();
+    render(<PresentModal decl={decl} onConfirm={onConfirm} onClose={vi.fn()} />);
+    pickAcuse();
+    const pdf = new File(['%PDF'], 'acuse.pdf', { type: '' });
+    fireEvent.change(screen.getByTestId('PresentModal__acuseInput'), { target: { files: [pdf] } });
+    fireEvent.click(screen.getByText('fm.action.confirm_presentation').closest('button'));
+    expect(onConfirm).toHaveBeenCalledWith({ status: 'submitted_ack', acuseFile: pdf });
   });
 });
 

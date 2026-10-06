@@ -25,7 +25,10 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
-vi.mock('../../../fiscalModelsUtils.js', () => ({
+// RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
+// Justificante tab and PresentModal derives its upload label/accept/type check from it.
+vi.mock('../../../fiscalModelsUtils.js', async () => ({
+  RECEIPT_ATTACHMENT_CONFIG: (await vi.importActual('../../../fiscalModelsUtils.js')).RECEIPT_ATTACHMENT_CONFIG,
   formatAmount: (n) => (n == null ? '—' : String(n)),
   formatPeriod: (p) => p,
   compute349Operators: vi.fn().mockResolvedValue(null),
@@ -56,8 +59,8 @@ vi.mock('../../../fiscal-models.css', () => ({}));
 // Real icons are cheap, side-effect-free SVG components — safe to render as-is.
 
 // Real PresentModal from FmOverlays.jsx is used unmocked in one describe block
-// below (MIME-gap trace) so the real file-picker `accept` attribute can be
-// inspected; every other test mocks it the same way the sibling suite does.
+// below (acuse file type, ETP-5584 P13) so the real file-picker `accept` and type
+// check can be exercised; every other test mocks it the same way the sibling suite does.
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
 }));
@@ -208,40 +211,45 @@ describe('FmModel349Page — rapid tab switching against the real hook', () => {
   });
 });
 
-describe('FmModel349Page — real PresentModal: acuse-de-recibo MIME-type gap (pre-existing, inherited from 303)', () => {
-  // Uses the REAL PresentModal from FmOverlays.jsx (not mocked in this file),
-  // so the modal's own `accept=".pdf,.xml"` file-input attribute is exercised,
-  // and the real handlePresent -> uploadReceipt -> useAttachments.upload() path
-  // runs against a mocked fetch. Neither layer validates the file's actual
-  // MIME type — this mirrors FmModel303Page's identical handlePresent wiring
-  // (same lack of validation there too), so this is NOT a new-to-349 regression,
-  // just confirmation that 349 replicates the same gap verbatim.
-  it("uploads a non-PDF file selected through the modal's own file input with no MIME check", async () => {
-    render(<FmModel349Page decl={makeDecl({ id: 'decl-mime' })} {...defaultProps} />);
-
-    const presentBtn = screen.getByText((t) => t.includes('fm.action.present'));
-    fireEvent.click(presentBtn);
-
-    // Select the "Presentación con Acuse de recibo" path (first PATHS entry).
+describe('FmModel349Page — real PresentModal: acuse file type matches the Justificante tab (ETP-5584 P13)', () => {
+  // Uses the REAL PresentModal from FmOverlays.jsx (not mocked in this file) and the real
+  // handlePresent -> uploadReceipt -> useAttachments.upload() path against a mocked fetch.
+  // Until ETP-5584 this pinned a gap: the modal's input accepted `.pdf,.xml` and uploaded
+  // whatever was picked, while the tab's dropzone only took PDF. Both now derive from
+  // RECEIPT_ATTACHMENT_CONFIG, and the modal checks the picked file against it.
+  function openAcusePath(declId) {
+    render(<FmModel349Page decl={makeDecl({ id: declId })} {...defaultProps} />);
+    fireEvent.click(screen.getByText((t) => t.includes('fm.action.present')));
     fireEvent.click(screen.getByText('fm.present.path.acuse'));
+    return screen.getByTestId('PresentModal__acuseInput');
+  }
 
-    // The modal's own <input type="file" accept=".pdf,.xml"> — note it already
-    // allows .xml, not just PDF, despite AttachmentsTab's own dropzone being
-    // configured with allowedMimeTypes: ['application/pdf'] for this same table.
-    const fileInput = document.querySelector('input[type="file"][accept=".pdf,.xml"]');
-    expect(fileInput).not.toBeNull();
+  it('the file input accepts exactly what the tab accepts (PDF)', () => {
+    const fileInput = openAcusePath('decl-accept');
+    expect(fileInput).toHaveAttribute('accept', 'application/pdf,.pdf');
+  });
 
+  it('rejects an XML picked via "All files": no upload, confirm stays disabled, dropzone message shown', async () => {
+    const fileInput = openAcusePath('decl-mime');
     const xmlFile = new File(['<root/>'], 'acuse.xml', { type: 'application/xml' });
     fireEvent.change(fileInput, { target: { files: [xmlFile] } });
 
-    const confirmBtn = screen.getByText((t) => t.includes('fm.action.confirm_presentation') || t.includes('Confirmar'));
+    expect(toast.error).toHaveBeenCalledWith('attachmentsInvalidType');
+    const confirmBtn = screen.getByText((t) => t.includes('fm.action.confirm_presentation'));
+    expect(confirmBtn.closest('button')).toBeDisabled();
     fireEvent.click(confirmBtn);
-
-    // useAttachments.upload() does no MIME validation whatsoever (unlike
-    // UploadDropzone's isMimeAllowed check) — the POST goes out regardless.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     const postCall = globalThis.fetch.mock.calls.find((c) => c[1]?.method === 'POST');
-    expect(postCall).toBeDefined();
-    expect(postCall[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-mime');
+    expect(postCall).toBeUndefined();
+  });
+
+  it('uploads a PDF picked through the modal to the declaration attachments', async () => {
+    const fileInput = openAcusePath('decl-pdf');
+    const pdf = new File(['%PDF-1.4'], 'acuse.pdf', { type: 'application/pdf' });
+    fireEvent.change(fileInput, { target: { files: [pdf] } });
+    fireEvent.click(screen.getByText((t) => t.includes('fm.action.confirm_presentation')));
+    await waitFor(() => {
+      const postCall = globalThis.fetch.mock.calls.find((c) => c[1]?.method === 'POST');
+      expect(postCall?.[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-pdf');
+    });
   });
 });

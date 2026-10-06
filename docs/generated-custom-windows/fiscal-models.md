@@ -2389,7 +2389,7 @@ space reserved from the start:
 
 | Popup | Revealed by | How the space is reserved |
 |---|---|---|
-| `PresentModal` | "Con acuse de recibo" → "Subir justificante (PDF/XML)" row | While the row is hidden, `PresentModalColumn` renders an empty `.fm-present-acuse-slot` after the card stack. The row (`.fm-present-acuse-upload`) and the slot take their height from the same CSS variables (`--fm-acuse-upload-h` + `--fm-acuse-upload-gap`), so one replaces the other with no change in height. The upload button never wraps: a long file name is ellipsized, and the full name is in its `title`. |
+| `PresentModal` | "Con acuse de recibo" → "Subir justificante (PDF)" row | While the row is hidden, `PresentModalColumn` renders an empty `.fm-present-acuse-slot` after the card stack. The row (`.fm-present-acuse-upload`) and the slot take their height from the same CSS variables (`--fm-acuse-upload-h` + `--fm-acuse-upload-gap`), so one replaces the other with no change in height. The upload button never wraps: a long file name is ellipsized, and the full name is in its `title`. |
 | `AeatSubmitFlow` | "Validar sin presentar" → test-mode warning | The warning banner is always laid out inside `.fm-aeat-testmode-slot` and only its `visibility` toggles (`--visible` modifier). `visibility: hidden` keeps the banner's real box, so the reserved space always matches it, in any locale. The slot is `aria-hidden` while unchecked. |
 
 Not covered by the rule: the red `connError` banner in `AeatSubmitFlow` (IBAN/NRC required,
@@ -2422,8 +2422,50 @@ are filled. The footer stays fully visible in every case.
 (`defaultValue`), as the native ones were, because these options are not persisted yet. The dead
 `CfgSection303` (never rendered) was deleted.
 
+**Justificante formats — one constant (ETP-5584 P13).** `RECEIPT_ATTACHMENT_CONFIG`
+(`fiscalModelsUtils.js`, `{ allowedMimeTypes: ['application/pdf'], allowedExtensions: ['pdf'] }`)
+is the only list of formats for a declaration's justificante. Every place that states or
+enforces them derives from it:
+
+| Where | Derived how |
+|---|---|
+| "Justificante" tab, 303 and 349 (`AttachmentsTab config=`) | Dropzone filter and the "Formatos compatibles: …" text (`buildTypesLabel` inside `AttachmentsTab`) |
+| `PresentModal` "Subir justificante ({types})" button | `fm.present.upload_acuse` now takes a `{types}` param, filled with `buildTypesLabel(RECEIPT_ATTACHMENT_CONFIG, t)` |
+| `PresentModal` file input `accept` | `buildAcceptAttribute(RECEIPT_ATTACHMENT_CONFIG)` → `application/pdf,.pdf` |
+| `PresentModal` picked file | `isFileTypeAllowed(file, RECEIPT_ATTACHMENT_CONFIG)`. `accept` alone is only a hint the "All files" picker option bypasses, so a rejected file shows the dropzone's own `attachmentsInvalidType` toast and is never kept (Confirmar stays disabled, nothing is uploaded). |
+
+Before this, the popup said "PDF/XML", accepted `.pdf,.xml` and uploaded whatever was picked,
+while the tab said "PDF".
+- **Why PDF:** the AEAT justificante is a PDF. The telematic flow stores AEAT's own
+  `pdfBase64`, and ETP-4456 restricted the tab to PDF on purpose. The "Con acuse" card already
+  said "Sube el justificante PDF".
+- **What the backend accepts:** the backend attachment policy (`NeoAttachmentPolicy`,
+  `GET /sws/neo/attachments/config`) accepts XML too, for every attachment. So it still rejects
+  only what is outside its own list, and the client-side check is not a security control.
+- **How to change the list:** adding a format means adding it to the constant, which updates the
+  tab, the label, `accept` and the check together. The tab only lists and downloads files (no
+  preview), so it can show any format the backend stores.
+
+**349 popup is "Registrar presentación" (ETP-5584 P14).** Modelo 349 has no telematic
+submission:
+- `Fiscal349BoxesHandler#dispatch` has no `submit` entity.
+- There is no `AEAT349SubmissionService`.
+- `org.openbravo.module.aeat349.es` only generates the file.
+- See "Modelo 349 has no telematic submission path" above.
+
+`FmModel349Page` never passes `showAeatPath`. Without it, the popup:
+- is titled `fm.present.title_register_only` ("Registrar presentación" / "Register submission");
+- drops its single column's heading, which would only repeat the title (the description stays).
+
+The 349 trigger button uses `fm.action.present`, which no other screen uses. Its value changed
+from "Registrar/Presentar" to "Registrar presentación" in `en_US`, `es_ES` and `es_AR`, with no
+JSX change. The 303 trigger (`fm.action.submit`) and title (`fm.present.title`) keep
+"Registrar/Presentar", because 303 does offer the AEAT path.
+
 Tests: `__tests__/FmOverlays.vitest.jsx` ("PresentModal — stable size when an option is
-picked", two-column width variant), `__tests__/FmOverlays.coverage.vitest.jsx` (ConfigDrawer: no
+picked", two-column width variant, title per variant, justificante formats),
+`models/349/__tests__/FmModel349Page.receiptTab.realAttachments.vitest.jsx` (real modal + real
+upload: `accept`, XML rejected with no POST, PDF uploaded), `__tests__/FmOverlays.coverage.vitest.jsx` (ConfigDrawer: no
 native `<select>`), and `models/303/__tests__/AeatSubmitFlow.vitest.jsx` (test-mode slot,
 full-width shared `Input`). jsdom has no layout, so these tests check that the slot and the
 revealed content swap places. That the height stays the same was checked in a real browser.
@@ -2473,7 +2515,7 @@ item's split-and-revert) was deleted from both locale files rather than left dan
 A tab (`receipt`, labeled via `fm.tab.receipt`) is the last of the 5 tabs, positioned right after
 Files (the former Historial tab that used to sit here was removed, see "Tabs" above), and shows a
 generic `AttachmentsTab` (`@/components/attachments`) bound to `tableName="ETGO_Fiscal_Decl"` /
-`recordId={decl.id}`, restricted to `allowedMimeTypes: ['application/pdf']`. It surfaces **both**
+`recordId={decl.id}`, restricted to PDF through `RECEIPT_ATTACHMENT_CONFIG` (`fiscalModelsUtils.js`, ETP-5584 — see "Justificante formats" under "Popups" below). It surfaces **both**
 kinds of AEAT justificante a declaration can end up with:
 
 - **Automatic** — on a successful telematic submission (`AeatSubmitFlow`), AEAT returns the

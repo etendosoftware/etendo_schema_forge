@@ -7,7 +7,8 @@ import { neoBase } from '@/components/related-documents/helpers.js';
 import { FileText, Landmark, OctagonAlert, TriangleAlert, X, Check, ChevronDown, Search } from 'lucide-react';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { formatPeriod, showIaeActivityReminder } from './fiscalModelsUtils.js';
+import { formatPeriod, showIaeActivityReminder, RECEIPT_ATTACHMENT_CONFIG } from './fiscalModelsUtils.js';
+import { buildAcceptAttribute, buildTypesLabel, isFileTypeAllowed } from '@/components/attachments/attachmentPolicy.js';
 import './fiscal-models.css';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
@@ -67,12 +68,15 @@ function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fi
               title={acuseFile ? acuseFile.name : undefined}
               onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
             >
-              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse')}
+              {acuseFile ? acuseFile.name : t('fm.present.upload_acuse', { types: buildTypesLabel(RECEIPT_ATTACHMENT_CONFIG, t) })}
             </button>
+            {/* ETP-5584 P13 — label and `accept` derive from the same constant as the
+                "Justificante" tab, so the three can never disagree again. */}
             <input
               ref={fileRef}
               type="file"
-              accept=".pdf,.xml"
+              accept={buildAcceptAttribute(RECEIPT_ATTACHMENT_CONFIG)}
+              data-testid="PresentModal__acuseInput"
               style={{ display: 'none' }}
               onChange={onPickFile}
             />
@@ -102,14 +106,20 @@ function PresentOptionCard({ p, selected, onSelect, t, acuseFile, onPickFile, fi
 // column — and therefore the modal — is always as tall as its expanded state.
 // The slot sits after the card stack (outside its flex gap) so the reserved height
 // is identical to what the upload row adds, independently of the locale.
-function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef }) {
+//
+// `showHeading` (ETP-5584 P14): the single-column variant (349) is already titled
+// "Registrar presentación", so repeating it as the column heading is dropped there; the
+// column description stays.
+function PresentModalColumn({ icon, titleKey, descKey, paths, path, setPath, t, acuseFile, onPickFile, fileRef, showHeading = true }) {
   const reservesAcuseSlot = paths.some(p => p.id === 'submitted_ack') && path !== 'submitted_ack';
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
-      </div>
+      {showHeading && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }} data-testid="PresentModal__columnHeading">
+          <span style={{ color: 'hsl(var(--text-disabled))', display: 'flex' }}>{icon}</span>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'hsl(var(--foreground))' }}>{t(titleKey)}</div>
+        </div>
+      )}
       <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', lineHeight: '16px', marginBottom: 12 }}>
         {t(descKey)}
       </div>
@@ -173,7 +183,20 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
     onClose();
   }
 
-  const onPickFile = (e) => setAcuseFile(e.target.files?.[0] ?? null);
+  // ETP-5584 P13 — `accept` only steers the OS picker ("All files" bypasses it), so the
+  // picked file is checked against the same RECEIPT_ATTACHMENT_CONFIG the "Justificante"
+  // tab's dropzone enforces, with the dropzone's own message. A rejected file is never
+  // kept, so "Confirmar" stays disabled and nothing is uploaded.
+  const onPickFile = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    if (file && !isFileTypeAllowed(file, RECEIPT_ATTACHMENT_CONFIG)) {
+      toast.error(t('attachmentsInvalidType'));
+      e.target.value = '';
+      setAcuseFile(null);
+      return;
+    }
+    setAcuseFile(file);
+  };
 
   const REGISTER_PATHS = [
     { id: 'submitted_ack', titleKey: 'fm.present.path.acuse',     descKey: 'fm.present.path.acuse_desc' },
@@ -202,7 +225,11 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
         {/* Header */}
         <div className="fm-config-modal__header">
           <div className="fm-config-modal__titles">
-            <div className="fm-config-modal__title">{t('fm.present.title')}</div>
+            {/* ETP-5584 P14 — without the AEAT path (349: no telematic submission in the
+                backend) the popup only registers a presentation, so it says so. */}
+            <div className="fm-config-modal__title" data-testid="PresentModal__title">
+              {showAeatPath ? t('fm.present.title') : t('fm.present.title_register_only')}
+            </div>
             <div className="fm-config-modal__sub">{subtitle}</div>
           </div>
           <button className="fm-config-modal__close" onClick={onClose} aria-label={t('fm.action.close')}>✕</button>
@@ -223,6 +250,7 @@ export function PresentModal({ decl, onConfirm, onClose, showAeatPath }) {
             acuseFile={acuseFile}
             onPickFile={onPickFile}
             fileRef={fileRef}
+            showHeading={!!showAeatPath}
             data-testid="PresentModalColumn__cda0bb" />
 
           {showAeatPath && (

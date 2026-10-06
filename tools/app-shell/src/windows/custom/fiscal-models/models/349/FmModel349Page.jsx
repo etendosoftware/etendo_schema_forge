@@ -12,7 +12,7 @@ import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmD
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
-import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData } from '../../fiscalModelsUtils.js';
+import { formatAmount, compute349Operators, generate349File, validate349Vies, persistManualData, RECEIPT_ATTACHMENT_CONFIG } from '../../fiscalModelsUtils.js';
 import { invalidateFiscalComputeCache, getCachedFiscalCompute, setCachedFiscalCompute } from '../../useFiscalAutoCompute.js';
 import { AttachmentsTab, useAttachments } from '@/components/attachments';
 import '../../fiscal-models.css';
@@ -684,7 +684,7 @@ function DetailTabContent({
           token={token}
           apiBaseUrl={apiBaseUrl}
           isActive={activeTab === 'receipt'}
-          config={{ allowedMimeTypes: ['application/pdf'] }}
+          config={RECEIPT_ATTACHMENT_CONFIG}
           // ETP-5432 pt.3 — the justificante must only be deletable while the
           // declaration is still a draft, same rule `FmRowActions`' own delete
           // action already enforces for the declaration record itself.

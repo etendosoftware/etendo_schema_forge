@@ -22,6 +22,7 @@ import {
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
   clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder, buildValidatedBoxValue,
+  RECEIPT_ATTACHMENT_CONFIG,
 } from '../../fiscalModelsUtils.js';
 import { getCachedFiscalCompute, setCachedFiscalCompute, invalidateFiscalComputeCache } from '../../useFiscalAutoCompute.js';
 import { useRecordWriteQueue } from '@/hooks/useRecordWriteQueue.js';
@@ -1646,7 +1647,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
                 token={token}
                 apiBaseUrl={apiBaseUrl}
                 isActive={activeTab === 'receipt'}
-                config={{ allowedMimeTypes: ['application/pdf'] }}
+                config={RECEIPT_ATTACHMENT_CONFIG}
                 // ETP-5432 pt.3 — the justificante must only be deletable while the
                 // declaration is still a draft, same rule `FmRowActions`' own delete
                 // action already enforces for the declaration record itself.

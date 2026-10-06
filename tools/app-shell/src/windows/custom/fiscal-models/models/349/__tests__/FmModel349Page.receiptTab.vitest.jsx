@@ -18,7 +18,10 @@ vi.mock('@/i18n', () => ({
   useUI: () => (key) => key,
   useLocaleSwitch: () => ({ locale: 'es_ES' }),
 }));
-vi.mock('../../../fiscalModelsUtils.js', () => ({
+// RECEIPT_ATTACHMENT_CONFIG is the REAL constant (ETP-5584 P13): the page passes it to the
+// Justificante tab and PresentModal derives its upload label/accept/type check from it.
+vi.mock('../../../fiscalModelsUtils.js', async () => ({
+  RECEIPT_ATTACHMENT_CONFIG: (await vi.importActual('../../../fiscalModelsUtils.js')).RECEIPT_ATTACHMENT_CONFIG,
   formatAmount: (n) => (n == null ? '—' : String(n)),
   compute349Operators: vi.fn().mockResolvedValue(null),
   generate349File: vi.fn().mockResolvedValue(false),
