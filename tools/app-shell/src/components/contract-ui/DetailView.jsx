@@ -6,16 +6,8 @@ import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge } from '@/components/ui/badge.jsx';
 import { AddLineButton } from '@/components/ui/add-line-button.jsx';
-import { X, Check, Save, List, Printer, Mail, Trash2, Loader2, Shield, Lock, Undo2 } from 'lucide-react';
-import { AttachmentIcon } from '@/components/attachments/AttachmentIcon';
-import { PricingIcon, WarehouseProductsIcon } from '@/components/ui/custom-icons';
-
-const TAB_ICONS = {
-  'custom:attachments': AttachmentIcon,
-  'custom:sif': Shield,
-  'custom:pricing': PricingIcon,
-  'products': WarehouseProductsIcon,
-};
+import { X, Check, Save, Printer, Mail, Trash2, Loader2, Lock, Undo2 } from 'lucide-react';
+import { resolveTabIcon } from './tabIcons.js';
 
 function TabStripButton({
   iconKey, label, count, isActive, onClick,
@@ -31,7 +23,7 @@ function TabStripButton({
         isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       ].join(' ')}
     >
-      {React.createElement(TAB_ICONS[iconKey] ?? List, { className: 'h-4 w-4' })}
+      {React.createElement(resolveTabIcon(iconKey), { className: 'h-4 w-4' })}
       {tMenu(label)}
       {count != null && (
         <span className="inline-flex items-center justify-center h-5 min-w-[1.25rem] px-1 text-xs rounded-full bg-muted text-muted-foreground">
@@ -1176,6 +1168,7 @@ export function DetailView({
   // (the return windows put a Confirm button in the topbarRight slot). Save then takes
   // the secondary/outline look instead of competing as a second primary button.
   hasExternalPrimaryAction = false,
+  primarySave = false, // ETP-5600: existing-record Save keeps the primary look (see saveActions.jsx)
   statusFieldLabel = null,
   statusEnumLabels = null,
   salesTheme = false,
@@ -2877,7 +2870,7 @@ export function DetailView({
     hook, isDirty, flushPendingLines, data, isNew, navigate, windowName,
     ui, tMenu, onAfterCreate, onAfterExistingSave, onAfterSave, token, apiBaseUrl, saveBtnCls, saveBusy,
     isDocumentReadOnly, isProcessed, draftMode, blockSaveForBalance, blockCompleteForBalance,
-    setShowProcessingModal, saveGate, hasExternalPrimaryAction, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
+    setShowProcessingModal, saveGate, hasExternalPrimaryAction, primarySave, onlySaveButton: onlySaveButtonForCompletedDoc(isDraftModeCompleted, draftMode),
   };
   const balanceFooterEditingLine = mergeLineEdits(lineEdits, selectedLine);
 

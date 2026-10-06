@@ -1244,7 +1244,10 @@ export function renderPrimaryTabButtons(primaryTabsVariant, primaryTabs, setActi
                 onClick={() => setActivePrimaryTab(tab.key)}
                 className={activePrimaryTab === tab.key
                   ? 'h-8 px-4 text-sm font-medium rounded-lg transition-all bg-card text-text-primary shadow-sm'
-                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary'}
+                  // ETP-5600 — Figma `_Base Tab Button` (Fill) hover: a light grey fill on the
+                  // inactive tab. `--card` at 60% over the pill's `--muted` track reads as a
+                  // lighter grey in both themes without competing with the active (solid card) tab.
+                  : 'h-8 px-4 text-sm font-medium rounded-lg transition-all text-text-secondary hover:bg-card/60 hover:text-text-primary'}
             >
               {tMenu(tab.label)}
             </button>

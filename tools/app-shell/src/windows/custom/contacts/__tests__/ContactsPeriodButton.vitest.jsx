@@ -1,5 +1,6 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
- * Tests for ContactsPeriodButton — period selector rendered in tabsBarRight slot.
+ * Tests for ContactsPeriodButton — period selector rendered inside ContactsSummaryWidget.
  */
 
 // Mocks before imports
@@ -10,6 +11,7 @@ vi.mock('@/i18n', () => ({
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <span data-testid="icon-chevron" />,
   Calendar: () => <span data-testid="icon-calendar" />,
+  Check: () => <span data-testid="icon-check" />,
 }));
 
 import { render, screen, act } from '@testing-library/react';

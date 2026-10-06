@@ -57,7 +57,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       password: onboardingCredentials.password,
     } : {});
     await navigateTo(page, 'contacts');
-    await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('action-new-more')).toBeVisible({ timeout: 30_000 });
 
     const categoriesResponse = await page.request.get(
       '/sws/neo/business-partner-category/businessPartnerCategory?limit=1000',
@@ -85,7 +85,9 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
       if (request.url().includes('/sws/neo/batch')) batchBodies.push(request.postDataJSON());
     });
 
-    await page.getByTestId('ListView__importButton').click();
+    await page.getByTestId('action-new-more').click();
+
+    await page.getByTestId('action-new-import').click();
     await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
       name: 'contacts-etp-4905-tomcat.csv',
@@ -149,7 +151,7 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     expect(firstLocation.body.cityName).toBe('Madrid');
     expect(firstLocation.body.postalCode).toBe('28013');
 
-    await expect(page.getByTestId('ListView__importButton')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('action-new-more')).toBeVisible({ timeout: 30_000 });
     for (const row of rows) await expect(page.getByText(row.name, { exact: true })).toBeVisible({ timeout: 30_000 });
     await captureScreenshot(page, { path: resolve(evidenceDir, 'ETP-4905-contacts-import-tomcat-created.png'), fullPage: true });
 

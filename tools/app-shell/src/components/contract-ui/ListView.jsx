@@ -351,6 +351,37 @@ function isDefaultSortActive(hook, defaultColumn, defaultDirection) {
   return hook.sortColumn === defaultColumn && hook.sortDirection === defaultDirection;
 }
 
+/**
+ * Whether anything the USER chose narrows the rows the server returns: a column filter
+ * (search box included), the advanced filter, or a subset/quick filter that carries a
+ * server-side `filter`. Client-side `rowFilter` subsets do NOT count — they never touch
+ * `hook.items`, which always holds the unnarrowed rows. `baseFilter` is the window's own
+ * permanent scope, not a user choice, so it does not count either.
+ */
+function hasUserNarrowing({ columnFilters, advancedFilterPart, subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices }) {
+  if (Object.keys(columnFilters ?? {}).length > 0) return true;
+  if (advancedFilterPart) return true;
+  if (subsetFilters && activeSubsetIndex != null && subsetFilters[activeSubsetIndex]?.filter) return true;
+  return [...activeFilterIndices].some((i) => Boolean(quickFilters?.[i]?.filter));
+}
+
+/**
+ * The context a Table gets (as `emptyListContext`) when the window has NO records at all —
+ * the fetch succeeded (`meta` is only set on a successful response), it returned nothing,
+ * and nothing the user chose narrowed it. `null` otherwise, so a Table can render a
+ * full-area "start here" state instead of an empty grid without re-deriving any of this.
+ * It carries the window's own create and import entry points, so the state can offer
+ * them without duplicating how they work. Window-agnostic: the Table decides what to show.
+ */
+function buildEmptyListContext({ hook, narrowed, onCreate, onImport, importConfig }) {
+  if (hook.loading || hook.items.length > 0 || hook.meta == null || narrowed) return null;
+  return {
+    onCreate,
+    onImport,
+    importFormats: importConfig?.enabled ? importConfig.formats : undefined,
+  };
+}
+
 // Extracted so the guard/try-finally doesn't add to ListView's own cognitive
 // complexity (S3776) — same rationale as the other top-level helpers above.
 async function executeBulkPrint({ isPrinting, setIsPrinting, windowName, selectedRows, token, ui, apiBaseUrl }) {
@@ -546,6 +577,17 @@ export function ListView({
   const [tableColumns, setTableColumns] = useState(initialColumns ?? []);
 
   const [showImportDialog, setShowImportDialog] = useState(false);
+  // A file handed in by the caller of `openImportDialog` (e.g. dropped on an empty-list
+  // state), forwarded to ImportDialog as `initialFile` so the dialog starts already loaded.
+  const [importInitialFile, setImportInitialFile] = useState(null);
+  const openImportDialog = useCallback((file) => {
+    setImportInitialFile(file instanceof File ? file : null);
+    setShowImportDialog(true);
+  }, []);
+  const handleImportOpenChange = useCallback((open) => {
+    setShowImportDialog(open);
+    if (!open) setImportInitialFile(null);
+  }, []);
   const apiFetch = useApiFetch(apiBaseUrl);
   const { locale } = useLocaleSwitch();
 
@@ -1080,6 +1122,30 @@ export function ListView({
   // behind, since sort/refresh have no flag of their own.
   const listBarHidden = listViewOptions?.hideListBar ?? hideListBar;
 
+  // The New action, shared by the toolbar button and the empty-list context below.
+  const canCreate = !hideCreate && !windowReadOnly;
+  const handleNew = useCallback(
+    () => (onNew ? onNew() : navigate(`/${windowName}/new`)),
+    [onNew, navigate, windowName],
+  );
+
+  // A `newActions` item may declare `opensImportDialog: true` instead of an `onClick`: it then
+  // opens this window's own import dialog (`window.import`). It is dropped when the window has
+  // no enabled import. When the split menu offers the import, the standalone import icon is
+  // redundant and is not rendered; it stays whenever the menu is unavailable (read-only
+  // window, `hideCreate`), so the import is never left unreachable.
+  const importEnabled = Boolean(importConfig?.enabled);
+  const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
+  const importInNewMenu = canCreate && visibleNewActions.some((action) => action.opensImportDialog);
+
+  const emptyListContext = buildEmptyListContext({
+    hook,
+    narrowed: hasUserNarrowing({ columnFilters, advancedFilterPart, subsetFilters, activeSubsetIndex, quickFilters, activeFilterIndices }),
+    onCreate: canCreate ? handleNew : undefined,
+    onImport: importEnabled ? openImportDialog : undefined,
+    importConfig,
+  });
+
   // Everything the Table needs, in one object, because ListTableRegion renders it from
   // either of two wrappers and these used to be written out once per branch. `meta` is
   // the same list-response envelope `headerContent` gets: a custom headerTable that
@@ -1138,6 +1204,7 @@ export function ListView({
     deselectRowIds,
     rowQuickActions: effectiveRowQuickActions,
     hiddenColumns,
+    emptyListContext,
   };
 
   return (
@@ -1361,12 +1428,12 @@ export function ListView({
                       the file: import pulls records into Etendo (Download), export pushes them
                       out (Upload). The import button used to carry the outward arrow, which read
                       as an export. */}
-                  {importConfig?.enabled && (
+                  {importEnabled && !importInNewMenu && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="gap-1.5 text-muted-foreground font-normal h-9 px-3 rounded-lg bg-card"
-                      onClick={() => setShowImportDialog(true)}
+                      onClick={() => openImportDialog()}
                       aria-label={ui('import')}
                       title={ui('import')}
                       data-testid="ListView__importButton"
@@ -1394,32 +1461,34 @@ export function ListView({
                     </Button>
                   )}
                   {/* Split "New" button */}
-                  {!hideCreate && !windowReadOnly && (
+                  {canCreate && (
                     <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
                       <Button
                         className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
                         data-testid="action-new"
-                        onClick={() => onNew ? onNew() : navigate(`/${windowName}/new`)}
+                        onClick={handleNew}
                       >
                         <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
                         {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
                       </Button>
-                      {newActions.length > 0 && (
+                      {visibleNewActions.length > 0 && (
                         <>
                           <div className="w-px bg-primary-foreground/20" />
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                                className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-foreground"
+                                aria-label={ui('moreOptions')}
+                                title={ui('moreOptions')}
                                 data-testid="action-new-more">
                                 <ChevronDown className="h-3.5 w-3.5" data-testid="ChevronDown__620cbc" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" data-testid="DropdownMenuContent__620cbc">
-                              {newActions.map((action) => (
+                              {visibleNewActions.map((action) => (
                                 <DropdownMenuItem
                                   key={action.key}
-                                  onClick={action.onClick}
+                                  onClick={action.opensImportDialog ? () => openImportDialog() : action.onClick}
                                   data-testid={`action-new-${action.key}`}
                                 >
                                   {action.label}
@@ -1521,8 +1590,9 @@ export function ListView({
         {importConfig?.enabled && showImportDialog && (
           <ImportDialog
             open={showImportDialog}
-            onOpenChange={setShowImportDialog}
+            onOpenChange={handleImportOpenChange}
             config={importConfig}
+            initialFile={importInitialFile ?? undefined}
             {...importDialogProps}
             onImported={({ failedCount }) => {
               // Refresh unconditionally — some rows may have committed even when others
@@ -1533,7 +1603,7 @@ export function ListView({
               // where a batch that failed outright showed nothing on screen at all, even
               // after ImportDialog/sendRow were fixed to surface the real message.
               hook.refresh();
-              if (failedCount === 0) setShowImportDialog(false);
+              if (failedCount === 0) handleImportOpenChange(false);
             }}
             data-testid="ImportDialog__620cbc" />
         )}

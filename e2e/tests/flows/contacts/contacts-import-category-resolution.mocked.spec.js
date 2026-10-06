@@ -51,7 +51,8 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
 
   await page.goto('/contacts');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await page.getByTestId('ListView__importButton').click();
+  await page.getByTestId('action-new-more').click();
+  await page.getByTestId('action-new-import').click();
   await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
   await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-corner-cases.csv',
@@ -102,7 +103,8 @@ test('skips an in-file duplicate tax id before sending the batch', async ({ page
 
   await page.goto('/contacts');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await page.getByTestId('ListView__importButton').click();
+  await page.getByTestId('action-new-more').click();
+  await page.getByTestId('action-new-import').click();
   await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
   await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-duplicate.csv',
@@ -151,7 +153,8 @@ test('imports a minimal company row with only the required legal name and tax id
 
   await page.goto('/contacts');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
-  await page.getByTestId('ListView__importButton').click();
+  await page.getByTestId('action-new-more').click();
+  await page.getByTestId('action-new-import').click();
   await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
   await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-minimal.csv',

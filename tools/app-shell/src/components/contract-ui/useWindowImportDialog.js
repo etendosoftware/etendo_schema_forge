@@ -122,6 +122,7 @@ export function useWindowImportDialog({ importConfig, apiBaseUrl, token, labelOv
   const labels = useMemo(() => ({
     title: ui('importDialogTitle'),
     revalidating: ui('importRevalidating'),
+    processing: ui('processing'),
     // `downloadTemplate` stays for back-compatibility (ImportDialog falls back to it for CSV
     // when the per-format key is absent); the two per-format captions are what actually render
     // now that a window can offer more than one template.

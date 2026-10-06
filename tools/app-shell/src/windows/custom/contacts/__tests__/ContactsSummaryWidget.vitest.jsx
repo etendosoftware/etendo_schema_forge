@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsSummaryWidget.jsx
+// @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
  * Tests for ContactsSummaryWidget — horizontal KPI summary in the headerContent slot.
  *
@@ -22,6 +24,7 @@ vi.mock('lucide-react', () => ({
   LineChart: () => <span data-testid="icon-line-chart" />,
   ChevronDown: () => <span data-testid="icon-chevron" />,
   Calendar: () => <span data-testid="icon-calendar" />,
+  Check: () => <span data-testid="icon-check" />,
 }));
 
 vi.mock('@/hooks/useCurrency', () => ({
@@ -48,7 +51,6 @@ vi.mock('@/components/ui/dialog', () => ({
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactsFinanceProvider } from '../ContactsFinanceContext';
-import ContactsPeriodButton from '../ContactsPeriodButton';
 import ContactsSummaryWidget from '../ContactsSummaryWidget';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -230,11 +232,10 @@ describe('ContactsSummaryWidget', () => {
 
   it('recomputes trend badges when the period switches to 6M', async () => {
     const user = userEvent.setup();
-    // Both the widget and the period button share the same provider so changing
-    // the period via the button re-renders the widget badges.
+    // The period selector is rendered inside the widget (ETP-5600), so changing the
+    // period through it re-renders the widget badges.
     render(
       <Wrapper>
-        <ContactsPeriodButton />
         <ContactsSummaryWidget data={{ id: 'BP1' }} />
       </Wrapper>,
     );
@@ -243,7 +244,7 @@ describe('ContactsSummaryWidget', () => {
     // Sanity: 3M revenue badge shows +18%
     expect(screen.getByText(/\+18% bpVsLast3Months/)).toBeInTheDocument();
 
-    // Switch to 6M via the shared period button
+    // Switch to 6M via the embedded period selector
     await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
     await user.click(screen.getByText('bpLast6Months'));
 
