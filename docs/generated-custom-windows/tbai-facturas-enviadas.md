@@ -45,7 +45,7 @@ debug mode, test plan, and known issues.
 (`ISPOST`/`ISPUT`/`ISPATCH`/`ISDELETE` = `N`). These are TBAI submission records produced by
 the integration, not user- or agent-authored data. NEO Headless answers
 `405 "<METHOD> not enabled for <entity>"` to the React app *and* to the MCP agent, and
-`neo_discover` reports `readOnly: true`.
+`etendo_discover` reports `readOnly: true`.
 
 CRUD only — action/process, callout, selector, defaults and evaluate-display endpoints are
 unaffected. Criteria and the full mechanism:

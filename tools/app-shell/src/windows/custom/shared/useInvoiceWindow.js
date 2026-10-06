@@ -8,7 +8,7 @@ import { translateBackendError } from '../../../lib/backendErrors.js';
 import { SEND_VISIBLE_WHEN_CONFIRMED } from './sendActionVisibility.js';
 
 export function getInvoiceDraftMode(ui, options = {}) {
-  const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [] } = options;
+  const { showVerifactuProcessingModal = false, keepSaveWhenCompletedFields = [], afterProcess } = options;
   return {
     enabled: true,
     processField: 'documentAction',
@@ -34,6 +34,11 @@ export function getInvoiceDraftMode(ui, options = {}) {
     ...(Array.isArray(keepSaveWhenCompletedFields) && keepSaveWhenCompletedFields.length > 0
       ? { keepSaveWhenCompletedFields }
       : {}),
+    // ETP-5576: optional post-Confirm hook (saveActions.jsx → runAfterProcess). The invoice
+    // windows pass createFollowUpAfterProcess(...) so a Confirm that leaves a shipment /
+    // receipt pending keeps the user on the invoice and opens the follow-up modal. Omitted
+    // when not a function, so a caller that passes nothing gets a byte-identical object.
+    ...(typeof afterProcess === 'function' ? { afterProcess } : {}),
   };
 }
 
