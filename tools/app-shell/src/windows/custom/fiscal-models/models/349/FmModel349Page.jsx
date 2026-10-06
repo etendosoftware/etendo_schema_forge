@@ -1224,7 +1224,7 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           <div style={{ flex: 1 }} />
           <MoreOptionsMenu
             favKey="fiscal-models"
-            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            favLabel={ui('fm.breadcrumb.section')}
             data-testid="MoreOptionsMenu__346dd5" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 2 }}>

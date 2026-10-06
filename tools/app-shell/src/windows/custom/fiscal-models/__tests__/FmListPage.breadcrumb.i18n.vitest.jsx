@@ -1,4 +1,9 @@
-// Real-locale breadcrumb regression coverage (ETP-4945).
+// Real-locale breadcrumb + page-title regression coverage (ETP-4945, ETP-5584).
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
+//
+// ETP-5584: the page title must be the window's menu name ("Modelos Fiscales"),
+// matching the breadcrumb's last segment; "Declaraciones" moved down to head the
+// declarations table toolbar, next to its count badge.
 //
 // FmListPage.jsx used to render `Tesorería / {t('fm.list.title') ?? 'Declaraciones'}` —
 // a raw hardcoded Spanish literal, never localized, never matched against the
@@ -84,5 +89,39 @@ describe('FmListPage — breadcrumb against the real locale dictionary (ETP-4945
     const { container } = render(<FmListPage declarations={[]} {...defaultProps} />);
 
     expect(container.textContent).toContain('Finance / Fiscal Models');
+  });
+});
+
+describe('FmListPage — page title and declarations heading (ETP-5584)', () => {
+  it('es_ES: page title is the menu name, "Declaraciones" heads the table toolbar', () => {
+    activeUi = realUiEs;
+    const decls = [{ id: 'd1', model: '303', year: 2026, period: '1T', status: 'draft' }];
+    render(<FmListPage declarations={decls} {...defaultProps} />);
+
+    expect(screen.getByTestId('fm-list-page-title').textContent).toBe('Modelos Fiscales');
+    expect(screen.getByTestId('fm-list-breadcrumb').textContent).toBe('Finanzas / Modelos Fiscales');
+    const section = screen.getByTestId('fm-list-section-title');
+    expect(section.textContent).toBe('Declaraciones1');
+    expect(screen.getByTestId('fm-list-count').textContent).toBe('1');
+    // The heading lives in the filters toolbar, not in the page header.
+    expect(section.closest('.fm-toolbar')).not.toBeNull();
+    expect(screen.getByTestId('fm-list-page-header').textContent).not.toContain('Declaraciones');
+  });
+
+  it('en_US: page title is "Fiscal Models", heading is "Declarations"', () => {
+    activeUi = realUiEn;
+    render(<FmListPage declarations={[]} {...defaultProps} />);
+
+    expect(screen.getByTestId('fm-list-page-title').textContent).toBe('Fiscal Models');
+    expect(screen.getByTestId('fm-list-section-title').textContent).toBe('Declarations0');
+  });
+
+  it('renders the page header before the declarations toolbar', () => {
+    activeUi = realUiEs;
+    render(<FmListPage declarations={[]} {...defaultProps} />);
+
+    const header = screen.getByTestId('fm-list-page-header');
+    const section = screen.getByTestId('fm-list-section-title');
+    expect(header.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

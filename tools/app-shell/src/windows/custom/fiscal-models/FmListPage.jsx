@@ -1142,29 +1142,86 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
 
   return (
     <div className="fm-page">
-      {/* ── Title bar ────────────────────────────────────────────── */}
-      <div style={{ padding: '10px 20px', background: 'hsl(var(--card))', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 20, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-            {t('fm.list.title') ?? 'Declaraciones'}
+      {/* ── Page header (ETP-5584) ───────────────────────────────
+          Title = the window's menu name (same key as the breadcrumb's last segment, so
+          the two can never disagree), breadcrumb below it, page actions on the right. */}
+      <div
+        data-testid="fm-list-page-header"
+        style={{
+          padding: '10px 20px', background: 'hsl(var(--card))', flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+          <span
+            data-testid="fm-list-page-title"
+            style={{ fontSize: 20, fontWeight: 600, lineHeight: '32px', color: 'hsl(var(--foreground))' }}
+          >
+            {ui('fm.breadcrumb.section')}
           </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center',
-            padding: '4px 8px', borderRadius: 8,
-            background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
-            fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
-          }}>{decls.length}</span>
+          <div
+            data-testid="fm-list-breadcrumb"
+            style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}
+          >
+            {ui('finance')} / {ui('fm.breadcrumb.section')}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <button
+            className="fm-toolbar__btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
+            onClick={() => setShowCatalog(true)}
+          >
+            <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
+            {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
+          </button>
+          {catalogLoaded && activeCount > 0 && (
+            <button
+              className="fm-toolbar__btn fm-toolbar__btn--primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
+              onClick={() => setShowNewDecl(true)}
+            >
+              + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
+            </button>
+          )}
           <MoreOptionsMenu
             favKey="fiscal-models"
-            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            favLabel={ui('fm.breadcrumb.section')}
             data-testid="MoreOptionsMenu__cb728e" />
         </div>
-        <div style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))', marginTop: 2 }}>
-          {ui('finance')} / {ui('fm.breadcrumb.section')}
-        </div>
       </div>
-      {/* ── Toolbar ──────────────────────────────────────────────── */}
+      {/* ── KPI cards row ─────────────────────────────────────── */}
+      {catalogLoaded && (
+        <KpiCardsRow
+          decls={modelYearFiltered}
+          t={t}
+          kpiFilter={kpiFilter}
+          onFilterClick={handleKpiFilterClick}
+          data-testid="KpiCardsRow__cb728e" />
+      )}
+      {/* ── Declarations toolbar: section heading + count on the left, filters/sort on the
+          right (ETP-5584 — "Declaraciones" is the table's heading, not the page title). ── */}
       <div className="fm-toolbar">
+        <span
+          data-testid="fm-list-section-title"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginRight: 8 }}
+        >
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+            {t('fm.list.title') ?? 'Declaraciones'}
+          </span>
+          <span
+            data-testid="fm-list-count"
+            style={{
+              display: 'inline-flex', alignItems: 'center',
+              padding: '4px 8px', borderRadius: 8,
+              background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border-control))',
+              fontSize: 12, color: 'hsl(var(--muted-foreground))', fontWeight: 400, lineHeight: '16px',
+            }}
+          >{decls.length}</span>
+        </span>
+
+        <div className="fm-toolbar__space" />
+
         <FilterDropdown
           label={t('fm.filter.all_years') ?? 'Todos los años'}
           value={yearFilter}
@@ -1186,8 +1243,6 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
           onChange={setStatusFilter}
           data-testid="FilterDropdown__cb728e" />
 
-        <div className="fm-toolbar__space" />
-
         {/* "Ordenar" — field-selector popover (same mechanism as ListView.jsx's
             column sort used by the generated/Factura windows), not a bare toggle. */}
         <div className="fm-filter-select" ref={sortBtnRef} style={{ position: 'relative' }}>
@@ -1204,7 +1259,9 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             <ArrowUpDown size={16} strokeWidth={1.75} data-testid="ArrowUpDown__cb728e" />
           </button>
           {showSortMenu && (
-            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200 }}>
+            // Right-anchored: the sort button is now the last item of the toolbar row, so a
+            // left-anchored menu would overflow the page edge (ETP-5584).
+            <div className="fm-status-select__menu" role="listbox" style={{ minWidth: 200, left: 'auto', right: 0 }}>
               <div style={{ padding: '6px 12px', fontSize: 12, fontWeight: 500, color: 'hsl(var(--muted-foreground))' }}>
                 {t('sortBy')}
               </div>
@@ -1243,35 +1300,7 @@ export default function FmListPage({ declarations: propDecls, onSelect, onComput
             </div>
           )}
         </div>
-
-        <button
-          className="fm-toolbar__btn"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-          onClick={() => setShowCatalog(true)}
-        >
-          <LayoutGrid size={14} strokeWidth={1.75} data-testid="LayoutGrid__cb728e" />
-          {t('fm.catalog.title') ?? 'Catálogo de modelos'}{catalogLoaded ? ` (${activeCount})` : ''}
-        </button>
-
-        {catalogLoaded && activeCount > 0 && (
-          <button
-            className="fm-toolbar__btn fm-toolbar__btn--primary"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8, padding: '9px 12px', fontSize: 14, fontWeight: 500 }}
-            onClick={() => setShowNewDecl(true)}
-          >
-            + {t('fm.action.new_declaration') ?? 'Nueva declaración'}
-          </button>
-        )}
       </div>
-      {/* ── KPI cards row ─────────────────────────────────────── */}
-      {catalogLoaded && (
-        <KpiCardsRow
-          decls={modelYearFiltered}
-          t={t}
-          kpiFilter={kpiFilter}
-          onFilterClick={handleKpiFilterClick}
-          data-testid="KpiCardsRow__cb728e" />
-      )}
       {/* ── Table ──────────────────────────────────────────────── */}
       <div className="fm-table-wrap">
         {tableSection}

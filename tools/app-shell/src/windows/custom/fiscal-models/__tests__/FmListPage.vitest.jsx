@@ -1,4 +1,5 @@
 // Vitest component tests for FmListPage.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmListPage.jsx
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { setSessionCredentials, CREDENTIAL_MODES } from '@etendosoftware/app-shell-core/auth/sessionCredentials.js';
 import React from 'react';
@@ -200,9 +201,10 @@ describe('FmListPage — rendering', () => {
     expect(document.body).toBeTruthy();
   });
 
-  it('renders the title key', () => {
+  it('renders the window name as page title and the list title key as the table heading (ETP-5584)', () => {
     render(<FmListPage declarations={[]} {...defaultProps} />);
-    expect(document.body.textContent).toContain('fm.list.title');
+    expect(screen.getByTestId('fm-list-page-title').textContent).toBe('fm.breadcrumb.section');
+    expect(screen.getByTestId('fm-list-section-title').textContent).toContain('fm.list.title');
   });
 
   it('shows declaration count badge', () => {

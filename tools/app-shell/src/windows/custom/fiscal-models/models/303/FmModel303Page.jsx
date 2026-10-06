@@ -1381,7 +1381,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
           </span>
           <MoreOptionsMenu
             favKey="fiscal-models"
-            favLabel={t('fm.list.title') ?? 'Declaraciones'}
+            favLabel={ui('fm.breadcrumb.section')}
             data-testid="MoreOptionsMenu__4f6c0d" />
         </div>
         <div style={{ fontSize: 12, color: 'hsl(var(--text-disabled))', marginTop: 1 }}>
