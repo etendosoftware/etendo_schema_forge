@@ -664,13 +664,17 @@
   background: var(--fm-bg-card, hsl(var(--card))); border-radius: 16px;
   box-shadow: 0 8px 40px hsl(var(--foreground) / .18); z-index: 51;
   width: 100%; max-width: 640px; margin: 16px;
-  display: flex; flex-direction: column; max-height: calc(100vh - 64px);
+  /* ETP-5584 P8 — the modal always fits the viewport (16px gutter top and
+     bottom, the same as its side margin): header and footer never shrink and
+     only the body scrolls, so the footer actions stay reachable on 1280×720. */
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   animation: fm-modal-in .2s cubic-bezier(.4,0,.2,1);
 }
 @keyframes fm-modal-in { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .fm-config-modal__header {
   display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 20px 20px 0; gap: 12px;
+  padding: 20px 20px 0; gap: 12px; flex-shrink: 0;
 }
 .fm-config-modal__titles { flex: 1; min-width: 0; }
 .fm-config-modal__title { font: 700 20px/28px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
@@ -684,7 +688,7 @@
 .fm-config-modal__body { flex: 1; overflow-y: auto; padding: 16px 20px; min-height: 360px; }
 .fm-config-modal__footer {
   padding: 14px 20px; border-top: 1px solid var(--fm-border-1);
-  display: flex; gap: 8px; justify-content: space-between;
+  display: flex; gap: 8px; justify-content: space-between; flex-shrink: 0;
 }
 /* ETP-5229 item #10 polish: PresentModal's footer sits right below its two-column
    card area, which already reads as visually distinct — drop the divider line so
@@ -775,32 +779,6 @@
 
 /* ─── Modal ────────────────────────────────────────────────────────── */
 .fm-modal-overlay { position: fixed; inset: 0; background: hsl(var(--foreground) / .35); z-index: 100; display: flex; align-items: center; justify-content: center; }
-.fm-present-modal {
-  background: var(--fm-bg-card, hsl(var(--card))); border-radius: 16px;
-  padding: 22px 24px; min-width: 420px; max-width: 560px;
-  box-shadow: 0 8px 40px hsl(var(--foreground) / .16);
-  border: 1px solid var(--fm-border-1);
-}
-.fm-present-modal__title { font: 700 16px/22px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); margin-bottom: 16px; }
-.fm-present-modal__paths { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.fm-present-modal__path {
-  border: 1.5px solid var(--fm-border-1); border-radius: 10px;
-  padding: 12px 14px; cursor: pointer; transition: border-color .15s;
-}
-.fm-present-modal__path:hover,
-.fm-present-modal__path--selected { border-color: var(--fm-gray-900); background: var(--fm-bg-subtle); }
-.fm-present-modal__path-title { font: 600 13px/18px var(--fm-font-sans, system-ui); color: var(--fm-fg-1); }
-.fm-present-modal__path-desc  { font: 400 12px/16px var(--fm-font-sans, system-ui); color: var(--fm-fg-3); margin-top: 2px; }
-.fm-present-modal__upload { margin-top: 8px; }
-.fm-present-modal__actions { display: flex; justify-content: flex-end; gap: 8px; }
-.fm-present-modal__btn {
-  padding: 7px 16px; border-radius: 8px;
-  font: 600 13px/18px var(--fm-font-sans, system-ui); cursor: pointer;
-  border: 1px solid var(--fm-border-1);
-  background: var(--fm-bg-subtle); color: var(--fm-fg-2);
-}
-.fm-present-modal__btn--primary { background: var(--fm-gray-900); color: hsl(var(--card)); border-color: var(--fm-gray-900); }
-.fm-present-modal__btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ─── "Nueva declaración" modal (NewDeclModal) ─────────────────────── */
 .fm-newdecl-modal { max-width: 560px; }
@@ -1489,3 +1467,43 @@
 .fm-aeat-section--compact .fm-aeat-cell__value { line-height: 40px; }
 .fm-aeat-section--compact .fm-aeat-col-headers__cell { width: 180px; }
 .fm-aeat-section--compact .fm-aeat-group-bracket::before { right: 568px; } /* 3×180 − same gap offsets = 808−240 */
+
+/* ─── ETP-5584 popups — Registrar/Presentar + Presentación telemática AEAT ───
+   Both are `.fm-config-modal`s (standard header / body / footer, 20px gutters).
+   Two rules shared by both:
+   - their body drops the generic 360px min-height so it can shrink and scroll
+     on short viewports (1280×720) instead of pushing the footer off-screen;
+   - toggling an option never changes the modal's size: the space for the
+     content an option reveals is always reserved (see each block below). */
+
+/* Registrar/Presentar (PresentModal). Fixed width per variant: 760px with the
+   AEAT column (303), 500px single column (349). */
+.fm-present-modal { max-width: 500px; }
+.fm-present-modal--two-col { max-width: 760px; }
+.fm-present-modal .fm-config-modal__body { min-height: 0; }
+
+/* The "Subir justificante" row inside the "Con acuse de recibo" card, and the
+   empty slot PresentModalColumn renders in its place while it is hidden. Both
+   take their height from the same variable, so selecting the option swaps one
+   for the other with no change in height. The button never wraps (a long file
+   name is ellipsized) so the row cannot outgrow the reserved slot. */
+.fm-present-modal { --fm-acuse-upload-h: 32px; --fm-acuse-upload-gap: 12px; }
+.fm-present-acuse-upload {
+  margin-top: var(--fm-acuse-upload-gap); height: var(--fm-acuse-upload-h);
+  display: flex; align-items: center; min-width: 0;
+}
+.fm-present-acuse-upload__btn {
+  height: var(--fm-acuse-upload-h); max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; justify-content: flex-start;
+}
+.fm-present-acuse-slot { height: calc(var(--fm-acuse-upload-h) + var(--fm-acuse-upload-gap)); }
+
+/* Presentación telemática AEAT (AeatSubmitFlow) — full-width stacked fields. */
+.fm-aeat-modal .fm-config-modal__body { min-height: 0; }
+.fm-aeat-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.fm-aeat-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.fm-aeat-field__label { font: 400 14px/20px var(--fm-font-sans, system-ui); color: hsl(var(--foreground)); }
+/* "Validar sin presentar" warning — always laid out, only its visibility
+   toggles, so the reserved space is exactly the banner's own height. */
+.fm-aeat-testmode-slot { visibility: hidden; }
+.fm-aeat-testmode-slot--visible { visibility: visible; }

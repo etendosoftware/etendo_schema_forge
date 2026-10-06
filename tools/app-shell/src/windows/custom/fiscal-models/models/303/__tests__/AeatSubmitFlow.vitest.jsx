@@ -181,11 +181,43 @@ describe('AeatSubmitFlow — confirm screen', () => {
     expect(screen.getByTestId('AeatSubmitFlow__presenterName')).toHaveValue('F&B España, S.A');
   });
 
+  // ETP-5584 P7 — the warning is always laid out (so the modal never changes height)
+  // and only its visibility toggles. "Shown" therefore means: the slot carries the
+  // visible modifier and is exposed to assistive tech.
   it('shows the test-mode warning banner only when the checkbox is checked', () => {
     renderFlow();
-    expect(screen.queryByText('fm.aeat.test_mode.warning')).not.toBeInTheDocument();
+    const slot = screen.getByTestId('AeatSubmitFlow__testModeSlot');
+    expect(slot).toHaveClass('fm-aeat-testmode-slot');
+    expect(slot).not.toHaveClass('fm-aeat-testmode-slot--visible');
+    expect(slot).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
-    expect(screen.getByText('fm.aeat.test_mode.warning')).toBeInTheDocument();
+    expect(slot).toHaveClass('fm-aeat-testmode-slot--visible');
+    expect(slot).toHaveAttribute('aria-hidden', 'false');
+    expect(slot).toContainElement(screen.getByText('fm.aeat.test_mode.warning'));
+    fireEvent.click(screen.getByTestId('AeatSubmitFlow__testMode'));
+    expect(slot).not.toHaveClass('fm-aeat-testmode-slot--visible');
+  });
+
+  it('reserves the test-mode warning space even while unchecked (stable modal height)', () => {
+    renderFlow();
+    // Present in the DOM before the checkbox is ever touched — only hidden.
+    expect(screen.getByTestId('AeatSubmitFlow__testModeSlot')).toContainElement(
+      screen.getByText('fm.aeat.test_mode.warning'),
+    );
+  });
+
+  it('lays out the presenter fields full-width with the shared Input (no fixed width, no monospace NRC)', () => {
+    renderFlow();
+    expect(screen.getByTestId('AeatSubmitFlow__dialog')).toHaveClass('fm-config-modal', 'fm-aeat-modal');
+    for (const id of ['AeatSubmitFlow__presenterNif', 'AeatSubmitFlow__presenterName', 'AeatSubmitFlow__nrc']) {
+      const input = screen.getByTestId(id);
+      expect(input.closest('.fm-aeat-field')).not.toBeNull();
+      expect(input).toHaveClass('w-full');
+      expect(input.style.width).toBe('');
+      expect(input.style.fontFamily).toBe('');
+    }
+    // Each label is bound to its input.
+    expect(screen.getByLabelText(/^fm\.aeat\.nrc\.label/)).toBe(screen.getByTestId('AeatSubmitFlow__nrc'));
   });
 
   it('calls onClose when the close (✕) button is clicked', () => {

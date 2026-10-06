@@ -599,7 +599,7 @@ Fix, in `FmModel303Page.jsx`'s `handlePresent` (now `async`): it `await`s `persi
 
 **"Autoliquidación Rectificativa" LOOKS unchecked on an already-submitted declaration, even though the persisted value is `true` (ETP-5338, second, unrelated bug — pure rendering, not data).** Follow-up report after the pt.4 fix above: on a submitted declaration whose `manualData.identification.rectificativa` really is `true` (confirmed — the adjacent "Nº de justificante" text field on the same identification section showed its correct saved value), the checkbox itself still rendered visually unchecked in read-only mode. This is NOT a recurrence of pt.4 and NOT a hydration bug — `identChecks` is seeded correctly from `decl.manualData?.identification` on mount (`FmModel303Page.jsx` line ~220), `identification={{ ...orgIdent, ...identChecks }}` is passed straight through to `FmBoxes303`, and the native `<input type="checkbox">` really did have `checked={true}`/`aria-checked="true"` the whole time — verified with a source-level trace, not just the report. The bug was generic to the shared `Checkbox` component (`@etendosoftware/app-shell-core/components/ui/checkbox.jsx`, consumed here via `tools/app-shell/src/components/ui/checkbox.jsx`), not specific to this window or this field: the checked+disabled visual state used the identical `bg-muted` box class as unchecked+disabled, and the checkmark's `stroke` was hardcoded to `"white"` — invisible against the near-white `--muted` token (96% lightness in the light theme). Every other read-only checkbox in this window (`sin_actividad`, `baja_domiciliacion`, `redeme`, `concurso`, …) shared the exact same risk since they all rendered through the same component.
 
-A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
+A component-level fix for this exists in `schema_forge_core` (`packages/app-shell-core/src/components/ui/checkbox.jsx`, commit `a8b8384a0`: checkmark stroke changed to `currentColor` plus a `border-text-disabled` accent on the checked+disabled box class). **That fix is not what fiscal-models ships on.** Publishing it would require bumping `@etendosoftware/app-shell-core` in this repo (see `docs/repo-topology.md`), affects every OTHER consumer of the shared `Checkbox` too, and — critically — would have left fiscal-models with two coexisting checkbox implementations: the (now-fixed) shared `Checkbox` here, and the already-correct hand-rolled checkbox the Sales Invoice SIF tab (`SifTab.jsx`) used all along, which never had this bug because it dims the whole control via `disabled:opacity-50` instead of swapping the box/checkmark colors. The product decision was instead to **consolidate fiscal-models on the SIF tab's implementation**: it was extracted into `tools/app-shell/src/windows/custom/shared/CheckboxField.jsx` (a `<button role="checkbox">`, exported for reuse — `SifTab.jsx` now imports it too, replacing its former inline copy) and every checkbox in both Modelo 303 and Modelo 349 (`FmOverlays.jsx`, `FmListPage.jsx`, `FmModel349Page.jsx`, `FmBoxes303.jsx`, `AeatSubmitFlow.jsx`) was switched from `@/components/ui/checkbox`'s `Checkbox` (or, for `AeatSubmitFlow`'s `testMode` toggle, a raw `<input type="checkbox">`) to `CheckboxField`. Fiscal-models now has exactly one checkbox implementation, and it does not depend on a cross-repo publish to stay correct. The `schema_forge_core` fix (`a8b8384a0`) remains valid for other consumers of the shared `Checkbox`; whether to pursue publishing it is a separate, still-open decision. Two small pre-existing spots were deliberately left alone as out of scope: `FmOverlays.jsx`'s `CfgSection303` (dead code, never rendered — since deleted, ETP-5584) and the "keys" checkboxes in `CfgSection349` (uncontrolled `defaultChecked` placeholders with no `onChange`/state at all) — converting either to `CheckboxField` would mean inventing controlled state that doesn't exist today, which is a behavior change, not the pure visual swap this fix is scoped to.
 
 This also closes a narrower, related gap: `handlePresent` calling `persistEditableFields()` can now race an already-in-flight Calcular/Guardar flush queued behind an earlier one (e.g. Guardar's PUT still open when the user immediately clicks Calcular, then immediately Registrar/Presentar). Both concurrent callers proceed independently — neither is deduped — and `useRecordWriteQueue`'s own single-flight `persist()` (`tools/app-shell/src/hooks/useRecordWriteQueue.js`) correctly serializes them: the second caller's write is coalesced into `queuedRef` and replayed once the first settles, rather than overlapping on the wire. In this specific interleaving that can mean one extra, content-identical PUT (the queued replay) beyond the minimum — harmless (same content, single-flight, no data loss) but a known follow-on effect, not eliminated here; see `FmModel303Page.explicitSaveSingleFlight.vitest.jsx`'s "flushes a queued save before filing the declaration, instead of dropping it" test, which drains every PUT this path can produce rather than asserting an exact count.
 
@@ -2261,6 +2261,59 @@ resurfaced the stale path-selection screen instead of returning to the main page
      - `ALREADY_SUBMITTED` (`fm.aeat.error.alreadySubmitted`) — **added with the QA BUG-1 fix**: the declaration was already accepted by the AEAT in a prior production submission; the backend now blocks a silent resubmission (`409`, see the backend doc linked above for the full guard semantics — test-mode resubmission is still allowed and does not hit this branch). No "go to fiscal-config" button here — a certificate is not what's missing.
 
 **Gap (not addressed, flagged rather than guessed):** the response's own `declarationData` (server-parsed NIF/businessName/etc.) is returned but not re-displayed on the result screen — the confirm screen already shows the equivalent client-known data, so this was a deliberate scope trim, not an oversight.
+
+### Popups — layout, stable size and 1280×720 (ETP-5584)
+
+`PresentModal` ("Registrar/Presentar", 303 and 349), `AeatSubmitFlow` ("Presentación telemática
+AEAT") and the `ConfigDrawer` modal are built on the window's standard `.fm-config-modal` shell
+(header / scrollable body / footer, 20px gutters) — the same shell as `NewDeclModal`,
+`FileGenModal` and `FileGenModal303`. They do not use the Radix `Dialog` from
+`@/components/ui/dialog`, and neither does any other fiscal-models modal; moving one popup alone
+would leave the window with two modal systems.
+
+**Rule: picking an option never changes a popup's size.** Content that an option reveals has its
+space reserved from the start:
+
+| Popup | Revealed by | How the space is reserved |
+|---|---|---|
+| `PresentModal` | "Con acuse de recibo" → "Subir justificante (PDF/XML)" row | While the row is hidden, `PresentModalColumn` renders an empty `.fm-present-acuse-slot` after the card stack. The row (`.fm-present-acuse-upload`) and the slot take their height from the same CSS variables (`--fm-acuse-upload-h` + `--fm-acuse-upload-gap`), so one replaces the other with no change in height. The upload button never wraps: a long file name is ellipsized, and the full name is in its `title`. |
+| `AeatSubmitFlow` | "Validar sin presentar" → test-mode warning | The warning banner is always laid out inside `.fm-aeat-testmode-slot` and only its `visibility` toggles (`--visible` modifier). `visibility: hidden` keeps the banner's real box, so the reserved space always matches it, in any locale. The slot is `aria-hidden` while unchecked. |
+
+Not covered by the rule: the red `connError` banner in `AeatSubmitFlow` (IBAN/NRC required,
+connection failure). It only appears after a submit attempt, and the body scrolls to fit it.
+
+**Width.** `PresentModal` gets its width from the stylesheet: `.fm-present-modal` is 500px (349, a
+single column) and `.fm-present-modal--two-col` is 760px (303, with the "Presentar a la AEAT"
+column). It used to be an inline `max-width`. A legacy `.fm-present-modal` rule block from the
+pre-redesign modal (22px/24px padding, `min-width: 420px`) was deleted. It still matched the
+redesigned modal's root, so the modal had double padding on top of the `.fm-config-modal` gutters.
+
+**AEAT fields.** "NIF del presentador", "Nombre del presentador" and "NRC" are full-width,
+stacked (`.fm-aeat-fields` / `.fm-aeat-field`), each with its `<label htmlFor>`. The inputs are
+the shared `Input` (`@/components/ui/input`), so text and placeholder use the app's standard
+typography. They used to be fixed at 376px, and the NRC placeholder was monospace.
+
+**Viewport (1280×720).** `.fm-config-modal` is capped at `calc(100dvh - 32px)` (16px gutter top and
+bottom; `100vh` is the fallback). Its header and footer have `flex-shrink: 0`, so only the body
+scrolls and the footer actions are always on screen. The two popups above also drop the body's
+generic `min-height: 360px` (`.fm-present-modal`/`.fm-aeat-modal .fm-config-modal__body`), so a
+short viewport shrinks the body instead of pushing the footer off-screen. Measured in a headless
+browser: `PresentModal` is 436px tall in every state and at 1680×1000, 1280×720 and 1280×560.
+`AeatSubmitFlow` is 690px tall at 1680×1000 in both states. At 1280×720 it reaches the cap
+(688px), and its body scrolls by a couple of pixels — more once the declarant's NIF and IBAN rows
+are filled. The footer stays fully visible in every case.
+
+**No native selects.** The `ConfigDrawer` pickers (Prorrata on the 303 tab; Periodicidad and
+"Preferencia VIES" on the 349 tab) use the app's `Select` through a local `CfgSelect` helper. Its
+`SelectContent` is lifted to `z-[110]`, above `.fm-modal-overlay`. They stay uncontrolled
+(`defaultValue`), as the native ones were, because these options are not persisted yet. The dead
+`CfgSection303` (never rendered) was deleted.
+
+Tests: `__tests__/FmOverlays.vitest.jsx` ("PresentModal — stable size when an option is
+picked", two-column width variant), `__tests__/FmOverlays.coverage.vitest.jsx` (ConfigDrawer: no
+native `<select>`), and `models/303/__tests__/AeatSubmitFlow.vitest.jsx` (test-mode slot,
+full-width shared `Input`). jsdom has no layout, so these tests check that the slot and the
+revealed content swap places. That the height stays the same was checked in a real browser.
 
 ### Base64 PDF download helpers (`fiscalModelsUtils.js`)
 

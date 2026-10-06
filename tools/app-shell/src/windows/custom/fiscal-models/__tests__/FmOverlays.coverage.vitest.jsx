@@ -183,8 +183,23 @@ describe('FmOverlays interactive coverage', () => {
     await user.type(orgNameInput, 'Updated Org');
     await user.click(screen.getByText('fm.config.m349.title'));
     expect(screen.getByText('fm.config.m349.keys')).toBeInTheDocument();
+    // ETP-5584 — the 349 tab's pickers are the app's Select, never a native <select>.
+    expect(document.querySelector('select')).toBeNull();
+    expect(screen.getByTestId('ConfigDrawer__periodicity')).toHaveTextContent('fm.config.m349.periodicity_monthly');
+    expect(screen.getByTestId('ConfigDrawer__viesPref')).toHaveTextContent('fm.config.m349.viespref_auto');
     await user.click(screen.getByText('fm.action.save'));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('config drawer 303 tab: the Prorrata picker is the app Select (no native <select>)', async () => {
+    const user = userEvent.setup();
+    render(<ConfigDrawer model="303" token="tkn" apiBaseUrl="/sws/neo/fiscal-models" onClose={vi.fn()} />);
+    await user.click(screen.getByText('fm.config.m303.title'));
+    expect(document.querySelector('select')).toBeNull();
+    const trigger = screen.getByTestId('ConfigDrawer__prorata');
+    expect(trigger).toHaveAttribute('role', 'combobox');
+    expect(trigger).toHaveAccessibleName('fm.config.m303.prorata');
+    expect(trigger).toHaveTextContent('fm.config.m303.prorata_general');
   });
 
   it('FileGenModal303: renders with default filename, edits it, and confirms', async () => {
