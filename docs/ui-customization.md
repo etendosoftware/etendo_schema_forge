@@ -2466,6 +2466,146 @@ through the exported `resolveContactName(record)` rather than reading `name` dir
 
 ---
 
+### 20. Follow-up documents — `FollowUpDocumentButton` + `draftMode.afterProcess` (ETP-5576)
+
+A generic flow that offers the document that naturally follows a completed one (today:
+invoice → shipment / goods receipt; designed so orders → shipment **and** invoice, and
+shipment → invoice, can reuse it). Not a `decisions.json` option: it is wired in the
+window's custom wrapper and `topbarRight` component, because both pieces are functions.
+
+**Backend contract.** The source spec annotates every header GET with
+`followUp: { available: [<key>…], <key>: { needed, reason, pendingLines, action, targetSpec, targetEntity } }`
+(`available` = keys still needed, in display order; empty for credit notes, returns, or when
+nothing is pending). `POST <spec>/header/{id}/action/<action>` creates a Draft with only the
+pending lines and answers `201 {response:{data:{id, documentNo, followUp, spec, entity, lineCount}}}`
+or `{error:{code,…}}`. The frontend never derives "pending" itself. When the backend needs a
+value it cannot decide on its own, the error carries an `input` block and the POST is retried
+with the chosen value — see **Input-required round-trip** below.
+
+**Pieces** (`tools/app-shell/src/components/follow-up-documents/`):
+
+| Piece | Role |
+|---|---|
+| `followUpDocuments.js` | Pure helpers: `readFollowUpEntries`, `buildFollowUpActionUrl`, error-code → i18n key map (`FOLLOW_UP_ERROR_KEYS`, fallback `followUpErrorGeneric`), the input-required helpers (`readFollowUpInputRequest`, `followUpInputLabels`, `mergeFollowUpInputValues`), the prompt hand-off (`requestFollowUpPrompt` / `consumeFollowUpPrompt`) and `createFollowUpAfterProcess(spec, options)` |
+| `useFollowUpDocuments` | State machine `closed → choice → (loading) → result`; POSTs through `useApiFetch`; keeps a backend-requested input (`session.inputRequest`, `session.inputs`, `setInputValue`); on success dispatches `<spec>:document-created` and calls `onCreated` |
+| `FollowUpDocumentModal` | Choice phase on `ActionChoiceModal` — layout decided only by how many configured follow-ups are available: ONE → single-option confirmation (summary, the window's question, ONE static option card — title + badge + description with the pending count, no radio — and a label-only primary button named after the action, focused so Enter creates); TWO+ → one Figma choice card per follow-up. No "not now" card: Cancel / X / Esc / backdrop reject. Result phase on `ConfirmResultModal` (link to the created document); errors inline |
+| `FollowUpDocumentButton` | `topbarRight` entry point: renders only while a configured follow-up is available (never for a read-only window); always mounts the modal, so the post-Confirm prompt also opens it |
+
+**Per-window config** — a map keyed by the backend follow-up key (see
+`windows/custom/shared/invoiceFollowUp.js`):
+
+```js
+questionKey,                       // question above the option(s), e.g. 'followUpInvoiceQuestion'
+                                   // («¿Qué vas a hacer con esta factura?»); default 'followUpQuestion'
+options: {
+  shipment: {
+    labelKey,                      // card title (static card or choice card) — «Crear albarán de venta»
+    descriptionKey,                // card description; receives { count } = pendingLines
+    descriptionOneKey,             // optional singular variant (count === 1)
+    badgeKey, badgeTone,           // optional badge; tone 'success' (green, default) | 'info' (blue)
+    actionLabelKey,                // primary button in the single-option layout («Crear albarán»)
+    icon,                          // lucide component
+    titleKey, buttonLabelKey,      // used when this is the only follow-up offered; separate keys: the
+                                   // modal title asks («¿Gestionar envío?»), the button does not («Gestionar envío»)
+    resultDocType,                 // ConfirmResultModal type: 'salida' | 'entrada' | 'facturaVenta' | 'facturaCompra'
+    resultTitleKey,
+  },
+},
+summary: { documentLabelKey /* required */, documentNoField, dateLabelKey, dateField, contactField, totalField, currencyField,
+           linesLabelKey /* pending-lines column, single follow-up only; default 'lines' («Líneas») */ },
+```
+
+`questionKey` is passed to `FollowUpDocumentButton` (→ `FollowUpDocumentModal`) as a prop next to
+`options` / `summary`, because the wording names the source document.
+
+A key the backend offers but the window does not configure is ignored. With several keys
+the modal shows one card per key (title `titleKey` prop or `followUpManageTitle`, button
+`buttonLabelKey` prop or `followUpManageButton`).
+
+**Opening right after Confirm.** Pass `draftMode.afterProcess = createFollowUpAfterProcess(spec, options)`
+(invoices: `getInvoiceDraftMode(ui, { afterProcess })`). When the processed record still has a
+configured follow-up it queues a prompt and returns `{ stay: true }`, so the user stays on the
+document instead of being sent to the list (the fresh record is primed into the form, see
+`runAfterProcess`); `FollowUpDocumentButton` consumes the prompt (immediately, or on mount after a
+`/new → /{id}` move). A prompt nobody consumes within 30 s (`FOLLOW_UP_PROMPT_TTL_MS`) is discarded. See `docs/decisions-reference.md` →
+`draftMode.afterProcess`.
+
+**After creation** the button calls the slot's `onRefresh` (record re-read: the annotation empties
+and the button disappears) and the `<spec>:document-created` event refreshes related documents
+(`SALES_RELATED_DOCS['sales-invoice'].refreshEvent`, purchase-invoice `RelatedDocuments.jsx`).
+
+**Keyboard.** `ActionChoiceModal` (shared, also used by sales-quotation) traps Tab (focus parks on
+the dialog while every control is disabled), Esc cancels (never while a request is in flight, and
+never an Esc that a layer opened on top already handled), the cards are a roving-tabindex radio
+group (Arrow/Home/End) where Enter selects the focused card AND continues, every control has a
+visible `:focus-visible` outline, and the layout stacks below 640px. With a single option the
+radio group is replaced by the direct confirmation and focus starts on the primary button (the
+static card is not a Tab stop). The result
+phase has the same Tab trap and Esc rule and focuses the link to the created document.
+
+**Input-required round-trip.** When the backend cannot decide a value the follow-up document
+needs (today: the target warehouse of the shipment / receipt), it answers the action POST with an
+error that carries an `input` block, and accepts the same POST again with that value in the body:
+
+```
+POST …/action/createShipment   body {}
+→ 409 {"error":{"code":"FOLLOW_UP_WAREHOUSE_REQUIRED","status":409,"message":"…",
+               "input":{"key":"warehouseId","options":[{"id":"…","name":"…"}, …]}}}
+POST …/action/createShipment   body {"warehouseId":"<id>"}
+→ 201 (created) | 400 FOLLOW_UP_INVALID_INPUT (the id is not one of the valid options)
+```
+
+- Detection is by shape, not by code: any failed answer whose `error.input` has an identifier
+  `key` (`/^[A-Za-z]\w*$/`, and not a name inherited from `Object.prototype` such as
+  `constructor`) and at least one option with an `id` (`readFollowUpInputRequest`). Chosen values
+  are always read as own properties (`readFollowUpInputValue`).
+  It is **not** an error state: no alert, the modal stays open and a required selector appears
+  below the option card(s). The key and the options come from the backend — the generic
+  components contain nothing warehouse- or invoice-specific.
+- The selector is the searchable combo the other document modals use (`CreatableSearchSelect`
+  over static options, as `PriceListSelectField` does), inside a `<fieldset>` named by its label and
+  described by its helper text. Label `followUpInput<Key>` (`warehouseId` → `followUpInputWarehouseId`,
+  «Almacén»), falling back to `followUpInputGeneric` («Selecciona una opción»); helper text
+  `followUpInput<Key>Help` («Elige el almacén donde se creará el documento.»), omitted when the key
+  has no translation. A new input key only needs those two i18n keys.
+- With exactly one option it is preselected (and still shown); with several the value starts
+  empty. The primary button (`ActionChoiceModal`'s new `primaryDisabled`) stays disabled until a
+  value is chosen, and the hook refuses a POST without it (so Enter on a choice card cannot bypass
+  it). The retry body is `{ ...valuesCollectedSoFar, [input.key]: value }` — if the backend then
+  asks for a second key, the first value is kept; a previous choice that is no longer offered is
+  dropped. The values belong to the follow-up key whose action asked (`inputs.forKey`); creating
+  another follow-up starts from `{}`.
+- Multi-option layout: the selector and the disabled primary apply only while the selected card
+  is `inputs.forKey`. Selecting another card releases the request (`releaseInput`, wired through
+  `ActionChoiceModal`'s `onSelectionChange`): the selector disappears, the primary creates the
+  other follow-up with `{}`, and going back to the first card does not bring the selector back —
+  its next POST asks again if the backend still needs the value.
+- Keyboard / a11y: focus moves to the selector when it appears (the search input, or the chip of
+  a preselected option) — `ActionChoiceModal` keeps that focus instead of moving it back to the
+  primary when loading ends. Arrows / Enter pick in the open list and Esc closes the list; with
+  the list closed, Enter retries (same as the primary) and Esc cancels the modal. The double-submit
+  guard and "Esc / backdrop ignored while loading" apply unchanged; the fieldset is disabled while
+  the retry is in flight.
+- Errors: `FOLLOW_UP_INVALID_INPUT` → `followUpErrorInvalidInput` (selector kept, choose again);
+  `FOLLOW_UP_WAREHOUSE_REQUIRED` arriving **without** an `input` block (no candidate warehouse) →
+  `followUpErrorWarehouseRequired`, shown inline like any other error.
+
+`ActionChoiceModal` gained three optional, backward-compatible props for this: `children` (rendered
+between the option(s) and the error) and `primaryDisabled` — each either a plain value or a function
+of the selected option id — and `onSelectionChange(id)` (called on every later change of the
+selection, not on mount). sales-quotation passes none of them.
+
+**Single vs multi layout** is generic: `ActionChoiceModal` switches to the single-option mode when
+it receives exactly one option. Single-option layout, top to bottom: title, summary, `question`,
+ONE static option card, footer (Cancel left, primary right). The static card looks like an idle
+choice card (1px border, 12px radius, icon box, title + badge, muted description) but is laid out
+icon-left and is plain content: no radio indicator, no `role="radio"` / `radiogroup`, not
+focusable, not clickable. Its description is the dialog's `aria-describedby`. The primary button
+carries the option's `actionLabel` and no arrow icon (the spinner still shows while loading).
+Options take an optional `badgeTone` (`'success'` default, `'info'`), mapped to the
+`--status-success-*` / `--status-info-*` tokens. sales-quotation always passes two options, no
+`badgeTone`, and is unaffected (green «Recomendado», arrow on the primary).
+
 ## Decision tree: which option to use?
 
 ```
