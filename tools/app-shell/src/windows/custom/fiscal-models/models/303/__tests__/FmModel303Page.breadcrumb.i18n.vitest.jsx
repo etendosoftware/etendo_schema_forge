@@ -10,7 +10,7 @@
 // (no in-page title row), so this asserts the published meta, following the
 // sibling FmModel303Page.vitest.jsx's mocking shape but with `useUI` backed by
 // the real locale dictionary instead of its identity mock.
-import { vi, describe, it, expect } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
 import { render } from '@testing-library/react';
 import { PageMetaProvider, usePageMeta } from '@/components/layout/PageMetaContext';
@@ -27,6 +27,20 @@ let activeLocale = 'es_ES';
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({ useUI: () => activeUi, useLocaleSwitch: () => ({ locale: activeLocale }) }));
+
+// ETP-5584 (review W1) — real assertions for the TopBar kebab's two items: favourites and help.
+const kebabMocks = vi.hoisted(() => ({
+  toggleFavorite: vi.fn(),
+  isFavorite: vi.fn(() => false),
+  setTab: vi.fn(),
+  open: vi.fn(),
+}));
+vi.mock('@/components/layout/FavoritesContext', () => ({
+  useFavorites: () => ({ toggleFavorite: kebabMocks.toggleFavorite, isFavorite: kebabMocks.isFavorite }),
+}));
+vi.mock('@/components/support/SupportChatContext.jsx', () => ({
+  useSupportChatSafe: () => ({ actions: { setTab: kebabMocks.setTab, open: kebabMocks.open } }),
+}));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -183,5 +197,38 @@ describe('FmModel303Page — monthly period title (P9)', () => {
     renderWithMeta(<FmModel303Page decl={{ ...BASE_DECL, period: '10' }} {...defaultProps} />);
     activeLocale = 'es_ES';
     expect(lastMeta.title).toBe('Form 303 - 2026/October');
+  });
+});
+
+// ETP-5584 (review W1) — the TopBar kebab is wired to the real favourites and help mechanisms.
+describe('FmModel303Page — TopBar kebab: favourites and help (ETP-5584)', () => {
+  beforeEach(() => {
+    kebabMocks.toggleFavorite.mockClear();
+    kebabMocks.setTab.mockClear();
+    kebabMocks.open.mockClear();
+    kebabMocks.isFavorite.mockImplementation(() => false);
+  });
+
+  it('onAddToFavorites toggles the window favourite, labelled with the window name', () => {
+    activeUi = realUiEs;
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    lastMeta.onAddToFavorites();
+    expect(kebabMocks.toggleFavorite).toHaveBeenCalledWith('fiscal-models', 'Modelos Fiscales');
+  });
+
+  it('onPageHelp opens the support chat on its "Ayuda" tab', () => {
+    activeUi = realUiEs;
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    lastMeta.onPageHelp();
+    expect(kebabMocks.setTab).toHaveBeenCalledWith('ayuda');
+    expect(kebabMocks.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('isFavorite follows the favourites context for the "fiscal-models" key', () => {
+    activeUi = realUiEs;
+    kebabMocks.isFavorite.mockImplementation((key) => key === 'fiscal-models');
+    renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    expect(lastMeta.isFavorite).toBe(true);
+    expect(kebabMocks.isFavorite).toHaveBeenCalledWith('fiscal-models');
   });
 });

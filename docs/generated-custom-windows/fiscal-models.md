@@ -292,7 +292,7 @@ that already carries it is just as frozen as one presented through either curren
     change is frozen on its persisted snapshot instead and cannot drift.
   - Every action that could mutate or regenerate a submitted declaration is wrapped in
     `{!isSubmitted && (...)}` in the action bar: **Guardar**, **Calcular**, **"Generar fichero
-    303"/"Generar fichero 349"**, and **"Registrar/Presentar"**. Once a declaration is submitted,
+    303"/"Generar fichero 349"**, and **"Registrar/Presentar"** (349: "Registrar presentación"). Once a declaration is submitted,
     the action bar reduces to just **Cancelar** and the status chip (`FmStatusChip`). `handleGenerate` on both pages
     also re-checks `isSubmitted` at its own top (belt-and-braces, same double-check pattern already
     used for `missingRequiredFields`) and toasts `fm.validation.already_submitted` if reached
@@ -404,7 +404,7 @@ Modelo 349:
 them — the only component that could ever set them (`StatusPillMenu`/`StatusMenu` in
 `FmCommon.jsx`) was never wired into any real page and has been deleted.
 
-Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
+Status transitions are driven by the detail page action buttons. Clicking **"Registrar/Presentar"** (on 349 "Registrar presentación" since ETP-5584 P14; renamed from "Marcar como 'Presentado'" — ETP-5229 item #10, see the "Action bar" and "AEAT electronic submission" sections below) opens `PresentModal`, which offers **3 paths on Modelo 303** (`submitted_ack`, `submitted`, and the opt-in `aeat_telematic` sentinel card) and **2 on Modelo 349** (`submitted_ack`, `submitted` — 349 never passes `showAeatPath`). The "Otra Plataforma" path — which used to set `submitted_ext` — was removed from `PresentModal`; `submitted_ext` itself is still a valid, fully-rendered status (color, label, stepper index) for any declaration that already carries it from before this change, it just can no longer be newly selected from the modal.
 
 ### `submissionMethod` — telling apart the 3 paths that lead to "Presentado" (ETP-4755)
 
@@ -547,7 +547,7 @@ variant for the primary. The status chip is the list's own chip (`FmStatusChip`)
 with no "Estado:" prefix. See "Detail page header, action bar and 1280×720 layout (ETP-5584)" below.
 The handlers, gates and data-safety behaviour described in the rest of this section are unchanged.
 
-Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill, then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
+Left to right (pre-ETP-5584 order): **Cancelar** (`onBack`) and a status pill (since ETP-5584 the `FmStatusChip`), then — right-aligned — **Guardar** (`Save`/`Loader2` icon, `handleSave` — ETP-5338, leftmost of the right-aligned group, replacing an earlier go-back button that used to sit next to Cancelar, see below), **Calcular** (`handleComputeClick` — triggers the actual box recompute via `handleCompute` first, then persists the freshly-recomputed `identChecks`/`manualOverrides` via the same `persistEditableFields()` helper Guardar uses, fire-and-forget; spinner while `computing`. **Order matters here (ETP-5431 pt.5, see "Box 111 autocompletion" below): recompute always runs before the persist reads its snapshot** — an earlier version launched both in parallel, so the save's snapshot almost always raced the recompute and persisted box 111's pre-recompute value), a standalone **"Generar fichero 303"** button, and a single **"Registrar/Presentar"** button (renamed from "Marcar como 'Presentado'" — ETP-5229 item #10) opening `PresentModal`, which on this page passes `showAeatPath` so its 3rd card ("Presentación telemática AEAT" / `aeat_telematic`) is available — see "AEAT electronic submission" below for how that card routes into `AeatSubmitFlow`. There is deliberately no separate standalone AEAT button in the action bar; a brief ETP-5229 iteration split it into one, but the modal was reunified with a single renamed trigger instead. **All four of these buttons — Guardar, Calcular, "Generar fichero 303", and "Registrar/Presentar" — are wrapped `{!isSubmitted && ...}` (ETP-5438): once the declaration reaches a submitted-family status, the action bar reduces to just Cancelar and the status pill.** "Generar fichero 303" used to be unconditionally visible regardless of submission status before this fix — see "Freeze once presented — recalculation/re-presentation guard (ETP-5438)" above for the full rationale and the matching backend guard. The page-title `MoreVertical` icon — previously decorative, with no menu attached — now opens `MoreOptionsMenu` (`FmCommon.jsx`): see "List page toolbar" below for the removal of this page's former kebab, and "'More options' menu — favorites and help" for the new, functioning menu that replaced the dead icon.
 
 **Guardar's position (ETP-5338 pt.6).** Guardar briefly landed in the old go-back slot (left, next to Cancelar) when it first replaced go-back, then moved into the right-aligned primary-action group — leftmost of it, before "Calcular" — to match `saveActions.jsx`'s established Save-before-Confirm ordering convention used by every AD-window's generic DetailView toolbar. It is not grouped with Cancelar: Cancelar discards/navigates away, Guardar persists and stays, and the two are visually separated by the `flex: 1` spacer between the left-aligned pair (Cancelar + status pill) and the right-aligned action cluster.
 
@@ -932,8 +932,15 @@ field is rendered by `renderIdentSelectField` in `FmBoxes303.jsx`. That covers `
 (`@/components/ui/select`). The trigger keeps the `fm-aeat-ident-inline-field__select(--compact)`
 classes, which only size it now: border, height, padding and focus ring come from `SelectTrigger`.
 It also carries `data-testid="FmBoxes303__identSelect"` and `data-field-id`. Each option carries
-`data-option-value`. Radix reserves `''` for "no value", so an unset field is passed as `undefined`
-and `fm.ident.decl.placeholder` is the trigger placeholder. Tests drive it in two ways:
+`data-option-value`. The Select is always **controlled**: an unset field is passed as `''`, never
+`undefined`, and shows `fm.ident.decl.placeholder` ("Seleccionar…") as the trigger placeholder. This
+is the same contract as the app's own optional selects (`SelectorInput`, `EntityForm`):
+- **Optional fields** also get a "Seleccionar…" item, so a value can be cleared again. Radix forbids
+  `''` as an item value, so the item uses the `__empty__` sentinel (`EMPTY_OPTION`), which
+  `onValueChange` maps back to `''`.
+- **Required fields** (`isFieldRequired`) get no clear item.
+
+Tests drive it in two ways:
 - **Vitest:** mock the module with `__tests__/testUtils/nativeSelectMock.jsx`, which renders a
   native `<select>`, so `fireEvent.change` still works.
 - **Playwright:** open the trigger and click `[role="option"][data-option-value="X"]`. See
@@ -2369,7 +2376,8 @@ resurfaced the stale path-selection screen instead of returning to the main page
 
 ### Popups — layout, stable size and 1280×720 (ETP-5584)
 
-`PresentModal` ("Registrar/Presentar", 303 and 349), `AeatSubmitFlow` ("Presentación telemática
+`PresentModal` (303: "Registrar/Presentar"; 349: `fm.present.title_register_only`, "Registrar
+presentación", see "349 popup is 'Registrar presentación'"), `AeatSubmitFlow` ("Presentación telemática
 AEAT") and the `ConfigDrawer` modal are built on the window's standard `.fm-config-modal` shell
 (header / scrollable body / footer, 20px gutters) — the same shell as `NewDeclModal`,
 `FileGenModal` and `FileGenModal303`. They do not use the Radix `Dialog` from
@@ -3349,7 +3357,7 @@ ever look wrong for a given campaign year — AEAT changes them periodically.
 
 ## Model catalog (`FmCatalogPage`)
 
-The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It uses the `fm-toolbar__btn` (non-`--primary`) style so it reads as a secondary action next to "+ Nueva declaración".
+The catalog drawer is opened from the toolbar button described above — **"Catálogo de modelos (N)"**. It reuses `fm.catalog.title` for its label and calls `setShowCatalog(true)` inline on click. It is an app `Button variant="outline" size="sm"` (`fm-list-catalog-button`), so it reads as a secondary action next to the dark primary "+ Nueva declaración" `Button`.
 
 The catalog drawer lists the tax forms the tenant can enable/disable. It currently exposes only the two supported forms — no locked/"coming soon" entries:
 
