@@ -40,7 +40,10 @@ export function SyncStatusInline({ account, onConnect, windowReadOnly = false })
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs ${tone}`}>
         <span className={`inline-flex h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden="true" />
-        <LastSyncLabel date={account.lastSyncDate} prefixKey="financeAccountsSyncedAgo" />
+        <LastSyncLabel
+          date={account.lastSyncDate}
+          prefixKey="financeAccountsSyncedAgo"
+          data-testid="last-sync-label" />
       </span>
     );
   }

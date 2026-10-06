@@ -23,11 +23,11 @@ export function LastSyncLabel({ date, prefixKey, className, 'data-testid': testI
 
   return (
     <TooltipProvider>
-      <Tooltip delayDuration={200}>
-        <TooltipTrigger asChild>
+      <Tooltip delayDuration={200} data-testid="Tooltip__e09e5a">
+        <TooltipTrigger asChild data-testid="TooltipTrigger__e09e5a">
           <span className={className} data-testid={testId}>{ui(prefixKey, { time: relative })}</span>
         </TooltipTrigger>
-        <TooltipContent>
+        <TooltipContent data-testid="TooltipContent__e09e5a">
           {formatDateTime(date, locale)}
         </TooltipContent>
       </Tooltip>
