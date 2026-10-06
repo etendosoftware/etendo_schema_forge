@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/models/349/FmModel349Page.jsx
 // Adversarial QA pass on the "Justificante" receipt tab port (ETP-4755) —
 // deliberately does NOT mock '@/components/attachments' (unlike the sibling
 // FmModel349Page.receiptTab.vitest.jsx), so the REAL AttachmentsTab/useAttachments
@@ -124,28 +125,32 @@ describe('FmModel349Page — real useAttachments: lazy-load honours isActive (ET
     // listing/fetching attachments on mount"). Previously this fired a redundant
     // GET regardless of tab; the shared-cache lazy-load (`&& active` gate on the
     // list effect) closed that gap. Give effects a tick to prove no fetch fires.
+    // ETP-5584 (P12) — the only request allowed on mount is the lightweight `/count` read that
+    // feeds the "Justificante" tab counter (`prefetchCount`); the attachment LIST is never fetched.
     await new Promise(resolve => setTimeout(resolve, 50));
-    const calledUrls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(calledUrls.some(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1'))).toBe(false);
+    const calledUrls = globalThis.fetch.mock.calls.map(c => String(c[0]));
+    const listUrls = calledUrls.filter(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-1') && !u.includes('/count'));
+    expect(listUrls).toHaveLength(0);
   });
 
   it('fetches ONCE — only once the receipt tab is opened — for the same table/record', async () => {
     render(<FmModel349Page decl={makeDecl({ id: 'decl-eager-2' })} {...defaultProps} />);
 
-    // No eager fetch while the receipt tab is inactive (ETP-4564).
+    // No eager LIST fetch while the receipt tab is inactive (ETP-4564) — only the `/count` read
+    // behind the tab counter (ETP-5584 P12).
+    const listCalls = () => globalThis.fetch.mock.calls
+      .map(c => String(c[0]))
+      .filter(u => u.includes('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-2') && !u.includes('/count'));
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(listCalls()).toHaveLength(0);
 
     const tabs = screen.getAllByRole('tab');
     fireEvent.click(tabs.find(t => t.textContent.includes('fm.tab.receipt')));
 
     // AttachmentsTab's own useAttachments({ isActive: true }) mounts and fires
-    // the single list() for this record. The previously-redundant second GET
-    // from the top-level hook is gone: that hook stays inactive and never
-    // fetches, so the receipt tab hits the endpoint exactly once.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
-    const urls = globalThis.fetch.mock.calls.map(c => c[0]);
-    expect(urls[0]).toContain('/sws/neo/attachments/ETGO_Fiscal_Decl/decl-eager-2');
+    // the single list() for this record. The top-level hook stays inactive and
+    // never lists, so the receipt tab hits the list endpoint exactly once.
+    await waitFor(() => expect(listCalls()).toHaveLength(1));
   });
 });
 

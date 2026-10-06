@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { useUI } from '@/i18n';
+import { useUI, useLocaleSwitch } from '@/i18n';
 import {
   Download, Save,
   OctagonAlert, TriangleAlert, CircleCheck,
@@ -9,7 +9,7 @@ import {
   ClipboardCheck, ReceiptText, FileCheck,
 } from 'lucide-react';
 import { Tabs, KpiWidget } from '../../FmCommon.jsx';
-import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta } from '../../FmDetailChrome.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import FmBoxes303 from './FmBoxes303.jsx';
 import { PresentModal, FileGenModal303 } from '../../FmOverlays.jsx';
@@ -18,7 +18,7 @@ import { isLastPeriodOfYear, getMissingRequiredFields } from './fm303Layouts.js'
 import { neoBase } from '@/components/related-documents/helpers.js';
 import { useAuth } from '@/auth/AuthContext.jsx';
 import {
-  formatAmount, formatPeriod, computeBoxes303, generate303File, fetchDeclarationIncidents,
+  formatAmount, computeBoxes303, generate303File, fetchDeclarationIncidents,
   persistManualData, deriveResultKind, toBoxArray, applyOverrides, recomputeDerivedBoxes, getBoxValue,
   resolveResultColors, withBox111NonZeroFlag, NEGATIVE_NOT_ALLOWED_BOXES, roundEur,
   clampNegativeOverrides, showIaeActivityReminder, showMissingRequiredFieldsReminder, buildValidatedBoxValue,
@@ -325,6 +325,8 @@ export function sourcesTabBadge(snapshotServed, invoiceCount, sources) {
 export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmittedRemotely, onManualDataSaved, token, apiBaseUrl }) {
   const ui = useUI();
   const t = ui;
+  const { locale: appLocale } = useLocaleSwitch();
+  const bcpLocale = (appLocale || 'es_ES').replace('_', '-');
   // Both hooks below back the ETP-4975 missing-default-IAE-activity guard only
   // (see handleGenerate). Requires a Router/AuthProvider ancestor — every test
   // that mounts this page must wrap it in both, or mock `react-router-dom`'s
@@ -511,12 +513,15 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
   // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
-  const { upload: uploadReceipt } = useAttachments({
+  // P12 (ETP-5584) — `prefetchCount` also fetches the lightweight attachment count for the
+  // "Justificante" tab counter (kept fresh by the attachments bus after an upload/delete).
+  const { upload: uploadReceipt, count: receiptCount = null } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
     token,
     apiBaseUrl,
     isActive: false,
+    prefetchCount: true,
   });
 
   function handleBoxChange(boxNum, rawValue) {
@@ -1343,7 +1348,7 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
   const resultColors = resolveResultColors(resultKind);
 
 
-  const { tone: incidentBadgeTone, iconColor: incidentIconColor, badge: incidentBadge } =
+  const { iconColor: incidentIconColor, badge: incidentBadge } =
     buildIncidentVariants(blocking, warning, t);
 
   const tabs = [
@@ -1352,19 +1357,21 @@ export default function FmModel303Page({ decl, onBack, onStatusChange, onSubmitt
     { id: 'sources',   label: t('fm.tab.sources') ?? 'Facturas',
       badge: sourcesTabBadge(snapshotServed, invoiceCount, liveSources ?? decl.sources),
       icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__4f6c0d" /> },
+    // P12 (ETP-5584) — every list tab shows its count, 0 included (FmDetailChrome's rule).
     { id: 'incidents', label: t('fm.tab.incidents') ?? 'Incidencias',
-      badge: incidentCount > 0 ? incidentCount : null,
-      badgeTone: incidentBadgeTone,
+      ...incidentsTabBadge(blocking, warning),
       icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__4f6c0d" /> },
     { id: 'receipt',   label: t('fm.tab.receipt') ?? 'Justificante',
+      badge: tabCount(receiptCount),
       icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__4f6c0d" /> },
   ];
 
-  const periodLabel = `${decl.year}/${formatPeriod(decl.period)}`;
 
   // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
   // model badge, kebab), like the list's "Modelos Fiscales" title. See FmDetailChrome.
-  const declTitle = `${t('fm.config.m303.title') ?? 'Modelo 303'} - ${periodLabel}`;
+  // P9 — same title format as every model (FmDetailChrome's buildDeclTitle); `bcpLocale`
+  // keeps a monthly period's month name in the UI locale.
+  const declTitle = buildDeclTitle(t('fm.config.m303.title') ?? 'Modelo 303', decl, bcpLocale);
   useFmDetailPageMeta({
     model: '303',
     title: declTitle,

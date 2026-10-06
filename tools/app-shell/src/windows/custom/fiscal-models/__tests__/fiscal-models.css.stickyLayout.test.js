@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/fiscal-models.css
 // Source-reading tests for ETP-5456 (sticky-layout follow-up): the 4 sticky
 // regions across the fiscal-models custom window must have `position: sticky`
 // with the RIGHT `top` value, stacked correctly relative to their sibling
@@ -68,5 +69,15 @@ describe('fiscal-models.css — sticky stack (ETP-5456)', () => {
     const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
     assert.doesNotMatch(cssWithoutComments, /padding-bottom:\s*100vh/);
     assert.doesNotMatch(cssWithoutComments, /margin-bottom:\s*-100vh/);
+  });
+
+  // ETP-5584 (P15) — the operators table's column header stays pinned with the filter row.
+  it('.fm-349-ops-table thead th is sticky at top: 97px, and its wrapper is not a scroll box', () => {
+    const th = ruleBodyFor('.fm-349-ops-table thead th', css);
+    assert.match(th, /position:\s*sticky/);
+    assert.match(th, /top:\s*97px/);
+    assert.match(th, /background:/);
+    const wrap = ruleBodyFor('.fm-349-ops-wrap', css);
+    assert.match(wrap, /overflow:\s*visible/);
   });
 });

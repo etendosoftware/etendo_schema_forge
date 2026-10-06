@@ -22,10 +22,11 @@ const realUiEs = makeRealUI(esES);
 const realUiEn = makeRealUI(enUS);
 
 let activeUi = realUiEs;
+let activeLocale = 'es_ES';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => activeUi }));
+vi.mock('@/i18n', () => ({ useUI: () => activeUi, useLocaleSwitch: () => ({ locale: activeLocale }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -114,7 +115,9 @@ describe('FmModel303Page — breadcrumb against the real locale dictionary (ETP-
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
   it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 303 - 2026/T2", not the stale "Modelo"', () => {
     activeUi = realUiEn;
+    activeLocale = 'en_US';
     renderWithMeta(<FmModel303Page decl={BASE_DECL} {...defaultProps} />);
+    activeLocale = 'es_ES';
 
     expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 303 - 2026/T2');
     expect(lastMeta.title).toBe('Form 303 - 2026/T2');
@@ -160,5 +163,24 @@ describe('FmModel303Page — app TopBar meta (ETP-5584)', () => {
     expect(lastMeta.title).toBe('Modelo 303 - 2026/T2');
     rerender(<PageMetaProvider><MetaProbe /></PageMetaProvider>);
     expect(lastMeta.title).toBeUndefined();
+  });
+});
+
+// P9 (ETP-5584) — one title format for every model (FmDetailChrome's buildDeclTitle): a monthly
+// period shows its month name in the UI locale, exactly like Modelo 349.
+describe('FmModel303Page — monthly period title (P9)', () => {
+  it('es_ES: "Modelo 303 - 2026/octubre"', () => {
+    activeUi = realUiEs;
+    activeLocale = 'es_ES';
+    renderWithMeta(<FmModel303Page decl={{ ...BASE_DECL, period: '10' }} {...defaultProps} />);
+    expect(lastMeta.title).toBe('Modelo 303 - 2026/octubre');
+  });
+
+  it('en_US: "Form 303 - 2026/October"', () => {
+    activeUi = realUiEn;
+    activeLocale = 'en_US';
+    renderWithMeta(<FmModel303Page decl={{ ...BASE_DECL, period: '10' }} {...defaultProps} />);
+    activeLocale = 'es_ES';
+    expect(lastMeta.title).toBe('Form 303 - 2026/October');
   });
 });

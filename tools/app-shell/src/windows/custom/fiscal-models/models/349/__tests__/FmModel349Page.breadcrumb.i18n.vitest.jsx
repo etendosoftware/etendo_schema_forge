@@ -123,18 +123,18 @@ function renderWithMeta(ui) {
 }
 
 describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-4945)', () => {
-  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1", not the stale "Tesorería / Declaraciones"', () => {
+  it('resolves the es_ES breadcrumb to "Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1", not the stale "Tesorería / Declaraciones"', () => {
     activeUi = realUiEs;
     activeLocale = 'es_ES';
     const { container } = renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026 T1');
-    expect(lastMeta.title).toBe('Modelo 349 - 2026 T1');
+    expect(lastMeta.breadcrumb).toBe('Finanzas / Modelos Fiscales / Modelo 349 - 2026/T1');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026/T1');
     expect(lastMeta.titleExtra.props.className).toBe('fm-model-badge fm-model-badge--349');
     expect(typeof lastMeta.onAddToFavorites).toBe('function');
     expect(typeof lastMeta.onPageHelp).toBe('function');
     // ETP-5584 — no in-page title row any more: nothing duplicated with the TopBar.
-    expect(container.textContent).not.toContain('Modelo 349 - 2026 T1');
+    expect(container.textContent).not.toContain('Modelo 349 - 2026/T1');
   });
 
   // ETP-5338 — the "Modelo 349" segment itself used to be a hardcoded Spanish
@@ -142,13 +142,13 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
   // the root/section segments. Now resolved via the shared 'fm.config.m349.title'
   // key (already used by the catalog config section header), which translates
   // "Modelo" to "Form" — the term AEAT-form-aware English UI copy uses.
-  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026 T1", not the stale "Modelo"', () => {
+  it('resolves the en_US breadcrumb to "Finance / Fiscal Models / Form 349 - 2026/T1", not the stale "Modelo"', () => {
     activeUi = realUiEn;
     activeLocale = 'en_US';
     renderWithMeta(<FmModel349Page decl={makeDecl()} {...defaultProps} />);
 
-    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 349 - 2026 T1');
-    expect(lastMeta.title).toBe('Form 349 - 2026 T1');
+    expect(lastMeta.breadcrumb).toBe('Finance / Fiscal Models / Form 349 - 2026/T1');
+    expect(lastMeta.title).toBe('Form 349 - 2026/T1');
   });
 
   // ETP-5338 — a MONTHLY declaration's periodLabel used to derive its month name
@@ -163,7 +163,7 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
     activeLocale = 'es_ES';
     renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(lastMeta.title).toBe('Modelo 349 - 2026 / octubre');
+    expect(lastMeta.title).toBe('Modelo 349 - 2026/octubre');
   });
 
   it('formats a monthly period\'s month name in English under en_US ("October"), not the stale "octubre"', () => {
@@ -171,6 +171,6 @@ describe('FmModel349Page — breadcrumb against the real locale dictionary (ETP-
     activeLocale = 'en_US';
     renderWithMeta(<FmModel349Page decl={makeDecl({ period: '10' })} {...defaultProps} />);
 
-    expect(lastMeta.title).toBe('Form 349 - 2026 / October');
+    expect(lastMeta.title).toBe('Form 349 - 2026/October');
   });
 });

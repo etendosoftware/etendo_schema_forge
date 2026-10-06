@@ -12,7 +12,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {
@@ -178,7 +178,8 @@ describe('FmModel303Page — incidents fetched on mount (ETP-4456)', () => {
     await waitFor(() => expect(screen.getByTestId('kpi-fm.tab.incidents').getAttribute('data-value')).toBe('0'));
 
     const tabBtn = incidentsTabButton();
-    expect(tabBtn.getAttribute('data-badge')).toBe('');
+    // ETP-5584 (P12) — every list tab shows its count, 0 included.
+    expect(tabBtn.getAttribute('data-badge')).toBe('0');
 
     fireEvent.click(tabBtn);
     const incidentsMock = screen.getByTestId('incidents-tab-mock');

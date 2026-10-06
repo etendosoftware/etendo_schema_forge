@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmCommon.jsx
+// @covers tools/app-shell/src/windows/custom/fiscal-models/FmDetailChrome.jsx
 // Vitest component tests for FmCommon.jsx
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import React from 'react';
@@ -63,6 +65,18 @@ describe('KpiWidget', () => {
     render(<KpiWidget label="Test" value={1} badge={null} />);
     // badge text should not appear
     expect(document.body.textContent).not.toContain('Esta semana');
+  });
+
+  // ETP-5584 (P15) — label and badge never wrap: at 1280px four cards leave ~210px for both.
+  it('keeps the label and the badge on one line (nowrap; the label ellipsises, the badge never shrinks)', () => {
+    render(<KpiWidget label="Total operaciones" value={1} badge="Base total" />);
+    const label = screen.getByText('Total operaciones');
+    const badge = screen.getByText('Base total');
+    expect(label.style.whiteSpace).toBe('nowrap');
+    expect(label.style.textOverflow).toBe('ellipsis');
+    expect(label.getAttribute('title')).toBe('Total operaciones');
+    expect(badge.style.whiteSpace).toBe('nowrap');
+    expect(badge.style.flexShrink).toBe('0');
   });
 
   it('renders icon when provided', () => {

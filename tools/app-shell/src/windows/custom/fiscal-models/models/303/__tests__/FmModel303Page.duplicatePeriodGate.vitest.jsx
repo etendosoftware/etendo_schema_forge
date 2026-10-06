@@ -10,6 +10,7 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));

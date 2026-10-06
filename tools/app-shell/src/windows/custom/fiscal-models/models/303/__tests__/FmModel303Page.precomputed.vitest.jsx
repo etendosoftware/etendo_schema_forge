@@ -5,7 +5,7 @@ import FmModel303Page from '../FmModel303Page.jsx';
 
 const navigateMock = vi.fn();
 
-vi.mock('@/i18n', () => ({ useUI: () => (key) => key }));
+vi.mock('@/i18n', () => ({ useUI: () => (key) => key, useLocaleSwitch: () => ({ locale: 'es_ES' }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
 vi.mock('@/auth/AuthContext.jsx', () => ({ useAuth: () => ({ selectedOrg: { id: 'org-1' } }) }));
 vi.mock('../../../fiscalModelsUtils.js', async (importOriginal) => {

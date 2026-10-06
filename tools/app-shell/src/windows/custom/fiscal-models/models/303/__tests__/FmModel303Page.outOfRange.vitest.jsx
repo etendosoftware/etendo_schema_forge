@@ -23,7 +23,7 @@ const { toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn(), toastSuccessMock: vi.fn(),
 }));
 
-vi.mock('@/i18n', () => ({ useUI: () => (key, params) => {
+vi.mock('@/i18n', () => ({ useLocaleSwitch: () => ({ locale: 'es_ES' }), useUI: () => (key, params) => {
   // Minimal real interpolation so the plural/singular assertions below can check actual text,
   // mirroring the real dictionary strings (en_US.json/es_ES.json) closely enough to assert on.
   const DICTIONARY = {

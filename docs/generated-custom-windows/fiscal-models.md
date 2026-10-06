@@ -32,7 +32,7 @@ debug contracts.
 - Implementation type: `layoutType: "custom"` — loaded from `customLoaders` in `tools/app-shell/src/windows/registry.js`.
 - Breadcrumb — list page: `Finanzas / Modelos Fiscales` (`` `${ui('finance')} / ${ui('fm.breadcrumb.section')}` ``, `FmListPage.jsx`), shown as the TopBar subtitle (ETP-5584).
 - Page title — list page: **"Modelos Fiscales"** / "Fiscal Models", the window's menu name, resolved from the same `ui('fm.breadcrumb.section')` key as the breadcrumb's last segment so the title and the breadcrumb can never disagree (ETP-5584 — it used to read "Declaraciones", `fm.list.title`, while the menu and the breadcrumb said "Modelos Fiscales"). It is published to the app TopBar via `useSetPageMeta` — see "List page header (app TopBar) and declarations toolbar" below.
-- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text.
+- Breadcrumb — Modelo 303/349 detail pages: `Finanzas / Modelos Fiscales / Modelo 303 - {periodLabel}` (es_ES) / `Finance / Fiscal Models / Form 303 - {periodLabel}` (en_US) (`FmModel303Page.jsx`), and the equivalent for 349 (`FmModel349Page.jsx`) — 3 segments, consistent between both models. ETP-4945 replaced 3 independently hardcoded, mutually inconsistent breadcrumbs (a raw Spanish literal `Tesorería` on all three pages, with 303 at 2 segments and 349 at 3), and introduced the shared `ui('finance')` / `ui('fm.breadcrumb.section')` keys reused across all three surfaces so the "Modelos Fiscales" segment can't drift between the list and its two detail pages again. ETP-5338 fixed a follow-on bug ETP-4945 left in place: the "Modelo 303"/"Modelo 349" segment itself (and the matching page-title text) was still a raw hardcoded Spanish literal even under `en_US` — now resolved via the shared `fm.config.m303.title` / `fm.config.m349.title` keys (already used by the catalog config section header), which is also why the English segment reads "Form 303", not "Model 303" — "Form" is this codebase's established translation of AEAT's "Modelo" (see `fm.catalog.303.name` / `fm.config.m303.title`). Since ETP-5584 it is the TopBar subtitle, published by `useFmDetailPageMeta`, not in-page text. **Title format (P9, ETP-5584):** both models build the title with one helper, `buildDeclTitle` in `FmDetailChrome.jsx`, so the format is `<model title> - <year>/<period>`. A quarter reads "Modelo 349 - 2026/T4" (349 used to read "2026 T4"). A monthly period shows its month name in the UI locale: "Modelo 303 - 2024/octubre" or "Form 303 - 2024/October". 303 used to show "10M", and 349 used "2026 / octubre". The locale is passed explicitly (`useLocaleSwitch`), never left to the runtime default.
 
 ## Auto-compute architecture (`useFiscalAutoCompute`)
 
@@ -2036,8 +2036,8 @@ be added to every one of those mocks before the pages render at all.
   lines. Row labels in compact sections keep `min-width: 200px`. The group bracket is positioned
   from the same variable: `right: calc(3 * var(--fm-aeat-cell-w) + 28px)`.
 - **KPI gutter (303).** The KPI row uses the same 20px side gutter as the header, so the cards line
-  up with the Cancelar and Registrar/Presentar edges. 349's KPI row is left as it was (349.2 is
-  tracked separately).
+  up with the Cancelar and Registrar/Presentar edges. 349's KPI row got the same gutter in P10:
+  see "Modelo 349 detail page › KPIs".
 - **"Información adicional" heading.** The heading row (`.fm-aeat-subheading`, the "Exclusivamente
   para aquellos sujetos pasivos…" sentence) now uses the column-header label typography
   (600 14/20), down from 700 18/28.
@@ -2720,6 +2720,54 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 
 ### Tabs
 
+**Counters, empty states and the sticky column header (ETP-5584).** The counter and empty-state
+rules apply to both 303 and 349.
+
+- **Tab counters (P12).**
+  - The rule: every tab that lists records shows its count, 0 included, in the shared
+    `.fm-tabs__badge` counter (`tabCount` in `FmDetailChrome.jsx`). The counter is hidden only
+    while the number is still unknown (`null`), and never shown as a fake 0.
+  - **Tabs with a counter.** 303: Facturas, Incidencias, Justificante. 349: Operadores,
+    Rectificaciones, Facturas origen, Incidencias, Justificante.
+  - **Casillas** (303) is a form, not a list, so it has no counter.
+  - **Incidencias** counts blocking + warning, which is what the tab lists, on both models
+    (`incidentsTabBadge`). The tone is `danger` if anything blocks, else `warn`. Before this, 349
+    counted blocking only, and both models hid the counter at 0.
+  - **Justificante** reads the lightweight attachment count: `useAttachments({ isActive: false,
+    prefetchCount: true })` in the page. The attachments bus keeps it fresh after an upload or a
+    delete. The attachment list itself is still fetched only when the tab opens. **Known gap:** a
+    server-side auto-attach after a successful AEAT filing is not announced on the bus, so 303's
+    counter shows it only after the page is reopened.
+- **One empty state (P11).**
+  - `FmEmptyState` (`FmDetailChrome.jsx`, re-exported by `FmCommon.jsx` as `EmptyState`) is the
+    single icon + title + text block. Every tab that can be empty renders it:
+
+    | Tab | Icon | Title | Text |
+    |---|---|---|---|
+    | Facturas / Facturas origen | `ReceiptText` | `fm.sources.empty` | `fm.sources.empty_sub` |
+    | Incidencias | `CircleCheck` | `fm.incidents.empty` | `fm.incidents.empty_sub` |
+    | Rectificaciones | `FileEdit` | `fm.m349.rectif.empty_title` | `fm.m349.rectif.empty` |
+    | Operadores | `Users` | `fm.m349.operators.empty` | `fm.m349.operators.empty_sub` |
+
+    Operadores shows the empty state under the column header. When a filter or search leaves
+    nothing, the title is `fm.m349.operators.no_match` instead.
+  - The operator "origin" filter empties use the same component, with the filter message as the
+    title.
+  - **Why no app-wide component is reused.** The app has no shared generic empty-state
+    component: `LinesEmptyState` is specific to adding lines, and `AttachmentsTable`'s empty row
+    is inline markup.
+  - **Justificante** keeps the app's own `AttachmentsTab` empty state, which is also an icon plus
+    a text. Its wording belongs to the formats work (P13).
+- **Sticky operators column header (P15).**
+  - The operators table's `<th>` row (NIF-IVA, Operador…) is `position: sticky; top: 97px`
+    (`.fm-349-ops-table thead th`). That docks it under the tabs bar (49px) and the filter row
+    (48px), alongside `.fm-349-totals`.
+  - Its wrapper, `.fm-349-ops-wrap`, overrides `.fm-table-wrap`'s `overflow: auto` with
+    `visible`. A never-scrolling `overflow: auto` box would otherwise capture the sticky header.
+  - Together with the fixed action bar, scrolling the operators keeps the action bar, tabs,
+    filters and column header all visible. Measured at 1280×720: the header lands at
+    `scroll top + 97px`.
+
 - **Operadores** — operator table with key filter chips and live name/NIF-IVA search. Null `name`/`nif` fields are guarded (`?? ''`) before case-folding to avoid runtime crashes. Each row's "Origen" summary (`FmModel349Page.originByNif`) is keyed by the composite `(nifIva, key)`, not `nifIva` alone — the same counterparty can legitimately appear as two separate operator rows under two different AEAT349 keys (e.g. one row under `E` — Entregas, another under `I` — Servicios recibidos), so each row's origin count now reflects only the invoices that belong to that row's own key (ETP-4755).
 - **Rectificativas en Operadores (ETP-5027)** — `/fiscal349/operators` now also returns *corrective* operator rows inside the same `operators` array (ordered after all regular rows), plus a sibling `rectificativeSummary` object. Every row carries a `rectificative` boolean (`false` on regular rows, never omitted), so badging needs no `undefined` handling; `isRectificativeOp()` in `FmModel349Page.jsx` only normalizes the boolean/string shapes NEO can emit.
   - **The amounts are signed deltas and are usually NEGATIVE** — a rectification removing 3 units of a 10 EUR product reports `-30`. They are rendered through `formatAmount` (which delegates to the canonical `formatCurrency('EUR', …)`) and are **never** `Math.abs()`'d: a negative subtotal is the expected, valid case, tinted via `.fm-349-amount--negative` for legibility only, not as an error state.
@@ -2735,6 +2783,14 @@ Full intra-EU recapitulative declaration view. Auto-compute runs via `useFiscalA
 - **Rectificaciones / Incidencias / Ficheros** — coming soon.
 
 ### KPIs
+
+**Layout (ETP-5584).**
+- **P10:** the KPI row has the same `12px 20px` padding as 303's, so the cards line up with the
+  action bar and the content. They used to overhang both by 12px on each side.
+- **P15:** `KpiWidget` (`FmCommon.jsx`, shared by the list, 303 and 349) keeps the label and the
+  badge on one line. The label is `nowrap` and ellipsises, with the full text in its `title`. The
+  badge is `nowrap` and never shrinks. At 1280×720, "Total operaciones / Base total", "Periodos
+  previos" and "Pendientes VIES / Sin validar" used to wrap onto two lines.
 
 Four cards (Operadores, Total operaciones, Rectificaciones, Pendientes VIES) sourced from `_precomputed.operators`. Each operator's `vies` value (`'valid'`/`'invalid'`/`'pending'`, driving both the Operadores row badge and the Pendientes VIES count) is derived server-side by `Fiscal349BoxesHandler#mapViesStatus` from the operator's BusinessPartner VIES status (`C_BPartner.EM_OBTIK_VIESStatus`, the same "Estado VIES" field editable on the Contact/BusinessPartner record): `'V'` → `valid`, `'I'` → `invalid`, anything else (null/blank/`'P'`) → `pending` (ETP-4755 — previously this field was never populated, so the badge always defaulted to `pending` regardless of the contact's real verification status).
 

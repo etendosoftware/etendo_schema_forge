@@ -1110,6 +1110,14 @@
   position: sticky;
   top: 97px;
 }
+
+/* ETP-5584 (P15) — the operators table's column header (NIF-IVA, Operador…) stays pinned
+   together with the filter row while the operators scroll: `top: 97px` = 49 (tabs bar) + 48
+   (filter row), the same stack `.fm-349-totals` docks under. Its wrapper must not be a scroll
+   box (`.fm-table-wrap` is `overflow: auto`), or the header would stick inside that never-
+   scrolling box instead of `.fm-detail-scroll`. */
+.fm-349-ops-wrap { overflow: visible; }
+.fm-349-ops-table thead th { position: sticky; top: 97px; z-index: 14; background: hsl(var(--card)); box-shadow: inset 0 -1px 0 hsl(var(--border-subtle)); }
 .fm-349-totals__card {
   background: hsl(var(--muted)); border-radius: 8px; padding: 12px;
 }

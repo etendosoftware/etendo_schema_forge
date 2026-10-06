@@ -1,4 +1,5 @@
 import React from 'react';
+import { useUI } from '@/i18n';
 import { Button } from '@/components/ui/button.jsx';
 import { useSetPageMeta } from '@/components/layout/PageMetaContext';
 import { useFavorites } from '@/components/layout/FavoritesContext';
@@ -132,6 +133,71 @@ export function FmStatusChip({ status, submissionMethod, t, variant = 'list' }) 
         </span>
       )}
     </span>
+  );
+}
+
+// ── Declaration title (P9) ───────────────────────────────────────────────────
+// ONE title format for every model: "<model title> - <year>/<period>", e.g. "Modelo 303 -
+// 2026/T1", "Modelo 349 - 2026/T4". A monthly period (2-digit "10") shows its month name in the
+// app's UI locale — `bcpLocale` must be passed explicitly ("es-ES"/"en-US"), never left to
+// Intl's runtime default (an es-language OS would otherwise show "octubre" under en_US, see
+// ETP-5338). Quarters ("T1".."T4") and anything else are shown as-is.
+export function formatDeclPeriod(decl, bcpLocale) {
+  const monthNum = /^\d{2}$/.test(String(decl?.period ?? '')) ? parseInt(decl.period, 10) : null;
+  const period = monthNum
+    ? new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1))
+    : decl?.period;
+  return `${decl?.year}/${period}`;
+}
+
+export function buildDeclTitle(modelTitle, decl, bcpLocale) {
+  return `${modelTitle} - ${formatDeclPeriod(decl, bcpLocale)}`;
+}
+
+// ── Tab counters (P12) ───────────────────────────────────────────────────────
+// ONE rule for every detail tab, 303 and 349 alike: a tab that lists records shows how many it
+// lists — 0 included — in the shared `.fm-tabs__badge` counter (303's "Facturas" style). The
+// counter is hidden only while the number is still unknown (`null`, e.g. invoices not loaded
+// yet), never shown as a fake 0. "Casillas" is a form, not a list, so it has no counter.
+export function tabCount(count) {
+  return count == null ? null : count;
+}
+
+// Incidencias: blocking + warning (what the tab lists), toned by the worst severity — same
+// danger/warn tones 303 always used.
+export function incidentsTabBadge(blocking, warning) {
+  const b = Number(blocking) || 0;
+  const w = Number(warning) || 0;
+  let badgeTone = null;
+  if (b > 0) badgeTone = 'danger';
+  else if (w > 0) badgeTone = 'warn';
+  return { badge: b + w, badgeTone };
+}
+
+// ── Empty state (P11) ────────────────────────────────────────────────────────
+// The ONE empty state of every fiscal-models surface: an icon, a title and a supporting text,
+// centred (`.fm-empty-state` in fiscal-models.css). Every 303/349 tab that can be empty renders
+// it — Facturas / Facturas origen, Incidencias, Rectificaciones, Operadores and the operator
+// "origin" filters — instead of each tab's own ad-hoc markup. The Justificante tab is the app's
+// shared AttachmentsTab, whose empty state is the attachments component's own.
+// `message`/`cta` keep the list page's historical call shapes working (FmCommon re-exports this
+// as `EmptyState`).
+export function FmEmptyState({ message, icon, title, sub, cta, testId }) {
+  const ui = useUI();
+  if (icon || title) {
+    return (
+      <div className="fm-empty-state" data-testid={testId}>
+        {icon && <div className="fm-empty-state__icon">{icon}</div>}
+        <div className="fm-empty-state__title">{title || message || ui('fm.list.empty')}</div>
+        {sub && <div className="fm-empty-state__sub">{sub}</div>}
+        {cta && <div className="fm-empty-state__cta">{cta}</div>}
+      </div>
+    );
+  }
+  return (
+    <div className="fm-empty-state" data-testid={testId}>
+      <p>{message ?? ui('fm.list.empty')}</p>
+    </div>
   );
 }
 

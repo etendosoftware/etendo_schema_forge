@@ -8,7 +8,7 @@ import {
   X, Save,
 } from 'lucide-react';
 import { KpiWidget, Tabs } from '../../FmCommon.jsx';
-import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta } from '../../FmDetailChrome.jsx';
+import { FmStatusChip, FmDetailHeader, FmDetailActionBar, FmDetailButton, useFmDetailPageMeta, buildDeclTitle, tabCount, incidentsTabBadge, FmEmptyState } from '../../FmDetailChrome.jsx';
 import { SourcesTab, IncidentsTab } from '../../FmTabContent.jsx';
 import { CheckboxField } from '@/windows/custom/shared/CheckboxField.jsx';
 import { PresentModal, FileGenModal } from '../../FmOverlays.jsx';
@@ -53,19 +53,7 @@ function declaredPeriodLabel(op) {
   return [period, year].filter(Boolean).join(' ');
 }
 
-// ETP-5456 — extracted out of the main component (S3776 cognitive-complexity fix, pure
-// refactor, no behavior change). Mirrors the exact monthNum/monthName/periodLabel logic that
-// used to live inline: a numeric two-digit `period` resolves to its localized month name
-// (explicit `bcpLocale`, not the runtime default — see the call site's own ETP-5338 comment);
-// anything else (quarters like "T1") falls back to the raw `year period` string.
-function buildPeriodLabel(decl, bcpLocale) {
-  const monthNum = /^\d{2}$/.test(decl.period) ? parseInt(decl.period, 10) : null;
-  if (!monthNum) return `${decl.year} ${decl.period}`;
-  const monthName = new Intl.DateTimeFormat(bcpLocale, { month: 'long' }).format(new Date(2000, monthNum - 1, 1));
-  return `${decl.year} / ${monthName}`;
-}
-
-// ETP-5456 — extracted alongside buildPeriodLabel (same S3776 fix). A filter only ever
+// ETP-5456 — extracted out of the main component (S3776 cognitive-complexity fix). A filter only ever
 // applies to the tab it was created for; the other tab must read null even in the instant
 // before the clear lands (see the call sites' own comment, unchanged).
 function resolveOriginFilterForTab(originFilter, tab) {
@@ -507,15 +495,13 @@ function OriginFilterChip({ nif, count, onClear, t, testId }) {
 // "nothing here" message, which would otherwise imply the declaration has no
 // invoices / no rectifications at all rather than none for THIS operator.
 function OriginFilterEmpty({ message, testId }) {
+  // ETP-5584 (P11) — the window's one empty state; the message is the filter-specific title.
   return (
-    <div
-      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}
-      data-testid={testId}
-    >
-      <span style={{ fontSize: 16, fontWeight: 600, color: 'hsl(var(--foreground))' }}>
-        {message}
-      </span>
-    </div>
+    <FmEmptyState
+      icon={<Search size={28} strokeWidth={1.5} data-testid="Search__originFilterEmpty" />}
+      title={message}
+      testId={testId}
+      data-testid="FmEmptyState__originFilter346dd5" />
   );
 }
 
@@ -574,15 +560,14 @@ function RectificationsTabContent({ rows, t, originFilter, onClearOriginFilter }
     : allRows;
 
   if (allRows.length === 0) {
+    // ETP-5584 (P11) — the window's one empty state (icon + title + text).
     return (
-      <div style={{ padding: '60px 0', textAlign: 'center' }}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: 'hsl(var(--foreground))', marginBottom: 6 }}>
-          {t('fm.m349.tab.rectif') ?? 'Rectificaciones'}
-        </div>
-        <div style={{ fontSize: 13, color: 'hsl(var(--text-disabled))' }}>
-          {t('fm.m349.rectif.empty')}
-        </div>
-      </div>
+      <FmEmptyState
+        icon={<FileEdit size={28} strokeWidth={1.5} data-testid="FileEdit__rectifEmpty" />}
+        title={t('fm.m349.rectif.empty_title') ?? 'Sin rectificaciones'}
+        sub={t('fm.m349.rectif.empty')}
+        testId="fm349-rectif-empty"
+        data-testid="FmEmptyState__rectif346dd5" />
     );
   }
 
@@ -839,22 +824,18 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
   // Only used to grab `upload()` for the manual acuse-de-recibo path below —
   // isActive: false keeps it from eagerly listing/fetching attachments on
   // mount (that eager fetch is owned by the "receipt" tab's own AttachmentsTab).
-  const { upload: uploadReceipt } = useAttachments({
+  // P12 (ETP-5584) — `prefetchCount` also fetches the lightweight attachment count for the
+  // "Justificante" tab counter (kept fresh by the attachments bus after an upload/delete).
+  const { upload: uploadReceipt, count: receiptCount = null } = useAttachments({
     tableName: FISCAL_DECL_TABLE,
     recordId: decl.id,
     token,
     apiBaseUrl,
     isActive: false,
+    prefetchCount: true,
   });
 
   const operators = liveOperators ?? decl.operators ?? MOCK_OPERATORS;
-
-  // ETP-5338 — `undefined` locale here used to resolve to the RUNTIME's/browser's
-  // default locale (typically the OS language), not the app's selected UI locale —
-  // so under an es-language OS the breadcrumb showed "octubre" even with the UI
-  // set to English. Pass the resolved `bcpLocale` explicitly, same fix pattern as
-  // `normDecl.updatedAt` in FmListPage.jsx.
-  const periodLabel = buildPeriodLabel(decl, bcpLocale);
 
   // ETP-5456 — derived from `identChecks`, not `decl.manualData` directly, so an unsaved
   // edit is reflected immediately (same precedent as 303's `identChecks.rectificativa`).
@@ -1196,16 +1177,20 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
 
 
   const TABS = [
-    { id:'operators', label: t('fm.m349.tab.operators'), badge: operators.length,        icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
-    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: rectifications || null,  icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
-    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
-    { id:'incidents', label: t('fm.m349.tab.incidents'), badge: blocking || null,        icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
-    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: null,        icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
+    // P12 (ETP-5584) — every list tab shows its count, 0 included, with the same counter and
+    // the same incident rule as 303 (FmDetailChrome's tabCount / incidentsTabBadge).
+    { id:'operators', label: t('fm.m349.tab.operators'), badge: tabCount(operators.length), icon: <Users size={16} strokeWidth={1.75} data-testid="Users__346dd5" /> },
+    { id:'rectif',    label: t('fm.m349.tab.rectif'),    badge: tabCount(rectifications),   icon: <FileEdit size={16} strokeWidth={1.75} data-testid="FileEdit__346dd5" /> },
+    { id:'invoices',  label: t('fm.m349.tab.invoices'),  badge: tabCount(invoicesTabBadge(snapshotServed, submittedSnapshot, liveInvoices)), icon: <ReceiptText size={16} strokeWidth={1.75} data-testid="ReceiptText__346dd5" /> },
+    { id:'incidents', label: t('fm.m349.tab.incidents'), ...incidentsTabBadge(blocking, warning), icon: <TriangleAlert size={16} strokeWidth={1.75} data-testid="TriangleAlert__346dd5" /> },
+    { id:'receipt',   label: t('fm.tab.receipt') ?? 'Justificante', badge: tabCount(receiptCount), icon: <FileCheck size={16} strokeWidth={1.75} data-testid="FileCheck__346dd5" /> },
   ];
 
   // ETP-5584 — the declaration title lives in the app top bar (title, breadcrumb subtitle,
   // model badge, kebab), like the list's "Modelos Fiscales" title. See FmDetailChrome.
-  const declTitle = `${t('fm.config.m349.title') ?? 'Modelo 349'} - ${periodLabel}`;
+  // P9 — same title format as every model (FmDetailChrome's buildDeclTitle), e.g.
+  // "Modelo 349 - 2026/T4"; `bcpLocale` keeps a monthly period's month name in the UI locale.
+  const declTitle = buildDeclTitle(t('fm.config.m349.title') ?? 'Modelo 349', decl, bcpLocale);
   useFmDetailPageMeta({
     model: '349',
     title: declTitle,
@@ -1284,10 +1269,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
           t={t}
           data-testid="ViesBanner__346dd5" />
         {/* ── KPI bar ──────────────────────────────────────────────── */}
+        {/* ETP-5584 (P10) — same 20px side gutter and 12px vertical padding as 303's KPI row,
+            so the cards line up with the action bar and the content instead of overhanging. */}
         <div style={{
           display: 'flex', flexDirection: 'row', alignItems: 'center',
-          gap: 12, padding: '0 8px',
-          height: 84, flexShrink: 0,
+          gap: 12, padding: '12px 20px',
+          flexShrink: 0,
         }}>
           <KpiWidget
             icon={<Users size={20} strokeWidth={1.75} data-testid="Users__346dd5" />}
@@ -1428,8 +1415,12 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                   data-testid="TotalsCard__346dd5" />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="fm-table-wrap" style={{ flex: 'none' }}>
-                    <table className="fm-table">
+                  {/* ETP-5584 (P15) — `fm-349-ops-wrap` drops `.fm-table-wrap`'s `overflow: auto`
+                      (a non-scrolling scroll box would capture the sticky header) and
+                      `fm-349-ops-table` pins the column header at `top: 97px`, right under the
+                      sticky filter row — see fiscal-models.css. */}
+                  <div className="fm-table-wrap fm-349-ops-wrap" style={{ flex: 'none' }}>
+                    <table className="fm-table fm-349-ops-table">
                       <thead>
                         <tr>
                           <th style={{ width: 32, paddingLeft: 20 }} onClick={e => e.stopPropagation()}>
@@ -1502,6 +1493,17 @@ export default function FmModel349Page({ decl, onBack, onStatusChange, onManualD
                         ))}
                       </tbody>
                     </table>
+                    {/* ETP-5584 (P11) — the window's one empty state, under the column header. */}
+                    {filteredOps.length === 0 && (
+                      <FmEmptyState
+                        icon={<Users size={28} strokeWidth={1.5} data-testid="Users__operatorsEmpty" />}
+                        title={operators.length === 0
+                          ? (t('fm.m349.operators.empty') ?? 'Sin operadores')
+                          : (t('fm.m349.operators.no_match') ?? 'Ningún operador coincide con el filtro')}
+                        sub={operators.length === 0 ? t('fm.m349.operators.empty_sub') : undefined}
+                        testId="fm349-operators-empty"
+                        data-testid="FmEmptyState__operators346dd5" />
+                    )}
                   </div>
                 </div>
               </div>

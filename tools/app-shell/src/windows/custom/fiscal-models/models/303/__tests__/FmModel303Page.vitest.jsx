@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 const navigateMock = vi.fn();
 
 vi.mock('@/i18n', () => ({
+  useLocaleSwitch: () => ({ locale: 'es_ES' }),
   useUI: () => (key) => key,
 }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigateMock }));
