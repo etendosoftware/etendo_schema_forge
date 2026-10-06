@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { toast } from 'sonner';
-import { useCopyLinkAction, useCopyRecordLinkAction } from '../useCopyLinkAction';
+// @covers tools/app-shell/src/hooks/useCopyLinkAction.js
+import { useCopyLinkAction, useCopyPageLink, useCopyRecordLinkAction } from '../useCopyLinkAction';
 
 vi.mock('sonner', () => ({
   toast: {
@@ -150,5 +151,39 @@ describe('useCopyRecordLinkAction', () => {
     });
     expect(toast.error).toHaveBeenCalledWith('Failed to copy');
     expect(toast.success).not.toHaveBeenCalled();
+  });
+});
+
+// ETP-5593 — backs ListView's toolbar "Share" button: the page URL as-is, query string
+// included, so state a window keeps in the URL (filters, search) travels with the link.
+describe('useCopyPageLink', () => {
+  const originalLocation = window.location;
+  const PAGE_URL = 'https://etendogo.example.com/chart-of-accounts?accountType=A&q=430';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.defineProperty(window, 'location', { value: { href: PAGE_URL }, writable: true });
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { value: originalLocation, writable: true });
+  });
+
+  it('copies the current page URL, query string included, and confirms with a toast', async () => {
+    const { result } = renderHook(() => useCopyPageLink());
+    await act(async () => { await result.current(); });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(PAGE_URL);
+    expect(toast.success).toHaveBeenCalledWith('Link copied');
+  });
+
+  it('shows an error toast when writeText rejects', async () => {
+    navigator.clipboard.writeText.mockRejectedValueOnce(new Error('denied'));
+    const { result } = renderHook(() => useCopyPageLink());
+    await act(async () => { await result.current(); });
+    expect(toast.error).toHaveBeenCalledWith('Failed to copy');
   });
 });

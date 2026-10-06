@@ -13630,6 +13630,10 @@
     }
   },
   "windows": {
+    "Chart of Accounts": {
+      "label": "Plan de cuentas",
+      "newLabel": "Nueva subcuenta"
+    },
     "Event Type": {
       "label": "Event Type"
     },
@@ -22618,13 +22622,15 @@
     "accountTreeFilterName": "Nombre",
     "accountTreeFilterElementLevel": "Nivel de elemento",
     "accountTreeFilterType": "Tipo de cuenta",
-    "accountTreeFilterActive": "Activo",
+    "accountTreeFilterActive": "Estado",
     "accountTreeDebit": "Débito",
     "accountTreeCredit": "Crédito",
     "accountTreeBalance": "Saldo",
     "accountTreeNoAccounts": "No hay cuentas para mostrar",
     "accountTreeReadOnlyPlaceholder": "Subcuenta de relleno — no editable",
-    "accountTreeLoadingFull": "Cargando el plan contable…",
+    "allAccountTypes": "Todos los tipos de cuenta",
+    "expandAll": "Expandir todo",
+    "collapseAll": "Contraer todo",
     "accountTreeFetchError": "No se pudo cargar el plan contable completo — mostrando una lista parcial",
     "newSubAccount": "Nueva subcuenta",
     "parentAccount": "Cuenta padre",
@@ -22633,7 +22639,7 @@
     "accountTypeAsset": "Activo",
     "accountTypeExpense": "Gasto",
     "accountTypeLiability": "Pasivo",
-    "accountTypeMemo": "Memorandum",
+    "accountTypeMemo": "Memorándum",
     "accountTypeOwnersEquity": "Patrimonio neto",
     "accountTypeRevenue": "Ingreso",
     "elementLevelHeading": "Epígrafe",

@@ -423,7 +423,7 @@ paged NEO entity grid, and this handler serves a custom, unpaged contract):
 | Estado | core `DistinctValuesFilter` (`multiple`, `heading`, `searchable={false}`, `renderLabel` → `Tag`) | See "Accounting status filter" |
 | Fecha | `DateRangePopover` | Default **Últimos 12 meses** (`last12m`) |
 | Limpiar filtros | `Button` | Only when filters differ from the defaults; resets to them (date back to 12 months) |
-| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts |
+| Share (link icon) | — | Copies `window.location.href` (filters are in the URL); `linkCopied` / `copyFailed` toasts. Uses the shared `useCopyPageLink()` hook (`hooks/useCopyLinkAction.js`), the same one behind `ListView`'s Share (ETP-5593) |
 | Ordenar | `ListSortPopover` + `useClientSort` | Client-side: the handler returns every row at once. Sorts the displayed (translated) values |
 | Actualizar | `RefreshButton` | Refetches with the same filters |
 | Table | `DataTable` | Columns: Tipo de documento (bold), Estado (`Tag`), Descripción, Fecha contable (`date`, `dot: false`), Organización |

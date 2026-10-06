@@ -13630,6 +13630,10 @@
     }
   },
   "windows": {
+    "Chart of Accounts": {
+      "label": "Chart of Accounts",
+      "newLabel": "New sub-account"
+    },
     "Tables and Columns": {
       "label": "Tables and Columns"
     },
@@ -22380,13 +22384,15 @@
     "accountTreeFilterName": "Name",
     "accountTreeFilterElementLevel": "Element Level",
     "accountTreeFilterType": "Account Type",
-    "accountTreeFilterActive": "Active",
+    "accountTreeFilterActive": "Status",
     "accountTreeDebit": "Debit",
     "accountTreeCredit": "Credit",
     "accountTreeBalance": "Balance",
     "accountTreeNoAccounts": "No accounts to display",
     "accountTreeReadOnlyPlaceholder": "Placeholder subaccount — not editable",
-    "accountTreeLoadingFull": "Loading chart of accounts…",
+    "allAccountTypes": "All account types",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
     "accountTreeFetchError": "Could not load the full chart of accounts — showing a partial list",
     "newSubAccount": "New Sub-account",
     "parentAccount": "Parent Account",

@@ -1,3 +1,4 @@
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // Mock react-router-dom
@@ -328,6 +329,22 @@ describe('ListView', () => {
       expect(() => capturedRowQuickActions.onEdit({ id: 'r1' })).not.toThrow();
       // A row without an id must not navigate (row?.id short-circuit).
       expect(() => capturedRowQuickActions.onEdit({})).not.toThrow();
+    });
+
+    // ETP-5593 — custom tables with their own inline edits (chart-of-accounts status
+    // switch) read the flag from the table props; New is hidden on the same flag.
+    it('forwards windowReadOnly to the table and hides New under the runtime read-only tier', () => {
+      render(
+        <ListView {...defaultProps} Table={CapturingMockTable} window={{ readOnly: true }} rowQuickActions={{}} />,
+      );
+      expect(capturedTableProps.windowReadOnly).toBe(true);
+      expect(screen.queryByTestId('action-new')).not.toBeInTheDocument();
+    });
+
+    it('forwards windowReadOnly false (and keeps New) with full access', () => {
+      render(<ListView {...defaultProps} Table={CapturingMockTable} rowQuickActions={{}} />);
+      expect(capturedTableProps.windowReadOnly).toBe(false);
+      expect(screen.getByTestId('action-new')).toBeInTheDocument();
     });
 
     // ETP-4520 — the runtime per-tier override passed via the `window` prop

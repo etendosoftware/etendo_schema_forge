@@ -1,13 +1,23 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronDown, Lock } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUI } from '@/i18n';
-import NewAccountModal from './NewAccountModal';
 import { ACCOUNT_TYPE_UI_KEYS, accountTypeLabel, ELEMENT_LEVEL_UI_KEYS, elementLevelLabel } from './accountTypeLabels';
+import { useChartOfAccountsFilters } from './chartOfAccountsFilters';
+import {
+  restorePersistedExpanded,
+  setExpanded,
+  setSelectedRecord,
+  setTreeData,
+  useChartOfAccountsTree,
+} from './chartOfAccountsTreeStore';
+import { ChartOfAccountsToolbarSlot } from './ChartOfAccountsToolbarSlot';
 import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { runInlineToggleRequest } from '@/components/contract-ui/DataTable.jsx';
+import { RowExpandToggle } from '@/components/contract-ui/RowExpandToggle.jsx';
+import { ListProgressBar } from '@/components/contract-ui/ListProgressBar.jsx';
 
 import { useApiFetch } from '@/auth/useApiFetch.js';
 // ETP-5101: this component's self-fetch (below) bypasses useEntity/normalizeRecord, the
@@ -27,31 +37,10 @@ import { rememberRecordVersions } from '@etendosoftware/app-shell-core/lib/recor
 // its page size directly from the requested endRow with no smaller server-side cap.
 const FULL_FETCH_END_ROW = 9999;
 
-// Persists which folder rows are expanded across navigation/reloads. Folder ids are
-// `group-<ancestor-code-path>` (e.g. `group-A|A.A`), derived from stable account codes
-// rather than DB record ids, so they stay valid across sessions.
-const EXPANDED_STORAGE_KEY = 'sf.chartOfAccounts.expandedFolderIds';
-
-function loadPersistedExpanded() {
-  try {
-    const raw = localStorage.getItem(EXPANDED_STORAGE_KEY);
-    if (!raw) return new Set();
-    const ids = JSON.parse(raw);
-    return Array.isArray(ids) ? new Set(ids) : new Set();
-  } catch {
-    return new Set();
-  }
-}
-
-function persistExpanded(expanded) {
-  try {
-    localStorage.setItem(EXPANDED_STORAGE_KEY, JSON.stringify(Array.from(expanded)));
-  } catch {
-    // Storage unavailable (private mode, quota, etc.) — expand/collapse still works
-    // in-memory for this session, it just won't persist across reloads.
-  }
-}
-
+// The columns ListView reads (via onColumnsReady) for its Sort popover and Print.
+// Only Código and Nombre are sortable (ETP-5593): folders have no type/status and the
+// level is implied by the hierarchy. The never-displayed YTD amount columns were removed
+// for the same reason — they leaked into Sort and Print.
 function buildTreeColumns(ui) {
   return [
     {
@@ -73,6 +62,7 @@ function buildTreeColumns(ui) {
     },
     {
       key: 'elementLevel',
+      sortable: false,
       column: 'accountTreeFilterElementLevel',
       type: 'enum',
       label: ui('accountTreeFilterElementLevel'),
@@ -84,6 +74,7 @@ function buildTreeColumns(ui) {
     },
     {
       key: 'accountType',
+      sortable: false,
       column: 'accountTreeFilterType',
       type: 'enum',
       label: ui('accountTreeFilterType'),
@@ -95,6 +86,7 @@ function buildTreeColumns(ui) {
     },
     {
       key: 'active',
+      sortable: false,
       column: 'accountTreeFilterActive',
       type: 'boolean',
       label: ui('accountTreeFilterActive'),
@@ -103,27 +95,6 @@ function buildTreeColumns(ui) {
         true: ui('yes'),
         false: ui('no'),
       },
-      filterable: false,
-    },
-    {
-      key: 'ytdDebit',
-      column: 'accountTreeDebit',
-      type: 'amount',
-      label: ui('accountTreeDebit'),
-      filterable: false,
-    },
-    {
-      key: 'ytdCredit',
-      column: 'accountTreeCredit',
-      type: 'amount',
-      label: ui('accountTreeCredit'),
-      filterable: false,
-    },
-    {
-      key: 'ytdBalance',
-      column: 'accountTreeBalance',
-      type: 'amount',
-      label: ui('accountTreeBalance'),
       filterable: false,
     },
   ];
@@ -143,12 +114,16 @@ function buildTreeColumns(ui) {
  *   parentCode4, parentCode4Name (legacy 4-digit grouping, kept for fallback
  *   and for NewAccountModal's parent selector)
  *
- * Defaults: every folder is collapsed on first-ever load. Expand/collapse state is
- * persisted to localStorage (per browser, `EXPANDED_STORAGE_KEY`) so navigating away
- * and back to this window restores exactly what the user left open.
+ * Defaults: every folder is collapsed on first-ever load. Expand/collapse state lives
+ * in `chartOfAccountsTreeStore` and is persisted to localStorage (per browser) so
+ * navigating away and back to this window restores exactly what the user left open.
  *
- * "New Sub-account" is always available. If a row is selected, NewAccountModal
- * auto-populates the parent from that row; otherwise the selector starts empty.
+ * Toolbar (ETP-5593): the tree renders no toolbar of its own. Its controls — Expandir /
+ * Contraer todo, the search box and the account-type filter — are
+ * `AccountTreeView.ToolbarQuickFilter` (ChartOfAccountsToolbarSlot), which ListView
+ * renders in its own toolbar row. "Nueva subcuenta" is ListView's New button
+ * (`newRecordComponent: NewSubAccountCreateModal`); it defaults the parent to the row
+ * selected here, shared through the store.
  */
 
 /**
@@ -273,16 +248,15 @@ function collectVirtualIds(nodes, acc = []) {
   return acc;
 }
 
-const ALL_FILTER = 'all';
-
 function matchesTextFilter(item, text) {
   if (!text) return true;
   const q = text.toLowerCase();
   return [item.searchKey, item.name].some((value) => String(value ?? '').toLowerCase().includes(q));
 }
 
+// A null account type means "all types".
 function matchesAccountType(item, accountType) {
-  return accountType === ALL_FILTER || item.accountType === accountType;
+  return !accountType || item.accountType === accountType;
 }
 
 /** A leaf matches when it satisfies both active filter criteria. */
@@ -357,16 +331,34 @@ function AccountTreeSkeleton() {
     <div data-testid="account-tree-skeleton" className="divide-y divide-[hsl(var(--border-subtle))]">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-4 py-2.5" style={{ opacity: 1 - i * 0.1 }}>
-          <Skeleton className="h-4 w-4 shrink-0" />
-          <Skeleton className="h-4 w-24 shrink-0" />
-          <Skeleton className="h-4 flex-1" />
-          <Skeleton className="h-4 w-32 shrink-0" />
-          <Skeleton className="h-4 w-40 shrink-0" />
-          <Skeleton className="h-4 w-10 shrink-0" />
+          <Skeleton className="h-4 w-4 shrink-0" data-testid="Skeleton__c9cb6e" />
+          <Skeleton className="h-4 w-24 shrink-0" data-testid="Skeleton__c9cb6e" />
+          <Skeleton className="h-4 flex-1" data-testid="Skeleton__c9cb6e" />
+          <Skeleton className="h-4 w-32 shrink-0" data-testid="Skeleton__c9cb6e" />
+          <Skeleton className="h-4 w-40 shrink-0" data-testid="Skeleton__c9cb6e" />
+          <Skeleton className="h-4 w-10 shrink-0" data-testid="Skeleton__c9cb6e" />
         </div>
       ))}
     </div>
   );
+}
+
+// Columns the toolbar's Sort popover may pick (see buildTreeColumns). Anything else —
+// including ListView's own default (`creationDate`) — leaves the tree in code order.
+const SORTABLE_KEYS = new Set(['searchKey', 'name']);
+
+/**
+ * Sorts the siblings at EVERY level by `key` (ETP-5593), returning new arrays — the
+ * input tree (already in code order from buildGroupedTree) is not mutated. Folders
+ * stay with their children: only the order among siblings changes.
+ */
+function sortTree(nodes, key, direction) {
+  const factor = direction === 'desc' ? -1 : 1;
+  const compare = (a, b) => factor * String(a[key] ?? '').localeCompare(String(b[key] ?? ''), undefined, { sensitivity: 'base' });
+  const walk = (list) => list
+    .map((node) => (node.children?.length ? { ...node, children: walk(node.children) } : node))
+    .sort(compare);
+  return walk(nodes);
 }
 
 function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui, activeChecked, activeDisabled, onActiveToggle }) {
@@ -375,85 +367,70 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
   const isProtected = isProtectedLeafCode(item);
 
   return (
-    <div
+    <TableRow
       data-testid={`account-tree-row-${item.id}`}
-      role="row"
       aria-selected={isSelected}
+      data-state={isSelected ? 'selected' : undefined}
       className={[
-        'flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm select-none transition-colors',
-        isSelected ? 'bg-[hsl(var(--muted))]' : 'hover:bg-[hsl(var(--muted))]/50',
+        'cursor-pointer text-sm select-none',
         isSummary ? 'font-semibold text-[hsl(var(--foreground))]' : 'font-normal text-[hsl(var(--muted-foreground))]',
       ].join(' ')}
       onClick={() => onRowClick(item)}
     >
-      {/* Indent spacer — grows proportional to depth */}
-      {indent > 0 && <span style={{ minWidth: indent, flexShrink: 0 }} />}
+      {/* Code — indent spacer (grows with depth), expand toggle, code in Space Mono */}
+      <TableCell data-testid="TableCell__c9cb6e">
+        <span className="flex items-center gap-2">
+          {indent > 0 && <span style={{ minWidth: indent, flexShrink: 0 }} />}
+          {item.hasChildren ? (
+            <RowExpandToggle
+              expanded={isExpanded}
+              orientation="horizontal"
+              stopPropagation
+              className="shrink-0"
+              onToggle={() => onToggle(item.id)}
+              iconTestId={`account-tree-toggle-icon-${item.id}`}
+              data-testid={`account-tree-toggle-${item.id}`} />
+          ) : (
+            <span className="w-7 shrink-0" />
+          )}
+          <span className="font-code tabular-nums">{item.searchKey}</span>
+        </span>
+      </TableCell>
 
-      {/* Toggle chevron or placeholder */}
-      <span className="flex items-center justify-center w-4 h-4 shrink-0">
-        {item.hasChildren ? (
-          <button
-            type="button"
-            data-testid={`account-tree-toggle-${item.id}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle(item.id);
-            }}
-            className="flex items-center justify-center w-4 h-4 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-            aria-expanded={isExpanded}
-            aria-label={isExpanded ? ui('collapse') : ui('expand')}
-          >
-            {isExpanded ? <ChevronDown size={13} data-testid="ChevronDown__acc34a" /> : <ChevronRight size={13} data-testid="ChevronRight__acc34a" />}
-          </button>
-        ) : (
-          <span className="w-4" />
-        )}
-      </span>
+      {/* Account name */}
+      <TableCell data-testid="TableCell__c9cb6e">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate">{item.name}</span>
+          {isProtected && (
+            <Lock
+              size={12}
+              className="shrink-0 text-[hsl(var(--text-disabled))]"
+              data-testid={`account-tree-locked-${item.id}`}
+              role="img"
+              aria-label={ui('accountTreeReadOnlyPlaceholder')}
+            />
+          )}
+        </span>
+      </TableCell>
 
-      {/* Account code — monospace, fixed width */}
-      <span className="shrink-0 w-24 font-mono text-xs text-[hsl(var(--muted-foreground))] tabular-nums">
-        {item.searchKey}
-      </span>
-
-      {/* Account name — fills remaining space */}
-      <span className="flex-1 min-w-0 truncate flex items-center gap-1.5">
-        {item.name}
-        {isProtected && (
-          <Lock
-            size={12}
-            className="shrink-0 text-[hsl(var(--text-disabled))]"
-            data-testid={`account-tree-locked-${item.id}`}
-            role="img"
-            aria-label={ui('accountTreeReadOnlyPlaceholder')}
-          />
-        )}
-      </span>
-
-      {/* Element level */}
-      <span className="shrink-0 w-32 truncate text-[hsl(var(--muted-foreground))]">
+      <TableCell
+        className="text-[hsl(var(--muted-foreground))]"
+        data-testid="TableCell__c9cb6e">
         {elementLevelLabel(ui, item.elementLevel)}
-      </span>
+      </TableCell>
 
-      {/* Account type */}
-      <span className="shrink-0 w-40 truncate text-[hsl(var(--muted-foreground))]">
+      <TableCell
+        className="text-[hsl(var(--muted-foreground))]"
+        data-testid="TableCell__c9cb6e">
         {accountTypeLabel(ui, item.accountType)}
-      </span>
+      </TableCell>
 
-      {/* Active/inactive toggle — leaf rows only, disabled for protected placeholders.
-          Folder rows keep an empty cell of the same width (ETP-5399): without it the
-          flex-1 name cell grows and pushes Element Level / Account Type out of line. */}
-      {item.isVirtual && (
-        <span
-          className="shrink-0 w-10"
-          aria-hidden="true"
-          data-testid={`account-tree-active-placeholder-${item.id}`}
-        />
-      )}
-      {!item.isVirtual && (
-        <span
-          className="shrink-0 flex items-center justify-center w-10"
-          onClick={(e) => e.stopPropagation()}
-        >
+      {/* Status toggle — leaf rows only, disabled for protected placeholders. Folder rows
+          keep the (empty) cell so the columns stay aligned (ETP-5399). */}
+      <TableCell onClick={(e) => e.stopPropagation()} data-testid="TableCell__c9cb6e">
+        {item.isVirtual ? (
+          <span aria-hidden="true" data-testid={`account-tree-active-placeholder-${item.id}`} />
+        ) : (
           <Switch
             checked={activeChecked}
             disabled={isProtected || activeDisabled}
@@ -461,24 +438,30 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
             aria-label={ui('active')}
             data-testid={`account-tree-active-toggle-${item.id}`}
           />
-        </span>
-      )}
-    </div>
+        )}
+      </TableCell>
+    </TableRow>
   );
 }
+
+const selectExpanded = (s) => s.expanded;
+const selectSavedGeneration = (s) => s.savedGeneration;
 
 /**
  * AccountTreeView — main component.
  *
  * Props it uses:
- *   data          — flat list of account records from NEO (with tree fields).
- *                   ListView.jsx only ever hands this one paginated BATCH_SIZE
- *                   page (`hook.items`), so it is used as the initial/fallback
- *                   dataset — see the self-fetch note below.
- *   onNavigate    — (item) => void — called when a non-virtual row is clicked (receives the full row object)
- *   onDataMutated — () => void  — called after a new sub-account is saved
- *   token         — JWT for API calls (forwarded to NewAccountModal, used for self-fetch)
- *   apiBaseUrl    — NEO base URL (forwarded to NewAccountModal, used for self-fetch)
+ *   data                — flat list of account records from NEO (with tree fields).
+ *                         ListView.jsx only ever hands this one paginated BATCH_SIZE
+ *                         page (`hook.items`), so it is used as the initial/fallback
+ *                         dataset — see the self-fetch note below.
+ *   onNavigate          — (item) => void — called when a non-virtual row is clicked (receives the full row object)
+ *   onDataMutated       — () => void  — called after a new sub-account is saved
+ *   token / apiBaseUrl  — used for the self-fetch and the active toggle
+ *   sortColumn / sortDirection — ListView's sort (toolbar Sort popover). Only `searchKey`
+ *                         and `name` reorder the tree (siblings at every level); anything
+ *                         else keeps the default code order.
+ *   userRefreshTrigger  — bumped by ListView's Refresh button (ETP-5387).
  *
  * Self-fetch: when `apiBaseUrl` is provided, the component fetches its own complete
  * leaf-account dataset (see FULL_FETCH_END_ROW above) on mount and after every save,
@@ -488,9 +471,13 @@ function AccountTreeRow({ item, isExpanded, isSelected, onToggle, onRowClick, ui
  * absent — e.g. direct unit tests that only pass `data`), the component renders `data`
  * as-is, so plain `data`-driven tests keep working without needing to mock `fetch`.
  *
- * The remaining props mirror what ListView passes to a headerTable component
- * (sorting, filtering, selection, etc.). They are accepted but not acted on
- * here since the tree has its own navigation model.
+ * Filters (ETP-5593) come from the URL (`accountType`, `q` — chartOfAccountsFilters.js),
+ * written by the toolbar slot. A filter SEEDS the expansion (every folder leading to a
+ * match opens when the filter changes) but the user can still collapse; clearing the
+ * filter restores the expansion the user had before filtering.
+ *
+ * The remaining props mirror what ListView passes to a headerTable component and are
+ * accepted but not acted on here, since the tree has its own navigation model.
  */
 export default function AccountTreeView({
   data = [],
@@ -498,16 +485,25 @@ export default function AccountTreeView({
   onDataMutated,
   token,
   apiBaseUrl,
+  sortColumn,
+  sortDirection,
+  onColumnsReady,
+  // View-only window (runtime read-only tier or decisions `window.readOnly`): the status
+  // switch is shown but cannot be flipped.
+  windowReadOnly = false,
   // Accepted but intentionally unused — ListView always passes them
   entity: _entity,
   specName: _specName,
+  meta: _meta,
+  navigate: _navigate,
+  selectedRows: _selectedRows,
   onSelectionChange: _onSelectionChange,
   isRowSelectable: _isRowSelectable,
   compact: _compact,
-  sortColumn: _sortColumn,
-  sortDirection: _sortDirection,
   onSort: _onSort,
-  onColumnsReady,
+  onSortSelect: _onSortSelect,
+  onClearSort: _onClearSort,
+  isDefaultSort: _isDefaultSort,
   api: _api,
   labelOverrides: _labelOverrides,
   onFilterChange: _onFilterChange,
@@ -517,6 +513,8 @@ export default function AccountTreeView({
   rowFilter: _rowFilter,
   hoverRowActions: _hoverRowActions,
   clearSelectionTrigger: _clearSelectionTrigger,
+  deselectTrigger: _deselectTrigger,
+  deselectRowIds: _deselectRowIds,
   rowQuickActions: _rowQuickActions,
   hiddenColumns: _hiddenColumns,
   // Bumped by ListView's toolbar Refresh button only (ETP-5387). Destructured so it never
@@ -587,9 +585,6 @@ export default function AccountTreeView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBaseUrl, token, apiFetch, fetchGeneration]);
 
-  // Refetch the complete dataset after a new sub-account is saved, in addition to
-  // whatever `onDataMutated` triggers on the caller's side (ListView's own
-  // one-page refresh).
   const refetchFull = useCallback(() => setFetchGeneration((g) => g + 1), []);
 
   // React to ListView's Refresh button. The initial value is the baseline, not a request —
@@ -604,10 +599,23 @@ export default function AccountTreeView({
     refetchFull();
   }, [userRefreshTrigger, apiBaseUrl, refetchFull]);
 
+  // A sub-account saved from the toolbar's "Nueva subcuenta" (NewSubAccountCreateModal)
+  // bumps the store's savedGeneration: refetch the complete dataset, in addition to
+  // whatever `onDataMutated` triggers on ListView's side (its own one-page refresh).
+  const savedGeneration = useChartOfAccountsTree(selectSavedGeneration);
+  const lastSavedGenerationRef = useRef(savedGeneration);
+  useEffect(() => {
+    if (savedGeneration === lastSavedGenerationRef.current) return;
+    lastSavedGenerationRef.current = savedGeneration;
+    onDataMutated?.();
+    refetchFull();
+  }, [savedGeneration, onDataMutated, refetchFull]);
+
   const [optimisticActiveToggles, setOptimisticActiveToggles] = useState({});
   const [savingActiveToggles, setSavingActiveToggles] = useState({});
 
   const handleActiveToggle = useCallback((item, nextChecked) => {
+    if (windowReadOnly) return;
     const toggleKey = `${item.id}:active`;
     runInlineToggleRequest({
       apiBaseUrl,
@@ -624,7 +632,7 @@ export default function AccountTreeView({
     }).catch((err) => {
       console.error('[AccountTreeView] Failed to toggle account active status:', err);
     });
-  }, [apiBaseUrl, token, refetchFull, ui]);
+  }, [apiBaseUrl, token, refetchFull, ui, windowReadOnly]);
 
   // Until the self-fetch resolves — or when it's not applicable (`apiBaseUrl` absent,
   // e.g. direct unit tests) — fall back to the `data` prop so behavior is unchanged.
@@ -636,46 +644,80 @@ export default function AccountTreeView({
   // dataset is still in flight — see the component docblock and ETP-5387.
   const showInitialSkeleton = !!apiBaseUrl && !hasLoadedOnce && isFetchingFull;
   const showBlockingSkeleton = showInitialSkeleton || isUserRefreshing;
+  // A quiet background refetch (save, status toggle) over a tree already on screen.
+  const showProgressBar = isFetchingFull && !showBlockingSkeleton;
 
   const { tree, indexById } = useMemo(() => buildGroupedTree(effectiveData), [effectiveData]);
 
-  const [expanded, setExpanded] = useState(loadPersistedExpanded);
+  const sortedTree = useMemo(() => {
+    if (!SORTABLE_KEYS.has(sortColumn)) return tree;
+    if (sortColumn === 'searchKey' && sortDirection !== 'desc') return tree; // already code ASC
+    return sortTree(tree, sortColumn, sortDirection);
+  }, [tree, sortColumn, sortDirection]);
 
-  // Persist expand/collapse state so it survives navigating away and back.
-  useEffect(() => {
-    persistExpanded(expanded);
-  }, [expanded]);
-
-  const [filterText, setFilterText] = useState('');
-  const [filterAccountType, setFilterAccountType] = useState(ALL_FILTER);
-
-  const hasActiveFilter =
-    filterText.trim() !== '' || filterAccountType !== ALL_FILTER;
-
-  const filters = useMemo(
-    () => ({ text: filterText.trim(), accountType: filterAccountType }),
-    [filterText, filterAccountType],
-  );
+  const { accountType, query } = useChartOfAccountsFilters();
+  const filters = useMemo(() => ({ text: query.trim(), accountType }), [query, accountType]);
+  const hasActiveFilter = filters.text !== '' || filters.accountType !== null;
 
   const filteredTree = useMemo(
-    () => (hasActiveFilter ? filterTree(tree, filters) : tree),
-    [tree, filters, hasActiveFilter],
+    () => (hasActiveFilter ? filterTree(sortedTree, filters) : sortedTree),
+    [sortedTree, filters, hasActiveFilter],
   );
 
-  // While a filter is active, every surviving virtual folder must be expanded —
-  // this OVERRIDES the manual `expanded` state without mutating it, so clearing
-  // the filter reveals the manual state exactly as the user left it.
-  const effectiveExpanded = useMemo(
-    () => (hasActiveFilter ? new Set(collectVirtualIds(filteredTree)) : expanded),
-    [hasActiveFilter, filteredTree, expanded],
-  );
+  const expanded = useChartOfAccountsTree(selectExpanded);
+
+  // Filter × expansion. When the filter changes, open every folder leading to a match
+  // (`persist: false` — a filter's expansion is temporary). The user can still collapse
+  // afterwards: later refetches under the same filter do NOT re-seed. Clearing the filter
+  // restores the user's own (persisted) expansion.
+  //
+  // With a self-fetch, the first rows on screen may be ListView's partial page; a seed
+  // made from them only counts once the full dataset has loaded, so a filter that came
+  // in the URL (a shared link) also opens the folders whose matches were not on that page.
+  const fullDataReady = !apiBaseUrl || hasLoadedOnce;
+  const filterKey = hasActiveFilter ? `${filters.accountType ?? ''}|${filters.text}` : null;
+  const seedRef = useRef({ key: null, seeded: false });
+  useEffect(() => {
+    const seed = seedRef.current;
+    if (filterKey === null) {
+      if (seed.key !== null) {
+        restorePersistedExpanded();
+        seedRef.current = { key: null, seeded: false };
+      }
+      return;
+    }
+    if (seed.key === filterKey && (seed.seeded || tree.length === 0)) return;
+    setExpanded(new Set(collectVirtualIds(filteredTree)), { persist: false });
+    seedRef.current = { key: filterKey, seeded: tree.length > 0 && fullDataReady };
+  }, [filterKey, filteredTree, tree.length, fullDataReady]);
+
+  // Share the accounts and the folders currently shown (for "Expandir todo") with the
+  // toolbar slot and the create modal.
+  useEffect(() => {
+    setTreeData({ accounts: effectiveData, shownFolderIds: collectVirtualIds(filteredTree) });
+  }, [effectiveData, filteredTree]);
 
   useEffect(() => {
     onColumnsReady?.(treeColumns);
   }, [onColumnsReady, treeColumns]);
 
   const [selectedId, setSelectedId] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // The create modal defaults the parent to the selected row. It needs the UNFILTERED
+  // node (filtered folders have pruned children), refreshed after every refetch.
+  useEffect(() => {
+    setSelectedRecord(selectedId ? (indexById.get(selectedId) ?? null) : null);
+  }, [selectedId, indexById]);
+  // A selection belongs to this mount: coming back from a record starts with none. The
+  // same goes for a filter's temporary expansion — the next mount starts from the
+  // persisted one.
+  // Resetting the seed ref matters under StrictMode's simulated remount, which keeps refs:
+  // without it a URL filter would not re-seed after this cleanup.
+  useEffect(() => () => {
+    setSelectedRecord(null);
+    restorePersistedExpanded();
+    seedRef.current = { key: null, seeded: false };
+  }, []);
 
   const handleToggle = useCallback((id) => {
     setExpanded((prev) => {
@@ -683,8 +725,8 @@ export default function AccountTreeView({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
-    });
-  }, []);
+    }, { persist: !hasActiveFilter });
+  }, [hasActiveFilter]);
 
   const handleRowClick = useCallback(
     (item) => {
@@ -697,36 +739,13 @@ export default function AccountTreeView({
   );
 
   const visibleRows = useMemo(
-    () => flattenVisible(filteredTree, effectiveExpanded),
-    [filteredTree, effectiveExpanded],
+    () => flattenVisible(filteredTree, expanded),
+    [filteredTree, expanded],
   );
-
-  const selectedRecord = useMemo(
-    () => (selectedId ? visibleRows.find((row) => row.id === selectedId) : null),
-    [visibleRows, selectedId],
-  );
-
-  // Filtered virtual nodes have pruned children; modal resolution needs the full tree node.
-  const currentRecordForModal = useMemo(
-    () => (selectedRecord ? (indexById.get(selectedRecord.id) ?? selectedRecord) : null),
-    [selectedRecord, indexById],
-  );
-
-  const expandAll = useCallback(
-    () => setExpanded(new Set(collectVirtualIds(tree))),
-    [tree],
-  );
-  const collapseAll = useCallback(() => setExpanded(new Set()), []);
-
-  const handleSaved = useCallback(() => {
-    setIsModalOpen(false);
-    onDataMutated?.();
-    refetchFull();
-  }, [onDataMutated, refetchFull]);
 
   let treeBody;
   if (showBlockingSkeleton) {
-    treeBody = <AccountTreeSkeleton />;
+    treeBody = <AccountTreeSkeleton data-testid="AccountTreeSkeleton__c9cb6e" />;
   } else if (effectiveData.length === 0) {
     treeBody = (
       <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
@@ -741,33 +760,24 @@ export default function AccountTreeView({
     );
   } else {
     treeBody = (
-      <>
-        {/* ── Column headers ── */}
-        <div
-          role="row"
-          className="flex items-center gap-3 px-4 h-11 border-b border-[hsl(var(--border-subtle))]"
-        >
-          {/* Spacer for toggle column */}
-          <span className="w-4 shrink-0" />
-          <span className="shrink-0 w-24 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-            {ui('accountTreeCode')}
-          </span>
-          <span className="flex-1 min-w-0 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-            {ui('name')}
-          </span>
-          <span className="shrink-0 w-32 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-            {ui('accountTreeFilterElementLevel')}
-          </span>
-          <span className="shrink-0 w-40 text-sm font-medium text-[hsl(var(--muted-foreground))]">
-            {ui('accountTreeFilterType')}
-          </span>
-          <span className="shrink-0 w-10 text-sm font-medium text-[hsl(var(--muted-foreground))] text-center">
-            {ui('accountTreeFilterActive')}
-          </span>
-        </div>
-
-        {/* ── Tree rows ── */}
-        <div role="rowgroup" className="divide-y divide-[hsl(var(--border-subtle))]">
+      <Table className="table-fixed" data-testid="account-tree-table">
+        <colgroup>
+          <col className="w-[16rem]" />
+          <col />
+          <col className="w-40" />
+          <col className="w-44" />
+          <col className="w-24" />
+        </colgroup>
+        <TableHeader data-testid="TableHeader__c9cb6e">
+          <TableRow className="hover:bg-transparent" data-testid="TableRow__c9cb6e">
+            <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeCode')}</TableHead>
+            <TableHead data-testid="TableHead__c9cb6e">{ui('name')}</TableHead>
+            <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterElementLevel')}</TableHead>
+            <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterType')}</TableHead>
+            <TableHead data-testid="TableHead__c9cb6e">{ui('accountTreeFilterActive')}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody data-testid="TableBody__c9cb6e">
           {visibleRows.map((item) => {
             const toggleKey = `${item.id}:active`;
             const rawActive = Object.hasOwn(optimisticActiveToggles, toggleKey)
@@ -783,101 +793,25 @@ export default function AccountTreeView({
                 onRowClick={handleRowClick}
                 ui={ui}
                 activeChecked={rawActive === true || rawActive === 'Y' || rawActive === 'true'}
-                activeDisabled={!!savingActiveToggles[toggleKey]}
+                activeDisabled={windowReadOnly || !!savingActiveToggles[toggleKey]}
                 onActiveToggle={handleActiveToggle}
-                data-testid="AccountTreeRow__acc34a"
-              />
+                data-testid="AccountTreeRow__c9cb6e" />
             );
           })}
-        </div>
-      </>
+        </TableBody>
+      </Table>
     );
   }
 
   return (
-    <div data-testid="account-tree" role="grid" {...rest}>
-      <div
-        data-testid="account-tree-controls"
-        className="sticky top-0 z-20 bg-card"
-      >
-        {/* ── Toolbar ── */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-[hsl(var(--border-subtle))]">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={expandAll}
-              data-testid="account-tree-expand-button"
-            >
-              {ui('expand')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={collapseAll}
-              data-testid="account-tree-collapse-button"
-            >
-              {ui('collapse')}
-            </Button>
-            {isFetchingFull && (
-              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                {ui('accountTreeLoadingFull')}
-              </span>
-            )}
-          </div>
-
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={() => setIsModalOpen(true)}
-            className="shrink-0 whitespace-nowrap"
-            data-testid="account-tree-new-subaccount-button"
-          >
-            + {ui('newSubAccount')}
-          </Button>
-        </div>
-
-        {/* ── Filter row ── */}
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-[hsl(var(--border-subtle))]">
-          <input
-            type="text"
-            data-testid="account-tree-filter-text"
-            value={filterText}
-            onChange={(e) => setFilterText(e.target.value)}
-            placeholder={ui('search')}
-            className="h-8 w-full min-w-0 rounded-md border border-[hsl(var(--border-control))] bg-card px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[hsl(var(--foreground))] sm:w-auto sm:min-w-[12rem] sm:flex-1 sm:max-w-xs"
-          />
-          <select
-            data-testid="account-tree-filter-type"
-            value={filterAccountType}
-            onChange={(e) => setFilterAccountType(e.target.value)}
-            className="h-8 shrink-0 rounded-md border border-[hsl(var(--border-control))] bg-card px-2 text-xs cursor-pointer"
-          >
-            <option value={ALL_FILTER}>{ui('all')}</option>
-            {Object.entries(ACCOUNT_TYPE_UI_KEYS).map(([code, uiKey]) => (
-              <option key={code} value={code}>{ui(uiKey)}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
+    // `rest` first: ListView passes every table its generic `data-testid="Table__620cbc"`,
+    // which would otherwise replace this window's own stable id.
+    <div {...rest} data-testid="account-tree">
+      {showProgressBar && <ListProgressBar testId="account-tree-progress" data-testid="ListProgressBar__c9cb6e" />}
       {treeBody}
-
-      {/* ── New Sub-account modal ── */}
-      <NewAccountModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSaved={handleSaved}
-        currentRecord={currentRecordForModal}
-        allAccounts={effectiveData}
-        apiBaseUrl={apiBaseUrl}
-        token={token}
-        data-testid="NewAccountModal__acc34a"
-      />
     </div>
   );
 }
+
+// ETP-5188 convention: ListView renders this in its own toolbar row (ETP-5593).
+AccountTreeView.ToolbarQuickFilter = ChartOfAccountsToolbarSlot;
