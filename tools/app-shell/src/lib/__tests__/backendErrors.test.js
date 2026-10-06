@@ -2783,7 +2783,7 @@ describe('user email correction messages (UserRoleAssignmentHandler)', () => {
     },
     { raw: "Field 'email' is required", key: 'backendError.userEmailRequired' },
     {
-      raw: "This user was never invited to Etendo GO (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'",
+      raw: "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'",
       key: 'backendError.userEmailNotAGoUser',
     },
     { raw: 'Invalid email format', key: 'backendError.userEmailInvalid' },

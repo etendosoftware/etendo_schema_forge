@@ -327,7 +327,7 @@ const BACKEND_ERROR_MAP = {
     "Field 'email' can only be changed while the user's invitation has expired or could not be delivered"),
   ...sameKeyEntries('backendError.userEmailRequired', "Field 'email' is required"),
   ...sameKeyEntries('backendError.userEmailNotAGoUser',
-    "This user was never invited to Etendo GO (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'"),
+    "This user was never invited to Etendo (for example, a business partner contact person): edit its email through spec 'contacts', entity 'contact'"),
   ...sameKeyEntries('backendError.userEmailInvalid', 'Invalid email format'),
   // NeoRequestRouter.java:132,191 (com.etendoerp.go) — hardcoded English literal sent on every
   // 403 for a spec/window/report the current role cannot access, regardless of session locale
