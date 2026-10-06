@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { test, expect } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -53,8 +55,8 @@ test('keeps valid contact rows and surfaces ambiguous or failed category rows', 
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.getByTestId('action-new-more').click();
   await page.getByTestId('action-new-import').click();
-  await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
-  await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
+  await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible();
+  await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-corner-cases.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
@@ -105,8 +107,8 @@ test('skips an in-file duplicate tax id before sending the batch', async ({ page
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.getByTestId('action-new-more').click();
   await page.getByTestId('action-new-import').click();
-  await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
-  await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
+  await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible();
+  await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-duplicate.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([
@@ -155,8 +157,8 @@ test('imports a minimal company row with only the required legal name and tax id
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
   await page.getByTestId('action-new-more').click();
   await page.getByTestId('action-new-import').click();
-  await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible();
-  await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
+  await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible();
+  await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
     name: 'contacts-etp-4905-minimal.csv',
     mimeType: 'text/csv',
     buffer: Buffer.from([

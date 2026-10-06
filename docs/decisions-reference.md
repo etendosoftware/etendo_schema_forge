@@ -692,6 +692,8 @@ Additional actions shown in the dropdown of the split "New" button in the list v
 
 The component receives: `token`, `apiBaseUrl`, `windowName`, `onClose`. The `token` prop remains for legacy compatibility while existing generated custom components are migrated. New or migrated components that need authenticated API calls should use `useApiFetch(apiBaseUrl)` instead of constructing raw auth headers.
 
+To put the window's own import (`window.import`) in this menu, a window wrapper passes a `newActions` item with `opensImportDialog: true` straight to the page. The generator does not emit that key. `ListView` drops the item when the import is disabled and hides the standalone import icon while the menu offers it. See `docs/ui-customization.md` → *`ListView` / `DetailView` wrapper props*.
+
 ### Process Overrides (`window.processOverrides`)
 
 Override the presentation and behavior of process buttons rendered in the detail view. Each key is a process name or column name from the backend contract. The generator matches overrides by `p.name` first, then falls back to `p.columnName`.

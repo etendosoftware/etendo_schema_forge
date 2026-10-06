@@ -1,6 +1,8 @@
 // @covers tools/app-shell/src/windows/custom/contacts/ContactsPeriodButton.jsx
 /**
  * Tests for ContactsPeriodButton — period selector rendered inside ContactsSummaryWidget.
+ * Built on the core Radix DropdownMenu: keyboard/focus handling is Radix's, so these
+ * tests only guard the component's own contract (labels, checked option, period state).
  */
 
 // Mocks before imports
@@ -10,11 +12,13 @@ vi.mock('@/i18n', () => ({
 
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <span data-testid="icon-chevron" />,
+  ChevronRight: () => <span data-testid="icon-chevron-right" />,
   Calendar: () => <span data-testid="icon-calendar" />,
   Check: () => <span data-testid="icon-check" />,
+  Circle: () => <span data-testid="icon-circle" />,
 }));
 
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ContactsFinanceProvider } from '../ContactsFinanceContext';
 import ContactsPeriodButton from '../ContactsPeriodButton';
@@ -29,6 +33,9 @@ function ProviderWrapper({ children, token = 'tok', apiBaseUrl = '/api' }) {
   );
 }
 
+const trigger = () => screen.getByRole('button', { name: /bpLast/ });
+const option = (name) => screen.getByRole('menuitemradio', { name });
+
 describe('ContactsPeriodButton', () => {
   beforeEach(() => {
     globalThis.fetch = vi.fn().mockResolvedValue({
@@ -42,74 +49,55 @@ describe('ContactsPeriodButton', () => {
     vi.restoreAllMocks();
   });
 
-  it('renders without crashing inside provider', () => {
+  it('shows the 3M label with its icons and keeps the menu closed initially', () => {
     render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
+    expect(trigger()).toHaveTextContent('bpLast3Months');
+    expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByTestId('icon-calendar')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-chevron')).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
-  it('shows the 3M label by default (bpLast3Months key)', () => {
-    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
-    expect(screen.getByText('bpLast3Months')).toBeInTheDocument();
-  });
-
-  it('does not show the dropdown initially', () => {
-    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
-    expect(screen.queryByText('bpLast6Months')).not.toBeInTheDocument();
-  });
-
-  it('opens the dropdown when the button is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
-    await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-    expect(screen.getAllByText('bpLast3Months').length).toBeGreaterThan(0);
-    expect(screen.getByText('bpLast6Months')).toBeInTheDocument();
-  });
-
-  it('selects 6M and closes the dropdown when option is clicked', async () => {
+  it('opens with both options and marks the selected one checked with a Check icon', async () => {
     const user = userEvent.setup();
     render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
 
-    // Open
-    await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-    // Select 6M
-    await user.click(screen.getByText('bpLast6Months'));
+    await user.click(trigger());
 
-    // Dropdown closed — only one instance of each label now
-    expect(screen.queryByText('bpLast3Months')).not.toBeInTheDocument();
-    // The trigger button now shows the 6M label
-    expect(screen.getByRole('button', { name: /bpLast6Months/ })).toBeInTheDocument();
+    expect(trigger()).toHaveAttribute('aria-expanded', 'true');
+    expect(trigger()).toHaveAttribute('data-state', 'open');
+    expect(option('bpLast3Months')).toHaveAttribute('aria-checked', 'true');
+    expect(option('bpLast6Months')).toHaveAttribute('aria-checked', 'false');
+    expect(option('bpLast3Months').querySelector('[data-testid="icon-check"]')).not.toBeNull();
+    expect(option('bpLast6Months').querySelector('[data-testid="icon-check"]')).toBeNull();
   });
 
-  it('selects 3M after choosing 6M', async () => {
+  it('choosing 6M updates the context period and closes the menu', async () => {
     const user = userEvent.setup();
     render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
 
-    // Switch to 6M
-    await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-    await user.click(screen.getByText('bpLast6Months'));
+    await user.click(trigger());
+    await user.click(option('bpLast6Months'));
 
-    // Now switch back to 3M
-    await user.click(screen.getByRole('button', { name: /bpLast6Months/ }));
-    await user.click(screen.getByText('bpLast3Months'));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger()).toHaveTextContent('bpLast6Months');
 
-    expect(screen.getByRole('button', { name: /bpLast3Months/ })).toBeInTheDocument();
+    await user.click(trigger());
+    expect(option('bpLast6Months')).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('closes dropdown when clicking outside', async () => {
+  it('Escape closes the menu and returns focus to the trigger', async () => {
     const user = userEvent.setup();
-    render(
-      <div>
-        <ContactsPeriodButton />
-        <button data-testid="outside">outside</button>
-      </div>,
-      { wrapper: ProviderWrapper },
-    );
+    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
 
-    await user.click(screen.getByRole('button', { name: /bpLast3Months/ }));
-    expect(screen.getByText('bpLast6Months')).toBeInTheDocument();
+    trigger().focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
 
-    // Click outside
-    await user.click(screen.getByTestId('outside'));
-    expect(screen.queryByText('bpLast6Months')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(trigger()).toHaveFocus();
   });
 
   it('throws when used outside ContactsFinanceProvider', () => {
@@ -118,15 +106,5 @@ describe('ContactsPeriodButton', () => {
       'useContactsFinance must be used inside ContactsFinanceProvider',
     );
     spy.mockRestore();
-  });
-
-  it('renders the calendar icon', () => {
-    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
-    expect(screen.getByTestId('icon-calendar')).toBeInTheDocument();
-  });
-
-  it('renders the chevron icon', () => {
-    render(<ContactsPeriodButton />, { wrapper: ProviderWrapper });
-    expect(screen.getByTestId('icon-chevron')).toBeInTheDocument();
   });
 });

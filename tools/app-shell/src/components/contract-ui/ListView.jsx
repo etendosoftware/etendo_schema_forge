@@ -41,6 +41,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
 
+// Keyboard focus ring for the split "New" group segments: the design-system focus
+// token, offset from the dark button so it stays visible (focus-visible only).
+const SPLIT_NEW_FOCUS_RING = 'relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
+
 /**
  * Normalizes a selected grid row into what `printDocuments()` needs to exclude Draft
  * documents from a multi-select print batch (ETP-5124 AC#6/AC#7). Returns a bare id
@@ -1138,6 +1142,7 @@ export function ListView({
   // window, `hideCreate`), so the import is never left unreachable.
   const importEnabled = Boolean(importConfig?.enabled);
   const visibleNewActions = newActions.filter((action) => !action.opensImportDialog || importEnabled);
+  const isSplitNew = visibleNewActions.length > 0;
   const importInNewMenu = canCreate && visibleNewActions.some((action) => action.opensImportDialog);
 
   const emptyListContext = buildEmptyListContext({
@@ -1473,22 +1478,24 @@ export function ListView({
                   )}
                   {/* Split "New" button */}
                   {canCreate && (
-                    <div className="inline-flex items-stretch rounded-lg overflow-hidden shadow-sm ml-3">
+                    // Split group: each segment carries its own corners, so the wrapper must not
+                    // clip — overflow-hidden would cut the offset keyboard focus ring.
+                    <div className={`inline-flex items-stretch rounded-lg shadow-sm ml-3${isSplitNew ? '' : ' overflow-hidden'}`}>
                       <Button
-                        className="rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors"
+                        className={`rounded-none rounded-l-lg gap-1.5 px-4 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors${isSplitNew ? ` ${SPLIT_NEW_FOCUS_RING}` : ''}`}
                         data-testid="action-new"
                         onClick={handleNew}
                       >
                         <Plus className="h-4 w-4" data-testid="Plus__620cbc" />
                         {newLabel ?? tMenu(entityLabel, { field: 'newLabel' }) ?? ui('newRecord')}
                       </Button>
-                      {visibleNewActions.length > 0 && (
+                      {isSplitNew && (
                         <>
                           <div className="w-px bg-primary-foreground/20" />
                           <DropdownMenu data-testid="DropdownMenu__620cbc">
                             <DropdownMenuTrigger asChild data-testid="DropdownMenuTrigger__620cbc">
                               <Button
-                                className="rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-foreground"
+                                className={`rounded-none rounded-r-lg px-2 hover:bg-[hsl(var(--accent-highlight))] hover:text-[hsl(var(--accent-highlight-foreground))] transition-colors ${SPLIT_NEW_FOCUS_RING}`}
                                 aria-label={ui('moreOptions')}
                                 title={ui('moreOptions')}
                                 data-testid="action-new-more">

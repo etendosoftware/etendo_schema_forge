@@ -1,3 +1,5 @@
+// @covers tools/app-shell/src/windows/custom/contacts/contactsImportDescriptor.js
+// @covers tools/app-shell/src/components/contract-ui/ListView.jsx
 import { test, expect } from '@playwright/test';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -88,8 +90,8 @@ test.describe('ETP-4905 — Contacts import category resolution (Tomcat integrat
     await page.getByTestId('action-new-more').click();
 
     await page.getByTestId('action-new-import').click();
-    await expect(page.getByTestId('ImportDropzone__zone')).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId('ImportDropzone__fileInput').setInputFiles({
+    await expect(page.getByRole('dialog').getByTestId('ImportDropzone__zone')).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('dialog').getByTestId('ImportDropzone__fileInput').setInputFiles({
       name: 'contacts-etp-4905-tomcat.csv',
       mimeType: 'text/csv',
       buffer: Buffer.from([

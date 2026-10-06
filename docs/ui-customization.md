@@ -2827,6 +2827,96 @@ full worked example combining all three mechanisms; `com.etendoerp.go`'s `docs/n
 
 ---
 
+## `ListView` / `DetailView` wrapper props (ETP-5600, not `decisions.json` options)
+
+Generic props a hand-written window wrapper (`tools/app-shell/src/windows/custom/{window}/index.jsx`)
+passes to the generated page, which forwards them to `ListView` / `DetailView`. The generator does
+not emit any of them; a window opts in from its own wrapper. Reference consumer: the Contacts window
+(`docs/generated-custom-windows/contacts.md`).
+
+### `newActions[].opensImportDialog` — import from the split "New" menu
+
+An item of the `newActions` prop may declare `opensImportDialog: true` instead of an `onClick`.
+`ListView` then wires it to the window's own import dialog (`window.import`), so the window does not
+reimplement how the import opens.
+
+```jsx
+newActions={[{ key: 'import', label: ui('importContacts'), opensImportDialog: true }]}
+```
+
+Rules, all in `ListView.jsx`:
+
+- The item is **dropped** when the window has no enabled import (`importConfig.enabled` false), so the
+  menu never shows an action that does nothing.
+- When the split menu offers the import, the **standalone import icon** in the toolbar
+  (`ListView__importButton`) is **not rendered**, because the menu already offers it.
+- The standalone icon **stays** whenever the menu is unavailable (read-only window, `hideCreate`), so
+  the import is never left unreachable.
+
+The generator's own `window.newActions` (`docs/decisions-reference.md` → *New Actions*) still emits only
+`key`/`label`/`onClick`; `opensImportDialog` is set from the wrapper.
+
+### `emptyListContext` — whole-window empty state for a custom list Table
+
+`ListView` passes every list Table (generated or a `customComponents.headerTable`) an
+`emptyListContext` prop. It is **non-null only when the window has no records at all**:
+
+| Condition | `emptyListContext` |
+|---|---|
+| Still loading (`hook.loading`) | `null` |
+| Fetch failed (`hook.meta` is only set on a successful response) | `null` |
+| The response has rows | `null` |
+| A column filter, the search box, the advanced filter, a quick filter with a server-side `filter`, or a subset filter with a server-side `filter` is active | `null` |
+| A **client-side** `rowFilter` subset is active (e.g. Contacts' Personas/Empresas) | not counted: `hook.items` always holds the unnarrowed rows, so a subset that hides every row keeps the normal grid |
+| None of the above: successful fetch, zero rows | `{ onCreate, onImport, importFormats }` |
+
+The window's permanent `baseFilter` is not a user choice and does not count as narrowing.
+
+The object carries the window's own entry points, so the Table renders a "start here" state without
+re-deriving them:
+
+| Key | Value |
+|---|---|
+| `onCreate` | The list's New action (`onNew` or navigation to `/{window}/new`). `undefined` when the window is read-only or `hideCreate`. |
+| `onImport(file?)` | Opens the window's import dialog. Pass a `File` (e.g. one dropped on the empty state) and it is forwarded to the core `ImportDialog` as `initialFile`, which processes it as if picked in its own dropzone and shows a processing indicator (`labels.processing`) meanwhile. `undefined` when the window has no enabled import. |
+| `importFormats` | `importConfig.formats` when the import is enabled, else `undefined`. |
+
+A Table that does not use the prop ignores it and keeps rendering its grid. Usage:
+
+```jsx
+export default function MyTable({ emptyListContext = null, ...rest }) {
+  if (emptyListContext) return <MyEmptyState context={emptyListContext} />;
+  return <DataTable {...rest} />;
+}
+```
+
+Render each entry point only when it is defined. The reference implementation,
+`windows/custom/contacts/ContactsEmptyState.jsx`, also uses two optional app hooks: `useCopilotOptional()`
+(`components/CopilotContext.jsx`, returns `null` instead of throwing without a `CopilotProvider`) to show
+an "Ask Copilot" button that calls `copilot.open`, and `useLaunchWalkthrough(source)`
+(`lib/walkthrough/useLaunchWalkthrough.js`, see `docs/walkthrough-flows.md` §9) to start a guided tutorial.
+
+### `primarySave` — keep Save as the primary button on existing records
+
+On an existing record, `DetailView` renders Save with the secondary (outline) look by default
+(`saveActions.jsx` → `renderExistingRecordSaveAction`). A window whose Save remains the only primary
+action of the detail view passes `primarySave={true}` to keep the default filled `Button` variant.
+Default `false`; it does not change the new-record path, where `hasExternalPrimaryAction` is the
+equivalent switch in the other direction.
+
+### Bottom tab-strip icons — `components/contract-ui/tabIcons.js`
+
+The icon before each secondary-tab label in the detail view's bottom tab strip is resolved by
+`resolveTabIcon(tabKey)` (used by `TabStripButton.jsx`) from the `TAB_ICONS` map, keyed by tab key
+(`secondaryTabs` key, or `custom:<key>` for `customTabs`). Unknown keys fall back to `List`. To give a
+tab an icon, add its key to `TAB_ICONS`. The map is keyed by tab, not by window, so every window
+with a tab of that key gets the same icon. Current entries include `custom:attachments`, `custom:sif`,
+`custom:pricing`, `products`, and the business-partner tabs `contact`, `bankAccount`, `locationAddress`,
+`customerAccounting`, `vendorAccounting`. The map lives outside `DetailView.jsx` because that file is
+under the no-growth guardrail (`.claude/hooks/check-detailview-growth.mjs`).
+
+---
+
 ## FK click-through navigation (`fkNavigation.js`)
 
 **Makes a read-only foreign-key value clickable, opening the record it points at — in the
