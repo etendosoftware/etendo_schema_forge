@@ -1684,6 +1684,21 @@ on one of the two paths. What remains is the typing, which is what
 - `src/lib/__tests__/matchOptionLabel.test.js` — still valid, but now exercises
   `src/lib/defaultCountry.js`'s consumption of `matchOptionByLabel`, not this popup.
 
+## OCR reader — create-product step defaults — ETP-5585
+
+When an invoice line from the OCR reader matches no product, the resolver popup offers
+"Create product" (`ProductCreateForm` in `ProductResolverPopup.jsx`). The form asks for name,
+search key, unit of measure and tax category, then POSTs to `/sws/neo/product/product`.
+
+Unit of measure and tax category are **prefilled** from `GET <productSpecUrl>/product/defaults`
+(`ProductDefaultsHandler`, ETP-4670) — the same defaults the product window uses (typically
+"Unidad" and "IVA Normal"). The form reads `uOM`/`uOM$_identifier` and
+`taxCategory`/`taxCategory$_identifier` from the response; no ids or names are hardcoded. The
+prefill never overwrites a value the user already picked (it only fills an empty selector), and if
+the defaults call fails the selectors stay empty and the existing required-field validation applies.
+
+Tests: `src/components/copilot/ocr/__tests__/ProductResolverPopup.vitest.jsx`.
+
 ## OCR reader — lookups without `_neoWhere` (production WAF)
 
 Every lookup the OCR reader makes — vendor, vendor address, the vendor picker, product, tax,
